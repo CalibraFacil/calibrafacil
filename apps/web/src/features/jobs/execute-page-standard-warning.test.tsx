@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { buildJobMutationResponse } from '@calibra-facil/contracts/jobs-fixtures'
-import { buildJobExecutionWarning } from '@calibra-facil/contracts/jobs-fixtures'
+import {
+  buildJobMutationResponse,
+  buildJobExecutionWarning,
+} from '@calibra-facil/contracts/fixtures'
 import {
   cleanup,
   fireEvent,

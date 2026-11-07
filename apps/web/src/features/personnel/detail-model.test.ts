@@ -1,4 +1,4 @@
-import { buildTrainingRecordListItem } from '@calibra-facil/contracts/training-records-fixtures'
+import { buildTrainingRecordListItem } from '@calibra-facil/contracts/fixtures'
 import { describe, expect, it } from 'vitest'
 
 import type { AssignableTrainingRecord } from './types'

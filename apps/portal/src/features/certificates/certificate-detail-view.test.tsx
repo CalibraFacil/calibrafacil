@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { buildPortalCertificateDetail } from "@calibra-facil/contracts/portal-fixtures";
+import { buildPortalCertificateDetail } from "@calibra-facil/contracts/fixtures";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

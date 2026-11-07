@@ -1,4 +1,4 @@
-import { buildDashboardStats } from '@calibra-facil/contracts/dashboard-fixtures'
+import { buildDashboardStats } from '@calibra-facil/contracts/fixtures'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DashboardStats } from '@/features/dashboard/queries'

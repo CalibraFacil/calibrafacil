@@ -3,12 +3,12 @@ import { z } from "zod";
 /**
  * One client-facing endpoint, declared once. The API mounts its handler against
  * the definition (`mount` in `apps/api`), the SDK builds its typed method from it
- * (`endpointClient` in `client-runtime`), and the data-policy registry, the
- * desktop stubs and the `AppType` route list are read from it. Nothing here
+ * (`endpointClient` in `client-runtime`), and the data-policy registry and the
+ * desktop stubs are read from it. Nothing here
  * imports a server or a client module: a definition is data plus Zod schemas.
  *
  * Rules for the schemas are the ones of the response contracts (see
- * `reference-data.ts`): the response schema validates only (no defaults,
+ * `docs/architecture/api-client-contract.md`): the response schema validates only (no defaults,
  * transforms or coercion), unknown keys allowed; `query` and `body` are the
  * same schemas the server validates the request with.
  */
@@ -169,11 +169,6 @@ export function endpointLabel(def: Pick<EndpointDef, "method" | "path">) {
   return `${def.method.toUpperCase()} ${def.path}`;
 }
 
-/** The paths of a set of groups, as a literal union (feeds `AppType`). */
-export type EndpointPaths<TGroups extends Record<string, EndpointGroup>> = {
-  [Namespace in keyof TGroups]: TGroups[Namespace][keyof TGroups[Namespace]]["path"];
-}[keyof TGroups];
-
 /** `{ method: policy }` of a group, keeping the literal policy of each entry. */
 export type EndpointPolicies<TGroup extends EndpointGroup> = {
   [Method in keyof TGroup]: TGroup[Method]["policy"];
@@ -187,6 +182,30 @@ export function endpointPolicies<const TGroup extends EndpointGroup>(
     policies[name] = def.policy;
   }
   return fromEntriesTyped<EndpointPolicies<TGroup>>(policies);
+}
+
+/** The policies of every group, keyed by namespace: `calibraApiPolicyRegistry` is this. */
+export type EndpointGroupPolicies<
+  TGroups extends Record<string, EndpointGroup>,
+> = {
+  [Namespace in keyof TGroups]: EndpointPolicies<TGroups[Namespace]>;
+};
+
+export function endpointGroupPolicies<
+  const TGroups extends Record<string, EndpointGroup>,
+>(groups: TGroups): EndpointGroupPolicies<TGroups> {
+  const policies: Record<string, Record<string, DataPolicy>> = {};
+  for (const [namespace, group] of Object.entries(groups)) {
+    policies[namespace] = endpointPolicies(group);
+  }
+  return groupPoliciesTyped<EndpointGroupPolicies<TGroups>>(policies);
+}
+
+function groupPoliciesTyped<TOut>(
+  value: Record<string, Record<string, DataPolicy>>,
+): TOut {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- one entry per group, each built by `endpointPolicies` from that group; this is the single trust point tying the runtime map to `EndpointGroupPolicies`.
+  return value as TOut;
 }
 
 function fromEntriesTyped<TOut>(value: Record<string, DataPolicy>): TOut {

@@ -4,7 +4,7 @@ import {
   ResponseContractError,
   type EndpointGroup,
 } from "@calibra-facil/contracts";
-import { buildCustomerRecord } from "@calibra-facil/contracts/customers-fixtures";
+import { buildCustomerRecord } from "@calibra-facil/contracts/fixtures";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 

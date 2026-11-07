@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { buildMaterialsListResponse } from '@calibra-facil/contracts/materials-fixtures'
+import { buildMaterialsListResponse } from '@calibra-facil/contracts/fixtures'
 
 import { calibraApi } from '@/utils/api'
 import {

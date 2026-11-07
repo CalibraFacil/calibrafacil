@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 
-import { buildAccreditedScopeLine } from '@calibra-facil/contracts/accredited-scope-fixtures'
+import { buildAccreditedScopeLine } from '@calibra-facil/contracts/fixtures'
 
 import {
   buildScopeLinePayload,

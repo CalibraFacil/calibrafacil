@@ -1,5 +1,6 @@
 import {
   ENDPOINT_GROUPS,
+  endpointGroupPolicies,
   endpointPolicies,
   type DataPolicy,
 } from "@calibra-facil/contracts";
@@ -78,45 +79,13 @@ const desktopDataPolicyUnavailableMessages = {
  * these entries (`apps/web/src/runtime/desktop-offline-routes.ts`).
  */
 export const calibraApiPolicyRegistry = {
-  // Derived from the endpoint definitions (`policy`), not listed here.
-  dashboard: endpointPolicies(ENDPOINT_GROUPS.dashboard),
-  units: endpointPolicies(ENDPOINT_GROUPS.units),
-  access: endpointPolicies(ENDPOINT_GROUPS.access),
-  onboarding: endpointPolicies(ENDPOINT_GROUPS.onboarding),
-  sessions: endpointPolicies(ENDPOINT_GROUPS.sessions),
-  finance: endpointPolicies(ENDPOINT_GROUPS.finance),
-  sso: endpointPolicies(ENDPOINT_GROUPS.sso),
-  apiKeys: endpointPolicies(ENDPOINT_GROUPS.apiKeys),
-  organizationLifecycle: endpointPolicies(
-    ENDPOINT_GROUPS.organizationLifecycle,
-  ),
-  organizationProfile: endpointPolicies(ENDPOINT_GROUPS.organizationProfile),
-  entityLabels: endpointPolicies(ENDPOINT_GROUPS.entityLabels),
-  certificateNumbering: endpointPolicies(ENDPOINT_GROUPS.certificateNumbering),
-  portalDomains: endpointPolicies(ENDPOINT_GROUPS.portalDomains),
-  emailDomains: endpointPolicies(ENDPOINT_GROUPS.emailDomains),
-  notifications: endpointPolicies(ENDPOINT_GROUPS.notifications),
-  signatures: endpointPolicies(ENDPOINT_GROUPS.signatures),
-  profileMedia: endpointPolicies(ENDPOINT_GROUPS.profileMedia),
-  organizationMedia: endpointPolicies(ENDPOINT_GROUPS.organizationMedia),
-  signingCertificates: endpointPolicies(ENDPOINT_GROUPS.signingCertificates),
-  // Derived from the endpoint definitions (`policy`), not listed here.
-  customers: endpointPolicies(ENDPOINT_GROUPS.customers),
-  customerGroups: endpointPolicies(ENDPOINT_GROUPS.customerGroups),
-  assets: endpointPolicies(ENDPOINT_GROUPS.assets),
-  assetTypes: endpointPolicies(ENDPOINT_GROUPS.assetTypes),
-  services: endpointPolicies(ENDPOINT_GROUPS.services),
-  // Material catalog is cloud-only in v1 (see the endpoint definitions).
-  materials: endpointPolicies(ENDPOINT_GROUPS.materials),
-  methods: endpointPolicies(ENDPOINT_GROUPS.methods),
-  standards: endpointPolicies(ENDPOINT_GROUPS.standards),
+  // Every endpoint group: the `policy` of each of its definitions.
+  ...endpointGroupPolicies(ENDPOINT_GROUPS),
   jobs: {
-    // The endpoint definitions' policies; `getLabelCommands` is not an endpoint
-    // of the jobs group (see `modules/jobs.ts`).
+    // `getLabelCommands` is not an endpoint of the jobs group (see `modules/jobs.ts`).
     ...endpointPolicies(ENDPOINT_GROUPS.jobs),
     getLabelCommands: "cloud-only",
   },
-  serviceOrders: endpointPolicies(ENDPOINT_GROUPS.serviceOrders),
   sync: {
     getSession: "local-only",
     reconcile: "local-only",
@@ -131,23 +100,6 @@ export const calibraApiPolicyRegistry = {
     list: "local-only",
     upload: "local-command-sync",
   },
-  environmentalLimits: endpointPolicies(ENDPOINT_GROUPS.environmentalLimits),
-  // #427 Phase 0: the whole namespace stays cloud-only (see the endpoint
-  // definitions).
-  accreditedScope: endpointPolicies(ENDPOINT_GROUPS.accreditedScope),
-  reports: endpointPolicies(ENDPOINT_GROUPS.reports),
-  publicSignup: endpointPolicies(ENDPOINT_GROUPS.publicSignup),
-  publicInvitations: endpointPolicies(ENDPOINT_GROUPS.publicInvitations),
-  labSetup: endpointPolicies(ENDPOINT_GROUPS.labSetup),
-  nonConformances: endpointPolicies(ENDPOINT_GROUPS.nonConformances),
-  capas: endpointPolicies(ENDPOINT_GROUPS.capas),
-  proficiencyTests: endpointPolicies(ENDPOINT_GROUPS.proficiencyTests),
-  spc: endpointPolicies(ENDPOINT_GROUPS.spc),
-  competences: endpointPolicies(ENDPOINT_GROUPS.competences),
-  trainingRecords: endpointPolicies(ENDPOINT_GROUPS.trainingRecords),
-  calibrationRequests: endpointPolicies(ENDPOINT_GROUPS.calibrationRequests),
-  visits: endpointPolicies(ENDPOINT_GROUPS.visits),
-  integrations: endpointPolicies(ENDPOINT_GROUPS.integrations),
 } as const satisfies CalibraApiPolicyRegistry;
 
 export function getCalibraApiDataPolicy<TNamespace extends CalibraApiNamespace>(

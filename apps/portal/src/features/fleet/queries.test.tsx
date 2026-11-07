@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildPortalFleetAsset } from "@calibra-facil/contracts/portal-fixtures";
+import { buildPortalFleetAsset } from "@calibra-facil/contracts/fixtures";
 import { PortalOrgProvider } from "@/lib/portal-org-context";
 import { useFleetAssets } from "./queries";
 

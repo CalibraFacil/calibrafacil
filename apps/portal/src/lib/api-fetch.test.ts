@@ -2,7 +2,7 @@ import {
   portalOverviewResponseSchema,
   ResponseContractError,
 } from "@calibra-facil/contracts";
-import { buildPortalOverview } from "@calibra-facil/contracts/jobs-fixtures";
+import { buildPortalOverview } from "@calibra-facil/contracts/fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { z } from "zod";

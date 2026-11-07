@@ -1,4 +1,4 @@
-import { buildJobExecutionWarning } from '@calibra-facil/contracts/jobs-fixtures'
+import { buildJobExecutionWarning } from '@calibra-facil/contracts/fixtures'
 import { describe, expect, it } from 'vitest'
 
 import { standardWarningItems } from './standard-warnings'

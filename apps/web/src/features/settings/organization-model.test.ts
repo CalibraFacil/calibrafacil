@@ -1,4 +1,4 @@
-import { buildOrganizationUnit } from '@calibra-facil/contracts/units-fixtures'
+import { buildOrganizationUnit } from '@calibra-facil/contracts/fixtures'
 import { describe, expect, it } from 'vitest'
 
 import type {

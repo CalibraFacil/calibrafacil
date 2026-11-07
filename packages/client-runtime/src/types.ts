@@ -23,50 +23,20 @@ import type {
   UpdateMaterialSchema,
   UpdateNotificationPreferencesSchema,
 } from "@calibra-facil/schemas";
-import type { AccreditedScopeApi } from "./modules/accredited-scope";
-import type { PublicInvitationsApi } from "./modules/public-invitations";
-import type { PublicSignupApi } from "./modules/public-signup";
-import type { AssetTypesApi } from "./modules/asset-types";
-import type { ApiKeysApi } from "./modules/api-keys";
-import type { EmailDomainsApi } from "./modules/email-domains";
-import type { NotificationsApi } from "./modules/notifications";
-import type { OrganizationLifecycleApi } from "./modules/organization-lifecycle";
 import type { OrganizationMediaApi } from "./modules/organization-media";
-import type { OrganizationProfileApi } from "./modules/organization-profile";
 import type { ProfileMediaApi } from "./modules/profile-media";
-import type { AccessApi } from "./modules/access";
 import type { LabSetupApi } from "./modules/lab-setup";
-import type { OnboardingApi } from "./modules/onboarding";
-import type { SessionsApi } from "./modules/sessions";
-import type { AssetsApi } from "./modules/assets";
-import type { CalibrationRequestsApi } from "./modules/calibration-requests";
-import type { CapasApi } from "./modules/capa";
-import type { CertificateNumberingApi } from "./modules/certificate-numbering";
-import type { CompetencesApi } from "./modules/competences";
-import type { CustomerGroupsApi } from "./modules/customer-groups";
+import type { EndpointGroups } from "@calibra-facil/contracts";
+import type { EndpointClient } from "./transport/endpoint-client";
 import type { CustomersApi } from "./modules/customers";
 import type { EntityLabelsApi } from "./modules/entity-labels";
-import type { ServicesApi } from "./modules/services";
-import type { DashboardApi } from "./modules/dashboard";
 import type { JobsApi } from "./modules/jobs";
 import type { EnvironmentalLimitsApi } from "./modules/environmental-limits";
-import type { FinanceApi } from "./modules/finance";
-import type { MaterialsApi } from "./modules/materials";
 import type { MethodsApi } from "./modules/methods";
-import type { NonConformancesApi } from "./modules/non-conformances";
-import type { PortalDomainsApi } from "./modules/portal-domains";
-import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
-import type { ReportsApi } from "./modules/reports";
 import type { ServiceOrdersApi } from "./modules/service-orders";
 import type { SignaturesApi } from "./modules/signatures";
-import type { SigningCertificatesApi } from "./modules/signing-certificates";
-import type { SpcApi } from "./modules/spc";
-import type { IntegrationsApi } from "./modules/integrations";
-import type { SsoApi } from "./modules/sso";
 import type { StandardsApi } from "./modules/standards";
-import type { TrainingRecordsApi } from "./modules/training-records";
 import type { UnitsApi } from "./modules/units";
-import type { VisitsApi } from "./modules/visits";
 
 export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
@@ -173,12 +143,6 @@ export type {
   LocalSyncConflictsResponse,
 } from "@calibra-facil/contracts";
 
-// =============================================================================
-// JOBS: the DTOs are the contract schemas' types (`@calibra-facil/contracts`,
-// `endpoints/jobs.ts`); the client is generated from the endpoint definitions
-// (`modules/jobs.ts`).
-// =============================================================================
-
 export type { JobsApi };
 
 /**
@@ -255,34 +219,20 @@ export interface AttachmentsApi {
   }): Promise<LocalAttachment>;
 }
 
-// SERVICES: the DTOs are the contract schemas' types
-// (`endpoints/services.ts`); the client is generated from the endpoint
-// definitions (`modules/services.ts`).
 export type ServicesListData = ServicesListResponse;
 export type ServiceDetailData = ServiceRecord;
-export type { ServiceAuditLogEntry, ServicesApi };
-
-// =============================================================================
-// MATERIALS, ENVIRONMENTAL LIMITS, ACCREDITED SCOPE: the DTOs are the contract
-// schemas' types (`@calibra-facil/contracts`, `endpoints/`); the clients are
-// generated from the endpoint definitions (`modules/`).
-// =============================================================================
+export type { ServiceAuditLogEntry };
 
 export type MaterialsListData = MaterialsListResponse;
 export type MaterialDetailData = MaterialRecord;
 export type AdjustMaterialStockData = AdjustMaterialStockResponse;
-export type { MaterialsApi };
 
-// METHODS: the DTOs are the contract schemas' types (`endpoints/methods.ts`);
-// the client is generated from the endpoint definitions (`modules/methods.ts`).
 export type MethodsListData = MethodsListResponse;
 export type MethodDetailData = MethodDetail;
 export type { MethodGovernance, MethodTemplateCatalogEntry };
 export type MethodFromTemplateInput = z.input<typeof FromTemplateSchema>;
 export type { MethodsApi };
 
-// STANDARDS: the DTOs are the contract schemas' types (`endpoints/standards.ts`);
-// the client is generated from the endpoint definitions (`modules/standards.ts`).
 export type StandardStatus = ReferenceStandardStatus;
 
 /** A standard as the list and the detail return it (contract type). */
@@ -297,35 +247,20 @@ export type MassCompositionProfileWriteInput = z.input<
 >;
 export type { StandardsApi };
 
-// =============================================================================
-// CUSTOMERS: the DTOs are the contract schemas' types
-// (`@calibra-facil/contracts`, `endpoints/customers.ts`); the client itself is
-// generated from the endpoint definitions (`modules/customers.ts`).
-// =============================================================================
-
 export type { CnpjLookupResult };
 export type CustomersListData = CustomersListResponse;
 export type CustomerDetailData = CustomerDetail;
 export type { CustomersApi };
 
-// =============================================================================
-// CUSTOMER GROUPS (multi-unit client networks): the DTOs are the contract
-// schemas' types (`endpoints/customer-groups.ts`); the client is generated from
-// the endpoint definitions (`modules/customer-groups.ts`).
-// =============================================================================
-
 export type { CustomerGroupDetailData, CustomerGroupsListData };
-export type { CustomerGroupsApi };
 
-// ASSETS: the DTOs are the contract schemas' types (`endpoints/assets.ts`);
-// the client is generated from the endpoint definitions (`modules/assets.ts`).
 export type { AssetStatus };
 export type AssetsListData = AssetsListResponse;
 export type AssetDetailData = AssetDetail;
-export type { AssetAuditLogEntry, AssetsApi };
+export type { AssetAuditLogEntry };
 
 export type AssetTypesListData = AssetTypesResponse;
-export type { AssetTypeListItem, AssetTypesApi };
+export type { AssetTypeListItem };
 
 export type { EnvironmentalLimitsApi };
 
@@ -338,41 +273,6 @@ export type SaveAccreditedScopeLineInput = z.input<
 >;
 export type SaveAccreditedScopeLineResponse =
   ContractSaveAccreditedScopeLineResponse;
-export type { AccreditedScopeApi };
-
-// REPORTS: the DTOs and the client are the endpoint definitions' own
-// (`endpoints/reports.ts`, `modules/reports.ts`).
-export type { ReportsApi };
-
-// PUBLIC SIGN-UP and PUBLIC INVITATIONS: the DTOs and the clients are the
-// endpoint definitions' own (`endpoints/public-signup.ts`,
-// `endpoints/public-invitations.ts`).
-export type { PublicInvitationsApi, PublicSignupApi };
-
-// Non-conformances and CAPA: the clients are generated from the endpoint
-// definitions (`modules/`); their DTOs are the contract's.
-export type { CapasApi, NonConformancesApi };
-
-export type { ProficiencyTestsApi };
-
-export type { SpcApi };
-
-export type { CompetencesApi, TrainingRecordsApi };
-
-// CALIBRATION REQUESTS and ON-SITE VISITS: the DTOs and the clients are the
-// endpoint definitions' own (`endpoints/calibration-requests.ts`,
-// `endpoints/visits.ts`; `modules/calibration-requests.ts`, `modules/visits.ts`).
-export type { CalibrationRequestsApi, VisitsApi };
-
-// Integrations: the DTOs are the contract schemas' types (`endpoints/integrations.ts`);
-// the client is generated from the endpoint definitions (`modules/integrations.ts`).
-export type { IntegrationsApi };
-
-// =============================================================================
-// SERVICE ORDERS: the DTOs are the contract schemas' types
-// (`@calibra-facil/contracts`, `endpoints/service-orders.ts`); the client is
-// generated from the endpoint definitions (`modules/service-orders.ts`).
-// =============================================================================
 
 export type CreateServiceOrderInput = z.input<typeof CreateServiceOrderSchema>;
 export type ServiceOrdersListData = ServiceOrdersListResponse;
@@ -382,156 +282,84 @@ export type {
   ServiceOrdersApi,
 };
 
-// =============================================================================
-// DASHBOARD: the DTOs are the contract schemas' types
-// (`@calibra-facil/contracts`, `endpoints/dashboard.ts`); the client itself is
-// generated from the endpoint definitions (`modules/dashboard.ts`).
-// =============================================================================
-
 export type DashboardJobStatus = JobStatus;
 export type { DashboardJob, DashboardStats };
-export type { DashboardApi };
 
 /** GET /api/units: the unit context of the session. */
 export type DashboardUnitsResponse = UnitsContext;
 export type { UnitsApi };
 
-// ACCESS and ONBOARDING: the DTOs and the clients are the endpoint definitions'
-// own (`endpoints/access.ts`, `endpoints/onboarding.ts`).
 export type {
-  AccessApi,
   ActivationChecklistResponse,
   ActivationStepId,
   FinanceAccessResponse,
-  OnboardingApi,
 };
-
-// FINANCE: the client is generated from the endpoint definitions
-// (`modules/finance.ts`); its DTOs are the contract's.
-export type { FinanceApi };
-
-// SESSIONS: the client is generated from the endpoint definition (`modules/sessions.ts`).
-export type { SessionsApi };
 
 export type { SelfServeSignupResponse };
 
-// SSO: the DTOs are the contract schemas' types (`endpoints/sso.ts`); the client
-// is generated from the endpoint definitions (`modules/sso.ts`).
-export type { SsoApi, SsoSettingsResponse, SsoVerificationRecord };
+export type { SsoSettingsResponse, SsoVerificationRecord };
 
-// API KEYS: the DTOs are the contract schemas' types (`endpoints/api-keys.ts`);
-// the client is generated from the endpoint definitions (`modules/api-keys.ts`).
-export type { ApiKeySecretResponse, ApiKeysApi, ApiKeysListResponse };
-
-// ORGANIZATION LIFECYCLE and PROFILE: the DTOs and the clients are the endpoint
-// definitions' own (`endpoints/organization-lifecycle.ts`,
-// `endpoints/organization-profile.ts`; `modules/organization-*.ts`).
-export type { OrganizationLifecycleApi, OrganizationProfileApi };
+export type { ApiKeySecretResponse, ApiKeysListResponse };
 
 export type { EntityLabelsApi };
 
-// CERTIFICATE NUMBERING: the DTOs are the contract schemas' types
-// (`endpoints/certificate-numbering.ts`); the client is generated from the
-// endpoint definitions (`modules/certificate-numbering.ts`).
 export type CertificateNumberingResetScope =
   CertificateNumberingConfig["sequence"]["resetScope"];
 export type {
-  CertificateNumberingApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
   UpdateCertificateNumberingProfileResponse,
 };
 
-// PORTAL DOMAINS: the DTOs are the contract schemas' types
-// (`endpoints/portal-domains.ts`); the client is generated from the endpoint
-// definitions (`modules/portal-domains.ts`).
-export type { PortalDomainResponse, PortalDomainsApi };
+export type { PortalDomainResponse };
 
-// EMAIL DOMAINS: the DTOs are the contract schemas' types
-// (`endpoints/email-domains.ts`); the client is generated from the endpoint
-// definitions (`modules/email-domains.ts`).
-export type { EmailDomainResponse, EmailDomainsApi };
+export type { EmailDomainResponse };
 
-// NOTIFICATIONS: the DTOs are the contract schemas' types
-// (`endpoints/notifications.ts`); the client is generated from the endpoint
-// definitions (`modules/notifications.ts`).
 export type {
   NotificationPreferencesResponse,
   NotificationSummary,
-  NotificationsApi,
   NotificationsListResponse,
   UnreadNotificationsResponse,
 };
 
-// SIGNATURES: the DTOs are the contract schemas' types
-// (`endpoints/signatures.ts`); the client is generated from the endpoint
-// definitions plus the multipart upload (`modules/signatures.ts`).
 export type { MySignatureResponse, SignatureUploadResponse, SignaturesApi };
 
-// PROFILE MEDIA and ORGANIZATION MEDIA: the clients are the endpoint
-// definitions plus the multipart uploads (`modules/profile-media.ts`,
-// `modules/organization-media.ts`).
 export type { OrganizationMediaApi, ProfileMediaApi };
 
-// SIGNING CERTIFICATES: the DTOs are the contract schemas' types
-// (`endpoints/signing-certificates.ts`); the client is generated from the
-// endpoint definitions (`modules/signing-certificates.ts`).
 export type {
   SigningCertificate,
-  SigningCertificatesApi,
   SigningCertificatesListResponse,
   UnsignedIssuanceSetting,
 };
 
-// LAB SETUP: the DTO is the contract schema's type (`endpoints/lab-setup.ts`);
-// the client is generated from the endpoint definitions (`modules/lab-setup.ts`).
 export type { LabSetupApi, LabSetupMetadata };
 
-export interface CalibraApi {
-  dashboard: DashboardApi;
+/**
+ * The namespaces whose client adds logic to its endpoint group (a 404 that is a
+ * result, a multipart upload, an envelope that is unwrapped); every other
+ * namespace of `ENDPOINT_GROUPS` is `EndpointClient<group>` as it is.
+ */
+type ClientModules = {
+  customers: CustomersApi;
   units: UnitsApi;
-  access: AccessApi;
-  onboarding: OnboardingApi;
-  sessions: SessionsApi;
-  finance: FinanceApi;
-  sso: SsoApi;
-  apiKeys: ApiKeysApi;
-  organizationLifecycle: OrganizationLifecycleApi;
-  organizationProfile: OrganizationProfileApi;
+  jobs: JobsApi;
+  environmentalLimits: EnvironmentalLimitsApi;
   entityLabels: EntityLabelsApi;
-  certificateNumbering: CertificateNumberingApi;
-  portalDomains: PortalDomainsApi;
-  emailDomains: EmailDomainsApi;
-  notifications: NotificationsApi;
+  labSetup: LabSetupApi;
+  methods: MethodsApi;
+  serviceOrders: ServiceOrdersApi;
   signatures: SignaturesApi;
   profileMedia: ProfileMediaApi;
   organizationMedia: OrganizationMediaApi;
-  signingCertificates: SigningCertificatesApi;
-  customers: CustomersApi;
-  customerGroups: CustomerGroupsApi;
-  assets: AssetsApi;
-  assetTypes: AssetTypesApi;
-  services: ServicesApi;
-  materials: MaterialsApi;
-  methods: MethodsApi;
   standards: StandardsApi;
-  jobs: JobsApi;
-  serviceOrders: ServiceOrdersApi;
+};
+
+/** One namespace per endpoint group, then the desktop-only ones. */
+export type CalibraApi = {
+  [Namespace in keyof EndpointGroups]: Namespace extends keyof ClientModules
+    ? ClientModules[Namespace]
+    : EndpointClient<EndpointGroups[Namespace]>;
+} & {
   sync: SyncApi;
   attachments: AttachmentsApi;
-  environmentalLimits: EnvironmentalLimitsApi;
-  accreditedScope: AccreditedScopeApi;
-  reports: ReportsApi;
-  publicInvitations: PublicInvitationsApi;
-  publicSignup: PublicSignupApi;
-  labSetup: LabSetupApi;
-  nonConformances: NonConformancesApi;
-  capas: CapasApi;
-  proficiencyTests: ProficiencyTestsApi;
-  spc: SpcApi;
-  competences: CompetencesApi;
-  trainingRecords: TrainingRecordsApi;
-  calibrationRequests: CalibrationRequestsApi;
-  visits: VisitsApi;
-  integrations: IntegrationsApi;
-}
+};

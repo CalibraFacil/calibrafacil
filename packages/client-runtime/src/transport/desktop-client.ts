@@ -76,37 +76,43 @@ function desktopUnsupportedError(
   );
 }
 
+type DesktopStubs = {
+  [Namespace in keyof EndpointGroups]: Pick<
+    CalibraApi[Namespace],
+    CalibraApiMethodsWithPolicy<Namespace, "cloud-only"> &
+      keyof CalibraApi[Namespace]
+  >;
+};
+
 /**
- * Throw-stubs for a domain converted to endpoint definitions: the
- * `cloud-only` endpoints of its group, labelled by each definition's
- * `desktopLabel`. Local-first methods are not stubbed here: the caller supplies
- * them (typically the group's own client over the desktop transport).
+ * Throw-stubs for the `cloud-only` endpoints of every group, labelled by each
+ * definition's `desktopLabel`. Local-first methods are not stubbed here: the
+ * client supplies them (typically the group's own client over the desktop
+ * transport).
  */
-function desktopEndpointStubs<
-  TNamespace extends keyof EndpointGroups & CalibraApiNamespace,
->(
-  namespace: TNamespace,
-): Pick<
-  CalibraApi[TNamespace],
-  CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
-    keyof CalibraApi[TNamespace]
-> {
-  const stubs: Record<string, () => Promise<never>> = {};
-  for (const [method, entry] of Object.entries(ENDPOINT_GROUPS[namespace])) {
-    const def: EndpointDef = entry;
-    if (def.policy !== "cloud-only") continue;
-    const flavor = def.desktopFlavor ?? "web-api";
-    stubs[method] = async () => {
-      throw desktopUnsupportedError(def.desktopLabel, flavor);
-    };
+function desktopEndpointStubs(): DesktopStubs {
+  const stubs: Record<string, Record<string, () => Promise<never>>> = {};
+  for (const [namespace, group] of Object.entries(ENDPOINT_GROUPS)) {
+    const namespaceStubs: Record<string, () => Promise<never>> = {};
+    for (const [method, entry] of Object.entries(group)) {
+      const def: EndpointDef = entry;
+      if (def.policy !== "cloud-only") continue;
+      const flavor = def.desktopFlavor ?? "web-api";
+      namespaceStubs[method] = async () => {
+        throw desktopUnsupportedError(def.desktopLabel, flavor);
+      };
+    }
+    stubs[namespace] = namespaceStubs;
   }
 
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- the stub keys are exactly the cloud-only entries of the group, which is what the registry (derived from the same group) classifies as cloud-only; the single trust point tying the runtime object to the Pick above.
-  return stubs as Pick<
-    CalibraApi[TNamespace],
-    CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
-      keyof CalibraApi[TNamespace]
-  >;
+  return asDesktopStubs<DesktopStubs>(stubs);
+}
+
+function asDesktopStubs<TStubs>(
+  stubs: Record<string, Record<string, () => Promise<never>>>,
+): TStubs {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- the stub keys of each namespace are exactly the cloud-only entries of its group, which is what the registry (derived from the same groups) classifies as cloud-only; the single trust point tying the runtime object to `DesktopStubs`.
+  return stubs as TStubs;
 }
 
 export function createDesktopApiClient(
@@ -183,10 +189,12 @@ export function createDesktopApiClient(
     return promise;
   }
 
+  const stubs = desktopEndpointStubs();
+
   return {
-    dashboard: desktopEndpointStubs("dashboard"),
+    ...stubs,
     units: {
-      ...desktopEndpointStubs("units"),
+      ...stubs.units,
       // The reads degrade to what the local session knows (or to nothing);
       // managing units and assignments is online-only.
       async getDashboardUnits() {
@@ -206,7 +214,7 @@ export function createDesktopApiClient(
     customerGroups: {
       // Customer groups are a cloud-only lab feature; desktop/offline can't
       // provision CLIENT orgs. Reads degrade to empty, writes are unsupported.
-      ...desktopEndpointStubs("customerGroups"),
+      ...stubs.customerGroups,
       async list() {
         return { data: [] };
       },
@@ -224,25 +232,20 @@ export function createDesktopApiClient(
     },
     // Self-serve activation is a cloud concern: a desktop install is reached by
     // a laboratory that already has an account.
-    onboarding: desktopEndpointStubs("onboarding"),
-    sessions: desktopEndpointStubs("sessions"),
-    finance: desktopEndpointStubs("finance"),
     sso: {
-      ...desktopEndpointStubs("sso"),
+      ...stubs.sso,
       async getProviders() {
         return desktopSsoSettings();
       },
     },
     apiKeys: {
-      ...desktopEndpointStubs("apiKeys"),
+      ...stubs.apiKeys,
       async list() {
         return { data: [] };
       },
     },
-    organizationLifecycle: desktopEndpointStubs("organizationLifecycle"),
-    organizationProfile: desktopEndpointStubs("organizationProfile"),
     entityLabels: {
-      ...desktopEndpointStubs("entityLabels"),
+      ...stubs.entityLabels,
       // No record labels offline: the links render without one.
       async getNonConformance() {
         return null;
@@ -255,20 +258,20 @@ export function createDesktopApiClient(
       },
     },
     certificateNumbering: {
-      ...desktopEndpointStubs("certificateNumbering"),
+      ...stubs.certificateNumbering,
       // The desktop shows the default profile; it never reads or writes the real one.
       async getProfile() {
         return desktopCertificateNumberingProfile();
       },
     },
     portalDomains: {
-      ...desktopEndpointStubs("portalDomains"),
+      ...stubs.portalDomains,
       async get() {
         return desktopPortalDomain();
       },
     },
     emailDomains: {
-      ...desktopEndpointStubs("emailDomains"),
+      ...stubs.emailDomains,
       async get() {
         return desktopEmailDomain();
       },
@@ -314,15 +317,13 @@ export function createDesktopApiClient(
       },
     },
     signatures: {
-      ...desktopEndpointStubs("signatures"),
+      ...stubs.signatures,
       async getMine() {
         return { hasSignature: false };
       },
     },
-    profileMedia: desktopEndpointStubs("profileMedia"),
-    organizationMedia: desktopEndpointStubs("organizationMedia"),
     signingCertificates: {
-      ...desktopEndpointStubs("signingCertificates"),
+      ...stubs.signingCertificates,
       async list() {
         return {
           certificates: [],
@@ -333,14 +334,14 @@ export function createDesktopApiClient(
       },
     },
     customers: {
-      ...desktopEndpointStubs("customers"),
+      ...stubs.customers,
       // Read-through from the local mirror: the local server answers the
       // definitions' own response schemas (`apps/local-server/src/contract.test.ts`).
       list: localCustomers.list,
       get: localCustomers.get,
     },
     assets: {
-      ...desktopEndpointStubs("assets"),
+      ...stubs.assets,
       // Read-through from the local mirror, and the offline intake stub: the
       // local server answers the definitions' own response schemas
       // (`apps/local-server/src/contract.test.ts`).
@@ -352,7 +353,7 @@ export function createDesktopApiClient(
     // definition's own response schema (`apps/local-server/src/contract.test.ts`).
     assetTypes: { list: localAssetTypes.list },
     environmentalLimits: {
-      ...desktopEndpointStubs("environmentalLimits"),
+      ...stubs.environmentalLimits,
       // Read-through from the local mirror (`apps/local-server/src/contract.test.ts`).
       effective: localEnvironmentalLimits.effective,
       // The limits of the active unit come from the session snapshot, not
@@ -376,22 +377,9 @@ export function createDesktopApiClient(
         };
       },
     },
-    accreditedScope: desktopEndpointStubs("accreditedScope"),
-    reports: desktopEndpointStubs("reports"),
-    publicInvitations: desktopEndpointStubs("publicInvitations"),
     // Opening an account happens on the cloud, before any desktop shell exists.
-    publicSignup: desktopEndpointStubs("publicSignup"),
-    labSetup: desktopEndpointStubs("labSetup"),
-    nonConformances: desktopEndpointStubs("nonConformances"),
-    capas: desktopEndpointStubs("capas"),
-    proficiencyTests: desktopEndpointStubs("proficiencyTests"),
-    spc: desktopEndpointStubs("spc"),
-    competences: desktopEndpointStubs("competences"),
-    trainingRecords: desktopEndpointStubs("trainingRecords"),
-    calibrationRequests: desktopEndpointStubs("calibrationRequests"),
-    visits: desktopEndpointStubs("visits"),
     integrations: {
-      ...desktopEndpointStubs("integrations"),
+      ...stubs.integrations,
       async list() {
         return { data: [] };
       },
@@ -400,7 +388,7 @@ export function createDesktopApiClient(
       // Material catalog is cloud-only in v1; the desktop SO flow keeps the
       // free-form part-item fallback. Reads degrade to empty, writes are
       // unsupported offline.
-      ...desktopEndpointStubs("materials"),
+      ...stubs.materials,
       async list() {
         return {
           data: [],
@@ -408,16 +396,15 @@ export function createDesktopApiClient(
         };
       },
     },
-    services: desktopEndpointStubs("services"),
     methods: {
-      ...desktopEndpointStubs("methods"),
+      ...stubs.methods,
       // Read-through from the local mirror: the local server answers the
       // definitions' own response schemas (`apps/local-server/src/contract.test.ts`).
       list: localMethods.list,
       get: localMethods.get,
     },
     standards: {
-      ...desktopEndpointStubs("standards"),
+      ...stubs.standards,
       // Read-through from the local mirror: the local server answers the
       // definitions' own response schemas (`apps/local-server/src/contract.test.ts`).
       list: localStandards.list,
@@ -425,7 +412,7 @@ export function createDesktopApiClient(
       listCompositionProfiles: localStandards.listCompositionProfiles,
     },
     jobs: {
-      ...desktopEndpointStubs("jobs"),
+      ...stubs.jobs,
       // Plain text, cloud-only (the desktop prints through its own bridge).
       async getLabelCommands() {
         throw desktopUnsupportedError(
@@ -442,7 +429,7 @@ export function createDesktopApiClient(
       submitExecution: localJobs.submitExecution,
     },
     serviceOrders: {
-      ...desktopEndpointStubs("serviceOrders"),
+      ...stubs.serviceOrders,
       // The offline reads and the intake command go to the local server, which
       // answers the definitions' own response schemas
       // (`apps/local-server/src/contract.test.ts`).

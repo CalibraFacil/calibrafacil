@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createCloudEndpointTransport } from "../transport/endpoint-client";
+import {
+  createCloudEndpointTransport,
+  endpointClient,
+} from "../transport/endpoint-client";
 import { CalibraApiError } from "../transport/errors";
-import { createOrganizationProfileApi } from "./organization-profile";
+import { organizationProfileEndpoints } from "@calibra-facil/contracts";
 
 const storedProfile = {
   cnpj: "11.222.333/0001-81",
@@ -33,7 +36,8 @@ function apiReplying(response: Response) {
     requests.push({ url: String(input), init });
     return response;
   };
-  const api = createOrganizationProfileApi(
+  const api = endpointClient(
+    organizationProfileEndpoints,
     createCloudEndpointTransport({
       baseUrl: "https://api.example.test",
       fetch: fetchImpl,

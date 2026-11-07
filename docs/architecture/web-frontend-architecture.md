@@ -120,12 +120,12 @@ calibraApi.methods.create(input);
 
 When adding API behavior:
 
-1. Add or update the relevant `packages/client-runtime/src/modules/<domain>.ts`.
+1. Add or update the endpoint definitions (`packages/contracts/src/endpoints/<domain>.ts`);
+   add a `packages/client-runtime/src/modules/<domain>.ts` only for client logic the
+   definitions cannot express.
 2. Reuse shared transport helpers from `packages/client-runtime/src/transport`.
 3. Keep public exports compatible through `packages/client-runtime/src/index.ts`.
-4. Update `packages/contracts/src/api-app.ts` only when raw browser-facing Hono
-   route paths change.
-5. Add client-runtime tests for success and error paths.
+4. Add client-runtime tests for success and error paths.
 
 See `docs/architecture/api-client-contract.md` for the package boundary rules.
 

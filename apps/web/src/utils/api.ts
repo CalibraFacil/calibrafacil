@@ -85,7 +85,7 @@ export async function getDesktopLocalApiToken() {
  * introduced) and only logs a structured warning in production, so a contract
  * slip never takes the UI down. `VITE_RESPONSE_VALIDATION=warn` opts a dev
  * server into the production behavior. The mocked-API Playwright run does not:
- * its fixtures are contract-valid (`@calibra-facil/contracts/jobs-fixtures`).
+ * its fixtures are contract-valid (`@calibra-facil/contracts/fixtures`).
  */
 const RESPONSE_VALIDATION =
   import.meta.env.PROD || import.meta.env.VITE_RESPONSE_VALIDATION === 'warn'

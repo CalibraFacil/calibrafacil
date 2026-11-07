@@ -6,7 +6,7 @@ import {
   buildJobMutationResponse,
   buildJobsList,
   buildJobWithdrawCertificateResponse,
-} from "@calibra-facil/contracts/jobs-fixtures";
+} from "@calibra-facil/contracts/fixtures";
 import { describe, expect, it, vi } from "vitest";
 
 import { createCloudApiClient } from "../index";
