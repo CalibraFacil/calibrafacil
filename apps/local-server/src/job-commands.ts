@@ -30,10 +30,15 @@ import { getLocalRequestContext } from "./request-context";
  * execution core (`@calibra-facil/method-definition`) builds the frozen
  * records and runs the official execution; what is left here is the local
  * store: which rows to read and what to save.
+ *
+ * Only the cloud-parity answers that are not errors live here (200, the 400 of
+ * an invalid body, the 404 of a missing job). A refusal deeper down is a thrown
+ * `LocalDomainError` / `LocalUnprocessableError` and any other throw is our bug:
+ * `handleLocalServerError` (`http-errors.ts`) answers 400/404/422 and 500.
  */
 
 type JobCommandResult = {
-  status: 200 | 400 | 404 | 422;
+  status: 200 | 400 | 404;
   body: Record<string, unknown>;
 };
 
@@ -76,50 +81,48 @@ export function executeLocalJob(
     storedPhases(current.calibrationPhaseSnapshot),
     recordedBy,
   );
-  try {
-    // The cloud's draft rule: a standard of the saved snapshot that went
-    // stale is kept (and reported in `warnings`); one the save adds is judged.
-    const { snapshot: standardsSnapshot, warnings } =
-      resolveLocalDraftStandards(database, {
-        selectedStandardIds: input.selectedStandardIds,
-        data: input.data,
-        // Judged on the day the work is recorded as performed (a draft keeps
-        // the date already saved).
-        performedAt: localStandardsPerformedAt(
-          input.performedAt,
-          current.performedAt,
-        ),
-        savedStandardsSnapshot: current.standardsSnapshot,
-      });
-    const results = executeFrozenMethod(database, current, {
-      data: input.data,
-      standardsSnapshot,
-      fallbackResults: input.results,
-      environment: input.environment,
-      calibrationPhaseSnapshot,
-      requireSuccess: false,
-    });
-    const job = saveLocalJobExecution(database, {
-      routeId,
-      data: input.data,
-      results,
+  // The cloud's draft rule: a standard of the saved snapshot that went
+  // stale is kept (and reported in `warnings`); one the save adds is judged.
+  const { snapshot: standardsSnapshot, warnings } = resolveLocalDraftStandards(
+    database,
+    {
       selectedStandardIds: input.selectedStandardIds,
-      environment: input.environment,
-      calibrationLocationSnapshot,
-      calibrationPhaseSnapshot,
-      methodDeviations: input.methodDeviations,
-      performedAt: input.performedAt,
-      actorUserId,
-      deviceId: config.deviceId,
-    });
+      data: input.data,
+      // Judged on the day the work is recorded as performed (a draft keeps
+      // the date already saved).
+      performedAt: localStandardsPerformedAt(
+        input.performedAt,
+        current.performedAt,
+      ),
+      savedStandardsSnapshot: current.standardsSnapshot,
+    },
+  );
+  const results = executeFrozenMethod(database, current, {
+    data: input.data,
+    standardsSnapshot,
+    fallbackResults: input.results,
+    environment: input.environment,
+    calibrationPhaseSnapshot,
+    requireSuccess: false,
+  });
+  const job = saveLocalJobExecution(database, {
+    routeId,
+    data: input.data,
+    results,
+    selectedStandardIds: input.selectedStandardIds,
+    environment: input.environment,
+    calibrationLocationSnapshot,
+    calibrationPhaseSnapshot,
+    methodDeviations: input.methodDeviations,
+    performedAt: input.performedAt,
+    actorUserId,
+    deviceId: config.deviceId,
+  });
 
-    return {
-      status: 200,
-      body: { message: "Dados salvos com sucesso", data: job, warnings },
-    };
-  } catch (error) {
-    return commandFailure(error);
-  }
+  return {
+    status: 200,
+    body: { message: "Dados salvos com sucesso", data: job, warnings },
+  };
 }
 
 export function submitLocalJob(
@@ -164,45 +167,41 @@ export function submitLocalJob(
   if (!performedAtError.ok) {
     return { status: 400, body: { error: performedAtError.message } };
   }
-  try {
-    const standardsSnapshot = buildLocalStandardsSnapshot(
-      database,
-      input.selectedStandardIds,
-      input.data,
-      // Judged on the day the work is recorded as performed (the cloud rule).
-      localStandardsPerformedAt(input.performedAt, null),
-    );
-    const results = executeFrozenMethod(database, current, {
-      data: input.data,
-      standardsSnapshot,
-      fallbackResults: input.results,
-      environment: input.environment,
-      calibrationPhaseSnapshot,
-      requireSuccess: true,
-    });
-    const job = saveLocalJobExecution(database, {
-      routeId,
-      data: input.data,
-      results,
-      selectedStandardIds: input.selectedStandardIds,
-      environment: input.environment,
-      calibrationLocationSnapshot,
-      calibrationPhaseSnapshot,
-      methodDeviations: input.methodDeviations,
-      performedAt: input.performedAt,
-      backdateReason: input.backdateReason,
-      requireResults: true,
-      actorUserId,
-      deviceId: config.deviceId,
-    });
+  const standardsSnapshot = buildLocalStandardsSnapshot(
+    database,
+    input.selectedStandardIds,
+    input.data,
+    // Judged on the day the work is recorded as performed (the cloud rule).
+    localStandardsPerformedAt(input.performedAt, null),
+  );
+  const results = executeFrozenMethod(database, current, {
+    data: input.data,
+    standardsSnapshot,
+    fallbackResults: input.results,
+    environment: input.environment,
+    calibrationPhaseSnapshot,
+    requireSuccess: true,
+  });
+  const job = saveLocalJobExecution(database, {
+    routeId,
+    data: input.data,
+    results,
+    selectedStandardIds: input.selectedStandardIds,
+    environment: input.environment,
+    calibrationLocationSnapshot,
+    calibrationPhaseSnapshot,
+    methodDeviations: input.methodDeviations,
+    performedAt: input.performedAt,
+    backdateReason: input.backdateReason,
+    requireResults: true,
+    actorUserId,
+    deviceId: config.deviceId,
+  });
 
-    return {
-      status: 200,
-      body: { message: "Job submetido para revisao", data: job },
-    };
-  } catch (error) {
-    return commandFailure(error);
-  }
+  return {
+    status: 200,
+    body: { message: "Job submetido para revisao", data: job },
+  };
 }
 
 type LocalJob = NonNullable<ReturnType<typeof getLocalJobDetail>>;
@@ -292,22 +291,4 @@ function invalidBody(issues: readonly unknown[]): JobCommandResult {
     status: 400,
     body: { error: "Dados invalidos para execucao do job", issues },
   };
-}
-
-function commandFailure(error: unknown): JobCommandResult {
-  return {
-    status: 422,
-    body: {
-      error: error instanceof Error ? error.message : "Erro local",
-      diagnostics: getDiagnostics(error),
-    },
-  };
-}
-
-function getDiagnostics(error: unknown) {
-  if (error && typeof error === "object" && "diagnostics" in error) {
-    return Reflect.get(error, "diagnostics");
-  }
-
-  return undefined;
 }
