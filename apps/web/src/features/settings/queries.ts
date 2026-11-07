@@ -13,6 +13,14 @@ import type {
   SyncTarget,
 } from './types'
 import type { IntegrationMappingsConfig } from '@calibra-facil/shared'
+import {
+  environmentalLimitKeys,
+  integrationKeys,
+  organizationKeys,
+  settingsKeys,
+} from '@/features/settings/keys'
+import { assetKeys } from '@/features/assets/keys'
+import { sessionKeys } from '@/lib/query-keys'
 
 export type { ContaAzulCatalogKey }
 
@@ -28,56 +36,56 @@ function trustedApiValue<T>(value: unknown): T {
 
 export function apiKeysQueryOptions() {
   return queryOptions({
-    queryKey: ['api-keys'],
+    queryKey: settingsKeys.apiKeys,
     queryFn: () => calibraApi.apiKeys.list(),
   })
 }
 
 export function ssoSettingsQueryOptions(organizationKey: string | null) {
   return queryOptions({
-    queryKey: ['sso-settings', organizationKey ?? 'no-org'],
+    queryKey: settingsKeys.ssoSettings(organizationKey),
     queryFn: () => calibraApi.sso.getProviders(),
   })
 }
 
 export function certificateNumberingProfileQueryOptions() {
   return queryOptions({
-    queryKey: ['certificate-numbering-profile'],
+    queryKey: settingsKeys.certificateNumberingProfile,
     queryFn: () => calibraApi.certificateNumbering.getProfile(),
   })
 }
 
 export function signingCertificatesQueryOptions(unitId: number | null) {
   return queryOptions({
-    queryKey: ['signing-certificates', unitId ?? 'no-unit'],
+    queryKey: settingsKeys.signingCertificates(unitId),
     queryFn: () => calibraApi.signingCertificates.list(),
   })
 }
 
 export function mySignatureQueryOptions() {
   return queryOptions({
-    queryKey: ['my-signature'],
+    queryKey: settingsKeys.mySignature,
     queryFn: () => calibraApi.signatures.getMine(),
   })
 }
 
 export function portalDomainQueryOptions() {
   return queryOptions({
-    queryKey: ['portal-domain'],
+    queryKey: settingsKeys.portalDomain,
     queryFn: () => calibraApi.portalDomains.get(),
   })
 }
 
 function emailDomainQueryOptions() {
   return queryOptions({
-    queryKey: ['email-domain'],
+    queryKey: settingsKeys.emailDomain,
     queryFn: () => calibraApi.emailDomains.get(),
   })
 }
 
 export function environmentalLimitsQueryOptions(unitId: number | null) {
   return queryOptions({
-    queryKey: ['environmental-limits', unitId ?? 'no-unit'],
+    queryKey: environmentalLimitKeys.unit(unitId),
     queryFn: () =>
       trustedApiResult<SettingsEnvironmentalLimitsData>(
         calibraApi.environmentalLimits.list(),
@@ -87,7 +95,7 @@ export function environmentalLimitsQueryOptions(unitId: number | null) {
 
 function accreditedScopeQueryOptions(unitId: number | null) {
   return queryOptions({
-    queryKey: ['accredited-scope', unitId ?? 'no-unit'],
+    queryKey: settingsKeys.accreditedScope(unitId),
     queryFn: () =>
       trustedApiResult<SettingsAccreditedScopeData>(
         calibraApi.accreditedScope.list(),
@@ -97,7 +105,7 @@ function accreditedScopeQueryOptions(unitId: number | null) {
 
 export function settingsAssetTypesQueryOptions() {
   return queryOptions({
-    queryKey: ['asset-types'],
+    queryKey: assetKeys.types,
     queryFn: () => calibraApi.assetTypes.list(),
     staleTime: 60_000,
   })
@@ -105,21 +113,21 @@ export function settingsAssetTypesQueryOptions() {
 
 export function notificationPreferencesQueryOptions() {
   return queryOptions({
-    queryKey: ['notification-preferences'],
+    queryKey: settingsKeys.notificationPreferences,
     queryFn: () => calibraApi.notifications.getPreferences(),
   })
 }
 
 export function integrationsQueryOptions() {
   return queryOptions({
-    queryKey: ['integrations'],
+    queryKey: integrationKeys.all,
     queryFn: () => calibraApi.integrations.list(),
   })
 }
 
 export function contaAzulAppQueryOptions() {
   return queryOptions({
-    queryKey: ['integrations', 'conta-azul', 'app'],
+    queryKey: integrationKeys.contaAzulApp,
     queryFn: () => calibraApi.integrations.getContaAzulApp(),
   })
 }
@@ -132,13 +140,7 @@ export function integrationRunItemsQueryOptions({
   runId: string | null
 }) {
   return queryOptions({
-    queryKey: [
-      'integrations',
-      integrationId ?? 'no-integration',
-      'runs',
-      runId ?? 'no-run',
-      'items',
-    ],
+    queryKey: integrationKeys.runItems(integrationId, runId),
     queryFn: () => {
       if (!integrationId || !runId) {
         return Promise.resolve({
@@ -170,7 +172,7 @@ export function contaAzulCatalogQueryOptions({
   id: string
 }) {
   return queryOptions({
-    queryKey: ['integrations', id, 'conta-azul', 'catalog', catalog],
+    queryKey: integrationKeys.catalog(id, catalog),
     queryFn: () =>
       calibraApi.integrations.listContaAzulCatalog({
         params: { id, catalog },
@@ -197,14 +199,14 @@ export function previewIntegrationSync({
 
 export function organizationUnitsQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['organization-units', organizationId],
+    queryKey: organizationKeys.units(organizationId),
     queryFn: () => calibraApi.units.listAdminUnits(),
   })
 }
 
 export function dashboardUnitsQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['dashboard-units', organizationId],
+    queryKey: sessionKeys.dashboardUnitsOf(organizationId),
     queryFn: async () => {
       const response = await calibraApi.units.getDashboardUnits()
       if (!response) {
@@ -219,7 +221,7 @@ export function organizationGovernanceMembersQueryOptions(
   organizationId: string,
 ) {
   return queryOptions({
-    queryKey: ['organization-governance-members', organizationId],
+    queryKey: organizationKeys.governanceMembers(organizationId),
     queryFn: () => calibraApi.units.listAdminMembers(),
   })
 }
@@ -228,14 +230,14 @@ export function organizationGovernanceActivityQueryOptions(
   organizationId: string,
 ) {
   return queryOptions({
-    queryKey: ['organization-governance-activity', organizationId],
+    queryKey: organizationKeys.governanceActivity(organizationId),
     queryFn: () => calibraApi.units.listAdminActivity(),
   })
 }
 
 export function organizationMembersQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['organization-members', organizationId],
+    queryKey: organizationKeys.members(organizationId),
     queryFn: async () => {
       const result = await authClient.organization.listMembers({
         query: { organizationId },
@@ -253,7 +255,7 @@ export function organizationMembersQueryOptions(organizationId: string) {
 
 export function organizationInvitationsQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['organization-invitations', organizationId],
+    queryKey: organizationKeys.invitations(organizationId),
     queryFn: async () => {
       const result = await authClient.organization.listInvitations({
         query: { organizationId },

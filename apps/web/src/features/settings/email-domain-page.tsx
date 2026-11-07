@@ -32,6 +32,7 @@ import {
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { settingsKeys } from '@/features/settings/keys'
 
 function statusVariant(status: EmailDomainResponse['statusSummary']['status']) {
   switch (status) {
@@ -69,7 +70,7 @@ export function EmailDomainSettingsPage() {
     fromLocalPart ?? savedDomain?.fromAddress.split('@')[0] ?? 'contato'
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['email-domain'] })
+    await queryClient.invalidateQueries({ queryKey: settingsKeys.emailDomain })
   }
 
   const createMutation = useMutation({

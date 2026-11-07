@@ -100,9 +100,7 @@ export function OrganizationUnitsSection({
   )
   const invalidateQueryKeys = (queryKeys: ReadonlyArray<readonly unknown[]>) =>
     Promise.all(
-      queryKeys.map((queryKey) =>
-        queryClient.invalidateQueries({ queryKey: [...queryKey] }),
-      ),
+      queryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
     )
 
   const createUnitMutation = useMutation({

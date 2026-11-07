@@ -27,6 +27,7 @@ import {
   NewGenericConnectorForm,
 } from './integrations/generic-connector'
 import { SectionTitle } from './integrations/shared'
+import { integrationKeys } from '@/features/settings/keys'
 
 export function IntegrationsSettingsPage({
   contaAzulOAuthError = null,
@@ -53,8 +54,8 @@ export function IntegrationsSettingsPage({
     // connect/token-refresh/manual, so exclude them here to avoid firing all
     // ~15 catalog requests on every sync.
     await queryClient.invalidateQueries({
-      queryKey: ['integrations'],
-      predicate: (query) => query.queryKey[3] !== 'catalog',
+      queryKey: integrationKeys.all,
+      predicate: (query) => !integrationKeys.isCatalog(query.queryKey),
     })
   }
 

@@ -146,6 +146,11 @@ Cross-feature fan-out for one event lives in one map, for example
 `features/jobs/query-effects.ts` (job approved: jobs, dashboard, assets,
 service orders, notifications, finance).
 
+`calibra/no-literal-query-keys` fails a literal array passed as `queryKey`, to
+`setQueryData` / `getQueryData` and the other cache methods, or to
+`keepPreviousDataInScope`, in `apps/web/src/features` and `apps/portal/src`
+(tests exempt, baseline empty).
+
 Tenant scope has one mechanism, a guaranteed cache reset. The API resolves the
 laboratory and unit from the session and from `x-active-unit-id`, so an
 organization id inside a key could not make a request answer for it. Every code
@@ -299,7 +304,9 @@ custom oxlint plugin (`packages/oxlint-plugin-calibra`, prefix `calibra/`):
 - `calibra/no-hono-client-outside-client-runtime` — raw `hono/client` only in
   `packages/client-runtime` (type-level use allowed in `packages/contracts`);
 - `calibra/no-router-coupling-in-features` — no `createFileRoute` / `useParams`
-  / `useSearch` imports inside `apps/web/src/features` (test files exempt).
+  / `useSearch` imports inside `apps/web/src/features` (test files exempt);
+- `calibra/no-literal-query-keys` — query keys come from the key factories, never
+  a literal array, in `apps/web/src/features` and `apps/portal/src`.
 
 Each rule has a `LEGACY_BASELINE` ratchet for grandfathering (all empty today).
 For the residual patterns the lint rules do not cover (route-local

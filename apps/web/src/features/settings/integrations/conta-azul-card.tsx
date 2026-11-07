@@ -72,6 +72,7 @@ import {
 } from './conta-azul-tabs'
 import { IntegrationActivity } from './activity'
 import { ContaAzulLogo, LiveDot } from './shared'
+import { integrationKeys } from '@/features/settings/keys'
 
 function getContaAzulConfig(
   integration: IntegrationSummary,
@@ -304,7 +305,7 @@ function ContaAzulPanel({
 
   const refreshCatalogs = async () => {
     await queryClient.invalidateQueries({
-      queryKey: ['integrations', integration.id, 'conta-azul', 'catalog'],
+      queryKey: integrationKeys.catalogsOf(integration.id),
     })
   }
 
@@ -318,7 +319,7 @@ function ContaAzulPanel({
     refreshCatalogs,
   })
   const scheduleQuery = useQuery({
-    queryKey: ['integrations', integration.id, 'conta-azul', 'schedule'],
+    queryKey: integrationKeys.schedule(integration.id),
     queryFn: () =>
       calibraApi.integrations.getContaAzulSchedule({
         params: { id: integration.id },

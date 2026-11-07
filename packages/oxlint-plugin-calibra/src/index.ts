@@ -8,7 +8,7 @@
 // net-new ones fail. Only no-json-error-body-in-routes,
 // no-calibration-job-update-outside-owner, no-process-env, no-raw-locale-formatting
 // and no-raw-palette-color-classes have a non-empty baseline (the rest, including
-// no-features-import-from-low-layers, report every
+// no-features-import-from-low-layers and no-literal-query-keys, report every
 // occurrence; no-raw-db-in-routes and no-error-response-in-transaction keep a
 // `baseline` rule option for their own tests only). no-raw-db-in-routes also fails
 // a count that is higher than the file's real number of uses (stale).
@@ -26,6 +26,7 @@ import noRawPaletteColorClasses from "./rules/no-raw-palette-color-classes.ts";
 import noAppUiPrimitiveRecreation from "./rules/no-app-ui-primitive-recreation.ts";
 import noErrorResponseInTransaction from "./rules/no-error-response-in-transaction.ts";
 import noFeaturesImportFromLowLayers from "./rules/no-features-import-from-low-layers.ts";
+import noLiteralQueryKeys from "./rules/no-literal-query-keys.ts";
 
 export default {
   meta: {
@@ -47,5 +48,6 @@ export default {
     "no-app-ui-primitive-recreation": noAppUiPrimitiveRecreation,
     "no-error-response-in-transaction": noErrorResponseInTransaction,
     "no-features-import-from-low-layers": noFeaturesImportFromLowLayers,
+    "no-literal-query-keys": noLiteralQueryKeys,
   },
 };

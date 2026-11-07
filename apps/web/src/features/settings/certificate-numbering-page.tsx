@@ -28,6 +28,7 @@ import {
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { useHasPermission } from '@/components/permission-gate'
 import { useCertificateNumberingProfileData } from '@/features/settings/queries'
+import { settingsKeys } from '@/features/settings/keys'
 
 type ResetScope = CertificateNumberingResetScope
 
@@ -133,7 +134,7 @@ function CertificateNumberingForm({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ['certificate-numbering-profile'],
+        queryKey: settingsKeys.certificateNumberingProfile,
       })
       toast.success('Perfil de numeração salvo')
     },

@@ -14,6 +14,8 @@ import type {
   UnitAssignmentRole,
 } from '@/features/settings/types'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { sessionKeys } from '@/lib/query-keys'
+import { organizationKeys } from './keys'
 
 const GLOBAL_MEMBER_ROLES = [
   'member',
@@ -336,35 +338,35 @@ export function updateAssignmentDraftOverride({
 
 export function organizationUnitGovernanceQueryKeys(organizationId: string) {
   return [
-    ['organization-units', organizationId],
-    ['organization-governance-members', organizationId],
-    ['organization-governance-activity', organizationId],
-    ['dashboard-units', organizationId],
+    organizationKeys.units(organizationId),
+    organizationKeys.governanceMembers(organizationId),
+    organizationKeys.governanceActivity(organizationId),
+    sessionKeys.dashboardUnitsOf(organizationId),
   ] as const
 }
 
 export function organizationAssignmentQueryKeys(organizationId: string) {
   return [
-    ['organization-governance-members', organizationId],
-    ['organization-governance-activity', organizationId],
-    ['dashboard-units', organizationId],
+    organizationKeys.governanceMembers(organizationId),
+    organizationKeys.governanceActivity(organizationId),
+    sessionKeys.dashboardUnitsOf(organizationId),
   ] as const
 }
 
 export function organizationRoleGovernanceQueryKeys(organizationId: string) {
   return [
-    ['organization-members', organizationId],
-    ['organization-governance-members', organizationId],
-    ['organization-governance-activity', organizationId],
+    organizationKeys.members(organizationId),
+    organizationKeys.governanceMembers(organizationId),
+    organizationKeys.governanceActivity(organizationId),
   ] as const
 }
 
 export function organizationInvitationsQueryKey(organizationId: string) {
-  return ['organization-invitations', organizationId] as const
+  return organizationKeys.invitations(organizationId)
 }
 
 export function organizationMembersQueryKey(organizationId: string) {
-  return ['organization-members', organizationId] as const
+  return organizationKeys.members(organizationId)
 }
 
 export function getGovernanceActivityLabel(event: GovernanceActivityEntry) {

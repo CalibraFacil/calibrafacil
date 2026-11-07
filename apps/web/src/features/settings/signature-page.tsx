@@ -22,6 +22,7 @@ import { Button } from '@calibra-facil/ui/button'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { useMySignatureData } from '@/features/settings/queries'
 import { cn } from '@calibra-facil/ui/utils'
+import { settingsKeys } from '@/features/settings/keys'
 
 export function SignatureSettingsPage() {
   const queryClient = useQueryClient()
@@ -35,7 +36,7 @@ export function SignatureSettingsPage() {
     mutationFn: (file: File) =>
       calibraApi.signatures.uploadMine(file, { fileName: file.name }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-signature'] })
+      queryClient.invalidateQueries({ queryKey: settingsKeys.mySignature })
       setPreviewUrl(null)
       toast.success('Assinatura salva com sucesso!')
     },
@@ -47,7 +48,7 @@ export function SignatureSettingsPage() {
   const deleteMutation = useMutation({
     mutationFn: () => calibraApi.signatures.deleteMine(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-signature'] })
+      queryClient.invalidateQueries({ queryKey: settingsKeys.mySignature })
       toast.success('Assinatura removida')
     },
     onError: (error) => {

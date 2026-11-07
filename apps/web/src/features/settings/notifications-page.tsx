@@ -11,6 +11,7 @@ import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
 import { calibraApi } from '@/utils/api'
 import { useNotificationPreferencesData } from '@/features/settings/queries'
+import { settingsKeys } from '@/features/settings/keys'
 
 interface NotificationSetting {
   id: NotificationType
@@ -211,17 +212,17 @@ export function NotificationsSettingsPage() {
     onMutate: async (newData) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({
-        queryKey: ['notification-preferences'],
+        queryKey: settingsKeys.notificationPreferences,
       })
 
       // Snapshot previous value
-      const previousData = queryClient.getQueryData([
-        'notification-preferences',
-      ])
+      const previousData = queryClient.getQueryData(
+        settingsKeys.notificationPreferences,
+      )
 
       // Optimistically update
       queryClient.setQueryData(
-        ['notification-preferences'],
+        settingsKeys.notificationPreferences,
         (old: typeof prefsData) => {
           if (!old) return old
           return {
@@ -242,7 +243,7 @@ export function NotificationsSettingsPage() {
       // Rollback on error
       if (context?.previousData) {
         queryClient.setQueryData(
-          ['notification-preferences'],
+          settingsKeys.notificationPreferences,
           context.previousData,
         )
       }
@@ -250,7 +251,9 @@ export function NotificationsSettingsPage() {
     },
     onSettled: () => {
       // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
+      queryClient.invalidateQueries({
+        queryKey: settingsKeys.notificationPreferences,
+      })
     },
   })
 

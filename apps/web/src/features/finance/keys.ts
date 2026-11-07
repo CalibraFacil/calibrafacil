@@ -15,6 +15,11 @@ export const financeKeys = {
     ['finance', 'contracts', String(id)] as const,
   contractFormCustomers: ['finance', 'contract-form', 'customers'] as const,
   contractFormServices: ['finance', 'contract-form', 'services'] as const,
+  automaticSendRules: ['finance', 'automatic-send-rules'] as const,
+  certificateReleasePolicies: [
+    'finance',
+    'certificate-release-policies',
+  ] as const,
   receipts: ['finance', 'receipts'] as const,
   erp: ['finance', 'erp'] as const,
   /** Every billing-readiness status filter. */

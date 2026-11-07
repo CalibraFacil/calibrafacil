@@ -118,7 +118,7 @@ export function OrganizationMembersSection({
     onSuccess: async () => {
       await Promise.all(
         organizationRoleGovernanceQueryKeys(activeOrg.id).map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey: [...queryKey] }),
+          queryClient.invalidateQueries({ queryKey }),
         ),
       )
       toast.success('Função atualizada com sucesso')
