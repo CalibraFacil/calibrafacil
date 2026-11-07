@@ -38,6 +38,22 @@ describe("calibra/no-api-domain-boundary-violations (real oxlint)", () => {
     });
   });
 
+  it("lets only server/ mount a domain's routers, through domains/<d>/routes", async () => {
+    await expectClean(RULE, {
+      "apps/api/src/server/route-mounts.ts": `import { x } from "../domains/jobs/routes";\n${USE}`,
+      "apps/api/src/server/mounts-index.ts": `import { x } from "../domains/jobs/routes/index";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/domains/portal/routes/portal.ts": `import { x } from "../../jobs/routes";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/cron/dispatch.ts": `import { x } from "../domains/jobs/routes";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/server/route-mounts.ts": `import { x } from "../domains/jobs/routes/jobs";\n${USE}`,
+    });
+  });
+
   it("lets a domain import its own files and the platform freely", async () => {
     await expectClean(RULE, {
       "apps/api/src/domains/jobs/routes/jobs.ts": `import { x } from "../commands/approve-job";\nimport { y } from "../../../lib/org-db";\nimport { z } from "../../../middleware/permission";\nexport const w = [x, y, z];\n`,
