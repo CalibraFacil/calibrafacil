@@ -1,5 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomically } from "./atomic-json-file";
 import {
   desktopSettingsPatchSchema,
   desktopSettingsSchema,
@@ -59,13 +60,7 @@ export class DesktopSettingsStore {
   }
 
   private async persist() {
-    const directory = path.dirname(this.filePath);
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-    const payload = `${JSON.stringify(this.current, null, 2)}\n`;
-
-    await mkdir(directory, { recursive: true });
-    await writeFile(tempPath, payload, "utf8");
-    await rename(tempPath, this.filePath);
+    await writeJsonFileAtomically(this.filePath, this.current);
   }
 }
 

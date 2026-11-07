@@ -52,9 +52,8 @@ import { ServiceOrderStatusBadge } from '@/features/service-orders/components/se
 import { SERVICE_ORDER_STATUS } from '@calibra-facil/shared'
 import { formatInstant, formatMoneyBRL } from '@calibra-facil/shared/format'
 function serviceOrderPath(order: ServiceOrderListItem) {
-  // Must match the link the prewarm is for. Built from the numeric id it
-  // warmed `by-public-id/<serial>`, which 404s — silently, so every hover
-  // looked like it was prefetching while warming nothing.
+  // Must match the link the prewarm is for: the public id, the one the detail
+  // route is keyed by (the numeric id would warm `by-public-id/<serial>`, a 404).
   return `/dashboard/service-orders/${order.publicId}`
 }
 

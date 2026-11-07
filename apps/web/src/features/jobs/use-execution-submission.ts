@@ -95,7 +95,6 @@ export function useExecutionSubmission({
     [calibrationPhases, phaseBlocks],
   )
 
-  // Save draft mutation
   const saveMutation = useMutation({
     // The variable is the snapshot being saved: on success it becomes the new
     // clean baseline, so edits typed while the request was in flight stay dirty.
@@ -130,7 +129,6 @@ export function useExecutionSubmission({
     },
   })
 
-  // Submit for review mutation
   const submitMutation = useMutation({
     mutationFn: async (_submitted: ExecutionFormValues) => {
       if (missingNotPerformedPhaseReasons.length > 0) {

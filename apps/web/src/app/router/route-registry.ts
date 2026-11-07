@@ -89,8 +89,8 @@ export type DashboardNavGroupId = keyof typeof dashboardNavGroups
 const settingsNavGroupLabels = {
   account: 'Conta',
   laboratory: 'Laboratório',
-  // Everything about the certificate, from its number to its delivery:
-  // release and automatic send used to be reachable only from Finance.
+  // Everything about the certificate, from its number to its delivery,
+  // release and automatic send included.
   certificates: 'Certificados',
   portal: 'Portal e integrações',
   advanced: 'Avançado',

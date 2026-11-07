@@ -21,7 +21,7 @@ vi.mock("@calibra-facil/jobs-core", () => ({
   processBackgroundJob: workerQueue,
 }));
 
-import { drainQueue } from "./queue-runtime";
+import { drainQueue } from "../test/integration/drain-queue";
 import { makeTestEnv } from "../test/integration/env";
 import { withStatusRepair } from "../test/integration/state-fixtures";
 

@@ -49,8 +49,7 @@ const SETTLE_ATTEMPTS = 40;
  * Which local database the running local server has open, and the only door
  * through which that changes.
  *
- * Owns the state that used to be module globals of the main process: the
- * partition in service, the cloud endpoint the server was started against
+ * Owns the partition in service, the cloud endpoint the server was started against
  * (captured once, so a switch restarts it against the same proxy rather than
  * a recomputed URL that may have moved), and the queue that serialises
  * activations.

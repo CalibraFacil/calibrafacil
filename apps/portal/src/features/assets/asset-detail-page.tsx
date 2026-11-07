@@ -223,8 +223,8 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
       </StaggerGroup>
 
       {/* Unified reliability warning — the hero pill only answers "am I due?";
-          this strip surfaces the drift verdict that used to hide at the bottom
-          of the rail. */}
+          this strip surfaces the drift verdict at the top, not the bottom of the
+          rail. */}
       <DriftAttentionStrip assetId={asset.id} />
 
       {/* min-w-0 on the columns: a grid item's implicit min-width is

@@ -146,8 +146,7 @@ function RecallDraftWizard({
   hideNotified?: boolean
 }) {
   // The impact query and the notification send are cloud commands; a
-  // connected desktop runs both. Previously the whole wizard was inert there,
-  // which meant a recall could only be worked from a browser.
+  // connected desktop runs both.
   const impactAvailability = useOperationAvailability(
     'standards',
     'getImpactedCertificates',

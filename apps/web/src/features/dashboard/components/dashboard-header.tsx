@@ -320,7 +320,6 @@ export function DashboardHeader({
       competenceDetailFetchCount === 0,
   })
 
-  // Build entity name lookup
   const entityNames: Record<string, string> = useMemo(() => {
     const names: Record<string, string> = {}
     const customerDisplayLabel = customerCachedLabel ?? customerLabel ?? null
@@ -400,61 +399,55 @@ export function DashboardHeader({
   ])
 
   const breadcrumbs = useMemo(() => {
-    return (
-      matches
-        .filter((m) => {
-          // Filter only dashboard routes
-          if (!m.routeId?.startsWith('/dashboard')) return false
+    return matches
+      .filter((m) => {
+        // Filter only dashboard routes
+        if (!m.routeId?.startsWith('/dashboard')) return false
 
-          // Remove index routes that duplicate layout routes
-          if (m.routeId.endsWith('/')) {
-            const layoutId = m.routeId.slice(0, -1)
-            const hasLayout = matches.some(
-              (other) => other.routeId === layoutId,
-            )
-            if (hasLayout) return false
+        if (m.routeId.endsWith('/')) {
+          const layoutId = m.routeId.slice(0, -1)
+          const hasLayout = matches.some((other) => other.routeId === layoutId)
+          if (hasLayout) return false
+        }
+
+        return true
+      })
+      .map((m) => {
+        // Normalize routeId by removing trailing slash for label lookup
+        const normalizedRouteId = m.routeId.endsWith('/')
+          ? m.routeId.slice(0, -1)
+          : m.routeId
+
+        let label = getDashboardRouteTitle(normalizedRouteId)
+
+        // Entity routes end in a dynamic segment — $id, $publicId, whatever
+        // the route names it. Swap the raw segment for the entity's own name
+        // so the crumb reads "OS-2026-000001" instead of the generic route
+        // label (or the opaque id itself).
+        // Still only for routes ENDING there: /clients/$id, not
+        // /clients/$id/info.
+        const routeParts = normalizedRouteId.split('/')
+        const lastRoutePart = routeParts.at(-1) ?? ''
+        if (lastRoutePart.startsWith('$')) {
+          const pathParts = m.pathname.split('/')
+          const id = pathParts[routeParts.length - 1]
+
+          if (id && entityNames[id]) {
+            label = entityNames[id]
           }
+        }
 
-          return true
-        })
-        .map((m) => {
-          // Normalize routeId by removing trailing slash for label lookup
-          const normalizedRouteId = m.routeId.endsWith('/')
-            ? m.routeId.slice(0, -1)
-            : m.routeId
+        // Fallback to last path segment if no label found
+        if (!label) {
+          label = m.pathname.split('/').pop() ?? ''
+        }
 
-          let label = getDashboardRouteTitle(normalizedRouteId)
-
-          // Entity routes end in a dynamic segment — $id, $publicId, whatever
-          // the route names it. Swap the raw segment for the entity's own name
-          // so the crumb reads "OS-2026-000001" instead of the generic route
-          // label (or the opaque id itself).
-          // Still only for routes ENDING there: /clients/$id, not
-          // /clients/$id/info.
-          const routeParts = normalizedRouteId.split('/')
-          const lastRoutePart = routeParts.at(-1) ?? ''
-          if (lastRoutePart.startsWith('$')) {
-            const pathParts = m.pathname.split('/')
-            const id = pathParts[routeParts.length - 1]
-
-            if (id && entityNames[id]) {
-              label = entityNames[id]
-            }
-          }
-
-          // Fallback to last path segment if no label found
-          if (!label) {
-            label = m.pathname.split('/').pop() ?? ''
-          }
-
-          return {
-            path: m.pathname,
-            label,
-          }
-        })
-        // Filter out breadcrumbs with empty labels
-        .filter((crumb) => crumb.label.trim() !== '')
-    )
+        return {
+          path: m.pathname,
+          label,
+        }
+      })
+      .filter((crumb) => crumb.label.trim() !== '')
   }, [matches, entityNames])
 
   return (

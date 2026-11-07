@@ -1,11 +1,9 @@
 /**
- * Which acceptance validation speaks about a formula output (roadmap 2 F1,
- * review 3.5). The review and the approved record used to pick the first
- * validation whose expressions CONTAIN the output key as text, so an output `U`
- * matched `U_c`, `Uexp` or any expression with a capital U in it, and showed
- * another criterion's message and badge next to it. A validation now targets an
+ * Which acceptance validation speaks about a formula output: one targets an
  * output only when the key appears in one of its expressions as a whole
- * identifier.
+ * identifier. Matching the key as plain text would let an output `U` match
+ * `U_c`, `Uexp` or any expression with a capital U in it, and show another
+ * criterion's message and badge next to it.
  */
 
 /**

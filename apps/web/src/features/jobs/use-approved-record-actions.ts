@@ -65,9 +65,7 @@ export function useApprovedRecordActions({
   const isOutOfToleranceAsFound = job.asFoundConformity === 'NON_CONFORMING'
   // Both of these are cloud commands against an already-approved record, so
   // the job's own local queue cannot make them stale — connectivity is the
-  // only real blocker. Previously §7.10 flagging was hidden on desktop
-  // outright and amendment was not gated at all, so it failed with a
-  // transport error instead of an explanation.
+  // only real blocker, and it is reported as the reason when the action is off.
   const flagOutOfToleranceAvailability = useOperationAvailability(
     'jobs',
     'flagOutOfTolerance',

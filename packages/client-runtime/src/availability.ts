@@ -8,8 +8,8 @@ import {
 /**
  * Operation availability, derived instead of hand-maintained.
  *
- * The desktop host used to answer "can I do this?" with a single `isDesktop`
- * boolean, which conflated three independent questions:
+ * "Can I do this?" is not a single `isDesktop` boolean: it is three independent
+ * questions:
  *
  * 1. **Capability** — does this host implement the mechanism at all?
  * 2. **Availability** — are the cloud, the local process and the local cache

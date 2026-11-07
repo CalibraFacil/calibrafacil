@@ -1,5 +1,4 @@
-import type { SyncState, SyncStatusSnapshot } from '@calibra-facil/contracts'
-import { pluralize } from '@calibra-facil/shared'
+import type { SyncStatusSnapshot } from '@calibra-facil/contracts'
 import type {
   CloudReachability,
   LocalRuntimeHealth,
@@ -117,56 +116,4 @@ export function buildRuntimeHealthSnapshot(
     pendingOutboxCount: status.pendingOutboxCount ?? 0,
     conflictCount: status.conflictCount ?? 0,
   }
-}
-
-/**
- * Human-facing summary of *why* the desktop is degraded, for the sync surface.
- * Kept separate from the per-operation reasons so a page-level banner and a
- * button tooltip never disagree.
- */
-export function describeRuntimeHealth(
-  health: RuntimeHealthSnapshot,
-): { tone: SyncState; summary: string } | null {
-  if (!health.isDesktop) return null
-
-  if (health.localRuntime === 'unavailable') {
-    return {
-      tone: 'error',
-      summary:
-        'O serviço local do desktop não respondeu. Reinicie o aplicativo para voltar a trabalhar offline.',
-    }
-  }
-
-  if (health.conflictCount > 0) {
-    return {
-      tone: 'conflict',
-      summary: `${pluralize(
-        health.conflictCount,
-        'registro',
-        'registros',
-      )} com conflito aguardando revisão.`,
-    }
-  }
-
-  if (health.cloud === 'unreachable') {
-    return {
-      tone: 'offline',
-      summary: health.localCacheBootstrapped
-        ? 'Sem conexão com a nuvem. Você continua trabalhando com os dados sincronizados neste computador.'
-        : 'Sem conexão com a nuvem e sem cache local. Conecte-se para baixar seus dados.',
-    }
-  }
-
-  if (health.pendingOutboxCount > 0) {
-    return {
-      tone: 'idle',
-      summary: `${pluralize(
-        health.pendingOutboxCount,
-        'alteração local',
-        'alterações locais',
-      )} aguardando envio.`,
-    }
-  }
-
-  return null
 }

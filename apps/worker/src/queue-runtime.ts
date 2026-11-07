@@ -330,29 +330,3 @@ export async function processQueueBatch(
     isStopping,
   );
 }
-
-// Release stale jobs, then keep claiming + processing batches until the queue
-// is empty. The poller claims one batch per tick; this is the "run to empty"
-// form the integration specs use. `maxBatches` is a runaway guard.
-export async function drainQueue(
-  env: WorkerEnv,
-  config: QueueRuntimeConfig,
-  maxBatches = 1_000,
-  isStopping: () => boolean = () => false,
-): Promise<number> {
-  await reclaimStaleJobs(config.staleAfterMs);
-
-  let processed = 0;
-  for (let batch = 0; batch < maxBatches && !isStopping(); batch += 1) {
-    const count = await claimAndProcessBatch(
-      env,
-      config.workerId,
-      config.batchSize,
-      isStopping,
-    );
-    if (count === 0) break;
-    processed += count;
-  }
-
-  return processed;
-}

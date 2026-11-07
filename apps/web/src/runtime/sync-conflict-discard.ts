@@ -4,9 +4,9 @@ import { SYNC_CONFLICT_STATUS } from '@calibra-facil/schemas'
 /**
  * How the desktop presents what the user decides on a sync conflict.
  *
- * "Manter nuvem" used to mean "ignore": the local change was marked as sent although the cloud
- * never received it. It is now a discard: the change is given up on purpose, recorded with who
- * decided, when and why, kept for audit, and never sent. The wording says what it does.
+ * "Manter nuvem" is a discard: the local change is given up on purpose, recorded with who
+ * decided, when and why, kept for audit, and never sent. It is not "ignore": nothing is marked
+ * as sent. The wording says what it does.
  */
 
 export function conflictStatusLabel(status: LocalSyncConflict['status']) {

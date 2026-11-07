@@ -69,10 +69,10 @@ vi.mock("@calibra-facil/jobs-core", () => ({
 
 import {
   defaultWorkerId,
-  drainQueue,
   processQueueBatch,
   readQueueConfig,
 } from "./queue-runtime";
+import { drainQueue } from "../test/integration/drain-queue";
 
 const CONFIG = {
   workerId: "test-worker",

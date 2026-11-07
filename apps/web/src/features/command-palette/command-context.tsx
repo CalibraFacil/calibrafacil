@@ -61,7 +61,6 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const location = useLocation()
   const activePage = pages[pages.length - 1] ?? 'root'
 
-  // Compute context actions based on current route
   const pathname = location.pathname
   const contextActions = useMemo(() => {
     for (const config of contextActionsRegistry) {

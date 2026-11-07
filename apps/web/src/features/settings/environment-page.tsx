@@ -125,7 +125,6 @@ export function EnvironmentSettingsPage() {
     },
   })
 
-  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       return calibraApi.environmentalLimits.delete({ params: { id } })

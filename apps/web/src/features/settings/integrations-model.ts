@@ -108,21 +108,6 @@ export function getIntegrationVisibleTargets(
     : genericHttpTargets
 }
 
-export function buildIntegrationActiveSummaries(
-  integrations: readonly IntegrationSummary[],
-) {
-  return {
-    total: integrations.length,
-    atRisk: integrations.filter(
-      (integration) =>
-        integration.overview.readiness.readinessStatus !== 'READY',
-    ).length,
-    scheduledTargets: integrations
-      .flatMap((integration) => integration.overview.targets)
-      .filter((target) => target.schedule.mode === 'scheduled').length,
-  }
-}
-
 export const integrationFormatterOptions: Array<{
   value: IntegrationMappingFormatter
   label: string
@@ -186,32 +171,6 @@ export function getIntegrationMappingDraft({
   )
 }
 
-export function updateIntegrationMappingDrafts({
-  drafts,
-  integration,
-  updater,
-}: {
-  drafts: IntegrationMappingDrafts
-  integration: IntegrationSummary
-  updater: (current: IntegrationMappingsConfig) => IntegrationMappingsConfig
-}): IntegrationMappingDrafts {
-  const base = getIntegrationMappingDraft({ drafts, integration })
-
-  return {
-    ...drafts,
-    [integration.id]: updater(cloneIntegrationMappings(base)),
-  }
-}
-
-export function clearIntegrationMappingDraft(
-  drafts: IntegrationMappingDrafts,
-  integrationId: string,
-): IntegrationMappingDrafts {
-  const next = { ...drafts }
-  delete next[integrationId]
-  return next
-}
-
 export function createEmptyIntegrationMappingRule(
   target: SyncTarget,
 ): IntegrationFieldMappingRule {
@@ -270,24 +229,6 @@ export function removeIntegrationMappingRule(
   }
 }
 
-export function createIntegrationPreviewKey(
-  integrationId: string,
-  target: SyncTarget,
-) {
-  return `${integrationId}:${target}`
-}
-
-export function clearIntegrationPreviewsForIntegration<TPreview>(
-  previews: Record<string, TPreview>,
-  integrationId: string,
-) {
-  return Object.fromEntries(
-    Object.entries(previews).filter(
-      ([key]) => !key.startsWith(`${integrationId}:`),
-    ),
-  )
-}
-
 export function formatIntegrationPreviewPayload(
   payload: Record<string, unknown>,
 ) {
@@ -296,13 +237,6 @@ export function formatIntegrationPreviewPayload(
 
 export function formatIntegrationDateTime(value: string | null) {
   return formatInstant(value, 'date-time', { empty: 'Ainda não disponível' })
-}
-
-export function formatIntegrationDuration(value: number | null | undefined) {
-  if (!value || value <= 0) return 'Sem duração'
-  if (value < 1000) return `${value} ms`
-  if (value < 60_000) return `${Math.round(value / 100) / 10}s`
-  return `${Math.round(value / 6000) / 10} min`
 }
 
 export function integrationReadinessBadgeVariant(
@@ -323,24 +257,6 @@ export function integrationCoveragePercentage(
 ) {
   if (coverage.localCount === 0) return 0
   return Math.round((coverage.linkedCount / coverage.localCount) * 100)
-}
-
-export function integrationScheduleStatusVariant(
-  status: IntegrationScheduleStatus,
-) {
-  switch (status) {
-    case 'scheduled':
-    case 'manual_only':
-    case 'disabled':
-      return 'outline'
-    case 'due':
-      return 'secondary'
-    case 'running':
-      return 'default'
-    case 'blocked':
-    case 'failing':
-      return 'destructive'
-  }
 }
 
 export function integrationScheduleStatusLabel(

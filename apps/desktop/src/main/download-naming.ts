@@ -1,11 +1,8 @@
-import { hasControlCharacter } from "./deep-link-path";
-
 /**
  * Filenames for files the desktop writes to the user's disk.
  *
- * The old behaviour offered `12.pdf` — the job's numeric id — which is
- * meaningless in a downloads folder six months later, and is exactly the name
- * the *next* certificate would suggest too.
+ * A name says what the file is (a bundle and the instant it was made), not a
+ * numeric id that means nothing in a downloads folder six months later.
  *
  * Two constraints make this less trivial than joining strings:
  *
@@ -42,32 +39,6 @@ export function buildSupportBundleFileName(now: Date = new Date()): string {
   const stamp = now.toISOString().replace(/[:.]/g, "-");
 
   return `${finalizeStem(`calibrafacil-suporte_${stamp}`, "calibrafacil-suporte")}.json`;
-}
-
-/**
- * Reduces one field to a filename-safe segment: strips path separators and
- * characters Windows rejects, collapses whitespace and runs of separators, and
- * keeps accented letters, which are ordinary in customer names here.
- */
-export function sanitizeSegment(value: string | null | undefined): string {
-  if (typeof value !== "string") return "";
-
-  return (
-    value
-      .normalize("NFC")
-      .trim()
-      // Path separators and the characters Windows forbids in a name.
-      .replace(/[\\/:*?"<>|]+/g, "-")
-      .replace(/\s+/g, "-")
-      // Anything left that a filesystem or a shell would treat oddly. Shares
-      // the deep-link module's control-character definition rather than
-      // restating the code-point range one file over.
-      .split("")
-      .filter((character) => !hasControlCharacter(character))
-      .join("")
-      .replace(/-{2,}/g, "-")
-      .replace(/^[-_.]+|[-_.]+$/g, "")
-  );
 }
 
 /**
