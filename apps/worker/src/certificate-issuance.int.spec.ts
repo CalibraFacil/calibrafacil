@@ -34,7 +34,7 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 import { notifyCertificateReady } from "@calibra-facil/notifications";
-import worker, { processBackgroundJob } from "@calibra-facil/jobs-core";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
@@ -578,35 +578,19 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
       );
     });
 
-    it("REQ-WRETRY-004 the queue handler forwards the message's delivery attempt: a non-final failure retries the message and keeps GENERATING_PDF", async () => {
+    it("REQ-WRETRY-004 a non-final delivery that fails throws (the queue retries it) and keeps GENERATING_PDF", async () => {
       const { env } = makeRecordingEnv();
       const { org, job } = await seedOrgAndJob();
       stubGotenberg([], { fail: true });
-      const retry = vi.fn();
-      const ack = vi.fn();
 
-      await worker.queue(
-        {
-          messages: [
-            {
-              body: {
-                type: "CERTIFICATE",
-                jobId: job.jobId,
-                userId: org.userId,
-              },
-              attempt: 1,
-              maxAttempts: 3,
-              ack,
-              retry,
-            },
-          ],
-        },
-        env,
-        { props: {}, waitUntil: () => undefined, passThroughOnException() {} },
-      );
+      await expect(
+        processBackgroundJob(
+          env,
+          { type: "CERTIFICATE", jobId: job.jobId, userId: org.userId },
+          { attempt: 1, maxAttempts: 3 },
+        ),
+      ).rejects.toThrow();
 
-      expect(ack).not.toHaveBeenCalled();
-      expect(retry).toHaveBeenCalledTimes(1);
       expect((await jobRow(job.jobId)).status).toBe("GENERATING_PDF");
     });
   });

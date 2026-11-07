@@ -24,7 +24,7 @@ import { makeTestEnv } from "../test/integration/env";
 const { workerQueue } = vi.hoisted(() => ({ workerQueue: vi.fn() }));
 
 vi.mock("@calibra-facil/jobs-core", () => ({
-  default: { queue: workerQueue },
+  processBackgroundJob: workerQueue,
 }));
 
 import { drainQueue } from "./queue-runtime";
@@ -160,19 +160,16 @@ describe("queue lease fencing (real Postgres)", () => {
     });
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    workerQueue.mockImplementationOnce(
-      async (batch: { messages: Array<{ ack: () => void }> }) => {
-        // While the (slow) worker runs, its lease expires and another worker
-        // reclaims and claims the row.
-        await db.execute(sql`
+    workerQueue.mockImplementationOnce(async () => {
+      // While the (slow) worker runs, its lease expires and another worker
+      // reclaims and claims the row.
+      await db.execute(sql`
           update app_queue_job
           set status = 'PENDING', locked_by = null, locked_at = null
           where id = ${id}
         `);
-        await claimQueueJobs("worker-b", 1);
-        for (const message of batch.messages) message.ack();
-      },
-    );
+      await claimQueueJobs("worker-b", 1);
+    });
 
     await drainQueue(env, CONFIG);
 
@@ -191,11 +188,7 @@ describe("queue receipts default mode (real Postgres)", () => {
       jobId: 999,
       userId: "user-1",
     });
-    workerQueue.mockImplementation(
-      async (batch: { messages: Array<{ ack: () => void }> }) => {
-        for (const message of batch.messages) message.ack();
-      },
-    );
+    workerQueue.mockImplementation(async () => {});
 
     expect(await drainQueue(env, CONFIG)).toBe(1);
     expect(workerQueue).toHaveBeenCalledTimes(1);
@@ -225,11 +218,7 @@ describe("queue receipts default mode (real Postgres)", () => {
       jobId: 998,
       userId: "user-1",
     });
-    workerQueue.mockImplementation(
-      async (batch: { messages: Array<{ ack: () => void }> }) => {
-        for (const message of batch.messages) message.ack();
-      },
-    );
+    workerQueue.mockImplementation(async () => {});
 
     await drainQueue(env, CONFIG);
     // COMPLETED -> PENDING is not a move of APP_QUEUE_JOB_MACHINE: staging it

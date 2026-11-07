@@ -12,7 +12,7 @@ import { makeTestEnv } from "../test/integration/env";
 const { workerQueue } = vi.hoisted(() => ({ workerQueue: vi.fn() }));
 
 vi.mock("@calibra-facil/jobs-core", () => ({
-  default: { queue: workerQueue },
+  processBackgroundJob: workerQueue,
 }));
 
 import { drainQueue } from "./queue-runtime";
@@ -25,16 +25,10 @@ const CONFIG = {
   staleAfterMs: 10 * 60_000,
 };
 
-type MessageBatchLike = {
-  messages: Array<{ body: unknown; ack: () => void }>;
-};
-
 beforeEach(async () => {
   vi.clearAllMocks();
   await truncateAll();
-  workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
-    for (const message of batch.messages) message.ack();
-  });
+  workerQueue.mockImplementation(async () => {});
 });
 
 // Bypasses the typed enqueue on purpose: it refuses exactly the payloads these
@@ -90,8 +84,8 @@ describe("drainQueue dead-letters unparseable payloads", () => {
 
     // The handler only ever saw the valid row, with its parsed payload.
     expect(workerQueue).toHaveBeenCalledTimes(1);
-    const [batch] = workerQueue.mock.calls[0] ?? [];
-    expect(batch.messages[0].body).toEqual({
+    const [, message] = workerQueue.mock.calls[0] ?? [];
+    expect(message).toEqual({
       type: "CERTIFICATE",
       jobId: 7,
       userId: "user-1",
