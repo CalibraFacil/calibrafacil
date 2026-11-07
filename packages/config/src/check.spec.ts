@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkConfig, parseEnvFile } from "./check";
+import { checkConfig } from "./check";
+import { parseEnvFile } from "./env-file";
 
 vi.setConfig({ testTimeout: 60_000 });
 
