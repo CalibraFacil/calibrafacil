@@ -11,9 +11,9 @@ import { describe, expect, it } from "vitest";
 const apiSource = (relative: string) =>
   fileURLToPath(new URL(`../../../apps/api/src/${relative}`, import.meta.url));
 
-/** Quoted SCREAMING_SNAKE literals in the API's sync routes and sync modules. */
+/** Quoted SCREAMING_SNAKE literals in the API's sync domain (its routes and its modules). */
 function emittedSyncCodes() {
-  const files = ["routes/sync", "modules/sync"].flatMap((relative) => {
+  const files = ["domains/sync/routes", "domains/sync"].flatMap((relative) => {
     const directory = apiSource(relative);
     return readdirSync(directory)
       .filter((name) => name.endsWith(".ts") && !name.includes(".spec."))

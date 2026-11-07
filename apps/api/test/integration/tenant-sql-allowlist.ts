@@ -112,7 +112,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/sync-change-log-purge.ts",
+    file: "apps/api/src/domains/sync/sync-change-log-purge.ts",
     tables: ["sync_change_log"],
     kinds: ["select"],
     sql: /select distinct organization_id from sync_change_log/i,

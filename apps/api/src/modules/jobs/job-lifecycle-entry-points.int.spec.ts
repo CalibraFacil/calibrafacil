@@ -66,7 +66,7 @@ import {
   jobRow,
 } from "../../../test/integration/job-cas";
 import { jobsRouter } from "../../routes/jobs";
-import { publicApiV2Router } from "../../routes/public-api-v2";
+import { publicApiV2Router } from "../../domains/public-api/routes/public-api-v2";
 import { visitJobsRouter } from "../../routes/visits";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 

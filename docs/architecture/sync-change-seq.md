@@ -182,9 +182,9 @@ catalog) is refused and stays on the owner path (`seedAssetTypes` on `systemDb`)
 
 ## Tests
 
-`apps/api/src/routes/sync-change-seq.int.spec.ts` (the late-commit case with two real concurrent
+`apps/api/src/domains/sync/routes/sync-change-seq.int.spec.ts` (the late-commit case with two real concurrent
 transactions, tombstones, scope moves, pages, compatibility, retention),
-`apps/api/src/modules/sync/change-log-triggers.int.spec.ts` (what each trigger writes),
+`apps/api/src/domains/sync/change-log-triggers.int.spec.ts` (what each trigger writes),
 `packages/db/src/sync-change-log-sql.test.ts` (migration, schema-extras and entity list agree),
 `packages/local-db/src/sync-change-seq.test.ts` and `apps/local-server/src/sync-change-seq.test.ts`
 (deletes, pending rows, paged bootstrap, resumption, resync), `packages/contracts/src/sync-change-seq.test.ts`.
