@@ -1,8 +1,8 @@
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DomainError, domainErrorBody } from "../lib/domain-errors";
+import { DomainError, domainErrorBody } from "../../../lib/domain-errors";
 import {
   syncAckResponseSchema,
   syncAttachmentCompleteUploadResponseSchema,
@@ -17,7 +17,7 @@ import {
   resolveDesktopPerformedAt,
   stripDesktopNullEntries,
   syncRouter,
-} from "./sync";
+} from "./";
 
 const mocks = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
@@ -130,8 +130,8 @@ const mocks = vi.hoisted(() => {
 // The reverse-traceability index is written on the submit's own transaction;
 // its rewrite (a delete and an insert) would consume the select queue here, and
 // is covered against a real database (jobs-contract.int.spec.ts).
-vi.mock("../lib/job-standards", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../lib/job-standards")>()),
+vi.mock("../../../lib/job-standards", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/job-standards")>()),
   syncJobStandardLinks: vi.fn(async () => undefined),
 }));
 
@@ -151,7 +151,7 @@ vi.mock("@calibra-facil/db", () => ({
 // sync.int.spec.ts. Here the claim is a pass-through that keeps the mocked
 // select queue exactly as it was: the audit-log lookup still answers
 // "already applied", anything else is claimed.
-vi.mock("../modules/sync/applied-events", () => ({
+vi.mock("../applied-events", () => ({
   claimDesktopSyncEvent: async (
     _o: unknown,
     _organizationId: string,
@@ -169,7 +169,7 @@ vi.mock("../modules/sync/applied-events", () => ({
 // The aggregate version (roadmap 2 E1) is exercised against a real database in
 // sync-aggregate-version.int.spec.ts. Here no desktop event was applied before (version
 // 0) and the lock is a no-op, so the mocked select queue is consumed exactly as before.
-vi.mock("../modules/sync/aggregate-version", () => ({
+vi.mock("../aggregate-version", () => ({
   lockSyncAggregate: async () => undefined,
   readSyncAggregateVersion: async () => 0,
 }));
@@ -177,8 +177,8 @@ vi.mock("../modules/sync/aggregate-version", () => ({
 // The real permission helpers (the per-operation push check reads them); only the
 // middleware that would authenticate a request is replaced by the one that sets
 // the session and the member.
-vi.mock("../middleware/permission", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../middleware/permission")>()),
+vi.mock("../../../middleware/permission", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../middleware/permission")>()),
   withLabPermission: mocks.withLabPermission,
   requireLabProtected: mocks.withLabPermission(),
   requireOrgType: () => async (_c: unknown, next: () => Promise<void>) => {
@@ -186,7 +186,7 @@ vi.mock("../middleware/permission", async (importOriginal) => ({
   },
 }));
 
-vi.mock("../lib/storage", () => ({
+vi.mock("../../../lib/storage", () => ({
   createR2Client: mocks.createR2Client,
   generateBoundPresignedUploadUrl: mocks.generateBoundPresignedUploadUrl,
   generatePresignedUrl: mocks.generatePresignedUrl,

@@ -1,12 +1,12 @@
-import { createRouter } from "../../server/router";
+import { createRouter } from "../../../server/router";
 import { syncBootstrapPageRequestSchema } from "@calibra-facil/contracts";
-import { domainErrorResponse, invalid } from "../../lib/domain-errors";
-import { withLabPermission } from "../../middleware/permission";
+import { domainErrorResponse, invalid } from "../../../lib/domain-errors";
+import { withLabPermission } from "../../../middleware/permission";
 import {
   buildBootstrapPageResponse,
   wantsBootstrapPages,
-} from "../../modules/sync/bootstrap-pages";
-import { updateRequiredBody } from "../../modules/sync/minimum-desktop-version";
+} from "../bootstrap-pages";
+import { updateRequiredBody } from "../minimum-desktop-version";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
 export const bootstrapRoutes = createRouter<SyncRouterEnv>().post(

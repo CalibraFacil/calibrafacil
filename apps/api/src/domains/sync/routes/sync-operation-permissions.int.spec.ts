@@ -9,7 +9,7 @@
  *   REQ-SYNC-RBAC-4  an event the role may send is not refused for permission (it
  *                    applies, or fails on its own merits), and a batch carries both
  */
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -25,13 +25,13 @@ import {
   classifyOutboxRejection,
   syncPushResponseSchema,
 } from "@calibra-facil/contracts";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedCustomer, seedOrg } from "../../test/integration/seed";
-import { syncRouter } from "./sync";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
+import { syncRouter } from "./";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

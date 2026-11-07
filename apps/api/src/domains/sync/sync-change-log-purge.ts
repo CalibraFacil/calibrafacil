@@ -13,11 +13,11 @@
  * laboratory is purged in its own transaction that names it (P2-18j): the delete
  * and the recording of its horizon commit together, for that laboratory only.
  */
-import { withOrg, SYSTEM_ACTOR } from "./org-context";
+import { withOrg, SYSTEM_ACTOR } from "../../lib/org-context";
 import { sql } from "drizzle-orm";
 import { systemDb } from "@calibra-facil/db";
 import { readSyncConfig } from "@calibra-facil/config";
-import { getExecuteRows } from "./db";
+import { getExecuteRows } from "../../lib/db";
 
 export type SyncChangeLogPurgeResult = {
   /** Entries deleted. */

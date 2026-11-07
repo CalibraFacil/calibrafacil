@@ -16,7 +16,7 @@
  *             recorded in the audit row of the job change it carries (roadmap 2 E2).
  */
 
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -26,14 +26,14 @@ import {
   jobAuditLog,
   syncAppliedEvent,
 } from "@calibra-facil/db/schema";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { syncRouter } from "./sync";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
+import { syncRouter } from "./";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

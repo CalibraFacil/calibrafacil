@@ -7,8 +7,8 @@ import { buildUnitScopeCondition } from "../../lib/units";
 import {
   type JobExecutionResult,
   type OfficialExecutionFailure,
-} from "../jobs/submit-job";
-import { type StandardsRefusal } from "../jobs/standards-judgement";
+} from "../../modules/jobs/submit-job";
+import { type StandardsRefusal } from "../../modules/jobs/standards-judgement";
 import { isIntegerNumber } from "./helpers";
 import {
   type ApplyDesktopSyncEventInput,

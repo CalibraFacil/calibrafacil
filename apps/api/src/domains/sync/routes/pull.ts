@@ -1,4 +1,4 @@
-import { createRouter } from "../../server/router";
+import { createRouter } from "../../../server/router";
 import {
   SYNC_MIN_PROTOCOL_VERSION,
   SYNC_PULL_PROTOCOL_PARAM,
@@ -7,10 +7,10 @@ import {
   syncAckResponseSchema,
   syncPullResponseSchema,
 } from "@calibra-facil/contracts";
-import { withLabPermission } from "../../middleware/permission";
-import { pullChangeLog } from "../../modules/sync/change-log";
-import { parseSyncPullLimit } from "../../modules/sync/helpers";
-import { updateRequiredBody } from "../../modules/sync/minimum-desktop-version";
+import { withLabPermission } from "../../../middleware/permission";
+import { pullChangeLog } from "../change-log";
+import { parseSyncPullLimit } from "../helpers";
+import { updateRequiredBody } from "../minimum-desktop-version";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
 export const pullRoutes = createRouter<SyncRouterEnv>()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectStaleDesktopBase } from "./sync";
+import { detectStaleDesktopBase } from "./";
 
 // REL-01 slice 2 — Docker-free boundary coverage of the optimistic-concurrency
 // comparator that guards the three blind desktop applies. The end-to-end apply +

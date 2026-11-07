@@ -13,7 +13,7 @@
  * queue and the notifications are faked).
  */
 
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -23,15 +23,15 @@ import {
   type JobStatus,
 } from "@calibra-facil/db/schema";
 import { DESKTOP_EXECUTION_PAYLOAD_VERSION } from "@calibra-facil/schemas";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { jobRow } from "../../test/integration/job-cas";
-import { syncRouter } from "./sync";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
+import { jobRow } from "../../../../test/integration/job-cas";
+import { syncRouter } from "./";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

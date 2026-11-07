@@ -60,7 +60,7 @@ import { signaturesRouter } from "../routes/signatures";
 import { signingRouter } from "../routes/signing";
 import { ssoRouter } from "../routes/sso";
 import { standardsRouter } from "../domains/standards/routes";
-import { syncRouter } from "../routes/sync";
+import { syncRouter } from "../domains/sync/routes";
 import { trainingRecordsRouter } from "../routes/training-records";
 import { unitsRouter } from "../routes/units";
 import { magicLinkRouter } from "../routes/magic-link";

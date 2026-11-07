@@ -1,11 +1,11 @@
-import { createRouter } from "../../server/router";
+import { createRouter } from "../../../server/router";
 import {
   syncConflictResolutionRequestSchema,
   syncConflictResolutionResponseSchema,
 } from "@calibra-facil/contracts";
-import { writeOrganizationAuditEvent } from "../../lib/audit";
-import { orgDb } from "../../lib/org-db";
-import { withLabPermission } from "../../middleware/permission";
+import { writeOrganizationAuditEvent } from "../../../lib/audit";
+import { orgDb } from "../../../lib/org-db";
+import { withLabPermission } from "../../../middleware/permission";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
 export const conflictRoutes = createRouter<SyncRouterEnv>().post(

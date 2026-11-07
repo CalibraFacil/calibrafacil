@@ -8,8 +8,8 @@
  * it expired; what matters is when the work was done.
  */
 
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
-import { insertJobs } from "../../test/integration/job-fixtures";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -25,14 +25,14 @@ import {
   calendarDateKey,
   labToday,
 } from "@calibra-facil/shared";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedCustomer, seedOrg } from "../../test/integration/seed";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { syncRouter } from "./sync";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
+import { syncRouter } from "./";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

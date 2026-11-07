@@ -1,4 +1,4 @@
-import { createRouter } from "../../server/router";
+import { createRouter } from "../../../server/router";
 import { type SyncRouterEnv } from "./env";
 import { bootstrapRoutes } from "./bootstrap";
 import { pushRoutes } from "./push";
@@ -21,8 +21,8 @@ export {
   DESKTOP_SERVICE_ORDER_NULLABLE_KEYS,
   DesktopCreateAssetSchema,
   stripDesktopNullEntries,
-} from "../../modules/sync/desktop-schemas";
+} from "../desktop-schemas";
 export {
   detectStaleDesktopBase,
   resolveDesktopPerformedAt,
-} from "../../modules/sync/desktop-event-support";
+} from "../desktop-event-support";

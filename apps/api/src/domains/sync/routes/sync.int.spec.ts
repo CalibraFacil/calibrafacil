@@ -1,7 +1,7 @@
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { syncRouter } from "./sync";
+import { syncRouter } from "./";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -17,10 +17,10 @@ import {
 } from "@calibra-facil/db/schema";
 import { syncBootstrapPageResponseSchema } from "@calibra-facil/contracts";
 import { eq, sql } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for syncRouter.
 // Only the better-auth session is mocked (test/integration/setup.ts).

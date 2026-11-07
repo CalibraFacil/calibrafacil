@@ -11,8 +11,8 @@ const { named } = vi.hoisted(() => ({
     Object.defineProperty(fn, "name", { value: name }),
 }));
 
-vi.mock("../middleware/permission", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../middleware/permission")>()),
+vi.mock("../../../middleware/permission", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../middleware/permission")>()),
   withLabPermission: (permissions: unknown) => [
     named(
       async () => undefined,
@@ -38,7 +38,7 @@ describe("sync router route table", () => {
     "REQ-SPLIT-2 keeps every route and its middleware chain in order",
     { timeout: 60_000 },
     async () => {
-      const { syncRouter } = await import("./sync");
+      const { syncRouter } = await import("./");
 
       const table = syncRouter.routes
         .map(({ method, path, handler }) => {

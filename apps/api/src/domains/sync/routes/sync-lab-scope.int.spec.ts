@@ -27,7 +27,7 @@
  *   REQ-18I-ATT-1   an attachment of another laboratory's partition is neither signed
  *                   nor completed
  */
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -50,18 +50,18 @@ import {
   syncPushResponseSchema,
 } from "@calibra-facil/contracts";
 import { DESKTOP_EXECUTION_PAYLOAD_VERSION } from "@calibra-facil/schemas";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedCustomer, seedOrg } from "../../test/integration/seed";
-import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { jobRow } from "../../test/integration/job-cas";
-import { failEventAuditInsert } from "../../test/integration/sync-faults";
-import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
-import { getExecuteRows } from "../lib/db";
-import { syncRouter } from "./sync";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
+import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
+import { jobRow } from "../../../../test/integration/job-cas";
+import { failEventAuditInsert } from "../../../../test/integration/sync-faults";
+import { openAppRoleDb, sqlStateOf } from "../../../../test/integration/rls";
+import { getExecuteRows } from "../../../lib/db";
+import { syncRouter } from "./";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

@@ -1,4 +1,4 @@
-import { createRouter } from "../../server/router";
+import { createRouter } from "../../../server/router";
 import {
   syncAttachmentCompleteUploadRequestSchema,
   syncAttachmentCompleteUploadResponseSchema,
@@ -10,9 +10,9 @@ import {
   createR2Client,
   generateBoundPresignedUploadUrl,
   generatePresignedUrl,
-} from "../../lib/storage";
-import { DomainError, invalid } from "../../lib/domain-errors";
-import { withLabPermission } from "../../middleware/permission";
+} from "../../../lib/storage";
+import { DomainError, invalid } from "../../../lib/domain-errors";
+import { withLabPermission } from "../../../middleware/permission";
 import {
   checkStoredSyncAttachment,
   checkSyncAttachmentDeclaration,
@@ -20,14 +20,14 @@ import {
   recordSyncAttachmentUploadCompleted,
   syncAttachmentObjectKeyMatches,
   type SyncAttachmentRefusal,
-} from "../../modules/sync/attachment-uploads";
+} from "../attachment-uploads";
 import {
   buildSyncAttachmentObjectKey,
   encodeSyncAttachmentId,
   syncAttachmentObjectKeyBelongsToOrganization,
   tryDecodeSyncAttachmentId,
-} from "../../modules/sync/helpers";
-import { SYNC_ATTACHMENT_PERMISSION } from "../../modules/sync/operation-permissions";
+} from "../helpers";
+import { SYNC_ATTACHMENT_PERMISSION } from "../operation-permissions";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;

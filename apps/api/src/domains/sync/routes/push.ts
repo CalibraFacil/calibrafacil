@@ -1,4 +1,4 @@
-import { createRouter } from "../../server/router";
+import { createRouter } from "../../../server/router";
 import {
   SYNC_MIN_PROTOCOL_VERSION,
   SYNC_PROTOCOL_VERSION,
@@ -14,12 +14,12 @@ import {
   buildSyncPushCursor,
 } from "@calibra-facil/contracts";
 import { readSyncConfig } from "@calibra-facil/config";
-import { domainErrorResponse, invalid } from "../../lib/domain-errors";
+import { domainErrorResponse, invalid } from "../../../lib/domain-errors";
 import {
   requireLabProtected,
   requireOrgType,
-} from "../../middleware/permission";
-import { applyDesktopEventAtomically } from "../../modules/sync/event-transaction";
+} from "../../../middleware/permission";
+import { applyDesktopEventAtomically } from "../event-transaction";
 import { type SyncRouterEnv, getMemberData } from "./env";
 import {
   type PreparedDesktopEventSideEffects,
@@ -27,23 +27,23 @@ import {
   deviceClockSkewOf,
   noteAppliedJobVersion,
   rejectedEventId,
-} from "../../modules/sync/desktop-event-support";
+} from "../desktop-event-support";
 import {
   findAppliedDesktopSyncEvent,
   getClaimedSyncActorUserId,
   isDesktopSyncEventApplied,
   validateSyncActorScope,
-} from "../../modules/sync/desktop-sync-support";
-import { prepareDesktopEventSideEffects } from "../../modules/sync/side-effects";
-import { applyDesktopSyncEvent } from "../../modules/sync/apply-event";
+} from "../desktop-sync-support";
+import { prepareDesktopEventSideEffects } from "../side-effects";
+import { applyDesktopSyncEvent } from "../apply-event";
 import {
   minimumDesktopVersion,
   updateRequiredBody,
-} from "../../modules/sync/minimum-desktop-version";
+} from "../minimum-desktop-version";
 import {
   authorizeSyncOperation,
   memberForEventUnit,
-} from "../../modules/sync/operation-permissions";
+} from "../operation-permissions";
 
 /** `entityType:entityId` of a raw event, or null when it names no aggregate. */
 function aggregateKeyOf(rawEvent: unknown): string | null {

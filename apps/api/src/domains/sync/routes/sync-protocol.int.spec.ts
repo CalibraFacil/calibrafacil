@@ -13,7 +13,7 @@
  *             queue is untouched) and the legacy calibration-record exemption ends
  */
 
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -33,20 +33,20 @@ import {
   syncUpdateRequiredResponseSchema,
 } from "@calibra-facil/contracts";
 import { DESKTOP_EXECUTION_PAYLOAD_VERSION } from "@calibra-facil/schemas";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
 import {
   auditActions,
   changeJobBeforeNextTransaction,
   jobRow,
-} from "../../test/integration/job-cas";
-import { failEventAuditInsert } from "../../test/integration/sync-faults";
-import { syncRouter } from "./sync";
+} from "../../../../test/integration/job-cas";
+import { failEventAuditInsert } from "../../../../test/integration/sync-faults";
+import { syncRouter } from "./";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

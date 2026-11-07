@@ -1,16 +1,16 @@
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { asset, calibrationJob } from "@calibra-facil/db/schema";
 import { z } from "zod";
 import { syncPushResponseSchema } from "@calibra-facil/contracts";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { syncRouter } from "./sync";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
+import { syncRouter } from "./";
 
 // Real-DB integration tests of the `baseUpdatedAt` guard on the one desktop apply that
 // still carries it, the job execution save/submit (Q69 retired the customer, instrument
@@ -25,7 +25,7 @@ import { syncRouter } from "./sync";
 //   REQ-REL-SYNC-202             equal/unchanged base: the save applies (no false conflict)
 //   REQ-REL-SYNC-203             null/absent base (an older desktop): the save applies
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

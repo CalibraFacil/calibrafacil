@@ -9,8 +9,8 @@
  * organization, with a second laboratory seeded alongside so a mis-attribution would
  * show.
  */
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
-import { insertJobs } from "../../test/integration/job-fixtures";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -21,16 +21,16 @@ import {
   referenceStandard,
   service,
 } from "@calibra-facil/db/schema";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedCustomer, seedOrg } from "../../test/integration/seed";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
-import { getExecuteRows } from "../lib/db";
-import { syncRouter } from "./sync";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { getExecuteRows } from "../../../lib/db";
+import { syncRouter } from "./";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

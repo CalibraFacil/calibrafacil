@@ -6,7 +6,7 @@ import {
   submitJob,
   type FrozenExecutionSnapshots,
   type JobExecutionCommand,
-} from "../jobs/submit-job";
+} from "../../modules/jobs/submit-job";
 import { type RefusedEventResult } from "./event-transaction";
 import { getNullableString, getNumber, getRecordOrNull } from "./helpers";
 import {

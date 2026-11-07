@@ -14,7 +14,7 @@
  *              unchanged blob; otherwise it is refused with a stable code, and an
  *              older protocol is refused for good
  */
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -25,10 +25,10 @@ import {
   syncAttachmentInitUploadResponseSchema,
   syncPushResponseSchema,
 } from "@calibra-facil/contracts";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { syncRouter } from "./sync";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { syncRouter } from "./";
 
 // An in-memory object store. Hoisted: the vi.mock factory below runs before imports.
 const store = vi.hoisted(() => {
@@ -67,8 +67,8 @@ const store = vi.hoisted(() => {
   };
 });
 
-vi.mock("../lib/storage", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../lib/storage")>()),
+vi.mock("../../../lib/storage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/storage")>()),
   createR2Client: () => ({}),
   generateBoundPresignedUploadUrl: async (
     _client: unknown,
@@ -112,7 +112,7 @@ vi.mock("../lib/storage", async (importOriginal) => ({
   },
 }));
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

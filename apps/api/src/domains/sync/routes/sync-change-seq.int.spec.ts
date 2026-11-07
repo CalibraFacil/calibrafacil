@@ -14,7 +14,7 @@
  *   REQ-CS-5  tenant-scoped log, retention purge, a cursor older than the purge horizon is
  *             told to bootstrap again
  */
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -37,18 +37,18 @@ import {
   syncResyncRequiredResponseSchema,
   syncUpdateRequiredResponseSchema,
 } from "@calibra-facil/contracts";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
 import {
   seedCustomer,
   seedOrg,
   seedService,
-} from "../../test/integration/seed";
-import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { getExecuteRows } from "../lib/db";
-import { purgeSyncChangeLog } from "../lib/sync-change-log-purge";
-import { syncRouter } from "./sync";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+} from "../../../../test/integration/seed";
+import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
+import { getExecuteRows } from "../../../lib/db";
+import { purgeSyncChangeLog } from "../sync-change-log-purge";
+import { syncRouter } from "./";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

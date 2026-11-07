@@ -9,7 +9,7 @@
  *   REQ-SYNC-RBAC-7  a retry of an event that was applied is acknowledged after a role
  *                    downgrade; a new event of the same operation is denied
  */
-import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
+import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -23,22 +23,22 @@ import {
   syncAppliedEvent,
 } from "@calibra-facil/db/schema";
 import { syncPushResponseSchema } from "@calibra-facil/contracts";
-import { loginAs, loginAsPortal } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
+import { loginAs, loginAsPortal } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
 import {
   seedCustomer,
   seedOrg,
   seedPortalContext,
-} from "../../test/integration/seed";
+} from "../../../../test/integration/seed";
 import {
   seedLab,
   seedMember,
   seedUser,
-} from "../../test/integration/identity-fixtures";
-import { syncRouter } from "./sync";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+} from "../../../../test/integration/identity-fixtures";
+import { syncRouter } from "./";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

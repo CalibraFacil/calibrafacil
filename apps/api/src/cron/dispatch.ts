@@ -17,7 +17,7 @@ import { CRON_SCHEDULE, isCronJobName, type CronJobName } from "./schedule";
 import { runCertificateDriftCheck } from "../lib/certificate-drift";
 import { runRecordsPurge } from "../lib/records-purge";
 import { runAuditChainVerification } from "../lib/audit-chain";
-import { purgeSyncChangeLog } from "../lib/sync-change-log-purge";
+import { purgeSyncChangeLog } from "../domains/sync";
 import { reconcileApprovalEffects } from "../lib/approval-effects-reconciler";
 import {
   createR2Client,
