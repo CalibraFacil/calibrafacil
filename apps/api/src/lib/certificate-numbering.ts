@@ -1,3 +1,4 @@
+import { slugify } from "@calibra-facil/shared/text";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -130,15 +131,6 @@ export function validateCertificateNumberingConfig(
 
 function pad(value: number, length: number) {
   return String(value).padStart(length, "0");
-}
-
-function slugify(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function buildTemplateTokens(params: {

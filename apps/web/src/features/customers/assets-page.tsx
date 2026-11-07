@@ -1,3 +1,4 @@
+import { assetRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import {
@@ -32,7 +33,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
-import { assetRouteId } from '@/lib/route-identifiers'
 import {
   ClientPanel,
   ClientPanelBody,

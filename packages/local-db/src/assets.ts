@@ -1,3 +1,4 @@
+import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import type { MetrologyRegime } from "@calibra-facil/schemas";
@@ -813,17 +814,6 @@ function toLocalAsset(row: LocalAssetListRow): LocalAsset {
     updatedAt: row.updated_at,
     syncState: row.sync_state,
   };
-}
-
-function slugifyRouteIdentifier(value: string): string {
-  const slug = value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  return slug || "item";
 }
 
 function resolveLocalEntityId(

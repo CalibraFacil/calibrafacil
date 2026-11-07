@@ -123,21 +123,6 @@ function getEccentricityIndicatorLabel(
     : 'Nenhum ponto selecionado'
 }
 
-export function isWeighingScaleAssetType(assetType?: {
-  name?: string | null
-  slug?: string | null
-}) {
-  const normalizedSlug = normalizeText(assetType?.slug)
-  const normalizedName = normalizeText(assetType?.name)
-
-  return (
-    normalizedSlug.includes('balanca') ||
-    normalizedSlug.includes('scale') ||
-    normalizedName.includes('balanca') ||
-    normalizedName.includes('scale')
-  )
-}
-
 type EccentricityIndicatorProps = {
   value?: EccentricityIndicatorPosition | null
   onChange?: (value: EccentricityIndicatorPosition | null) => void
@@ -369,11 +354,4 @@ function getPointDescription(
     default:
       return 'Posição do indicador'
   }
-}
-
-function normalizeText(value: string | null | undefined) {
-  return (value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
 }

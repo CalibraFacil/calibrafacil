@@ -6,7 +6,7 @@ v2 GET /customers/:id requireApiScope(customers:read)
 v2 GET /customers/:id <anonymous> #6b5f94b308
 v2 POST /customers requireApiScope(customers:write)
 v2 POST /customers zValidator(json:name|tradeName|taxId|email|phone|address|groupId|externalId)
-v2 POST /customers <anonymous> #b23c3ab3b6
+v2 POST /customers <anonymous> #7043e7c4af
 v2 PUT /customers/:id requireApiScope(customers:write)
 v2 PUT /customers/:id zValidator(json:name|tradeName|taxId|email|phone|address|groupId|externalId)
 v2 PUT /customers/:id <anonymous> #414ba8239b

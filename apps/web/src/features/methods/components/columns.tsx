@@ -1,3 +1,4 @@
+import { methodRouteId } from '@calibra-facil/shared/route-identifiers'
 import { type ColumnDef } from '@tanstack/react-table'
 import { METHOD_MACHINE } from '@calibra-facil/schemas/machines'
 import { Link } from '@tanstack/react-router'
@@ -20,7 +21,6 @@ import {
 } from '@calibra-facil/ui/dropdown-menu'
 import type { MethodListItem, MethodStatus } from '@/features/methods/types'
 import { cn } from '@/lib/utils'
-import { methodRouteId } from '@/lib/route-identifiers'
 
 export type Method = MethodListItem
 

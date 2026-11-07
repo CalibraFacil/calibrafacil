@@ -1,3 +1,4 @@
+import { foldText } from '@calibra-facil/shared/text'
 import type { MethodInputField } from '@/components/method-runtime/types'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
@@ -12,13 +13,6 @@ const CIRCULAR_ECCENTRICITY_LOAD_POSITION_SET = new Set(
   CIRCULAR_ECCENTRICITY_LOAD_POSITIONS,
 )
 
-export function normalizeText(value: string | null | undefined) {
-  return (value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-}
-
 export function getEccentricityIndicatorVariant(
   field: MethodInputField | undefined,
 ): EccentricityIndicatorVariant | null {
@@ -31,7 +25,7 @@ export function getCircularEccentricityLoadPositions(
   rows: Array<Record<string, unknown>>,
 ) {
   const positionColumn = field.columns?.find((column) => {
-    const text = normalizeText(`${column.key} ${column.label}`)
+    const text = foldText(`${column.key} ${column.label}`)
     return text.includes('posicao') || text.includes('ponto')
   })
 

@@ -10,7 +10,6 @@ export {
   getAssetIndicatorPosition,
   getCircularEccentricityLoadPositions,
   getEccentricityIndicatorVariant,
-  normalizeText,
   resolveSelectedIndicatorPosition,
 } from './eccentricity'
 export {

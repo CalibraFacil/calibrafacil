@@ -1,3 +1,4 @@
+import { slugify } from "@calibra-facil/shared/text";
 import { randomBytes } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
@@ -48,20 +49,11 @@ function platformUserFromUnknown(value: unknown) {
   };
 }
 
-function slugifyLabName(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 function labSlugCandidate(
   input: { name: string; slug?: string },
   suffix: number,
 ) {
-  const baseSlug = slugifyLabName(input.slug ?? input.name) || "laboratorio";
+  const baseSlug = slugify(input.slug ?? input.name) || "laboratorio";
   return suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
 }
 

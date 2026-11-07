@@ -1,3 +1,4 @@
+import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
@@ -536,17 +537,6 @@ function assignSyncPayloadValue(
   if (value === undefined || value === null) return;
   if (typeof value === "string" && value.length === 0) return;
   payload[key] = value;
-}
-
-function slugifyRouteIdentifier(value: string): string {
-  const slug = value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  return slug || "item";
 }
 
 function parseJson(value: string | null) {

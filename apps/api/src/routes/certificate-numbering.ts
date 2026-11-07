@@ -1,3 +1,4 @@
+import { slugify } from "@calibra-facil/shared/text";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
@@ -248,12 +249,7 @@ function buildPreview(
     number: "",
     labCode: config.labCode,
     labName: organizationName,
-    labSlug: organizationName
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, ""),
+    labSlug: slugify(organizationName),
     projectCode: config.projectCode?.trim() || "GERAL",
     yyyy,
     yy: yyyy.slice(-2),

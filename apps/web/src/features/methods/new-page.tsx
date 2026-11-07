@@ -1,10 +1,10 @@
+import { methodRouteId } from '@calibra-facil/shared/route-identifiers'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense } from 'react'
 import { toast } from 'sonner'
 
 import { calibraApi } from '@/utils/api'
-import { methodRouteId } from '@/lib/route-identifiers'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   draftToMethodSavePayload,

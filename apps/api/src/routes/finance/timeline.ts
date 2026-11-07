@@ -1,3 +1,4 @@
+import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { Hono } from "hono";
 import {
   buildCustomerFinancialTimeline,
@@ -9,11 +10,10 @@ import {
 } from "../../middleware/permission";
 import { resolveCustomerRouteId } from "../../lib/customer-route-id";
 import { orgDb } from "../../lib/org-db";
-import { parseLegacyNumericIdentifier } from "../../lib/route-identifiers";
 
 function parseStrictPositiveInt(value: string | undefined) {
   if (!value) return null;
-  return parseLegacyNumericIdentifier(value);
+  return parseNumericRouteIdentifier(value);
 }
 
 const CUSTOMER_TIMELINE_MAX_LIMIT = 50;

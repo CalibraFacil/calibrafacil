@@ -1,3 +1,4 @@
+import { methodRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link, useNavigate } from '@tanstack/react-router'
 import type { ActivationStepId } from '@calibra-facil/client-runtime'
 import { OnboardingStepHint } from '@/features/onboarding/step-hint'
@@ -46,7 +47,6 @@ import {
   type MethodsTableMeta,
   methodsColumns,
 } from '@/features/methods/components/columns'
-import { methodRouteId } from '@/lib/route-identifiers'
 import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
 import { useOperationAvailability } from '@/runtime/use-operation-availability'
 

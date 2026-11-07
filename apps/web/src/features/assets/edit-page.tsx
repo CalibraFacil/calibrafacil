@@ -1,10 +1,10 @@
+import { assetRouteId } from '@calibra-facil/shared/route-identifiers'
 import { useNavigate } from '@tanstack/react-router'
 
 import { useAssetDetailData } from '@/features/assets/queries'
 import { AssetEditForm } from '@/features/assets/components/asset-edit-form'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { Panel } from '@calibra-facil/ui/instrument-panel'
-import { assetRouteId } from '@/lib/route-identifiers'
 import {
   shouldReturnToSyncConflicts,
   SyncConflictReturnNotice,

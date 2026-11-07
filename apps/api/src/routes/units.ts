@@ -1,3 +1,4 @@
+import { slugify } from "@calibra-facil/shared/text";
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -115,18 +116,6 @@ const UpdateMemberRoleSchema = z.object({
   role: z.enum(["member", "operator", "technician", "admin"]),
 });
 
-function slugify(name: string) {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || "unit";
-}
-
 function isUniqueViolation(error: unknown) {
   const code =
     error && typeof error === "object" && "code" in error
@@ -145,7 +134,7 @@ async function allocateUnitSlug(
     excludeId?: number;
   },
 ) {
-  const baseSlug = slugify(params.name);
+  const baseSlug = slugify(params.name) || "unit";
 
   for (let attempt = 1; attempt <= 100; attempt += 1) {
     const candidate = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;

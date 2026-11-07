@@ -1,3 +1,4 @@
+import { methodRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -32,7 +33,6 @@ import {
   StaggerGroup,
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
-import { methodRouteId } from '@/lib/route-identifiers'
 import { formatFinanceMoney } from '@/lib/finance-formatters'
 
 function formatPrice(priceInCents: number | null, currency: string): string {

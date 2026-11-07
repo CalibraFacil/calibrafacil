@@ -8,6 +8,7 @@
  * import directly from `@calibra-facil/shared/units`.
  */
 
+import { foldText } from "./text";
 import {
   type SpecificationFieldLike,
   type MethodInputFieldLike,
@@ -87,23 +88,18 @@ export function isMassAssetTypeDefinition(
     return true;
   }
 
-  const normalizedSlug = String(assetType?.slug ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  const normalizedName = String(assetType?.name ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  return isWeighingScaleAssetType(assetType);
+}
 
-  return (
-    normalizedSlug.includes("balanca") ||
-    normalizedSlug.includes("balance") ||
-    normalizedSlug.includes("scale") ||
-    normalizedName.includes("balanca") ||
-    normalizedName.includes("balance") ||
-    normalizedName.includes("scale")
-  );
+const WEIGHING_SCALE_KEYWORDS = ["balanca", "balance", "scale"];
+
+/** An asset type that names a weighing instrument (balança / balance / scale). */
+export function isWeighingScaleAssetType(assetType?: {
+  slug?: string | null;
+  name?: string | null;
+}): boolean {
+  const text = `${foldText(assetType?.slug ?? "")} ${foldText(assetType?.name ?? "")}`;
+  return WEIGHING_SCALE_KEYWORDS.some((keyword) => text.includes(keyword));
 }
 
 export function normalizeAssetSpecificationsForStorage(

@@ -1,3 +1,4 @@
+import { clientRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link, useNavigate } from '@tanstack/react-router'
 
 import {
@@ -23,7 +24,6 @@ import {
 } from '@/features/customers/financial-timeline-model'
 import { Button } from '@calibra-facil/ui/button'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
-import { clientRouteId } from '@/lib/route-identifiers'
 import {
   ClientMetric,
   ClientMetricStrip,

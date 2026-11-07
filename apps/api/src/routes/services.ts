@@ -1,3 +1,7 @@
+import {
+  parseNumericRouteIdentifier,
+  serviceRouteId,
+} from "@calibra-facil/shared/route-identifiers";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -20,10 +24,6 @@ import {
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
 import { orgDb } from "../lib/org-db";
-import {
-  buildServiceRouteIdentifier,
-  parseLegacyNumericIdentifier,
-} from "../lib/route-identifiers";
 import { clientIp } from "../lib/client-ip";
 
 /**
@@ -46,7 +46,7 @@ async function resolveServiceRouteId(
   // The caller's org-bound transaction (row-level security).
   o: OrgDb,
 ): Promise<number | null> {
-  const legacyId = parseLegacyNumericIdentifier(identifier);
+  const legacyId = parseNumericRouteIdentifier(identifier);
   const directConditions = [eq(service.name, identifier)];
 
   if (legacyId !== null) {
@@ -80,7 +80,7 @@ async function resolveServiceRouteId(
     );
 
   const match = scopedServices.find(
-    (candidate) => buildServiceRouteIdentifier(candidate) === identifier,
+    (candidate) => serviceRouteId(candidate) === identifier,
   );
 
   return match?.id ?? null;

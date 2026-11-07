@@ -1,4 +1,3 @@
-import { toRecord } from "@calibra-facil/shared/record";
 /**
  * The eccentricity-indicator diagram: a small SVG showing which platform
  * position the indicator sat on during the eccentricity test. Extracted from
@@ -6,6 +5,9 @@ import { toRecord } from "@calibra-facil/shared/record";
  * former PNG variant (and its `@resvg/resvg-js` rasterizer) is gone. It only
  * existed because a spreadsheet cell cannot hold an SVG.
  */
+
+import { toRecord } from "@calibra-facil/shared/record";
+import { foldText } from "@calibra-facil/shared/text";
 
 export type CertificateImageContext = {
   dataFields?: ReadonlyArray<{
@@ -158,7 +160,7 @@ function resolveCircularEccentricityLoadPositions(
   }
 
   const positionColumn = field.columns.find((column) => {
-    const text = normalizeSearchText(`${column.key} ${column.label ?? ""}`);
+    const text = foldText(`${column.key} ${column.label ?? ""}`);
     return text.includes("posicao") || text.includes("ponto");
   });
 
@@ -275,11 +277,4 @@ function getPathValue(data: Record<string, unknown>, path: string): unknown {
     }
     return undefined;
   }, data);
-}
-
-function normalizeSearchText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
 }

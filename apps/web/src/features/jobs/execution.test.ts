@@ -67,7 +67,6 @@ import {
   isExecutionEditable,
   isPhaseActive,
   normalizeExecutionFormData,
-  normalizeText,
   phaseModeLabel,
   previewFormulaErrorMessage,
   resolveFieldForDisplay,
@@ -222,7 +221,6 @@ describe('job execution feature model', () => {
       ],
     })
 
-    expect(normalizeText('Posição À')).toBe('posicao a')
     expect(getEccentricityIndicatorVariant(field)).toBe('circular_platform')
     expect(
       getCircularEccentricityLoadPositions(field, [

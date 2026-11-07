@@ -1,29 +1,3 @@
-function slugifyRouteIdentifier(value: string): string {
-  const slug = value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return slug || 'item'
-}
-
-export function methodRouteId(method: {
-  name: string
-  version: number
-}): string {
-  return `${slugifyRouteIdentifier(method.name)}-v${method.version}`
-}
-
-export function standardRouteId(standard: {
-  id: string | number
-  name: string
-  serialNumber?: string | null
-}): string {
-  return `${slugifyRouteIdentifier(standard.name)}-${standard.id}`
-}
-
 function decodeRouteIdentifier(value: string): string {
   let decodedValue = value
 
@@ -47,19 +21,4 @@ export function jobRouteId(job: { jobId: string }): string {
 export function apiRouteParam(value: string | number): string {
   const decodedValue = decodeRouteIdentifier(String(value))
   return encodeURIComponent(encodeURIComponent(decodedValue))
-}
-
-export function assetRouteId(asset: { tag: string }): string {
-  return slugifyRouteIdentifier(asset.tag)
-}
-
-export function clientRouteId(client: {
-  name: string
-  taxId?: string | null
-}): string {
-  return slugifyRouteIdentifier(client.taxId || client.name)
-}
-
-export function serviceRouteId(service: { name: string }): string {
-  return slugifyRouteIdentifier(service.name)
 }

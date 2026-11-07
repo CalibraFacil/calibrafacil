@@ -1,3 +1,4 @@
+import { uniqueSlug } from "../lib/unique-slug";
 import { Hono } from "hono";
 import type {
   CustomerDetail,
@@ -68,24 +69,6 @@ const CommandPaletteCustomerSearchQuerySchema = z.object({
 /**
  * Generate a URL-friendly slug from a string
  */
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
-    .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with hyphens
-    .replace(/^-+|-+$/g, "") // Trim hyphens from start/end
-    .substring(0, 50); // Limit length
-}
-
-/**
- * Generate a unique slug by appending a random suffix if needed
- */
-function generateUniqueSlug(name: string): string {
-  const baseSlug = slugify(name);
-  const randomSuffix = Math.random().toString(36).substring(2, 8);
-  return `${baseSlug}-${randomSuffix}`;
-}
 
 function getStringProperty(value: unknown, key: string) {
   const property = toRecord(value)[key];
@@ -168,7 +151,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Step 1: Create CLIENT organization via service account (3B model)
-        const slug = generateUniqueSlug(input.name);
+        const slug = uniqueSlug(input.name);
 
         const orgResult = await createClientOrganizationAsServiceOwner({
           name: input.name,

@@ -1,6 +1,7 @@
+import { standardRouteId } from '@calibra-facil/shared/route-identifiers'
 import { describe, expect, it } from 'vitest'
 
-import { apiRouteParam, jobRouteId, standardRouteId } from './route-identifiers'
+import { apiRouteParam, jobRouteId } from './route-identifiers'
 
 describe('apiRouteParam', () => {
   it('preserves slashes through Hono client path interpolation', () => {

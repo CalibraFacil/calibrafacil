@@ -1,3 +1,4 @@
+import { clientRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link, useNavigate } from '@tanstack/react-router'
 import type { ActivationStepId } from '@calibra-facil/client-runtime'
 import { OnboardingStepHint } from '@/features/onboarding/step-hint'
@@ -30,7 +31,6 @@ import {
   type Client,
   clientsColumns,
 } from '@/features/customers/components/columns'
-import { clientRouteId } from '@/lib/route-identifiers'
 
 export function ClientsPage({
   onboardingStep,

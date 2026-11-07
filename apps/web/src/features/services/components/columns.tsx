@@ -1,3 +1,7 @@
+import {
+  methodRouteId,
+  serviceRouteId,
+} from '@calibra-facil/shared/route-identifiers'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -20,7 +24,6 @@ import {
 } from '@calibra-facil/ui/dropdown-menu'
 import type { ServiceListItem } from '@/features/services/types'
 import { cn } from '@/lib/utils'
-import { methodRouteId, serviceRouteId } from '@/lib/route-identifiers'
 import { formatFinanceMoney } from '@/lib/finance-formatters'
 
 export type Service = ServiceListItem

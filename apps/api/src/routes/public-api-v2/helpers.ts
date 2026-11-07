@@ -1,20 +1,6 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { toRecord } from "@calibra-facil/shared/record";
 
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .substring(0, 50);
-}
-
-export function generateUniqueSlug(name: string) {
-  return `${slugify(name)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function isContentfulStatus(status: number): status is ContentfulStatusCode {
   return (
     Number.isInteger(status) &&

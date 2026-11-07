@@ -1,3 +1,4 @@
+import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -110,7 +111,6 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
-import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
 import {
   decodeRouteIdentifier,
   shouldUseLocalR2Download,
@@ -164,7 +164,7 @@ function resolveJobRouteId(
   executor?: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const routeIdentifier = decodeRouteIdentifier(identifier);
-  const legacyId = parseLegacyNumericIdentifier(routeIdentifier);
+  const legacyId = parseNumericRouteIdentifier(routeIdentifier);
 
   return withOrgReader(memberData.organizationId, executor, async (reader) => {
     const [job] = await reader
