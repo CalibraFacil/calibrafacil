@@ -35,8 +35,8 @@ import { insertJobs } from "../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../../test/integration/organization-of";
 import {
-  financeCertificateReleaseRouter,
-  settingsCertificateReleasePolicyRouter,
+  financeCertificateReleaseRouter as bareFinanceCertificateReleaseRouter,
+  settingsCertificateReleasePolicyRouter as bareSettingsCertificateReleasePolicyRouter,
 } from "./certificate-release";
 import { db } from "@calibra-facil/db";
 import {
@@ -59,6 +59,14 @@ import { loginAs, logout } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../../test/integration/with-error-handling";
+
+const financeCertificateReleaseRouter = withErrorHandling(
+  bareFinanceCertificateReleaseRouter,
+);
+const settingsCertificateReleasePolicyRouter = withErrorHandling(
+  bareSettingsCertificateReleasePolicyRouter,
+);
 
 // ---------------------------------------------------------------------------
 // No notifications or background-jobs imported by certificate-release route or

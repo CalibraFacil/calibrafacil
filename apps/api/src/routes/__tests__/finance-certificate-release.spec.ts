@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono, type Context, type Next } from "hono";
+import { withErrorHandling } from "../../../test/integration/with-error-handling";
 
 const mocks = vi.hoisted(() => {
   const job: {
@@ -114,7 +115,9 @@ vi.mock("../../lib/certificate-release", () => ({
 import { financeCertificateReleaseRouter } from "../finance/certificate-release";
 
 function makeApp() {
-  return new Hono().route("/", financeCertificateReleaseRouter);
+  return withErrorHandling(
+    new Hono().route("/", financeCertificateReleaseRouter),
+  );
 }
 
 beforeEach(() => {

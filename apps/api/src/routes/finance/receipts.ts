@@ -10,7 +10,6 @@ import {
 import {
   billingDocument,
   customer,
-  financialAuditLog,
   paymentReceipt,
   receivableInstallment,
 } from "@calibra-facil/db/schema";
@@ -18,8 +17,11 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
+import { invalid, notFound } from "../../lib/domain-errors";
+import { withOrg } from "../../lib/org-context";
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
+import { requestActor } from "../../middleware/request-actor";
 
 const RecordReceiptSchema = z.object({
   amountCents: z.number().int().positive(),
@@ -85,12 +87,11 @@ export const financeInstallmentsRouter = new Hono<{
   zValidator("json", RecordReceiptSchema),
   async (c) => {
     const member = c.get("member");
-    const session = c.get("session");
     const installmentId = Number.parseInt(c.req.param("id"), 10);
     const input = c.req.valid("json");
 
     if (!Number.isInteger(installmentId)) {
-      return c.json({ error: "ID invalido" }, 400);
+      throw invalid("invalid_request", "ID invalido");
     }
 
     const receivedAt = input.receivedAt
@@ -99,9 +100,11 @@ export const financeInstallmentsRouter = new Hono<{
 
     // The checks and the receipt (installment, document and audit rows) are one
     // transaction naming the laboratory.
-    const outcome = await orgDb(member.organizationId).transaction(
-      async (tx) => {
-        const [installment] = await tx
+    const receipt = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [installment] = await ctx.o
           .select({
             id: receivableInstallment.id,
             amountCents: receivableInstallment.amountCents,
@@ -126,7 +129,9 @@ export const financeInstallmentsRouter = new Hono<{
           // the second sees it PAID.
           .for("update");
 
-        if (!installment) return { status: "not_found" as const };
+        if (!installment) {
+          throw notFound("installment_not_found", "Parcela nao encontrada");
+        }
 
         if (
           !RECEIVABLE_INSTALLMENT_MACHINE.canTransition(
@@ -134,7 +139,10 @@ export const financeInstallmentsRouter = new Hono<{
             "pay",
           )
         ) {
-          return { status: "not_receivable" as const };
+          throw invalid(
+            "installment_not_receivable",
+            "Parcela nao pode ser baixada",
+          );
         }
 
         if (
@@ -143,19 +151,25 @@ export const financeInstallmentsRouter = new Hono<{
             "record_payment",
           )
         ) {
-          return { status: "void_document" as const };
+          throw invalid(
+            "installment_document_void",
+            "Documento anulado nao pode receber baixa",
+          );
         }
 
         if (input.amountCents !== installment.amountCents) {
-          return { status: "partial_amount" as const };
+          throw invalid(
+            "installment_partial_receipt_unsupported",
+            "O MVP aceita apenas baixa integral do valor em aberto",
+          );
         }
 
-        const [createdReceipt] = await tx
+        const [createdReceipt] = await ctx.o
           .insert(paymentReceipt)
           .values({
             organizationId: member.organizationId,
             installmentId,
-            recordedBy: session.user.id,
+            recordedBy: ctx.actor.userId,
             receivedAt,
             amountCents: input.amountCents,
             paymentMethod: input.paymentMethod,
@@ -164,7 +178,7 @@ export const financeInstallmentsRouter = new Hono<{
           })
           .returning();
 
-        await tx
+        await ctx.o
           .update(receivableInstallment)
           .set({
             status: RECEIVABLE_INSTALLMENT_MACHINE.requireTargetOf(
@@ -178,7 +192,7 @@ export const financeInstallmentsRouter = new Hono<{
           })
           .where(eq(receivableInstallment.id, installmentId));
 
-        await tx
+        await ctx.o
           .update(billingDocument)
           .set({
             status: BILLING_DOCUMENT_MACHINE.requireTargetOf(
@@ -186,45 +200,29 @@ export const financeInstallmentsRouter = new Hono<{
               "record_payment",
             ),
             updatedAt: new Date(),
-            updatedBy: session.user.id,
+            updatedBy: ctx.actor.userId,
           })
           .where(eq(billingDocument.id, installment.documentId));
 
-        await tx.insert(financialAuditLog).values({
-          organizationId: member.organizationId,
-          entityType: "receipt",
-          entityId: String(createdReceipt?.id ?? installmentId),
-          action: "receipt.record",
-          changes: {
-            installmentId,
-            amountCents: input.amountCents,
-            paymentMethod: input.paymentMethod,
-            receivedAt: receivedAt.toISOString(),
+        await ctx.audit(
+          "financialReceipt",
+          createdReceipt?.id ?? installmentId,
+          {
+            action: "receipt.record",
+            changes: {
+              installmentId,
+              amountCents: input.amountCents,
+              paymentMethod: input.paymentMethod,
+              receivedAt: receivedAt.toISOString(),
+            },
+            reason: input.notes?.trim() || null,
           },
-          performedBy: session.user.id,
-          reason: input.notes?.trim() || null,
-        });
+        );
 
-        return { status: "ok" as const, receipt: createdReceipt };
+        return createdReceipt;
       },
     );
 
-    if (outcome.status === "not_found") {
-      return c.json({ error: "Parcela nao encontrada" }, 404);
-    }
-    if (outcome.status === "not_receivable") {
-      return c.json({ error: "Parcela nao pode ser baixada" }, 400);
-    }
-    if (outcome.status === "void_document") {
-      return c.json({ error: "Documento anulado nao pode receber baixa" }, 400);
-    }
-    if (outcome.status === "partial_amount") {
-      return c.json(
-        { error: "O MVP aceita apenas baixa integral do valor em aberto" },
-        400,
-      );
-    }
-
-    return c.json({ data: outcome.receipt }, 201);
+    return c.json({ data: receipt }, 201);
   },
 );

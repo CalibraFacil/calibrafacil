@@ -59,9 +59,15 @@ import {
   findServiceOrdersForCalibrationJob,
   triggerAutomaticSendForMilestone,
 } from "../../lib/automatic-send";
-import { financeRouter } from "./index";
-import { settingsCertificateReleasePolicyRouter } from "./certificate-release";
+import { financeRouter as bareFinanceRouter } from "./index";
+import { settingsCertificateReleasePolicyRouter as bareSettingsCertificateReleasePolicyRouter } from "./certificate-release";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../../test/integration/with-error-handling";
+
+const financeRouter = withErrorHandling(bareFinanceRouter);
+const settingsCertificateReleasePolicyRouter = withErrorHandling(
+  bareSettingsCertificateReleasePolicyRouter,
+);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
@@ -1013,11 +1019,15 @@ describe("finance routes — success paths and cross-laboratory negatives", () =
   // rollback: a failure after partial writes leaves nothing behind
   // ===========================================================================
 
-  /** Makes every insert into the financial audit log fail, for `run`. */
+  /**
+   * Makes every insert into the financial audit log fail, for `run`. The failure
+   * is an internal error (XX000), not P0001: the app's error handler reads a
+   * P0001 as a trigger's refusal and answers 409.
+   */
   async function withFailingAuditInsert<T>(run: () => Promise<T>): Promise<T> {
     await db.execute(sql`
       create function test_fail_financial_audit() returns trigger as $$
-      begin raise exception 'audit write refused'; end;
+      begin raise exception 'audit write refused' using errcode = 'XX000'; end;
       $$ language plpgsql`);
     await db.execute(sql`
       create trigger test_fail_financial_audit_trg

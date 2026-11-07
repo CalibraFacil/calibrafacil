@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { withErrorHandling } from "../../../test/integration/with-error-handling";
 import { dispatchSyncRun, integrationsRouter } from "../integrations";
 import type { AuthVariables } from "../../middleware/permission";
 import type { IntegrationOverview } from "../../modules/integrations";
@@ -186,7 +187,7 @@ function createTestApp() {
   });
   app.route("/api/integrations", integrationsRouter);
 
-  return app;
+  return withErrorHandling(app);
 }
 
 function emptyOverview(
@@ -571,6 +572,7 @@ describe("integrations run items route", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "Integração não encontrada",
+      code: "integration_not_found",
     });
     expect(mocks.limits).toEqual([]);
   });
@@ -884,6 +886,7 @@ describe("Conta Azul OAuth start route", () => {
 
     await expect(response.json()).resolves.toEqual({
       error: "INTEGRATIONS_MASTER_KEY não configurada",
+      code: "conta_azul_oauth_unavailable",
     });
     expect(response.status).toBe(503);
     expect(buildContaAzulAuthorizationUrl).not.toHaveBeenCalled();

@@ -9,6 +9,7 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import { resolveCustomerRouteId } from "../../lib/customer-route-id";
+import { invalid, notFound } from "../../lib/domain-errors";
 import { orgDb } from "../../lib/org-db";
 
 function parseStrictPositiveInt(value: string | undefined) {
@@ -30,7 +31,7 @@ export const financeTimelineRouter = new Hono<{
         c.req.param("serviceOrderId"),
       );
       if (!serviceOrderId) {
-        return c.json({ error: "ID da ordem de serviço inválido" }, 400);
+        throw invalid("invalid_request", "ID da ordem de serviço inválido");
       }
 
       const data = await orgDb(member.organizationId).transaction((o) =>
@@ -44,7 +45,10 @@ export const financeTimelineRouter = new Hono<{
       );
 
       if (!data) {
-        return c.json({ error: "Ordem de serviço não encontrada" }, 404);
+        throw notFound(
+          "service_order_not_found",
+          "Ordem de serviço não encontrada",
+        );
       }
 
       return c.json({ data });
@@ -62,10 +66,10 @@ export const financeTimelineRouter = new Hono<{
       const limitParam = c.req.query("limit");
       const limit = limitParam ? parseStrictPositiveInt(limitParam) : null;
       if (!customerId) {
-        return c.json({ error: "Cliente não encontrado" }, 404);
+        throw notFound("customer_not_found", "Cliente não encontrado");
       }
       if (limitParam && !limit) {
-        return c.json({ error: "Limite inválido" }, 400);
+        throw invalid("invalid_limit", "Limite inválido");
       }
 
       const timeline = await orgDb(member.organizationId).transaction((o) =>
@@ -82,7 +86,7 @@ export const financeTimelineRouter = new Hono<{
       );
 
       if (!timeline) {
-        return c.json({ error: "Cliente não encontrado" }, 404);
+        throw notFound("customer_not_found", "Cliente não encontrado");
       }
 
       return c.json({ data: timeline });

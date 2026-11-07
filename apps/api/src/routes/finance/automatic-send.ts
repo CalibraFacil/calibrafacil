@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
+import { conflict, invalid, notFound } from "../../lib/domain-errors";
+import { withOrg } from "../../lib/org-context";
 import { orgDb } from "../../lib/org-db";
 import { automaticSendRule, customer } from "@calibra-facil/db/schema";
 import {
@@ -11,6 +13,7 @@ import {
 import type { AutomaticSendMilestone } from "@calibra-facil/shared";
 import { agreementBelongsToOrganization } from "../../lib/tenant-refs";
 import { isUniqueViolationOf } from "../../lib/db-errors";
+import { requestActor } from "../../middleware/request-actor";
 
 /** Partial unique index: one organization-wide default rule (migration 0031). */
 const ORG_DEFAULT_RULE_INDEX = "automatic_send_rule_org_default_uidx";
@@ -108,16 +111,17 @@ export const financeAutomaticSendRouter = new Hono<{
     zValidator("json", CreateRuleSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const body = c.req.valid("json");
 
       // The partial unique index is the authority: a second org-wide default rule
       // violates it, also when two requests race. Map that one index to 409. The
       // violation aborts the transaction, so it is caught outside it.
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
+      const created = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
           if (body.customerId != null) {
-            const [matched] = await o
+            const [matched] = await ctx.o
               .select({ id: customer.id })
               .from(customer)
               .where(
@@ -127,7 +131,9 @@ export const financeAutomaticSendRouter = new Hono<{
                 ),
               )
               .limit(1);
-            if (!matched) return { status: "invalid_customer" as const };
+            if (!matched) {
+              throw invalid("rule_customer_invalid", "Cliente inválido");
+            }
           }
 
           // Same cross-tenant guard for the agreement the override is pinned to.
@@ -136,13 +142,13 @@ export const financeAutomaticSendRouter = new Hono<{
             !(await agreementBelongsToOrganization(
               member.organizationId,
               body.commercialAgreementId,
-              o,
+              ctx.o,
             ))
           ) {
-            return { status: "invalid_agreement" as const };
+            throw invalid("rule_agreement_invalid", "Contrato inválido");
           }
 
-          const rows = await o
+          const [row] = await ctx.o
             .insert(automaticSendRule)
             .values({
               organizationId: member.organizationId,
@@ -151,32 +157,21 @@ export const financeAutomaticSendRouter = new Hono<{
               commercialAgreementId: body.commercialAgreementId ?? null,
               serviceCategory: body.serviceCategory ?? null,
               priority: body.priority ?? 0,
-              createdByUserId: session.user.id,
+              createdByUserId: ctx.actor.userId,
             })
             .returning();
-          return { status: "ok" as const, rows };
-        })
-        .catch((error: unknown) => {
-          if (isUniqueViolationOf(error, ORG_DEFAULT_RULE_INDEX)) {
-            return { status: "duplicate_default" as const };
-          }
-          throw error;
-        });
-      if (outcome.status === "invalid_customer") {
-        return c.json({ error: "Cliente inválido" }, 400);
-      }
-      if (outcome.status === "invalid_agreement") {
-        return c.json({ error: "Contrato inválido" }, 400);
-      }
-      if (outcome.status === "duplicate_default") {
-        return c.json(
-          { error: "Já existe uma regra padrão para a organização" },
-          409,
-        );
-      }
-
-      const created = outcome.rows[0];
-      if (!created) return c.json({ error: "Falha ao criar regra" }, 500);
+          if (!row) throw new Error("Falha ao criar regra");
+          return row;
+        },
+      ).catch((error: unknown) => {
+        if (isUniqueViolationOf(error, ORG_DEFAULT_RULE_INDEX)) {
+          throw conflict(
+            "automatic_send_default_exists",
+            "Já existe uma regra padrão para a organização",
+          );
+        }
+        throw error;
+      });
 
       return c.json({
         data: {
@@ -206,60 +201,53 @@ export const financeAutomaticSendRouter = new Hono<{
       const { id } = c.req.valid("param");
       const body = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const [existing] = await o
-            .select({
-              id: automaticSendRule.id,
-              customerId: automaticSendRule.customerId,
-              commercialAgreementId: automaticSendRule.commercialAgreementId,
-              serviceCategory: automaticSendRule.serviceCategory,
-            })
-            .from(automaticSendRule)
-            .where(
-              and(
-                eq(automaticSendRule.id, id),
-                eq(automaticSendRule.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-          if (!existing) return { status: "not_found" as const };
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const [existing] = await ctx.o
+          .select({
+            id: automaticSendRule.id,
+            customerId: automaticSendRule.customerId,
+            commercialAgreementId: automaticSendRule.commercialAgreementId,
+            serviceCategory: automaticSendRule.serviceCategory,
+          })
+          .from(automaticSendRule)
+          .where(
+            and(
+              eq(automaticSendRule.id, id),
+              eq(automaticSendRule.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          throw notFound(
+            "automatic_send_rule_not_found",
+            "Regra não encontrada",
+          );
+        }
 
-          const isOrgDefault =
-            existing.customerId === null &&
-            existing.commercialAgreementId === null &&
-            existing.serviceCategory === null;
-          if (isOrgDefault && body.archived === true) {
-            return { status: "default_not_archivable" as const };
-          }
+        const isOrgDefault =
+          existing.customerId === null &&
+          existing.commercialAgreementId === null &&
+          existing.serviceCategory === null;
+        if (isOrgDefault && body.archived === true) {
+          throw invalid(
+            "automatic_send_default_not_archivable",
+            "Regra padrão da organização não pode ser arquivada",
+          );
+        }
 
-          await o
-            .update(automaticSendRule)
-            .set({
-              ...(body.milestone !== undefined
-                ? { milestone: body.milestone }
-                : {}),
-              ...(body.priority !== undefined
-                ? { priority: body.priority }
-                : {}),
-              ...(body.archived === true ? { archivedAt: new Date() } : {}),
-              ...(body.archived === false ? { archivedAt: null } : {}),
-              updatedAt: new Date(),
-            })
-            .where(eq(automaticSendRule.id, id));
-
-          return { status: "ok" as const };
-        },
-      );
-      if (outcome.status === "not_found") {
-        return c.json({ error: "Regra não encontrada" }, 404);
-      }
-      if (outcome.status === "default_not_archivable") {
-        return c.json(
-          { error: "Regra padrão da organização não pode ser arquivada" },
-          400,
-        );
-      }
+        await ctx.o
+          .update(automaticSendRule)
+          .set({
+            ...(body.milestone !== undefined
+              ? { milestone: body.milestone }
+              : {}),
+            ...(body.priority !== undefined ? { priority: body.priority } : {}),
+            ...(body.archived === true ? { archivedAt: new Date() } : {}),
+            ...(body.archived === false ? { archivedAt: null } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(automaticSendRule.id, id));
+      });
 
       return c.json({ data: { id } });
     },

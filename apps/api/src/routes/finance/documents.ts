@@ -14,10 +14,7 @@ import {
   billingDocumentItem,
   calibrationJob,
   customer,
-  financialAuditLog,
-  jobCommercialSnapshot,
   organizationUnit,
-  paymentReceipt,
   receivableInstallment,
   service,
 } from "@calibra-facil/db/schema";
@@ -34,9 +31,18 @@ import {
   ensureJobCommercialSnapshotFromJob,
   generateBillingDocumentNumber,
 } from "../../lib/finance";
+import {
+  getDocumentById,
+  getDocumentByPublicId,
+  requireDocumentInUnitScope,
+  requireDocumentRouteId,
+  requireLabDocument,
+} from "../../lib/billing-document-access";
+import { invalid, notFound } from "../../lib/domain-errors";
+import { withOrg } from "../../lib/org-context";
 import { orgDb } from "../../lib/org-db";
-import { orgTransactionWithExecutor } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
+import { requestActor } from "../../middleware/request-actor";
 
 const ListDocumentsQuerySchema = z.object({
   query: z.string().trim().optional(),
@@ -87,158 +93,6 @@ async function lockBillingDocumentStatus(o: Pick<OrgDb, "select">, id: number) {
     .limit(1)
     .for("update");
   return row?.status ?? null;
-}
-
-async function getDocumentById(
-  o: OrgDb,
-  organizationId: string,
-  documentId: number,
-) {
-  const [document] = await o
-    .select({
-      id: billingDocument.id,
-      publicId: billingDocument.publicId,
-      organizationId: billingDocument.organizationId,
-      customerId: billingDocument.customerId,
-      customerName: customer.name,
-      unitId: billingDocument.unitId,
-      unitName: organizationUnit.name,
-      agreementId: billingDocument.agreementId,
-      documentNumber: billingDocument.documentNumber,
-      status: billingDocument.status,
-      issueDate: billingDocument.issueDate,
-      dueDate: billingDocument.dueDate,
-      currency: billingDocument.currency,
-      subtotalCents: billingDocument.subtotalCents,
-      discountCents: billingDocument.discountCents,
-      totalCents: billingDocument.totalCents,
-      notes: billingDocument.notes,
-      exportStatus: billingDocument.exportStatus,
-      exportedAt: billingDocument.exportedAt,
-      createdAt: billingDocument.createdAt,
-      updatedAt: billingDocument.updatedAt,
-      voidReason: billingDocument.voidReason,
-    })
-    .from(billingDocument)
-    .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-    .innerJoin(
-      organizationUnit,
-      eq(billingDocument.unitId, organizationUnit.id),
-    )
-    .where(
-      and(
-        eq(billingDocument.id, documentId),
-        eq(billingDocument.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
-
-  if (!document) {
-    return null;
-  }
-
-  const [items, installments, receipts, audit] = await Promise.all([
-    o
-      .select({
-        id: billingDocumentItem.id,
-        documentId: billingDocumentItem.documentId,
-        jobId: billingDocumentItem.jobId,
-        jobDisplayId: calibrationJob.jobId,
-        jobCommercialSnapshotId: billingDocumentItem.jobCommercialSnapshotId,
-        snapshotServiceName: jobCommercialSnapshot.serviceName,
-        snapshotPriceCents: jobCommercialSnapshot.priceCents,
-        description: billingDocumentItem.description,
-        quantity: billingDocumentItem.quantity,
-        unitPriceCents: billingDocumentItem.unitPriceCents,
-        totalCents: billingDocumentItem.totalCents,
-        sortOrder: billingDocumentItem.sortOrder,
-      })
-      .from(billingDocumentItem)
-      .leftJoin(
-        calibrationJob,
-        eq(billingDocumentItem.jobId, calibrationJob.id),
-      )
-      .leftJoin(
-        jobCommercialSnapshot,
-        eq(
-          billingDocumentItem.jobCommercialSnapshotId,
-          jobCommercialSnapshot.id,
-        ),
-      )
-      .where(eq(billingDocumentItem.documentId, document.id))
-      .orderBy(billingDocumentItem.sortOrder, billingDocumentItem.id),
-    o
-      .select()
-      .from(receivableInstallment)
-      .where(eq(receivableInstallment.documentId, document.id))
-      .orderBy(receivableInstallment.installmentNumber),
-    o
-      .select({
-        id: paymentReceipt.id,
-        installmentId: paymentReceipt.installmentId,
-        amountCents: paymentReceipt.amountCents,
-        paymentMethod: paymentReceipt.paymentMethod,
-        reference: paymentReceipt.reference,
-        notes: paymentReceipt.notes,
-        receivedAt: paymentReceipt.receivedAt,
-      })
-      .from(paymentReceipt)
-      .innerJoin(
-        receivableInstallment,
-        eq(paymentReceipt.installmentId, receivableInstallment.id),
-      )
-      .where(eq(receivableInstallment.documentId, document.id))
-      .orderBy(desc(paymentReceipt.receivedAt)),
-    o
-      .select()
-      .from(financialAuditLog)
-      .where(
-        and(
-          eq(financialAuditLog.organizationId, organizationId),
-          eq(financialAuditLog.entityType, "document"),
-          eq(financialAuditLog.entityId, String(document.id)),
-        ),
-      )
-      .orderBy(desc(financialAuditLog.performedAt)),
-  ]);
-
-  return {
-    ...document,
-    items,
-    installments,
-    receipts,
-    audit,
-  };
-}
-
-async function getDocumentByPublicId(
-  o: OrgDb,
-  organizationId: string,
-  publicId: string,
-) {
-  const [row] = await o
-    .select({ id: billingDocument.id })
-    .from(billingDocument)
-    .where(
-      and(
-        eq(billingDocument.publicId, publicId),
-        eq(billingDocument.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
-
-  if (!row) {
-    return null;
-  }
-
-  return getDocumentById(o, organizationId, row.id);
-}
-
-function isDocumentOutsideActiveUnitScope(
-  member: AuthVariables["member"],
-  unitId: number,
-) {
-  return member.selectedUnitScope !== "all" && unitId !== member.activeUnitId;
 }
 
 export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -423,12 +277,13 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateDocumentSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const jobs = await o
+      const document = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const jobs = await ctx.o
             .select({
               id: calibrationJob.id,
               jobId: calibrationJob.jobId,
@@ -447,17 +302,23 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             );
 
           if (jobs.length !== input.jobIds.length) {
-            return { status: "jobs_not_found" as const };
+            throw notFound(
+              "billing_jobs_not_found",
+              "Uma ou mais ordens nao foram encontradas",
+            );
           }
 
           const invalidJobs = jobs.filter(
             (job) => !isOneOf(CERTIFICATE_ISSUED_JOB_STATUSES, job.status),
           );
           if (invalidJobs.length > 0) {
-            return { status: "jobs_not_billable" as const };
+            throw invalid(
+              "billing_jobs_not_billable",
+              "Apenas ordens aprovadas ou retificadas podem ser faturadas",
+            );
           }
 
-          const existingLinks = await o
+          const existingLinks = await ctx.o
             .select({
               jobId: billingDocumentItem.jobId,
               documentNumber: billingDocument.documentNumber,
@@ -481,10 +342,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             );
 
           if (existingLinks.length > 0) {
-            return {
-              status: "already_documented" as const,
-              documentNumber: existingLinks[0]?.documentNumber ?? "sem numero",
-            };
+            throw invalid(
+              "billing_jobs_already_documented",
+              `Uma ou mais ordens ja possuem documento ativo (${existingLinks[0]?.documentNumber ?? "sem numero"})`,
+            );
           }
 
           const snapshots: Awaited<
@@ -494,11 +355,11 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             snapshots.push(
               await ensureJobCommercialSnapshotFromJob(
                 {
-                  actorUserId: session.user.id,
+                  actorUserId: ctx.actor.userId,
                   jobId: job.id,
                   organizationId: member.organizationId,
                 },
-                o,
+                ctx.o,
               ),
             );
           }
@@ -516,11 +377,17 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
                 (snapshots[index]?.currency ?? "BRL") !== sharedCurrency,
             )
           ) {
-            return { status: "not_consolidatable" as const };
+            throw invalid(
+              "billing_jobs_not_consolidatable",
+              "A cobranca consolidada exige ordens do mesmo cliente, unidade e moeda",
+            );
           }
 
           if (input.mode === "single" && jobs.length !== 1) {
-            return { status: "single_mode_violation" as const };
+            throw invalid(
+              "billing_single_job_mode_violation",
+              "O modo por OS aceita apenas uma ordem por documento",
+            );
           }
 
           const subtotalCents = snapshots.reduce(
@@ -538,7 +405,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
           const discountCents = input.discountCents ?? 0;
           const totalCents = Math.max(subtotalCents - discountCents, 0);
 
-          const [document] = await o
+          const [created] = await ctx.o
             .insert(billingDocument)
             .values({
               organizationId: member.organizationId,
@@ -553,19 +420,19 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
               discountCents,
               totalCents,
               notes: input.notes?.trim() || null,
-              createdBy: session.user.id,
-              updatedBy: session.user.id,
+              createdBy: ctx.actor.userId,
+              updatedBy: ctx.actor.userId,
             })
             .returning();
 
-          if (!document) {
+          if (!created) {
             throw new Error("Falha ao criar documento financeiro");
           }
 
-          await o.insert(billingDocumentItem).values(
+          await ctx.o.insert(billingDocumentItem).values(
             jobs.map((job, index) => ({
               organizationId: member.organizationId,
-              documentId: document.id,
+              documentId: created.id,
               jobId: job.id,
               jobCommercialSnapshotId: snapshots[index]?.id ?? null,
               description: snapshots[index]?.serviceName ?? job.jobId,
@@ -576,10 +443,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             })),
           );
 
-          await o.insert(financialAuditLog).values({
-            organizationId: member.organizationId,
-            entityType: "document",
-            entityId: String(document.id),
+          await ctx.audit("financialDocument", created.id, {
             action: "document.create",
             changes: {
               jobIds: jobs.map((job) => job.id),
@@ -588,52 +452,13 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
               discountCents,
               totalCents,
             },
-            performedBy: session.user.id,
           });
 
-          return { status: "ok" as const, document };
+          return created;
         },
       );
 
-      if (outcome.status === "jobs_not_found") {
-        return c.json(
-          { error: "Uma ou mais ordens nao foram encontradas" },
-          404,
-        );
-      }
-      if (outcome.status === "jobs_not_billable") {
-        return c.json(
-          {
-            error: "Apenas ordens aprovadas ou retificadas podem ser faturadas",
-          },
-          400,
-        );
-      }
-      if (outcome.status === "already_documented") {
-        return c.json(
-          {
-            error: `Uma ou mais ordens ja possuem documento ativo (${outcome.documentNumber})`,
-          },
-          400,
-        );
-      }
-      if (outcome.status === "not_consolidatable") {
-        return c.json(
-          {
-            error:
-              "A cobranca consolidada exige ordens do mesmo cliente, unidade e moeda",
-          },
-          400,
-        );
-      }
-      if (outcome.status === "single_mode_violation") {
-        return c.json(
-          { error: "O modo por OS aceita apenas uma ordem por documento" },
-          400,
-        );
-      }
-
-      return c.json({ data: outcome.document }, 201);
+      return c.json({ data: document }, 201);
     },
   )
   .get("/:id", ...withLabPermission({ financial: ["read"] }), async (c) => {
@@ -644,15 +469,9 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       getDocumentByPublicId(o, member.organizationId, publicId),
     );
     if (!document) {
-      return c.json({ error: "Documento nao encontrado" }, 404);
+      throw notFound("billing_document_not_found", "Documento nao encontrado");
     }
-
-    if (isDocumentOutsideActiveUnitScope(member, document.unitId)) {
-      return c.json(
-        { error: "Documento fora do escopo da unidade ativa" },
-        403,
-      );
-    }
+    requireDocumentInUnitScope(member, document.unitId);
 
     return c.json({ data: document });
   })
@@ -662,25 +481,20 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateDocumentSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const id = requireDocumentRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const existing = await getDocumentById(o, member.organizationId, id);
-          if (!existing) return { status: "not_found" as const };
-
-          if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
-            return { status: "outside_unit_scope" as const };
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabDocument(ctx.o, member, id);
 
           if (existing.status !== "DRAFT") {
-            return { status: "not_draft" as const };
+            throw invalid(
+              "billing_document_not_draft",
+              "Apenas documentos em rascunho podem ser editados",
+            );
           }
 
           const nextItems = existing.items.map((item) => {
@@ -713,7 +527,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           if (hasSnapshotDivergence && !input.reason?.trim()) {
-            return { status: "reason_required" as const };
+            throw invalid(
+              "billing_document_edit_reason_required",
+              "Edicoes divergentes do snapshot exigem motivo",
+            );
           }
 
           const subtotalCents = nextItems.reduce(
@@ -723,7 +540,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
           const discountCents = input.discountCents ?? 0;
           const totalCents = Math.max(subtotalCents - discountCents, 0);
 
-          await o
+          await ctx.o
             .update(billingDocument)
             .set({
               dueDate: input.dueDate
@@ -737,12 +554,12 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
               subtotalCents,
               totalCents,
               updatedAt: new Date(),
-              updatedBy: session.user.id,
+              updatedBy: ctx.actor.userId,
             })
             .where(eq(billingDocument.id, id));
 
           for (const item of nextItems) {
-            await o
+            await ctx.o
               .update(billingDocumentItem)
               .set({
                 description: item.description,
@@ -754,10 +571,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
               .where(eq(billingDocumentItem.id, item.id));
           }
 
-          await o.insert(financialAuditLog).values({
-            organizationId: member.organizationId,
-            entityType: "document",
-            entityId: String(id),
+          await ctx.audit("financialDocument", id, {
             action: "document.update",
             changes: {
               reason: input.reason ?? null,
@@ -766,40 +580,14 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
               subtotalCents,
               totalCents,
             },
-            performedBy: session.user.id,
             reason: input.reason?.trim() || null,
           });
 
-          return {
-            status: "ok" as const,
-            updated: await getDocumentById(o, member.organizationId, id),
-          };
+          return getDocumentById(ctx.o, member.organizationId, id);
         },
       );
 
-      if (outcome.status === "not_found") {
-        return c.json({ error: "Documento nao encontrado" }, 404);
-      }
-      if (outcome.status === "outside_unit_scope") {
-        return c.json(
-          { error: "Documento fora do escopo da unidade ativa" },
-          403,
-        );
-      }
-      if (outcome.status === "not_draft") {
-        return c.json(
-          { error: "Apenas documentos em rascunho podem ser editados" },
-          400,
-        );
-      }
-      if (outcome.status === "reason_required") {
-        return c.json(
-          { error: "Edicoes divergentes do snapshot exigem motivo" },
-          400,
-        );
-      }
-
-      return c.json({ data: outcome.updated });
+      return c.json({ data: updated });
     },
   )
   .post(
@@ -807,38 +595,32 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ financial: ["document_issue"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const id = requireDocumentRouteId(c.req.param("id"));
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      // `tx` is the raw transaction the numbering helper needs (it takes an
-      // advisory lock with raw SQL); everything else goes through `o`.
-      const outcome = await orgTransactionWithExecutor(
+      // `ctx.tx` is the raw transaction the numbering helper needs (it takes an
+      // advisory lock with raw SQL); everything else goes through `ctx.o`.
+      const issued = await withOrg(
         member.organizationId,
-        async (o, tx) => {
-          const existing = await getDocumentById(o, member.organizationId, id);
-          if (!existing) return { status: "not_found" as const };
-
-          if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
-            return { status: "outside_unit_scope" as const };
-          }
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabDocument(ctx.o, member, id);
 
           // Locked: the number below is allocated only for a draft that stays
           // a draft until this transaction commits.
-          const lockedStatus = await lockBillingDocumentStatus(o, id);
+          const lockedStatus = await lockBillingDocumentStatus(ctx.o, id);
           if (
             !lockedStatus ||
             !BILLING_DOCUMENT_MACHINE.canTransition(lockedStatus, "issue")
           ) {
-            return { status: "not_draft" as const };
+            throw invalid(
+              "billing_document_not_draft",
+              "Documento ja foi emitido ou encerrado",
+            );
           }
 
           const documentNumber = await generateBillingDocumentNumber(
             member.organizationId,
-            tx,
+            ctx.tx,
           );
           const issueDate = new Date();
           const effectiveDueDate = resolveIssuedDueDate(
@@ -847,7 +629,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
           );
 
-          await o
+          await ctx.o
             .update(billingDocument)
             .set({
               documentNumber,
@@ -857,20 +639,20 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
               ),
               issueDate,
               dueDate: effectiveDueDate,
-              issuedBy: session.user.id,
-              updatedBy: session.user.id,
+              issuedBy: ctx.actor.userId,
+              updatedBy: ctx.actor.userId,
               updatedAt: issueDate,
             })
             .where(eq(billingDocument.id, id));
 
-          const [existingInstallment] = await o
+          const [existingInstallment] = await ctx.o
             .select({ id: receivableInstallment.id })
             .from(receivableInstallment)
             .where(eq(receivableInstallment.documentId, id))
             .limit(1);
 
           if (!existingInstallment) {
-            await o.insert(receivableInstallment).values({
+            await ctx.o.insert(receivableInstallment).values({
               organizationId: member.organizationId,
               documentId: id,
               installmentNumber: 1,
@@ -881,40 +663,20 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             });
           }
 
-          await o.insert(financialAuditLog).values({
-            organizationId: member.organizationId,
-            entityType: "document",
-            entityId: String(id),
+          await ctx.audit("financialDocument", id, {
             action: "document.issue",
             changes: {
               documentNumber,
               issueDate: issueDate.toISOString(),
               dueDate: effectiveDueDate.toISOString(),
             },
-            performedBy: session.user.id,
           });
 
-          return {
-            status: "ok" as const,
-            issued: await getDocumentById(o, member.organizationId, id),
-          };
+          return getDocumentById(ctx.o, member.organizationId, id);
         },
       );
 
-      if (outcome.status === "not_found") {
-        return c.json({ error: "Documento nao encontrado" }, 404);
-      }
-      if (outcome.status === "outside_unit_scope") {
-        return c.json(
-          { error: "Documento fora do escopo da unidade ativa" },
-          403,
-        );
-      }
-      if (outcome.status === "not_draft") {
-        return c.json({ error: "Documento ja foi emitido ou encerrado" }, 400);
-      }
-
-      return c.json({ data: outcome.issued });
+      return c.json({ data: issued });
     },
   )
   .post(
@@ -923,32 +685,27 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", VoidDocumentSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const id = requireDocumentRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const voided = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          await requireLabDocument(ctx.o, member, id);
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const existing = await getDocumentById(o, member.organizationId, id);
-          if (!existing) return { status: "not_found" as const };
-
-          if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
-            return { status: "outside_unit_scope" as const };
-          }
-
-          const lockedStatus = await lockBillingDocumentStatus(o, id);
+          const lockedStatus = await lockBillingDocumentStatus(ctx.o, id);
           if (
             !lockedStatus ||
             !BILLING_DOCUMENT_MACHINE.canTransition(lockedStatus, "void")
           ) {
-            return { status: "already_void" as const };
+            throw invalid(
+              "billing_document_already_void",
+              "Documento ja esta anulado",
+            );
           }
 
-          await o
+          await ctx.o
             .update(billingDocument)
             .set({
               status: BILLING_DOCUMENT_MACHINE.requireTargetOf(
@@ -956,15 +713,15 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
                 "void",
               ),
               voidReason: input.reason,
-              voidedBy: session.user.id,
+              voidedBy: ctx.actor.userId,
               updatedAt: new Date(),
-              updatedBy: session.user.id,
+              updatedBy: ctx.actor.userId,
             })
             .where(eq(billingDocument.id, id));
 
           // `void` of RECEIVABLE_INSTALLMENT_MACHINE: every installment goes
           // with its document.
-          await o
+          await ctx.o
             .update(receivableInstallment)
             .set({
               status: "VOID",
@@ -980,38 +737,18 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
               ),
             );
 
-          await o.insert(financialAuditLog).values({
-            organizationId: member.organizationId,
-            entityType: "document",
-            entityId: String(id),
+          await ctx.audit("financialDocument", id, {
             action: "document.void",
             changes: {
               reason: input.reason,
             },
-            performedBy: session.user.id,
             reason: input.reason,
           });
 
-          return {
-            status: "ok" as const,
-            voided: await getDocumentById(o, member.organizationId, id),
-          };
+          return getDocumentById(ctx.o, member.organizationId, id);
         },
       );
 
-      if (outcome.status === "not_found") {
-        return c.json({ error: "Documento nao encontrado" }, 404);
-      }
-      if (outcome.status === "outside_unit_scope") {
-        return c.json(
-          { error: "Documento fora do escopo da unidade ativa" },
-          403,
-        );
-      }
-      if (outcome.status === "already_void") {
-        return c.json({ error: "Documento ja esta anulado" }, 400);
-      }
-
-      return c.json({ data: outcome.voided });
+      return c.json({ data: voided });
     },
   );

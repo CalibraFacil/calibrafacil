@@ -11,11 +11,14 @@ import {
 import { decryptPassword } from "@calibra-facil/signing";
 import { normalizeContaAzulConnectionConfig } from "@calibra-facil/shared";
 
-import { integrationsRouter } from "./integrations";
+import { integrationsRouter as bareIntegrationsRouter } from "./integrations";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const integrationsRouter = withErrorHandling(bareIntegrationsRouter);
 
 // Real-DB + real-RBAC tests for the bring-your-own Conta Azul application:
 // a laboratory saves its own Client ID/Secret, and the OAuth flow, the token
