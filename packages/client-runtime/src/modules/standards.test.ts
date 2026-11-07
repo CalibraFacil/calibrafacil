@@ -93,7 +93,9 @@ describe("standards module response contracts", () => {
 
     const list = buildStandardsList();
     const { client, requests } = clientReplying({ body: list });
-    expect(await client.jobs.listStandards()).toEqual(list);
+    expect(
+      await client.standards.list({ query: { status: "ACTIVE", limit: 100 } }),
+    ).toEqual(list);
     expect(requests[0]?.url).toBe(
       "https://api.example.test/api/standards?status=ACTIVE&limit=100",
     );
@@ -211,7 +213,10 @@ describe("environmental-limits module response contracts", () => {
     });
     const got = await clientReplying({
       body: effective,
-    }).client.jobs.getEffectiveEnvironmentalLimits(3, { unitId: 1 });
+    }).client.environmentalLimits.effective({
+      params: { assetTypeId: 3 },
+      query: { unitId: "1" },
+    });
     expect(got.source).toBe("asset_type");
     expect(got.limits?.temperatureMax).toBe(25);
 
@@ -219,13 +224,13 @@ describe("environmental-limits module response contracts", () => {
       await clientReplying({
         status: 403,
         body: { error: "Sem acesso" },
-      }).client.jobs.getEffectiveEnvironmentalLimits(3),
+      }).client.environmentalLimits.effective({ params: { assetTypeId: 3 } }),
     ).toEqual({ limits: null, source: null });
 
     await expect(
       clientReplying({
         body: { limits: null, source: "local" },
-      }).client.jobs.getEffectiveEnvironmentalLimits(3),
+      }).client.environmentalLimits.effective({ params: { assetTypeId: 3 } }),
     ).rejects.toBeInstanceOf(ResponseContractError);
   });
 

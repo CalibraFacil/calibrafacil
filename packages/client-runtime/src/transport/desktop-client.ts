@@ -44,6 +44,7 @@ import {
 } from "./endpoint-client";
 import { createServiceOrdersApi } from "../modules/service-orders";
 import { emptyGovernanceResponse } from "../modules/units";
+import { createEnvironmentalLimitsApi } from "../modules/environmental-limits";
 import { createJobsApi } from "../modules/jobs";
 import {
   createDesktopHeaders,
@@ -165,6 +166,10 @@ export function createDesktopApiClient(
   const desktopTransport = createDesktopEndpointTransport(options);
   const localServiceOrders = createServiceOrdersApi(desktopTransport, options);
   const localJobs = createJobsApi(desktopTransport, options);
+  const localEnvironmentalLimits = createEnvironmentalLimitsApi(
+    desktopTransport,
+    options,
+  );
   const localAssets = endpointClient(assetEndpoints, desktopTransport, options);
   const localMethods = endpointClient(
     methodEndpoints,
@@ -412,6 +417,8 @@ export function createDesktopApiClient(
     assetTypes: { list: localAssetTypes.list },
     environmentalLimits: {
       ...desktopEndpointStubs("environmentalLimits"),
+      // Read-through from the local mirror (`apps/local-server/src/contract.test.ts`).
+      effective: localEnvironmentalLimits.effective,
       // The limits of the active unit come from the session snapshot, not
       // from a local-server route.
       async list() {
@@ -505,9 +512,6 @@ export function createDesktopApiClient(
       // (`apps/local-server/src/contract.test.ts`).
       list: localJobs.list,
       get: localJobs.get,
-      listStandards: localJobs.listStandards,
-      getEffectiveEnvironmentalLimits:
-        localJobs.getEffectiveEnvironmentalLimits,
       saveExecution: localJobs.saveExecution,
       submitExecution: localJobs.submitExecution,
     },

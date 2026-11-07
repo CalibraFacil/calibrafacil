@@ -104,15 +104,9 @@ export const desktopOfflineRoutes = [
   {
     to: '/dashboard/jobs/$id/execute',
     renders: [
-      ...reads(
-        'jobs',
-        'get',
-        'listStandards',
-        'getEffectiveEnvironmentalLimits',
-        'saveExecution',
-        'submitExecution',
-      ),
-      ...reads('standards', 'listCompositionProfiles'),
+      ...reads('jobs', 'get', 'saveExecution', 'submitExecution'),
+      ...reads('standards', 'list', 'listCompositionProfiles'),
+      ...reads('environmentalLimits', 'effective'),
     ],
   },
 

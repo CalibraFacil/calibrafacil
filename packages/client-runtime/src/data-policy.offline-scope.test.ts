@@ -18,13 +18,12 @@ const Q13_OFFLINE_METHODS = [
   // field capture
   "jobs.list",
   "jobs.get",
-  "jobs.listStandards",
-  "jobs.getEffectiveEnvironmentalLimits",
   "jobs.saveExecution",
   "jobs.submitExecution",
   "attachments.list",
   "attachments.upload",
   "environmentalLimits.list",
+  "environmentalLimits.effective",
   "standards.listCompositionProfiles",
   // intake
   "serviceOrders.create",

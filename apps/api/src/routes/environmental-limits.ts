@@ -2,11 +2,7 @@ import { createRouter } from "../server/router";
 import { HTTPException } from "hono/http-exception";
 import { environmentalLimits, assetType } from "@calibra-facil/db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
-import {
-  environmentalLimitEndpoints,
-  type EffectiveEnvironmentalLimitsResponse,
-  type ServerShape,
-} from "@calibra-facil/contracts";
+import { environmentalLimitEndpoints } from "@calibra-facil/contracts";
 import {
   requireLabProtected,
   requireOrgType,
@@ -78,28 +74,19 @@ mount(
 // ===========================================================================
 // GET /effective/:assetTypeId - Get effective limits for an asset type
 // Resolves hierarchy: unit asset-type-specific > unit default
-//
-// A plain Hono route, not an endpoint definition: the SDK reaches it through
-// `jobs.getEffectiveEnvironmentalLimits` (the job execution page), and its
-// response schema (`effectiveEnvironmentalLimitsResponseSchema`) is shared with
-// the desktop local server.
 // ===========================================================================
-environmentalLimitsRouter.get(
-  "/effective/:assetTypeId",
-  ...requireLabProtected,
-  requireOrgType("LAB"),
-  async (c) => {
+mount(
+  environmentalLimitsRouter,
+  PREFIX,
+  environmentalLimitEndpoints.effective,
+  labMiddleware,
+  async (c, { params, query }) => {
     const memberData = c.get("member");
-    const assetTypeId = parseInt(c.req.param("assetTypeId"), 10);
-    const queryUnitId = c.req.query("unitId");
-
-    if (isNaN(assetTypeId)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { assetTypeId } = params;
 
     const unit = resolveAccessibleUnitContext(
       memberData,
-      queryUnitId ? Number.parseInt(queryUnitId, 10) : null,
+      query.unitId ? Number.parseInt(query.unitId, 10) : null,
     );
 
     const { candidateLimits, specificLimits } = await orgDb(
@@ -132,21 +119,14 @@ environmentalLimitsRouter.get(
       return { candidateLimits: candidates, specificLimits: specifics };
     });
 
-    const { limits: resolvedLimits, source } =
-      selectEffectiveEnvironmentalLimits([
-        ...specificLimits,
-        ...candidateLimits,
-      ]);
+    const { limits, source } = selectEffectiveEnvironmentalLimits([
+      ...specificLimits,
+      ...candidateLimits,
+    ]);
 
-    // `unit` rides along for the cloud caller; the contract (shared with the
-    // desktop local-server, which has no unit lookup) is `limits` + `source`.
-    const body = { limits: resolvedLimits, source, unit };
-    return c.json(
-      body satisfies ServerShape<EffectiveEnvironmentalLimitsResponse>,
-    );
+    return { limits, source, unit };
   },
 );
-
 // ===========================================================================
 // PUT / - Upsert environmental limits
 // ===========================================================================

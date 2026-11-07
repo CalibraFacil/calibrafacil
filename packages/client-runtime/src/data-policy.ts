@@ -126,11 +126,9 @@ export const calibraApiPolicyRegistry = {
   methods: endpointPolicies(ENDPOINT_GROUPS.methods),
   standards: endpointPolicies(ENDPOINT_GROUPS.standards),
   jobs: {
-    // The endpoint definitions' policies; the three methods below are not
-    // endpoints of the jobs group (see `modules/jobs.ts`).
+    // The endpoint definitions' policies; `getLabelCommands` is not an endpoint
+    // of the jobs group (see `modules/jobs.ts`).
     ...endpointPolicies(ENDPOINT_GROUPS.jobs),
-    listStandards: "local-first-read-through-sync",
-    getEffectiveEnvironmentalLimits: "local-first-read-through-sync",
     getLabelCommands: "cloud-only",
   },
   serviceOrders: endpointPolicies(ENDPOINT_GROUPS.serviceOrders),

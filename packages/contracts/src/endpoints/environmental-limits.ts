@@ -12,11 +12,6 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
  * rules). The desktop local-server answers `GET /effective/:assetTypeId` from
  * the offline mirror with the same shape, so `source` uses one vocabulary on
  * both.
- *
- * `GET /effective/:assetTypeId` is not in the group: the SDK reaches it through
- * `jobs.getEffectiveEnvironmentalLimits` (the job execution page), so its
- * schema is exported for that module and the local server, and the route stays a
- * plain Hono route.
  */
 
 /** One configured limit row (a unit default, or an asset-type override). */
@@ -61,6 +56,8 @@ const effectiveLimitsSourceSchema = z.enum(["asset_type", "unit_default"]);
 export const effectiveEnvironmentalLimitsResponseSchema = z.object({
   limits: environmentalLimitRowSchema.nullable(),
   source: effectiveLimitsSourceSchema.nullable(),
+  /** The unit the lookup ran for; the cloud sends it, the desktop local server has no unit lookup. */
+  unit: unitContextSchema.optional(),
 });
 export type EffectiveEnvironmentalLimitsResponse = z.infer<
   typeof effectiveEnvironmentalLimitsResponseSchema
@@ -98,6 +95,19 @@ export const environmentalLimitEndpoints = {
     path: "/api/environmental-limits",
     response: environmentalLimitsResponseSchema,
     failure: "Falha ao carregar limites",
+    policy: "local-first-read-through-sync",
+  }),
+  // The limits that apply to an asset type in the unit (its override, else the
+  // unit default). The job execution page reads it; the SDK method answers "no
+  // limits" for an HTTP error (`modules/environmental-limits.ts`). `unitId` is
+  // kept a string: the handler parses it and falls back like it always did.
+  effective: endpoint({
+    method: "get",
+    path: "/api/environmental-limits/effective/:assetTypeId",
+    params: z.object({ assetTypeId: routeId }),
+    query: z.object({ unitId: z.string().optional() }),
+    response: effectiveEnvironmentalLimitsResponseSchema,
+    failure: "Falha ao carregar limites efetivos",
     policy: "local-first-read-through-sync",
   }),
   save: endpoint({

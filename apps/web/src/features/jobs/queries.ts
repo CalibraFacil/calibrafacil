@@ -119,7 +119,8 @@ export function newJobServicesQueryOptions(assetTypeId: number | null) {
 export function activeReferenceStandardsQueryOptions() {
   return queryOptions({
     queryKey: ['standards', 'active'],
-    queryFn: () => calibraApi.jobs.listStandards(),
+    queryFn: () =>
+      calibraApi.standards.list({ query: { status: 'ACTIVE', limit: 100 } }),
   })
 }
 
@@ -140,8 +141,9 @@ export function effectiveEnvironmentalLimitsQueryOptions({
   return queryOptions({
     queryKey: ['environmental-limits', 'effective', assetTypeId, unitId],
     queryFn: () =>
-      calibraApi.jobs.getEffectiveEnvironmentalLimits(assetTypeId!, {
-        unitId,
+      calibraApi.environmentalLimits.effective({
+        params: { assetTypeId: assetTypeId! },
+        query: unitId ? { unitId: String(unitId) } : {},
       }),
     staleTime: 60_000,
   })

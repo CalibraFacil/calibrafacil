@@ -163,26 +163,6 @@ export function createCloudApiClient(
           };
         };
       };
-      // Only `jobs.listStandards` (the jobs domain, not converted yet) reads
-      // the standards list through the raw client; `standards` itself is an
-      // endpoint group. Delete this when `listStandards` is converted.
-      standards: {
-        $get(input: {
-          query: { status?: string; limit?: string };
-        }): Promise<Response>;
-      };
-      "environmental-limits": {
-        // `effective` stays on the raw tree: `jobs.getEffectiveEnvironmentalLimits`
-        // reaches it (the rest of the group is an endpoint definition).
-        effective: {
-          ":assetTypeId": {
-            $get(input: {
-              param: { assetTypeId: string };
-              query?: { unitId?: string };
-            }): Promise<Response>;
-          };
-        };
-      };
     };
   };
 
