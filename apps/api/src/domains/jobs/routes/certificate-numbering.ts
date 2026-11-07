@@ -15,7 +15,7 @@ import {
   requirePermission,
   type AuthVariables,
 } from "../../../middleware/permission";
-import { requireUnitOperationalSettingsManager } from "../../../lib/unit-operational-settings";
+import { requireUnitOperationalSettingsManager } from "../../org";
 import {
   DEFAULT_CERTIFICATE_NUMBERING_CONFIG,
   buildCertificateSequenceKey,

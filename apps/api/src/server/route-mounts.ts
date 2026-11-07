@@ -10,13 +10,30 @@ import {
   nonConformancesRouter,
   trainingRecordsRouter,
 } from "../domains/quality/routes";
-import { apiKeysRouter } from "../routes/api-keys";
+import {
+  apiKeysRouter,
+  onboardingRouter,
+  invitationsRouter,
+  labSetupRouter,
+  organizationLifecycleRouter,
+  organizationProfileRouter,
+  organizationMediaRouter,
+  emailDomainsRouter,
+  portalDomainsRouter,
+  profileMediaRouter,
+  publicSignupRouter,
+  sessionsRouter,
+  signaturesRouter,
+  signingRouter,
+  ssoRouter,
+  unitsRouter,
+  magicLinkRouter,
+} from "../domains/org/routes";
 import {
   assetTypesRouter,
   assetsRouter,
   legalMetrologyRegulationsRouter,
 } from "../domains/assets/routes";
-import { onboardingRouter } from "../routes/onboarding";
 import {
   calibrationRequestsRouter,
   visitJobsRouter,
@@ -35,46 +52,31 @@ import {
 import { dashboardRouter, reportsRouter } from "../domains/reports/routes";
 import { financeRouter } from "../routes/finance";
 import { integrationsRouter } from "../routes/integrations";
-import { invitationsRouter } from "../routes/invitations";
-import { labSetupRouter } from "../routes/lab-setup";
 import { runApiHealthCheck } from "../lib/health";
 import { methodsRouter } from "../domains/methods/routes";
 import {
   notificationsRouter,
   webhooksRouter,
 } from "../domains/notifications/routes";
-import { organizationLifecycleRouter } from "../routes/organization-lifecycle";
-import { organizationProfileRouter } from "../routes/organization-profile";
-import { organizationMediaRouter } from "../routes/organization-media";
-import { emailDomainsRouter } from "../routes/email-domains";
-import { portalDomainsRouter } from "../routes/portal-domains";
 import {
   portalNotificationsRouter,
   portalRequestsRouter,
   portalVisitsRouter,
   portalRouter,
 } from "../domains/portal/routes";
-import { profileMediaRouter } from "../routes/profile-media";
 import {
   publicApiRouter,
   publicApiV2DocsRouter,
   publicApiV2Router,
 } from "../domains/public-api/routes";
-import { publicSignupRouter } from "../routes/public-signup";
 import {
   portalServiceOrdersRouter,
   publicServiceOrderAccessRouter,
   serviceOrdersRouter,
 } from "../domains/service-orders/routes";
 import { materialsRouter, servicesRouter } from "../domains/catalog/routes";
-import { sessionsRouter } from "../routes/sessions";
-import { signaturesRouter } from "../routes/signatures";
-import { signingRouter } from "../routes/signing";
-import { ssoRouter } from "../routes/sso";
 import { standardsRouter } from "../domains/standards/routes";
 import { syncRouter } from "../domains/sync/routes";
-import { unitsRouter } from "../routes/units";
-import { magicLinkRouter } from "../routes/magic-link";
 import { verifyRouter } from "../domains/verify/routes";
 import type { Env } from "./env";
 

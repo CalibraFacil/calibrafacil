@@ -16,7 +16,7 @@ import {
   type StandardsDraftWarning,
 } from "@calibra-facil/schemas";
 import { and, desc, eq, inArray, isNull, like, not, or } from "drizzle-orm";
-import { selectEffectiveEnvironmentalLimits } from "../../../lib/unit-operational-settings";
+import { selectEffectiveEnvironmentalLimits } from "../../org";
 import {
   checkEnvironmentWithinLimits,
   findMissingRequiredAssetSpecs,

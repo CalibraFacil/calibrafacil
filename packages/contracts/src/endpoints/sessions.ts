@@ -4,7 +4,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The signed-in user's own sessions. The response schema is the wire body of
- * `apps/api/src/routes/sessions.ts`. Cloud-only.
+ * `apps/api/src/domains/org/routes/sessions.ts`. Cloud-only.
  */
 
 export const RevokeSessionSchema = z.object({

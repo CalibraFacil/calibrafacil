@@ -4,7 +4,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The signed-in user's avatar. Response schemas are the wire bodies of
- * `apps/api/src/routes/profile-media.ts`. Cloud-only. The upload is a
+ * `apps/api/src/domains/org/routes/profile-media.ts`. Cloud-only. The upload is a
  * multipart form: the definition carries no `body` (the handler reads the form
  * itself) and the SDK overrides that method with the file upload
  * (`client-runtime/src/modules/profile-media.ts`).

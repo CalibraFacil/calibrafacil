@@ -19,7 +19,7 @@ import {
 import {
   requireUnitOperationalSettingsManager,
   resolveAccessibleUnitContext,
-} from "../../../lib/unit-operational-settings";
+} from "../../org";
 import { invalid, notFound } from "../../../lib/domain-errors";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";

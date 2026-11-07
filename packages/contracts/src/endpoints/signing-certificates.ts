@@ -6,7 +6,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * The unit's ICP-Brasil signing certificates and its signing policy. Response
- * schemas are wire schemas written from what `apps/api/src/routes/signing.ts`
+ * schemas are wire schemas written from what `apps/api/src/domains/org/routes/signing.ts`
  * returns. Cloud-only: the desktop never reads or writes them
  * (`desktop-client.ts`).
  *

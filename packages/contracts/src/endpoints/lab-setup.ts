@@ -5,7 +5,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The first-access (claim) flow of a laboratory account: the setup token the
  * invitation e-mail carries. Public, authenticated by the token alone. Response
- * schemas are the wire bodies of `apps/api/src/routes/lab-setup.ts`. Cloud-only.
+ * schemas are the wire bodies of `apps/api/src/domains/org/routes/lab-setup.ts`. Cloud-only.
  *
  * A refused token answers 400, 404 or 410 with the metadata body (`status`
  * says why): the SDK's `get` hands that body back instead of throwing

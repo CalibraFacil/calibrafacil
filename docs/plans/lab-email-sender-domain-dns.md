@@ -3,8 +3,8 @@
 Status: research only, no code changed. Fetch dates below are 2026-09-09 unless stated.
 Scope: replaces "lab runs its own Resend account" with "we mint the sending domain under
 our Resend account via the Domains API; the lab publishes the DNS records we generate."
-Prior art in this repo: `apps/api/src/routes/portal-domains.ts` +
-`apps/api/src/lib/portal-domains.ts` (single TXT at `_calibrafacil-domain.<hostname>`,
+Prior art in this repo: `apps/api/src/domains/org/routes/portal-domains.ts` +
+`apps/api/src/domains/org/portal-domains.ts` (single TXT at `_calibrafacil-domain.<hostname>`,
 verified by a Cloudflare DoH lookup). That is the friction bar a real customer already cleared.
 
 ## Recommended shape

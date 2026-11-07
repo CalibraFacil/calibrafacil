@@ -1,0 +1,410 @@
+import { createRouter } from "../../../server/router";
+import { labSetupEndpoints } from "@calibra-facil/contracts";
+import { randomBytes } from "node:crypto";
+import { createLabAuth } from "@calibra-facil/auth";
+import {
+  buildLabClaimUrl,
+  normalizeLabAccessEmail,
+  validateLabAccountSetupToken,
+} from "@calibra-facil/auth/lab-access";
+import {
+  invitation,
+  labAccountSetupToken,
+  member,
+  organization,
+  platformEventLog,
+  session as authSession,
+} from "@calibra-facil/db/schema";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
+import {
+  DomainError,
+  forbidden,
+  unauthenticated,
+} from "../../../lib/domain-errors";
+import { recordPlatformEvent } from "../../../lib/identity";
+import { orgDb } from "../../../lib/org-db";
+import { toRecord } from "@calibra-facil/shared/record";
+import { mount } from "../../../lib/endpoint-mount";
+
+function getEnvValue(c: { env?: unknown }, key: string) {
+  return toRecord(c.env)[key];
+}
+
+function resolveTrustedAppUrl(c: { env?: unknown }) {
+  const configuredAppUrl =
+    getEnvValue(c, "APP_URL") ?? process.env.APP_URL ?? process.env.WEB_URL;
+
+  if (typeof configuredAppUrl === "string") {
+    const trimmed = configuredAppUrl.trim().replace(/\/+$/, "");
+    if (trimmed) return trimmed;
+  }
+
+  return appBaseUrl();
+}
+
+/** The ways a claim can go on when the passkey is not used. */
+const CLAIM_FALLBACK_METHODS = ["magic_link", "email_otp"] as const;
+
+function tokenStatusHttpCode(status: string) {
+  if (status === "expired" || status === "consumed") {
+    return 410;
+  }
+
+  if (status === "invalid") {
+    return 404;
+  }
+
+  return 400;
+}
+
+/** Setup mail could not be sent: the auth service answered with a failure. */
+function setupDeliveryFailed(message: string) {
+  return new DomainError({
+    code: "lab_setup_delivery_failed",
+    status: 500,
+    message,
+  });
+}
+
+async function logClaimEvent(input: {
+  action: string;
+  targetUserId?: string | null;
+  tokenId?: string | null;
+  details?: Record<string, unknown> | null;
+}) {
+  await recordPlatformEvent({
+    actorUserId: null,
+    targetUserId: input.targetUserId ?? null,
+    action: input.action,
+    entityType: "lab_account_setup_token",
+    entityId: input.tokenId ?? null,
+    details: input.details ?? null,
+  });
+}
+
+const PREFIX = "/api/lab-setup";
+
+export const labSetupRouter = createRouter();
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.get,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
+    const validation = await validateLabAccountSetupToken(rawToken);
+
+    if (!validation.ok) {
+      // A refused token answers 400, 404 or 410 with the metadata body: statuses
+      // the definition (200) does not describe.
+      return c.json(
+        {
+          status: validation.status,
+          passkeyPreferred: true,
+          fallbackMethods: ["magic_link", "email_otp"],
+        },
+        tokenStatusHttpCode(validation.status),
+      );
+    }
+
+    return {
+      status: "ready" as const,
+      email: validation.token.email,
+      organizationName: validation.token.organizationName,
+      organizationSlug: validation.token.organizationSlug,
+      expiresAt: validation.token.expiresAt,
+      passkeyPreferred: true as const,
+      fallbackMethods: [...CLAIM_FALLBACK_METHODS],
+    };
+  },
+);
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.requestMagicLink,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
+    const validation = await validateLabAccountSetupToken(rawToken);
+
+    if (!validation.ok) {
+      await logClaimEvent({
+        action: "lab_account.magic_link_request_failed",
+        details: { reason: validation.status },
+      });
+      return c.json(
+        { magicLinkRequested: true },
+        tokenStatusHttpCode(validation.status),
+      );
+    }
+
+    const appUrl = resolveTrustedAppUrl(c);
+    const claimUrl = buildLabClaimUrl(appUrl, rawToken);
+    const auth = createLabAuth();
+    const response = await auth.api.signInMagicLink({
+      body: {
+        email: validation.token.email,
+        callbackURL: claimUrl,
+        errorCallbackURL: claimUrl,
+        metadata: {
+          setupToken: rawToken,
+        },
+      },
+      headers: c.req.raw.headers,
+      asResponse: true,
+    });
+
+    if (!response.ok) {
+      throw setupDeliveryFailed("Falha ao enviar link mágico");
+    }
+
+    await logClaimEvent({
+      action: "lab_account.magic_link_requested",
+      targetUserId: validation.token.userId,
+      tokenId: validation.token.id,
+      details: {
+        organizationId: validation.token.organizationId,
+        invitationId: validation.token.invitationId,
+      },
+    });
+
+    return { magicLinkRequested: true as const };
+  },
+);
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.requestOtp,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
+    const validation = await validateLabAccountSetupToken(rawToken);
+
+    if (!validation.ok) {
+      await logClaimEvent({
+        action: "lab_account.otp_request_failed",
+        details: { reason: validation.status },
+      });
+      return c.json(
+        { otpRequested: true },
+        tokenStatusHttpCode(validation.status),
+      );
+    }
+
+    const auth = createLabAuth();
+    const response = await auth.api.sendVerificationOTP({
+      body: {
+        email: validation.token.email,
+        type: "sign-in",
+      },
+      asResponse: true,
+    });
+
+    if (!response.ok) {
+      throw setupDeliveryFailed("Falha ao enviar código");
+    }
+
+    await logClaimEvent({
+      action: "lab_account.otp_requested",
+      targetUserId: validation.token.userId,
+      tokenId: validation.token.id,
+      details: {
+        organizationId: validation.token.organizationId,
+        invitationId: validation.token.invitationId,
+      },
+    });
+
+    return { otpRequested: true as const };
+  },
+);
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.complete,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
+    const validation = await validateLabAccountSetupToken(rawToken);
+
+    if (!validation.ok) {
+      await logClaimEvent({
+        action: "lab_account.claim_failed",
+        details: { reason: validation.status },
+      });
+      throw new DomainError({
+        code: "lab_setup_token_invalid",
+        status: tokenStatusHttpCode(validation.status),
+        message: "Link de configuração inválido ou expirado",
+      });
+    }
+
+    const auth = createLabAuth();
+    const session = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+
+    if (!session?.user?.id) {
+      throw unauthenticated("unauthenticated", "Sessão obrigatória");
+    }
+
+    if (
+      session.user.id !== validation.token.userId ||
+      normalizeLabAccessEmail(session.user.email) !== validation.token.email
+    ) {
+      await logClaimEvent({
+        action: "lab_account.claim_failed",
+        targetUserId: validation.token.userId,
+        tokenId: validation.token.id,
+        details: {
+          reason: "session_user_mismatch",
+          sessionUserId: session.user.id,
+          organizationId: validation.token.organizationId,
+        },
+      });
+      throw forbidden("forbidden", "Sessão não corresponde ao convite");
+    }
+
+    try {
+      // The token names the laboratory (validated above): the membership, the
+      // invitation and the token are tenant rows of THAT laboratory, so the claim
+      // is one transaction that names it. A claim of a token from another
+      // laboratory's invitation cannot see or touch this laboratory's rows.
+      const laboratory = orgDb(validation.token.organizationId);
+      await laboratory.transaction(async (tx) => {
+        if (!validation.token.hasMembership) {
+          if (
+            validation.token.purpose !== "member_invite_claim" ||
+            !validation.token.invitationId
+          ) {
+            throw new Error("MEMBERSHIP_MISSING");
+          }
+
+          const [pendingInvitation] = await tx
+            .select({
+              id: invitation.id,
+              role: invitation.role,
+            })
+            .from(invitation)
+            .where(
+              and(
+                eq(invitation.id, validation.token.invitationId),
+                eq(invitation.organizationId, validation.token.organizationId),
+                eq(
+                  sql<string>`lower(${invitation.email})`,
+                  validation.token.email,
+                ),
+                eq(invitation.status, "pending"),
+                gt(invitation.expiresAt, new Date()),
+              ),
+            )
+            .limit(1);
+
+          if (!pendingInvitation) {
+            throw new Error("INVITATION_INVALID");
+          }
+
+          const [existingMembership] = await tx
+            .select({ id: member.id })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, validation.token.organizationId),
+                eq(member.userId, validation.token.userId),
+              ),
+            )
+            .limit(1);
+
+          if (!existingMembership) {
+            await tx.insert(member).values({
+              id: randomBytes(16).toString("hex"),
+              organizationId: validation.token.organizationId,
+              userId: validation.token.userId,
+              role: pendingInvitation.role ?? "member",
+              createdAt: new Date(),
+            });
+          }
+
+          await tx
+            .update(invitation)
+            .set({ status: "accepted" })
+            .where(eq(invitation.id, pendingInvitation.id));
+        }
+
+        const [consumed] = await tx
+          .update(labAccountSetupToken)
+          .set({ consumedAt: new Date() })
+          .where(
+            and(
+              eq(labAccountSetupToken.id, validation.token.id),
+              isNull(labAccountSetupToken.consumedAt),
+              gt(labAccountSetupToken.expiresAt, new Date()),
+            ),
+          )
+          .returning();
+
+        if (!consumed) {
+          throw new Error("TOKEN_CONSUMED");
+        }
+
+        await tx.insert(platformEventLog).values({
+          actorUserId: validation.token.userId,
+          targetUserId: validation.token.userId,
+          action: "lab_account.claim_completed",
+          entityType: "lab_account_setup_token",
+          entityId: validation.token.id,
+          details: {
+            organizationId: validation.token.organizationId,
+            invitationId: validation.token.invitationId,
+            purpose: validation.token.purpose,
+          },
+        });
+
+        await tx
+          .update(authSession)
+          .set({ activeOrganizationId: validation.token.organizationId })
+          .where(eq(authSession.id, session.session.id));
+      });
+
+      const [org] = await laboratory
+        .select({
+          cnpj: organization.cnpj,
+          email: organization.email,
+          phone: organization.phone,
+        })
+        .from(organization)
+        .where(eq(organization.id, validation.token.organizationId))
+        .limit(1);
+
+      return {
+        claimed: true as const,
+        organizationId: validation.token.organizationId,
+        needsOnboarding: !org?.cnpj || !org.email || !org.phone,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "UNKNOWN";
+      const status = message === "TOKEN_CONSUMED" ? 409 : 400;
+
+      await logClaimEvent({
+        action: "lab_account.claim_failed",
+        targetUserId: validation.token.userId,
+        tokenId: validation.token.id,
+        details: {
+          reason: message,
+          organizationId: validation.token.organizationId,
+          invitationId: validation.token.invitationId,
+        },
+      });
+
+      throw new DomainError({
+        code: status === 409 ? "conflict" : "invalid_request",
+        status,
+        message: "Não foi possível concluir o acesso",
+      });
+    }
+  },
+);

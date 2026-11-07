@@ -15,7 +15,7 @@ import { endpoint, type EndpointGroup } from "./define";
  * The laboratory's units (sites) and who works in them: the unit context of
  * the session (`GET /api/units`) and the governance screens under
  * `/api/units/admin`. Response schemas are wire schemas written from what the
- * handlers in `apps/api/src/routes/units.ts` return. The desktop answers the
+ * handlers in `apps/api/src/domains/org/routes/units.ts` return. The desktop answers the
  * reads from the local session (`transport/desktop-client.ts`); every endpoint
  * is `cloud-only` (units are managed online).
  */

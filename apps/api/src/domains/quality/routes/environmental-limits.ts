@@ -12,7 +12,7 @@ import {
   requireUnitOperationalSettingsManager,
   resolveAccessibleUnitContext,
   selectEffectiveEnvironmentalLimits,
-} from "../../../lib/unit-operational-settings";
+} from "../../org";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
 import { invalid, notFound } from "../../../lib/domain-errors";

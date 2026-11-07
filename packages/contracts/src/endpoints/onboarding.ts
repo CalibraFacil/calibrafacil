@@ -5,7 +5,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * What a laboratory still has to do before its first certificate: derived from
  * live domain state on every call. The response schema is the wire body of
- * `apps/api/src/routes/onboarding.ts`. Cloud-only: the desktop is reached by a
+ * `apps/api/src/domains/org/routes/onboarding.ts`. Cloud-only: the desktop is reached by a
  * laboratory that already has an account.
  */
 

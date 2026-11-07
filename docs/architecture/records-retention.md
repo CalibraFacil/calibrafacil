@@ -16,15 +16,15 @@ pnpm --dir packages/db retention:inventory
 
 ## Model
 
-| Piece                                            | Where                                     | What it does                                                                                                                                                                                                                        |
-| ------------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `organization.retention_years`                   | schema.ts, migration 0117                 | Retention period, default 10, `CHECK (retention_years >= 5)`.                                                                                                                                                                       |
-| `organization.legal_hold` (+ `_reason`)          | schema.ts, migration 0117                 | While true the purge job never touches the organization.                                                                                                                                                                            |
-| `organization.deleted_at/_by`, `deletion_reason` | schema.ts, migration 0117                 | Soft delete of a LAB organization. `CHECK (deleted_at IS NULL OR status = 'SUSPENDED')`, so `requireOrganization` refuses every member.                                                                                             |
-| `calibra_retain_until(org, record_date)`         | migration 0117, `sql/schema-extras.sql`   | `record_date + retention_years` of that organization: the first date a record may be purged.                                                                                                                                        |
-| `organization_lab_delete_guard` trigger          | migration 0117, `sql/schema-extras.sql`   | `DELETE` of a LAB organization raises, unless `calibra.allow_org_purge = 'on'` (purge job, empty-org cleanup) or the seed hatch `calibra.allow_audit_rewrite` is set for the transaction, by the table owner only (migration 0130). |
-| Evidence foreign keys                            | schema.ts, migration 0117                 | Every FK that cascaded a delete into evidence is `RESTRICT`.                                                                                                                                                                        |
-| Purge job `records-purge`                        | `apps/api/src/lib/records-purge.ts`, cron | Disabled unless `RECORDS_PURGE_ENABLED=true`; dry-run unless `RECORDS_PURGE_MODE=execute`. See `DEPLOYMENT.md`.                                                                                                                     |
+| Piece                                            | Where                                             | What it does                                                                                                                                                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `organization.retention_years`                   | schema.ts, migration 0117                         | Retention period, default 10, `CHECK (retention_years >= 5)`.                                                                                                                                                                       |
+| `organization.legal_hold` (+ `_reason`)          | schema.ts, migration 0117                         | While true the purge job never touches the organization.                                                                                                                                                                            |
+| `organization.deleted_at/_by`, `deletion_reason` | schema.ts, migration 0117                         | Soft delete of a LAB organization. `CHECK (deleted_at IS NULL OR status = 'SUSPENDED')`, so `requireOrganization` refuses every member.                                                                                             |
+| `calibra_retain_until(org, record_date)`         | migration 0117, `sql/schema-extras.sql`           | `record_date + retention_years` of that organization: the first date a record may be purged.                                                                                                                                        |
+| `organization_lab_delete_guard` trigger          | migration 0117, `sql/schema-extras.sql`           | `DELETE` of a LAB organization raises, unless `calibra.allow_org_purge = 'on'` (purge job, empty-org cleanup) or the seed hatch `calibra.allow_audit_rewrite` is set for the transaction, by the table owner only (migration 0130). |
+| Evidence foreign keys                            | schema.ts, migration 0117                         | Every FK that cascaded a delete into evidence is `RESTRICT`.                                                                                                                                                                        |
+| Purge job `records-purge`                        | `apps/api/src/domains/org/records-purge.ts`, cron | Disabled unless `RECORDS_PURGE_ENABLED=true`; dry-run unless `RECORDS_PURGE_MODE=execute`. See `DEPLOYMENT.md`.                                                                                                                     |
 
 ### Rules
 
@@ -38,7 +38,7 @@ pnpm --dir packages/db retention:inventory
    the row survives, only the reference to the person is cleared.
 2. **A LAB organization is soft-deleted, not deleted.** Soft delete sets
    `deleted_at`, `deleted_by`, `deletion_reason` and `status = 'SUSPENDED'` in
-   one statement (`softDeleteLabOrganization` in `apps/api/src/lib/records-retention.ts`).
+   one statement (`softDeleteLabOrganization` in `apps/api/src/domains/org/records-retention.ts`).
    The sign-in and membership lookups ignore a soft-deleted organization
    (`findDefaultActiveOrganizationId`, `hasActiveLabMembership`,
    `hasPendingLabInvitation`, the magic-link preview and the public sign-up

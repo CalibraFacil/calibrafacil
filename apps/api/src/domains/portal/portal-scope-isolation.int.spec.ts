@@ -46,7 +46,7 @@ import {
   getActivePortalDomainForOrganization,
   getOrganizationCustomDomain,
   resolveLabOrganizationIdByPortalHostname,
-} from "../../lib/portal-domains";
+} from "../org/portal-domains";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 type Lab = Awaited<ReturnType<typeof seedLab>>;

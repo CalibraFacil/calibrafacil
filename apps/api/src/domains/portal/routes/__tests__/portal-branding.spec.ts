@@ -30,7 +30,7 @@ vi.mock("@calibra-facil/db", () => {
   return { db: builder };
 });
 
-vi.mock("../../../../lib/portal-domains", () => ({
+vi.mock("../../../org/portal-domains", () => ({
   resolveLabOrganizationIdByPortalHostname: vi.fn(async () => null),
 }));
 
@@ -52,7 +52,7 @@ vi.mock("../../../../middleware/permission", () => {
 
 const { portalRouter } = await import("../portal");
 const { resolveLabOrganizationIdByPortalHostname } =
-  await import("../../../../lib/portal-domains");
+  await import("../../../org/portal-domains");
 
 beforeEach(() => {
   dbQueue.length = 0;

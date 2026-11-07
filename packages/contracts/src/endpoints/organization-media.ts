@@ -4,7 +4,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The laboratory's logo (admin and owner). Response schemas are the wire bodies
- * of `apps/api/src/routes/organization-media.ts`. Cloud-only. The upload is a
+ * of `apps/api/src/domains/org/routes/organization-media.ts`. Cloud-only. The upload is a
  * multipart form: the definition carries no `body` (the handler reads the form
  * itself) and the SDK overrides that method with the file upload
  * (`client-runtime/src/modules/organization-media.ts`).

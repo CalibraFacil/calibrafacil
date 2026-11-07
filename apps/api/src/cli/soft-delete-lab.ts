@@ -19,7 +19,7 @@ import { systemDb as ownerDb } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 
-import { softDeleteLabOrganization } from "../lib/records-retention";
+import { softDeleteLabOrganization } from "../domains/org";
 
 const USAGE = `Usage: soft-delete-lab --slug <laboratory slug> --reason <why>`;
 

@@ -56,7 +56,7 @@ import { calibrationRequestsRouter } from "../domains/visits/routes/calibration-
 import { customerGroupsRouter } from "../domains/customers/routes/customer-groups";
 import { customersRouter } from "../domains/customers/routes/customers";
 import { materialsRouter } from "../domains/catalog/routes/materials";
-import { unitsRouter } from "./units";
+import { unitsRouter } from "../domains/org/routes/units";
 import { servicesRouter } from "../domains/catalog/routes/services";
 import { visitJobsRouter } from "../domains/visits/routes/visits";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
