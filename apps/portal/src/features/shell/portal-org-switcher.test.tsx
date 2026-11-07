@@ -81,6 +81,8 @@ vi.mock("@/lib/runtime-env", () => ({
   getWebAppUrl: () => "http://localhost:5173",
 }));
 
+import { portalOrganization } from "@calibra-facil/auth/client";
+import { PORTAL_ORG_KEY } from "@calibra-facil/shared/client-storage-keys";
 import { useOverview } from "@/features/dashboard/queries";
 import { SidebarProvider } from "@calibra-facil/ui/sidebar";
 import { PortalOrgProvider } from "@/lib/portal-org-context";
@@ -247,5 +249,32 @@ describe("PortalOrgSwitcher cache isolation", () => {
       .getAll()
       .filter((query) => query.queryKey[1] === "org-a");
     expect(orgA).toEqual([]);
+  });
+
+  it("keeps the current organization, its cache and its stored choice when the switch fails", async () => {
+    localStorage.removeItem(PORTAL_ORG_KEY);
+    vi.mocked(portalOrganization.setActive).mockClear();
+    vi.mocked(portalOrganization.setActive).mockResolvedValueOnce({
+      data: null,
+      error: { message: "falhou", status: 500, statusText: "Error" },
+    });
+    renderHarness();
+    await waitFor(() =>
+      expect(screen.getByTestId("overview").textContent).toBe("Painel org-a"),
+    );
+
+    await switchTo("Cliente B");
+    await waitFor(() =>
+      expect(portalOrganization.setActive).toHaveBeenCalledTimes(1),
+    );
+
+    expect(screen.getByTestId("overview").textContent).toBe("Painel org-a");
+    expect(localStorage.getItem(PORTAL_ORG_KEY)).toBeNull();
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.queryKey[1]),
+    ).toContain("org-a");
   });
 });

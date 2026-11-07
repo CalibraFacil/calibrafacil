@@ -9,6 +9,7 @@ import { MotionConfig } from 'motion/react'
 
 import type { QueryClient } from '@tanstack/react-query'
 
+import { THEME_STORAGE_KEY } from '@calibra-facil/shared/client-storage-keys'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ThemedToaster } from '@/components/themed-toaster'
 import { usePrefersDark } from '@/hooks/use-prefers-dark'
@@ -40,7 +41,7 @@ function RootComponent() {
         defaultTheme="system"
         enableSystem
         disableTransitionOnChange
-        storageKey="theme"
+        storageKey={THEME_STORAGE_KEY}
         forcedTheme={isLanding ? landingTheme : undefined}
       >
         <MotionConfig reducedMotion="user">
