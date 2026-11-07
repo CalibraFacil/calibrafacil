@@ -77,7 +77,7 @@ const ruleScopeSchema = z.enum([
 export const ListDocumentsQuerySchema = z.object({
   query: z.string().trim().optional(),
   customerId: z.coerce.number().int().positive().optional(),
-  status: z.enum(["DRAFT", "ISSUED", "PAID", "OVERDUE", "VOID"]).optional(),
+  status: z.enum(BILLING_DOCUMENT_STATUSES).optional(),
 });
 
 export const EligibleJobsQuerySchema = z.object({

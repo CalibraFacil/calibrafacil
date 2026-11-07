@@ -14,7 +14,7 @@ export const FleetAnalyticsQuerySchema = z.object({
   unitId: z.coerce.number().int().positive().optional(),
 });
 
-const AssetOotImpactDecisionSchema = z.enum([
+export const AssetOotImpactDecisionSchema = z.enum([
   "NO_IMPACT",
   "IMPACT_CONTAINED",
   "IMPACT_ESCALATED",

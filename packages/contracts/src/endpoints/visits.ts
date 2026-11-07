@@ -8,6 +8,8 @@ import {
   DeclineVisitRescheduleRequestSchema,
   ListVisitsQuerySchema,
   RescheduleVisitSchema,
+  VisitReschedulePreferredPeriodSchema,
+  AddressSchema,
 } from "@calibra-facil/schemas";
 import {
   VISIT_RESCHEDULE_REQUEST_STATUSES,
@@ -27,21 +29,11 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 const visitStatusSchema = z.enum(VISIT_STATUSES);
 export type VisitStatus = z.infer<typeof visitStatusSchema>;
 
-const visitAddressSchema = z.object({
-  cep: z.string().optional(),
-  number: z.string().optional(),
-  street: z.string().optional(),
-  complement: z.string().optional(),
-  neighbourhood: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-});
-
 const visitListItemSchema = z.object({
   id: z.number(),
   status: visitStatusSchema,
   scheduledAt: nullableString,
-  address: visitAddressSchema.nullable(),
+  address: AddressSchema.nullable(),
   customerId: z.number(),
   customerName: z.string(),
   technicianId: nullableString,
@@ -72,7 +64,7 @@ export type VisitDetailJob = z.infer<typeof visitDetailJobSchema>;
 const visitReschedulePreferredWindowSchema = z.object({
   /** ISO yyyy-mm-dd */
   date: z.string(),
-  period: z.enum(["MORNING", "AFTERNOON", "ANY"]),
+  period: VisitReschedulePreferredPeriodSchema,
   note: z.string().optional(),
 });
 export type VisitReschedulePreferredWindow = z.infer<
@@ -96,7 +88,7 @@ export const visitDetailSchema = z.object({
   status: visitStatusSchema,
   scheduledAt: nullableString,
   scheduledEndAt: nullableString,
-  address: visitAddressSchema.nullable(),
+  address: AddressSchema.nullable(),
   notes: nullableString,
   customerId: z.number(),
   customerName: z.string(),
@@ -124,7 +116,7 @@ const visitRowSchema = z.object({
   status: visitStatusSchema,
   scheduledAt: nullableString,
   scheduledEndAt: nullableString,
-  address: visitAddressSchema.nullable(),
+  address: AddressSchema.nullable(),
   notes: nullableString,
   createdBy: z.string(),
   createdAt: z.string(),

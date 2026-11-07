@@ -1,3 +1,22 @@
+/** What an API key may be allowed to do (the scopes of `Authorization: Bearer cf_live_...`). */
+export const PUBLIC_API_SCOPES = [
+  "customers:read",
+  "customers:write",
+  "assets:read",
+  "assets:write",
+  "requests:read",
+  "requests:write",
+  "jobs:read",
+  "jobs:write",
+  "services:read",
+  "units:read",
+  "reports:read",
+  "certificates:read",
+  "webhooks:manage",
+] as const;
+
+export type PublicApiScope = (typeof PUBLIC_API_SCOPES)[number];
+
 const PUBLIC_API_RESOURCE_TYPES = [
   "customer",
   "asset",

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { AccreditedScopeLineSchema } from "@calibra-facil/schemas";
+import {
+  AccreditedScopeLineSchema,
+  CmcTypeSchema,
+} from "@calibra-facil/schemas";
 
 import { nullableNumber, nullableString, unitContextSchema } from "../common";
 import { endpoint, routeId, type EndpointGroup } from "./define";
@@ -23,7 +26,7 @@ const accreditedScopeLineSchema = z.object({
   rangeMin: z.number(),
   rangeMax: z.number(),
   rangeUnit: z.string(),
-  cmcType: z.enum(["fixed", "linear"]),
+  cmcType: CmcTypeSchema,
   cmcA: z.number(),
   cmcB: nullableNumber,
   cmcUnit: z.string(),

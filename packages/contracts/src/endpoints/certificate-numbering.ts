@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { UpdateCertificateNumberingProfileSchema } from "@calibra-facil/schemas";
+import {
+  UpdateCertificateNumberingProfileSchema,
+  CertificateSequenceResetScopeSchema,
+} from "@calibra-facil/schemas";
 
 import { nullableString } from "../common";
 import { endpoint, type EndpointGroup } from "./define";
@@ -20,7 +23,7 @@ const certificateNumberingConfigSchema = z.object({
   numberTemplate: z.string(),
   certificateNameTemplate: z.string(),
   sequence: z.object({
-    resetScope: z.enum(["never", "year", "month", "project"]),
+    resetScope: CertificateSequenceResetScopeSchema,
     startAt: z.number(),
     increment: z.number(),
     padding: z.number(),

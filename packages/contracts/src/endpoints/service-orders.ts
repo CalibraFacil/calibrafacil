@@ -8,9 +8,7 @@ import {
   IssueServiceOrderDeliveryDocumentSchema,
   ListServiceOrdersQuerySchema,
   SendServiceOrderQuoteSchema,
-  SERVICE_ORDER_EXECUTION_RESULTS,
-  SERVICE_ORDER_ITEM_TYPES,
-  SERVICE_ORDER_RECOMMENDED_ACTIONS,
+  MetrologyRegimeSchema,
   ServiceOrderPrioritySchema,
   ServiceOrderStatusSchema,
   StartServiceOrderExecutionSchema,
@@ -19,7 +17,13 @@ import {
   UpdateServiceOrderSchema,
 } from "@calibra-facil/schemas";
 
-import { SERVICE_ORDER_QUOTE_STATUSES } from "@calibra-facil/shared";
+import {
+  SERVICE_ORDER_DELIVERY_METHODS,
+  SERVICE_ORDER_EXECUTION_RESULTS,
+  SERVICE_ORDER_ITEM_TYPES,
+  SERVICE_ORDER_QUOTE_STATUSES,
+  SERVICE_ORDER_RECOMMENDED_ACTIONS,
+} from "@calibra-facil/shared";
 
 import { nullableString, paginationSchema } from "../common";
 import { endpoint, routeId, type EndpointGroup } from "./define";
@@ -189,10 +193,7 @@ const serviceOrderDetailSchema = z.object({
   assetName: z.string(),
   assetTag: nullableString.optional(),
   assetSerialNumber: nullableString,
-  assetMetrologyRegime: z
-    .enum(["INDUSTRIAL", "LEGAL", "UNKNOWN"])
-    .nullable()
-    .optional(),
+  assetMetrologyRegime: MetrologyRegimeSchema.nullable().optional(),
   unitName: nullableString.optional(),
   responsibleTechnicianId: nullableString,
   claimedDefect: z.string(),
@@ -212,11 +213,7 @@ const serviceOrderDetailSchema = z.object({
   deliveredAt: nullableString.optional(),
   deliveredToName: nullableString.optional(),
   deliveredToDocument: nullableString.optional(),
-  deliveryMethod: z.enum([
-    "pickup_at_lab",
-    "ship_to_client",
-    "third_party_pickup",
-  ]),
+  deliveryMethod: z.enum(SERVICE_ORDER_DELIVERY_METHODS),
   deliveryNotes: nullableString.optional(),
   clientVisibleNotes: nullableString,
   internalNotes: nullableString,

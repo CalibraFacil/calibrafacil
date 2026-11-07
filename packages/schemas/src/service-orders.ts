@@ -1,66 +1,16 @@
-import { SERVICE_ORDER_STATUSES } from "@calibra-facil/shared";
+import {
+  SERVICE_ORDER_CLOSING_REASONS,
+  SERVICE_ORDER_DELIVERY_METHODS,
+  SERVICE_ORDER_EXECUTION_RESULTS,
+  SERVICE_ORDER_INTAKE_TYPES,
+  SERVICE_ORDER_ITEM_TYPES,
+  SERVICE_ORDER_MANUAL_APPROVAL_EVIDENCE_TYPES,
+  SERVICE_ORDER_PRIORITIES,
+  SERVICE_ORDER_RECOMMENDED_ACTIONS,
+  SERVICE_ORDER_STATUSES,
+} from "@calibra-facil/shared";
 import { z } from "zod";
 import { queryFlag } from "./query-flag";
-const SERVICE_ORDER_PRIORITIES = [
-  "normal",
-  "urgent",
-  "contract",
-  "warranty",
-] as const;
-const SERVICE_ORDER_INTAKE_TYPES = [
-  "counter",
-  "carrier",
-  "third_party",
-  "internal",
-  "warranty_return",
-] as const;
-const SERVICE_ORDER_DELIVERY_METHODS = [
-  "pickup_at_lab",
-  "ship_to_client",
-  "third_party_pickup",
-] as const;
-const SERVICE_ORDER_CLOSING_REASONS = [
-  "completed_repaired",
-  "completed_calibrated",
-  "completed_repaired_and_calibrated",
-  "quote_rejected_returned",
-  "condemned_returned",
-  "no_defect_found",
-  "warranty_completed",
-  "canceled_before_execution",
-] as const;
-export const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
-  "repair",
-  "calibration_only",
-  "return_without_repair",
-  "condemned",
-  "warranty_service",
-  "external_service_required",
-] as const;
-export const SERVICE_ORDER_ITEM_TYPES = [
-  "service",
-  "part",
-  "external_service",
-  "freight",
-  "discount",
-  "evaluation_fee",
-  "other",
-] as const;
-export const SERVICE_ORDER_EXECUTION_RESULTS = [
-  "repaired",
-  "not_repaired",
-  "condemned",
-  "returned_without_service",
-  "sent_to_third_party",
-] as const;
-const SERVICE_ORDER_MANUAL_APPROVAL_EVIDENCE_TYPES = [
-  "phone",
-  "whatsapp",
-  "email",
-  "in_person",
-  "other",
-] as const;
-
 const nullableText = z.string().trim().max(5000).optional().nullable();
 const moneyCents = z.coerce.number().int().min(0).max(999999999);
 const signedMoneyCents = z.coerce.number().int().min(-999999999).max(999999999);

@@ -1,3 +1,15 @@
+import {
+  ACCEPTANCE_CRITERION_SEVERITIES,
+  FORMULA_REPORTING_GROUPS,
+  FORMULA_REPORTING_ROLES,
+  MASS_COMPOSITION_OPTION_SOURCES,
+  MASS_COMPOSITION_QUANTITY_MODES,
+  MASS_COMPOSITION_UNCERTAINTY_MODES,
+  MASS_UNITS,
+  METHOD_COLUMN_PHASES,
+  METHOD_TABLE_COLUMN_ROLES,
+  METHOD_TABLE_COLUMN_TYPES,
+} from "@calibra-facil/shared";
 import { CALIBRATION_PHASE_MODES } from "@calibra-facil/shared/calibration-record";
 import { z } from "zod";
 
@@ -76,9 +88,9 @@ const TableColumnSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),
-    type: z.enum(["text", "number"]),
+    type: z.enum(METHOD_TABLE_COLUMN_TYPES),
     unit: z.string().trim().optional(),
-    role: z.enum(["standard_value", "mass_standard_composition"]).optional(),
+    role: z.enum(METHOD_TABLE_COLUMN_ROLES).optional(),
     quantityKind: z
       .enum([
         "indication",
@@ -91,15 +103,13 @@ const TableColumnSchema = z
         "other",
       ])
       .optional(),
-    phase: z.enum(["before", "after", "always"]).optional(),
+    phase: z.enum(METHOD_COLUMN_PHASES).optional(),
     /** Presentation: false keeps a calc-input column out of the certificate grid. */
     includeInCertificate: z.boolean().optional(),
     massComposition: z
       .object({
-        targetUnit: z.enum(["mg", "g", "kg"]).optional(),
-        optionSource: z
-          .enum(["certified_values", "composition_profiles"])
-          .optional(),
+        targetUnit: z.enum(MASS_UNITS).optional(),
+        optionSource: z.enum(MASS_COMPOSITION_OPTION_SOURCES).optional(),
         targetColumns: z
           .object({
             certifiedValue: SafeKeySchema.optional(),
@@ -111,12 +121,8 @@ const TableColumnSchema = z
           })
           .strict()
           .optional(),
-        uncertaintyMode: z
-          .enum(["expanded_rss", "expanded_arithmetic"])
-          .optional(),
-        quantityMode: z
-          .enum(["linear_per_item_then_rss", "profile_linear"])
-          .optional(),
+        uncertaintyMode: z.enum(MASS_COMPOSITION_UNCERTAINTY_MODES).optional(),
+        quantityMode: z.enum(MASS_COMPOSITION_QUANTITY_MODES).optional(),
       })
       .strict()
       .optional(),
@@ -226,20 +232,8 @@ const MethodFormulaSchema = z
     reporting: z
       .object({
         includeInCertificate: z.boolean().optional(),
-        role: z
-          .enum([
-            "primary_result",
-            "expanded_uncertainty",
-            "coverage_factor",
-            "conformity_margin",
-            "conformity_verdict",
-            "uncertainty_component",
-            "auxiliary",
-          ])
-          .optional(),
-        group: z
-          .enum(["calibration_result", "uncertainty_budget", "raw_calculation"])
-          .optional(),
+        role: z.enum(FORMULA_REPORTING_ROLES).optional(),
+        group: z.enum(FORMULA_REPORTING_GROUPS).optional(),
         /**
          * Presentation phase for table_row outputs: lets the certificate
          * grid split "como recebido" / "após ajuste" tables (a *_antes/_apos
@@ -362,7 +356,7 @@ const MethodAcceptanceCriterionSchema = z
     key: SafeKeySchema,
     label: z.string().trim().min(1),
     expression: z.string().trim().min(1),
-    severity: z.enum(["info", "warning", "blocking"]),
+    severity: z.enum(ACCEPTANCE_CRITERION_SEVERITIES),
     message: z.string().trim().min(1),
     metadata: SafeMetadataSchema.optional(),
   })

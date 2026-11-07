@@ -6,6 +6,9 @@ import {
   ListCustomersQuerySchema,
   UpdateComplianceSchema,
   UpdateCustomerSchema,
+  QualificationStatusSchema,
+  AssetOotImpactDecisionSchema,
+  AddressSchema,
 } from "@calibra-facil/schemas";
 import { ASSET_OOT_EVENT_STATUSES } from "@calibra-facil/schemas/machines";
 
@@ -26,21 +29,9 @@ import { endpoint, type EndpointGroup } from "./define";
 // Schemas
 // ---------------------------------------------------------------------------
 
-const customerAddressSchema = z.object({
-  cep: z.string().optional(),
-  number: z.string().optional(),
-  street: z.string().optional(),
-  complement: z.string().optional(),
-  neighbourhood: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-});
-
 /** The ISO/IEC 17025 7.1 qualification block; the offline mirror keeps only the status. */
 const customerComplianceSchema = z.object({
-  qualificationStatus: z
-    .enum(["pending", "qualified", "suspended", "expired"])
-    .optional(),
+  qualificationStatus: QualificationStatusSchema.optional(),
   qualificationDate: z.string().optional(),
   qualificationExpiresAt: z.string().optional(),
   contractAgreementId: z.number().optional(),
@@ -60,7 +51,7 @@ const customerSchema = z.object({
   taxId: nullableString,
   email: nullableString,
   phone: nullableString,
-  address: customerAddressSchema.nullable(),
+  address: AddressSchema.nullable(),
   /** The CLIENT organization behind the portal; the offline mirror has none. */
   authOrganizationId: nullableString,
   groupId: nullableNumber.optional(),
@@ -154,9 +145,7 @@ const customerOotEventSchema = z.object({
   assetName: z.string(),
   jobId: z.number(),
   jobIdentifier: z.string(),
-  assessmentDecision: z
-    .enum(["NO_IMPACT", "IMPACT_CONTAINED", "IMPACT_ESCALATED"])
-    .nullable(),
+  assessmentDecision: AssetOotImpactDecisionSchema.nullable(),
   assessmentCreatedAt: nullableString,
 });
 export type CustomerOotEvent = z.infer<typeof customerOotEventSchema>;

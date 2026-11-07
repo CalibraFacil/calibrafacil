@@ -5,6 +5,8 @@ import {
   ListCalibrationRequestsQuerySchema,
   RejectCalibrationRequestSchema,
   ReviewCalibrationRequestSchema,
+  CalibrationRequestDeliveryMethodSchema,
+  AddressSchema,
 } from "@calibra-facil/schemas";
 import { CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 
@@ -76,18 +78,8 @@ export const calibrationRequestDetailSchema = z.object({
   observations: nullableString,
   internalNotes: nullableString,
   requestedDueDate: nullableString,
-  deliveryMethod: z.enum(["dropoff", "carrier", "onsite"]),
-  onsiteAddress: z
-    .object({
-      cep: z.string().optional(),
-      number: z.string().optional(),
-      street: z.string().optional(),
-      complement: z.string().optional(),
-      neighbourhood: z.string().optional(),
-      city: z.string().optional(),
-      state: z.string().optional(),
-    })
-    .nullable(),
+  deliveryMethod: CalibrationRequestDeliveryMethodSchema,
+  onsiteAddress: AddressSchema.nullable(),
   preferredVisitDate: nullableString,
   submittedAt: z.string(),
   reviewedAt: nullableString,
