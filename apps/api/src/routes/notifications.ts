@@ -1,4 +1,5 @@
 import { createRouter } from "../server/router";
+import { notificationEndpoints } from "@calibra-facil/contracts";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   ListNotificationsQuerySchema,
@@ -20,6 +21,7 @@ import { eq, and, desc, count, inArray, sql } from "drizzle-orm";
 
 import { invalid, notFound } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { requestActor } from "../middleware/request-actor";
 
@@ -36,74 +38,81 @@ import { requestActor } from "../middleware/request-actor";
  * - Never hard-delete notifications (use ARCHIVED status)
  * - All notification events are auditable
  */
-export const notificationsRouter = createRouter<{ Variables: AuthVariables }>()
-  // =========================================================================
-  // GET / - List notifications with pagination and filters
-  // =========================================================================
-  .get(
-    "/",
-    ...requireLabProtected,
-    zValidator("query", ListNotificationsQuerySchema),
-    async (c) => {
-      const session = c.get("session");
-      const member = c.get("member");
-      const { page, limit, status, type, priority } = c.req.valid("query");
-      const offset = (page - 1) * limit;
+const PREFIX = "/api/notifications";
 
-      // Build conditions - scope to user and organization
-      const conditions = [
-        eq(notification.recipientUserId, session.user.id),
-        eq(notification.organizationId, member.organizationId),
-      ];
+export const notificationsRouter = createRouter<{ Variables: AuthVariables }>();
 
-      if (status) {
-        conditions.push(eq(notification.status, status));
-      }
+// =========================================================================
+// GET / - List notifications with pagination and filters
+// =========================================================================
+mount(
+  notificationsRouter,
+  PREFIX,
+  notificationEndpoints.listRecent,
+  [...requireLabProtected],
+  async (c, { query }) => {
+    const session = c.get("session");
+    const member = c.get("member");
+    const { page, limit, status, type, priority } = query;
+    const offset = (page - 1) * limit;
 
-      if (type) {
-        conditions.push(eq(notification.type, type));
-      }
+    // Build conditions - scope to user and organization
+    const conditions = [
+      eq(notification.recipientUserId, session.user.id),
+      eq(notification.organizationId, member.organizationId),
+    ];
 
-      if (priority) {
-        conditions.push(eq(notification.priority, priority));
-      }
+    if (status) {
+      conditions.push(eq(notification.status, status));
+    }
 
-      const whereCondition = and(...conditions);
+    if (type) {
+      conditions.push(eq(notification.type, type));
+    }
 
-      // Get total count
-      const [countResult] = await orgDb(member.organizationId).transaction(
-        (o) =>
-          o.select({ total: count() }).from(notification).where(whereCondition),
-      );
+    if (priority) {
+      conditions.push(eq(notification.priority, priority));
+    }
 
-      // Get paginated data
-      const notifications = await orgDb(member.organizationId).transaction(
-        (o) =>
-          o
-            .select()
-            .from(notification)
-            .where(whereCondition)
-            .orderBy(desc(notification.createdAt))
-            .limit(limit)
-            .offset(offset),
-      );
+    const whereCondition = and(...conditions);
 
-      return c.json({
-        data: notifications,
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
-      });
-    },
-  )
+    // Get total count
+    const [countResult] = await orgDb(member.organizationId).transaction((o) =>
+      o.select({ total: count() }).from(notification).where(whereCondition),
+    );
 
-  // =========================================================================
-  // GET /unread-count - Get unread notification count for bell badge
-  // =========================================================================
-  .get("/unread-count", ...requireLabProtected, async (c) => {
+    // Get paginated data
+    const notifications = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(notification)
+        .where(whereCondition)
+        .orderBy(desc(notification.createdAt))
+        .limit(limit)
+        .offset(offset),
+    );
+
+    return {
+      data: notifications,
+      pagination: {
+        page,
+        limit,
+        total: countResult?.total ?? 0,
+        totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+      },
+    };
+  },
+);
+
+// =========================================================================
+// GET /unread-count - Get unread notification count for bell badge
+// =========================================================================
+mount(
+  notificationsRouter,
+  PREFIX,
+  notificationEndpoints.getUnreadCount,
+  [...requireLabProtected],
+  async (c) => {
     const session = c.get("session");
     const member = c.get("member");
 
@@ -120,53 +129,60 @@ export const notificationsRouter = createRouter<{ Variables: AuthVariables }>()
         ),
     );
 
-    return c.json({ count: result?.count ?? 0 });
-  })
+    return { count: result?.count ?? 0 };
+  },
+);
 
-  // =========================================================================
-  // POST /mark-read - Mark specific notifications as read
-  // =========================================================================
-  .post(
-    "/mark-read",
-    ...requireLabProtected,
-    zValidator("json", MarkNotificationsReadSchema),
-    async (c) => {
-      const session = c.get("session");
-      const member = c.get("member");
-      const { notificationIds } = c.req.valid("json");
+// =========================================================================
+// POST /mark-read - Mark specific notifications as read
+// =========================================================================
+mount(
+  notificationsRouter,
+  PREFIX,
+  notificationEndpoints.markRead,
+  [...requireLabProtected],
+  async (c, { body }) => {
+    const session = c.get("session");
+    const member = c.get("member");
+    const { notificationIds } = body;
 
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        (ctx) =>
-          ctx.o
-            .update(notification)
-            .set({
-              status: "READ",
-              readAt: new Date(),
-            })
-            .where(
-              and(
-                inArray(notification.id, notificationIds),
-                eq(notification.recipientUserId, session.user.id),
-                eq(notification.organizationId, member.organizationId),
-                eq(notification.status, "UNREAD"),
-              ),
-            )
-            .returning(),
-      );
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      (ctx) =>
+        ctx.o
+          .update(notification)
+          .set({
+            status: "READ",
+            readAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(notification.id, notificationIds),
+              eq(notification.recipientUserId, session.user.id),
+              eq(notification.organizationId, member.organizationId),
+              eq(notification.status, "UNREAD"),
+            ),
+          )
+          .returning(),
+    );
 
-      return c.json({
-        message: `${updated.length} notificacao(oes) marcada(s) como lida(s)`,
-        updatedIds: updated.map((n) => n.id),
-      });
-    },
-  )
+    return {
+      message: `${updated.length} notificacao(oes) marcada(s) como lida(s)`,
+      updatedIds: updated.map((n) => n.id),
+    };
+  },
+);
 
-  // =========================================================================
-  // POST /mark-all-read - Mark all notifications as read
-  // =========================================================================
-  .post("/mark-all-read", ...requireLabProtected, async (c) => {
+// =========================================================================
+// POST /mark-all-read - Mark all notifications as read
+// =========================================================================
+mount(
+  notificationsRouter,
+  PREFIX,
+  notificationEndpoints.markAllRead,
+  [...requireLabProtected],
+  async (c) => {
     const session = c.get("session");
     const member = c.get("member");
 
@@ -190,52 +206,58 @@ export const notificationsRouter = createRouter<{ Variables: AuthVariables }>()
           .returning(),
     );
 
-    return c.json({
+    return {
       message: `${updated.length} notificacao(oes) marcada(s) como lida(s)`,
       count: updated.length,
-    });
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // DELETE /:id - Archive notification (soft delete for ISO 17025)
-  // =========================================================================
-  .delete("/:id", ...requireLabProtected, async (c) => {
-    const session = c.get("session");
-    const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+// =========================================================================
+// DELETE /:id - Archive notification (soft delete for ISO 17025)
+// =========================================================================
+notificationsRouter.delete("/:id", ...requireLabProtected, async (c) => {
+  const session = c.get("session");
+  const member = c.get("member");
+  const id = parseInt(c.req.param("id"), 10);
 
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID invalido");
-    }
+  if (isNaN(id)) {
+    throw invalid("invalid_request", "ID invalido");
+  }
 
-    const [updated] = await withOrg(
-      member.organizationId,
-      requestActor(c),
-      (ctx) =>
-        ctx.o
-          .update(notification)
-          .set({ status: "ARCHIVED" })
-          .where(
-            and(
-              eq(notification.id, id),
-              eq(notification.recipientUserId, session.user.id),
-              eq(notification.organizationId, member.organizationId),
-            ),
-          )
-          .returning(),
-    );
+  const [updated] = await withOrg(
+    member.organizationId,
+    requestActor(c),
+    (ctx) =>
+      ctx.o
+        .update(notification)
+        .set({ status: "ARCHIVED" })
+        .where(
+          and(
+            eq(notification.id, id),
+            eq(notification.recipientUserId, session.user.id),
+            eq(notification.organizationId, member.organizationId),
+          ),
+        )
+        .returning(),
+  );
 
-    if (!updated) {
-      throw notFound("notification_not_found", "Notificacao nao encontrada");
-    }
+  if (!updated) {
+    throw notFound("notification_not_found", "Notificacao nao encontrada");
+  }
 
-    return c.json({ message: "Notificacao arquivada", data: updated });
-  })
+  return c.json({ message: "Notificacao arquivada", data: updated });
+});
 
-  // =========================================================================
-  // GET /preferences - Get user notification preferences
-  // =========================================================================
-  .get("/preferences", ...requireLabProtected, async (c) => {
+// =========================================================================
+// GET /preferences - Get user notification preferences
+// =========================================================================
+mount(
+  notificationsRouter,
+  PREFIX,
+  notificationEndpoints.getPreferences,
+  [...requireLabProtected],
+  async (c) => {
     const session = c.get("session");
     const member = c.get("member");
 
@@ -249,108 +271,110 @@ export const notificationsRouter = createRouter<{ Variables: AuthVariables }>()
 
     // Return default preferences if user hasn't set any
     if (!prefs) {
-      return c.json({
+      return {
         preferences: DEFAULT_NOTIFICATION_PREFERENCES,
         emailEnabled: true,
         notifySelfActions: false,
-        digestFrequency: "NONE",
-      });
+        digestFrequency: "NONE" as const,
+      };
     }
 
-    return c.json({
+    return {
       preferences: prefs.preferences,
       emailEnabled: prefs.emailEnabled,
       notifySelfActions: prefs.notifySelfActions,
       digestFrequency: prefs.digestFrequency,
-    });
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // PUT /preferences - Update user notification preferences
-  // =========================================================================
-  .put(
-    "/preferences",
-    ...requireLabProtected,
-    zValidator("json", UpdateNotificationPreferencesSchema),
-    async (c) => {
-      const session = c.get("session");
-      const member = c.get("member");
-      const input = c.req.valid("json");
+// =========================================================================
+// PUT /preferences - Update user notification preferences
+// =========================================================================
+mount(
+  notificationsRouter,
+  PREFIX,
+  notificationEndpoints.updatePreferences,
+  [...requireLabProtected],
+  async (c, { body }) => {
+    const session = c.get("session");
+    const member = c.get("member");
+    const input = body;
 
-      return withOrg(member.organizationId, requestActor(c), async (ctx) => {
-        // Check if preferences exist
-        const [existing] = await ctx.o
-          .select()
-          .from(notificationPreference)
-          .where(eq(notificationPreference.userId, session.user.id))
-          .limit(1);
+    return withOrg(member.organizationId, requestActor(c), async (ctx) => {
+      // Check if preferences exist
+      const [existing] = await ctx.o
+        .select()
+        .from(notificationPreference)
+        .where(eq(notificationPreference.userId, session.user.id))
+        .limit(1);
 
-        if (existing) {
-          // Update existing preferences
-          const updateData: Record<string, unknown> = {};
+      if (existing) {
+        // Update existing preferences
+        const updateData: Record<string, unknown> = {};
 
-          if (input.preferences !== undefined) {
-            // Merge with existing preferences
-            updateData.preferences = {
-              ...existing.preferences,
-              ...input.preferences,
-            };
-          }
-
-          if (input.emailEnabled !== undefined) {
-            updateData.emailEnabled = input.emailEnabled;
-          }
-
-          if (input.notifySelfActions !== undefined) {
-            updateData.notifySelfActions = input.notifySelfActions;
-          }
-
-          if (input.digestFrequency !== undefined) {
-            updateData.digestFrequency = input.digestFrequency;
-          }
-
-          const [updated] = await ctx.o
-            .update(notificationPreference)
-            .set(updateData)
-            .where(eq(notificationPreference.userId, session.user.id))
-            .returning();
-
-          if (!updated) {
-            throw new Error("Erro ao atualizar preferencias");
-          }
-
-          return c.json({
-            message: "Preferencias atualizadas",
-            preferences: updated.preferences,
-            emailEnabled: updated.emailEnabled,
-            notifySelfActions: updated.notifySelfActions,
-            digestFrequency: updated.digestFrequency,
-          });
+        if (input.preferences !== undefined) {
+          // Merge with existing preferences
+          updateData.preferences = {
+            ...existing.preferences,
+            ...input.preferences,
+          };
         }
 
-        // Create new preferences record
-        const [created] = await ctx.o
-          .insert(notificationPreference)
-          .values({
-            userId: session.user.id,
-            preferences: input.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES,
-            emailEnabled: input.emailEnabled ?? true,
-            notifySelfActions: input.notifySelfActions ?? false,
-            digestFrequency: input.digestFrequency ?? "NONE",
-          })
+        if (input.emailEnabled !== undefined) {
+          updateData.emailEnabled = input.emailEnabled;
+        }
+
+        if (input.notifySelfActions !== undefined) {
+          updateData.notifySelfActions = input.notifySelfActions;
+        }
+
+        if (input.digestFrequency !== undefined) {
+          updateData.digestFrequency = input.digestFrequency;
+        }
+
+        const [updated] = await ctx.o
+          .update(notificationPreference)
+          .set(updateData)
+          .where(eq(notificationPreference.userId, session.user.id))
           .returning();
 
-        if (!created) {
-          throw new Error("Erro ao criar preferencias");
+        if (!updated) {
+          throw new Error("Erro ao atualizar preferencias");
         }
 
-        return c.json({
-          message: "Preferencias criadas",
-          preferences: created.preferences,
-          emailEnabled: created.emailEnabled,
-          notifySelfActions: created.notifySelfActions,
-          digestFrequency: created.digestFrequency,
-        });
-      });
-    },
-  );
+        return {
+          message: "Preferencias atualizadas",
+          preferences: updated.preferences,
+          emailEnabled: updated.emailEnabled,
+          notifySelfActions: updated.notifySelfActions,
+          digestFrequency: updated.digestFrequency,
+        };
+      }
+
+      // Create new preferences record
+      const [created] = await ctx.o
+        .insert(notificationPreference)
+        .values({
+          userId: session.user.id,
+          preferences: input.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES,
+          emailEnabled: input.emailEnabled ?? true,
+          notifySelfActions: input.notifySelfActions ?? false,
+          digestFrequency: input.digestFrequency ?? "NONE",
+        })
+        .returning();
+
+      if (!created) {
+        throw new Error("Erro ao criar preferencias");
+      }
+
+      return {
+        message: "Preferencias criadas",
+        preferences: created.preferences,
+        emailEnabled: created.emailEnabled,
+        notifySelfActions: created.notifySelfActions,
+        digestFrequency: created.digestFrequency,
+      };
+    });
+  },
+);

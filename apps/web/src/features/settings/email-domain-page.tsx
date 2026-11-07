@@ -75,8 +75,10 @@ export function EmailDomainSettingsPage() {
   const createMutation = useMutation({
     mutationFn: async () =>
       calibraApi.emailDomains.create({
-        hostname: sendingHostname,
-        fromLocalPart: sendingLocalPart,
+        body: {
+          hostname: sendingHostname,
+          fromLocalPart: sendingLocalPart,
+        },
       }),
     onSuccess: async () => {
       toast.success(

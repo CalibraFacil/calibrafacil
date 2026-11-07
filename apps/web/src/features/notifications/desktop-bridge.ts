@@ -51,9 +51,11 @@ export function useDesktopNotificationBridge({
           staleTime: 30_000,
         }),
         calibraApi.notifications.listRecent({
-          page: 1,
-          limit: PUBLISHED_ENTRY_LIMIT,
-          status: 'UNREAD',
+          query: {
+            page: 1,
+            limit: PUBLISHED_ENTRY_LIMIT,
+            status: 'UNREAD',
+          },
         }),
       ])
 

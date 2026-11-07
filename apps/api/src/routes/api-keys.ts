@@ -1,6 +1,9 @@
 import { createRouter } from "../server/router";
+import {
+  DEFAULT_API_KEY_LIFETIME_DAYS,
+  apiKeyEndpoints,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
 import {
   organizationApiKey,
   organizationApiKeyAuditLog,
@@ -19,52 +22,14 @@ import {
 } from "../middleware/permission";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { notFound } from "../lib/domain-errors";
 import { withOrg, type OrgContext } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
-import { parseCidr } from "@calibra-facil/shared/ip-range";
 
 import { requireFreshSession } from "../middleware/fresh-session";
-const ScopeSchema = z.enum([
-  "customers:read",
-  "customers:write",
-  "assets:read",
-  "assets:write",
-  "requests:read",
-  "requests:write",
-  "jobs:read",
-  "jobs:write",
-  "services:read",
-  "units:read",
-  "reports:read",
-  "certificates:read",
-  "webhooks:manage",
-]);
-
-/** A key lives a year unless the laboratory asks for less (at most two years). */
-const DEFAULT_KEY_LIFETIME_DAYS = 365;
-const MAX_KEY_LIFETIME_DAYS = 730;
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const AllowedIpSchema = z
-  .string()
-  .trim()
-  .refine((entry) => parseCidr(entry) !== null, {
-    message: "Endereço IP ou faixa CIDR inválido",
-  });
-
-const CreateApiKeySchema = z.object({
-  name: z.string().trim().min(3).max(80),
-  scopes: z.array(ScopeSchema).min(1).max(12).optional(),
-  expiresInDays: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_KEY_LIFETIME_DAYS)
-    .default(DEFAULT_KEY_LIFETIME_DAYS),
-  allowedIps: z.array(AllowedIpSchema).max(20).optional(),
-});
 
 function expiryFrom(now: Date, days: number) {
   return new Date(now.getTime() + days * DAY_MS);
@@ -93,207 +58,147 @@ function apiKeyNotFound() {
   return notFound("api_key_not_found", "Chave de API não encontrada");
 }
 
-export const apiKeysRouter = createRouter<{ Variables: AuthVariables }>()
-  .get(
-    "/",
+const PREFIX = "/api/api-keys";
+
+export const apiKeysRouter = createRouter<{ Variables: AuthVariables }>();
+
+mount(
+  apiKeysRouter,
+  PREFIX,
+  apiKeyEndpoints.list,
+  [
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
+  ],
+  async (c) => {
+    const member = c.get("member");
 
-      const keys = await orgDb(member.organizationId).transaction((o) =>
-        o
-          .select({
-            id: organizationApiKey.id,
-            name: organizationApiKey.name,
-            keyPrefix: organizationApiKey.keyPrefix,
-            scopes: organizationApiKey.scopes,
-            lastUsedAt: organizationApiKey.lastUsedAt,
-            expiresAt: organizationApiKey.expiresAt,
-            allowedIps: organizationApiKey.allowedIps,
-            createdAt: organizationApiKey.createdAt,
-            revokedAt: organizationApiKey.revokedAt,
-          })
-          .from(organizationApiKey)
-          .where(eq(organizationApiKey.organizationId, member.organizationId))
-          .orderBy(desc(organizationApiKey.createdAt)),
-      );
+    const keys = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select({
+          id: organizationApiKey.id,
+          name: organizationApiKey.name,
+          keyPrefix: organizationApiKey.keyPrefix,
+          scopes: organizationApiKey.scopes,
+          lastUsedAt: organizationApiKey.lastUsedAt,
+          expiresAt: organizationApiKey.expiresAt,
+          allowedIps: organizationApiKey.allowedIps,
+          createdAt: organizationApiKey.createdAt,
+          revokedAt: organizationApiKey.revokedAt,
+        })
+        .from(organizationApiKey)
+        .where(eq(organizationApiKey.organizationId, member.organizationId))
+        .orderBy(desc(organizationApiKey.createdAt)),
+    );
 
-      return c.json({ data: keys });
-    },
-  )
-  .post(
-    "/",
+    return { data: keys };
+  },
+);
+
+mount(
+  apiKeysRouter,
+  PREFIX,
+  apiKeyEndpoints.create,
+  [
     ...withLabPermission({ organization: ["update"] }),
     requireFreshSession,
     requireRole(["admin", "owner"]),
-    zValidator("json", CreateApiKeySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
-      const generated = createApiKeySecret();
-      const scopes: PublicApiScope[] = [
-        ...(input.scopes ?? DEFAULT_PUBLIC_API_SCOPES),
-      ];
-      const keyId = crypto.randomUUID();
-      const expiresAt = expiryFrom(new Date(), input.expiresInDays);
-      const allowedIps =
-        input.allowedIps && input.allowedIps.length > 0
-          ? input.allowedIps
-          : null;
+  ],
+  async (c, { body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const input = body;
+    const generated = createApiKeySecret();
+    const scopes: PublicApiScope[] = [
+      ...(input.scopes ?? DEFAULT_PUBLIC_API_SCOPES),
+    ];
+    const keyId = crypto.randomUUID();
+    const expiresAt = expiryFrom(new Date(), input.expiresInDays);
+    const allowedIps =
+      input.allowedIps && input.allowedIps.length > 0 ? input.allowedIps : null;
 
-      // The key and both audit entries commit together.
-      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
-        await ctx.o.insert(organizationApiKey).values({
-          id: keyId,
-          organizationId: member.organizationId,
-          name: input.name,
-          keyPrefix: generated.keyPrefix,
-          keyHash: generated.keyHash,
-          scopes,
-          expiresAt,
-          allowedIps,
-          createdBy: session.user.id,
-        });
-
-        await writeAuditLog(ctx, {
-          apiKeyId: keyId,
-          action: "create",
-          details: {
-            name: input.name,
-            scopes,
-            expiresAt: expiresAt.toISOString(),
-            allowedIps,
-          },
-        });
-
-        await writeOrganizationAuditEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "api_key.created",
-            entityType: "api_key",
-            entityId: keyId,
-            details: {
-              name: input.name,
-              keyPrefix: generated.keyPrefix,
-              scopes,
-              ipAddress: ctx.actor.ipAddress,
-            },
-          },
-          ctx.o,
-        );
+    // The key and both audit entries commit together.
+    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+      await ctx.o.insert(organizationApiKey).values({
+        id: keyId,
+        organizationId: member.organizationId,
+        name: input.name,
+        keyPrefix: generated.keyPrefix,
+        keyHash: generated.keyHash,
+        scopes,
+        expiresAt,
+        allowedIps,
+        createdBy: session.user.id,
       });
 
-      return c.json(
+      await writeAuditLog(ctx, {
+        apiKeyId: keyId,
+        action: "create",
+        details: {
+          name: input.name,
+          scopes,
+          expiresAt: expiresAt.toISOString(),
+          allowedIps,
+        },
+      });
+
+      await writeOrganizationAuditEvent(
         {
-          secret: generated.key,
-          key: {
-            id: keyId,
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "api_key.created",
+          entityType: "api_key",
+          entityId: keyId,
+          details: {
             name: input.name,
             keyPrefix: generated.keyPrefix,
             scopes,
-            expiresAt,
-            allowedIps,
+            ipAddress: ctx.actor.ipAddress,
           },
         },
-        201,
+        ctx.o,
       );
-    },
-  )
-  .post(
-    "/:id/rotate",
+    });
+
+    return {
+      secret: generated.key,
+      key: {
+        id: keyId,
+        name: input.name,
+        keyPrefix: generated.keyPrefix,
+        scopes,
+        expiresAt,
+        allowedIps,
+      },
+    };
+  },
+);
+
+mount(
+  apiKeysRouter,
+  PREFIX,
+  apiKeyEndpoints.rotate,
+  [
     ...withLabPermission({ organization: ["update"] }),
     requireFreshSession,
     requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
+  ],
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
 
-      const generated = createApiKeySecret();
-      // Rotating renews the key: the new secret lives a fresh year.
-      const expiresAt = expiryFrom(new Date(), DEFAULT_KEY_LIFETIME_DAYS);
+    const generated = createApiKeySecret();
+    // Rotating renews the key: the new secret lives a fresh year.
+    const expiresAt = expiryFrom(new Date(), DEFAULT_API_KEY_LIFETIME_DAYS);
 
-      // Look-up, rotation and audit entries are one transaction.
-      const existing = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [row] = await ctx.o
-            .select()
-            .from(organizationApiKey)
-            .where(
-              and(
-                eq(organizationApiKey.id, id),
-                eq(organizationApiKey.organizationId, member.organizationId),
-                isNull(organizationApiKey.revokedAt),
-              ),
-            )
-            .limit(1);
-          if (!row) throw apiKeyNotFound();
-
-          await ctx.o
-            .update(organizationApiKey)
-            .set({
-              keyPrefix: generated.keyPrefix,
-              keyHash: generated.keyHash,
-              expiresAt,
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationApiKey.id, row.id));
-
-          await writeAuditLog(ctx, { apiKeyId: row.id, action: "rotate" });
-
-          await writeOrganizationAuditEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "api_key.rotated",
-              entityType: "api_key",
-              entityId: row.id,
-              details: {
-                name: row.name,
-                keyPrefix: generated.keyPrefix,
-                previousKeyPrefix: row.keyPrefix,
-                scopes: row.scopes,
-                ipAddress: ctx.actor.ipAddress,
-              },
-            },
-            ctx.o,
-          );
-          return row;
-        },
-      );
-
-      return c.json({
-        secret: generated.key,
-        key: {
-          id: existing.id,
-          name: existing.name,
-          keyPrefix: generated.keyPrefix,
-          scopes: existing.scopes,
-          expiresAt,
-          allowedIps: existing.allowedIps,
-        },
-      });
-    },
-  )
-  .post(
-    "/:id/revoke",
-    ...withLabPermission({ organization: ["update"] }),
-    requireFreshSession,
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-
-      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+    // Look-up, rotation and audit entries are one transaction.
+    const existing = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
         const [row] = await ctx.o
           .select()
           .from(organizationApiKey)
@@ -301,6 +206,7 @@ export const apiKeysRouter = createRouter<{ Variables: AuthVariables }>()
             and(
               eq(organizationApiKey.id, id),
               eq(organizationApiKey.organizationId, member.organizationId),
+              isNull(organizationApiKey.revokedAt),
             ),
           )
           .limit(1);
@@ -309,33 +215,108 @@ export const apiKeysRouter = createRouter<{ Variables: AuthVariables }>()
         await ctx.o
           .update(organizationApiKey)
           .set({
-            revokedAt: row.revokedAt ?? new Date(),
-            revokedBy: session.user.id,
+            keyPrefix: generated.keyPrefix,
+            keyHash: generated.keyHash,
+            expiresAt,
+            updatedAt: new Date(),
           })
           .where(eq(organizationApiKey.id, row.id));
 
-        await writeAuditLog(ctx, { apiKeyId: row.id, action: "revoke" });
+        await writeAuditLog(ctx, { apiKeyId: row.id, action: "rotate" });
 
         await writeOrganizationAuditEvent(
           {
             organizationId: member.organizationId,
             actorUserId: session.user.id,
             actorMemberId: member.id,
-            action: "api_key.revoked",
+            action: "api_key.rotated",
             entityType: "api_key",
             entityId: row.id,
             details: {
               name: row.name,
-              keyPrefix: row.keyPrefix,
+              keyPrefix: generated.keyPrefix,
+              previousKeyPrefix: row.keyPrefix,
               scopes: row.scopes,
-              alreadyRevoked: Boolean(row.revokedAt),
               ipAddress: ctx.actor.ipAddress,
             },
           },
           ctx.o,
         );
-      });
+        return row;
+      },
+    );
 
-      return c.json({ success: true });
-    },
-  );
+    return {
+      secret: generated.key,
+      key: {
+        id: existing.id,
+        name: existing.name,
+        keyPrefix: generated.keyPrefix,
+        scopes: existing.scopes,
+        expiresAt,
+        allowedIps: existing.allowedIps,
+      },
+    };
+  },
+);
+
+mount(
+  apiKeysRouter,
+  PREFIX,
+  apiKeyEndpoints.revoke,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireFreshSession,
+    requireRole(["admin", "owner"]),
+  ],
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+
+    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+      const [row] = await ctx.o
+        .select()
+        .from(organizationApiKey)
+        .where(
+          and(
+            eq(organizationApiKey.id, id),
+            eq(organizationApiKey.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!row) throw apiKeyNotFound();
+
+      await ctx.o
+        .update(organizationApiKey)
+        .set({
+          revokedAt: row.revokedAt ?? new Date(),
+          revokedBy: session.user.id,
+        })
+        .where(eq(organizationApiKey.id, row.id));
+
+      await writeAuditLog(ctx, { apiKeyId: row.id, action: "revoke" });
+
+      await writeOrganizationAuditEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "api_key.revoked",
+          entityType: "api_key",
+          entityId: row.id,
+          details: {
+            name: row.name,
+            keyPrefix: row.keyPrefix,
+            scopes: row.scopes,
+            alreadyRevoked: Boolean(row.revokedAt),
+            ipAddress: ctx.actor.ipAddress,
+          },
+        },
+        ctx.o,
+      );
+    });
+
+    return { success: true as const };
+  },
+);

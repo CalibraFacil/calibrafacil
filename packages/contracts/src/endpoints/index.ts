@@ -3,6 +3,9 @@ import { publicInvitationEndpoints } from "./public-invitations";
 import { publicSignupEndpoints } from "./public-signup";
 import { assetTypeEndpoints } from "./asset-types";
 import { assetEndpoints } from "./assets";
+import { emailDomainEndpoints } from "./email-domains";
+import { apiKeyEndpoints } from "./api-keys";
+import { notificationEndpoints } from "./notifications";
 import { calibrationRequestEndpoints } from "./calibration-requests";
 import { capaEndpoints } from "./capa";
 import { certificateNumberingEndpoints } from "./certificate-numbering";
@@ -41,6 +44,9 @@ export * from "./portal-domains";
 export * from "./assets";
 export * from "./asset-types";
 export * from "./customer-groups";
+export * from "./email-domains";
+export * from "./api-keys";
+export * from "./notifications";
 export * from "./customers";
 export * from "./capa";
 export * from "./non-conformances";
@@ -104,6 +110,9 @@ export const ENDPOINT_GROUPS = {
   publicSignup: publicSignupEndpoints,
   publicInvitations: publicInvitationEndpoints,
   units: unitEndpoints,
+  notifications: notificationEndpoints,
+  apiKeys: apiKeyEndpoints,
+  emailDomains: emailDomainEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

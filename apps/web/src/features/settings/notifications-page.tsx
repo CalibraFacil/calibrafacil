@@ -207,7 +207,7 @@ export function NotificationsSettingsPage() {
       preferences?: Partial<Record<NotificationType, NotificationChannels>>
       emailEnabled?: boolean
       notifySelfActions?: boolean
-    }) => calibraApi.notifications.updatePreferences(data),
+    }) => calibraApi.notifications.updatePreferences({ body: data }),
     onMutate: async (newData) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({

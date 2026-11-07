@@ -21,8 +21,10 @@ export function recentNotificationsQueryOptions(organizationKey: string) {
     queryKey: ['notifications', organizationKey, 'recent'],
     queryFn: async (): Promise<NotificationsListResponse> =>
       calibraApi.notifications.listRecent({
-        page: 1,
-        limit: 5,
+        query: {
+          page: 1,
+          limit: 5,
+        },
       }),
     staleTime: 5_000,
   })
@@ -56,9 +58,11 @@ export function useNotificationCenterData({
     queryKey: ['notifications', organizationKey, 'inbox', { page, unreadOnly }],
     queryFn: () =>
       calibraApi.notifications.listRecent({
-        page,
-        limit: 15,
-        ...(unreadOnly ? { status: 'UNREAD' as const } : {}),
+        query: {
+          page,
+          limit: 15,
+          ...(unreadOnly ? { status: 'UNREAD' as const } : {}),
+        },
       }),
     enabled,
     staleTime: 5_000,

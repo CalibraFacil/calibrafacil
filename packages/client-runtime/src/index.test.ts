@@ -468,12 +468,12 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "getUnreadCount",
+          "method": "listRecent",
           "namespace": "notifications",
           "policy": "cloud-only",
         },
         {
-          "method": "listRecent",
+          "method": "getUnreadCount",
           "namespace": "notifications",
           "policy": "cloud-only",
         },
@@ -2390,6 +2390,8 @@ describe("api keys runtime adapter", () => {
       keyPrefix: "cf_live_1234",
       scopes: ["customers:read", "jobs:write"],
       lastUsedAt: null,
+      expiresAt: "2027-05-09T12:00:00.000Z",
+      allowedIps: null,
       createdAt: "2026-05-09T12:00:00.000Z",
       revokedAt: null,
     };
@@ -2430,18 +2432,24 @@ describe("api keys runtime adapter", () => {
     });
     await expect(
       client.apiKeys.create({
-        name: "Automation",
-        scopes: ["customers:read", "jobs:write"],
+        body: {
+          name: "Automation",
+          scopes: ["customers:read", "jobs:write"],
+        },
       }),
     ).resolves.toMatchObject({
       secret: "cf_live_secret",
       key: { id: "key-1" },
     });
-    await expect(client.apiKeys.rotate("key-1")).resolves.toMatchObject({
+    await expect(
+      client.apiKeys.rotate({ params: { id: "key-1" } }),
+    ).resolves.toMatchObject({
       secret: "cf_live_rotated",
       key: { keyPrefix: "cf_live_5678" },
     });
-    await expect(client.apiKeys.revoke("key-1")).resolves.toEqual({
+    await expect(
+      client.apiKeys.revoke({ params: { id: "key-1" } }),
+    ).resolves.toEqual({
       success: true,
     });
 
@@ -2463,15 +2471,15 @@ describe("api keys runtime adapter", () => {
     });
 
     await expect(client.apiKeys.list()).resolves.toEqual({ data: [] });
-    await expect(client.apiKeys.create({ name: "Automation" })).rejects.toThrow(
-      "API keys requer a API web/nuvem",
-    );
-    await expect(client.apiKeys.rotate("key-1")).rejects.toThrow(
-      "API keys requer a API web/nuvem",
-    );
-    await expect(client.apiKeys.revoke("key-1")).rejects.toThrow(
-      "API keys requer a API web/nuvem",
-    );
+    await expect(
+      client.apiKeys.create({ body: { name: "Automation" } }),
+    ).rejects.toThrow("API keys requer a API web/nuvem");
+    await expect(
+      client.apiKeys.rotate({ params: { id: "key-1" } }),
+    ).rejects.toThrow("API keys requer a API web/nuvem");
+    await expect(
+      client.apiKeys.revoke({ params: { id: "key-1" } }),
+    ).rejects.toThrow("API keys requer a API web/nuvem");
   });
 });
 
@@ -4468,7 +4476,7 @@ describe("email domains runtime adapter", () => {
       fetchCalls.push([input, init]);
 
       if (init?.method === "DELETE") {
-        return new Response(null, { status: 204 });
+        return Response.json({ success: true });
       }
 
       return Response.json(payload);
@@ -4483,8 +4491,10 @@ describe("email domains runtime adapter", () => {
     });
     await expect(
       client.emailDomains.create({
-        hostname: "mail.lab.example.test",
-        fromLocalPart: "os",
+        body: {
+          hostname: "mail.lab.example.test",
+          fromLocalPart: "os",
+        },
       }),
     ).resolves.toMatchObject({ domain: { id: "emaildom-1" } });
     await expect(client.emailDomains.verify()).resolves.toMatchObject({
@@ -4493,7 +4503,9 @@ describe("email domains runtime adapter", () => {
     await expect(client.emailDomains.activate()).resolves.toMatchObject({
       statusSummary: { canActivate: true },
     });
-    await expect(client.emailDomains.delete()).resolves.toBeUndefined();
+    await expect(client.emailDomains.delete()).resolves.toEqual({
+      success: true,
+    });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/email-domains",
@@ -4518,8 +4530,10 @@ describe("email domains runtime adapter", () => {
     });
     await expect(
       client.emailDomains.create({
-        hostname: "mail.lab.example.test",
-        fromLocalPart: "os",
+        body: {
+          hostname: "mail.lab.example.test",
+          fromLocalPart: "os",
+        },
       }),
     ).rejects.toThrow("Domínio de e-mail requer a API web/nuvem");
     await expect(client.emailDomains.verify()).rejects.toThrow(
@@ -4545,9 +4559,11 @@ describe("notifications runtime adapter", () => {
       },
     });
     await client.notifications.listRecent({
-      page: 2,
-      limit: 15,
-      status: "UNREAD",
+      query: {
+        page: 2,
+        limit: 15,
+        status: "UNREAD",
+      },
     });
     const url = new URL(requestUrl);
     expect(url.searchParams.get("page")).toBe("2");
@@ -4589,7 +4605,10 @@ describe("notifications runtime adapter", () => {
       }
 
       if (url.endsWith("/api/notifications/mark-read")) {
-        return Response.json({ updatedIds: [1] });
+        return Response.json({
+          message: "1 notificacao(oes) marcada(s) como lida(s)",
+          updatedIds: [1],
+        });
       }
 
       if (url.endsWith("/api/notifications/preferences")) {
@@ -4612,7 +4631,10 @@ describe("notifications runtime adapter", () => {
         });
       }
 
-      return Response.json({ count: 1 });
+      return Response.json({
+        message: "1 notificacao(oes) marcada(s) como lida(s)",
+        count: 1,
+      });
     };
     const client = createCloudApiClient({
       baseUrl: "https://api.example.test",
@@ -4623,9 +4645,11 @@ describe("notifications runtime adapter", () => {
       count: 3,
     });
     await expect(
-      client.notifications.listRecent({ page: 1, limit: 5 }),
+      client.notifications.listRecent({ query: { page: 1, limit: 5 } }),
     ).resolves.toMatchObject({ data: [{ id: 1, status: "UNREAD" }] });
-    await expect(client.notifications.markRead([1])).resolves.toMatchObject({
+    await expect(
+      client.notifications.markRead({ body: { notificationIds: [1] } }),
+    ).resolves.toMatchObject({
       updatedIds: [1],
     });
     await expect(client.notifications.markAllRead()).resolves.toMatchObject({
@@ -4637,8 +4661,10 @@ describe("notifications runtime adapter", () => {
     });
     await expect(
       client.notifications.updatePreferences({
-        emailEnabled: false,
-        notifySelfActions: true,
+        body: {
+          emailEnabled: false,
+          notifySelfActions: true,
+        },
       }),
     ).resolves.toMatchObject({
       emailEnabled: false,
@@ -4671,7 +4697,9 @@ describe("notifications runtime adapter", () => {
       data: [],
       pagination: { total: 0 },
     });
-    await expect(client.notifications.markRead([1])).resolves.toMatchObject({
+    await expect(
+      client.notifications.markRead({ body: { notificationIds: [1] } }),
+    ).resolves.toMatchObject({
       updatedIds: [],
     });
     await expect(client.notifications.markAllRead()).resolves.toMatchObject({
@@ -4683,7 +4711,9 @@ describe("notifications runtime adapter", () => {
     });
     await expect(
       client.notifications.updatePreferences({
-        emailEnabled: true,
+        body: {
+          emailEnabled: true,
+        },
       }),
     ).resolves.toMatchObject({
       preferences: {},

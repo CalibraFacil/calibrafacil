@@ -1,41 +1,18 @@
-import type {
-  ApiKeySecretResponse,
-  ApiKeysApi,
-  ApiKeysListResponse,
-} from "../types";
-import { readJsonResponse } from "../transport/response";
+import { apiKeyEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
 
-export function createApiKeysApi(rawCloudClient: any): ApiKeysApi {
-  return {
-    async list() {
-      return readJsonResponse<ApiKeysListResponse>(
-        await rawCloudClient.api["api-keys"].$get(),
-        "Falha ao carregar API keys",
-      );
-    },
-    async create(input) {
-      return readJsonResponse<ApiKeySecretResponse>(
-        await rawCloudClient.api["api-keys"].$post({
-          json: input,
-        }),
-        "Falha ao criar API key",
-      );
-    },
-    async rotate(id) {
-      return readJsonResponse<ApiKeySecretResponse>(
-        await rawCloudClient.api["api-keys"][":id"].rotate.$post({
-          param: { id },
-        }),
-        "Falha ao rotacionar API key",
-      );
-    },
-    async revoke(id) {
-      return readJsonResponse<{ success: boolean }>(
-        await rawCloudClient.api["api-keys"][":id"].revoke.$post({
-          param: { id },
-        }),
-        "Falha ao revogar API key",
-      );
-    },
-  };
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The API keys client is its endpoint group (`apiKeyEndpoints` in `@calibra-facil/contracts`). */
+export type ApiKeysApi = EndpointClient<typeof apiKeyEndpoints>;
+
+export function createApiKeysApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): ApiKeysApi {
+  return endpointClient(apiKeyEndpoints, transport, options);
 }
