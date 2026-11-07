@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { run, sha256 } from "./lib/script-helpers.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const desktopDir = path.join(root, "apps/desktop");
@@ -106,14 +106,6 @@ function originRepository() {
   }
 }
 
-function run(command, args, options = {}) {
-  execFileSync(command, args, {
-    cwd: options.cwd ?? root,
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  });
-}
-
 function validateRendererAssets() {
   const indexPath = path.join(rendererOutDir, "index.html");
   if (!fs.existsSync(indexPath)) {
@@ -197,10 +189,6 @@ function validateLocalServerBundle() {
   if (!fs.existsSync(stagedServer)) {
     throw new Error(`Local server bundle was not staged: ${stagedServer}`);
   }
-}
-
-function sha256(input) {
-  return createHash("sha256").update(input).digest("hex");
 }
 
 function validateLinuxPackagePrerequisites() {

@@ -2,10 +2,14 @@ import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import Database from "better-sqlite3";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assert,
+  authHeaders,
+  getAvailablePort,
+} from "./lib/script-helpers.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stagedServerPath = path.join(
@@ -109,9 +113,7 @@ try {
 
   for (const check of checks) {
     const response = await fetch(`${baseUrl}${check.path}`, {
-      headers: check.auth
-        ? { Authorization: `Bearer ${localToken}` }
-        : undefined,
+      headers: check.auth ? authHeaders(localToken) : undefined,
     });
     assert(
       response.status === check.expectedStatus,
@@ -194,7 +196,7 @@ async function waitForReadiness(url) {
     try {
       // The bootstrap names the signed-in user, so it takes the same token as
       // /api/* (the desktop main process sends it on its readiness probe).
-      const response = await fetch(url, { headers: authHeaders() });
+      const response = await fetch(url, { headers: authHeaders(localToken) });
       if (response.ok) {
         return response.json();
       }
@@ -266,7 +268,7 @@ async function runOfflineWorkflowSmoke(baseUrl) {
   const attachmentResponse = await fetch(
     `${baseUrl}/api/attachments/${encodeURIComponent(attachment.id)}`,
     {
-      headers: authHeaders(),
+      headers: authHeaders(localToken),
     },
   );
   assert(
@@ -316,7 +318,7 @@ async function verifyOfflineWorkflowPersisted(baseUrl, workflow) {
   const attachmentResponse = await fetch(
     `${baseUrl}/api/attachments/${encodeURIComponent(workflow.attachmentId)}`,
     {
-      headers: authHeaders(),
+      headers: authHeaders(localToken),
     },
   );
   assert(
@@ -380,7 +382,7 @@ async function runConflictQueueSmoke(baseUrl) {
 
 async function getJson(baseUrl, pathName) {
   const response = await fetch(`${baseUrl}${pathName}`, {
-    headers: authHeaders(),
+    headers: authHeaders(localToken),
   });
   assert(response.ok, `${pathName} returned HTTP ${response.status}`);
   return response.json();
@@ -390,7 +392,7 @@ async function postJson(baseUrl, pathName, body) {
   const response = await fetch(`${baseUrl}${pathName}`, {
     method: "POST",
     headers: {
-      ...authHeaders(),
+      ...authHeaders(localToken),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -415,7 +417,7 @@ async function uploadAttachment(baseUrl, input) {
 
   const response = await fetch(`${baseUrl}/api/attachments`, {
     method: "POST",
-    headers: authHeaders(),
+    headers: authHeaders(localToken),
     body: form,
   });
   if (!response.ok) {
@@ -424,10 +426,6 @@ async function uploadAttachment(baseUrl, input) {
     );
   }
   return response.json();
-}
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localToken}` };
 }
 
 function seedCatalog(filePath) {
@@ -623,27 +621,6 @@ LIMIT 1
   } finally {
     database.close();
   }
-}
-
-function getAvailablePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      server.close(() => {
-        if (address && typeof address === "object") {
-          resolve(address.port);
-        } else {
-          reject(new Error("failed to allocate local port"));
-        }
-      });
-    });
-  });
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
 }
 
 async function writeCapturedLog() {

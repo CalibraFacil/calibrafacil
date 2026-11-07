@@ -19,6 +19,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { run as runCommand } from "./lib/script-helpers.mjs";
 import { splitDatabaseRoles } from "./role-split.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,14 +34,10 @@ const fail = (message) => {
 };
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: root,
-    stdio: "inherit",
-    shell: isWindows,
-    ...options,
-  });
-  if (result.status !== 0) {
-    fail(`${command} ${args.join(" ")} failed (exit ${result.status ?? "?"})`);
+  try {
+    runCommand(command, args, { cwd: root, ...options });
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
   }
 }
 
