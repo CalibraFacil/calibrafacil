@@ -72,7 +72,8 @@ export function useCnpjLookup({
           // react-doctor-disable-next-line react-doctor/async-defer-await -- the post-await staleness guard cannot run before the await
           const result = await queryClient.fetchQuery({
             queryKey: ['cnpj-lookup', normalized],
-            queryFn: () => calibraApi.customers.lookupCnpj(normalized),
+            queryFn: () =>
+              calibraApi.customers.lookupCnpj({ params: { cnpj: normalized } }),
             staleTime: 24 * 60 * 60 * 1000,
           })
 

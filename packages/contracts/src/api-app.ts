@@ -1,15 +1,10 @@
 import type { Hono } from "hono";
 import type { BlankEnv } from "hono/types";
 
+import type { EndpointGroupPaths, PathParams } from "./endpoints";
+
 type RpcScalar = string | number | boolean | null | undefined;
 type RpcQuery = Record<string, RpcScalar | RpcScalar[]>;
-
-type PathParams<Path extends string> =
-  Path extends `${string}:${infer Param}/${infer Rest}`
-    ? { [Key in Param | keyof PathParams<Rest>]: string }
-    : Path extends `${string}:${infer Param}`
-      ? { [Key in Param]: string }
-      : Record<never, never>;
 
 type RpcInput<Path extends string> = keyof PathParams<Path> extends never
   ? {
@@ -35,7 +30,7 @@ type RpcRoute<Path extends string> = {
 
 // Keep the browser-facing Hono contract server-free. Importing apps/api here
 // pulls route handlers and runtime dependencies back across the package boundary.
-type ApiRoutePath =
+type HandListedRoutePath =
   | "/api/accredited-scope"
   | "/api/accredited-scope/:id"
   | "/api/accredited-scope/enforcement"
@@ -76,17 +71,6 @@ type ApiRoutePath =
   | "/api/competences/:id/label"
   | "/api/competences/:id/renew"
   | "/api/competences/matrix"
-  | "/api/customers"
-  | "/api/customers/cnpj-lookup/:cnpj"
-  | "/api/customers/:id"
-  | "/api/customers/:id/audit-log"
-  | "/api/customers/:id/compliance"
-  | "/api/customers/:id/invitations"
-  | "/api/customers/:id/invitations/:invId"
-  | "/api/customers/:id/invitations/:invId/resend"
-  | "/api/customers/:id/members"
-  | "/api/customers/:id/members/:memberId"
-  | "/api/customers/:id/oot-events"
   | "/api/customer-groups"
   | "/api/customer-groups/:id"
   | "/api/customer-groups/:id/branches"
@@ -301,6 +285,11 @@ type ApiRoutePath =
   | "/api/visits/:id/jobs/:jobId"
   | "/api/visits/:id/reschedule-requests/:requestId/accept"
   | "/api/visits/:id/reschedule-requests/:requestId/decline";
+
+// The converted domains list their paths in their endpoint definitions
+// (`endpoints/`); the hand list above shrinks as domains are converted and
+// disappears with the last one.
+type ApiRoutePath = HandListedRoutePath | EndpointGroupPaths;
 
 type ApiRouteSchema = {
   [Path in ApiRoutePath]: RpcRoute<Path>;

@@ -107,6 +107,7 @@ const calibraClient = isDesktopRuntime()
         baseUrl: getLocalApiBaseURL(),
         tokenProvider: getDesktopLocalApiToken,
         fetch: desktopLocalFetch,
+        responseValidation: RESPONSE_VALIDATION,
       },
     })
   : createCloudApiClient({

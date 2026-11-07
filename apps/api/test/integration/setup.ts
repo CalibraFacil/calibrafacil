@@ -3,6 +3,7 @@ import { beforeEach, inject, vi } from "vitest";
 import { assertEphemeralTestDb } from "./guard";
 import { installTenantSqlGuard } from "./tenant-sql-guard";
 import { installReportProbes } from "./app-role-mode";
+import { checkEndpointResponses } from "../../src/lib/endpoint-mount";
 
 // Per-worker setup for the integration tier. Runs before any test file in this
 // worker process. Each worker gets its OWN copy of the schema (calibra_w<id>)
@@ -22,6 +23,9 @@ import { installReportProbes } from "./app-role-mode";
 //
 // Guard: assertEphemeralTestDb is called on the per-worker URL to ensure we
 // never accidentally point this suite at a non-local host.
+
+// A mounted endpoint whose response drifts from its contract schema fails the request.
+checkEndpointResponses();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 1-4: create per-worker database

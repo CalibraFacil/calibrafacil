@@ -1,7 +1,10 @@
 import type { JobStatus } from '@calibra-facil/schemas'
 import type { AssetStatus } from '@calibra-facil/schemas/machines'
 import type { CustomersListData as ClientRuntimeCustomersListData } from '@calibra-facil/client-runtime'
-import type { Address } from '@calibra-facil/shared/address'
+import type {
+  CustomerAuditLogEntry,
+  CustomerDetail as ContractCustomerDetail,
+} from '@calibra-facil/contracts'
 import type { CustomerFinancialTimeline } from '@calibra-facil/shared'
 
 export type CustomerListItem =
@@ -20,55 +23,14 @@ export type CustomersListQueryInput = {
   search: string
 }
 
-type CustomerFinancialSummary = {
-  openDocumentsCount: number
-  overdueDocumentsCount: number
-  openBalanceCents: number
-  overdueBalanceCents: number
-  overdueBalanceFlag: boolean
-}
-
 export type CustomerFinancialTimelineResponse = {
   data: CustomerFinancialTimeline
 }
 
-export type CustomerCompliance = {
-  qualificationStatus?: 'pending' | 'qualified' | 'suspended' | 'expired'
-  qualificationDate?: string
-  qualificationExpiresAt?: string
-  contractAgreementId?: number
-  contractNumber?: string
-  contractSignedAt?: string
-  contractExpiresAt?: string
-  qualityRequirementsAcknowledged?: boolean
-  qualityRequirementsAcknowledgedAt?: string
-  notes?: string
-}
-
-type ActiveCommercialAgreement = {
-  id: number
-  title: string
-  agreementCode: string | null
-  effectiveFrom: string
-  effectiveTo: string | null
-  currency: string
-  defaultPaymentTermDays: number
-}
-
-export type CustomerDetail = {
-  id: number
-  name?: string
-  tradeName?: string
-  taxId?: string
-  email?: string
-  phone?: string
-  address?: Address
-  financialSummary?: CustomerFinancialSummary
-  compliance?: CustomerCompliance
-  activeCommercialAgreement?: ActiveCommercialAgreement | null
-  groupId?: number | null
-  group?: { id: number; name: string } | null
-}
+// The customer DTOs are the contract's (`@calibra-facil/contracts`,
+// `endpoints/customers.ts`); the names below are the views the pages use.
+export type CustomerDetail = ContractCustomerDetail
+export type CustomerCompliance = NonNullable<CustomerDetail['compliance']>
 
 type CustomerAssetStatus = AssetStatus
 
@@ -116,16 +78,6 @@ export type CustomerJobsData = {
     total: number
     totalPages: number
   }
-}
-
-export type CustomerAuditLogEntry = {
-  id: number
-  action: string
-  changes: unknown
-  performedAt: string
-  reason: string | null
-  performedByName: string
-  performedByEmail: string
 }
 
 export type CustomerAuditLogData = {

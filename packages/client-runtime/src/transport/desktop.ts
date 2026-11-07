@@ -1,11 +1,14 @@
-import type { CalibraBridge } from "@calibra-facil/contracts";
+import type {
+  CalibraBridge,
+  ResponseValidationOptions,
+} from "@calibra-facil/contracts";
 import type { CreateCloudApiClientOptions } from "./cloud";
 
 export type CreateDesktopApiClientOptions = {
   baseUrl: string;
   tokenProvider?: () => string | null | Promise<string | null>;
   fetch?: typeof fetch;
-};
+} & ResponseValidationOptions;
 
 export type CreateDesktopHybridApiClientOptions = {
   cloud: CreateCloudApiClientOptions;

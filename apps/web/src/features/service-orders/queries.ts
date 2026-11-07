@@ -108,9 +108,11 @@ export function newServiceOrderCustomersQueryOptions(search = '') {
     queryKey: ['customers', 'service-order-open', search],
     queryFn: async (): Promise<NewServiceOrderCustomersData> => {
       const result = await calibraApi.customers.list({
-        page: 1,
-        limit: 100,
-        query: search.trim() || undefined,
+        query: {
+          page: 1,
+          limit: 100,
+          query: search.trim() || undefined,
+        },
       })
       return {
         data: result.data.map((customer) => ({

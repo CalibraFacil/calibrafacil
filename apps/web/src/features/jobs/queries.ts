@@ -70,9 +70,11 @@ export function newJobCustomersQueryOptions(search = '') {
     queryKey: ['customers', 'search', search],
     queryFn: (): Promise<NewJobCustomersData> =>
       calibraApi.customers.list({
-        page: 1,
-        limit: 50,
-        query: search || undefined,
+        query: {
+          page: 1,
+          limit: 50,
+          query: search || undefined,
+        },
       }),
     staleTime: 30_000,
   })

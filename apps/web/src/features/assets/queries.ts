@@ -155,9 +155,11 @@ export function newAssetCustomersQueryOptions(search = '') {
     queryKey: ['customers', 'search', search],
     queryFn: (): Promise<NewAssetCustomersData> =>
       calibraApi.customers.list({
-        page: 1,
-        limit: 50,
-        query: search || undefined,
+        query: {
+          page: 1,
+          limit: 50,
+          query: search || undefined,
+        },
       }),
     staleTime: 30_000,
   })

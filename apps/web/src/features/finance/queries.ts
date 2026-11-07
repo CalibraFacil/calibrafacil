@@ -118,8 +118,10 @@ export function financeContractCustomerOptionsQueryOptions() {
     queryKey: ['finance', 'contract-form', 'customers'],
     queryFn: async (): Promise<FinanceContractCustomerOptionsData> =>
       calibraApi.customers.list({
-        page: 1,
-        limit: 100,
+        query: {
+          page: 1,
+          limit: 100,
+        },
       }),
   })
 }

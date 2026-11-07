@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
+import type { CustomerRecord } from '@calibra-facil/contracts'
 import {
   ArrowDown01Icon,
   Building02Icon,
@@ -60,7 +61,7 @@ const NO_GROUP_VALUE = 'none'
 export type CustomerGroupOption = { id: number; name: string }
 
 /** The customer record returned by `customers.update` (used to refresh selection). */
-export type UpdatedCustomer = CustomerDetail
+export type UpdatedCustomer = CustomerRecord
 
 /**
  * Reusable customer-edit form. Owns its state, validation and update mutation,
@@ -109,7 +110,10 @@ export function CustomerEditForm({
       address?: Address
       groupId?: number | null
     }) => {
-      return calibraApi.customers.update<CustomerDetail>(customerId, data)
+      return calibraApi.customers.update({
+        params: { id: customerId },
+        body: data,
+      })
     },
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['customer', customerId] })

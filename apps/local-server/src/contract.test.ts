@@ -19,8 +19,7 @@ import {
   assetRecordSchema,
   assetTypesResponseSchema,
   assetsListResponseSchema,
-  customerDetailSchema,
-  customersListResponseSchema,
+  customerEndpoints,
   effectiveEnvironmentalLimitsResponseSchema,
   jobDetailSchema,
   jobExecutionResponseSchema,
@@ -553,14 +552,15 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
 
     const customers = await parsedBody(
       await app.request("/api/customers"),
-      customersListResponseSchema,
+      // The offline customer reads answer the endpoint definitions' own response schemas.
+      customerEndpoints.list.response,
     );
     expect(customers.data.map((customer) => customer.name)).toEqual([
       "Acme Lab",
     ]);
     await parsedBody(
       await app.request("/api/customers/123"),
-      customerDetailSchema,
+      customerEndpoints.get.response,
     );
     const assetTypes = await parsedBody(
       await app.request("/api/asset-types"),

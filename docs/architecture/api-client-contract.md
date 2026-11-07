@@ -65,7 +65,8 @@ When changing API/client boundaries:
 4. Reuse `readJson`, `readApiError`, `ensureOk`, and form-data helpers from
    `packages/client-runtime/src/transport/*` for response/error handling.
 5. Update `packages/contracts/src/api-app.ts` if the browser-facing raw route
-   surface changes.
+   surface changes (a converted domain needs nothing here: its paths come from
+   its endpoint definitions, see "Adding an endpoint").
 6. Run `pnpm --filter @calibra-facil/contracts check-types`.
 7. Run `pnpm check-types` before pushing.
 
@@ -74,6 +75,84 @@ oxlint plugin (`packages/oxlint-plugin-calibra`):
 `calibra/no-api-import-in-frontend` and
 `calibra/no-hono-client-outside-client-runtime`. Each rule carries a
 `LEGACY_BASELINE` ratchet for grandfathering existing violations (empty today).
+
+## Adding an endpoint: one definition (converted domains)
+
+A converted domain declares each client-facing endpoint **once**, in
+`packages/contracts/src/endpoints/<domain>.ts`, and everything else is derived.
+Customers is the reference (`endpoints/customers.ts`); the other domains still
+use the hand-written route, module, `types.ts` DTOs, policy entry and desktop
+stub described above and are converted one at a time.
+
+```ts
+export const customerEndpoints = {
+  list: endpoint({
+    method: "get",
+    path: "/api/customers",
+    query: ListCustomersQuerySchema, // same schemas the server validates with
+    response: customersListResponseSchema, // the wire body, from what the handler returns
+    failure: "Falha ao carregar clientes", // CalibraApiError message when the body has no `error`
+    policy: "local-first-read-through-sync",
+  }),
+  create: endpoint({
+    method: "post",
+    path: "/api/customers",
+    body: CreateCustomerSchema,
+    response: customerCreatedSchema,
+    status: 201,
+    failure: "Erro ao criar cliente",
+    policy: "cloud-only",
+    desktopLabel: "Clientes", // required for cloud-only: "Clientes requer a API web/nuvem ..."
+  }),
+} as const satisfies EndpointGroup;
+```
+
+What derives from it:
+
+| Consumer        | How                                                                                                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API route       | `mount(router, "/api/customers", def, middleware, handler)` (`apps/api/src/lib/endpoint-mount.ts`): method + path, `zValidator` for `query`/`body`, the handler gets `{ params, query, body }` typed and returns the response (checked at compile time against `response`; parsed with it in development and tests). |
+| SDK method      | `endpointClient(group, transport, options)` (`client-runtime/src/transport/endpoint-client.ts`): `(input) => Promise<z.infer<response>>`, input `{ params, query, body }` (each key only when the endpoint has it). Non-2xx is a `CalibraApiError`; a 2xx body is parsed with `response`.                            |
+| Data policy     | `calibraApiPolicyRegistry.<ns> = endpointPolicies(ENDPOINT_GROUPS.<ns>)`.                                                                                                                                                                                                                                            |
+| Desktop stubs   | `desktopEndpointStubs("<ns>")` throws for every `cloud-only` endpoint with its `desktopLabel`; local-first methods are the group's own client over `createDesktopEndpointTransport` (the local server answers the same `response`).                                                                                  |
+| `AppType` paths | `ENDPOINT_GROUPS` paths join the hand list in `api-app.ts`; delete the domain's paths from the hand list when you convert it.                                                                                                                                                                                        |
+| Route drift     | `apps/api/src/server/api-app-routes.spec.ts` checks every definition is served at its method + path.                                                                                                                                                                                                                 |
+
+To convert a domain:
+
+1. Write the definitions (`endpoints/<domain>.ts`) and add the group to
+   `ENDPOINT_GROUPS` in `endpoints/index.ts`, keyed by the `CalibraApi`
+   namespace. Reuse the request schemas from `@calibra-facil/schemas`; write the
+   response schemas from what each handler returns (wire rules above: validate
+   only, unknown keys allowed). Move any existing response schema for the
+   domain here. Add a `<domain>.fixtures.ts` (contract-valid builders, parsed in
+   a test) for tests in other packages.
+2. API: replace the chained `.get(...)/.post(...)` of each client-facing route
+   with `mount(...)`, return plain values (no `c.json`), keep `withLabPermission`
+   as the `middleware` argument. A route nothing calls stays a plain Hono route
+   (comment why). A status the definition does not describe (a 502 from an
+   upstream) returns a `Response` from the handler.
+3. client-runtime: `modules/<domain>.ts` becomes
+   `endpointClient(<domain>Endpoints, transport, options)` plus only genuine
+   client logic (spread the client and override that method, as `lookupCnpj`
+   does for 404 to null). Export the `<Domain>Api` type from there, import it
+   in `types.ts` (`CalibraApi`), replace the domain's hand DTOs in `types.ts`
+   with `z.infer` aliases (`export type X = ContractX`), delete the domain's raw
+   Hono tree from `index.ts` and pass `createCloudEndpointTransport(options)` to
+   the module.
+4. Policy and desktop: in `data-policy.ts` use `endpointPolicies(ENDPOINT_GROUPS.<ns>)`;
+   in `transport/desktop-client.ts` spread `desktopEndpointStubs("<ns>")` and add
+   the local-first methods from `endpointClient(group, createDesktopEndpointTransport(options), options)`.
+5. Callers: methods now take one object (`calibraApi.customers.get({ params: { id } })`),
+   no generics (the response type is the schema's). Drop web/portal
+   hand-written copies of the DTO in favour of the contract type.
+6. Keep `apps/local-server/src/contract.test.ts` parsing the offline reads with
+   `<domain>Endpoints.<name>.response`, and add an integration spec that parses
+   the real route's body (as `reference-data-contract.int.spec.ts` does).
+
+Not yet in the definition: the route's permission (stays the `middleware`
+argument of `mount`), and a response check in the SDK for domains that are not
+converted.
 
 ## Domain errors and stable codes
 

@@ -28,6 +28,7 @@ export * from "./common";
 export * from "./standards";
 export * from "./environmental-limits";
 export * from "./reference-data";
+export * from "./endpoints";
 export * from "./service-orders";
 export * from "./portal-fleet";
 export * from "./portal-certificates";

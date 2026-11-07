@@ -27,6 +27,7 @@ import type {
   UpdateNotificationPreferencesSchema,
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
+import type { CustomersApi } from "./modules/customers";
 
 export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
@@ -72,28 +73,11 @@ export type AssetAuditLogData<TRecord = unknown> = {
   data: TRecord[];
 };
 
-export type CustomerDetailData = CustomersListData["data"][number] & {
-  address?: Record<string, unknown> | null;
-  compliance?: {
-    qualificationStatus?: "pending" | "qualified" | "suspended" | "expired";
-    [key: string]: unknown;
-  } | null;
-  financialSummary?: {
-    openDocumentsCount: number;
-    overdueDocumentsCount: number;
-    openBalanceCents: number;
-    overdueBalanceCents: number;
-    overdueBalanceFlag: boolean;
-  };
-  activeCommercialAgreement?: unknown;
-  /** Parent customer group (rede), resolved on the detail payload. */
-  group?: { id: number; name: string } | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-};
-
 import type {
   AssetRecord,
+  CnpjLookupResult,
+  CustomerDetail,
+  CustomersListResponse,
   DeleteEnvironmentalLimitResponse,
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimitsResponse,
@@ -738,102 +722,16 @@ export interface StandardsApi {
   ): Promise<StandardCertificateDocumentDownloadResponse>;
 }
 
-export type CustomersListInput = {
-  page: number;
-  limit: number;
-  query?: string;
-};
+// =============================================================================
+// CUSTOMERS: the DTOs are the contract schemas' types
+// (`@calibra-facil/contracts`, `endpoints/customers.ts`); the client itself is
+// generated from the endpoint definitions (`modules/customers.ts`).
+// =============================================================================
 
-export type CustomersListData = {
-  data: Array<{
-    id: number;
-    name: string;
-    tradeName?: string | null;
-    taxId: string | null;
-    email: string | null;
-    phone?: string | null;
-    authOrganizationId: string | null;
-    groupId?: number | null;
-    groupName?: string | null;
-    compliance?: {
-      qualificationStatus?: "pending" | "qualified" | "suspended" | "expired";
-    } | null;
-  }>;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-export type UpdateCustomerComplianceInput = {
-  compliance: Record<string, unknown>;
-  reason: string;
-};
-
-export type CustomerAuditLogData<TRecord = unknown> = {
-  data: TRecord[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-/** Receita Federal registry data resolved from a CNPJ, used to pre-fill the cadastro. */
-export type CnpjLookupResult = {
-  taxId: string;
-  name: string;
-  tradeName: string | null;
-  email: string | null;
-  phone: string | null;
-  status: string | null;
-  address: {
-    cep: string | null;
-    street: string | null;
-    number: string | null;
-    complement: string | null;
-    neighbourhood: string | null;
-    city: string | null;
-    state: string | null;
-  };
-};
-
-export interface CustomersApi {
-  list(input: CustomersListInput): Promise<CustomersListData>;
-  /** Resolve a CNPJ against the Receita Federal mirrors. Returns null when not found. */
-  lookupCnpj(cnpj: string): Promise<CnpjLookupResult | null>;
-  create(
-    input: CreateCustomerInput,
-  ): Promise<CustomersListData["data"][number]>;
-  get<TCustomer = CustomerDetailData>(id: string | number): Promise<TCustomer>;
-  update<TCustomer = CustomerDetailData>(
-    id: string | number,
-    input: UpdateCustomerInput,
-  ): Promise<TCustomer>;
-  auditLog<TRecord = unknown>(
-    id: string | number,
-    input?: { page?: number; limit?: number },
-  ): Promise<CustomerAuditLogData<TRecord>>;
-  ootEvents<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  updateCompliance<TCustomer = CustomerDetailData>(
-    id: string | number,
-    input: UpdateCustomerComplianceInput,
-  ): Promise<TCustomer>;
-  listMembers<TMember = unknown>(id: string | number): Promise<TMember[]>;
-  listInvitations<TInvitation = unknown>(
-    id: string | number,
-  ): Promise<TInvitation[]>;
-  createInvitation<TInvitation = unknown>(
-    id: string | number,
-    input: { email: string; role: string },
-  ): Promise<TInvitation>;
-  resendInvitation(id: string | number, invitationId: string): Promise<unknown>;
-  cancelInvitation(id: string | number, invitationId: string): Promise<unknown>;
-  removeMember(id: string | number, memberId: string): Promise<unknown>;
-}
+export type { CnpjLookupResult };
+export type CustomersListData = CustomersListResponse;
+export type CustomerDetailData = CustomerDetail;
+export type { CustomersApi };
 
 // =============================================================================
 // CUSTOMER GROUPS (multi-unit client networks)
