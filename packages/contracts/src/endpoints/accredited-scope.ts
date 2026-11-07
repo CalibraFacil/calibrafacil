@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AccreditedScopeLineSchema } from "@calibra-facil/schemas";
 
 import { nullableNumber, nullableString, unitContextSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * The laboratory's accredited scope (CMC lines, ISO/IEC 17025 7.6 and 7.8.3,
@@ -97,6 +97,7 @@ export const accreditedScopeEndpoints = {
   delete: endpoint({
     method: "delete",
     path: "/api/accredited-scope/:id",
+    params: z.object({ id: routeId }),
     response: z.object({ message: z.string() }),
     failure: "Falha ao remover",
     policy: "cloud-only",

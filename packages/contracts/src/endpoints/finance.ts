@@ -10,7 +10,7 @@ import {
 } from "@calibra-facil/shared";
 
 import { nullableNumber, nullableString } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * The laboratory's finance: billing documents, commercial contracts, receipts,
@@ -902,6 +902,7 @@ export const financeEndpoints = {
   updateDocument: endpoint({
     method: "put",
     path: "/api/finance/documents/:id",
+    params: z.object({ id: routeId }),
     body: UpdateDocumentSchema,
     response: dataSchema(documentDetailSchema),
     failure: "Erro ao atualizar documento",
@@ -911,6 +912,7 @@ export const financeEndpoints = {
   issueDocument: endpoint({
     method: "post",
     path: "/api/finance/documents/:id/issue",
+    params: z.object({ id: routeId }),
     response: dataSchema(documentDetailSchema),
     failure: "Erro ao emitir documento",
     policy: "cloud-only",
@@ -919,6 +921,7 @@ export const financeEndpoints = {
   voidDocument: endpoint({
     method: "post",
     path: "/api/finance/documents/:id/void",
+    params: z.object({ id: routeId }),
     body: VoidDocumentSchema,
     response: dataSchema(documentDetailSchema),
     failure: "Erro ao anular documento",
@@ -956,6 +959,7 @@ export const financeEndpoints = {
   getContract: endpoint({
     method: "get",
     path: "/api/finance/contracts/:id",
+    params: z.object({ id: routeId }),
     response: dataSchema(contractDetailSchema),
     failure: "Erro ao carregar contrato",
     policy: "cloud-only",
@@ -974,6 +978,7 @@ export const financeEndpoints = {
   activateContract: endpoint({
     method: "post",
     path: "/api/finance/contracts/:id/activate",
+    params: z.object({ id: routeId }),
     response: dataSchema(agreementRowSchema),
     failure: "Erro ao ativar contrato",
     policy: "cloud-only",
@@ -982,6 +987,7 @@ export const financeEndpoints = {
   cancelContract: endpoint({
     method: "post",
     path: "/api/finance/contracts/:id/cancel",
+    params: z.object({ id: routeId }),
     response: dataSchema(agreementRowSchema),
     failure: "Erro ao cancelar contrato",
     policy: "cloud-only",
@@ -998,6 +1004,7 @@ export const financeEndpoints = {
   receiveInstallment: endpoint({
     method: "post",
     path: "/api/finance/installments/:id/receive",
+    params: z.object({ id: routeId }),
     body: RecordReceiptSchema,
     response: dataSchema(
       z.object({
@@ -1024,6 +1031,7 @@ export const financeEndpoints = {
   exportErpDocument: endpoint({
     method: "post",
     path: "/api/finance/erp/documents/:id/export",
+    params: z.object({ id: routeId }),
     response: z.object({ data: z.unknown() }),
     failure: "Erro ao exportar documento",
     policy: "cloud-only",
@@ -1050,6 +1058,7 @@ export const financeEndpoints = {
   getServiceOrderStatus: endpoint({
     method: "get",
     path: "/api/finance/service-orders/:serviceOrderId/status",
+    params: z.object({ serviceOrderId: routeId }),
     response: dataSchema(serviceOrderFinancialStatusSchema),
     failure: "Erro ao carregar status financeiro da OS",
     policy: "cloud-only",
@@ -1067,6 +1076,7 @@ export const financeEndpoints = {
   getCertificateRelease: endpoint({
     method: "get",
     path: "/api/finance/certificate-releases/:calibrationJobId",
+    params: z.object({ calibrationJobId: routeId }),
     response: dataSchema(certificateReleaseSchema),
     failure: "Erro ao carregar status de liberação",
     policy: "cloud-only",
@@ -1075,6 +1085,7 @@ export const financeEndpoints = {
   releaseCertificateByException: endpoint({
     method: "post",
     path: "/api/finance/certificate-releases/:calibrationJobId/release-by-exception",
+    params: z.object({ calibrationJobId: routeId }),
     body: ReleaseByExceptionSchema,
     response: dataSchema(certificateReleaseSchema),
     failure: "Erro ao liberar certificado com exceção",
@@ -1101,6 +1112,7 @@ export const financeEndpoints = {
   updateCertificateReleasePolicy: endpoint({
     method: "put",
     path: "/api/finance/certificate-release-policies/:id",
+    params: z.object({ id: routeId }),
     body: UpdatePolicySchema,
     response: idResultSchema,
     failure: "Erro ao atualizar política de liberação",
@@ -1127,6 +1139,7 @@ export const financeEndpoints = {
   updateAutomaticSendRule: endpoint({
     method: "put",
     path: "/api/finance/automatic-send-rules/:id",
+    params: z.object({ id: routeId }),
     body: UpdateRuleSchema,
     response: idResultSchema,
     failure: "Erro ao atualizar regra de envio automático",

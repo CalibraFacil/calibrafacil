@@ -7,7 +7,7 @@ import {
 } from "@calibra-facil/schemas";
 
 import { nullableNumber, nullableString, paginationSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * The parts and materials catalog (pecas e materiais). Response schemas are wire
@@ -76,6 +76,7 @@ export const materialEndpoints = {
   get: endpoint({
     method: "get",
     path: "/api/materials/:id",
+    params: z.object({ id: routeId }),
     response: materialSchema,
     failure: "Falha ao carregar material",
     policy: "cloud-only",
@@ -94,6 +95,7 @@ export const materialEndpoints = {
   update: endpoint({
     method: "put",
     path: "/api/materials/:id",
+    params: z.object({ id: routeId }),
     body: UpdateMaterialSchema,
     response: materialSchema,
     failure: "Erro ao atualizar material",
@@ -103,6 +105,7 @@ export const materialEndpoints = {
   deactivate: endpoint({
     method: "delete",
     path: "/api/materials/:id",
+    params: z.object({ id: routeId }),
     response: z.object({ message: z.string(), data: materialSchema }),
     failure: "Erro ao desativar material",
     policy: "cloud-only",
@@ -111,6 +114,7 @@ export const materialEndpoints = {
   adjustStock: endpoint({
     method: "post",
     path: "/api/materials/:id/stock",
+    params: z.object({ id: routeId }),
     body: AdjustMaterialStockSchema,
     response: adjustMaterialStockResponseSchema,
     failure: "Erro ao ajustar estoque do material",

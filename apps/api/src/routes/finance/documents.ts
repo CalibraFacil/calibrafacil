@@ -35,7 +35,6 @@ import {
   getDocumentById,
   getDocumentByPublicId,
   requireDocumentInUnitScope,
-  requireDocumentRouteId,
   requireLabDocument,
 } from "../../lib/billing-document-access";
 import { invalid, notFound } from "../../lib/domain-errors";
@@ -452,7 +451,7 @@ mount(
   withLabPermission({ financial: ["document_create"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireDocumentRouteId(params.id);
+    const { id } = params;
 
     const updated = await withOrg(
       member.organizationId,
@@ -572,7 +571,7 @@ mount(
   withLabPermission({ financial: ["document_issue"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireDocumentRouteId(params.id);
+    const { id } = params;
 
     // `ctx.tx` is the raw transaction the numbering helper needs (it takes an
     // advisory lock with raw SQL); everything else goes through `ctx.o`.
@@ -670,7 +669,7 @@ mount(
   withLabPermission({ financial: ["document_void"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireDocumentRouteId(params.id);
+    const { id } = params;
 
     const voided = await withOrg(
       member.organizationId,

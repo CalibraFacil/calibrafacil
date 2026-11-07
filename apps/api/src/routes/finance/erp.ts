@@ -67,11 +67,7 @@ mount(
   withLabPermission({ financial: ["export"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const documentId = Number.parseInt(params.id, 10);
-
-    if (!Number.isInteger(documentId)) {
-      throw invalid("invalid_request", "ID invalido");
-    }
+    const documentId = params.id;
 
     const payload = await orgDb(member.organizationId).transaction((o) =>
       loadBillingDocumentExportPayload(member.organizationId, documentId, o),
