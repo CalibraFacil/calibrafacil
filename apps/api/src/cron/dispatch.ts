@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { readJobsConfig, readRuntimeConfig } from "@calibra-facil/config";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
+  dispatchContaAzulSync,
   processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls,
 } from "../modules/integrations";
@@ -117,7 +118,7 @@ async function runIntegrations() {
     processScheduledContaAzulIntegrationSyncs({
       env,
       dispatch: async (message) => {
-        await enqueueBackgroundJob(message);
+        await dispatchContaAzulSync(message);
       },
     }),
   );

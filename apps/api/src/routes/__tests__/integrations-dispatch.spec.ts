@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   limits: new Array<number>(),
   buildIntegrationOverview: vi.fn(),
   enqueueBackgroundJob: vi.fn(),
+  dispatchContaAzulSync: vi.fn(),
   failIntegrationSyncRun: vi.fn(),
   getContaAzulScheduleState: vi.fn(),
   getIntegrationRecord: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock("../../modules/integrations", () => ({
   buildIntegrationOverview: mocks.buildIntegrationOverview,
   createSyncRun: vi.fn(),
   decryptIntegrationSecret: vi.fn(),
+  dispatchContaAzulSync: mocks.dispatchContaAzulSync,
   encryptIntegrationSecret: vi.fn(),
   failIntegrationSyncRun: mocks.failIntegrationSyncRun,
   failSyncRunAsBlocked: vi.fn(),
@@ -331,7 +333,7 @@ describe("dispatchSyncRun", () => {
         provider: "conta_azul",
       },
     });
-    mocks.enqueueBackgroundJob.mockResolvedValue({
+    mocks.dispatchContaAzulSync.mockResolvedValue({
       messageId: "queued-conta-azul-1",
     });
 
@@ -350,7 +352,7 @@ describe("dispatchSyncRun", () => {
       status: "PENDING",
     });
 
-    expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith({
+    expect(mocks.dispatchContaAzulSync).toHaveBeenCalledWith({
       type: "INTEGRATION_SYNC",
       provider: "conta_azul",
       integrationId: "int-1",
@@ -370,7 +372,7 @@ describe("dispatchSyncRun", () => {
           provider: "conta_azul",
         },
       });
-      mocks.enqueueBackgroundJob.mockResolvedValue({
+      mocks.dispatchContaAzulSync.mockResolvedValue({
         messageId: `queued-${target}`,
       });
 
@@ -389,7 +391,7 @@ describe("dispatchSyncRun", () => {
         status: "PENDING",
       });
 
-      expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith({
+      expect(mocks.dispatchContaAzulSync).toHaveBeenCalledWith({
         type: "INTEGRATION_SYNC",
         provider: "conta_azul",
         integrationId: "int-1",
@@ -444,7 +446,7 @@ describe("dispatchSyncRun", () => {
         provider: "conta_azul",
       },
     });
-    mocks.enqueueBackgroundJob.mockRejectedValue(new Error("queue down"));
+    mocks.dispatchContaAzulSync.mockRejectedValue(new Error("queue down"));
 
     await expect(
       dispatchSyncRun({

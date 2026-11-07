@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   cleanupExpiredAuthRecords: vi.fn(),
   createWorkerRuntimeEnv: vi.fn(() => ({ DATABASE_URL: "postgres://test" })),
   enqueueBackgroundJob: vi.fn(),
+  dispatchContaAzulSync: vi.fn(),
   processScheduledContaAzulIntegrationSyncs: vi.fn(),
   processScheduledContaAzulPolls: vi.fn(),
   processScheduledIntegrationSyncs: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("../../lib/runtime-env", () => ({
 }));
 
 vi.mock("../../modules/integrations", () => ({
+  dispatchContaAzulSync: mocks.dispatchContaAzulSync,
   processScheduledContaAzulIntegrationSyncs:
     mocks.processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls: mocks.processScheduledContaAzulPolls,
@@ -170,9 +172,10 @@ describe("integrations cron", () => {
       trigger: "scheduled",
     });
 
-    expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith(
+    expect(mocks.dispatchContaAzulSync).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "conta_azul", runId: "run-1" }),
     );
+    expect(mocks.enqueueBackgroundJob).not.toHaveBeenCalled();
   });
 });
 

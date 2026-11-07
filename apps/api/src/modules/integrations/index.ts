@@ -3,6 +3,7 @@ export {
   shouldRefreshContaAzulTokenBeforeUse,
   validateContaAzulConnection,
 } from "./conta-azul-auth";
+export { dispatchContaAzulSync } from "./conta-azul-local-sync";
 export { pollContaAzulBillingStatus } from "./conta-azul-billing-poll";
 export { pollContaAzulRemoteDrift } from "./conta-azul-drift-poll";
 export {
