@@ -1,12 +1,11 @@
-// Row-level security of the tenant tables, in SHADOW mode (roadmap P2-3, Q15).
+// Row-level security of the tenant tables.
 //
 // Every table of tenancy.ts that carries an organization column gets
 // `ENABLE ROW LEVEL SECURITY` (never FORCE) and one policy, `tenant_isolation`,
 // for the role `calibra_app`. The tables are owned by the migration owner, and an
-// owner that is not FORCEd bypasses RLS, so a deployment that connects as the
-// owner (every deployment today) sees no change at all; the policies only bite
-// once the API connects as a member of `calibra_app` (DEPLOYMENT.md, "Row-level
-// security").
+// owner that is not FORCEd bypasses RLS, so only a connection as a member of
+// `calibra_app` is bound by the policies (the API and worker connect that way;
+// DEPLOYMENT.md, "Row-level security").
 //
 // `pnpm --filter @calibra-facil/db gen:rls-sql` prints the per-table block. It is
 // pasted verbatim into the migration that (re)defines it and into

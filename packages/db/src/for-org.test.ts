@@ -406,7 +406,7 @@ describe("forOrg: transactions", () => {
         if (property === "transaction") {
           return async (run: (tx: typeof mock) => Promise<unknown>) => {
             calls.push("begin");
-            // P2-3: a transaction also names its organization for row-level
+            // A transaction also names its organization for row-level
             // security (set_config); the mock has no connection to run it on,
             // so the tx hands that one statement a stub. Assertions unchanged.
             return run(

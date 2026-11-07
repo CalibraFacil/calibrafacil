@@ -85,8 +85,8 @@ async function ensureApplicationLogin(sql) {
         CREATE ROLE calibra_app;
       END IF;
     END $$`);
-  // Only LOGIN and the password: a CREATEROLE owner that is not a superuser (Neon,
-  // RDS, Supabase) may not touch the other attributes, and CREATE ROLE's defaults
+  // Only LOGIN and the password: a CREATEROLE owner that is not a superuser (managed
+  // Postgres such as RDS or Supabase) may not touch the other attributes, and CREATE ROLE's defaults
   // (NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE) are the safe ones; start-up
   // refuses a superuser or BYPASSRLS application role anyway. The literal is quoted
   // by the server (format %L), never by hand.

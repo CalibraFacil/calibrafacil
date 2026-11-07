@@ -1,5 +1,5 @@
 /**
- * Organization-bound data handle (P2-2, REQ-ORGDB-1).
+ * Organization-bound data handle.
  *
  * `forOrg(db, organizationId)` returns a handle with the same query surface as
  * Drizzle (`select`, `selectDistinct`, `selectDistinctOn`, `insert`, `update`,

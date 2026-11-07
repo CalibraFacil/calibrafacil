@@ -1157,7 +1157,7 @@ export async function seedAssetTypes(
     }
   }
 
-  // Also seed the GLOBAL legal-metrology regulation catalog (deferred #3 of #423).
+  // Also seed the GLOBAL legal-metrology regulation catalog.
   // Idempotent + data-only (ON CONFLICT DO NOTHING on `category`; touches no asset row).
   log("Seeding legal-metrology regulations...");
   await seedLegalMetrologyRegulations(systemDb);

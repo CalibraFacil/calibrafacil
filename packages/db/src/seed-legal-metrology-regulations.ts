@@ -1,5 +1,5 @@
 /**
- * Seed for the legal-metrology regulation catalog (deferred #3 of issue #423).
+ * Seed for the legal-metrology regulation catalog.
  *
  * Populates `legal_metrology_regulation` with the primary-grounded Portaria → regulated-
  * interval-shape table (research 2026-06-29; see specs/legal-metrology-catalog/spec.md).

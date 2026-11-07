@@ -30,8 +30,8 @@ type Change<T = unknown> = { old: T; new: T };
 export type JobActorAuditFields = {
   source?: "desktop_sync" | "public_api";
   /**
-   * Desktop sync only: the pushing device's clock minus the server's, in ms
-   * (roadmap 2 E2), recorded when it exceeds the tolerance. The instants the
+   * Desktop sync only: the pushing device's clock minus the server's, in ms,
+   * recorded when it exceeds the tolerance. The instants the
    * device reported (performedAt, the backdate base) came from that clock.
    */
   deviceClockSkewMs?: number;
@@ -176,7 +176,7 @@ export type SignatureAudit =
   | { signed: true; signerName: string }
   | {
       signed: false;
-      /** Q51: the unit issues unsigned on purpose; the reason it recorded. */
+      /** The unit issues unsigned on purpose; the reason it recorded. */
       unsignedByPolicy?: string;
     };
 
@@ -278,7 +278,7 @@ export type JobEvent =
       };
     })
   // A manager re-dispatched the render of a failed certificate (RENDER_FAILED ->
-  // GENERATING_PDF, roadmap 2 C5); the approval and its frozen input stand.
+  // GENERATING_PDF); the approval and its frozen input stand.
   | (JobEventBase & {
       action: "render_retried";
       changes: JobActorAuditFields & {

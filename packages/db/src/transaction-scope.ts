@@ -108,7 +108,7 @@ export function createTransactionScopeRunner(open: OpenTransaction) {
 /**
  * The functions `runInTransactionScope` has handed to `db.transaction`. A
  * WeakSet, not a name: a minifier renames functions, and the harness that needs
- * to tell a scope's transaction from an ordinary one (db/testing.ts) must not
+ * to tell a scope's transaction from an ordinary one (db/src/testing.ts) must not
  * depend on it.
  */
 const scopeCallbacks = new WeakSet<object>();

@@ -3,7 +3,7 @@
  *
  * A per-lab value (a service-order tag, a quote number, a document number...) that carries a
  * unique index WITHOUT the organization column is unique across every laboratory, so the first
- * order of the year of a second lab collides with the first lab's (P0-4, the class fixed for NC/
+ * order of the year of a second lab collides with the first lab's (the class fixed for NC/
  * CAPA by migration 0124 and for the service-order documents by 0125). Every unique index,
  * unique constraint and composite primary key of a tenant table (`classifyTables().tenant`,
  * including the partial indexes of `sql/schema-extras.sql`) must either

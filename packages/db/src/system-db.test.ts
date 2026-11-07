@@ -7,7 +7,7 @@ import {
   systemDb,
 } from "./db";
 
-// The SYSTEM path (P2-18): the owner connection that the statements which are
+// The SYSTEM path: the owner connection that the statements which are
 // cross-organization by design run on. postgres.js connects lazily, so these
 // tests never open a socket: they read the options the pool was built with.
 

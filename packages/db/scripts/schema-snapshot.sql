@@ -1,5 +1,5 @@
--- A schema snapshot that does not depend on how the database got there
--- (roadmap 2 G4): one sorted line per column, constraint, index, trigger,
+-- A schema snapshot that does not depend on how the database got there:
+-- one sorted line per column, constraint, index, trigger,
 -- function, policy, RLS flag and table privilege of the public schema. Two
 -- databases with the same schema print the same text whatever the column order
 -- of their CREATE TABLEs (a migration's ADD COLUMN appends; schema.ts may not).
