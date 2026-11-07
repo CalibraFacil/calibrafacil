@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./migrations": "./src/migrations/index.ts"
+    "./migrations": "./src/migrations/index.ts",
+    "./legacy-outbox-fixtures": "./src/legacy-outbox-fixtures.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

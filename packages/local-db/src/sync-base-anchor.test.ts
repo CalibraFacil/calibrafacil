@@ -5,13 +5,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applySyncBootstrap,
-  createLocalCustomer,
   listPendingOutboxEvents,
   openLocalDatabase,
-  saveLocalServiceOrderExecutionNotes,
-  updateLocalAsset,
-  updateLocalCustomer,
 } from "./index";
+import {
+  createLocalCustomer,
+  updateLocalCustomer,
+  updateLocalAsset,
+  saveLocalServiceOrderExecutionNotes,
+} from "./legacy-outbox-fixtures";
 
 const tempDirectories: string[] = [];
 

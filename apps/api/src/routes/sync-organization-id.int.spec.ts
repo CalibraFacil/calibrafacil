@@ -30,33 +30,6 @@ import { getExecuteRows } from "../lib/db";
 import { syncRouter } from "./sync";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 
-// The CLIENT organization of a new customer is created through Better Auth (not
-// available here): replace only that call with a plain organization row.
-vi.mock("../lib/portal-service-account", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../lib/portal-service-account")>();
-  return {
-    ...actual,
-    createClientOrganizationAsServiceOwner: async (params: {
-      name: string;
-      slug: string;
-    }) => {
-      const { db: database } = await import("@calibra-facil/db");
-      const { organization } = await import("@calibra-facil/db/schema");
-      const id = `client-${params.slug}`;
-      await database.insert(organization).values({
-        id,
-        name: params.name,
-        slug: params.slug,
-        type: "CLIENT",
-        status: "ACTIVE",
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      });
-      return { id };
-    },
-  };
-});
-
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
@@ -341,63 +314,6 @@ describe("REQ-ORG-5: desktop sync operations write the lab organization on tenan
     await expectOnlyLab("asset_audit_log", sql`action = 'create'`);
   });
 
-  it("REQ-ORG-5: update_local_asset writes asset_audit_log with the lab org", async () => {
-    await pushOk(world, {
-      entityType: "asset",
-      entityId: "local-asset-2",
-      operation: "update_local_asset",
-      payload: { remoteId: world.assetId, name: "Renomeado" },
-    });
-    await expectOnlyLab("asset_audit_log", sql`action <> 'create'`);
-  });
-
-  it("REQ-ORG-5: create_local_customer writes customer_audit_log with the lab org", async () => {
-    await pushOk(world, {
-      entityType: "customer",
-      entityId: "local-customer-1",
-      operation: "create_local_customer",
-      payload: { name: "Cliente Desktop Ltda" },
-    });
-    await expectOnlyLab("customer_audit_log", sql`action = 'create'`);
-  });
-
-  it("REQ-ORG-5: update_local_customer writes customer_audit_log with the lab org", async () => {
-    await pushOk(world, {
-      entityType: "customer",
-      entityId: "local-customer-2",
-      operation: "update_local_customer",
-      payload: { remoteId: world.customerId, name: "Cliente Renomeado" },
-    });
-    await expectOnlyLab("customer_audit_log", sql`action = 'update'`);
-  });
-
-  it("REQ-ORG-5: update_local_customer_compliance writes customer_audit_log with the lab org", async () => {
-    await pushOk(world, {
-      entityType: "customer",
-      entityId: "local-customer-3",
-      operation: "update_local_customer_compliance",
-      payload: {
-        remoteId: world.customerId,
-        compliance: { qualificationStatus: "qualified" },
-        reason: "Auditoria de qualificacao",
-      },
-    });
-    await expectOnlyLab(
-      "customer_audit_log",
-      sql`action = 'compliance_change'`,
-    );
-  });
-
-  it("REQ-ORG-5: create_local_job_draft writes the job's job_audit_log row with the lab org", async () => {
-    await pushOk(world, {
-      entityType: "calibration_job",
-      entityId: "local-job-draft-1",
-      operation: "create_local_job_draft",
-      payload: { assetId: world.assetId, serviceId: world.serviceId },
-    });
-    await expectOnlyLab("job_audit_log", sql`action = 'create'`);
-  });
-
   it("REQ-ORG-5: submit_local_execution writes job_audit_log and the job_standard links with the lab org", async () => {
     await pushOk(world, {
       entityType: "calibration_job",
@@ -432,81 +348,9 @@ describe("REQ-ORG-5: desktop sync operations write the lab organization on tenan
     await expectOnlyLab("job_standard", sql`job_id = ${world.jobId}`);
   });
 
-  it("REQ-ORG-5: create_local_non_conformance writes non_conformance_audit_log with the lab org", async () => {
-    await pushOk(world, {
-      entityType: "non_conformance",
-      entityId: "local-nc-1",
-      operation: "create_local_non_conformance",
-      payload: {
-        type: "work",
-        description: "Desvio no procedimento de calibracao",
-        detectedAt: new Date().toISOString(),
-      },
-    });
-    await expectOnlyLab("non_conformance_audit_log");
-  });
-
   it("REQ-ORG-5: create_local_service_order_intake writes service_order_asset_snapshot with the lab org", async () => {
     await createServiceOrder(world, "local-so-1");
     await expectOnlyLab("service_order_asset_snapshot");
-  });
-
-  it("REQ-ORG-5: create_local_service_order_quote_draft writes the quote and its items with the lab org", async () => {
-    await createServiceOrder(world, "local-so-2");
-    await pushOk(world, {
-      entityType: "service_order_quote",
-      entityId: "local-quote-1",
-      operation: "create_local_service_order_quote_draft",
-      payload: {
-        serviceOrderId: "local-so-2",
-        items: [
-          {
-            type: "service",
-            description: "Mao de obra",
-            quantity: 1,
-            unit: "un",
-            unitPriceCents: 10000,
-          },
-        ],
-      },
-    });
-    await expectOnlyLab("service_order_quote");
-    await expectOnlyLab("service_order_quote_item");
-  });
-
-  it("REQ-ORG-5: save_local_service_order_execution_notes writes the execution and its items with the lab org", async () => {
-    await createServiceOrder(world, "local-so-3");
-    await pushOk(world, {
-      entityType: "service_order_execution",
-      entityId: "local-exec-1",
-      operation: "save_local_service_order_execution_notes",
-      payload: {
-        serviceOrderId: "local-so-3",
-        technicalNotes: "Troca de celula",
-        items: [
-          {
-            type: "service",
-            description: "Reparo",
-            quantity: 1,
-            unit: "un",
-            unitPriceCents: 5000,
-          },
-        ],
-      },
-    });
-    await expectOnlyLab("service_order_execution");
-    await expectOnlyLab("service_order_execution_item");
-  });
-
-  it("REQ-ORG-5: create_local_service_order_delivery_document_draft writes the delivery document with the lab org", async () => {
-    await createServiceOrder(world, "local-so-4");
-    await pushOk(world, {
-      entityType: "service_order_delivery_document",
-      entityId: "local-delivery-1",
-      operation: "create_local_service_order_delivery_document_draft",
-      payload: { serviceOrderId: "local-so-4" },
-    });
-    await expectOnlyLab("service_order_delivery_document");
   });
 
   it("REQ-ORG-5: nothing a lab's device pushes is attributed to another laboratory", async () => {

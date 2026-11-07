@@ -27,7 +27,6 @@ export type OutboxRejectionClass = "permanent" | "transient";
 export const OUTBOX_REJECTION_CLASSES = {
   // The operation or the payload can never be applied by the cloud.
   UNSUPPORTED_SYNC_OPERATION: "permanent",
-  OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED: "permanent",
   STATUS_PAYLOAD_MISMATCH: "permanent",
   INVALID_DESKTOP_EVENT_PAYLOAD: "permanent",
   // The event does not fit the typed push protocol (envelope or payload schema).

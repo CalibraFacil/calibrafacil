@@ -10,7 +10,6 @@ import {
   listLocalAssets,
   openLocalDatabase,
   runLocalMigrations,
-  updateLocalAsset,
   type LocalDatabase,
 } from "./index";
 import { currentLocalDbSchemaVersion } from "./migrations";
@@ -126,63 +125,6 @@ describe("legal-metrology offline parity", () => {
 
     const detail = getLocalAssetDetail(database, "BAL-LMR-1");
     expect(detail?.regulatedInterval).toEqual(regulatedInterval);
-
-    database.close();
-  });
-
-  it("REQ-OFFLINE-002: an updated asset round-trips changes to the four fields", () => {
-    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
-    const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
-    seedCustomerAndAssetType(database, now);
-
-    const created = createLocalAsset(database, {
-      organizationId: "org-1",
-      unitId: 1,
-      customerId: 20,
-      assetTypeId: 10,
-      name: "Balanca industrial",
-      serialNumber: "SN-LMR-2",
-      tag: "BAL-LMR-2",
-      status: "ACTIVE",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-
-    // Default regime on create mirrors the cloud column default.
-    expect(created.metrologyRegime).toBe("INDUSTRIAL");
-    expect(created.regulatedInterval).toBeNull();
-    expect(created.nextLegalVerificationDate).toBeNull();
-    expect(created.installedAt).toBeNull();
-
-    const updated = updateLocalAsset(database, {
-      identifier: "BAL-LMR-2",
-      metrologyRegime: "LEGAL",
-      regulatedInterval,
-      nextLegalVerificationDate: "2027-12-31T00:00:00.000Z",
-      installedAt: "2026-02-01T00:00:00.000Z",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-
-    expect(updated.metrologyRegime).toBe("LEGAL");
-    expect(updated.regulatedInterval).toEqual(regulatedInterval);
-    expect(updated.nextLegalVerificationDate).toBe("2027-12-31T00:00:00.000Z");
-    expect(updated.installedAt).toBe("2026-02-01T00:00:00.000Z");
-
-    // Clearing the regime back to a non-LEGAL value also round-trips.
-    const cleared = updateLocalAsset(database, {
-      identifier: "BAL-LMR-2",
-      metrologyRegime: "INDUSTRIAL",
-      regulatedInterval: null,
-      nextLegalVerificationDate: null,
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-    expect(cleared.metrologyRegime).toBe("INDUSTRIAL");
-    expect(cleared.regulatedInterval).toBeNull();
-    expect(cleared.nextLegalVerificationDate).toBeNull();
-    // installedAt was not in the update → preserved.
-    expect(cleared.installedAt).toBe("2026-02-01T00:00:00.000Z");
 
     database.close();
   });

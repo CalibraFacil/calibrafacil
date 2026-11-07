@@ -8,7 +8,6 @@ import {
   applySyncPullResponse,
   applySyncPushResult,
   createLocalAsset,
-  createLocalCustomer,
   createLocalServiceOrderIntake,
   countPendingOutbox,
   getLocalDatabaseDiagnostics,
@@ -24,10 +23,9 @@ import {
   openLocalDatabase,
   resolveSyncConflict,
   saveLocalJobExecution,
-  updateLocalAsset,
-  updateLocalCustomer,
   upsertLocalJobProjection,
 } from "./index";
+import { createLocalCustomer } from "./legacy-outbox-fixtures";
 import { currentLocalDbSchemaVersion } from "./migrations";
 
 const tempDirectories: string[] = [];
@@ -1480,209 +1478,6 @@ WHERE tag = 'BAL-001'
       remote_id: 654,
       sync_state: "synced",
     });
-
-    database.close();
-  });
-
-  it("creates a local customer and writes the accepted remote ID back", () => {
-    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
-
-    const created = createLocalCustomer(database, {
-      organizationId: "org-1",
-      unitId: 1,
-      name: "Cliente Local",
-      taxId: "12345678000199",
-      email: "cliente@example.com",
-      phone: "(11) 99999-9999",
-      address: { city: "Sao Paulo", state: "SP" },
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-
-    expect(created).toMatchObject({
-      name: "Cliente Local",
-      taxId: "12345678000199",
-      email: "cliente@example.com",
-      authOrganizationId: null,
-      syncState: "local",
-    });
-    expect(
-      listLocalCustomers(database, { page: 1, limit: 20 }).data.find(
-        (customer) => customer.name === "Cliente Local",
-      )?.syncState,
-    ).toBe("local");
-
-    const outboxRow = requiredRow(
-      database
-        .prepare<
-          [],
-          {
-            event_id: string;
-            aggregate_kind: string;
-            event_type: string;
-          }
-        >(
-          `
-SELECT domain_events.event_id, domain_events.aggregate_kind, domain_events.event_type
-FROM domain_events
-INNER JOIN outbox ON outbox.event_id = domain_events.event_id
-WHERE domain_events.aggregate_kind = 'customer'
-LIMIT 1
-`,
-        )
-        .get(),
-    );
-
-    expect(outboxRow.aggregate_kind).toBe("customer");
-    expect(outboxRow.event_type).toBe("create_local_customer");
-
-    applySyncPushResult(database, {
-      accepted: [
-        {
-          eventId: outboxRow.event_id,
-          remoteEntityId: 987,
-          remoteEntity: { id: 987, name: "Cliente Local" },
-          remoteVersion: 1,
-          cloudEventId: `cloud:${outboxRow.event_id}`,
-        },
-      ],
-      rejected: [],
-      conflicts: [],
-      newCursor: "cursor-customer",
-    });
-
-    const synced = requiredRow(
-      database
-        .prepare<[], { remote_id: number | null; sync_state: string }>(
-          `
-SELECT remote_id, sync_state
-FROM customers
-WHERE name = 'Cliente Local'
-`,
-        )
-        .get(),
-    );
-
-    expect(synced).toEqual({
-      remote_id: 987,
-      sync_state: "synced",
-    });
-
-    database.close();
-  });
-
-  it("omits blank optional customer fields from desktop sync payloads", () => {
-    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
-
-    const created = createLocalCustomer(database, {
-      organizationId: "org-1",
-      unitId: 1,
-      name: "Cliente Sem Documento",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-
-    updateLocalCustomer(database, {
-      identifier: String(created.id),
-      name: "Cliente Sem Documento Atualizado",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-
-    const events = listPendingOutboxEvents(database);
-    expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({
-      operation: "create_local_customer",
-    });
-    expect(events[0]?.payload).toEqual({ name: "Cliente Sem Documento" });
-    expect(events[1]).toMatchObject({
-      operation: "update_local_customer",
-    });
-    expect(events[1]?.payload).toEqual({
-      name: "Cliente Sem Documento Atualizado",
-    });
-
-    database.close();
-  });
-
-  it("returns pending sync state for locally updated operational rows", () => {
-    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
-    const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
-
-    database
-      .prepare(
-        `
-INSERT INTO asset_types (
-  id,
-  remote_id,
-  organization_id,
-  name,
-  specifications_schema_json,
-  pulled_at,
-  sync_state
-) VALUES (
-  'asset-type:10',
-  10,
-  'org-1',
-  'Balanca',
-  '{}',
-  @now,
-  'synced'
-)
-`,
-      )
-      .run({ now });
-
-    const customer = createLocalCustomer(database, {
-      organizationId: "org-1",
-      unitId: 1,
-      name: "Cliente Offline",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-    const asset = createLocalAsset(database, {
-      organizationId: "org-1",
-      unitId: 1,
-      customerId: customer.id,
-      assetTypeId: 10,
-      name: "Balanca Offline",
-      serialNumber: "SN-OFFLINE",
-      tag: "TAG-OFFLINE",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-
-    const updatedCustomer = updateLocalCustomer(database, {
-      identifier: String(customer.id),
-      name: "Cliente Offline Atualizado",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-    const updatedAsset = updateLocalAsset(database, {
-      identifier: String(asset.id),
-      name: "Balanca Offline Atualizada",
-      actorUserId: "user-1",
-      deviceId: "device-1",
-    });
-
-    expect(updatedCustomer).toMatchObject({
-      name: "Cliente Offline Atualizado",
-      syncState: "local",
-    });
-    expect(updatedAsset).toMatchObject({
-      name: "Balanca Offline Atualizada",
-      syncState: "local",
-    });
-    expect(
-      listLocalCustomers(database, { page: 1, limit: 20 }).data.find(
-        (row) => row.id === customer.id,
-      )?.syncState,
-    ).toBe("local");
-    expect(
-      listLocalAssets(database, { page: 1, limit: 20 }).data.find(
-        (row) => row.id === asset.id,
-      )?.syncState,
-    ).toBe("local");
 
     database.close();
   });

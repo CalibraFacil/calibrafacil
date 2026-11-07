@@ -19,10 +19,12 @@ import {
   resolveSyncConflict,
   saveLocalJobExecution,
   setSyncCursor,
-  saveLocalServiceOrderExecutionNotes,
-  updateLocalAsset,
-  updateLocalCustomer,
 } from "./index";
+import {
+  updateLocalCustomer,
+  updateLocalAsset,
+  saveLocalServiceOrderExecutionNotes,
+} from "./legacy-outbox-fixtures";
 
 // A pull must not overwrite a row that still has queued local changes. The
 // upserts were blind and forced `sync_state = 'synced'`, so a pull that landed

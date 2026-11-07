@@ -253,14 +253,6 @@ describe("REQ-18I-PUSH: a device pushes only into its own laboratory", () => {
     const aBefore = await snapshotOf(a);
 
     const events = [
-      // B's instrument by its cloud id.
-      wireEvent(a, {
-        eventId: "evt-ls-update-asset",
-        entityType: "asset",
-        entityId: "local-asset-x",
-        operation: "update_local_asset",
-        payload: { remoteId: b.assetId, name: "Invadido" },
-      }),
       // B's customer in a new instrument.
       createAssetEventFor(a, b, "evt-ls-create-asset", "LS-FOREIGN"),
       // B's job executed and submitted.
@@ -290,27 +282,6 @@ describe("REQ-18I-PUSH: a device pushes only into its own laboratory", () => {
           ...EXECUTION_STAMP,
         },
       }),
-      // A job draft over B's instrument and service.
-      wireEvent(a, {
-        eventId: "evt-ls-draft",
-        entityType: "calibration_job",
-        entityId: "local-job-z",
-        operation: "create_local_job_draft",
-        payload: { assetId: b.assetId, serviceId: b.serviceId },
-      }),
-      // A non-conformance about B's job.
-      wireEvent(a, {
-        eventId: "evt-ls-nc",
-        entityType: "non_conformance",
-        entityId: "local-nc-x",
-        operation: "create_local_non_conformance",
-        payload: {
-          type: "work",
-          description: "Desvio no procedimento de calibracao",
-          detectedAt: new Date().toISOString(),
-          jobId: b.jobId,
-        },
-      }),
       // A service-order intake over B's instrument and customer.
       wireEvent(a, {
         eventId: "evt-ls-intake",
@@ -335,9 +306,7 @@ describe("REQ-18I-PUSH: a device pushes only into its own laboratory", () => {
     );
     const codeOf = (eventId: string) =>
       body.rejected.find((entry) => entry.eventId === eventId)?.code;
-    expect(codeOf("evt-ls-update-asset")).toBe("DOMAIN_VALIDATION_FAILED");
     expect(codeOf("evt-ls-create-asset")).toBe("DOMAIN_VALIDATION_FAILED");
-    expect(codeOf("evt-ls-nc")).toBe("DOMAIN_VALIDATION_FAILED");
     expect(codeOf("evt-ls-intake")).toBe("DOMAIN_VALIDATION_FAILED");
 
     // Nothing of laboratory B moved, and laboratory A gained no row either.
@@ -411,7 +380,7 @@ describe("REQ-18I-PUSH: a device pushes only into its own laboratory", () => {
     ]);
   });
 
-  it("REQ-18I-PUSH-3: a local id mapped by laboratory B means nothing to laboratory A's device", async () => {
+  it("REQ-18I-PUSH-3: a local id mapped by laboratory B means nothing to laboratory A's device: A's event with the same local id creates A's own instrument", async () => {
     const { a, b } = await seedWorld();
     // B's device creates the instrument under its local id...
     const created = await push(b, [
@@ -424,29 +393,25 @@ describe("REQ-18I-PUSH: a device pushes only into its own laboratory", () => {
       .from(asset)
       .where(eq(asset.tag, "LS-MAP"));
 
-    // ...and A's device updates "the same" local id: A has no mapping for it.
+    // ...and A's device creates "the same" local id: A has no mapping for it, so it is a
+    // new instrument of A, not B's answered back.
     const body = await push(a, [
-      wireEvent(a, {
-        eventId: "evt-ls-map-a",
-        entityType: "asset",
-        entityId: "local-asset-shared",
-        operation: "update_local_asset",
-        payload: { name: "Renomeado por A" },
-      }),
+      createAssetEvent(a, "evt-ls-map-a", "LS-MAP-A", "local-asset-shared"),
     ]);
 
-    expect(body.accepted).toEqual([]);
-    expect(body.rejected).toEqual([
-      expect.objectContaining({
-        eventId: "evt-ls-map-a",
-        code: "DOMAIN_VALIDATION_FAILED",
-      }),
-    ]);
+    expect(body.rejected).toEqual([]);
+    expect(body.accepted).toHaveLength(1);
+    expect(body.accepted[0]?.remoteEntityId).not.toBe(remoteId);
     const [after] = await db
       .select()
       .from(asset)
       .where(eq(asset.tag, "LS-MAP"));
     expect(after).toEqual(before);
+    const [own] = await db
+      .select({ org: asset.labOrganizationId })
+      .from(asset)
+      .where(eq(asset.tag, "LS-MAP-A"));
+    expect(own?.org).toBe(A);
   });
 
   it("REQ-18I-PUSH-4 [HIGH RISK]: an event that fails mid-apply leaves no claim, no instrument, no audit row and no change-log entry; the one beside it commits whole", async () => {

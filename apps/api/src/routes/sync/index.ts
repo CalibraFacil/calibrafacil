@@ -20,12 +20,9 @@ syncRouter
 export {
   DESKTOP_SERVICE_ORDER_NULLABLE_KEYS,
   DesktopCreateAssetSchema,
-  DesktopUpdateAssetSchema,
-  DesktopUpdateServiceOrderExecutionSchema,
   stripDesktopNullEntries,
 } from "../../modules/sync/desktop-schemas";
 export {
   detectStaleDesktopBase,
   resolveDesktopPerformedAt,
 } from "../../modules/sync/desktop-event-support";
-export { desktopCustomerSlug } from "../../modules/sync/desktop-customer-org";

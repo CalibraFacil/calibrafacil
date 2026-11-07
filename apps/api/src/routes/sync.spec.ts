@@ -14,8 +14,6 @@ import {
 import {
   DESKTOP_SERVICE_ORDER_NULLABLE_KEYS,
   DesktopCreateAssetSchema,
-  DesktopUpdateAssetSchema,
-  DesktopUpdateServiceOrderExecutionSchema,
   resolveDesktopPerformedAt,
   stripDesktopNullEntries,
   syncRouter,
@@ -409,7 +407,7 @@ describe("syncRouter", () => {
     expect(mocks.db.insert).not.toHaveBeenCalled();
   });
 
-  it("REQ-SYNC-PUSH-UNKNOWN-004: still acknowledges the audit-only legacy certificate-draft marker", async () => {
+  it("REQ-SYNC-PUSH-UNKNOWN-004 (Q69): a retired operation (the audit-only certificate-draft marker) is refused for good, not acknowledged, and writes nothing", async () => {
     mocks.selectResults.push([]);
 
     const response = await createApp().request("/api/sync/push", {
@@ -431,9 +429,14 @@ describe("syncRouter", () => {
     });
     const body = syncPushResponseSchema.parse(await response.json());
 
-    expect(body.rejected).toEqual([]);
-    expect(body.accepted).toHaveLength(1);
-    expect(mocks.db.insert).toHaveBeenCalledTimes(1);
+    expect(body.accepted).toEqual([]);
+    expect(body.rejected).toEqual([
+      expect.objectContaining({
+        eventId: "evt-certificate-draft",
+        code: "UNSUPPORTED_SYNC_OPERATION",
+      }),
+    ]);
+    expect(mocks.db.insert).not.toHaveBeenCalled();
   });
 
   it("acknowledges an already-applied pushed event without reapplying it", async () => {
@@ -1476,191 +1479,6 @@ describe("syncRouter", () => {
     );
   });
 
-  it("REQ-OFFLINE-003: push update_local_asset carries the four legal-metrology columns into the cloud asset update", async () => {
-    const regulatedInterval = {
-      kind: "fixed_months",
-      valueMonths: 12,
-      anchor: "last_verification",
-      regulationReference: "Portaria Inmetro nº 157/2022",
-      operationalizedByDelegate: false,
-    };
-    // Select order for one update_local_asset event:
-    //   1. findAppliedDesktopSyncEvent (idempotency) → not yet applied
-    //   2. findDesktopSyncRemoteEntityId → maps local id → remote asset 42
-    //   3. existing asset (regime read) → INDUSTRIAL, no interval, install anchor set
-    //   4. db.update(...).returning() → updated asset row
-    //   5. db.insert(assetAuditLog) (changes recorded)
-    //   6. writeOrganizationAuditEvent → db.insert(organizationEventLog)
-    // REQ-OFFLINE-003 here doubles as REQ-DROPBOOL-005 coverage: the cloud update set
-    // carries `metrology_regime` (the boolean is gone) + the derived verification date.
-    mocks.selectResults.push(
-      [],
-      [{ details: { remoteEntityId: 42 } }],
-      [
-        {
-          id: 42,
-          customerId: 20,
-          name: "Hidrômetro",
-          manufacturer: null,
-          model: null,
-          serialNumber: "SN-1",
-          tag: "TAG-1",
-          status: "ACTIVE",
-          baseMeasurementUnit: null,
-          lastCalibrationDate: new Date("2026-01-01T00:00:00.000Z"),
-          nextCalibrationDate: null,
-          comments: null,
-          specifications: {},
-          metrologyRegime: "INDUSTRIAL",
-          regulatedInterval: null,
-          installedAt: new Date("2026-02-01T00:00:00.000Z"),
-          assetTypeDefinition: null,
-        },
-      ],
-      [{ id: 42, tag: "TAG-1", status: "ACTIVE" }],
-      [],
-      [],
-    );
-
-    const response = await createApp().request("/api/sync/push", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        deviceId: "desktop-1",
-        clientBatchId: "batch-regime",
-        baseCursor: "cursor-before",
-        ...CURRENT_DESKTOP_BUILD,
-        events: [
-          syncEvent({
-            eventId: "evt-regime",
-            entityType: "asset",
-            entityId: "local-asset-1",
-            operation: "update_local_asset",
-            payload: {
-              metrologyRegime: "LEGAL",
-              regulatedInterval,
-            },
-          }),
-        ],
-      }),
-    });
-    const body = syncPushResponseSchema.parse(await response.json());
-
-    expect(response.status).toBe(200);
-    expect(body.rejected).toEqual([]);
-    expect(body.conflicts).toEqual([]);
-    expect(body.accepted).toHaveLength(1);
-
-    expect(mocks.db.update).toHaveBeenCalledTimes(1);
-    const updateQuery = mocks.db.update.mock.results[0]?.value;
-    expect(updateQuery.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metrologyRegime: "LEGAL",
-        regulatedInterval: expect.objectContaining({
-          kind: "fixed_months",
-          valueMonths: 12,
-        }),
-        // Derived from last verification (2026-01-01) + 12 months.
-        nextLegalVerificationDate: new Date("2027-01-01T00:00:00.000Z"),
-      }),
-    );
-  });
-
-  it("push update_local_asset accepts a REAL local-db-shaped payload (explicit nulls) and derives — never applies — the desktop next-cal date", async () => {
-    // The local outbox merges the FULL SQLite row into the payload, so every
-    // optional field arrives as explicit `null` and Track-1 dates are always
-    // present. Before the Desktop* schema variants, this payload was rejected
-    // wholesale ("expected string, received null"): every real desktop asset
-    // edit died with INVALID_DESKTOP_EVENT_PAYLOAD.
-    mocks.selectResults.push(
-      [],
-      [{ details: { remoteEntityId: 42 } }],
-      [
-        {
-          id: 42,
-          customerId: 20,
-          name: "Balança",
-          manufacturer: null,
-          model: null,
-          serialNumber: "SN-1",
-          tag: "TAG-1",
-          status: "ACTIVE",
-          baseMeasurementUnit: null,
-          lastCalibrationDate: new Date("2025-06-01T00:00:00.000Z"),
-          nextCalibrationDate: new Date("2026-06-01T00:00:00.000Z"),
-          // Customer-owned interval (Track 1) — set via the portal.
-          calibrationIntervalMonths: 12,
-          comments: null,
-          specifications: null,
-          metrologyRegime: "INDUSTRIAL",
-          regulatedInterval: null,
-          installedAt: null,
-          assetTypeDefinition: null,
-        },
-      ],
-      [{ id: 42, tag: "TAG-1", status: "ACTIVE" }],
-      [],
-      [],
-    );
-
-    const response = await createApp().request("/api/sync/push", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        deviceId: "desktop-1",
-        clientBatchId: "batch-real-payload",
-        baseCursor: "cursor-before",
-        ...CURRENT_DESKTOP_BUILD,
-        events: [
-          syncEvent({
-            eventId: "evt-real-payload",
-            entityType: "asset",
-            entityId: "local-asset-1",
-            operation: "update_local_asset",
-            // Exactly what packages/local-db updateLocalAsset enqueues: the
-            // full row merge, nulls included, plus the local copy of
-            // nextCalibrationDate (which the cloud must IGNORE — §7.8.4.3).
-            payload: {
-              remoteId: 42,
-              name: "Balança",
-              manufacturer: null,
-              model: null,
-              serialNumber: "SN-1",
-              tag: "TAG-1",
-              status: "ACTIVE",
-              baseMeasurementUnit: null,
-              lastCalibrationDate: "2026-06-01T00:00:00.000Z",
-              nextCalibrationDate: "2030-12-31T00:00:00.000Z",
-              comments: null,
-              metrologyRegime: "INDUSTRIAL",
-              regulatedInterval: null,
-              nextLegalVerificationDate: null,
-              installedAt: null,
-              specifications: null,
-            },
-          }),
-        ],
-      }),
-    });
-    const body = syncPushResponseSchema.parse(await response.json());
-
-    expect(response.status).toBe(200);
-    expect(body.rejected).toEqual([]);
-    expect(body.conflicts).toEqual([]);
-    expect(body.accepted).toHaveLength(1);
-
-    expect(mocks.db.update).toHaveBeenCalledTimes(1);
-    const updateQuery = mocks.db.update.mock.results[0]?.value;
-    expect(updateQuery.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        lastCalibrationDate: new Date("2026-06-01T00:00:00.000Z"),
-        // Derived: last (2026-06-01) + the CUSTOMER interval (12 months) —
-        // NOT the desktop-sent 2030-12-31 value.
-        nextCalibrationDate: new Date("2027-06-01T00:00:00.000Z"),
-      }),
-    );
-  });
-
   describe("desktop payload tolerance (null-vs-optional)", () => {
     it("accepts explicit nulls exactly where the local SQLite row produces them", () => {
       // create_local_asset — full-row shape from packages/local-db createLocalAsset.
@@ -1684,17 +1502,6 @@ describe("syncRouter", () => {
         }).success,
       ).toBe(true);
 
-      // Service-order execution notes — the fields the local-db builder sends
-      // as `?? null` (result, items).
-      expect(
-        DesktopUpdateServiceOrderExecutionSchema.shape.result.safeParse(null)
-          .success,
-      ).toBe(true);
-      expect(
-        DesktopUpdateServiceOrderExecutionSchema.shape.items.safeParse(null)
-          .success,
-      ).toBe(true);
-
       // Service-order intake — `CreateServiceOrderSchema` is refined (no
       // extend), so explicit nulls for clientContactSnapshot/assetSnapshot are
       // dropped BEFORE the parse (null ≡ absent on a create).
@@ -1710,7 +1517,12 @@ describe("syncRouter", () => {
     });
 
     it("strips a desktop-sent nextCalibrationDate instead of accepting it (§7.8.4.3)", () => {
-      const parsed = DesktopUpdateAssetSchema.parse({
+      const parsed = DesktopCreateAssetSchema.parse({
+        customerId: 20,
+        assetTypeId: 3,
+        name: "Balança",
+        serialNumber: "SN-1",
+        tag: "TAG-1",
         nextCalibrationDate: "2030-12-31T00:00:00.000Z",
       });
       expect(Object.keys(parsed)).not.toContain("nextCalibrationDate");

@@ -4,10 +4,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applySyncBootstrap,
-  createLocalCustomer,
   openLocalDatabase,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
+import { createLocalCustomer } from "@calibra-facil/local-db/legacy-outbox-fixtures";
 import type { LocalServerConfig } from "./bootstrap";
 import { createLocalServer } from "./server";
 
@@ -760,8 +760,9 @@ INSERT INTO outbox (
             rejected: [
               {
                 eventId: "event-legacy-cert",
-                code: "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
-                reason: "Certificates are issued online only.",
+                code: "UNSUPPORTED_SYNC_OPERATION",
+                reason:
+                  "Sync operation generate_local_certificate_pdf on certificate_draft is not supported by this server.",
               },
             ],
             conflicts: [],

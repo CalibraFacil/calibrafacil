@@ -16,9 +16,6 @@ import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
-  customer,
-  nonConformance,
-  organization,
   organizationEventLog,
   serviceOrder,
   syncAppliedEvent,
@@ -49,34 +46,6 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
 }));
 
-// The CLIENT organization of a new customer is created through Better Auth (not
-// available here): replace only that call with a plain organization row.
-vi.mock("../lib/portal-service-account", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../lib/portal-service-account")>();
-  return {
-    ...actual,
-    createClientOrganizationAsServiceOwner: async (params: {
-      name: string;
-      slug: string;
-    }) => {
-      const { db: database } = await import("@calibra-facil/db");
-      const { organization: organizationTable } =
-        await import("@calibra-facil/db/schema");
-      const id = `client-${params.slug}`;
-      await database.insert(organizationTable).values({
-        id,
-        name: params.name,
-        slug: params.slug,
-        type: "CLIENT",
-        status: "ACTIVE",
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      });
-      return { id };
-    },
-  };
-});
-
 const JSON_HEADERS = { "content-type": "application/json" };
 const LAB = "org-rbac";
 
@@ -90,26 +59,14 @@ const ROLES: readonly Role[] = [
 ];
 
 const FIELD: readonly Role[] = ["owner", "admin", "technician", "operator"];
-const MANAGER: readonly Role[] = ["owner", "admin"];
 
 /** The roles the ONLINE route of each operation lets through (hand-written). */
 const ALLOWED: Record<string, readonly Role[]> = {
-  create_local_job_draft: FIELD,
   create_local_asset: FIELD,
-  update_local_asset: FIELD,
-  create_local_customer: FIELD,
-  update_local_customer: FIELD,
-  update_local_customer_compliance: FIELD,
   save_local_execution: FIELD,
   submit_local_execution: FIELD,
   create_local_service_order_intake: ["owner", "admin", "operator", "member"],
-  create_local_non_conformance: ["owner", "admin", "technician"],
-  create_local_service_order_quote_draft: MANAGER,
-  save_local_service_order_execution_notes: FIELD,
-  create_local_service_order_delivery_document_draft: MANAGER,
   create_local_attachment: FIELD,
-  create_local_certificate_draft: FIELD,
-  generate_local_certificate_pdf: MANAGER,
 };
 
 async function seedWorld(role: Role) {
@@ -148,30 +105,16 @@ async function seedWorld(role: Role) {
 type World = Awaited<ReturnType<typeof seedWorld>>;
 
 const ENTITY_TYPES: Record<string, string> = {
-  create_local_job_draft: "calibration_job",
   create_local_asset: "asset",
-  update_local_asset: "asset",
-  create_local_customer: "customer",
-  update_local_customer: "customer",
-  update_local_customer_compliance: "customer",
   save_local_execution: "calibration_job",
   submit_local_execution: "calibration_job",
   create_local_service_order_intake: "service_order",
-  create_local_non_conformance: "non_conformance",
-  create_local_service_order_quote_draft: "service_order_quote",
-  save_local_service_order_execution_notes: "service_order_execution",
-  create_local_service_order_delivery_document_draft:
-    "service_order_delivery_document",
   create_local_attachment: "attachment",
-  create_local_certificate_draft: "certificate_draft",
-  generate_local_certificate_pdf: "certificate_pdf",
 };
 
 /** Payloads that would apply for a permitted role where that is cheap to arrange. */
 function payloadFor(world: World, operation: string): Record<string, unknown> {
   switch (operation) {
-    case "create_local_customer":
-      return { name: "Cliente Offline Ltda" };
     case "create_local_asset":
       return {
         customerId: world.customerId,
@@ -186,12 +129,6 @@ function payloadFor(world: World, operation: string): Record<string, unknown> {
         assetId: world.assetId,
         claimedDefect: "Nao liga",
         intakeCondition: "Riscos na carcaca",
-      };
-    case "create_local_non_conformance":
-      return {
-        type: "work",
-        description: "Desvio no procedimento de calibracao",
-        detectedAt: new Date().toISOString(),
       };
     default:
       return {};
@@ -264,12 +201,6 @@ describe("REQ-SYNC-RBAC-3/4: each desktop operation needs the right of its onlin
     async (role) => {
       const world = await seedWorld(role);
       const operations = [...SYNC_COMMAND_OPERATIONS];
-      const customersBefore = await db
-        .select({ id: customer.id })
-        .from(customer);
-      const organizationsBefore = await db
-        .select({ id: organization.id })
-        .from(organization);
 
       const pushed = await pushBatch(world, operations);
 
@@ -312,23 +243,9 @@ describe("REQ-SYNC-RBAC-3/4: each desktop operation needs the right of its onlin
         expect(audited.filter((id) => deniedIds.includes(id))).toEqual([]);
       }
       const deniedOps = new Set(denied.map((event) => event.operation));
-      if (deniedOps.has("create_local_customer")) {
-        expect(await db.select({ id: customer.id }).from(customer)).toEqual(
-          customersBefore,
-        );
-        // ... and no CLIENT organization was provisioned as a side effect.
-        expect(
-          await db.select({ id: organization.id }).from(organization),
-        ).toEqual(organizationsBefore);
-      }
       if (deniedOps.has("create_local_service_order_intake")) {
         expect(
           await db.select({ id: serviceOrder.id }).from(serviceOrder),
-        ).toEqual([]);
-      }
-      if (deniedOps.has("create_local_non_conformance")) {
-        expect(
-          await db.select({ id: nonConformance.id }).from(nonConformance),
         ).toEqual([]);
       }
       if (deniedOps.has("create_local_asset")) {
@@ -342,26 +259,27 @@ describe("REQ-SYNC-RBAC-3/4: each desktop operation needs the right of its onlin
   );
 
   it("REQ-SYNC-RBAC-4: a permitted role still applies the operation, in the same batch as a denied one", async () => {
-    const world = await seedWorld("operator");
+    const world = await seedWorld("member");
 
     const pushed = await pushBatch(world, [
-      "create_local_non_conformance", // operator: denied
-      "create_local_service_order_intake", // operator: allowed
-      "create_local_asset", // operator: allowed
-      "create_local_customer", // operator: allowed
+      "create_local_asset", // member: denied
+      "create_local_service_order_intake", // member: allowed
     ]);
 
-    const [nc, intake, newAsset, newCustomer] = pushed.events;
-    expect(pushed.codeOf(nc?.eventId ?? "")).toBe("SYNC_PERMISSION_DENIED");
-    for (const event of [intake, newAsset, newCustomer]) {
-      expect(pushed.codeOf(event?.eventId ?? "")).toBeNull();
-      expect(pushed.accepted.has(event?.eventId ?? "")).toBe(true);
-    }
+    const [newAsset, intake] = pushed.events;
+    expect(pushed.codeOf(newAsset?.eventId ?? "")).toBe(
+      "SYNC_PERMISSION_DENIED",
+    );
+    expect(pushed.codeOf(intake?.eventId ?? "")).toBeNull();
+    expect(pushed.accepted.has(intake?.eventId ?? "")).toBe(true);
     expect(
       await db.select({ id: serviceOrder.id }).from(serviceOrder),
     ).toHaveLength(1);
     expect(
-      await db.select({ id: nonConformance.id }).from(nonConformance),
+      await db
+        .select({ id: asset.id })
+        .from(asset)
+        .where(eq(asset.tag, "TAG-OFF-1")),
     ).toEqual([]);
   });
 });

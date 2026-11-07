@@ -10,7 +10,6 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../../lib/audit";
 import { orgDb } from "../../lib/org-db";
 import { type MemberData } from "../../middleware/permission";
-import { getNullableString } from "./helpers";
 import { type ApplyDesktopSyncEventInput } from "./desktop-event-support";
 
 /**
@@ -121,20 +120,6 @@ export async function findAppliedDesktopSyncEvent(
   }
 
   return null;
-}
-
-export async function getRemoteServiceOrderIdFromPayload(
-  input: ApplyDesktopSyncEventInput,
-  payload: Record<string, unknown>,
-) {
-  const localServiceOrderId = getNullableString(payload, "serviceOrderId");
-  if (!localServiceOrderId) return null;
-
-  return findDesktopSyncRemoteEntityId(
-    input.memberData.organizationId,
-    localServiceOrderId,
-    input.o,
-  );
 }
 
 export async function writeDesktopSyncAudit(

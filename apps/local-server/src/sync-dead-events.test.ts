@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applySyncBootstrap,
   applySyncPushResult,
-  createLocalCustomer,
   markOutboxEventsFailedForRetry,
   openLocalDatabase,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
+import { createLocalCustomer } from "@calibra-facil/local-db/legacy-outbox-fixtures";
 import type { SyncStatusSnapshot } from "@calibra-facil/contracts";
 import { asBootstrapPage } from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";

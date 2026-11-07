@@ -22,8 +22,8 @@ import {
   releaseSettledSkippedRows,
   resolveSyncConflict,
   setSyncCursor,
-  updateLocalCustomer,
 } from "./index";
+import { updateLocalCustomer } from "./legacy-outbox-fixtures";
 
 // Protocol 3 on the desktop: the paged bootstrap (REQ-CS-3), delete events for every
 // mirrored entity (REQ-CS-2), and the change-log cursor (REQ-CS-1/5).

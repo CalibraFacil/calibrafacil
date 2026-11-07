@@ -353,10 +353,8 @@ added or removed without a migration.
     an entry of its own organization, which the `sync_change_log` policy accepts, so no migration was needed. A
     write that fans out to every laboratory (the global `asset_type` catalog, the seed) is refused for
     `calibra_app` and stays on `systemDb` (above).
-  - **System path.** One statement: the "is another laboratory's customer attached to this client organization"
-    check of the `create_local_customer` pre-phase (`findOrganizationCreatedForEvent`, `modules/sync/desktop-customer-org.ts`,
-    `customer`, one column, read only; the allowlist entry says why). The `organization` slug lookup beside it
-    is a global table.
+  - **System path.** None: the one statement of the retired `create_local_customer` pre-phase ("is another
+    laboratory's customer attached to this client organization") went with the operation (Q69).
   - **One behaviour change (a closed hole).** An attachment id is the object key in base64 and carried no
     authority: any device could be handed a download URL for any `org/.../sync-attachments/...` key it could
     name. `GET /attachments/:id/download` and `POST /attachments/complete-upload` now answer 400 (as for an

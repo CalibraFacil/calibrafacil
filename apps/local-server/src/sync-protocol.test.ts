@@ -7,7 +7,8 @@ import {
   buildSyncUpdateRequiredResponse,
   desktopUpdateRequiredMessage,
   parseSyncCommand,
-  syncCommandSupport,
+  isSyncCommandOperation,
+  syncOperationLabel,
   syncPushRequestSchema,
 } from "@calibra-facil/contracts";
 import {
@@ -189,8 +190,8 @@ describe("the push request (REQ-SP-1)", () => {
 });
 
 describe("the retired commands an older build may still hold (REQ-SP-1)", () => {
-  // The six commands legacy-outbox-events.test.ts queues as an upgraded
-  // desktop's leftovers, plus the other operations only an older build wrote.
+  // The commands legacy-outbox-events.test.ts queues as an upgraded desktop's
+  // leftovers, plus the other operations only an older build wrote.
   it.each([
     "create_local_non_conformance",
     "create_local_service_order_quote_draft",
@@ -204,9 +205,10 @@ describe("the retired commands an older build may still hold (REQ-SP-1)", () => 
     "generate_local_certificate_pdf",
     "create_local_certificate_draft",
   ])(
-    "REQ-SP-1: %s is an explicit legacy member of the protocol",
+    "REQ-SP-1 (Q69): %s is retired: not a member of the protocol, still labelled in the refused list",
     (operation) => {
-      expect(syncCommandSupport(operation)).toBe("legacy");
+      expect(isSyncCommandOperation(operation)).toBe(false);
+      expect(syncOperationLabel(operation)).toBeDefined();
     },
   );
 });

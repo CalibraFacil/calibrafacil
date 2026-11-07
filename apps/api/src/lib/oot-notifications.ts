@@ -309,61 +309,6 @@ export async function flagJobOutOfTolerance(
   return { ok: true, nc: newNc, notification };
 }
 
-/**
- * Attaches a §7.10 notification (+ outbox row + PDF job) to an existing
- * out-of-tolerance NC that has none yet. Used by the desktop sync ingest when
- * an OOT-typed NC captured offline lands with a job link — the email then
- * dispatches on reconnect without any desktop email path. No-op (returns
- * null) when the NC is not OOT-typed, has no job, or already has one.
- */
-export async function ensureOotNotificationForNc(
-  input: {
-    nc: typeof nonConformance.$inferSelect;
-    organizationId: string;
-    actorUserId: string;
-    affectedScope?: string;
-  },
-  ctx: OrgContext,
-): Promise<typeof ootNotification.$inferSelect | null> {
-  if (input.nc.type !== "out_of_tolerance" || !input.nc.jobId) return null;
-
-  const [existing] = await ctx.o
-    .select({ id: ootNotification.id })
-    .from(ootNotification)
-    .where(eq(ootNotification.ncId, input.nc.id))
-    .limit(1);
-  if (existing) return null;
-
-  const [job] = await ctx.o
-    .select({
-      id: calibrationJob.id,
-      jobId: calibrationJob.jobId,
-      status: calibrationJob.status,
-      customerId: calibrationJob.customerId,
-      asFoundMargins: calibrationJob.asFoundMargins,
-    })
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.id, input.nc.jobId),
-        eq(calibrationJob.organizationId, input.organizationId),
-      ),
-    )
-    .limit(1);
-  if (!job) return null;
-
-  return createNotificationForNc(
-    {
-      nc: input.nc,
-      job,
-      organizationId: input.organizationId,
-      actorUserId: input.actorUserId,
-      affectedScope: input.affectedScope,
-    },
-    ctx,
-  );
-}
-
 // =============================================================================
 // STANDARD RECALL - reverse traceability (#426 Phase 1)
 // =============================================================================
