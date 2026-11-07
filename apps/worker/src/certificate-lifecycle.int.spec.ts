@@ -10,7 +10,7 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
 
 /**
  * Real-DB integration tier for the certificate lifecycle written by the worker
- * (roadmap 2 B3; ISO/IEC 17025 §7.8.8 amendments): the issuance writes the
+ * (ISO/IEC 17025 §7.8.8 amendments): the issuance writes the
  * certificate's ISSUED event, and the issuance of an AMENDMENT is what supersedes
  * its original, atomically, in the same transaction.
  *

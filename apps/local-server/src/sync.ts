@@ -42,8 +42,8 @@ import type { LocalServerConfig } from "./bootstrap";
 import { getLocalRequestContext } from "./request-context";
 
 /**
- * The cloud refused the desktop's session (HTTP 401): it expired or was revoked
- * (roadmap 2 E2). The sync stops in `auth_required` until the user signs in
+ * The cloud refused the desktop's session (HTTP 401): it expired or was revoked.
+ * The sync stops in `auth_required` until the user signs in
  * again; queued changes are not marked failed (they are not the problem).
  */
 class CloudAuthRequiredError extends Error {
@@ -696,7 +696,7 @@ async function pushEventBatch(deps: PushDeps, events: PendingEvents) {
       protocolVersion,
       desktopVersion: config.appVersion,
       // The device clock at send time: the cloud records how far it is from its
-      // own with the changes of this push (roadmap 2 E2).
+      // own with the changes of this push.
       sentAt: new Date().toISOString(),
       events: eventsCarriedBy(sent, protocolVersion).map((event) =>
         toWireEvent(config, context, event),
@@ -782,7 +782,7 @@ async function pushEventBatch(deps: PushDeps, events: PendingEvents) {
 const CLOCK_SKEW_WARNING_MS = 120_000;
 
 /**
- * Roadmap 2 E2: the instants this device stamps (when a calibration was
+ * The instants this device stamps (when a calibration was
  * performed, when it was recorded) come from its clock. The cloud never lets
  * one pass its own and records the skew in the audit trail; the log says it here.
  */

@@ -22,7 +22,7 @@ import { seedOrg, type SeededOrg } from "../test/integration/seed";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 
 /**
- * P2-16 / REQ-TSA-2 and REQ-TSA-3: a configured RFC 3161 time-stamp authority
+ * REQ-TSA-2 and REQ-TSA-3: a configured RFC 3161 time-stamp authority
  * reaches the certificate render through the worker environment, and the
  * signing path behaves as documented on top of it.
  *

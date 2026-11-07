@@ -7,7 +7,7 @@ import { seedOrg } from "../test/integration/seed";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 
 /**
- * The certificate worker as `calibra_app` (P2-18f): every connection the
+ * The certificate worker as `calibra_app`: every connection the
  * handlers open is a session of the application role, which the
  * `tenant_isolation` policies bind (migration 0123), and only the one lookup
  * that learns which laboratory a queue message belongs to uses the owner

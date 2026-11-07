@@ -7,7 +7,7 @@ import { applySyncBootstrap, openLocalDatabase } from "@calibra-facil/local-db";
 import { createLocalServer } from "./server";
 import type { LocalServerConfig } from "./bootstrap";
 
-// P1-11 on the desktop: the local draft save runs the cloud's rule. A standard
+// On the desktop the local draft save runs the cloud's rule. A standard
 // already in the job's saved snapshot that went stale is kept and reported in
 // `warnings`; a standard the save adds is refused; the submit stays the gate.
 

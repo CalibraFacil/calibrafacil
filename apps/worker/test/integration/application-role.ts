@@ -5,8 +5,8 @@ import { applicationRoleUrl, makeTestEnv } from "./env";
 // application role `calibra_app`, which the `tenant_isolation` policies bind
 // (migration 0123). Every connection a handler opens is a session of that role;
 // only the lookups that LEARN which laboratory a message or a sweep belongs to
-// use the owner connection (`DATABASE_OWNER_URL`). Since P2-18k `makeTestEnv`
-// builds that env by default; this helper stays for the specs that drop the
+// use the owner connection (`DATABASE_OWNER_URL`). `makeTestEnv` builds that
+// env by default; this helper stays for the specs that drop the
 // owner URL on purpose.
 
 export { applicationRoleUrl };

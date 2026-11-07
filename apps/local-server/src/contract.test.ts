@@ -1,5 +1,5 @@
 /**
- * contract.test.ts: P2-15 REQ-TC-4. The routes the desktop local-server keeps
+ * REQ-TC-4. The routes the desktop local-server keeps
  * after the offline scope was narrowed to field capture, intake and reference
  * reads (jobs reads, execution save/submit, attachments, environmental limits,
  * service-order create/list/get, asset create/list/get, asset types, customers /
@@ -562,7 +562,7 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
       // The offline asset-type read answers the endpoint definition's own response schema.
       assetTypeEndpoints.list.response,
     );
-    // The mirror keeps the cloud's slug (it used to answer with its own row id).
+    // The mirror keeps the cloud's slug, not its own row id.
     expect(assetTypes.data.map((type) => type.slug)).toEqual(["balanca"]);
     const methods = await parsedBody(
       await app.request("/api/methods?status=PUBLISHED&limit=100"),

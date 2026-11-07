@@ -564,7 +564,7 @@ describe("local sync partial-failure / conflict reconciliation", () => {
     expect(pushedEventIds).toEqual([conflicted.eventId]);
     expect(readEventSyncState(database, conflicted.eventId)).toBe("conflict");
 
-    // Resolve as "ignored" (the old name of a discard) -> the event is discarded: kept for
+    // Resolve as "ignored" -> the event is discarded: kept for
     // audit, never re-sent, and never marked synced (the cloud did not receive it).
     conflictOnNextPush = false;
     const resolveResponse = await app.request(

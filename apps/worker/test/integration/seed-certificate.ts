@@ -17,15 +17,12 @@ import { withStatusRepair } from "./state-fixtures";
  * leaving a calibration_job in `status` (default GENERATING_PDF — the
  * pre-issuance state).
  *
- * Rewritten for #865 Phase 3. The previous version seeded a certificate_template
- * and a published version and linked the method to it; both tables are gone
- * (0108) and the layout is now ours, chosen by the method's declared reporting
- * metadata rather than by a row a laboratory configured.
+ * The layout is chosen by the method's declared reporting metadata, not by a
+ * row a laboratory configured.
  *
  * That metadata is the interesting part of this fixture. The adapter refuses to
  * build a results table unless the method declares one, so a snapshot with
- * empty `formulas` — which is what the old fixture used — would now be REJECTED
- * rather than rendered. The snapshot below declares the minimum a real method
+ * empty `formulas` would be REJECTED rather than rendered. The snapshot below declares the minimum a real method
  * declares: an error, its expanded uncertainty, and the coverage factor, all
  * row-scoped over a points table.
  */
@@ -160,7 +157,7 @@ export async function seedIssuableJob(params: {
       .values({
         unitId: params.unitId,
         customerId: customerRow.id,
-        // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
+        // The asset carries its lab organization (the seeded customer's).
         labOrganizationId: params.organizationId,
         assetTypeId: assetTypeRow.id,
         name: "Balança Analítica",

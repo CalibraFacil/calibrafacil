@@ -11,9 +11,9 @@ import type { LocalServerConfig } from "./bootstrap";
 import { createLocalSyncRuntime } from "./sync";
 
 /**
- * Q13 retired these commands from offline mode, but a desktop upgraded from an
- * earlier build can still hold their events in the outbox. The cloud refuses them
- * (Q69); they must leave the queue through the dead-event path without starving
+ * These commands are no longer part of offline mode, but a desktop upgraded from an
+ * earlier build can still hold their events in the outbox. The cloud refuses them;
+ * they must leave the queue through the dead-event path without starving
  * the field-capture and intake events queued behind them.
  */
 const tempDirectories: string[] = [];

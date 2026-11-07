@@ -11,7 +11,7 @@ import {
   seedPortalCustomer,
 } from "../test/integration/seed-audit-pack";
 
-// Real-DB integration tier for the worker's AUDIT_PACK handler (#738).
+// Real-DB integration tier for the worker's AUDIT_PACK handler.
 // processBackgroundJob({type:"AUDIT_PACK",exportId,userId}) routes straight to
 // processAuditPackJob. We seed the portal_export_job row + the certificate
 // graph via drizzle, invoke the PUBLIC `processBackgroundJob` entrypoint, and

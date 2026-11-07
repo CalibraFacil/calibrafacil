@@ -154,8 +154,6 @@ describe("continuous sync lifecycle", () => {
   });
 
   it("pauses continuous sync instead of claiming it was never running", async () => {
-    // The old endpoint answered "Continuous sync is not running." — literally
-    // true then, and a lie the moment a scheduler exists.
     const { app, syncScheduler } = createRuntime();
     syncScheduler.start();
 

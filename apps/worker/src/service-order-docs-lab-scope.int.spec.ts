@@ -24,7 +24,7 @@ import {
 
 /**
  * The service-order document handlers and the out-of-tolerance letter as
- * `calibra_app` (P2-18j). A message names a service order (or a notification),
+ * `calibra_app`. A message names a service order (or a notification),
  * not its laboratory: the laboratory is learnt with one lookup on the owner
  * connection (`DATABASE_OWNER_URL`); the rows are read in a transaction that
  * names it, then the QR code, the logo, Gotenberg and storage run with no

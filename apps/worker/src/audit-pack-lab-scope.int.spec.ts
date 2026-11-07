@@ -17,7 +17,7 @@ import {
 } from "../test/integration/seed-audit-pack";
 
 /**
- * The audit-pack worker as `calibra_app` (P2-18j). The message names an export,
+ * The audit-pack worker as `calibra_app`. The message names an export,
  * not its laboratory: the laboratory is learnt with one lookup on the owner
  * connection (`DATABASE_OWNER_URL`), then every statement runs in a transaction
  * that names it, and none spans the R2 downloads, Gotenberg or the zip.

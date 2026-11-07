@@ -12,11 +12,10 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
 import { setJobStatus } from "../test/integration/job-fixtures";
 
 /**
- * P0-8 / Q44: an expired signing certificate FAILS CLOSED.
+ * An expired signing certificate FAILS CLOSED.
  *
- * Before, the issuance read "a valid default certificate" and an expired A1
- * looked like "no certificate": the unit's certificates were silently issued
- * UNSIGNED. Now a unit that has ever had a signing certificate (any row,
+ * An expired A1 must not look like "no certificate" (which issues UNSIGNED): a
+ * unit that has ever had a signing certificate (any row,
  * expired and revoked included) and has none valid gets a failed render
  * (existing render-failure path: the job is RENDER_FAILED with the reason, nothing
  * is stored) and its admins are notified. A unit that never had one keeps
@@ -266,7 +265,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
   });
 
-  // Q51: the unit's explicit "emitir sem assinatura digital" lifts the failure.
+  // The unit's explicit "emitir sem assinatura digital" lifts the failure.
   async function enableUnsignedIssuance(org: SeededOrg, reason: string) {
     await db.execute(
       sql`UPDATE organization_unit

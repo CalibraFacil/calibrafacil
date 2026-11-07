@@ -658,8 +658,7 @@ export function createLocalServerRuntime(
       // No `nextCalibrationDate`: the interval / next-cal date is customer-owned
       // (portal, §7.8.4.3) — the lab never authors it, on desktop either.
       lastCalibrationDate: input.lastCalibrationDate,
-      // Legal-metrology regime (Track 2) + install anchor — previously dropped
-      // here, so a desktop-set LEGAL regime was silently lost. The regulated
+      // Legal-metrology regime (Track 2) + install anchor. The regulated
       // next-verification date is derived on the cloud during sync push.
       metrologyRegime: input.metrologyRegime,
       regulatedInterval: input.regulatedInterval,

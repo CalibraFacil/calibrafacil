@@ -17,7 +17,7 @@ import { seedOrg, type SeededOrg } from "../test/integration/seed";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 
 /**
- * Roadmap 2 B4a, REQ-B4A-1 at the point of use: the worker opens the unit's
+ * REQ-B4A-1 at the point of use: the worker opens the unit's
  * signing credential with the KEK named in its record and the AAD it is bound to
  * (organization + unit + serial), and signs. Legacy rows keep working; a KEK
  * rotation (current + previous keys, through the validated worker configuration)

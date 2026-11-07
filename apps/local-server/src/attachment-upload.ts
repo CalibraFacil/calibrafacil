@@ -22,12 +22,11 @@ import type { LocalServerConfig } from "./bootstrap";
 import { resolveLocalStoragePath } from "./local-storage";
 
 /**
- * The desktop half of the offline attachment upload leg (roadmap P0-5).
+ * The desktop half of the offline attachment upload leg.
  *
  * An attachment is a file on this computer plus a queued `create_local_attachment`
- * event. The event alone tells the cloud nothing about the bytes, and an older
- * build marked the attachment synced as soon as the cloud acknowledged the event,
- * so the file never left the laptop. Now, before an attachment event is pushed:
+ * event. The event alone tells the cloud nothing about the bytes, so before an
+ * attachment event is pushed:
  *
  *   1. the file is read back and checked against the size and SHA-256 recorded
  *      when it was captured (a file that is gone or changed is a dead attachment)

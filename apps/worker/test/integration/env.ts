@@ -62,7 +62,7 @@ export function applicationRoleUrl(ownerUrl: string): string {
  * `INTEGRATIONS_MASTER_KEY` is set (required by processIntegrationSync to decrypt
  * the connection secret); signing/email secrets are omitted so those no-op.
  *
- * Like a deployment (P2-18k) the handlers connect as `calibra_app`, which the
+ * Like a deployment, the handlers connect as `calibra_app`, which the
  * tenant policies bind, with the owner as the system path
  * (`DATABASE_OWNER_URL`) and `DATABASE_RLS_MODE=enforced`: a handler statement
  * that forgets its organization fails its spec. The specs' own seeding and

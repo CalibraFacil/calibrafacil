@@ -6,10 +6,9 @@ const FILE_NAME = "device-id";
 const PATTERN = /^dev_[0-9a-f-]{36}$/;
 
 /**
- * This installation's device id (roadmap 2 E2, review 3.4): created once, at
- * the first start, and kept in the user-data directory. The cloud tells the
- * devices of one user apart by it (pushes, conflicts, the audit of offline
- * work); before, every installation reported "local-dev-device".
+ * This installation's device id: created once, at the first start, and kept in
+ * the user-data directory. The cloud tells the devices of one user apart by it
+ * (pushes, conflicts, the audit of offline work).
  */
 export function installDeviceId(userDataDir: string): string {
   const file = path.join(userDataDir, FILE_NAME);

@@ -375,8 +375,8 @@ describe("processScheduledNotifications (worker real-DB integration)", () => {
 
 // =============================================================================
 // Legal-metrology VERIFICATION recall (Track 2 — Inmetro / RBMLQ-I).
-// Deferred item #1 of #423: a PARALLEL, INDEPENDENT reminder for the regulation-
-// fixed `next_legal_verification_date`, distinct from the recalibration recall.
+// A PARALLEL, INDEPENDENT reminder for the regulation-fixed
+// `next_legal_verification_date`, distinct from the recalibration recall.
 // =============================================================================
 describe("processScheduledNotifications — legal-verification recall (REQ-LVRECALL)", () => {
   // A representative national-fixed period (taxímetro-style): last-verification
@@ -569,7 +569,7 @@ describe("processScheduledNotifications — legal-verification recall (REQ-LVREC
   });
 });
 
-// ── #427 Phase 2: accredited-scope (CMC) line expiry reminders ───────────────
+// ── accredited-scope (CMC) line expiry reminders ───────────────
 describe("processScheduledNotifications — accredited-scope line expiry (REQ-CMC-020..022)", () => {
   async function seedScopeLine(params: {
     organizationId: string;
@@ -729,8 +729,8 @@ describe("processScheduledNotifications — accredited-scope line expiry (REQ-CM
   });
 });
 
-// ── P0-8: signing-certificate expiry warnings at 30, 14 and 7 days ───────────
-describe("processScheduledNotifications — signing-certificate expiry (P0-8)", () => {
+// ── signing-certificate expiry warnings at 30, 14 and 7 days ───────────
+describe("processScheduledNotifications — signing-certificate expiry", () => {
   async function seedCertificate(params: {
     organizationId: string;
     unitId: number;

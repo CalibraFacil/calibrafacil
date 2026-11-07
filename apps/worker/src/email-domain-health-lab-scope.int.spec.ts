@@ -14,7 +14,7 @@ import { seedOrg } from "../test/integration/seed";
 import { withStatusRepair } from "../test/integration/state-fixtures";
 
 /**
- * The e-mail sender-domain health sweep as `calibra_app` (P2-18j). The sweep
+ * The e-mail sender-domain health sweep as `calibra_app`. The sweep
  * lists every laboratory's domain in ONE statement on the system connection
  * (the owner); each row's update and its audit event then commit together in
  * one short transaction that names the row's own laboratory, after the Resend
