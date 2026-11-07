@@ -19,6 +19,8 @@
     "./competences-fixtures": "./src/endpoints/competences.fixtures.ts",
     "./training-records-fixtures": "./src/endpoints/training-records.fixtures.ts",
     "./proficiency-tests-fixtures": "./src/endpoints/proficiency-tests.fixtures.ts",
+    "./materials-fixtures": "./src/endpoints/materials.fixtures.ts",
+    "./accredited-scope-fixtures": "./src/endpoints/accredited-scope.fixtures.ts",
     "./portal-fixtures": "./src/portal.fixtures.ts",
     "./sync": "./src/sync.ts",
     "./sync-entities": "./src/sync-entities.ts",

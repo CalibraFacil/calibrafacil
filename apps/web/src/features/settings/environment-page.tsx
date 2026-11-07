@@ -95,17 +95,19 @@ export function EnvironmentSettingsPage() {
   const upsertMutation = useMutation({
     mutationFn: async (data: LimitFormState) => {
       return calibraApi.environmentalLimits.save({
-        assetTypeId: data.assetTypeId,
-        temperatureMin: data.temperatureMin
-          ? Number(data.temperatureMin)
-          : null,
-        temperatureMax: data.temperatureMax
-          ? Number(data.temperatureMax)
-          : null,
-        humidityMin: data.humidityMin ? Number(data.humidityMin) : null,
-        humidityMax: data.humidityMax ? Number(data.humidityMax) : null,
-        pressureMin: data.pressureMin ? Number(data.pressureMin) : null,
-        pressureMax: data.pressureMax ? Number(data.pressureMax) : null,
+        body: {
+          assetTypeId: data.assetTypeId,
+          temperatureMin: data.temperatureMin
+            ? Number(data.temperatureMin)
+            : null,
+          temperatureMax: data.temperatureMax
+            ? Number(data.temperatureMax)
+            : null,
+          humidityMin: data.humidityMin ? Number(data.humidityMin) : null,
+          humidityMax: data.humidityMax ? Number(data.humidityMax) : null,
+          pressureMin: data.pressureMin ? Number(data.pressureMin) : null,
+          pressureMax: data.pressureMax ? Number(data.pressureMax) : null,
+        },
       })
     },
     onSuccess: () => {
@@ -125,7 +127,7 @@ export function EnvironmentSettingsPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      return calibraApi.environmentalLimits.delete(id)
+      return calibraApi.environmentalLimits.delete({ params: { id } })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

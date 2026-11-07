@@ -9,6 +9,7 @@ import type {
   ReferenceStandardStatus,
 } from "@calibra-facil/schemas/machines";
 import type {
+  AccreditedScopeLineSchema,
   AdjustMaterialStockSchema,
   CreateCustomerSchema,
   CreateCustomerGroupSchema,
@@ -23,6 +24,7 @@ import type {
   UpdateNotificationPreferencesSchema,
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
+import type { AccreditedScopeApi } from "./modules/accredited-scope";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { AssetsApi } from "./modules/assets";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
@@ -33,6 +35,8 @@ import type { DashboardApi } from "./modules/dashboard";
 import type { NonConformancesApi } from "./modules/non-conformances";
 import type { FinanceApi } from "./modules/finance";
 import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
+import type { EnvironmentalLimitsApi } from "./modules/environmental-limits";
+import type { MaterialsApi } from "./modules/materials";
 import type { ReportsApi } from "./modules/reports";
 import type { SignaturesApi } from "./modules/signatures";
 import type { SpcApi } from "./modules/spc";
@@ -69,11 +73,6 @@ export type ServiceAuditLogData<TRecord = unknown> = {
   data: TRecord[];
 };
 
-export type AdjustMaterialStockData = {
-  stockQuantity: number;
-  stockSyncedAt: string | Date;
-};
-
 import type {
   AssetAuditLogEntry,
   AssetDetail,
@@ -88,9 +87,14 @@ import type {
   UpdateCertificateNumberingProfileResponse,
   CustomerDetail,
   CustomersListResponse,
-  DeleteEnvironmentalLimitResponse,
+  AccreditedScopeLine as ContractAccreditedScopeLine,
+  AccreditedScopeResponse as ContractAccreditedScopeResponse,
+  AdjustMaterialStockResponse,
+  MaterialRecord,
+  MaterialsListResponse,
+  SaveAccreditedScopeLineResponse as ContractSaveAccreditedScopeLineResponse,
+  ScopeEnforcementMode as ContractScopeEnforcementMode,
   EffectiveEnvironmentalLimitsResponse,
-  EnvironmentalLimitsResponse,
   JobAmendResponse,
   JobWithdrawCertificateResponse,
   JobCreateResponse,
@@ -113,7 +117,6 @@ import type {
   LocalSyncConflictsResponse,
   MassCompositionProfile,
   MassCompositionProfilesResponse,
-  SaveEnvironmentalLimitResponse,
   Standard,
   StandardCertificateDocumentDownloadResponse,
   StandardCertificateDocumentUploadResponse,
@@ -382,54 +385,16 @@ export interface ServicesApi {
   deactivate(id: string | number): Promise<unknown>;
 }
 
-export type MaterialsListInput = {
-  page?: number;
-  limit?: number;
-  query?: string;
-  controlsStock?: boolean;
-  isActive?: boolean;
-};
+// =============================================================================
+// MATERIALS, ENVIRONMENTAL LIMITS, ACCREDITED SCOPE: the DTOs are the contract
+// schemas' types (`@calibra-facil/contracts`, `endpoints/`); the clients are
+// generated from the endpoint definitions (`modules/`).
+// =============================================================================
 
-export type MaterialsListData = {
-  data: Array<{
-    id: number;
-    name: string;
-    description: string | null;
-    sku: string | null;
-    unit: string;
-    unitCostCents: number | null;
-    unitPriceCents: number | null;
-    controlsStock: boolean;
-    stockQuantity: number | null;
-    stockSyncedAt: string | Date | null;
-    isActive: boolean;
-    createdAt: string | Date | null;
-    updatedAt: string | Date | null;
-  }>;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-export type MaterialDetailData = MaterialsListData["data"][number];
-
-export interface MaterialsApi {
-  list(input?: MaterialsListInput): Promise<MaterialsListData>;
-  get(id: string | number): Promise<MaterialDetailData>;
-  create(input: CreateMaterialInput): Promise<{ id: number }>;
-  update(
-    id: string | number,
-    input: UpdateMaterialInput,
-  ): Promise<MaterialDetailData>;
-  deactivate(id: string | number): Promise<unknown>;
-  adjustStock(
-    id: string | number,
-    input: AdjustMaterialStockInput,
-  ): Promise<AdjustMaterialStockData>;
-}
+export type MaterialsListData = MaterialsListResponse;
+export type MaterialDetailData = MaterialRecord;
+export type AdjustMaterialStockData = AdjustMaterialStockResponse;
+export type { MaterialsApi };
 
 export type MethodsListInput = {
   page?: number;
@@ -825,91 +790,18 @@ export interface AssetTypesApi {
   list(): Promise<AssetTypesListData>;
 }
 
-export type SaveEnvironmentalLimitInput = {
-  assetTypeId: number | null;
-  temperatureMin: number | null;
-  temperatureMax: number | null;
-  humidityMin: number | null;
-  humidityMax: number | null;
-  pressureMin: number | null;
-  pressureMax: number | null;
-};
+export type { EnvironmentalLimitsApi };
 
-export interface EnvironmentalLimitsApi {
-  list(): Promise<EnvironmentalLimitsResponse>;
-  save(
-    input: SaveEnvironmentalLimitInput,
-  ): Promise<SaveEnvironmentalLimitResponse>;
-  delete(id: number): Promise<DeleteEnvironmentalLimitResponse>;
-}
-
-/** Accredited-scope (CMC) line — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427). */
-export type AccreditedScopeLine = {
-  id: number;
-  unitId: number;
-  quantityKind: string;
-  rangeMin: number;
-  rangeMax: number;
-  rangeUnit: string;
-  cmcType: "fixed" | "linear";
-  cmcA: number;
-  cmcB: number | null;
-  cmcUnit: string;
-  coverageFactor: number;
-  description: string | null;
-  validFrom: string | Date | null;
-  validUntil: string | Date | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-};
-
-export type ScopeEnforcementMode = "warn" | "enforce";
-
-export type AccreditedScopeResponse = {
-  lines: AccreditedScopeLine[];
-  unit: { unitId: number | null; unitName: string | null };
-  /** Org-level guard behavior (#427 Phase 1): the EFFECTIVE mode (Q45). */
-  enforcementMode: ScopeEnforcementMode;
-  /**
-   * True when the lab never chose a mode and the default applies (`enforce` for
-   * an accredited lab, `warn` otherwise); false when the mode was set explicitly.
-   */
-  enforcementModeIsDefault?: boolean;
-};
-
-export type SaveAccreditedScopeLineInput = {
-  id?: number;
-  quantityKind: string;
-  rangeMin: number;
-  rangeMax: number;
-  rangeUnit: string;
-  cmcType: "fixed" | "linear";
-  cmcA: number;
-  cmcB?: number | null;
-  cmcUnit: string;
-  coverageFactor?: number;
-  description?: string | null;
-  validFrom?: string | null;
-  validUntil?: string | null;
-};
-
-export type SaveAccreditedScopeLineResponse = {
-  message: string;
-  data: AccreditedScopeLine;
-  unit: { unitId: number | null; unitName: string | null };
-};
-
-export interface AccreditedScopeApi {
-  list(): Promise<AccreditedScopeResponse>;
-  save(
-    input: SaveAccreditedScopeLineInput,
-  ): Promise<SaveAccreditedScopeLineResponse>;
-  delete(id: number): Promise<{ message: string }>;
-  setEnforcementMode(mode: ScopeEnforcementMode): Promise<{
-    message: string;
-    enforcementMode: ScopeEnforcementMode;
-  }>;
-}
+/** Accredited-scope (CMC) line: ISO/IEC 17025 7.6/7.8.3, ILAC P14 (#427). */
+export type AccreditedScopeLine = ContractAccreditedScopeLine;
+export type ScopeEnforcementMode = ContractScopeEnforcementMode;
+export type AccreditedScopeResponse = ContractAccreditedScopeResponse;
+export type SaveAccreditedScopeLineInput = z.input<
+  typeof AccreditedScopeLineSchema
+>;
+export type SaveAccreditedScopeLineResponse =
+  ContractSaveAccreditedScopeLineResponse;
+export type { AccreditedScopeApi };
 
 // REPORTS: the DTOs and the client are the endpoint definitions' own
 // (`endpoints/reports.ts`, `modules/reports.ts`).

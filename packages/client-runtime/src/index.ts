@@ -1,8 +1,6 @@
 import type {
-  AdjustMaterialStockInput,
   CalibraApi,
   CreateApiKeyInput,
-  CreateMaterialInput,
   CreateServiceInput,
   CreateServiceOrderInput,
   CreateServiceOrderQuoteInput,
@@ -17,8 +15,6 @@ import type {
   MethodPublishDraftInput,
   MethodRequestApprovalInput,
   MethodWriteInput,
-  SaveAccreditedScopeLineInput,
-  SaveEnvironmentalLimitInput,
   SaveServiceOrderEvaluationInput,
   SaveServiceOrderExecutionInput,
   SendServiceOrderQuoteInput,
@@ -26,7 +22,6 @@ import type {
   UpdateServiceOrderInput,
   StandardWriteInput,
   StartSsoInput,
-  UpdateMaterialInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
   UploadSigningCertificateInput,
@@ -366,32 +361,6 @@ export function createCloudApiClient(
           };
         };
       };
-      materials: {
-        $get(input: {
-          query: {
-            page?: string;
-            limit?: string;
-            query?: string;
-            controlsStock?: string;
-            isActive?: string;
-          };
-        }): Promise<Response>;
-        $post(input: { json: CreateMaterialInput }): Promise<Response>;
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $put(input: {
-            param: { id: string };
-            json: UpdateMaterialInput;
-          }): Promise<Response>;
-          $delete(input: { param: { id: string } }): Promise<Response>;
-          stock: {
-            $post(input: {
-              param: { id: string };
-              json: AdjustMaterialStockInput;
-            }): Promise<Response>;
-          };
-        };
-      };
       methods: {
         $get(input: {
           query: {
@@ -489,11 +458,8 @@ export function createCloudApiClient(
         };
       };
       "environmental-limits": {
-        $get(): Promise<Response>;
-        $put(input: { json: SaveEnvironmentalLimitInput }): Promise<Response>;
-        ":id": {
-          $delete(input: { param: { id: string } }): Promise<Response>;
-        };
+        // `effective` stays on the raw tree: `jobs.getEffectiveEnvironmentalLimits`
+        // reaches it (the rest of the group is an endpoint definition).
         effective: {
           ":assetTypeId": {
             $get(input: {
@@ -501,18 +467,6 @@ export function createCloudApiClient(
               query?: { unitId?: string };
             }): Promise<Response>;
           };
-        };
-      };
-      "accredited-scope": {
-        $get(): Promise<Response>;
-        $put(input: { json: SaveAccreditedScopeLineInput }): Promise<Response>;
-        ":id": {
-          $delete(input: { param: { id: string } }): Promise<Response>;
-        };
-        enforcement: {
-          $put(input: {
-            json: { mode: "warn" | "enforce" };
-          }): Promise<Response>;
         };
       };
 
@@ -631,11 +585,14 @@ export function createCloudApiClient(
     customerGroups: createCustomerGroupsApi(rawCloudClient),
     assets: createAssetsApi(endpointTransport, options),
     assetTypes: createAssetTypesApi(rawCloudClient),
-    environmentalLimits: createEnvironmentalLimitsApi(rawCloudClient, options),
-    accreditedScope: createAccreditedScopeApi(rawCloudClient),
+    environmentalLimits: createEnvironmentalLimitsApi(
+      endpointTransport,
+      options,
+    ),
+    accreditedScope: createAccreditedScopeApi(endpointTransport, options),
     integrations: createIntegrationsApi(rawCloudClient),
     services: createServicesApi(rawCloudClient),
-    materials: createMaterialsApi(rawCloudClient),
+    materials: createMaterialsApi(endpointTransport, options),
     methods: createMethodsApi(rawCloudClient),
     standards: createStandardsApi(rawCloudClient, options),
     jobs: createJobsApi(rawCloudClient, options),

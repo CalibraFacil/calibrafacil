@@ -45,15 +45,17 @@ export function materialsListQueryOptions(input: MaterialsListQueryInput) {
     ],
     queryFn: (): Promise<MaterialsListData> =>
       calibraApi.materials.list({
-        page: input.page,
-        limit: input.limit,
-        query: input.search || undefined,
-        isActive:
-          input.statusFilter === 'active'
-            ? true
-            : input.statusFilter === 'inactive'
-              ? false
-              : undefined,
+        query: {
+          page: input.page,
+          limit: input.limit,
+          query: input.search || undefined,
+          isActive:
+            input.statusFilter === 'active'
+              ? true
+              : input.statusFilter === 'inactive'
+                ? false
+                : undefined,
+        },
       }),
     placeholderData: keepPreviousDataInScope([
       'materials',
@@ -65,7 +67,8 @@ export function materialsListQueryOptions(input: MaterialsListQueryInput) {
 export function materialDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['materials', id],
-    queryFn: (): Promise<MaterialDetail> => calibraApi.materials.get(id),
+    queryFn: (): Promise<MaterialDetail> =>
+      calibraApi.materials.get({ params: { id } }),
   })
 }
 

@@ -48,7 +48,7 @@ export function NewMaterialPage() {
 
   const createMutation = useMutation({
     mutationFn: (data: CreateMaterialInput) =>
-      calibraApi.materials.create(data),
+      calibraApi.materials.create({ body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materials'] })
       toast.success('Material criado com sucesso!')

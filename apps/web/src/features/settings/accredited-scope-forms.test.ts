@@ -1,6 +1,8 @@
 import { format } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 
+import { buildAccreditedScopeLine } from '@calibra-facil/contracts/accredited-scope-fixtures'
+
 import {
   buildScopeLinePayload,
   canSaveScopeLine,
@@ -92,22 +94,24 @@ describe('canSaveScopeLine', () => {
 
 describe('scopeLineToFormState', () => {
   it('round-trips a stored line into editable strings', () => {
-    const state = scopeLineToFormState({
-      id: 3,
-      unitId: 1,
-      quantityKind: 'mass',
-      rangeMin: 0,
-      rangeMax: 500,
-      rangeUnit: 'g',
-      cmcType: 'linear',
-      cmcA: 0.005,
-      cmcB: 0.0001,
-      cmcUnit: 'g',
-      coverageFactor: 2,
-      description: 'Balanças classe II',
-      validFrom: '2026-01-15T00:00:00.000Z',
-      validUntil: '2026-12-31T23:59:59.999Z',
-    })
+    const state = scopeLineToFormState(
+      buildAccreditedScopeLine({
+        id: 3,
+        unitId: 1,
+        quantityKind: 'mass',
+        rangeMin: 0,
+        rangeMax: 500,
+        rangeUnit: 'g',
+        cmcType: 'linear',
+        cmcA: 0.005,
+        cmcB: 0.0001,
+        cmcUnit: 'g',
+        coverageFactor: 2,
+        description: 'Balanças classe II',
+        validFrom: '2026-01-15T00:00:00.000Z',
+        validUntil: '2026-12-31T23:59:59.999Z',
+      }),
+    )
     expect(state).toMatchObject({
       quantityKind: 'mass',
       rangeMin: '0',
@@ -122,20 +126,20 @@ describe('scopeLineToFormState', () => {
   })
 
   it('reads stored bounds back as the calendar days they name', () => {
-    const base = {
+    const base = buildAccreditedScopeLine({
       id: 3,
       unitId: 1,
-      quantityKind: 'mass' as const,
+      quantityKind: 'mass',
       rangeMin: 0,
       rangeMax: 500,
       rangeUnit: 'g',
-      cmcType: 'fixed' as const,
+      cmcType: 'fixed',
       cmcA: 0.005,
       cmcB: null,
       cmcUnit: 'g',
       coverageFactor: 2,
       description: null,
-    }
+    })
     for (const [validFrom, validUntil] of [
       ['2026-01-15T03:00:00.000Z', '2027-01-01T02:59:59.999Z'],
       // Legacy UTC anchor: the start used to read as the evening before.

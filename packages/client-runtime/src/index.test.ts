@@ -3475,19 +3475,23 @@ describe("environmental limits runtime adapter", () => {
     });
     await expect(
       client.environmentalLimits.save({
-        assetTypeId: null,
-        temperatureMin: 18,
-        temperatureMax: 24,
-        humidityMin: 40,
-        humidityMax: 60,
-        pressureMin: null,
-        pressureMax: null,
+        body: {
+          assetTypeId: null,
+          temperatureMin: 18,
+          temperatureMax: 24,
+          humidityMin: 40,
+          humidityMax: 60,
+          pressureMin: null,
+          pressureMax: null,
+        },
       }),
     ).resolves.toMatchObject({
       message: "Limites ambientais atualizados",
       data: { id: 15 },
     });
-    await expect(client.environmentalLimits.delete(15)).resolves.toEqual({
+    await expect(
+      client.environmentalLimits.delete({ params: { id: 15 } }),
+    ).resolves.toEqual({
       message: "Limites removidos",
     });
 
@@ -3552,13 +3556,15 @@ describe("environmental limits runtime adapter", () => {
     });
     await expect(
       client.environmentalLimits.save({
-        assetTypeId: null,
-        temperatureMin: null,
-        temperatureMax: null,
-        humidityMin: null,
-        humidityMax: null,
-        pressureMin: null,
-        pressureMax: null,
+        body: {
+          assetTypeId: null,
+          temperatureMin: null,
+          temperatureMax: null,
+          humidityMin: null,
+          humidityMax: null,
+          pressureMin: null,
+          pressureMax: null,
+        },
       }),
     ).rejects.toThrow("Limites ambientais requer a API web/nuvem");
     expect(String(fetchCalls[0]?.[0])).toBe(

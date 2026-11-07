@@ -419,9 +419,9 @@ export function createDesktopApiClient(
       },
     },
     environmentalLimits: {
-      ...desktopCloudOnlyStubs("environmentalLimits", {
-        action: "Limites ambientais",
-      }),
+      ...desktopEndpointStubs("environmentalLimits"),
+      // The limits of the active unit come from the session snapshot, not
+      // from a local-server route.
       async list() {
         const session = await getLocalSessionSnapshot();
         const activeUnitId = session.data?.permissions.activeUnitId ?? null;
@@ -441,9 +441,7 @@ export function createDesktopApiClient(
         };
       },
     },
-    accreditedScope: desktopCloudOnlyStubs("accreditedScope", {
-      action: "Escopo acreditado (CMC)",
-    }),
+    accreditedScope: desktopEndpointStubs("accreditedScope"),
     reports: desktopEndpointStubs("reports"),
     publicInvitations: desktopCloudOnlyStubs("publicInvitations", {
       action: "Convites",
@@ -481,11 +479,12 @@ export function createDesktopApiClient(
       // Material catalog is cloud-only in v1; the desktop SO flow keeps the
       // free-form part-item fallback. Reads degrade to empty, writes are
       // unsupported offline.
-      ...desktopCloudOnlyStubs("materials", {
-        action: "Catálogo de materiais",
-      }),
+      ...desktopEndpointStubs("materials"),
       async list() {
-        return { data: [] };
+        return {
+          data: [],
+          pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+        };
       },
     },
     services: desktopCloudOnlyStubs("services", {

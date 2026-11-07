@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { buildMaterialsListResponse } from '@calibra-facil/contracts/materials-fixtures'
+
 import { calibraApi } from '@/utils/api'
 import {
   fetchServiceOrderMaterials,
@@ -61,23 +63,17 @@ describe('service orders feature queries', () => {
 
   it('REQ-SOPICK-001: fetches only active materials with the trimmed query', async () => {
     const list = vi.mocked(calibraApi.materials.list)
-    list.mockResolvedValue({ data: [] })
+    list.mockResolvedValue(buildMaterialsListResponse([]))
 
     await fetchServiceOrderMaterials('  correia  ')
 
     expect(list).toHaveBeenCalledWith({
-      page: 1,
-      limit: 20,
-      query: 'correia',
-      isActive: true,
+      query: { page: 1, limit: 20, query: 'correia', isActive: true },
     })
 
     await fetchServiceOrderMaterials('')
     expect(list).toHaveBeenLastCalledWith({
-      page: 1,
-      limit: 20,
-      query: undefined,
-      isActive: true,
+      query: { page: 1, limit: 20, query: undefined, isActive: true },
     })
   })
 
