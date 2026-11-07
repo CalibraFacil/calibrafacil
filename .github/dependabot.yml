@@ -15,7 +15,6 @@ updates:
   - package-ecosystem: npm
     directories:
       - /
-      - /services/gotenberg
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
@@ -49,7 +48,6 @@ updates:
   - package-ecosystem: docker
     directories:
       - /
-      - /services/gotenberg
       - /deploy/backup
     schedule:
       interval: weekly

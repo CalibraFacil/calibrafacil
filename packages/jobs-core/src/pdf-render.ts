@@ -161,7 +161,7 @@ export function getErrorMessage(error: unknown): string {
 }
 
 /**
- * Render HTML to PDF via the Gotenberg Chromium engine (services/gotenberg),
+ * Render HTML to PDF via the Gotenberg Chromium engine,
  * replacing the previous in-function headless Chromium so the worker no
  * longer bundles puppeteer or downloads a Chromium pack.
  */
