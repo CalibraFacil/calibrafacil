@@ -34,6 +34,10 @@ import type { OrganizationLifecycleApi } from "./modules/organization-lifecycle"
 import type { OrganizationMediaApi } from "./modules/organization-media";
 import type { OrganizationProfileApi } from "./modules/organization-profile";
 import type { ProfileMediaApi } from "./modules/profile-media";
+import type { AccessApi } from "./modules/access";
+import type { LabSetupApi } from "./modules/lab-setup";
+import type { OnboardingApi } from "./modules/onboarding";
+import type { SessionsApi } from "./modules/sessions";
 import type { AssetsApi } from "./modules/assets";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CapasApi } from "./modules/capa";
@@ -83,6 +87,10 @@ export type UpdateNotificationPreferencesInput = z.input<
 
 import type {
   SelfServeSignupResponse,
+  ActivationChecklistResponse,
+  ActivationStepId,
+  FinanceAccessResponse,
+  LabSetupMetadata,
   PortalDomainResponse,
   SigningCertificate,
   SigningCertificatesListResponse,
@@ -466,43 +474,22 @@ export type { DashboardApi };
 export type DashboardUnitsResponse = UnitsContext;
 export type { UnitsApi };
 
-export type FinanceAccessResponse = {
-  canReadFinancial: boolean;
-  canManageFinancial: boolean;
-  canExportFinancial: boolean;
-  role: string;
+// ACCESS and ONBOARDING: the DTOs and the clients are the endpoint definitions'
+// own (`endpoints/access.ts`, `endpoints/onboarding.ts`).
+export type {
+  AccessApi,
+  ActivationChecklistResponse,
+  ActivationStepId,
+  FinanceAccessResponse,
+  OnboardingApi,
 };
-
-/** One step of the first-certificate checklist, derived server-side. */
-export type ActivationStepId =
-  | "organizationProfile"
-  | "methodPublished"
-  | "referenceStandard"
-  | "signingCertificate"
-  | "customer"
-  | "firstCertificate";
-
-export type ActivationChecklistResponse = {
-  steps: Array<{ id: ActivationStepId; done: boolean }>;
-  complete: boolean;
-};
-
-export interface OnboardingApi {
-  /** What the laboratory still has to do before its first certificate. */
-  getChecklist(): Promise<ActivationChecklistResponse>;
-}
-
-export interface AccessApi {
-  getFinanceAccess(): Promise<FinanceAccessResponse>;
-}
 
 // FINANCE: the client is generated from the endpoint definitions
 // (`modules/finance.ts`); its DTOs are the contract's.
 export type { FinanceApi };
 
-export interface SessionsApi {
-  revoke(sessionId: string): Promise<unknown>;
-}
+// SESSIONS: the client is generated from the endpoint definition (`modules/sessions.ts`).
+export type { SessionsApi };
 
 export type { SelfServeSignupResponse };
 
@@ -574,31 +561,9 @@ export type {
   UnsignedIssuanceSetting,
 };
 
-export type LabSetupMetadata = {
-  status:
-    | "ready"
-    | "invalid"
-    | "expired"
-    | "consumed"
-    | "user_invalid"
-    | "email_mismatch"
-    | "organization_invalid"
-    | "membership_missing"
-    | "invitation_invalid";
-  email?: string;
-  organizationName?: string;
-  organizationSlug?: string;
-  expiresAt?: string | Date;
-  passkeyPreferred: boolean;
-  fallbackMethods: Array<"magic_link" | "email_otp">;
-};
-
-export interface LabSetupApi {
-  get(token: string): Promise<LabSetupMetadata>;
-  requestMagicLink<TResponse = unknown>(token: string): Promise<TResponse>;
-  requestOtp<TResponse = unknown>(token: string): Promise<TResponse>;
-  complete<TResponse = unknown>(token: string): Promise<TResponse>;
-}
+// LAB SETUP: the DTO is the contract schema's type (`endpoints/lab-setup.ts`);
+// the client is generated from the endpoint definitions (`modules/lab-setup.ts`).
+export type { LabSetupApi, LabSetupMetadata };
 
 export interface CalibraApi {
   dashboard: DashboardApi;

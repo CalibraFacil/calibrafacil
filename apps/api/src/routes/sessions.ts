@@ -1,40 +1,26 @@
 import { createRouter } from "../server/router";
+import { sessionEndpoints } from "@calibra-facil/contracts";
 
-import { invalid, notFound } from "../lib/domain-errors";
+import { notFound } from "../lib/domain-errors";
+import { mount } from "../lib/endpoint-mount";
 import { revokeOwnSession } from "../lib/identity";
 import { requireLabAuth, type AuthVariables } from "../middleware/permission";
 
-export const sessionsRouter = createRouter<{ Variables: AuthVariables }>().post(
-  "/revoke",
-  requireLabAuth,
-  async (c) => {
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      throw invalid("invalid_request", "Invalid JSON body");
-    }
+export const sessionsRouter = createRouter<{ Variables: AuthVariables }>();
 
-    const bodyRecord =
-      body && typeof body === "object" && !Array.isArray(body)
-        ? Object.fromEntries(Object.entries(body))
-        : {};
-    const sessionId =
-      typeof bodyRecord.sessionId === "string"
-        ? bodyRecord.sessionId.trim()
-        : "";
-
-    if (!sessionId) {
-      throw invalid("invalid_request", "sessionId is required");
-    }
-
+mount(
+  sessionsRouter,
+  "/api/sessions",
+  sessionEndpoints.revoke,
+  [requireLabAuth],
+  async (c, { body }) => {
     const currentSession = c.get("session");
     const userId = currentSession.user.id;
 
-    if (!(await revokeOwnSession(userId, sessionId))) {
+    if (!(await revokeOwnSession(userId, body.sessionId))) {
       throw notFound("session_not_found", "Session not found");
     }
 
-    return c.json({ status: true });
+    return { status: true as const };
   },
 );

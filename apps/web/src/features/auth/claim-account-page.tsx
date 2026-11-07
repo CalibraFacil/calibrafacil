@@ -26,12 +26,6 @@ import { startDesktopInitialSync } from '@/components/sign-in-form'
 import { cn } from '@calibra-facil/ui/utils'
 import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
-type ClaimCompleteResponse = {
-  claimed: boolean
-  organizationId: string
-  needsOnboarding: boolean
-}
-
 type ClaimAccountPageProps = {
   token?: string
   error?: string
@@ -96,7 +90,7 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
 
   const setupQuery = useQuery({
     queryKey: ['lab-setup', token],
-    queryFn: () => calibraApi.labSetup.get(token ?? ''),
+    queryFn: () => calibraApi.labSetup.get({ params: { token: token ?? '' } }),
     enabled: Boolean(token),
     retry: false,
   })
@@ -110,8 +104,7 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
   async function finishClaim() {
     if (!token) return
 
-    const result =
-      await calibraApi.labSetup.complete<ClaimCompleteResponse>(token)
+    const result = await calibraApi.labSetup.complete({ params: { token } })
 
     startDesktopInitialSync()
 
@@ -190,7 +183,7 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
     setIsMagicLinkLoading(true)
 
     try {
-      await calibraApi.labSetup.requestMagicLink(token)
+      await calibraApi.labSetup.requestMagicLink({ params: { token: token } })
       setAuthStatus({
         tone: 'success',
         title: 'Link de acesso enviado',
@@ -213,7 +206,7 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
     setIsOtpRequesting(true)
 
     try {
-      await calibraApi.labSetup.requestOtp(token)
+      await calibraApi.labSetup.requestOtp({ params: { token: token } })
       setOtpRequested(true)
       setAuthStatus({
         tone: 'success',

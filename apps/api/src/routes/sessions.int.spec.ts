@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { Hono } from "hono";
 import { sessionsRouter } from "./sessions";
+import { applyValidationErrorShape } from "../server/validation-error-shape";
+import type { Env } from "../server/env";
 import { db } from "@calibra-facil/db";
 import { session as sessionTable } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
@@ -125,7 +128,12 @@ describe("sessionsRouter — real DB + real middleware", () => {
     const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
 
     loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-    const res = await sessionsRouter.request("/revoke", {
+    // The body is validated by the endpoint definition; the app-wide shape
+    // rewrites the validator's answer as in production.
+    const app = new Hono<{ Bindings: Env }>();
+    applyValidationErrorShape(app);
+    app.route("/", sessionsRouter);
+    const res = await app.request("/revoke", {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({}),
@@ -133,9 +141,10 @@ describe("sessionsRouter — real DB + real middleware", () => {
 
     expect(res.status).toBe(400);
     const body: unknown = await res.json();
-    expect(body).toEqual({
-      error: "sessionId is required",
+    expect(body).toMatchObject({
+      error: "Dados inválidos",
       code: "invalid_request",
+      details: { issues: [{ path: "sessionId" }] },
     });
   });
 });

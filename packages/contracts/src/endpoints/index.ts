@@ -6,6 +6,10 @@ import { accreditedScopeEndpoints } from "./accredited-scope";
 import { publicInvitationEndpoints } from "./public-invitations";
 import { publicSignupEndpoints } from "./public-signup";
 import { assetTypeEndpoints } from "./asset-types";
+import { labSetupEndpoints } from "./lab-setup";
+import { sessionEndpoints } from "./sessions";
+import { accessEndpoints } from "./access";
+import { onboardingEndpoints } from "./onboarding";
 import { assetEndpoints } from "./assets";
 import { emailDomainEndpoints } from "./email-domains";
 import { apiKeyEndpoints } from "./api-keys";
@@ -42,6 +46,10 @@ import { visitEndpoints } from "./visits";
 export * from "./define";
 export * from "./public-invitations";
 export * from "./public-signup";
+export * from "./lab-setup";
+export * from "./sessions";
+export * from "./access";
+export * from "./onboarding";
 export * from "./signing-certificates";
 export * from "./sso";
 export * from "./portal-domains";
@@ -125,6 +133,10 @@ export const ENDPOINT_GROUPS = {
   organizationProfile: organizationProfileEndpoints,
   organizationMedia: organizationMediaEndpoints,
   profileMedia: profileMediaEndpoints,
+  onboarding: onboardingEndpoints,
+  access: accessEndpoints,
+  sessions: sessionEndpoints,
+  labSetup: labSetupEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

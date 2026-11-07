@@ -31,12 +31,10 @@ type RpcRoute<Path extends string> = {
 // Keep the browser-facing Hono contract server-free. Importing apps/api here
 // pulls route handlers and runtime dependencies back across the package boundary.
 type HandListedRoutePath =
-  | "/api/onboarding/checklist"
   | "/api/authorized-signatories"
   | "/api/authorized-signatories/:id"
   | "/api/authorized-signatories/:id/revoke"
   | "/api/environmental-limits/effective/:assetTypeId"
-  | "/api/finance/access"
   | "/api/finance/automatic-send-rules"
   | "/api/finance/automatic-send-rules/:id"
   | "/api/finance/billing-readiness"
@@ -96,18 +94,13 @@ type HandListedRoutePath =
   | "/api/integrations/conta-azul/app"
   | "/api/integrations/conta-azul/oauth/callback"
   | "/api/integrations/conta-azul/oauth/start"
-  | "/api/lab-setup/:token"
-  | "/api/lab-setup/:token/complete"
-  | "/api/lab-setup/:token/request-magic-link"
-  | "/api/lab-setup/:token/request-otp"
   | "/api/jobs/:id/label-commands"
   | "/api/portal/service-orders/:id/financial-summary"
   | "/api/public/service-order-access/:token"
   | "/api/public/service-order-access/:token/approve-quote"
   | "/api/public/service-order-access/:token/reject-quote"
   | "/api/public/service-order-access/redeem-code"
-  | "/api/service-orders/pending-calibration"
-  | "/api/sessions/revoke";
+  | "/api/service-orders/pending-calibration";
 
 // The converted domains list their paths in their endpoint definitions
 // (`endpoints/`); the hand list above shrinks as domains are converted and

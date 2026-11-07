@@ -72,35 +72,6 @@ export function createCloudApiClient(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- the raw Hono client type is narrowed to the browser-supported route subset used by runtime modules.
   const rawCloudClient = createRawCloudClient(options) as unknown as {
     api: {
-      onboarding: {
-        checklist: {
-          $get(): Promise<Response>;
-        };
-      };
-      finance: {
-        access: {
-          $get(): Promise<Response>;
-        };
-      };
-      sessions: {
-        revoke: {
-          $post(input: { json: { sessionId: string } }): Promise<Response>;
-        };
-      };
-      "lab-setup": {
-        ":token": {
-          $get(input: { param: { token: string } }): Promise<Response>;
-          complete: {
-            $post(input: { param: { token: string } }): Promise<Response>;
-          };
-          "request-magic-link": {
-            $post(input: { param: { token: string } }): Promise<Response>;
-          };
-          "request-otp": {
-            $post(input: { param: { token: string } }): Promise<Response>;
-          };
-        };
-      };
       integrations: {
         $get(): Promise<Response>;
         $post(input: { json: unknown }): Promise<Response>;
@@ -153,9 +124,9 @@ export function createCloudApiClient(
   return {
     dashboard: createDashboardApi(endpointTransport, options),
     units: createUnitsApi(endpointTransport, options),
-    access: createAccessApi(rawCloudClient),
-    onboarding: createOnboardingApi(rawCloudClient),
-    sessions: createSessionsApi(rawCloudClient),
+    access: createAccessApi(endpointTransport, options),
+    onboarding: createOnboardingApi(endpointTransport, options),
+    sessions: createSessionsApi(endpointTransport, options),
     finance: createFinanceApi(endpointTransport, options),
     sso: createSsoApi(endpointTransport, options),
     apiKeys: createApiKeysApi(endpointTransport, options),
@@ -203,7 +174,7 @@ export function createCloudApiClient(
     reports: createReportsApi(endpointTransport, options),
     publicInvitations: createPublicInvitationsApi(endpointTransport, options),
     publicSignup: createPublicSignupApi(endpointTransport, options),
-    labSetup: createLabSetupApi(rawCloudClient),
+    labSetup: createLabSetupApi(endpointTransport, options),
     nonConformances: createNonConformancesApi(endpointTransport, options),
     capas: createCapasApi(endpointTransport, options),
     proficiencyTests: createProficiencyTestsApi(endpointTransport, options),

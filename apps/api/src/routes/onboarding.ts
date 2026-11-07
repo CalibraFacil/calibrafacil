@@ -1,4 +1,5 @@
 import { createRouter } from "../server/router";
+import { onboardingEndpoints } from "@calibra-facil/contracts";
 
 import {
   requireLabProtected,
@@ -6,6 +7,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { getActivationChecklist } from "../services/activation-checklist";
+import { mount } from "../lib/endpoint-mount";
 
 /**
  * What a laboratory still has to do before it can issue its first certificate.
@@ -16,15 +18,20 @@ import { getActivationChecklist } from "../services/activation-checklist";
  * Better Auth's custom session data bypasses the cookie cache and would run
  * these existence checks on every route transition, for every user, forever.
  */
+const PREFIX = "/api/onboarding";
+
 export const onboardingRouter = createRouter<{
   Variables: AuthVariables;
-}>().get(
-  "/checklist",
-  ...requireLabProtected,
-  requireOrgType("LAB"),
+}>();
+
+mount(
+  onboardingRouter,
+  PREFIX,
+  onboardingEndpoints.getChecklist,
+  [...requireLabProtected, requireOrgType("LAB")],
   async (c) => {
     const member = c.get("member");
 
-    return c.json(await getActivationChecklist(member.organizationId));
+    return await getActivationChecklist(member.organizationId);
   },
 );

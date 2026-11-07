@@ -274,12 +274,8 @@ export function createDesktopApiClient(
     },
     // Self-serve activation is a cloud concern: a desktop install is reached by
     // a laboratory that already has an account.
-    onboarding: desktopCloudOnlyStubs("onboarding", {
-      action: "Configuração inicial",
-    }),
-    sessions: desktopCloudOnlyStubs("sessions", {
-      action: "Gerenciamento de sessoes",
-    }),
+    onboarding: desktopEndpointStubs("onboarding"),
+    sessions: desktopEndpointStubs("sessions"),
     finance: desktopEndpointStubs("finance"),
     sso: {
       ...desktopEndpointStubs("sso"),
@@ -435,9 +431,7 @@ export function createDesktopApiClient(
     publicInvitations: desktopEndpointStubs("publicInvitations"),
     // Opening an account happens on the cloud, before any desktop shell exists.
     publicSignup: desktopEndpointStubs("publicSignup"),
-    labSetup: desktopCloudOnlyStubs("labSetup", {
-      action: "Configuração de acesso",
-    }),
+    labSetup: desktopEndpointStubs("labSetup"),
     nonConformances: desktopEndpointStubs("nonConformances"),
     capas: desktopEndpointStubs("capas"),
     proficiencyTests: desktopEndpointStubs("proficiencyTests"),

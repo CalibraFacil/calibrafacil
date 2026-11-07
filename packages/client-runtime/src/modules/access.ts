@@ -1,13 +1,18 @@
-import type { AccessApi, FinanceAccessResponse } from "../types";
-import { readJsonResponse } from "../transport/response";
+import { accessEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
 
-export function createAccessApi(rawCloudClient: any): AccessApi {
-  return {
-    async getFinanceAccess() {
-      return readJsonResponse<FinanceAccessResponse>(
-        await rawCloudClient.api.finance.access.$get(),
-        "Erro ao carregar acesso financeiro",
-      );
-    },
-  };
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The access client is its endpoint group (`accessEndpoints` in `@calibra-facil/contracts`). */
+export type AccessApi = EndpointClient<typeof accessEndpoints>;
+
+export function createAccessApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): AccessApi {
+  return endpointClient(accessEndpoints, transport, options);
 }
