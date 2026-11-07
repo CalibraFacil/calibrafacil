@@ -1,13 +1,13 @@
+import { THEME_STORAGE_KEY } from "@calibra-facil/shared/client-storage-keys";
+
 /**
- * Theme preference for the portal. The `theme` localStorage key is shared with
- * the web app, and `index.html` runs a bootstrap script that reads the same key
- * before React hydrates (prevents a flash of the wrong theme). Keep the three
- * pieces in sync: this module, the bootstrap script, and the web app.
+ * Theme preference for the portal, stored under the key both apps share
+ * (`THEME_STORAGE_KEY`). `index.html` runs a bootstrap script that reads the same
+ * key before React hydrates (prevents a flash of the wrong theme); `theme.test.ts`
+ * checks that script still reads it.
  */
 
 export type Theme = "light" | "dark" | "system";
-
-const THEME_KEY = "theme";
 
 /** Narrows an arbitrary stored value to a valid theme, defaulting to system. */
 export function resolveTheme(value: string | null): Theme {
@@ -18,7 +18,7 @@ export function resolveTheme(value: string | null): Theme {
 
 export function getStoredTheme(): Theme {
   if (typeof window === "undefined") return "system";
-  return resolveTheme(localStorage.getItem(THEME_KEY));
+  return resolveTheme(localStorage.getItem(THEME_STORAGE_KEY));
 }
 
 function applyTheme(theme: Theme) {
@@ -37,6 +37,6 @@ function applyTheme(theme: Theme) {
 }
 
 export function setTheme(theme: Theme) {
-  localStorage.setItem(THEME_KEY, theme);
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
   applyTheme(theme);
 }

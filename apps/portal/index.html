@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script>
         // Apply theme before React hydrates (prevents flicker)
-        // Uses unified 'theme' key shared with web app
+        // Reads the theme key shared with the web app (THEME_STORAGE_KEY; theme.test.ts checks it)
         (function () {
             try {
                 var stored = localStorage.getItem('theme');

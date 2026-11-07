@@ -158,9 +158,12 @@ path that changes the active organization or unit goes through
 `apps/web/src/lib/switch-scope.ts` (`switchActiveOrganization`, `switchScope`),
 which cancels in-flight requests, applies the switch and resets all queries;
 `organization.setActive` is called nowhere else (a test enforces it). Sign-out
-and organization deletion call `queryClient.clear()`. The portal, whose keys are
-built from `portalQueryKey(organizationId, ...)`, keeps the organization in the
-key as well.
+and organization deletion call `queryClient.clear()`. The portal follows the same
+rule with a different mechanism: its keys carry the organization
+(`portalQueryKey(organizationId, ...)`) and its switcher cancels in-flight
+queries, switches, and removes the other organizations' entries instead of
+resetting everything (`portal-frontend.md`). In both apps the guarantee is the
+switch, never the key.
 
 Known gap, left on purpose: a second tab of the lab app does not hear that
 another tab changed the session's organization or unit. The app has no

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Building02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -56,10 +57,20 @@ export function PortalOrgSwitcher() {
     // Stop requests still in flight for the organization being left, so their
     // answers cannot land in the cache once the session points elsewhere.
     await cancelPortalQueries(queryClient);
-    await portalOrganization.setActive({ organizationId: orgId });
-    // Cache keys already carry the org id; dropping the entries as well means
-    // nothing fetched for the previous organization survives the switch. The
-    // new org's own entries are kept: its queries may already be in flight.
+    const result = await portalOrganization.setActive({
+      organizationId: orgId,
+    });
+    if (result?.error) {
+      // The session still names the old organization: keep its cache and its
+      // stored preference, or the screen would say one org while the API
+      // answers for another.
+      toast.error("Não foi possível trocar de organização.");
+      return;
+    }
+    // The API answers for the organization the session names, not the one in a
+    // key, so what guarantees isolation is this switch: nothing fetched for the
+    // previous organization survives it. The keys carry the org id as well, so
+    // the new org's entries (its queries may already be in flight) are kept.
     removePortalQueries(queryClient, orgId);
     // Store preference for portal to avoid conflicts with dashboard
     localStorage.setItem(PORTAL_ORG_KEY, orgId);

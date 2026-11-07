@@ -3,8 +3,11 @@ import type { QueryClient } from "@tanstack/react-query";
 /**
  * Every authenticated portal query is cached under the active client
  * organization. The portal API answers for whichever organization the session
- * names, so a key without the org id would let one org's response be served to
- * another after a switch. Build keys only through this helper.
+ * names, not for the one in a key, so the key is not the tenant guard: the
+ * switch is (`cancelPortalQueries`, then `removePortalQueries` around
+ * `setActive`). The org in the key keeps an entry fetched for one organization
+ * from being read under another's key and scopes `placeholderData`. Build keys
+ * only through this helper.
  */
 
 /** First segment shared by every key built with `portalQueryKey`. */

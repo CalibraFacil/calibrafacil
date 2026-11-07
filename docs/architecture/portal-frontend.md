@@ -172,18 +172,26 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
 - `getApiBaseUrl()` (`lib/api-fetch.ts`, over `resolveApiBaseUrl` in `@calibra-facil/shared/api-base-url`, which the lab app uses too) resolves the API origin per host
   (localhost:3000 in dev, `VITE_API_URL` when set, else the same origin). Always go through it; never hardcode the origin.
 - Wrap reads in `useQuery` with a stable `queryKey` and a sensible `staleTime`.
-- **Authenticated query keys are scoped to the active client organization.** The
-  API answers for whichever org the session names, and a customer can belong to
-  several, so a key without the org id would serve one org's cache to another.
-  Keys are built only by the factory in `lib/portal-keys.ts` (`usePortalKeys()`:
+- **Authenticated query keys carry the active client organization; the switch is
+  what guarantees tenant scope.** The API answers for whichever org the _session_
+  names (a customer can belong to several), never for the org in a key, so a key
+  cannot make a request answer for an org. The guarantee is the switch path
+  (`handleSetActiveOrganization` in `features/shell/portal-org-switcher.tsx`): it
+  cancels in-flight portal queries, calls `setActive` (a failure keeps the old
+  organization, its cache and its stored choice), then removes every portal entry
+  of the other orgs. Startup clears the whole cache only when a different user
+  signs in (`loadPortalStartup`). The org in the key keeps an entry fetched for
+  one org from being read under another's key and scopes `placeholderData`. The
+  lab app has the same rule with a different mechanism (a full reset on switch,
+  `apps/web/src/lib/switch-scope.ts`, see `web-frontend-architecture.md`), and the
+  same known gap: a second tab does not hear that another tab changed the
+  session's organization. Keys are built only by the factory in `lib/portal-keys.ts` (`usePortalKeys()`:
   `keys.asset(id)`, `keys.requests`, ...), which prepends the org through
   `portalQueryKey` (`lib/portal-query-keys.ts`) — for `useQuery`,
   `invalidateQueries`, `setQueryData` and placeholder scopes alike; never a
   literal array or a retyped `key("portal-...")` string at a call site. Public
   and pre-auth queries (verification, invites, magic link, branding) and the
-  user-level org list stay unscoped, under `portalPublicKeys`. The org
-  switcher also cancels in-flight portal queries and removes the previous
-  org's entries when it switches.
+  user-level org list stay unscoped, under `portalPublicKeys`.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint
   in `apps/api/src/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
   the sidebar badges reuse the same hook so counts cannot drift.
