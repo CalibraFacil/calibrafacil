@@ -13,6 +13,10 @@ import {
   buildServiceOrderCreateResponse,
   buildServiceOrderDetail,
 } from "@calibra-facil/contracts/service-orders-fixtures";
+import {
+  buildJobDetail,
+  buildJobMutationResponse,
+} from "@calibra-facil/contracts/jobs-fixtures";
 import { buildStandard } from "@calibra-facil/contracts/standards-fixtures";
 import {
   buildOrganizationGovernanceActivityData,
@@ -944,14 +948,14 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "get",
-          "namespace": "jobs",
-          "policy": "local-first-read-through-sync",
-        },
-        {
           "method": "listTechnicians",
           "namespace": "jobs",
           "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "jobs",
+          "policy": "local-first-read-through-sync",
         },
         {
           "method": "approve",
@@ -979,16 +983,6 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "listStandards",
-          "namespace": "jobs",
-          "policy": "local-first-read-through-sync",
-        },
-        {
-          "method": "getEffectiveEnvironmentalLimits",
-          "namespace": "jobs",
-          "policy": "local-first-read-through-sync",
-        },
-        {
           "method": "saveExecution",
           "namespace": "jobs",
           "policy": "local-command-sync",
@@ -1014,11 +1008,6 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "getLabelCommands",
-          "namespace": "jobs",
-          "policy": "cloud-only",
-        },
-        {
           "method": "amend",
           "namespace": "jobs",
           "policy": "cloud-only",
@@ -1030,6 +1019,21 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "flagOutOfTolerance",
+          "namespace": "jobs",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listStandards",
+          "namespace": "jobs",
+          "policy": "local-first-read-through-sync",
+        },
+        {
+          "method": "getEffectiveEnvironmentalLimits",
+          "namespace": "jobs",
+          "policy": "local-first-read-through-sync",
+        },
+        {
+          "method": "getLabelCommands",
           "namespace": "jobs",
           "policy": "cloud-only",
         },
@@ -2884,7 +2888,13 @@ describe("desktop hybrid runtime adapter", () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
     const fetchMock: typeof fetch = async (input, init) => {
       fetchCalls.push([input, init]);
-      return Response.json({ ok: true, data: { jobId: "R-0001/2026" } });
+      const path = new URL(String(input)).pathname;
+      // The local server answers the jobs endpoint contract.
+      return Response.json(
+        path.endsWith("/execute") || path.endsWith("/submit")
+          ? buildJobMutationResponse()
+          : buildJobDetail(),
+      );
     };
     const client = createDesktopApiClient({
       baseUrl: "http://127.0.0.1:4317",
@@ -2892,22 +2902,22 @@ describe("desktop hybrid runtime adapter", () => {
       fetch: fetchMock,
     });
 
-    await client.jobs.get("R-0001/2026");
-    await client.jobs.get("R-0001%2F2026");
-    await client.jobs.saveExecution(
-      "R-0001/2026",
-      testPayload<JobExecutionPayload>({
+    await client.jobs.get({ params: { id: "R-0001/2026" } });
+    await client.jobs.get({ params: { id: "R-0001%2F2026" } });
+    await client.jobs.saveExecution({
+      params: { id: "R-0001/2026" },
+      body: testPayload<JobExecutionPayload>({
         status: "draft",
         measurements: [],
       }),
-    );
-    await client.jobs.submitExecution(
-      "R-0001%2F2026",
-      testPayload<JobExecutionPayload>({
+    });
+    await client.jobs.submitExecution({
+      params: { id: "R-0001%2F2026" },
+      body: testPayload<JobExecutionPayload>({
         status: "submitted",
         measurements: [],
       }),
-    );
+    });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/jobs/R-0001%252F2026",
@@ -2933,6 +2943,10 @@ describe("desktop hybrid runtime adapter", () => {
       // The service-order intake answers the endpoint contract.
       if (url.pathname === "/api/service-orders") {
         return Response.json(buildServiceOrderCreateResponse());
+      }
+      // The field-capture saves answer the jobs endpoint contract.
+      if (url.pathname.startsWith("/api/jobs/")) {
+        return Response.json(buildJobMutationResponse());
       }
 
       return Response.json({ ok: true, data: { id: "local-1" } });
@@ -2960,20 +2974,20 @@ describe("desktop hybrid runtime adapter", () => {
         model: "Modelo",
       },
     });
-    await client.jobs.saveExecution(
-      "job-1",
-      testPayload<JobExecutionPayload>({
+    await client.jobs.saveExecution({
+      params: { id: "job-1" },
+      body: testPayload<JobExecutionPayload>({
         status: "draft",
         measurements: [],
       }),
-    );
-    await client.jobs.submitExecution(
-      "job-1",
-      testPayload<JobExecutionPayload>({
+    });
+    await client.jobs.submitExecution({
+      params: { id: "job-1" },
+      body: testPayload<JobExecutionPayload>({
         status: "submitted",
         measurements: [],
       }),
-    );
+    });
     await client.serviceOrders.create({
       body: testPayload<CreateServiceOrderInput>({
         customerId: 1,
@@ -3150,7 +3164,7 @@ describe("desktop hybrid runtime adapter", () => {
     await client.methods.list({ query: { page: 1, limit: 20 } });
     await client.standards.list({ query: { page: 1, limit: 20 } });
     await client.environmentalLimits.list();
-    await client.jobs.list({ page: 1, limit: 20 });
+    await client.jobs.list({ query: { page: 1, limit: 20 } });
     await client.serviceOrders.list({ query: { page: 1, limit: 20 } });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
@@ -3239,6 +3253,9 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/standards/1") {
         return Response.json(buildStandard());
       }
+      if (url.pathname === "/api/jobs/job-1") {
+        return Response.json(buildJobDetail());
+      }
 
       return Response.json({
         id: url.pathname.split("/").at(-1),
@@ -3270,8 +3287,8 @@ describe("desktop hybrid runtime adapter", () => {
     await client.standards.list({ query: { page: 1, limit: 20 } });
     await client.standards.get({ params: { id: 1 } });
     await client.environmentalLimits.list();
-    await client.jobs.list({ page: 1, limit: 20 });
-    await client.jobs.get("job-1");
+    await client.jobs.list({ query: { page: 1, limit: 20 } });
+    await client.jobs.get({ params: { id: "job-1" } });
     await client.jobs.listStandards();
     await client.jobs.getEffectiveEnvironmentalLimits(1, { unitId: 10 });
     await client.serviceOrders.list({ query: { page: 1, limit: 20 } });

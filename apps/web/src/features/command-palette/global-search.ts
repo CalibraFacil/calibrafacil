@@ -133,9 +133,11 @@ export function commandSearchJobsQueryOptions(query: string) {
     queryFn: async () => {
       if (query.length < SEARCH_MIN_LENGTH) return []
       const result = await calibraApi.jobs.list({
-        page: 1,
-        limit: SEARCH_RESULT_LIMIT,
-        query,
+        query: {
+          page: 1,
+          limit: SEARCH_RESULT_LIMIT,
+          query,
+        },
       })
 
       return result.data.map((job) => ({

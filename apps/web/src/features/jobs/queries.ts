@@ -23,10 +23,12 @@ const JOBS_LIST_LIMIT = 20
 
 async function fetchJobsList(input: JobsListQueryInput): Promise<JobsListData> {
   return calibraApi.jobs.list({
-    page: input.page,
-    limit: JOBS_LIST_LIMIT,
-    query: input.search || undefined,
-    status: input.statusFilter || undefined,
+    query: {
+      page: input.page,
+      limit: JOBS_LIST_LIMIT,
+      query: input.search || undefined,
+      status: input.statusFilter || undefined,
+    },
   })
 }
 
@@ -53,7 +55,7 @@ export function jobDetailQueryOptions({
 }) {
   return queryOptions({
     queryKey: ['jobs', id],
-    queryFn: () => calibraApi.jobs.get(apiJobId),
+    queryFn: () => calibraApi.jobs.get({ params: { id: apiJobId } }),
   })
 }
 
@@ -146,7 +148,9 @@ export function effectiveEnvironmentalLimitsQueryOptions({
 }
 
 export async function getJobCertificateDownloadUrl(jobId: number | string) {
-  const data = await calibraApi.jobs.getCertificateDownloadUrl(jobId)
+  const data = await calibraApi.jobs.getCertificateDownloadUrl({
+    params: { id: jobId },
+  })
   return data.url
 }
 
@@ -165,7 +169,9 @@ export function jobCertificateDownloadUrlQueryOptions({
 }
 
 export async function getJobLabelDownloadUrl(jobId: number | string) {
-  const data = await calibraApi.jobs.getLabelDownloadUrl(jobId)
+  const data = await calibraApi.jobs.getLabelDownloadUrl({
+    params: { id: jobId },
+  })
   return data.url
 }
 

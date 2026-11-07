@@ -21,9 +21,7 @@ import {
   assetTypeEndpoints,
   customerEndpoints,
   effectiveEnvironmentalLimitsResponseSchema,
-  jobDetailSchema,
-  jobExecutionResponseSchema,
-  jobsListResponseSchema,
+  jobEndpoints,
   localAttachmentSchema,
   localAttachmentsResponseSchema,
   localDeadOutboxEventsResponseSchema,
@@ -449,13 +447,13 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
 
     const list = await parsedBody(
       await app.request("/api/jobs?page=1&limit=20"),
-      jobsListResponseSchema,
+      jobEndpoints.list.response,
     );
     expect(list.data.map((job) => job.jobId)).toEqual(["CAL-2026-0001"]);
 
     await parsedWithKnownGaps(
       await app.request("/api/jobs/12345"),
-      jobDetailSchema,
+      jobEndpoints.get.response,
       JOB_DETAIL_GAPS,
     );
     // A job that is still open has no frozen asset snapshot: like the cloud, the
@@ -482,23 +480,23 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
 
     const saved = await parsedBody(
       await post(app, "/api/jobs/12345/execute", worksheet),
-      jobExecutionResponseSchema,
+      jobEndpoints.saveExecution.response,
     );
     expect(saved.data.status).toBe("IN_PROGRESS");
     await parsedWithKnownGaps(
       await app.request("/api/jobs/12345"),
-      jobDetailSchema,
+      jobEndpoints.get.response,
       JOB_DETAIL_GAPS,
     );
 
     const submitted = await parsedBody(
       await post(app, "/api/jobs/12345/submit", worksheet),
-      jobExecutionResponseSchema,
+      jobEndpoints.saveExecution.response,
     );
     expect(submitted.data.status).toBe("REVIEW");
     await parsedWithKnownGaps(
       await app.request("/api/jobs/12345"),
-      jobDetailSchema,
+      jobEndpoints.get.response,
       JOB_DETAIL_GAPS,
     );
     database.close();

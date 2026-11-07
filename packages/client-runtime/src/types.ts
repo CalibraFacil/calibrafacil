@@ -39,6 +39,7 @@ import type { CustomersApi } from "./modules/customers";
 import type { EntityLabelsApi } from "./modules/entity-labels";
 import type { ServicesApi } from "./modules/services";
 import type { DashboardApi } from "./modules/dashboard";
+import type { JobsApi } from "./modules/jobs";
 import type { EnvironmentalLimitsApi } from "./modules/environmental-limits";
 import type { FinanceApi } from "./modules/finance";
 import type { MaterialsApi } from "./modules/materials";
@@ -123,18 +124,6 @@ import type {
   ServiceAuditLogEntry,
   ServiceRecord,
   ServicesListResponse,
-  EffectiveEnvironmentalLimitsResponse,
-  JobAmendResponse,
-  JobWithdrawCertificateResponse,
-  JobCreateResponse,
-  JobDetail,
-  JobDownloadUrlResponse,
-  JobExecutionResponse,
-  JobFlagOotResponse,
-  JobGenerateLabelResponse,
-  JobMutationResponse,
-  JobTechniciansResponse,
-  JobsListResponse,
   JobStatus,
   LocalAttachment,
   LocalAttachmentsResponse,
@@ -151,7 +140,6 @@ import type {
   SyncStatusSnapshot,
   UnitsContext,
 } from "@calibra-facil/contracts";
-import type { JobExecutionPayload } from "./jobs";
 export type { JobExecutionPayload } from "./jobs";
 export type {
   AssetRecord,
@@ -170,85 +158,13 @@ export type {
   LocalSyncConflictsResponse,
 } from "@calibra-facil/contracts";
 
-export type JobsListInput = {
-  page: number;
-  limit: number;
-  customerId?: number;
-  query?: string;
-  status?: JobStatus;
-};
+// =============================================================================
+// JOBS: the DTOs are the contract schemas' types (`@calibra-facil/contracts`,
+// `endpoints/jobs.ts`); the client is generated from the endpoint definitions
+// (`modules/jobs.ts`).
+// =============================================================================
 
-/** POST /api/jobs answers with the created job row. */
-type CreateJobResult = JobCreateResponse;
-
-export interface JobsApi {
-  list(input: JobsListInput): Promise<JobsListResponse>;
-  create(input: CreateJobInput): Promise<CreateJobResult>;
-  get(jobId: string | number): Promise<JobDetail>;
-  listTechnicians(): Promise<JobTechniciansResponse>;
-  approve(
-    jobId: string | number,
-    input: {
-      reason: string;
-      environmentalJustification?: string;
-      scopeOverrideJustification?: string;
-    },
-  ): Promise<JobMutationResponse>;
-  reject(jobId: string | number, reason: string): Promise<JobMutationResponse>;
-  retryRender(jobId: string | number): Promise<JobMutationResponse>;
-  cancel(jobId: string | number, reason: string): Promise<JobMutationResponse>;
-  assign(
-    jobId: string | number,
-    technicianId: string,
-  ): Promise<JobMutationResponse>;
-  /** The active reference standards a worksheet can pick from. */
-  listStandards(): Promise<StandardsListResponse>;
-  getEffectiveEnvironmentalLimits(
-    assetTypeId: string | number,
-    input?: { unitId?: string | number | null },
-  ): Promise<EffectiveEnvironmentalLimitsResponse>;
-  saveExecution(
-    jobId: string | number,
-    input: JobExecutionPayload,
-  ): Promise<JobExecutionResponse>;
-  submitExecution(
-    jobId: string | number,
-    input: JobExecutionPayload,
-  ): Promise<JobExecutionResponse>;
-  getCertificateDownloadUrl(
-    jobId: string | number,
-  ): Promise<JobDownloadUrlResponse>;
-  generateLabel(jobId: string | number): Promise<JobGenerateLabelResponse>;
-  getLabelDownloadUrl(jobId: string | number): Promise<JobDownloadUrlResponse>;
-  /** Native printer commands (ZPL/TSPL) for direct thermal printing (text). */
-  getLabelCommands(
-    jobId: string | number,
-    options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
-  ): Promise<string>;
-  amend(jobId: string | number, reason: string): Promise<JobAmendResponse>;
-  /**
-   * §7.10: withdraws the issued certificate (admin/owner; a written reason is
-   * mandatory). The job keeps its status; the certificate lifecycle becomes
-   * WITHDRAWN and the verification page and the portal say so.
-   */
-  withdrawCertificate(
-    jobId: string | number,
-    reason: string,
-  ): Promise<JobWithdrawCertificateResponse>;
-  /**
-   * §7.10 (#426): flags an approved job as out-of-tolerance (as found) —
-   * opens a typed NC and, when notifyCustomer, generates the customer
-   * notification (PDF + email via outbox).
-   */
-  flagOutOfTolerance(
-    jobId: string | number,
-    input: {
-      description?: string;
-      affectedScope?: string;
-      notifyCustomer: boolean;
-    },
-  ): Promise<JobFlagOotResponse>;
-}
+export type { JobsApi };
 
 /**
  * Outcome of a canonical reconciliation. Never an error: reconciliation runs

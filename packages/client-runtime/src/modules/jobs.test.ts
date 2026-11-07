@@ -39,13 +39,17 @@ describe("jobs module response contracts", () => {
     const list = buildJobsList();
     expect(
       await clientReplying({ body: list }).client.jobs.list({
-        page: 1,
-        limit: 20,
+        query: {
+          page: 1,
+          limit: 20,
+        },
       }),
     ).toEqual(list);
 
     const detail = buildJobDetail({ status: "REVIEW" });
-    const got = await clientReplying({ body: detail }).client.jobs.get(7);
+    const got = await clientReplying({ body: detail }).client.jobs.get({
+      params: { id: 7 },
+    });
     // Typed by the schema: no generic needed to read a detail field.
     expect(got.methodSnapshot.methodName).toBe("Método de massa");
     expect(got).toEqual(detail);
@@ -67,12 +71,27 @@ describe("jobs module response contracts", () => {
 
     const executionInput = { data: { load: 10 } };
     const results = [
-      await client.jobs.approve(7, { reason: "ok" }),
-      await client.jobs.reject(7, "motivo"),
-      await client.jobs.cancel(7, "motivo"),
-      await client.jobs.assign(7, "user-2"),
-      await client.jobs.saveExecution(7, executionInput),
-      await client.jobs.submitExecution(7, executionInput),
+      await client.jobs.approve({ params: { id: 7 }, body: { reason: "ok" } }),
+      await client.jobs.reject({
+        params: { id: 7 },
+        body: { reason: "motivo" },
+      }),
+      await client.jobs.cancel({
+        params: { id: 7 },
+        body: { reason: "motivo" },
+      }),
+      await client.jobs.assign({
+        params: { id: 7 },
+        body: { technicianId: "user-2" },
+      }),
+      await client.jobs.saveExecution({
+        params: { id: 7 },
+        body: executionInput,
+      }),
+      await client.jobs.submitExecution({
+        params: { id: 7 },
+        body: executionInput,
+      }),
     ];
 
     for (const result of results) {
@@ -98,7 +117,10 @@ describe("jobs module response contracts", () => {
       body: buildJobMutationResponse({ status: "IN_PROGRESS" }, "Salvo", [
         warning,
       ]),
-    }).client.jobs.saveExecution(7, { data: { load: 10 } });
+    }).client.jobs.saveExecution({
+      params: { id: 7 },
+      body: { data: { load: 10 } },
+    });
     expect(saved.warnings).toEqual([warning]);
 
     await expect(
@@ -107,20 +129,30 @@ describe("jobs module response contracts", () => {
           ...buildJobMutationResponse(),
           warnings: [{ ...warning, standardIds: "11" }],
         },
-      }).client.jobs.saveExecution(7, { data: { load: 10 } }),
+      }).client.jobs.saveExecution({
+        params: { id: 7 },
+        body: { data: { load: 10 } },
+      }),
     ).rejects.toBeInstanceOf(ResponseContractError);
   });
 
   it("REQ-TC-2: amend and the download links are validated too", async () => {
     const amended = await clientReplying({
       body: buildJobAmendResponse(),
-    }).client.jobs.amend(7, "Erro de digitação na incerteza");
+    }).client.jobs.amend({
+      params: { id: 7 },
+      body: { reason: "Erro de digitação na incerteza" },
+    });
     expect(amended.amendedJob.amendmentNumber).toBe(1);
 
     const link = { url: "https://files.example.test/c.pdf" };
     const { client } = clientReplying({ body: link });
-    expect(await client.jobs.getCertificateDownloadUrl(7)).toEqual(link);
-    expect(await client.jobs.getLabelDownloadUrl(7)).toEqual(link);
+    expect(
+      await client.jobs.getCertificateDownloadUrl({ params: { id: 7 } }),
+    ).toEqual(link);
+    expect(
+      await client.jobs.getLabelDownloadUrl({ params: { id: 7 } }),
+    ).toEqual(link);
   });
 
   it("REQ-TC-2: withdrawCertificate posts the reason to the certificate route and validates the answer", async () => {
@@ -128,10 +160,10 @@ describe("jobs module response contracts", () => {
       body: buildJobWithdrawCertificateResponse(),
     });
 
-    const withdrawn = await client.jobs.withdrawCertificate(
-      7,
-      "Padrao de referencia recolhido",
-    );
+    const withdrawn = await client.jobs.withdrawCertificate({
+      params: { id: 7 },
+      body: { reason: "Padrao de referencia recolhido" },
+    });
 
     expect(withdrawn.certificateStatus).toBe("WITHDRAWN");
     expect(requests).toEqual([
@@ -146,14 +178,19 @@ describe("jobs module response contracts", () => {
           ...buildJobWithdrawCertificateResponse(),
           certificateStatus: "ISSUED",
         },
-      }).client.jobs.withdrawCertificate(7, "Padrao de referencia recolhido"),
+      }).client.jobs.withdrawCertificate({
+        params: { id: 7 },
+        body: { reason: "Padrao de referencia recolhido" },
+      }),
     ).rejects.toBeInstanceOf(ResponseContractError);
   });
 
   it("REQ-TC-2: strict mode (the default) rejects a response that breaks its contract", async () => {
     const { client } = clientReplying({ body: { id: 7, jobId: "CAL-0007" } });
 
-    const failure = await client.jobs.get(7).catch((error: unknown) => error);
+    const failure = await client.jobs
+      .get({ params: { id: 7 } })
+      .catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(ResponseContractError);
     if (failure instanceof ResponseContractError) {
@@ -162,8 +199,11 @@ describe("jobs module response contracts", () => {
     }
 
     await expect(
-      clientReplying({ body: { message: "ok" } }).client.jobs.approve(7, {
-        reason: "ok",
+      clientReplying({ body: { message: "ok" } }).client.jobs.approve({
+        params: { id: 7 },
+        body: {
+          reason: "ok",
+        },
       }),
     ).rejects.toBeInstanceOf(ResponseContractError);
   });
@@ -179,7 +219,10 @@ describe("jobs module response contracts", () => {
       },
     );
 
-    const result = await client.jobs.submitExecution(7, { data: {} });
+    const result = await client.jobs.submitExecution({
+      params: { id: 7 },
+      body: { data: {} },
+    });
 
     expect(result).toEqual(legacy);
     expect(onViolation).toHaveBeenCalledTimes(1);
@@ -194,7 +237,9 @@ describe("jobs module response contracts", () => {
       body: { error: "Job nao encontrado" },
     });
 
-    const failure = await client.jobs.get(404).catch((error: unknown) => error);
+    const failure = await client.jobs
+      .get({ params: { id: 404 } })
+      .catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(CalibraApiError);
     expect(failure).toMatchObject({

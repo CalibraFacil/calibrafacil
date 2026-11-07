@@ -60,7 +60,9 @@ export function jobLabelQueryOptions(id: string) {
     queryKey: ['jobs', id, 'label'],
     queryFn: async () => {
       try {
-        const job = await calibraApi.jobs.get(apiRouteParam(id))
+        const job = await calibraApi.jobs.get({
+          params: { id: apiRouteParam(id) },
+        })
         return job.jobId ?? null
       } catch {
         return null

@@ -130,9 +130,9 @@ describe('ExecuteJobPage workflow', () => {
     )
 
     await waitFor(() => {
-      expect(apiMocks.submitExecution).toHaveBeenCalledWith(
-        'CAL-0007',
-        expect.objectContaining({
+      expect(apiMocks.submitExecution).toHaveBeenCalledWith({
+        params: { id: 'CAL-0007' },
+        body: expect.objectContaining({
           selectedStandardIds: [],
           data: { load: 10 },
           results: {},
@@ -142,7 +142,7 @@ describe('ExecuteJobPage workflow', () => {
             notes: null,
           },
         }),
-      )
+      })
     })
     expect(toastMocks.success).toHaveBeenCalledWith('Job enviado para revisão!')
     expect(navigate).toHaveBeenCalledWith({ to: '/dashboard/jobs' })
@@ -159,13 +159,13 @@ describe('ExecuteJobPage workflow', () => {
     fireEvent.click(screen.getByRole('button', { name: /salvar rascunho/i }))
 
     await waitFor(() => {
-      expect(apiMocks.saveExecution).toHaveBeenCalledWith(
-        'CAL-0007',
-        expect.objectContaining({
+      expect(apiMocks.saveExecution).toHaveBeenCalledWith({
+        params: { id: 'CAL-0007' },
+        body: expect.objectContaining({
           data: { load: 10 },
           results: {},
         }),
-      )
+      })
     })
     expect(toastMocks.success).toHaveBeenCalledWith('Dados salvos com sucesso!')
     expect(navigate).toHaveBeenCalledWith({ to: '/dashboard/sync/conflicts' })

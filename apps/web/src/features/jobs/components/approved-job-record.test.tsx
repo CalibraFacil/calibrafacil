@@ -213,10 +213,10 @@ describe('ApprovedJobRecord certificate lifecycle (7.8.8 amendments, 7.10 withdr
     fireEvent.click(confirm)
 
     await waitFor(() => {
-      expect(apiMocks.withdrawCertificate).toHaveBeenCalledWith(
-        7,
-        'Padrão de referência recolhido',
-      )
+      expect(apiMocks.withdrawCertificate).toHaveBeenCalledWith({
+        params: { id: 7 },
+        body: { reason: 'Padrão de referência recolhido' },
+      })
     })
     await waitFor(() => expect(onRefresh).toHaveBeenCalled())
     expect(toastMocks.success).toHaveBeenCalledWith('Certificado retirado')

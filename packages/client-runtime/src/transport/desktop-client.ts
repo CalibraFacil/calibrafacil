@@ -10,16 +10,11 @@ import {
   type EndpointGroups,
   type UnitsContext,
 } from "@calibra-facil/contracts";
-import type {
-  JobDetail,
-  JobsListResponse,
-  SyncStatusSnapshot,
-} from "@calibra-facil/contracts";
+import type { SyncStatusSnapshot } from "@calibra-facil/contracts";
 import type {
   CalibraApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
-  EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
   FinanceAccessResponse,
   LocalAttachment,
@@ -34,7 +29,6 @@ import type {
   EmailDomainResponse,
   PortalDomainResponse,
   SsoSettingsResponse,
-  StandardsListData,
 } from "../types";
 import {
   getDesktopDataPolicyUnavailableMessage,
@@ -50,8 +44,7 @@ import {
 } from "./endpoint-client";
 import { createServiceOrdersApi } from "../modules/service-orders";
 import { emptyGovernanceResponse } from "../modules/units";
-import { readApiError } from "./response";
-import { apiRouteParam } from "./url";
+import { createJobsApi } from "../modules/jobs";
 import {
   createDesktopHeaders,
   type CreateDesktopApiClientOptions,
@@ -171,6 +164,7 @@ export function createDesktopApiClient(
   const fetchImpl = options.fetch ?? fetch;
   const desktopTransport = createDesktopEndpointTransport(options);
   const localServiceOrders = createServiceOrdersApi(desktopTransport, options);
+  const localJobs = createJobsApi(desktopTransport, options);
   const localAssets = endpointClient(assetEndpoints, desktopTransport, options);
   const localMethods = endpointClient(
     methodEndpoints,
@@ -494,146 +488,24 @@ export function createDesktopApiClient(
       listCompositionProfiles: localStandards.listCompositionProfiles,
     },
     jobs: {
-      ...desktopCloudOnlyStubs("jobs", {
-        action: "Jobs de calibração",
-        actionByMethod: {
-          approve: "Aprovação de job",
-          reject: "Rejeição de job",
-          retryRender: "Reemissão de certificado",
-          cancel: "Cancelamento de job",
-          assign: "Atribuição de técnico",
-          getCertificateDownloadUrl: "Download de certificado publicado",
-          generateLabel: "Geração de etiqueta publicada",
-          getLabelDownloadUrl: "Download de etiqueta publicada",
-          getLabelCommands: "Geração de comandos da etiqueta",
-          amend: "Retificação de certificado",
-          withdrawCertificate: "Retirada de certificado",
-          flagOutOfTolerance: "Sinalização de fora de tolerância",
-        },
-      }),
-      async list(input) {
-        const url = new URL("/api/jobs", options.baseUrl);
-        url.searchParams.set("page", String(input.page));
-        url.searchParams.set("limit", String(input.limit));
-
-        if (input.customerId) {
-          url.searchParams.set("customerId", String(input.customerId));
-        }
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        if (input.status) {
-          url.searchParams.set("status", input.status);
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar calibrações");
-        }
-
-        return readDesktopJson<JobsListResponse>(response);
-      },
-      async get(jobId: string | number) {
-        const response = await fetchImpl(
-          new URL(`/api/jobs/${apiRouteParam(jobId)}`, options.baseUrl),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
+      ...desktopEndpointStubs("jobs"),
+      // Plain text, cloud-only (the desktop prints through its own bridge).
+      async getLabelCommands() {
+        throw desktopUnsupportedError(
+          "Geração de comandos da etiqueta",
+          "web-api",
         );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar job");
-        }
-
-        return readDesktopJson<JobDetail>(response);
       },
-      async listStandards() {
-        const url = new URL("/api/standards", options.baseUrl);
-        url.searchParams.set("status", "ACTIVE");
-        url.searchParams.set("limit", "100");
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar padrões");
-        }
-
-        return readDesktopJson<StandardsListData>(response);
-      },
-      async getEffectiveEnvironmentalLimits(
-        assetTypeId: string | number,
-        input: { unitId?: string | number | null } = {},
-      ) {
-        const url = new URL(
-          `/api/environmental-limits/effective/${encodeURIComponent(
-            String(assetTypeId),
-          )}`,
-          options.baseUrl,
-        );
-
-        if (input.unitId) {
-          url.searchParams.set("unitId", String(input.unitId));
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          return { limits: null, source: null };
-        }
-
-        return readDesktopJson<EffectiveEnvironmentalLimitsResponse>(response);
-      },
-      async saveExecution(jobId, input) {
-        const response = await fetchImpl(
-          new URL(`/api/jobs/${apiRouteParam(jobId)}/execute`, options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao salvar"));
-        }
-
-        return response.json();
-      },
-      async submitExecution(jobId, input) {
-        const response = await fetchImpl(
-          new URL(`/api/jobs/${apiRouteParam(jobId)}/submit`, options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao submeter"));
-        }
-
-        return response.json();
-      },
+      // The offline reads and the field-capture saves go to the local server,
+      // which answers the definitions' own response schemas
+      // (`apps/local-server/src/contract.test.ts`).
+      list: localJobs.list,
+      get: localJobs.get,
+      listStandards: localJobs.listStandards,
+      getEffectiveEnvironmentalLimits:
+        localJobs.getEffectiveEnvironmentalLimits,
+      saveExecution: localJobs.saveExecution,
+      submitExecution: localJobs.submitExecution,
     },
     serviceOrders: {
       ...desktopEndpointStubs("serviceOrders"),

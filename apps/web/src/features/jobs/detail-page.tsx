@@ -163,13 +163,13 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // Approve mutation
   const approveMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.jobs.approve(
-        apiJobId,
-        buildJobApprovalInput(
+      return calibraApi.jobs.approve({
+        params: { id: apiJobId },
+        body: buildJobApprovalInput(
           envJustification,
           scopeViolationBlocked ? scopeOverrideJustification : '',
         ),
-      )
+      })
     },
     onSuccess: async () => {
       await settleAfterCloudCommand(
@@ -189,7 +189,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // Reject mutation
   const rejectMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.jobs.reject(apiJobId, rejectReason)
+      return calibraApi.jobs.reject({
+        params: { id: apiJobId },
+        body: { reason: rejectReason },
+      })
     },
     onSuccess: async () => {
       await settleAfterCloudCommand(
@@ -206,7 +209,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // Retry the render of a certificate whose render failed (roadmap 2 C5)
   const retryRenderMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.jobs.retryRender(apiJobId)
+      return calibraApi.jobs.retryRender({ params: { id: apiJobId } })
     },
     onSuccess: async () => {
       await settleAfterCloudCommand(
@@ -222,7 +225,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // Cancel mutation
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.jobs.cancel(apiJobId, cancelReason)
+      return calibraApi.jobs.cancel({
+        params: { id: apiJobId },
+        body: { reason: cancelReason },
+      })
     },
     onSuccess: async () => {
       await settleAfterCloudCommand(
@@ -240,7 +246,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // Assign mutation
   const assignMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.jobs.assign(apiJobId, selectedTechnician)
+      return calibraApi.jobs.assign({
+        params: { id: apiJobId },
+        body: { technicianId: selectedTechnician },
+      })
     },
     onSuccess: async () => {
       await settleAfterCloudCommand(

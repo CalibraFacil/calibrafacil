@@ -111,9 +111,13 @@ async function seedApprovedOriginal() {
           name: "Massa padrao 1 kg",
           certificateNumber: "PAD-0001",
           calibrationDate: "2026-02-01",
+          nextCalibrationDate: null,
           uncertainty: 0.01,
           uncertaintyUnit: "g",
           coverageFactor: 2,
+          distribution: "normal",
+          drift: null,
+          certifiedValues: null,
         },
       ],
       assetSnapshot: {
@@ -131,14 +135,26 @@ async function seedApprovedOriginal() {
         capturedAt: "2026-03-10T14:00:00.000Z",
       },
       environmentalSnapshot: {
-        temperature: { value: 20.4, unit: "C" },
-        humidity: { value: 48, unit: "%" },
+        temperature: 20.4,
+        humidity: 48,
+        pressure: null,
+        recordedAt: "2026-02-01T10:00:00.000Z",
+        recordedBy: TECH,
+        limits: null,
+        withinLimits: true,
+        outOfLimitsJustification: null,
       },
       calibrationLocationSnapshot: {
         type: "customer_site",
         addressText: "Rua do Cliente, 10",
+        recordedAt: "2026-02-01T10:00:00.000Z",
+        recordedBy: TECH,
       },
-      calibrationPhaseSnapshot: { phases: [{ name: "as-found" }] },
+      calibrationPhaseSnapshot: {
+        blocks: { "as-found": { mode: "before_only" } },
+        recordedAt: "2026-02-01T10:00:00.000Z",
+        recordedBy: TECH,
+      },
       methodDeviations: "Ponto de 750 g omitido a pedido do cliente",
     })
     .where(eq(calibrationJob.id, jobId));

@@ -127,7 +127,7 @@ export function useApprovedRecordActions({
   const handleGenerateLabel = async () => {
     setLabelFlow({ kind: 'requesting' })
     try {
-      await calibraApi.jobs.generateLabel(job.id)
+      await calibraApi.jobs.generateLabel({ params: { id: job.id } })
       // Wait for the worker (PendingLabelPoller refreshes the job).
       setLabelFlow({ kind: 'waiting', baselineLabelUrl: job.labelUrl ?? null })
       toast.info('Gerando etiqueta... Aguarde.')
@@ -162,7 +162,10 @@ export function useApprovedRecordActions({
 
     setIsAmending(true)
     try {
-      const result = await calibraApi.jobs.amend(job.id, amendmentReason)
+      const result = await calibraApi.jobs.amend({
+        params: { id: job.id },
+        body: { reason: amendmentReason },
+      })
 
       // The original now shows the amendment in progress; lists show the new job.
       await refreshAfter('amended')
@@ -195,7 +198,10 @@ export function useApprovedRecordActions({
 
     setIsWithdrawing(true)
     try {
-      await calibraApi.jobs.withdrawCertificate(job.id, reason)
+      await calibraApi.jobs.withdrawCertificate({
+        params: { id: job.id },
+        body: { reason },
+      })
       await refreshAfter('withdrawn')
       toast.success('Certificado retirado')
       setIsWithdrawDialogOpen(false)
@@ -215,10 +221,13 @@ export function useApprovedRecordActions({
   const handleFlagOutOfTolerance = async () => {
     setIsFlaggingOot(true)
     try {
-      await calibraApi.jobs.flagOutOfTolerance(job.id, {
-        description: ootDescription.trim() || undefined,
-        affectedScope: ootAffectedScope.trim() || undefined,
-        notifyCustomer: ootNotifyCustomer,
+      await calibraApi.jobs.flagOutOfTolerance({
+        params: { id: job.id },
+        body: {
+          description: ootDescription.trim() || undefined,
+          affectedScope: ootAffectedScope.trim() || undefined,
+          notifyCustomer: ootNotifyCustomer,
+        },
       })
       toast.success('Não conformidade registrada')
       toast.info('Acompanhe na área de Qualidade (NC)')

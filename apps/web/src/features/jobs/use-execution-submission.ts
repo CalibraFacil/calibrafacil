@@ -99,9 +99,9 @@ export function useExecutionSubmission({
     // The variable is the snapshot being saved: on success it becomes the new
     // clean baseline, so edits typed while the request was in flight stay dirty.
     mutationFn: async (_saved: ExecutionFormValues) => {
-      return calibraApi.jobs.saveExecution(
-        apiRouteParam(jobId),
-        buildExecutionMutationPayload({
+      return calibraApi.jobs.saveExecution({
+        params: { id: apiRouteParam(jobId) },
+        body: buildExecutionMutationPayload({
           selectedStandardIds,
           normalizedData: parsedFormData,
           formulaResults,
@@ -112,7 +112,7 @@ export function useExecutionSubmission({
           // Persist the execution date with the draft so it survives a reload.
           performedAt: performedAtState.instant ?? undefined,
         }),
-      )
+      })
     },
     onSuccess: (data, saved) => {
       setSavedValues(saved)
@@ -140,9 +140,9 @@ export function useExecutionSubmission({
       if (!performedAtState.payload) {
         throw new Error(performedAtState.message ?? 'Data de execução inválida')
       }
-      return calibraApi.jobs.submitExecution(
-        apiRouteParam(jobId),
-        buildExecutionMutationPayload({
+      return calibraApi.jobs.submitExecution({
+        params: { id: apiRouteParam(jobId) },
+        body: buildExecutionMutationPayload({
           selectedStandardIds,
           normalizedData: parsedFormData,
           formulaResults,
@@ -152,7 +152,7 @@ export function useExecutionSubmission({
           methodDeviations,
           ...performedAtState.payload,
         }),
-      )
+      })
     },
     onSuccess: (_data, submitted) => {
       setSavedValues(submitted)
