@@ -3,14 +3,18 @@ import {
   DESKTOP_UPDATE_REQUIRED_CODE,
   LEGACY_SYNC_PROTOCOL_VERSION,
   SYNC_COMMAND_OPERATIONS,
-  SYNC_COMMAND_SUPPORT,
+  SYNC_CREATE_OPERATIONS,
+  SYNC_OPERATIONS,
   SYNC_PROTOCOL_VERSION,
   buildSyncUpdateRequiredResponse,
   compareDesktopVersions,
   desktopUpdateRequiredMessage,
   evaluateDesktopVersionGate,
+  isCreateSyncOperation,
+  isRegulatedSyncOperation,
   parseSyncCommand,
   syncCommandSupport,
+  syncOperationLabel,
   syncPushRequestEnvelopeSchema,
   syncPushRequestSchema,
   syncUpdateRequiredResponseSchema,
@@ -85,15 +89,15 @@ describe("SyncCommand union (REQ-SP-1)", () => {
   });
 
   it("REQ-SP-1: the support table lists every member exactly once, with the operations a desktop still produces as current", () => {
-    expect(sorted(Object.keys(SYNC_COMMAND_SUPPORT))).toEqual(
+    expect(sorted(Object.keys(SYNC_OPERATIONS))).toEqual(
       sorted(SYNC_COMMAND_OPERATIONS),
     );
     expect(new Set(SYNC_COMMAND_OPERATIONS).size).toBe(
       SYNC_COMMAND_OPERATIONS.length,
     );
     const current = sorted(
-      Object.entries(SYNC_COMMAND_SUPPORT)
-        .filter(([, support]) => support === "current")
+      Object.entries(SYNC_OPERATIONS)
+        .filter(([, definition]) => definition.support === "current")
         .map(([operation]) => operation),
     );
     expect(current).toEqual([
@@ -106,6 +110,48 @@ describe("SyncCommand union (REQ-SP-1)", () => {
     expect(syncCommandSupport("update_local_asset")).toBe("legacy");
     expect(syncCommandSupport("save_local_execution")).toBe("current");
     expect(syncCommandSupport("approve_from_the_future")).toBeNull();
+  });
+
+  it("REQ-SP-1: the operation table says which operations carry regulated readings and which create a record", () => {
+    expect(
+      sorted(
+        Object.entries(SYNC_OPERATIONS)
+          .filter(([, definition]) => definition.regulated)
+          .map(([operation]) => operation),
+      ),
+    ).toEqual(["save_local_execution", "submit_local_execution"]);
+    expect(isRegulatedSyncOperation("submit_local_execution")).toBe(true);
+    expect(isRegulatedSyncOperation("create_local_customer")).toBe(false);
+    expect(isRegulatedSyncOperation("approve_from_the_future")).toBe(false);
+
+    expect(sorted(SYNC_CREATE_OPERATIONS)).toEqual([
+      "create_local_asset",
+      "create_local_attachment",
+      "create_local_certificate_draft",
+      "create_local_customer",
+      "create_local_job_draft",
+      "create_local_non_conformance",
+      "create_local_service_order_delivery_document_draft",
+      "create_local_service_order_intake",
+      "create_local_service_order_quote_draft",
+    ]);
+    expect(isCreateSyncOperation("create_local_asset")).toBe(true);
+    expect(isCreateSyncOperation("update_local_asset")).toBe(false);
+    expect(isCreateSyncOperation("create_local_from_the_future")).toBe(false);
+  });
+
+  it("REQ-SP-1: every operation has a pt-BR label and a permission of one or more resources", () => {
+    for (const [operation, definition] of Object.entries(SYNC_OPERATIONS)) {
+      expect(definition.label.length, operation).toBeGreaterThan(0);
+      expect(syncOperationLabel(operation)).toBe(definition.label);
+      const resources = Object.entries(definition.permission);
+      expect(resources.length, operation).toBeGreaterThan(0);
+      for (const [, actions] of resources) {
+        expect(actions.length, operation).toBeGreaterThan(0);
+      }
+    }
+    expect(syncOperationLabel("approve_from_the_future")).toBeUndefined();
+    expect(syncOperationLabel(null)).toBeUndefined();
   });
 
   it("REQ-SP-1: an operation outside the union, or one sent for another entity type, is unsupported, not a schema failure", () => {

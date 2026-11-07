@@ -36,7 +36,10 @@ import {
   service,
   serviceOrder,
 } from "@calibra-facil/db/schema";
-import type { SyncChangeEntityType } from "@calibra-facil/db/sync-change-log";
+import {
+  SYNC_ENTITY_ORDER,
+  type SyncEntity,
+} from "@calibra-facil/contracts/sync-entities";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { buildUnitScopeCondition } from "../../lib/units";
 import type { MemberData } from "../../middleware/permission";
@@ -59,7 +62,7 @@ export type SyncEntityRow = {
 };
 
 export type SyncEntitySource = {
-  readonly entityType: SyncChangeEntityType;
+  readonly entityType: SyncEntity;
   /**
    * The rows of `ids` the desktop may see right now (its laboratory, its unit scope,
    * published where that applies), live or soft-deleted. A missing id is a row that was
@@ -82,7 +85,7 @@ export type SyncEntitySource = {
 type UnitColumn = AnyColumn<{ data: number }>;
 
 type SourceDefinition = {
-  entityType: SyncChangeEntityType;
+  entityType: SyncEntity;
   table: PgTable;
   fields: SelectedFields;
   id: AnyColumn<{ data: number }>;
@@ -439,30 +442,26 @@ const massCompositionProfileSource = define({
   ),
 });
 
-/** In the order the bootstrap walks them and the desktop applies them. */
-export const SYNC_ENTITY_SOURCES = [
-  assetTypeSource,
-  customerSource,
-  assetSource,
-  serviceSource,
-  referenceStandardSource,
-  environmentalLimitSource,
-  calibrationJobSource,
-  serviceOrderSource,
-  publishedMethodSource,
-  massCompositionProfileSource,
-] as const satisfies readonly SyncEntitySource[];
+/** One source per entity of the sync entity table (`@calibra-facil/contracts/sync-entities`). */
+const SOURCES = {
+  asset_type: assetTypeSource,
+  customer: customerSource,
+  asset: assetSource,
+  service: serviceSource,
+  reference_standard: referenceStandardSource,
+  environmental_limit: environmentalLimitSource,
+  calibration_job: calibrationJobSource,
+  service_order: serviceOrderSource,
+  published_method: publishedMethodSource,
+  mass_composition_profile: massCompositionProfileSource,
+} satisfies Record<SyncEntity, SyncEntitySource>;
 
-const SOURCE_BY_TYPE = new Map<SyncChangeEntityType, SyncEntitySource>(
-  SYNC_ENTITY_SOURCES.map((source) => [source.entityType, source]),
-);
+/** In the order the bootstrap walks them and the desktop applies them (`SYNC_ENTITY_ORDER`). */
+export const SYNC_ENTITY_SOURCES: readonly SyncEntitySource[] =
+  SYNC_ENTITY_ORDER.map((entityType) => SOURCES[entityType]);
 
-export function syncEntitySource(
-  entityType: SyncChangeEntityType,
-): SyncEntitySource {
-  const source = SOURCE_BY_TYPE.get(entityType);
-  if (!source) throw new Error(`no sync source for ${entityType}`);
-  return source;
+export function syncEntitySource(entityType: SyncEntity): SyncEntitySource {
+  return SOURCES[entityType];
 }
 
 /**

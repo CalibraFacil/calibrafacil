@@ -5,6 +5,16 @@ import {
   syncBootstrapResponseSchema,
 } from "@calibra-facil/contracts/sync";
 import { SyncBootstrapPageResponse } from "@calibra-facil/contracts/sync-change-seq";
+import {
+  SYNC_ENTITIES,
+  SYNC_ENTITY_ORDER,
+  SYNC_SKIPPED_ROW_KINDS,
+  type SyncEntity,
+  type SyncSkippedRowKind,
+  isSyncSkippedRowKind,
+  syncMirrorLiveCondition,
+  syncMirrorLocalId,
+} from "@calibra-facil/contracts/sync-entities";
 import type { LocalDatabase } from "./database";
 import { setSyncCursor } from "./outbox";
 import { resolveServiceOrdersForAggregates } from "./service-orders";
@@ -15,22 +25,17 @@ type JsonRecord = Record<string, unknown>;
 
 /** A pulled row that was left untouched because local changes are queued. */
 type SkippedPulledRow = {
-  entityType: "customer" | "asset" | "calibration_job" | "service_order";
+  entityType: SyncSkippedRowKind;
   localId: string;
 };
 
-const EMPTY_ENTITY_ARRAYS = {
-  publishedMethods: [],
-  assetTypes: [],
-  customers: [],
-  assets: [],
-  services: [],
-  standards: [],
-  massCompositionProfiles: [],
-  environmentalLimits: [],
-  jobs: [],
-  serviceOrders: [],
-};
+/** The bootstrap arrays emptied, for the header-only snapshot (one per entity of the sync entity table). */
+const EMPTY_ENTITY_ARRAYS = Object.fromEntries(
+  SYNC_ENTITY_ORDER.map((entityType) => [
+    SYNC_ENTITIES[entityType].bootstrapKey,
+    [],
+  ]),
+);
 
 export type ApplySyncSummary = {
   skipped: SkippedPulledRow[];
@@ -222,7 +227,7 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("asset-type", id),
+          id: mirrorLocalId("asset_type", id),
           remoteId: id,
           organizationId,
           name: getString(row, "name") ?? `Tipo ${id}`,
@@ -236,17 +241,7 @@ ON CONFLICT(id) DO UPDATE SET
     for (const item of bootstrap.customers) {
       const row = toRecord(item);
       const id = requiredNumber(row, "id");
-      if (
-        skipPendingRow(
-          database,
-          pending,
-          skipped,
-          row,
-          "customer",
-          "customer",
-          id,
-        )
-      )
+      if (skipPendingRow(database, pending, skipped, row, "customer", id))
         continue;
       database
         .prepare(
@@ -294,7 +289,7 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("customer", id),
+          id: mirrorLocalId("customer", id),
           remoteId: id,
           organizationId,
           unitId: activeUnitId,
@@ -312,7 +307,7 @@ ON CONFLICT(id) DO UPDATE SET
     for (const item of bootstrap.assets) {
       const row = toRecord(item);
       const id = requiredNumber(row, "id");
-      if (skipPendingRow(database, pending, skipped, row, "asset", "asset", id))
+      if (skipPendingRow(database, pending, skipped, row, "asset", id))
         continue;
       const customerId = requiredNumber(row, "customerId");
       const assetTypeId = requiredNumber(row, "assetTypeId");
@@ -395,12 +390,12 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("asset", id),
+          id: mirrorLocalId("asset", id),
           remoteId: id,
           organizationId,
           unitId: getNumber(row, "unitId") ?? activeUnitId ?? 0,
-          customerId: remoteLocalId("customer", customerId),
-          assetTypeId: remoteLocalId("asset-type", assetTypeId),
+          customerId: mirrorLocalId("customer", customerId),
+          assetTypeId: mirrorLocalId("asset_type", assetTypeId),
           name: getString(row, "name") ?? `Ativo ${id}`,
           serialNumber: getString(row, "serialNumber") ?? "",
           tag: getString(row, "tag") ?? String(id),
@@ -464,16 +459,16 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("service", id),
+          id: mirrorLocalId("service", id),
           remoteId: id,
           organizationId,
           assetTypeId: getNumber(row, "assetTypeId")
-            ? remoteLocalId("asset-type", getNumber(row, "assetTypeId")!)
+            ? mirrorLocalId("asset_type", getNumber(row, "assetTypeId")!)
             : null,
           name: getString(row, "name") ?? `Servico ${id}`,
           description: getNullableString(row, "description"),
           methodId: getNumber(row, "methodId")
-            ? remoteLocalId("method", getNumber(row, "methodId")!)
+            ? mirrorLocalId("published_method", getNumber(row, "methodId")!)
             : null,
           status: getBoolean(row, "isActive") === false ? "INACTIVE" : "ACTIVE",
           pulledAt,
@@ -528,11 +523,11 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("method", id),
+          id: mirrorLocalId("published_method", id),
           remoteId: id,
           organizationId,
           assetTypeId: getNumber(row, "assetTypeId")
-            ? remoteLocalId("asset-type", getNumber(row, "assetTypeId")!)
+            ? mirrorLocalId("asset_type", getNumber(row, "assetTypeId")!)
             : null,
           name: getString(row, "name") ?? `Metodo ${id}`,
           version: getNumber(row, "version") ?? 1,
@@ -596,7 +591,7 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("standard", id),
+          id: mirrorLocalId("reference_standard", id),
           remoteId: id,
           organizationId,
           unitId: getNumber(row, "unitId"),
@@ -647,7 +642,7 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("mass_composition_profile", id),
+          id: mirrorLocalId("mass_composition_profile", id),
           remoteId: id,
           organizationId,
           profileKey: getString(row, "profileKey") ?? "",
@@ -691,7 +686,7 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("environmental-limit", id),
+          id: mirrorLocalId("environmental_limit", id),
           remoteId: id,
           organizationId,
           unitId: getNumber(row, "unitId") ?? activeUnitId,
@@ -705,15 +700,7 @@ ON CONFLICT(id) DO UPDATE SET
       const row = toRecord(item);
       const id = requiredNumber(row, "id");
       if (
-        skipPendingRow(
-          database,
-          pending,
-          skipped,
-          row,
-          "calibration_job",
-          "job",
-          id,
-        )
+        skipPendingRow(database, pending, skipped, row, "calibration_job", id)
       ) {
         continue;
       }
@@ -802,18 +789,18 @@ ON CONFLICT(id) DO UPDATE SET
 `,
         )
         .run({
-          id: remoteLocalId("job", id),
+          id: mirrorLocalId("calibration_job", id),
           remoteId: id,
           jobId: getString(row, "jobId") ?? String(id),
           certificateName: getNullableString(row, "certificateName"),
           organizationId,
           unitId: getNumber(row, "unitId") ?? activeUnitId ?? 0,
-          customerId: remoteLocalId(
+          customerId: mirrorLocalId(
             "customer",
             requiredNumber(row, "customerId"),
           ),
-          assetId: remoteLocalId("asset", requiredNumber(row, "assetId")),
-          serviceId: remoteLocalId("service", requiredNumber(row, "serviceId")),
+          assetId: mirrorLocalId("asset", requiredNumber(row, "assetId")),
+          serviceId: mirrorLocalId("service", requiredNumber(row, "serviceId")),
           technicianId: getNullableString(row, "technicianId"),
           methodSnapshotJson: JSON.stringify(row.methodSnapshot ?? null),
           assetSnapshotJson: JSON.stringify(row.assetSnapshot ?? null),
@@ -853,15 +840,7 @@ ON CONFLICT(id) DO UPDATE SET
       const row = toRecord(item);
       const id = requiredNumber(row, "id");
       if (
-        skipPendingRow(
-          database,
-          pending,
-          skipped,
-          row,
-          "service_order",
-          "service-order",
-          id,
-        )
+        skipPendingRow(database, pending, skipped, row, "service_order", id)
       ) {
         continue;
       }
@@ -966,11 +945,11 @@ ON CONFLICT(id) DO UPDATE SET
         )
         .run({
           keepSyncState: pending.serviceOrdersWithQueuedChildren.has(
-            remoteLocalId("service-order", id),
+            mirrorLocalId("service_order", id),
           )
             ? 1
             : 0,
-          id: remoteLocalId("service-order", id),
+          id: mirrorLocalId("service_order", id),
           remoteId: id,
           // Opaque cloud id the dashboard routes with, so a synced OS has the
           // same URL in both runtimes.
@@ -979,11 +958,11 @@ ON CONFLICT(id) DO UPDATE SET
             getString(row, "serviceOrderNumber") ?? `OS-${id}`,
           organizationId,
           unitId: getNumber(row, "unitId") ?? activeUnitId ?? 0,
-          customerId: remoteLocalId(
+          customerId: mirrorLocalId(
             "customer",
             requiredNumber(row, "customerId"),
           ),
-          assetId: remoteLocalId("asset", requiredNumber(row, "assetId")),
+          assetId: mirrorLocalId("asset", requiredNumber(row, "assetId")),
           clientContactId: getNumber(row, "clientContactId"),
           clientContactSnapshotJson: JSON.stringify(
             row.clientContactSnapshot ?? null,
@@ -1145,32 +1124,17 @@ function applyCloudDeletions(
 }
 
 type MirrorRemoval = {
-  entityType: CloudSyncEvent["entityType"];
+  entityType: SyncEntity;
   remoteId: number;
   deletedAt: string;
   version: string;
 };
 
-const SOFT_DELETED_AGGREGATES = {
-  customer: { table: "customers", prefix: "customer" },
-  asset: { table: "assets", prefix: "asset" },
-  calibration_job: { table: "calibration_jobs", prefix: "job" },
-} as const;
-
-const HARD_DELETED_MIRRORS = {
-  asset_type: { table: "asset_types", prefix: "asset-type" },
-  service: { table: "services", prefix: "service" },
-  published_method: { table: "published_methods", prefix: "method" },
-  environmental_limit: {
-    table: "environmental_limits",
-    prefix: "environmental-limit",
-  },
-  mass_composition_profile: {
-    table: "mass_composition_profiles",
-    prefix: "mass_composition_profile",
-  },
-} as const;
-
+/**
+ * Removes the local mirror of one cloud row, the way its delete mode says
+ * (`SYNC_ENTITIES[entity].deleteMode`). A row of a `skippedRowKind` entity with queued
+ * local changes is left alone and recorded instead.
+ */
 function removeLocalMirror(
   database: LocalDatabase,
   pending: PendingLocalChanges,
@@ -1178,79 +1142,60 @@ function removeLocalMirror(
   removal: MirrorRemoval,
 ) {
   const { entityType, remoteId, deletedAt } = removal;
+  const { mirrorTable, deleteMode } = SYNC_ENTITIES[entityType];
+  const localId = mirrorLocalId(entityType, remoteId);
 
   if (
-    entityType === "customer" ||
-    entityType === "asset" ||
-    entityType === "calibration_job"
+    isSyncSkippedRowKind(entityType) &&
+    skipPendingRow(
+      database,
+      pending,
+      skipped,
+      { updatedAt: removal.version },
+      entityType,
+      remoteId,
+    )
   ) {
-    const { table, prefix } = SOFT_DELETED_AGGREGATES[entityType];
-    if (
-      skipPendingRow(
-        database,
-        pending,
-        skipped,
-        { updatedAt: removal.version },
-        entityType,
-        prefix,
-        remoteId,
-      )
-    ) {
-      return;
-    }
-    database
-      .prepare(
-        `
-UPDATE ${table}
+    return;
+  }
+  if (
+    entityType === "service_order" &&
+    pending.serviceOrdersWithQueuedChildren.has(localId)
+  ) {
+    return;
+  }
+
+  switch (deleteMode) {
+    case "deleted_at":
+      database
+        .prepare(
+          `
+UPDATE ${mirrorTable}
 SET deleted_at = @deletedAt,
   sync_state = 'synced'
 WHERE id = @id AND deleted_at IS NULL
 `,
-      )
-      .run({ id: remoteLocalId(prefix, remoteId), deletedAt });
-    return;
-  }
-
-  if (entityType === "service_order") {
-    const localId = remoteLocalId("service-order", remoteId);
-    if (
-      skipPendingRow(
-        database,
-        pending,
-        skipped,
-        { updatedAt: removal.version },
-        "service_order",
-        "service-order",
-        remoteId,
-      ) ||
-      pending.serviceOrdersWithQueuedChildren.has(localId)
-    ) {
+        )
+        .run({ id: localId, deletedAt });
       return;
-    }
-    database.prepare("DELETE FROM service_orders WHERE id = ?").run(localId);
-    return;
-  }
-
-  if (entityType === "reference_standard") {
-    // reference_standards has no deleted_at: 'deleted' is the state every
-    // local standards query already filters out.
-    database
-      .prepare(
-        `
-UPDATE reference_standards
+    case "sync_state":
+      // reference_standards has no deleted_at: 'deleted' is the state every
+      // local standards query already filters out.
+      database
+        .prepare(
+          `
+UPDATE ${mirrorTable}
 SET sync_state = 'deleted',
   pulled_at = @deletedAt
 WHERE id = @id
 `,
-      )
-      .run({ id: remoteLocalId("standard", remoteId), deletedAt });
-    return;
+        )
+        .run({ id: localId, deletedAt });
+      return;
+    case "hard":
+      database.prepare(`DELETE FROM ${mirrorTable} WHERE id = ?`).run(localId);
+      return;
   }
-
-  const { table, prefix } = HARD_DELETED_MIRRORS[entityType];
-  database
-    .prepare(`DELETE FROM ${table} WHERE id = ?`)
-    .run(remoteLocalId(prefix, remoteId));
 }
 
 type PendingLocalChanges = {
@@ -1261,13 +1206,6 @@ type PendingLocalChanges = {
   /** Service orders whose own row is clean but a child event is still queued. */
   serviceOrdersWithQueuedChildren: Set<string>;
 };
-
-const PULLED_AGGREGATE_TABLES = {
-  customer: { table: "customers", prefix: "customer" },
-  asset: { table: "assets", prefix: "asset" },
-  calibration_job: { table: "calibration_jobs", prefix: "job" },
-  service_order: { table: "service_orders", prefix: "service-order" },
-} as const;
 
 /**
  * What still has to be pushed. "Unsettled" is every outbox status but
@@ -1295,9 +1233,8 @@ WHERE o.status NOT IN ('synced', 'discarded')
     events.map((event) => `${event.kind}:${event.id}`),
   );
 
-  for (const [kind, { table, prefix }] of Object.entries(
-    PULLED_AGGREGATE_TABLES,
-  )) {
+  for (const kind of SYNC_SKIPPED_ROW_KINDS) {
+    const { mirrorTable: table } = SYNC_ENTITIES[kind];
     const ids = events.filter((event) => event.kind === kind);
     for (const chunk of chunked(ids, 500)) {
       const rows = database
@@ -1308,7 +1245,7 @@ WHERE o.status NOT IN ('synced', 'discarded')
         .all(...chunk.map((event) => event.id));
       for (const row of rows) {
         if (row.remote_id !== null) {
-          aggregates.add(`${kind}:${remoteLocalId(prefix, row.remote_id)}`);
+          aggregates.add(`${kind}:${mirrorLocalId(kind, row.remote_id)}`);
         }
       }
     }
@@ -1327,7 +1264,7 @@ WHERE o.status NOT IN ('synced', 'discarded')
       .get(orderId)?.remote_id;
     if (remoteId !== null && remoteId !== undefined) {
       serviceOrdersWithQueuedChildren.add(
-        remoteLocalId("service-order", remoteId),
+        mirrorLocalId("service_order", remoteId),
       );
     }
   }
@@ -1344,11 +1281,10 @@ function skipPendingRow(
   pending: PendingLocalChanges,
   skipped: SkippedPulledRow[],
   row: JsonRecord,
-  entityType: SkippedPulledRow["entityType"],
-  prefix: string,
+  entityType: SyncSkippedRowKind,
   remoteId: number,
 ) {
-  const localId = remoteLocalId(prefix, remoteId);
+  const localId = mirrorLocalId(entityType, remoteId);
   if (!pending.aggregates.has(`${entityType}:${localId}`)) return false;
 
   skipped.push({ entityType, localId });
@@ -1373,9 +1309,7 @@ function chunked<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-function remoteLocalId(kind: string, remoteId: number) {
-  return `${kind}:${remoteId}`;
-}
+const mirrorLocalId = syncMirrorLocalId;
 
 export function getLocalSessionSnapshot(database: LocalDatabase) {
   const row = database
@@ -1503,70 +1437,6 @@ export function discardBootstrapProgress(database: LocalDatabase) {
   })();
 }
 
-const BOOTSTRAP_PAGE_ARRAYS = [
-  ["asset_type", "assetTypes"],
-  ["customer", "customers"],
-  ["asset", "assets"],
-  ["service", "services"],
-  ["reference_standard", "standards"],
-  ["environmental_limit", "environmentalLimits"],
-  ["calibration_job", "jobs"],
-  ["service_order", "serviceOrders"],
-  ["published_method", "publishedMethods"],
-  ["mass_composition_profile", "massCompositionProfiles"],
-] as const satisfies ReadonlyArray<
-  readonly [CloudSyncEvent["entityType"], keyof SyncBootstrapPageResponse]
->;
-
-/**
- * The local mirror tables a completed bootstrap reconciles: which rows are mirrors of a
- * cloud row (their id is the remote-addressed `<prefix>:<remote id>`, not a locally
- * created id that was accepted later) and which of those are still live.
- */
-const BOOTSTRAP_MIRRORS = {
-  asset_type: { table: "asset_types", prefix: "asset-type", live: "1 = 1" },
-  customer: {
-    table: "customers",
-    prefix: "customer",
-    live: "deleted_at IS NULL",
-  },
-  asset: { table: "assets", prefix: "asset", live: "deleted_at IS NULL" },
-  service: { table: "services", prefix: "service", live: "1 = 1" },
-  reference_standard: {
-    table: "reference_standards",
-    prefix: "standard",
-    live: "sync_state <> 'deleted'",
-  },
-  environmental_limit: {
-    table: "environmental_limits",
-    prefix: "environmental-limit",
-    live: "1 = 1",
-  },
-  calibration_job: {
-    table: "calibration_jobs",
-    prefix: "job",
-    live: "deleted_at IS NULL",
-  },
-  service_order: {
-    table: "service_orders",
-    prefix: "service-order",
-    live: "1 = 1",
-  },
-  published_method: {
-    table: "published_methods",
-    prefix: "method",
-    live: "1 = 1",
-  },
-  mass_composition_profile: {
-    table: "mass_composition_profiles",
-    prefix: "mass_composition_profile",
-    live: "1 = 1",
-  },
-} as const satisfies Record<
-  CloudSyncEvent["entityType"],
-  { table: string; prefix: string; live: string }
->;
-
 /**
  * Apply ONE page of the paged bootstrap, atomically with the bookkeeping that lets an
  * interrupted bootstrap resume at the next page: the rows, the ids delivered so far, and
@@ -1601,8 +1471,8 @@ export function applySyncBootstrapPage(
     const remember = database.prepare(
       "INSERT OR IGNORE INTO sync_bootstrap_seen (entity_type, remote_id) VALUES (?, ?)",
     );
-    for (const [entityType, key] of BOOTSTRAP_PAGE_ARRAYS) {
-      for (const item of page[key] ?? []) {
+    for (const entityType of SYNC_ENTITY_ORDER) {
+      for (const item of page[SYNC_ENTITIES[entityType].bootstrapKey] ?? []) {
         const id = getNumber(toRecord(item), "id");
         if (id !== null) remember.run(entityType, id);
       }
@@ -1633,8 +1503,12 @@ function removeRowsTheBootstrapDidNotDeliver(
   const pending = loadPendingLocalChanges(database);
   const skipped: SkippedPulledRow[] = [];
 
-  for (const [entityType] of BOOTSTRAP_PAGE_ARRAYS) {
-    const { table, prefix, live } = BOOTSTRAP_MIRRORS[entityType];
+  // The local mirror tables a completed bootstrap reconciles: which rows are mirrors of a
+  // cloud row (their id is the remote-addressed `<prefix>:<remote id>`, not a locally
+  // created id that was accepted later) and which of those are still live.
+  for (const entityType of SYNC_ENTITY_ORDER) {
+    const { mirrorTable: table, idPrefix: prefix } = SYNC_ENTITIES[entityType];
+    const live = syncMirrorLiveCondition(entityType);
     const undelivered = database
       .prepare<
         [string],

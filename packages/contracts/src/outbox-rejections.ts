@@ -1,3 +1,5 @@
+import { isRegulatedSyncOperation } from "./sync-protocol";
+
 /**
  * What a cloud rejection of an outbox event means for the event's future.
  *
@@ -111,8 +113,15 @@ export function classifyOutboxRejection(code: string): OutboxRejectionClass {
   return known?.[1] ?? "transient";
 }
 
+/** Every code the tables decide: the cloud's rejections and the desktop's own failures. */
+export type OutboxFailureCode =
+  | keyof typeof OUTBOX_REJECTION_CLASSES
+  | keyof typeof LOCAL_OUTBOX_FAILURE_CLASSES;
+
 /** Whether the table (cloud rejections or the desktop's own failures) has a decision for `code`. */
-export function isKnownOutboxRejectionCode(code: string): boolean {
+export function isKnownOutboxRejectionCode(
+  code: string,
+): code is OutboxFailureCode {
   return (
     Object.hasOwn(OUTBOX_REJECTION_CLASSES, code) ||
     Object.hasOwn(LOCAL_OUTBOX_FAILURE_CLASSES, code)
@@ -137,12 +146,10 @@ export function parseOutboxErrorCode(lastError: string | null): string | null {
   return match?.[1] ?? null;
 }
 
-/** Operations whose events carry regulated calibration readings. */
-const REGULATED_OUTBOX_OPERATIONS: readonly string[] = [
-  "submit_local_execution",
-  "save_local_execution",
-];
-
+/**
+ * Whether an operation's events carry regulated calibration readings: the flag of the
+ * push-operation table (`SYNC_OPERATIONS` in sync-protocol.ts).
+ */
 export function isRegulatedOutboxOperation(operation: string): boolean {
-  return REGULATED_OUTBOX_OPERATIONS.includes(operation);
+  return isRegulatedSyncOperation(operation);
 }

@@ -27,6 +27,11 @@ import {
   formatSyncChangeCursor,
   syncBootstrapPageResponseSchema,
 } from "@calibra-facil/contracts";
+import {
+  SYNC_ENTITIES,
+  SYNC_ENTITY_ORDER,
+  type SyncBootstrapKey,
+} from "@calibra-facil/contracts/sync-entities";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { orgDb } from "../../lib/org-db";
 import type { MemberData } from "../../middleware/permission";
@@ -66,60 +71,16 @@ function formatToken(walk: Walk): string {
   return `b3|${walk.xmin}|${walk.rank}|${walk.afterId}`;
 }
 
-type EntityArrays = Pick<
-  SyncBootstrapPageResponse,
-  | "publishedMethods"
-  | "assetTypes"
-  | "customers"
-  | "assets"
-  | "services"
-  | "standards"
-  | "environmentalLimits"
-  | "jobs"
-  | "serviceOrders"
-> & { massCompositionProfiles: unknown[] };
+/** The rows of one page, by the bootstrap array each entity travels in (`bootstrapKey`). */
+type EntityArrays = Map<SyncBootstrapKey, unknown[]>;
 
 function emptyArrays(): EntityArrays {
-  return {
-    publishedMethods: [],
-    assetTypes: [],
-    customers: [],
-    assets: [],
-    services: [],
-    standards: [],
-    environmentalLimits: [],
-    jobs: [],
-    serviceOrders: [],
-    massCompositionProfiles: [],
-  };
-}
-
-function arrayFor(
-  arrays: EntityArrays,
-  entityType: (typeof SYNC_ENTITY_SOURCES)[number]["entityType"],
-): unknown[] {
-  switch (entityType) {
-    case "asset_type":
-      return arrays.assetTypes;
-    case "customer":
-      return arrays.customers;
-    case "asset":
-      return arrays.assets;
-    case "service":
-      return arrays.services;
-    case "reference_standard":
-      return arrays.standards;
-    case "environmental_limit":
-      return arrays.environmentalLimits;
-    case "calibration_job":
-      return arrays.jobs;
-    case "service_order":
-      return arrays.serviceOrders;
-    case "published_method":
-      return arrays.publishedMethods;
-    case "mass_composition_profile":
-      return arrays.massCompositionProfiles;
-  }
+  return new Map(
+    SYNC_ENTITY_ORDER.map((entityType) => [
+      SYNC_ENTITIES[entityType].bootstrapKey,
+      [],
+    ]),
+  );
 }
 
 type BootstrapPage =
@@ -184,7 +145,9 @@ async function loadBootstrapPageIn(
       afterId,
       remaining,
     );
-    arrayFor(arrays, source.entityType).push(...rows.map((row) => row.payload));
+    arrays
+      .get(SYNC_ENTITIES[source.entityType].bootstrapKey)
+      ?.push(...rows.map((row) => row.payload));
     rowCount += rows.length;
     const last = rows.at(-1);
     if (rows.length < remaining || last === undefined) {
@@ -269,7 +232,7 @@ export async function buildBootstrapPageResponse(input: {
       offlineCertificatePublication: false,
     },
     syncCursor: page.syncCursor,
-    ...page.arrays,
+    ...Object.fromEntries(page.arrays),
     page: { nextToken: page.nextToken, rowCount: page.rowCount },
   });
 }

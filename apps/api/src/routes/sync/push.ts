@@ -55,7 +55,7 @@ function aggregateKeyOf(rawEvent: unknown): string | null {
 export const pushRoutes = new Hono<SyncRouterEnv>().post(
   "/push",
   // Authentication, membership and the laboratory organization only: what each
-  // member may send is decided per event (SYNC_OPERATION_PERMISSIONS), since
+  // member may send is decided per event (`SYNC_OPERATIONS`, then `authorizeSyncOperation`), since
   // one batch carries operations that the online routes guard differently.
   ...requireLabProtected,
   requireOrgType("LAB"),

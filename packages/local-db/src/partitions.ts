@@ -1,4 +1,8 @@
 import { LocalDatabasePartition } from "@calibra-facil/contracts/desktop";
+import {
+  SYNC_ENTITIES,
+  SYNC_PARTITION_DOMAIN_ENTITIES,
+} from "@calibra-facil/contracts/sync-entities";
 import { createHash } from "node:crypto";
 
 import type { LocalDatabase } from "./database";
@@ -135,20 +139,19 @@ VALUES (1, @userId, @organizationId, @claimedAt)
  * that carry customer and calibration data, which is what makes adoption
  * unsafe. Device-local tables (printer profiles, schema bookkeeping) do not.
  */
-const DOMAIN_TABLES = [
-  "calibration_jobs",
-  "customers",
-  "assets",
-  "service_orders",
+const DOMAIN_TABLES: readonly string[] = [
+  // The mirrors of the entities the sync entity table marks `partitionDomain`.
+  ...SYNC_PARTITION_DOMAIN_ENTITIES.map(
+    (entity) => SYNC_ENTITIES[entity].mirrorTable,
+  ),
   "non_conformances",
   "attachments",
   "certificate_drafts",
-  "reference_standards",
   "tenant_snapshot",
   // Queued field work. Listed explicitly because it is the one thing that
   // must never be adopted by, or uploaded under, another account.
   "outbox",
-] as const;
+];
 
 export function localDatabaseHasDomainRows(database: LocalDatabase): boolean {
   for (const table of DOMAIN_TABLES) {

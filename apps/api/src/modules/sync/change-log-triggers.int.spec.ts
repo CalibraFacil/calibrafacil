@@ -22,9 +22,9 @@ import {
   serviceOrder,
 } from "@calibra-facil/db/schema";
 import {
-  SYNC_CHANGE_ENTITY_ORDER,
-  SYNC_CHANGE_LOG_TABLES,
-} from "@calibra-facil/db/sync-change-log";
+  SYNC_ENTITY_ORDER,
+  syncChangeLogTables,
+} from "@calibra-facil/contracts/sync-entities";
 import { truncateAll } from "../../../test/integration/db";
 import {
   seedCustomer,
@@ -83,20 +83,22 @@ describe("sync change log triggers", () => {
         WHERE NOT t.tgisinternal AND t.tgname LIKE 'sync_change_log_%'`),
     );
     const found = rows.map((row) => `${row.relname}:${row.tgname}`).toSorted();
-    const expected = SYNC_CHANGE_LOG_TABLES.flatMap((entry) => [
-      `${entry.table}:sync_change_log_${entry.table}_write`,
-      `${entry.table}:sync_change_log_${entry.table}_update`,
-    ]).toSorted();
+    const expected = syncChangeLogTables()
+      .flatMap((entry) => [
+        `${entry.table}:sync_change_log_${entry.table}_write`,
+        `${entry.table}:sync_change_log_${entry.table}_update`,
+      ])
+      .toSorted();
     expect(found).toEqual(expected);
   });
 
   it("REQ-CS-1: the API's entity sources are exactly the entities the triggers log (no entity pulled without a trigger, none logged without a source)", () => {
     expect(SYNC_ENTITY_SOURCES.map((source) => source.entityType)).toEqual([
-      ...SYNC_CHANGE_ENTITY_ORDER,
+      ...SYNC_ENTITY_ORDER,
     ]);
     expect(
-      new Set(SYNC_CHANGE_LOG_TABLES.map((entry) => entry.entityType)),
-    ).toEqual(new Set(SYNC_CHANGE_ENTITY_ORDER));
+      new Set(syncChangeLogTables().map((entry) => entry.entityType)),
+    ).toEqual(new Set(SYNC_ENTITY_ORDER));
   });
 
   it("REQ-CS-2: a customer is an upsert entry when inserted or changed and a delete entry when removed", async () => {

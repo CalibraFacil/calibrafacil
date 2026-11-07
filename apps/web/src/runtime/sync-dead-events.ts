@@ -2,6 +2,14 @@ import type {
   LocalBlockedOutboxEvent,
   LocalDeadOutboxEvent,
 } from '@calibra-facil/contracts'
+import {
+  type OutboxFailureCode,
+  isKnownOutboxRejectionCode,
+} from '@calibra-facil/contracts/outbox-rejections'
+import {
+  type SyncCommandEntityType,
+  syncOperationLabel,
+} from '@calibra-facil/contracts/sync-protocol'
 
 /**
  * How the desktop presents an event the cloud refused for good.
@@ -15,159 +23,97 @@ import type {
 const GENERIC_REASON =
   'A nuvem recusou esta alteração e ela não será reenviada sozinha.'
 
-const REASONS: ReadonlyArray<readonly [string, string]> = [
-  [
-    'UNSUPPORTED_SYNC_OPERATION',
+/**
+ * Why the cloud (or the desktop itself) refused an event, by code. Typed against the
+ * decision tables of the contract (`OutboxFailureCode`): a code that does not exist
+ * cannot be given a reason. A code without one (the transient ones, a code of a newer
+ * cloud) reads as the generic reason.
+ */
+const REASONS: Partial<Record<OutboxFailureCode, string>> = {
+  UNSUPPORTED_SYNC_OPERATION:
     'A nuvem não reconhece este tipo de alteração, provavelmente feita por uma versão antiga do aplicativo.',
-  ],
-  [
-    'OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED',
+  OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED:
     'Certificados são emitidos somente online: aprove a calibração na nuvem e o certificado é gerado e assinado lá.',
-  ],
-  [
-    'STATUS_PAYLOAD_MISMATCH',
+  STATUS_PAYLOAD_MISMATCH:
     'O status informado por esta alteração não é o que a calibração assume na nuvem.',
-  ],
-  [
-    'INVALID_DESKTOP_EVENT_PAYLOAD',
+  INVALID_DESKTOP_EVENT_PAYLOAD:
     'Os dados desta alteração estão incompletos ou inválidos para a nuvem.',
-  ],
-  [
-    'INVALID_SYNC_COMMAND',
+  INVALID_SYNC_COMMAND:
     'Esta alteração não está no formato que a nuvem aceita. Atualize o aplicativo e, se persistir, descarte-a.',
-  ],
-  [
-    'INVALID_STANDARD_SNAPSHOT',
+  INVALID_STANDARD_SNAPSHOT:
     'O registro dos padrões usados nesta calibração está incompleto.',
-  ],
-  [
-    'COMPILED_METHOD_SNAPSHOT_INVALID',
+  COMPILED_METHOD_SNAPSHOT_INVALID:
     'O método de calibração salvo com esta execução não é válido para a nuvem.',
-  ],
-  [
-    'CALIBRATION_RECORD_INCOMPLETE',
-    'O registro desta calibração está incompleto.',
-  ],
-  [
-    'OFFICIAL_EXECUTION_FAILED',
+  CALIBRATION_RECORD_INCOMPLETE: 'O registro desta calibração está incompleto.',
+  OFFICIAL_EXECUTION_FAILED:
     'A nuvem não conseguiu reproduzir o cálculo desta execução.',
-  ],
-  [
-    'DOMAIN_VALIDATION_FAILED',
+  DOMAIN_VALIDATION_FAILED:
     'A nuvem recusou esta alteração por uma regra de validação.',
-  ],
-  [
-    'TAG_ALREADY_EXISTS',
+  TAG_ALREADY_EXISTS:
     'A etiqueta (tag) deste instrumento já está em uso na nuvem.',
-  ],
-  [
-    'ASSET_NOT_FOUND',
+  ASSET_NOT_FOUND:
     'O instrumento desta calibração não foi encontrado na nuvem.',
-  ],
-  [
-    'ASSET_SPECIFICATION_MISSING',
+  ASSET_SPECIFICATION_MISSING:
     'O instrumento não tem as especificações necessárias para esta calibração.',
-  ],
-  [
-    'REMOTE_ENTITY_NOT_FOUND',
+  REMOTE_ENTITY_NOT_FOUND:
     'O registro ao qual esta alteração se refere não existe mais na nuvem.',
-  ],
-  [
-    'SYNC_PERMISSION_DENIED',
+  SYNC_PERMISSION_DENIED:
     'Seu perfil de acesso não permite esta operação na nuvem, mesmo online. Peça a um gestor para fazê-la, ou reenvie depois que o perfil for alterado.',
-  ],
-  [
-    'SYNC_ATTACHMENT_TYPE_NOT_ALLOWED',
+  SYNC_ATTACHMENT_TYPE_NOT_ALLOWED:
     'Este tipo de arquivo não é aceito como anexo. Use foto (JPEG, PNG, WebP, HEIC), PDF ou texto.',
-  ],
-  [
-    'SYNC_ATTACHMENT_TOO_LARGE',
+  SYNC_ATTACHMENT_TOO_LARGE:
     'O arquivo deste anexo é maior que o limite de 25 MB.',
-  ],
-  [
-    'SYNC_ATTACHMENT_INTEGRITY_FAILED',
+  SYNC_ATTACHMENT_INTEGRITY_FAILED:
     'O arquivo enviado não confere com o anexo registrado neste computador. Reenvie o anexo.',
-  ],
-  [
-    'SYNC_ATTACHMENT_UPLOAD_UNSUPPORTED',
+  SYNC_ATTACHMENT_UPLOAD_UNSUPPORTED:
     'Esta versão do aplicativo não envia arquivos de anexo. Atualize o aplicativo e reenvie o anexo.',
-  ],
-  [
-    'ATTACHMENT_FILE_MISSING',
+  ATTACHMENT_FILE_MISSING:
     'O arquivo deste anexo não está mais neste computador, então não pode ser enviado.',
-  ],
-  [
-    'ATTACHMENT_FILE_CHANGED',
+  ATTACHMENT_FILE_CHANGED:
     'O arquivo deste anexo foi alterado depois de registrado e não corresponde mais ao que foi capturado.',
-  ],
-  [
-    'ATTACHMENT_UPLOAD_REJECTED',
-    'A nuvem recusou o envio do arquivo deste anexo.',
-  ],
-  [
-    'PUSH_REQUEST_REJECTED',
+  ATTACHMENT_UPLOAD_REJECTED: 'A nuvem recusou o envio do arquivo deste anexo.',
+  PUSH_REQUEST_REJECTED:
     'A nuvem recusou o envio desta alteração mesmo sozinha (por exemplo, por ser grande demais ou estar malformada). As demais alterações seguiram normalmente. Atualize o aplicativo e, se persistir, descarte-a.',
-  ],
-  [
-    'INVALID_STATUS_TRANSITION',
+  INVALID_STATUS_TRANSITION:
     'Na nuvem, a calibração está em um status que não permite esta alteração.',
-  ],
-  [
-    'STANDARD_EXPIRED',
+  STANDARD_EXPIRED:
     'Um padrão usado nesta calibração está com o certificado vencido.',
-  ],
-  ['STANDARD_NOT_ACTIVE', 'Um padrão usado nesta calibração está inativo.'],
-  [
-    'STANDARD_SCOPE_MISMATCH',
+  STANDARD_NOT_ACTIVE: 'Um padrão usado nesta calibração está inativo.',
+  STANDARD_SCOPE_MISMATCH:
     'Um padrão usado nesta calibração não existe ou está fora do escopo do laboratório na nuvem.',
-  ],
-  [
-    'STANDARD_CERTIFIED_VALUES_MISSING',
+  STANDARD_CERTIFIED_VALUES_MISSING:
     'Um padrão usado nesta calibração não tem valores certificados registrados.',
-  ],
-  [
-    'STANDARD_BACKDATE_REASON_REQUIRED',
+  STANDARD_BACKDATE_REASON_REQUIRED:
     'O certificado de um padrão venceu depois da data da calibração: é preciso justificar o registro retroativo.',
-  ],
-  [
-    'TECHNICIAN_COMPETENCE_MISSING',
+  TECHNICIAN_COMPETENCE_MISSING:
     'O técnico da calibração não tem competência ativa para este tipo de instrumento.',
-  ],
-]
+}
 
-const ENTITY_LABELS: ReadonlyArray<readonly [string, string]> = [
-  ['asset', 'Ativo'],
-  ['attachment', 'Anexo'],
-  ['calibration_job', 'Calibração'],
-  ['customer', 'Cliente'],
-  ['non_conformance', 'Não conformidade'],
-  ['service_order', 'Ordem de serviço'],
-  ['service_order_execution', 'Execução da OS'],
-  ['service_order_quote', 'Orçamento da OS'],
-  ['service_order_delivery_document', 'Documento de entrega'],
-  ['certificate_draft', 'Certificado'],
-]
+/** The entity types of the push protocol's commands, in the words of the person at the queue. */
+const ENTITY_LABELS: Record<SyncCommandEntityType, string> = {
+  asset: 'Ativo',
+  attachment: 'Anexo',
+  calibration_job: 'Calibração',
+  customer: 'Cliente',
+  non_conformance: 'Não conformidade',
+  service_order: 'Ordem de serviço',
+  service_order_execution: 'Execução da OS',
+  service_order_quote: 'Orçamento da OS',
+  service_order_delivery_document: 'Documento de entrega',
+  certificate_draft: 'Certificado',
+}
 
-const OPERATION_LABELS: ReadonlyArray<readonly [string, string]> = [
-  ['create_local_asset', 'Cadastro de instrumento'],
-  ['update_local_asset', 'Edição de instrumento'],
-  ['create_local_customer', 'Cadastro de cliente'],
-  ['update_local_customer', 'Edição de cliente'],
-  ['update_local_customer_compliance', 'Conformidade do cliente'],
-  ['create_local_job_draft', 'Abertura de calibração'],
-  ['save_local_execution', 'Rascunho da execução'],
-  ['submit_local_execution', 'Envio da execução para aprovação'],
-  ['create_local_service_order_intake', 'Recebimento de ordem de serviço'],
-  ['create_local_service_order_quote_draft', 'Orçamento da ordem de serviço'],
-  ['save_local_service_order_execution_notes', 'Notas da execução da OS'],
-  [
-    'create_local_service_order_delivery_document_draft',
-    'Documento de entrega',
-  ],
-  ['create_local_attachment', 'Anexo'],
-  ['create_local_non_conformance', 'Registro de não conformidade'],
-  ['generate_local_certificate_pdf', 'Publicação de certificado'],
-]
+function entityLabel(entityType: string | null): string | undefined {
+  if (entityType === null) return undefined
+  return Object.entries(ENTITY_LABELS).find(
+    ([candidate]) => candidate === entityType,
+  )?.[1]
+}
+
+function reasonFor(code: string | null): string | undefined {
+  if (code === null || !isKnownOutboxRejectionCode(code)) return undefined
+  return REASONS[code]
+}
 
 function lookup(
   table: ReadonlyArray<readonly [string, string]>,
@@ -188,12 +134,12 @@ export type DeadEventDescription = {
 export function describeDeadEvent(
   event: LocalDeadOutboxEvent,
 ): DeadEventDescription {
-  const entity = lookup(ENTITY_LABELS, event.entityType) ?? event.entityType
-  const operation = lookup(OPERATION_LABELS, event.operation) ?? event.operation
+  const entity = entityLabel(event.entityType) ?? event.entityType
+  const operation = syncOperationLabel(event.operation) ?? event.operation
 
   return {
     title: `${entity} · ${operation}`,
-    reason: lookup(REASONS, event.errorCode) ?? GENERIC_REASON,
+    reason: reasonFor(event.errorCode) ?? GENERIC_REASON,
     detail: event.errorMessage,
   }
 }
@@ -257,12 +203,11 @@ export type BlockedEventDescription = {
 export function describeBlockedEvent(
   event: LocalBlockedOutboxEvent,
 ): BlockedEventDescription {
-  const entity = lookup(ENTITY_LABELS, event.entityType) ?? event.entityType
-  const operation = lookup(OPERATION_LABELS, event.operation) ?? event.operation
+  const entity = entityLabel(event.entityType) ?? event.entityType
+  const operation = syncOperationLabel(event.operation) ?? event.operation
   const blockerOperation =
-    lookup(OPERATION_LABELS, event.blockedByOperation) ?? 'Uma alteração'
-  const blockerEntity =
-    lookup(ENTITY_LABELS, event.blockedByEntityType) ?? 'registro'
+    syncOperationLabel(event.blockedByOperation) ?? 'Uma alteração'
+  const blockerEntity = entityLabel(event.blockedByEntityType) ?? 'registro'
   const blockerStatus =
     lookup(BLOCKER_STATUS_REASONS, event.blockedByStatus) ??
     'precisa de uma decisão'

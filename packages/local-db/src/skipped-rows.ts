@@ -1,4 +1,8 @@
 import {
+  SYNC_ENTITIES,
+  type SyncSkippedRowKind,
+} from "@calibra-facil/contracts/sync-entities";
+import {
   compareSyncChangePositions,
   formatSyncChangeCursor,
   parseSyncChangeCursor,
@@ -28,18 +32,8 @@ import type { LocalDatabase } from "./database";
  * conflict ignored in favour of the cloud, on a row a bootstrap met with queued edits).
  */
 
-export type SkippedRowKind =
-  | "customer"
-  | "asset"
-  | "calibration_job"
-  | "service_order";
-
-const KIND_TABLES: Record<SkippedRowKind, string> = {
-  customer: "customers",
-  asset: "assets",
-  calibration_job: "calibration_jobs",
-  service_order: "service_orders",
-};
+/** The entities whose pulled rows are skipped while changes are queued (`skippedRowKind` of the sync entity table). */
+export type SkippedRowKind = SyncSkippedRowKind;
 
 export function recordSkippedRow(
   database: LocalDatabase,
@@ -158,7 +152,7 @@ export function releaseSettledSkippedRows(database: LocalDatabase): number {
 }
 
 function hasUnsettledChanges(database: LocalDatabase, row: SkippedRow) {
-  const table = KIND_TABLES[row.entity_type];
+  const table = SYNC_ENTITIES[row.entity_type].mirrorTable;
   // A locally created row keeps its own id and only gains the remote id, so the
   // queued events may be addressed to either.
   const found = database

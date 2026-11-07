@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  SYNC_CHANGE_ENTITY_ORDER,
-  SYNC_CHANGE_LOG_TABLES,
-} from "./sync-change-log";
+  SYNC_ENTITIES,
+  SYNC_ENTITY_ORDER,
+  syncChangeLogTables,
+} from "@calibra-facil/contracts/sync-entities";
 import { GLOBAL_TABLES, listTenancy } from "./tenancy";
 
 function read(path: string): string {
@@ -38,23 +39,34 @@ describe("sync change log SQL: migration 0122 and schema-extras.sql", () => {
       ),
       (match) => `${match[1]}:${match[2]}:${match[3]}`,
     );
-    const expected = SYNC_CHANGE_LOG_TABLES.flatMap((entry) => [
+    const expected = syncChangeLogTables().flatMap((entry) => [
       `${entry.table}:write:${entry.entityType}`,
       `${entry.table}:update:${entry.entityType}`,
     ]);
     expect(created.toSorted()).toEqual(expected.toSorted());
   });
 
-  it("REQ-CS-1: every logged table exists in the schema, and the entity order lists each entity type once", () => {
+  it("REQ-CS-1: every logged table exists in the schema, and the sync entity table lists each entity type once", () => {
     const tenant = new Set(listTenancy().map((table) => table.name));
-    for (const { table } of SYNC_CHANGE_LOG_TABLES) {
+    const tables = syncChangeLogTables();
+    for (const { table } of tables) {
       expect(tenant.has(table) || table in GLOBAL_TABLES, table).toBe(true);
     }
-    const entityTypes = new Set(
-      SYNC_CHANGE_LOG_TABLES.map((entry) => entry.entityType),
+    expect(new Set(SYNC_ENTITY_ORDER).size).toBe(SYNC_ENTITY_ORDER.length);
+    expect(new Set(tables.map((entry) => entry.entityType))).toEqual(
+      new Set(SYNC_ENTITY_ORDER),
     );
-    expect(new Set(SYNC_CHANGE_ENTITY_ORDER)).toEqual(entityTypes);
-    expect(SYNC_CHANGE_ENTITY_ORDER.length).toBe(entityTypes.size);
+    expect(Object.keys(SYNC_ENTITIES).toSorted()).toEqual(
+      [...SYNC_ENTITY_ORDER].toSorted(),
+    );
+  });
+
+  it("REQ-CS-1: every trigger names its entity by the wire name of the sync entity table, and the entity's own table is the first one logged", () => {
+    const logged = syncChangeLogTables();
+    for (const entityType of SYNC_ENTITY_ORDER) {
+      const own = logged.find((entry) => entry.entityType === entityType);
+      expect(own?.table, entityType).toBe(SYNC_ENTITIES[entityType].cloudTable);
+    }
   });
 
   it("REQ-CS-5: the log and its purge horizon are tenant tables with the laboratory removed on cascade", () => {
