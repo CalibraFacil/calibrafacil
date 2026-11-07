@@ -43,6 +43,7 @@ export function loadPortalConfig(env: EnvSource) {
 export type ApiConfig = ReturnType<typeof loadApiConfig>;
 
 export { ConfigError, isProductionEnv, type EnvSource } from "./define";
+export { parseEnvFile, type EnvFile } from "./env-file";
 export type { PlatformEmailTransport } from "./groups/email";
 export {
   readAuthConfig,

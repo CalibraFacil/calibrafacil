@@ -256,3 +256,21 @@ describe("deploy/Caddyfile", () => {
     expect(read("apps/web/index.html")).not.toMatch(/<script>/);
   });
 });
+
+describe("apps/web/index.html", () => {
+  it("pins theme-init.js by the real sha256 of the file (editing the script without re-hashing blocks the theme)", () => {
+    const html = read("apps/web/index.html");
+    const tag = html.match(
+      /<script\s+src="\/theme-init\.js"\s+integrity="sha256-([^"]+)"/,
+    );
+    expect(
+      tag,
+      "index.html loads theme-init.js with an integrity hash",
+    ).not.toBeNull();
+
+    const actual = createHash("sha256")
+      .update(readFileSync(join(repoRoot, "apps/web/public/theme-init.js")))
+      .digest("base64");
+    expect(tag?.[1]).toBe(actual);
+  });
+});

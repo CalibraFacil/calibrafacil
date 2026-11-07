@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Run the GitHub CI gates locally — we're on the free plan and out of Actions
-// minutes, so PRs are validated here instead. Mirrors .github/workflows/ci.yml
-// (blocked-deps → app boundaries → frozen install → audit → lint → knip → import cycles → type-check → test) under
-// Node 24 + TZ=UTC to match the runners.
+// minutes, so PRs are validated here instead. The gates are the `run` steps of
+// the `ci` job of .github/workflows/ci.yml, read from it (scripts/lib/ci-steps.mjs),
+// under Node 24 + TZ=UTC to match the runners.
 //
 // Usage:
 //   pnpm ci:local            # test packages changed vs origin/main and their dependents (like CI)
@@ -13,56 +13,40 @@
 // you fix everything in one pass; exits non-zero if any gate failed.
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { localCommand, readJobRunSteps } from "./lib/ci-steps.mjs";
 
 const args = new Set(process.argv.slice(2));
 const runAllTests = args.has("--all");
 const skipAudit = args.has("--no-audit");
-const testFilter = runAllTests ? [] : ["--filter=...[origin/main...HEAD]"];
 
-const env = { ...process.env, TZ: "UTC", FORCE_COLOR: "1" };
+// A pull request tests what it touches (and its dependents); a push to main,
+// and `--all`, test everything. The workflow's Test step reads $EVENT for that.
+const env = {
+  ...process.env,
+  TZ: "UTC",
+  FORCE_COLOR: "1",
+  EVENT: runAllTests ? "push" : "pull_request",
+};
 
-function shell(cmd, argv) {
-  const result = spawnSync(cmd, argv, { stdio: "inherit", env });
-  return result.status === 0 && result.error === undefined;
-}
+const workflow = readFileSync(
+  new URL("../.github/workflows/ci.yml", import.meta.url),
+  "utf8",
+);
 
-const steps = [
-  {
-    name: "Blocked dependencies",
-    run: () => shell("node", ["scripts/check-blocked-deps.mjs"]),
-  },
-  {
-    name: "App boundaries",
-    run: () => shell("node", ["scripts/check-app-boundaries.mjs"]),
-  },
-  {
-    name: "Install (frozen lockfile)",
-    run: () => shell("pnpm", ["install", "--frozen-lockfile"]),
-  },
-  ...(skipAudit
-    ? []
-    : [
-        {
-          name: "Security audit (prod, high)",
-          run: () =>
-            shell("pnpm", ["audit", "--prod", "--audit-level", "high"]),
-        },
-      ]),
-  { name: "Lint", run: () => shell("pnpm", ["run", "lint"]) },
-  { name: "Unused code (knip)", run: () => shell("pnpm", ["run", "knip"]) },
-  {
-    name: "Import cycles (madge)",
-    run: () => shell("pnpm", ["run", "check:cycles"]),
-  },
-  {
-    name: "Type check (turbo)",
-    run: () => shell("pnpm", ["run", "check-types"]),
-  },
-  {
-    name: "Test",
-    run: () => shell("pnpm", ["exec", "turbo", "run", "test", ...testFilter]),
-  },
-];
+const steps = readJobRunSteps(workflow, "ci")
+  .filter((step) => !(skipAudit && /\bpnpm audit\b/.test(step.run)))
+  .map((step) => ({
+    name: step.name,
+    run: () => {
+      const result = spawnSync(localCommand(step.run), {
+        stdio: "inherit",
+        env,
+        shell: true,
+      });
+      return result.status === 0 && result.error === undefined;
+    },
+  }));
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
 if (nodeMajor !== 24) {

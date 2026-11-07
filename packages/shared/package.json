@@ -39,7 +39,8 @@
     "./query-scope": "./src/query-scope.ts",
     "./client-error": "./src/client-error.ts",
     "./client-storage-keys": "./src/client-storage-keys.ts",
-    "./lab-handoff": "./src/lab-handoff.ts"
+    "./lab-handoff": "./src/lab-handoff.ts",
+    "./runtime-env": "./src/runtime-env.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
