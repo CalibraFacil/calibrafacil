@@ -18,37 +18,64 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { EmailBrand } from "@calibra-facil/email";
 
-const { dbState, resendCtorMock, resendSendMock } = vi.hoisted(() => ({
+const { dbState, tables, resendCtorMock, resendSendMock } = vi.hoisted(() => ({
   dbState: {
-    selectResults: Array.of<unknown[]>(),
+    // What a select returns, by the table it reads from (not by call order).
+    rowsByTable: new Map<unknown, unknown[]>(),
     updates: Array.of<unknown>(),
     inserts: Array.of<unknown>(),
+  },
+  tables: {
+    organizationEmailDomain: {
+      organizationId: "organization_id",
+      isActive: "is_active",
+      keyStatus: "key_status",
+      id: "id",
+    },
+    subscription: { organizationId: "organization_id", planId: "plan_id" },
   },
   resendCtorMock: vi.fn(),
   resendSendMock: vi.fn(),
 }));
 
-function makeChain(result: unknown[]): Record<string, unknown> {
+function makeChain(
+  resultFor: () => unknown[],
+  onFrom?: (table: unknown) => void,
+): Record<string, unknown> {
   const chain: Record<string, unknown> = {};
-  for (const method of ["from", "where", "limit", "set", "values"]) {
+  for (const method of ["where", "limit", "set", "values"]) {
     chain[method] = vi.fn(() => chain);
   }
+  chain.from = vi.fn((table: unknown) => {
+    onFrom?.(table);
+    return chain;
+  });
   // oxlint-disable-next-line unicorn/no-thenable -- mocks drizzle's awaitable query builder
-  chain.then = (resolve: (value: unknown[]) => unknown) => resolve(result);
-  chain.returning = vi.fn(() => Promise.resolve(result));
+  chain.then = (resolve: (value: unknown[]) => unknown) => resolve(resultFor());
+  chain.returning = vi.fn(() => Promise.resolve(resultFor()));
   return chain;
+}
+
+function makeSelectChain(): Record<string, unknown> {
+  let table: unknown;
+  return makeChain(
+    () => dbState.rowsByTable.get(table) ?? [],
+    (from) => {
+      table = from;
+    },
+  );
 }
 
 vi.mock("@calibra-facil/db", () => ({
   db: {
-    select: vi.fn(() => makeChain(dbState.selectResults.shift() ?? [])),
+    select: vi.fn(() => makeSelectChain()),
     update: vi.fn((table: unknown) => {
       dbState.updates.push(table);
-      return makeChain([{ id: "emaildom-1" }]);
+      return makeChain(() => [{ id: "emaildom-1" }]);
     }),
     insert: vi.fn((table: unknown) => {
       dbState.inserts.push(table);
-      return makeChain([]);
+      return makeChain(() => []);
     }),
   },
 }));
@@ -76,14 +103,9 @@ vi.mock("@calibra-facil/db/for-org", () => ({
 }));
 
 vi.mock("@calibra-facil/db/schema", () => ({
-  organizationEmailDomain: {
-    organizationId: "organization_id",
-    isActive: "is_active",
-    keyStatus: "key_status",
-    id: "id",
-  },
+  organizationEmailDomain: tables.organizationEmailDomain,
   organizationEventLog: {},
-  subscription: { organizationId: "organization_id", planId: "plan_id" },
+  subscription: tables.subscription,
 }));
 
 vi.mock("resend", () => {
@@ -163,7 +185,7 @@ function makeInput(brand: EmailBrand | undefined) {
 }
 
 beforeEach(() => {
-  dbState.selectResults.length = 0;
+  dbState.rowsByTable.clear();
   dbState.updates.length = 0;
   dbState.inserts.length = 0;
   resendCtorMock.mockReset();
@@ -177,14 +199,15 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** Queue the two selects getLabEmailCredential performs: domain row, plan. */
-function queueUsableLabSender() {
-  dbState.selectResults.push([labDomainRow()], [{ planId: "STANDARD" }]);
+/** The rows getLabEmailCredential reads: the lab's verified domain, and its plan. */
+function givenUsableLabSender() {
+  dbState.rowsByTable.set(tables.organizationEmailDomain, [labDomainRow()]);
+  dbState.rowsByTable.set(tables.subscription, [{ planId: "STANDARD" }]);
 }
 
 describe("#584 service-order email white-label envelope", () => {
   it("sends through the lab's own Resend account with a first-party From", async () => {
-    queueUsableLabSender();
+    givenUsableLabSender();
     resendSendMock.mockResolvedValue({ data: { id: "e1" }, error: null });
     const { input, renderEmail } = makeInput(brandWithSender());
 
@@ -202,7 +225,7 @@ describe("#584 service-order email white-label envelope", () => {
   });
 
   it("falls back to the platform sender on a revoked lab key, re-rendering without the sender", async () => {
-    queueUsableLabSender();
+    givenUsableLabSender();
     resendSendMock
       .mockResolvedValueOnce({
         data: null,
@@ -232,7 +255,7 @@ describe("#584 service-order email white-label envelope", () => {
   });
 
   it("reports a transient lab failure as retryable without a platform attempt", async () => {
-    queueUsableLabSender();
+    givenUsableLabSender();
     resendSendMock.mockResolvedValueOnce({
       data: null,
       error: { name: "internal_server_error", message: "boom" },
