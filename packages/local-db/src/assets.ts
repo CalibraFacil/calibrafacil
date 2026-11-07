@@ -5,6 +5,7 @@ import type { MetrologyRegime } from "@calibra-facil/schemas";
 import type { AssetStatus } from "@calibra-facil/schemas/machines";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
+import { LocalDomainError, LocalNotFoundError } from "./errors";
 
 type LocalAssetStatus = AssetStatus;
 
@@ -118,7 +119,9 @@ export function createLocalAsset(
   input: CreateLocalAssetInput,
 ): LocalAsset {
   if (!input.organizationId || !input.unitId) {
-    throw new Error("Contexto local sem organizacao ou unidade ativa");
+    throw new LocalDomainError(
+      "Contexto local sem organizacao ou unidade ativa",
+    );
   }
 
   const customerId = resolveLocalEntityId(
@@ -127,7 +130,7 @@ export function createLocalAsset(
     input.customerId,
   );
   if (!customerId) {
-    throw new Error("Cliente local nao encontrado");
+    throw new LocalDomainError("Cliente local nao encontrado");
   }
 
   const assetTypeId = resolveLocalEntityId(
@@ -136,7 +139,7 @@ export function createLocalAsset(
     input.assetTypeId,
   );
   if (!assetTypeId) {
-    throw new Error("Tipo de instrumento local nao encontrado");
+    throw new LocalDomainError("Tipo de instrumento local nao encontrado");
   }
 
   const existingTag = database
@@ -152,7 +155,7 @@ LIMIT 1
     .get({ tag: input.tag });
 
   if (existingTag) {
-    throw new Error("Tag ja esta em uso");
+    throw new LocalDomainError("Tag ja esta em uso");
   }
 
   const now = new Date().toISOString();
@@ -412,7 +415,7 @@ LIMIT 1
     .get({ id });
 
   if (!row) {
-    throw new Error("Ativo local nao encontrado");
+    throw new LocalNotFoundError("Ativo local nao encontrado");
   }
 
   return toLocalAsset(row);

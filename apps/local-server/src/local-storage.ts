@@ -1,4 +1,5 @@
 import path from "node:path";
+import { LocalDomainError } from "@calibra-facil/local-db";
 
 /**
  * The absolute path of a file kept under the local storage root, refusing any
@@ -13,7 +14,7 @@ export function resolveLocalStoragePath(
   const target = path.resolve(root, localPath);
 
   if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
-    throw new Error("Caminho de arquivo local invalido");
+    throw new LocalDomainError("Caminho de arquivo local invalido");
   }
 
   return target;

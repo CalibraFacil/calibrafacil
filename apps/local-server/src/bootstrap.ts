@@ -16,15 +16,7 @@ import {
 
 export type LocalServerConfig = LocalServerBootstrapConfig;
 
-/**
- * The database file this config should open.
- *
- * Derived here rather than by the Electron host so that the partition path and
- * the ownership check that enforces it live in one place. A host that passed a
- * stale `dbPath` alongside a fresh identity would otherwise open the wrong
- * account's file and rely on the check to catch it; deriving means the two
- * cannot disagree in the first place.
- */
+/** A packaged build was asked to start without a partition to open. */
 export class LocalServerPartitionRequiredError extends Error {
   constructor() {
     super(
@@ -50,6 +42,15 @@ export function assertLocalServerPartitionConfigured(
   throw new LocalServerPartitionRequiredError();
 }
 
+/**
+ * The database file this config should open.
+ *
+ * Derived here rather than by the Electron host so that the partition path and
+ * the ownership check that enforces it live in one place. A host that passed a
+ * stale `dbPath` alongside a fresh identity would otherwise open the wrong
+ * account's file and rely on the check to catch it; deriving means the two
+ * cannot disagree in the first place.
+ */
 export function resolveLocalServerDbPath(config: LocalServerConfig): string {
   if (!config.dataRoot || !config.userId || !config.organizationId) {
     return config.dbPath;

@@ -1,5 +1,7 @@
-import type { LocalDatabase } from "@calibra-facil/local-db";
-import { toRecord } from "@calibra-facil/shared/record";
+import {
+  readLocalTenantContext,
+  type LocalDatabase,
+} from "@calibra-facil/local-db";
 import type { LocalServerConfig } from "./bootstrap";
 
 /**
@@ -11,42 +13,11 @@ export function getLocalRequestContext(
   config: LocalServerConfig,
   database: LocalDatabase,
 ) {
-  const snapshot = tenantSnapshotFromUnknown(
-    database
-      .prepare(
-        `
-SELECT organization_id, active_unit_id, user_id
-FROM tenant_snapshot
-ORDER BY pulled_at DESC
-LIMIT 1
-`,
-      )
-      .get(),
-  );
+  const snapshot = readLocalTenantContext(database);
 
   return {
-    organizationId: config.organizationId ?? snapshot?.organization_id ?? null,
-    unitId: config.unitId ?? snapshot?.active_unit_id ?? null,
-    userId: config.userId ?? snapshot?.user_id ?? null,
-  };
-}
-
-function tenantSnapshotFromUnknown(value: unknown) {
-  const snapshot = toRecord(value);
-  const organizationId = snapshot.organization_id;
-  const activeUnitId = snapshot.active_unit_id;
-  const userId = snapshot.user_id;
-
-  if (typeof organizationId !== "string" || typeof userId !== "string") {
-    return undefined;
-  }
-
-  return {
-    organization_id: organizationId,
-    active_unit_id:
-      typeof activeUnitId === "number" && Number.isFinite(activeUnitId)
-        ? activeUnitId
-        : null,
-    user_id: userId,
+    organizationId: config.organizationId ?? snapshot?.organizationId ?? null,
+    unitId: config.unitId ?? snapshot?.unitId ?? null,
+    userId: config.userId ?? snapshot?.userId ?? null,
   };
 }

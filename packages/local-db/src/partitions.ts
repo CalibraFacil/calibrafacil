@@ -212,26 +212,3 @@ export function assertLocalDatabaseOwner(
 
   return claimLocalDatabase(database, partition);
 }
-
-/**
- * The account and organization a database's own bootstrap snapshot says it
- * belongs to. `null` when it was never bootstrapped.
- */
-export function readLocalTenantIdentity(
-  database: LocalDatabase,
-): LocalDatabasePartition | null {
-  const row = database
-    .prepare<[], { organization_id: string; user_id: string }>(
-      `
-SELECT organization_id, user_id
-FROM tenant_snapshot
-ORDER BY pulled_at DESC
-LIMIT 1
-`,
-    )
-    .get();
-
-  if (!row?.user_id || !row.organization_id) return null;
-
-  return { userId: row.user_id, organizationId: row.organization_id };
-}

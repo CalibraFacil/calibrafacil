@@ -1,9 +1,11 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  LocalDomainError,
+  LocalNotFoundError,
   createLocalAsset,
   createLocalAttachment,
   createLocalServiceOrderIntake,
@@ -84,6 +86,7 @@ import {
   type LocalSyncSchedulerOptions,
 } from "./sync-scheduler";
 import { executeLocalJob, submitLocalJob } from "./job-commands";
+import { handleLocalServerError } from "./http-errors";
 import { getLocalRequestContext } from "./request-context";
 import { resolveLocalStoragePath } from "./local-storage";
 import { registerPrinterRoutes } from "./printing/routes";
@@ -138,6 +141,7 @@ export function createLocalServerRuntime(
   } = {},
 ): LocalServerRuntime {
   const app = new Hono();
+  app.onError(handleLocalServerError);
   const syncRuntime = createLocalSyncRuntime(config, database, syncOptions);
   const syncScheduler = createLocalSyncScheduler(
     syncRuntime,
@@ -559,19 +563,15 @@ export function createLocalServerRuntime(
     }
 
     const context = getLocalRequestContext(config, database);
-    try {
-      const serviceOrder = createLocalServiceOrderIntake(database, {
-        ...parsed.data,
-        organizationId: context.organizationId,
-        unitId: context.unitId,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
+    const serviceOrder = createLocalServiceOrderIntake(database, {
+      ...parsed.data,
+      organizationId: context.organizationId,
+      unitId: context.unitId,
+      actorUserId: context.userId,
+      deviceId: config.deviceId,
+    });
 
-      return c.json({ data: serviceOrder }, 201);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
+    return c.json({ data: serviceOrder }, 201);
   });
 
   app.get("/api/service-orders/:id", (c) => {
@@ -643,38 +643,34 @@ export function createLocalServerRuntime(
     const input = CreateAssetSchema.parse(await c.req.json());
     const context = getLocalRequestContext(config, database);
 
-    try {
-      const asset = createLocalAsset(database, {
-        organizationId: context.organizationId,
-        unitId: context.unitId,
-        customerId: input.customerId,
-        assetTypeId: input.assetTypeId,
-        name: input.name,
-        manufacturer: input.manufacturer,
-        model: input.model,
-        serialNumber: input.serialNumber,
-        tag: input.tag,
-        status: input.status,
-        baseMeasurementUnit: input.baseMeasurementUnit,
-        // No `nextCalibrationDate`: the interval / next-cal date is customer-owned
-        // (portal, §7.8.4.3) — the lab never authors it, on desktop either.
-        lastCalibrationDate: input.lastCalibrationDate,
-        // Legal-metrology regime (Track 2) + install anchor — previously dropped
-        // here, so a desktop-set LEGAL regime was silently lost. The regulated
-        // next-verification date is derived on the cloud during sync push.
-        metrologyRegime: input.metrologyRegime,
-        regulatedInterval: input.regulatedInterval,
-        installedAt: input.installedAt,
-        comments: input.comments,
-        specifications: input.specifications,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
+    const asset = createLocalAsset(database, {
+      organizationId: context.organizationId,
+      unitId: context.unitId,
+      customerId: input.customerId,
+      assetTypeId: input.assetTypeId,
+      name: input.name,
+      manufacturer: input.manufacturer,
+      model: input.model,
+      serialNumber: input.serialNumber,
+      tag: input.tag,
+      status: input.status,
+      baseMeasurementUnit: input.baseMeasurementUnit,
+      // No `nextCalibrationDate`: the interval / next-cal date is customer-owned
+      // (portal, §7.8.4.3) — the lab never authors it, on desktop either.
+      lastCalibrationDate: input.lastCalibrationDate,
+      // Legal-metrology regime (Track 2) + install anchor — previously dropped
+      // here, so a desktop-set LEGAL regime was silently lost. The regulated
+      // next-verification date is derived on the cloud during sync push.
+      metrologyRegime: input.metrologyRegime,
+      regulatedInterval: input.regulatedInterval,
+      installedAt: input.installedAt,
+      comments: input.comments,
+      specifications: input.specifications,
+      actorUserId: context.userId,
+      deviceId: config.deviceId,
+    });
 
-      return c.json(asset, 201);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
+    return c.json(asset, 201);
   });
 
   app.get("/api/assets/:id", (c) => {
@@ -704,32 +700,29 @@ export function createLocalServerRuntime(
   });
 
   app.post("/api/attachments", async (c) => {
-    let localPath: string | null = null;
-    let absolutePath: string | null = null;
+    const body = await readFormBody(c);
+    const entityType = getFormString(body.entityType);
+    const entityId = getFormString(body.entityId);
+    const file = getFormFile(body.file);
+
+    if (!entityType || !entityId || !file) {
+      return c.json(
+        { error: "Tipo, entidade e arquivo sao obrigatorios" },
+        400,
+      );
+    }
+
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const contentHash = createHash("sha256").update(bytes).digest("hex");
+    const localPath = buildLocalAttachmentPath({
+      entityType,
+      entityId,
+      contentHash,
+      fileName: file.name,
+    });
+    const absolutePath = resolveLocalStoragePath(config.storageRoot, localPath);
 
     try {
-      const body = await c.req.parseBody();
-      const entityType = getFormString(body.entityType);
-      const entityId = getFormString(body.entityId);
-      const file = getFormFile(body.file);
-
-      if (!entityType || !entityId || !file) {
-        return c.json(
-          { error: "Tipo, entidade e arquivo sao obrigatorios" },
-          400,
-        );
-      }
-
-      const bytes = Buffer.from(await file.arrayBuffer());
-      const contentHash = createHash("sha256").update(bytes).digest("hex");
-      localPath = buildLocalAttachmentPath({
-        entityType,
-        entityId,
-        contentHash,
-        fileName: file.name,
-      });
-      absolutePath = resolveLocalStoragePath(config.storageRoot, localPath);
-
       await mkdir(path.dirname(absolutePath), { recursive: true });
       await writeFile(absolutePath, bytes);
 
@@ -749,39 +742,38 @@ export function createLocalServerRuntime(
         201,
       );
     } catch (error) {
-      if (absolutePath) {
-        await rm(absolutePath, { force: true });
-      }
-
-      return c.json({ error: errorMessage(error) }, 400);
+      // No half-written file stays behind a refused or failed attachment.
+      await rm(absolutePath, { force: true });
+      throw error;
     }
   });
 
   app.get("/api/attachments/:id", async (c) => {
-    try {
-      const attachment = getLocalAttachment(database, c.req.param("id"));
-      if (!attachment) {
-        return c.json({ error: "Anexo local nao encontrado" }, 404);
-      }
-
-      const absolutePath = resolveLocalStoragePath(
-        config.storageRoot,
-        attachment.localPath,
-      );
-      const bytes = await readFile(absolutePath);
-
-      return new Response(bytes, {
-        headers: {
-          "Content-Type": attachment.mimeType,
-          "Content-Disposition": `inline; filename="${toSafeFileName(
-            path.basename(attachment.localPath),
-          )}"`,
-          "Cache-Control": "no-store",
-        },
-      });
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
+    const attachment = getLocalAttachment(database, c.req.param("id"));
+    if (!attachment) {
+      return c.json({ error: "Anexo local nao encontrado" }, 404);
     }
+
+    const absolutePath = resolveLocalStoragePath(
+      config.storageRoot,
+      attachment.localPath,
+    );
+    const bytes = await readFile(absolutePath).catch((error: unknown) => {
+      if (Reflect.get(Object(error), "code") === "ENOENT") {
+        throw new LocalNotFoundError("Arquivo do anexo nao encontrado");
+      }
+      throw error;
+    });
+
+    return new Response(bytes, {
+      headers: {
+        "Content-Type": attachment.mimeType,
+        "Content-Disposition": `inline; filename="${toSafeFileName(
+          path.basename(attachment.localPath),
+        )}"`,
+        "Cache-Control": "no-store",
+      },
+    });
   });
 
   app.post("/api/local/sync/start", async (c) => {
@@ -982,8 +974,15 @@ async function readJsonOrEmpty(request: Request) {
   return raw ? JSON.parse(raw) : {};
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Erro local";
+/** A multipart or url-encoded body; one that does not parse is the caller's (400), not ours. */
+async function readFormBody(c: Context) {
+  try {
+    return await c.req.parseBody();
+  } catch {
+    throw new LocalDomainError(
+      "Corpo da requisicao nao e um formulario valido",
+    );
+  }
 }
 
 function getFormString(
