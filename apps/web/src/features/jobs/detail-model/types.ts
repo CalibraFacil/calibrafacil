@@ -1,6 +1,6 @@
 import type { JobAllowedActions } from '@calibra-facil/contracts'
 import { type MeasurementUnit } from '@calibra-facil/shared/units'
-import type { MethodInputType } from '@/components/method-runtime/types'
+import type { MethodInputType } from '@/features/methods/runtime/types'
 
 import type { CertificateLifecycleStatus } from '@calibra-facil/schemas'
 

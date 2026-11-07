@@ -16,7 +16,7 @@ import {
   getDefaultCloudApiUrl,
   getDefaultDesktopLocalApiUrl,
 } from '@/app/config/runtime'
-import { getStoredDashboardActiveUnitId } from '@/features/dashboard/dashboard-scope-storage'
+import { getStoredDashboardActiveUnitId } from '@/lib/dashboard-scope-storage'
 
 export function getApiBaseURL(): string {
   return getCloudApiBaseUrl()

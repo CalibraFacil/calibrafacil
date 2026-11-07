@@ -24,7 +24,7 @@ import {
 } from '@calibra-facil/ui/field'
 import { Input } from '@calibra-facil/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
-import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
+import { setStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
 import { readSessionWithRetry } from '@calibra-facil/shared/session-retry'
 import { getClientSession } from '@/lib/auth-session'

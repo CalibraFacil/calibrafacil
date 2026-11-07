@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 
-import { getStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
+import { getStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
 
 export { getStoredDashboardOrganizationId }
 

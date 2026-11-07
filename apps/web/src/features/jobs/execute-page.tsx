@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { Spinner } from '@calibra-facil/ui/spinner'
-import { createMethodCalculationEngine } from '@/components/method-runtime/math-runtime'
+import { createMethodCalculationEngine } from '@/features/methods/runtime/math-runtime'
 import { type SyncConflictReturnSearch } from '@/runtime/sync-conflict-return'
 import {
   useActiveReferenceStandardsData,

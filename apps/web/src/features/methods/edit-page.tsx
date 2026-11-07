@@ -12,11 +12,11 @@ import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   draftToMethodSavePayload,
   methodDataToDraft,
-} from '@/components/method-builder/adapters'
-import type { MethodDraft } from '@/components/method-builder/types'
+} from '@/features/methods/builder/adapters'
+import type { MethodDraft } from '@/features/methods/builder/types'
 
 const MethodBuilder = lazy(() =>
-  import('@/components/method-builder/method-builder').then((module) => ({
+  import('@/features/methods/builder/method-builder').then((module) => ({
     default: module.MethodBuilder,
   })),
 )

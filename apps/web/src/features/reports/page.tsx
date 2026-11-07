@@ -44,7 +44,7 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
-import { setStoredDashboardActiveUnitIdForOrganization } from '@/features/dashboard/dashboard-scope-storage'
+import { setStoredDashboardActiveUnitIdForOrganization } from '@/lib/dashboard-scope-storage'
 import {
   useComparisonReportData,
   useExecutiveReportData,

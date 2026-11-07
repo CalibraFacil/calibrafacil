@@ -13,7 +13,7 @@ import {
 import { Separator } from '@calibra-facil/ui/separator'
 import { SidebarTrigger } from '@calibra-facil/ui/sidebar'
 import { getDashboardRouteTitle } from '@/app/router/route-registry'
-import { NotificationBell } from '@/components/notifications/notification-bell'
+import { NotificationCenter } from '@/features/notifications/notification-center'
 import {
   useAssetLabelData,
   useCapaLabelData,
@@ -482,7 +482,7 @@ export function DashboardHeader({
       <div className="flex items-center gap-2">
         <DesktopDataSourceIndicator />
         <DesktopSyncButton />
-        <NotificationBell />
+        <NotificationCenter />
       </div>
     </header>
   )

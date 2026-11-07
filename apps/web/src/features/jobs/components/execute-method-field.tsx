@@ -10,11 +10,11 @@ import {
 import {
   TableInputRenderer,
   type CertifiedValueOption,
-} from '@/components/method-runtime/table-input-renderer'
-import type { MassCompositionOption } from '@/components/method-runtime/mass-composition-utils'
-import type { StandardCertifiedValueOption } from '@/components/method-runtime/standard-value-utils'
+} from '@/features/methods/runtime/table-input-renderer'
+import type { MassCompositionOption } from '@/features/methods/runtime/mass-composition-utils'
+import type { StandardCertifiedValueOption } from '@/features/methods/runtime/standard-value-utils'
 import { EccentricityIndicator } from '@/components/eccentricity-indicator'
-import type { MethodInputField } from '@/components/method-runtime/types'
+import type { MethodInputField } from '@/features/methods/runtime/types'
 import {
   DEFAULT_PHASE_MODE,
   getCircularEccentricityLoadPositions,

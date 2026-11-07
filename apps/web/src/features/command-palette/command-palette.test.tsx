@@ -48,7 +48,7 @@ vi.mock('@/features/command-palette/global-search', () => ({
 }))
 import { CommandPaletteProvider } from './command-context'
 import { CommandPalette } from './command-palette'
-import { getStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
+import { getStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
 
 beforeEach(() => {
   vi.clearAllMocks()

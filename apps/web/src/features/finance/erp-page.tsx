@@ -7,7 +7,7 @@ import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table'
 import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
-} from '@/components/finance-status-badges'
+} from '@/features/finance/components/finance-status-badges'
 import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import { BILLING_DOCUMENT_EXPORT_STATUS } from '@calibra-facil/shared'
 import { Money, exportStatusToneOf } from '@/features/finance/finance-display'

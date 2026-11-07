@@ -44,25 +44,25 @@ vi.mock('@calibra-facil/auth/client', () => ({
   useSession: authMocks.useSession,
 }))
 
-vi.mock('@/components/app-sidebar', () => ({
+vi.mock('@/features/dashboard/components/app-sidebar', () => ({
   AppSidebar: () => <aside>sidebar</aside>,
 }))
 
-vi.mock('@/components/sidebar-mobile-autoclose', () => ({
+vi.mock('@/features/dashboard/components/sidebar-mobile-autoclose', () => ({
   SidebarMobileAutoClose: () => null,
 }))
 
-vi.mock('@/components/command-palette/command-context', () => ({
+vi.mock('@/features/command-palette/command-context', () => ({
   CommandPaletteProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
 }))
 
-vi.mock('@/components/command-palette/command-palette', () => ({
+vi.mock('@/features/command-palette/command-palette', () => ({
   CommandPalette: () => <div>command palette</div>,
 }))
 
-vi.mock('@/components/dashboard-header', () => ({
+vi.mock('@/features/dashboard/components/dashboard-header', () => ({
   DashboardHeader: ({
     suspendEntityQueries,
   }: {

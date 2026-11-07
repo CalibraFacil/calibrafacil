@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { SearchIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { useCommandPalette } from './command-palette/command-context'
+import { useCommandPalette } from '@/features/command-palette/command-context'
 import { Kbd } from '@calibra-facil/ui/kbd'
 import {
   SidebarMenu,

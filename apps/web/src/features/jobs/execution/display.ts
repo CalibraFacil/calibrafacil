@@ -7,7 +7,7 @@ import {
 import type {
   FormulaResult,
   MethodInputField,
-} from '@/components/method-runtime/types'
+} from '@/features/methods/runtime/types'
 import { type CalibrationPhaseMode, type JobData } from './types'
 import { resolvePointDisplayUnit } from './formulas'
 

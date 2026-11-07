@@ -10,7 +10,7 @@ import {
 } from '@calibra-facil/ui/table'
 import { formatCalibrationValue } from '@calibra-facil/shared'
 import { RepeatabilityTable } from '@/features/jobs/components/repeatability-table'
-import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
+import { isMassCompositionValue } from '@/features/methods/runtime/mass-composition-utils'
 import {
   buildJobReviewModel,
   formatReviewValue,

@@ -80,7 +80,7 @@ import {
   prewarmStandardDetail,
   prewarmStandardsIndex,
 } from '@/features/standards/queries'
-import { getStoredDashboardActiveUnitId } from '@/features/dashboard/dashboard-scope-storage'
+import { getStoredDashboardActiveUnitId } from '@/lib/dashboard-scope-storage'
 import { prewarmDashboardIndex } from '@/features/dashboard/queries'
 import { getStoredDashboardOrganizationId } from '@/lib/route-data'
 import { isDesktopRuntime } from '@/runtime/desktop'

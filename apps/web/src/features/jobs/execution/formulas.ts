@@ -16,7 +16,7 @@ import type {
   MethodFormula,
   MethodValidation,
   ValidationResult,
-} from '@/components/method-runtime/types'
+} from '@/features/methods/runtime/types'
 import {
   buildFormulaContext,
   effectiveVariableBindings,
@@ -27,7 +27,7 @@ import {
   type FormulaContext,
   type FormulaScalar,
   type createMethodCalculationEngine,
-} from '@/components/method-runtime/math-runtime'
+} from '@/features/methods/runtime/math-runtime'
 import {
   type CalibrationPhaseSnapshot,
   type EnvironmentalFormData,

@@ -82,7 +82,7 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
   feature.
 - Runtime constants, telemetry flags, and dashboard storage keys belong in
   `apps/web/src/app/config/runtime.ts` and
-  `apps/web/src/features/dashboard/dashboard-scope-storage.ts`.
+  `apps/web/src/lib/dashboard-scope-storage.ts`.
 - Route navigation, cloud-only state, sidebar visibility, and role rules should use
   `apps/web/src/app/router/route-meta.ts` where possible.
 - Forms for regulated workflows should be schema-first. Prefer `@calibra-facil/schemas` for

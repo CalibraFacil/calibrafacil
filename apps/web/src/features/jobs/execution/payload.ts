@@ -6,11 +6,11 @@ import {
 import type {
   FormulaResult,
   MethodInputField,
-} from '@/components/method-runtime/types'
-import { applyTableWeighingRangeResolvers } from '@/components/method-runtime/table-input-renderer'
-import { collectMassCompositionStandardIds } from '@/components/method-runtime/mass-composition-utils'
+} from '@/features/methods/runtime/types'
+import { applyTableWeighingRangeResolvers } from '@/features/methods/runtime/table-input-renderer'
+import { collectMassCompositionStandardIds } from '@/features/methods/runtime/mass-composition-utils'
 
-import { isNumericString } from './paste'
+import { isNumericString } from '@/features/methods/runtime/paste'
 import {
   type CalibrationLocationSnapshot,
   type CalibrationPhaseBlock,

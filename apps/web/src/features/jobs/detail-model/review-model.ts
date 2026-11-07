@@ -4,7 +4,7 @@ import {
   denormalizeSpecificationsForDisplay,
   resolveDisplayUnit,
 } from '@calibra-facil/shared/units'
-import { normalizeMethodValidations } from '@/components/method-runtime/math-runtime'
+import { normalizeMethodValidations } from '@/features/methods/runtime/math-runtime'
 import { type AcceptanceItem, type ReviewJobDetailData } from './types'
 import {
   buildReviewAssetSpecDefinitions,

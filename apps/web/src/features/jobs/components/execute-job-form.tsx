@@ -1,7 +1,7 @@
 import type { JobExecutionWarning } from '@calibra-facil/contracts'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { denormalizeMethodDataForDisplay } from '@calibra-facil/shared/units'
-import { createMethodCalculationEngine } from '@/components/method-runtime/math-runtime'
+import { createMethodCalculationEngine } from '@/features/methods/runtime/math-runtime'
 import {
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,

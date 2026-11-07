@@ -26,7 +26,7 @@ export {
   applyPastedReadings,
   parsePastedReadings,
   type ParsePastedReadingsResult,
-} from './paste'
+} from '@/features/methods/runtime/paste'
 export {
   buildCalibrationLocationPayload,
   buildCalibrationPhasesPayload,

@@ -9,7 +9,7 @@ import {
 import type {
   MethodInputField,
   ValidationResult,
-} from '@/components/method-runtime/types'
+} from '@/features/methods/runtime/types'
 import {
   evaluateExecutionFormulaResults,
   DEFAULT_PHASE_MODE,

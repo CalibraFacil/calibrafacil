@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   MethodInputField,
   ValidationResult,
-} from '@/components/method-runtime/types'
+} from '@/features/methods/runtime/types'
 
 import {
   buildAssetSpecSummaryItems,

@@ -6,10 +6,7 @@ import { toast } from 'sonner'
 
 import type { MethodInputField } from './types'
 
-import {
-  applyPastedReadings,
-  parsePastedReadings,
-} from '@/features/jobs/execution'
+import { applyPastedReadings, parsePastedReadings } from './paste'
 import { Button } from '@calibra-facil/ui/button'
 import { Input } from '@calibra-facil/ui/input'
 import { MassCompositionCell } from './mass-composition-cell'
@@ -30,7 +27,7 @@ import {
   resolveWeighingRange,
   type ResolvedWeighingRange,
   type WeighingRangeResolverTargetColumns,
-} from './weighing-range-utils'
+} from '@/lib/weighing-range-utils'
 import { MeasurementNumberCell } from './measurement-number-cell'
 import {
   normalizeMassUnit,

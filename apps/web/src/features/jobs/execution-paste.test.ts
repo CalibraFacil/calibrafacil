@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { MethodTableColumn } from '@/components/method-runtime/types'
+import type { MethodTableColumn } from '@/features/methods/runtime/types'
 
 import { applyPastedReadings, parsePastedReadings } from './execution'
 

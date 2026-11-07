@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { CommercialAgreementStatusBadge } from '@/components/finance-status-badges'
+import { CommercialAgreementStatusBadge } from '@/features/finance/components/finance-status-badges'
 import { formatFinanceDate } from '@/lib/finance-formatters'
 import { Money } from '@/features/finance/finance-display'
 import {

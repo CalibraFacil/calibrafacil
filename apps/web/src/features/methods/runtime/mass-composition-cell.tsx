@@ -31,7 +31,7 @@ import {
   suggestMassComposition,
   type MassDeltaStatus,
 } from './mass-composition-suggest'
-import { parseNumericValue } from './weighing-range-utils'
+import { parseNumericValue } from '@/lib/weighing-range-utils'
 
 import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'

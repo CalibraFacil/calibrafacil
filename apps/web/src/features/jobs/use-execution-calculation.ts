@@ -1,14 +1,14 @@
 import { useCallback, useMemo } from 'react'
-import { type CertifiedValueOption } from '@/components/method-runtime/table-input-renderer'
-import type { MassCompositionOption } from '@/components/method-runtime/mass-composition-utils'
-import type { StandardCertifiedValueOption } from '@/components/method-runtime/standard-value-utils'
+import { type CertifiedValueOption } from '@/features/methods/runtime/table-input-renderer'
+import type { MassCompositionOption } from '@/features/methods/runtime/mass-composition-utils'
+import type { StandardCertifiedValueOption } from '@/features/methods/runtime/standard-value-utils'
 import { normalizeMethodDataForStorage } from '@calibra-facil/shared/units'
 import type {
   MethodInputField,
   MethodFormula,
   ValidationResult,
-} from '@/components/method-runtime/types'
-import { createMethodCalculationEngine } from '@/components/method-runtime/math-runtime'
+} from '@/features/methods/runtime/types'
+import { createMethodCalculationEngine } from '@/features/methods/runtime/math-runtime'
 import {
   buildCertifiedValueOptions,
   buildExecutionFormulaContext,

@@ -92,8 +92,9 @@ export function usePathPrewarmIntent(
     })
     if (!url) return
 
-    return import('@/lib/route-prewarm').then(({ prewarmRouteDataForPath }) =>
-      prewarmRouteDataForPath(url, queryClient),
+    return import('@/app/router/route-prewarm').then(
+      ({ prewarmRouteDataForPath }) =>
+        prewarmRouteDataForPath(url, queryClient),
     )
   }, options)
 }

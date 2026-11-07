@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@calibra-facil/ui/table'
-import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
+import { isMassCompositionValue } from '@/features/methods/runtime/mass-composition-utils'
 import { RepeatabilityTable } from '@/features/jobs/components/repeatability-table'
 import {
   buildApprovedJobRecordModel,
