@@ -511,12 +511,10 @@ export function createDesktopApiClient(
     labSetup: desktopCloudOnlyStubs("labSetup", {
       action: "Configuração de acesso",
     }),
-    nonConformances: desktopCloudOnlyStubs("nonConformances", {
-      action: "Não conformidades",
-    }),
-    capas: desktopCloudOnlyStubs("capas", { action: "CAPA" }),
+    nonConformances: desktopEndpointStubs("nonConformances"),
+    capas: desktopEndpointStubs("capas"),
     proficiencyTests: desktopEndpointStubs("proficiencyTests"),
-    spc: desktopCloudOnlyStubs("spc", { action: "Cartas de controle" }),
+    spc: desktopEndpointStubs("spc"),
     competences: desktopEndpointStubs("competences"),
     trainingRecords: desktopEndpointStubs("trainingRecords"),
     calibrationRequests: desktopEndpointStubs("calibrationRequests"),

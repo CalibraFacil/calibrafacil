@@ -91,7 +91,10 @@ export function CAPADetailPage({ id }: { id: string }) {
 
   const implementMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.capas.implement(id, { implementationEvidence })
+      return calibraApi.capas.implement({
+        params: { id },
+        body: { implementationEvidence },
+      })
     },
     onSuccess: () => {
       toast.success('CAPA marcada como implementada')
@@ -103,12 +106,15 @@ export function CAPADetailPage({ id }: { id: string }) {
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.capas.verify(id, {
-        effectivenessConfirmed,
-        verificationNotes,
-        ...(waiverOffered && independenceJustification.trim()
-          ? { independenceJustification: independenceJustification.trim() }
-          : {}),
+      return calibraApi.capas.verify({
+        params: { id },
+        body: {
+          effectivenessConfirmed,
+          verificationNotes,
+          ...(waiverOffered && independenceJustification.trim()
+            ? { independenceJustification: independenceJustification.trim() }
+            : {}),
+        },
       })
     },
     onSuccess: () => {
@@ -128,7 +134,10 @@ export function CAPADetailPage({ id }: { id: string }) {
 
   const closeMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.capas.close(id, { reason: closeReason || undefined })
+      return calibraApi.capas.close({
+        params: { id },
+        body: { reason: closeReason || undefined },
+      })
     },
     onSuccess: () => {
       toast.success('CAPA fechada com sucesso')

@@ -145,8 +145,8 @@ describe('new CAPA route workflow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Criar CAPA' }))
 
     await waitFor(() => expect(apiMocks.createCapa).toHaveBeenCalled())
-    expect(apiMocks.createCapa).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(apiMocks.createCapa).toHaveBeenCalledWith({
+      body: expect.objectContaining({
         title: 'Ajustar procedimento',
         description: 'Procedimento atual permite execução ambígua em campo',
         source: 'nc_detection',
@@ -156,7 +156,7 @@ describe('new CAPA route workflow', () => {
         actionPlan: 'Revisar procedimento e treinar equipe técnica',
         responsibleId: 'user-1',
       }),
-    )
+    })
     expect(toastMocks.success).toHaveBeenCalledWith(
       'CAPA-77 criada com sucesso',
     )

@@ -4,6 +4,7 @@ import {
   buildCustomersListResponse,
 } from "@calibra-facil/contracts/customers-fixtures";
 import { buildDashboardStats } from "@calibra-facil/contracts/dashboard-fixtures";
+import { buildNonConformanceRecord } from "@calibra-facil/contracts/non-conformances-fixtures";
 import { buildStandard } from "@calibra-facil/contracts/standards-fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -2545,7 +2546,9 @@ describe("non-conformances runtime adapter", () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
     const fetchMock: typeof fetch = async (input, init) => {
       fetchCalls.push([input, init]);
-      return Response.json({ id: 10, ncNumber: "NC-2026-001" });
+      return Response.json(
+        buildNonConformanceRecord({ id: 10, ncNumber: "NC-2026-001" }),
+      );
     };
     const client = createCloudApiClient({
       baseUrl: "https://api.example.test",
@@ -2554,12 +2557,14 @@ describe("non-conformances runtime adapter", () => {
 
     await expect(
       client.nonConformances.create({
-        type: "work",
-        description: "Leitura fora da faixa esperada",
-        detectedAt: "2026-05-20T12:00:00.000Z",
-        jobId: 42,
+        body: {
+          type: "work",
+          description: "Leitura fora da faixa esperada",
+          detectedAt: "2026-05-20T12:00:00.000Z",
+          jobId: 42,
+        },
       }),
-    ).resolves.toEqual({ id: 10, ncNumber: "NC-2026-001" });
+    ).resolves.toMatchObject({ id: 10, ncNumber: "NC-2026-001" });
 
     expect(String(fetchCalls[0]?.[0])).toBe("https://api.example.test/api/nc");
     expect(fetchCalls[0]?.[1]?.method).toBe("POST");
@@ -2580,9 +2585,11 @@ describe("non-conformances runtime adapter", () => {
 
     await expect(
       client.nonConformances.create({
-        type: "work",
-        description: "Leitura fora da faixa esperada",
-        detectedAt: "2026-05-20T12:00:00.000Z",
+        body: {
+          type: "work",
+          description: "Leitura fora da faixa esperada",
+          detectedAt: "2026-05-20T12:00:00.000Z",
+        },
       }),
     ).rejects.toThrow("Descrição inválida");
   });

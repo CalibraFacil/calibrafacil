@@ -113,7 +113,7 @@ export function NewNCPage() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: CreateNonConformanceInput) =>
-      calibraApi.nonConformances.create(payload),
+      calibraApi.nonConformances.create({ body: payload }),
     onSuccess: (result) => {
       toast.success(`NC ${result.ncNumber} registrada com sucesso`)
       navigate({ to: '/dashboard/nc/$id', params: { id: String(result.id) } })

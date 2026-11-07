@@ -1,9 +1,4 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
-import type {
-  OotImpactAssessmentData,
-  OotNotificationData,
-} from '@calibra-facil/client-runtime'
-
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
@@ -20,18 +15,10 @@ import {
   CAPA_CATEGORIES,
   CAPA_SEVERITIES,
   NON_CONFORMANCE_TYPES,
-  type CapaAuditLogData,
-  type CapaDetail,
-  type CapaListData,
   type CapaListQueryInput,
   type CapaResponsibleMembersData,
-  type CapaSummaryData,
   type NewNonConformanceJobsData,
-  type NonConformanceAuditLogData,
-  type NonConformanceDetail,
-  type NonConformanceListData,
   type NonConformanceListQueryInput,
-  type NonConformanceSummaryData,
 } from './types'
 
 const QUALITY_LIST_LIMIT = 20
@@ -88,12 +75,14 @@ export function nonConformanceListQueryOptions(
       input.typeFilter,
     ],
     queryFn: () =>
-      calibraApi.nonConformances.list<NonConformanceListData>({
-        page: input.page,
-        limit: QUALITY_LIST_LIMIT,
-        query: input.search || undefined,
-        status: input.statusFilter || undefined,
-        type: input.typeFilter || undefined,
+      calibraApi.nonConformances.list({
+        query: {
+          page: input.page,
+          limit: QUALITY_LIST_LIMIT,
+          query: input.search || undefined,
+          status: input.statusFilter || undefined,
+          type: input.typeFilter || undefined,
+        },
       }),
     placeholderData: keepPreviousDataInScope([
       'non-conformances',
@@ -105,23 +94,21 @@ export function nonConformanceListQueryOptions(
 function nonConformanceSummaryQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['non-conformances-summary', organizationId],
-    queryFn: () =>
-      calibraApi.nonConformances.summary<NonConformanceSummaryData>(),
+    queryFn: () => calibraApi.nonConformances.summary(),
   })
 }
 
 export function nonConformanceDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['non-conformance', id],
-    queryFn: () => calibraApi.nonConformances.get<NonConformanceDetail>(id),
+    queryFn: () => calibraApi.nonConformances.get({ params: { id } }),
   })
 }
 
 export function nonConformanceAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['non-conformance-audit', id],
-    queryFn: () =>
-      calibraApi.nonConformances.auditLog<NonConformanceAuditLogData>(id),
+    queryFn: () => calibraApi.nonConformances.auditLog({ params: { id } }),
   })
 }
 
@@ -129,9 +116,7 @@ function ootNotificationQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['non-conformance-oot-notification', id],
     queryFn: () =>
-      calibraApi.nonConformances.getOotNotification<{
-        data: OotNotificationData | null
-      }>(id),
+      calibraApi.nonConformances.getOotNotification({ params: { id } }),
   })
 }
 
@@ -139,9 +124,7 @@ function ootImpactAssessmentQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['non-conformance-impact-assessment', id],
     queryFn: () =>
-      calibraApi.nonConformances.getImpactAssessment<{
-        data: OotImpactAssessmentData | null
-      }>(id),
+      calibraApi.nonConformances.getImpactAssessment({ params: { id } }),
   })
 }
 
@@ -168,13 +151,15 @@ export function capaListQueryOptions(input: CapaListQueryInput) {
       input.categoryFilter,
     ],
     queryFn: () =>
-      calibraApi.capas.list<CapaListData>({
-        page: input.page,
-        limit: QUALITY_LIST_LIMIT,
-        query: input.search || undefined,
-        status: input.statusFilter || undefined,
-        severity: input.severityFilter || undefined,
-        category: input.categoryFilter || undefined,
+      calibraApi.capas.list({
+        query: {
+          page: input.page,
+          limit: QUALITY_LIST_LIMIT,
+          query: input.search || undefined,
+          status: input.statusFilter || undefined,
+          severity: input.severityFilter || undefined,
+          category: input.categoryFilter || undefined,
+        },
       }),
     placeholderData: keepPreviousDataInScope(['capas', input.organizationId]),
   })
@@ -183,21 +168,21 @@ export function capaListQueryOptions(input: CapaListQueryInput) {
 function capaSummaryQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['capas-summary', organizationId],
-    queryFn: () => calibraApi.capas.summary<CapaSummaryData>(),
+    queryFn: () => calibraApi.capas.summary(),
   })
 }
 
 export function capaDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['capa', id],
-    queryFn: () => calibraApi.capas.get<CapaDetail>(id),
+    queryFn: () => calibraApi.capas.get({ params: { id } }),
   })
 }
 
 export function capaAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['capa-audit-log', id],
-    queryFn: () => calibraApi.capas.auditLog<CapaAuditLogData>(id),
+    queryFn: () => calibraApi.capas.auditLog({ params: { id } }),
   })
 }
 

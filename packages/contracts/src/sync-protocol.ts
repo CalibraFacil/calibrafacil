@@ -412,7 +412,7 @@ export const SYNC_OPERATIONS = {
     regulated: false,
     ordering: "create",
     permission: { non_conformance: ["create"] },
-    onlineRoute: "POST /api/non-conformances",
+    onlineRoute: "POST /api/nc",
   },
   create_local_service_order_quote_draft: {
     support: "legacy",

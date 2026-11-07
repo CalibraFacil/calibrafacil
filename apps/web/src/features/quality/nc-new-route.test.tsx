@@ -136,16 +136,16 @@ describe('new NC route workflow', () => {
     await waitFor(() =>
       expect(apiMocks.createNonConformance).toHaveBeenCalled(),
     )
-    expect(apiMocks.createNonConformance).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(apiMocks.createNonConformance).toHaveBeenCalledWith({
+      body: expect.objectContaining({
         type: 'equipment',
         description: 'Equipamento apresentou resultado fora da tolerância',
         jobId: 42,
       }),
-    )
-    expect(apiMocks.createNonConformance.mock.calls[0]?.[0].detectedAt).toBe(
-      new Date(2026, 4, 20, 14, 35).toISOString(),
-    )
+    })
+    expect(
+      apiMocks.createNonConformance.mock.calls[0]?.[0].body.detectedAt,
+    ).toBe(new Date(2026, 4, 20, 14, 35).toISOString())
     expect(toastMocks.success).toHaveBeenCalledWith(
       'NC NC-12 registrada com sucesso',
     )

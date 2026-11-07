@@ -6,7 +6,6 @@
 import type { z } from "zod";
 import type {
   AssetStatus,
-  OotNotificationStatus,
   ReferenceStandardStatus,
 } from "@calibra-facil/schemas/machines";
 import type {
@@ -28,12 +27,15 @@ import type {
 } from "@calibra-facil/schemas";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
+import type { CapasApi } from "./modules/capa";
 import type { CompetencesApi } from "./modules/competences";
 import type { CustomersApi } from "./modules/customers";
 import type { DashboardApi } from "./modules/dashboard";
+import type { NonConformancesApi } from "./modules/non-conformances";
 import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
 import type { ReportsApi } from "./modules/reports";
 import type { SignaturesApi } from "./modules/signatures";
+import type { SpcApi } from "./modules/spc";
 import type { TrainingRecordsApi } from "./modules/training-records";
 import type { VisitsApi } from "./modules/visits";
 
@@ -995,308 +997,13 @@ export interface PublicSignupApi {
   start<TInput = unknown>(input: TInput): Promise<SelfServeSignupResponse>;
 }
 
-export type NonConformanceListInput = {
-  page: number;
-  limit: number;
-  query?: string;
-  status?: string;
-  type?: string;
-  jobId?: string | number;
-  dateFrom?: string;
-  dateTo?: string;
-};
+// Non-conformances and CAPA: the clients are generated from the endpoint
+// definitions (`modules/`); their DTOs are the contract's.
+export type { CapasApi, NonConformancesApi };
 
-export type CreateNonConformanceResult = {
-  id: number;
-  ncNumber: string;
-};
-
-export type NonConformanceDispositionInput = {
-  disposition: "rework" | "scrap" | "use_as_is" | "concession";
-  justification?: string;
-};
-
-export type NonConformanceResolveInput = {
-  correctionTaken: string;
-};
-
-export type NonConformanceEscalateInput = {
-  rootCauseAnalysis?: string;
-  actionPlan?: string;
-  responsibleId?: string;
-  dueDate?: string;
-};
-
-export type RegisterOotAcknowledgementInput = {
-  note: string;
-};
-
-/** #426 Phase 2: guided §7.10 impact-assessment payload. */
-export type SaveOotImpactAssessmentInput = {
-  deviationSummary: string;
-  deviationMagnitude?: number;
-  customerTolerance?: number;
-  toleranceUnit?: string;
-  affectedFrom?: string;
-  affectedTo?: string;
-  items: Array<{
-    description: string;
-    disposition: "no_impact" | "recheck" | "notify_downstream" | "other";
-    note?: string;
-  }>;
-  conclusion?: "no_significant_impact" | "impact_confirmed" | "inconclusive";
-  correctiveActionNote?: string;
-};
-
-export type OotImpactAssessmentData = {
-  id: number;
-  ncId: number;
-  deviationSummary: string;
-  deviationMagnitude: number | null;
-  customerTolerance: number | null;
-  toleranceUnit: string | null;
-  affectedFrom: string | null;
-  affectedTo: string | null;
-  items: Array<{
-    description: string;
-    disposition: "no_impact" | "recheck" | "notify_downstream" | "other";
-    note?: string | null;
-  }> | null;
-  conclusion:
-    | "no_significant_impact"
-    | "impact_confirmed"
-    | "inconclusive"
-    | null;
-  correctiveActionNote: string | null;
-  signedBy: string | null;
-  signedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/** §7.10 out-of-tolerance customer-notification record (#426 Phase 0). */
-export type OotNotificationData = {
-  id: number;
-  ncId: number;
-  jobId: number;
-  certificateNumber: string | null;
-  recipientName: string | null;
-  recipientEmail: string | null;
-  affectedScope: string | null;
-  status: OotNotificationStatus;
-  pdfR2Key: string | null;
-  sentAt: string | null;
-  acknowledgedAt: string | null;
-  acknowledgedVia: "email_link" | "portal_link" | "manual" | null;
-  acknowledgedNote: string | null;
-  createdAt: string;
-};
-
-export interface NonConformancesApi {
-  list<TResponse = unknown>(input: NonConformanceListInput): Promise<TResponse>;
-  summary<TResponse = unknown>(): Promise<TResponse>;
-  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  auditLog<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  create(input: CreateNonConformanceInput): Promise<CreateNonConformanceResult>;
-  setDisposition<TResponse = unknown>(
-    id: string | number,
-    input: NonConformanceDispositionInput,
-  ): Promise<TResponse>;
-  resolve<TResponse = unknown>(
-    id: string | number,
-    input: NonConformanceResolveInput,
-  ): Promise<TResponse>;
-  escalateToCapa<TResponse = unknown>(
-    id: string | number,
-    input: NonConformanceEscalateInput,
-  ): Promise<TResponse>;
-  getOotNotification<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  registerOotAcknowledgement<TResponse = unknown>(
-    id: string | number,
-    input: RegisterOotAcknowledgementInput,
-  ): Promise<TResponse>;
-  getImpactAssessment<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  saveImpactAssessment<TResponse = unknown>(
-    id: string | number,
-    input: SaveOotImpactAssessmentInput,
-  ): Promise<TResponse>;
-  signImpactAssessment<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-}
-
-export type CapaListInput = {
-  page: number;
-  limit: number;
-  query?: string;
-  status?: string;
-  severity?: string;
-  category?: string;
-  source?: string;
-  type?: string;
-  responsibleId?: string;
-  overdue?: boolean;
-};
-
-export type CapaCreateInput = {
-  title: string;
-  description: string;
-  source:
-    | "internal_audit"
-    | "customer_complaint"
-    | "nc_detection"
-    | "external_audit"
-    | "management_review";
-  sourceReference?: string;
-  detectionDate: string;
-  type: "corrective" | "preventive";
-  severity: "minor" | "major" | "critical";
-  category:
-    | "method"
-    | "equipment"
-    | "personnel"
-    | "procedure"
-    | "environment"
-    | "other";
-  actionPlan: string;
-  responsibleId: string;
-  dueDate: string;
-  rootCauseAnalysis?: string;
-  rootCauseAnalysisMethod?: "5_whys" | "fishbone" | "pareto" | "other";
-  preventiveMeasures?: string;
-};
-
-export type CapaUpdateInput = Partial<CapaCreateInput>;
-
-export type CapaImplementInput = {
-  implementationEvidence: string;
-};
-
-export type CapaVerifyInput = {
-  effectivenessConfirmed: boolean;
-  verificationNotes?: string;
-  /**
-   * Only for a verifier who is not independent of the CAPA and is the
-   * laboratory's sole eligible verifier (decision Q50): why they verify anyway.
-   */
-  independenceJustification?: string;
-};
-
-export type CapaCloseInput = {
-  reason?: string;
-};
-
-export interface CapasApi {
-  list<TResponse = unknown>(input: CapaListInput): Promise<TResponse>;
-  summary<TResponse = unknown>(): Promise<TResponse>;
-  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  auditLog<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  create<TResponse = unknown>(input: CapaCreateInput): Promise<TResponse>;
-  update<TResponse = unknown>(
-    id: string | number,
-    input: CapaUpdateInput,
-  ): Promise<TResponse>;
-  implement<TResponse = unknown>(
-    id: string | number,
-    input: CapaImplementInput,
-  ): Promise<TResponse>;
-  verify<TResponse = unknown>(
-    id: string | number,
-    input: CapaVerifyInput,
-  ): Promise<TResponse>;
-  close<TResponse = unknown>(
-    id: string | number,
-    input: CapaCloseInput,
-  ): Promise<TResponse>;
-}
-
-// Proficiency tests, competences and training records: the clients are generated
-// from the endpoint definitions (`modules/`); their DTOs are the contract's.
 export type { ProficiencyTestsApi };
 
-export type SpcChartListInput = {
-  standardId?: number;
-  status?: string;
-  page?: number;
-  limit?: number;
-};
-
-type SpcChartParamsInput = {
-  baselineWindow?: number;
-  centerline?: number;
-  sigma?: number;
-  subgroupSize?: number;
-  cusumK?: number;
-  cusumH?: number;
-  ewmaLambda?: number;
-  ewmaK?: number;
-  enabledRules?: string[];
-};
-
-export type SpcChartCreateInput = {
-  standardId: number;
-  parameter: string;
-  chartType?: "i_mr" | "xbar_r" | "cusum" | "ewma";
-  params?: SpcChartParamsInput;
-  unitId?: number;
-};
-
-export type SpcChartUpdateInput = {
-  chartType?: "i_mr" | "xbar_r" | "cusum" | "ewma";
-  params?: SpcChartParamsInput;
-};
-
-export type SpcEscalateInput = {
-  description?: string;
-};
-
-export type SpcReadingListInput = {
-  standardId: number;
-  parameter?: string;
-  limit?: number;
-};
-
-export type SpcReadingCreateInput = {
-  standardId: number;
-  parameter: string;
-  value: number;
-  uncertainty?: number;
-  measuredAt: string;
-  sourceJobId?: number;
-};
-
-export interface SpcApi {
-  listCharts<TResponse = unknown>(
-    input?: SpcChartListInput,
-  ): Promise<TResponse>;
-  getChart<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  createChart<TResponse = unknown>(
-    input: SpcChartCreateInput,
-  ): Promise<TResponse>;
-  updateChart<TResponse = unknown>(
-    id: string | number,
-    input: SpcChartUpdateInput,
-  ): Promise<TResponse>;
-  removeChart<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  recalculateChart<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  escalateChart<TResponse = unknown>(
-    id: string | number,
-    input?: SpcEscalateInput,
-  ): Promise<TResponse>;
-  listReadings<TResponse = unknown>(
-    input: SpcReadingListInput,
-  ): Promise<TResponse>;
-  createReading<TResponse = unknown>(
-    input: SpcReadingCreateInput,
-  ): Promise<TResponse>;
-  removeReading<TResponse = unknown>(id: string | number): Promise<TResponse>;
-}
+export type { SpcApi };
 
 export type { CompetencesApi, TrainingRecordsApi };
 

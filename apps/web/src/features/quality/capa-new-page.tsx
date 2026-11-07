@@ -5,7 +5,10 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Shield01Icon, Wrench01Icon } from '@hugeicons/core-free-icons'
-import type { CapaCreateInput } from '@calibra-facil/client-runtime'
+import type {
+  capaEndpoints,
+  EndpointClientInput,
+} from '@calibra-facil/contracts'
 
 import { calibraApi } from '@/utils/api'
 import { parseCapaForm, type CapaFormData } from '@/features/quality/forms'
@@ -119,6 +122,8 @@ const CAPA_LIFECYCLE = [
   },
 ]
 
+type CapaCreateInput = EndpointClientInput<typeof capaEndpoints.create>['body']
+
 export function NewCAPAPage() {
   const navigate = useNavigate()
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
@@ -169,7 +174,7 @@ export function NewCAPAPage() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: CapaCreateInput) =>
-      calibraApi.capas.create<{ id: number; capaNumber: string }>(payload),
+      calibraApi.capas.create({ body: payload }),
     onSuccess: (result) => {
       toast.success(`${result.capaNumber} criada com sucesso`)
       navigate({

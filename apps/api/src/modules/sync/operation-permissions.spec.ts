@@ -156,7 +156,7 @@ const ROUTE_FILES: Record<string, string> = {
   "/api/assets": "../../routes/assets.ts",
   "/api/customers": "../../routes/customers.ts",
   "/api/service-orders": "../../routes/service-orders.ts",
-  "/api/non-conformances": "../../routes/non-conformances.ts",
+  "/api/nc": "../../routes/non-conformances.ts",
 };
 
 function squash(text: string) {
