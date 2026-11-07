@@ -11,15 +11,11 @@ import {
 import { pageFromUrl } from '@/lib/url-search'
 import type {
   CustomerAssetsData,
-  CustomerAuditLogEntry,
   CustomerAuditLogData,
-  CustomerDetail,
   CustomerJobsData,
   CustomerFinancialTimelineResponse,
   CustomersListData,
   CustomersListQueryInput,
-  PortalInvitation,
-  PortalMember,
 } from './types'
 
 export const CUSTOMERS_LIST_LIMIT = 20
@@ -47,9 +43,11 @@ export function customersListQueryOptions(input: CustomersListQueryInput) {
     ],
     queryFn: (): Promise<CustomersListData> =>
       calibraApi.customers.list({
-        page: input.page,
-        limit: input.limit,
-        query: input.search || undefined,
+        query: {
+          page: input.page,
+          limit: input.limit,
+          query: input.search || undefined,
+        },
       }),
     placeholderData: keepPreviousDataInScope([
       'customers',
@@ -63,9 +61,7 @@ function customersSearchQueryOptions(organizationId: string, search = '') {
     queryKey: ['customers', organizationId, 'search', search],
     queryFn: (): Promise<CustomersListData> =>
       calibraApi.customers.list({
-        page: 1,
-        limit: 50,
-        query: search || undefined,
+        query: { page: 1, limit: 50, query: search || undefined },
       }),
     staleTime: 30_000,
   })
@@ -83,7 +79,7 @@ export async function prewarmCustomersSearch(
 export function customerDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer', id],
-    queryFn: () => calibraApi.customers.get<CustomerDetail>(id),
+    queryFn: () => calibraApi.customers.get({ params: { id } }),
   })
 }
 
@@ -169,9 +165,9 @@ export function customerAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer-audit-log', id],
     queryFn: (): Promise<CustomerAuditLogData> =>
-      calibraApi.customers.auditLog<CustomerAuditLogEntry>(id, {
-        page: 1,
-        limit: 50,
+      calibraApi.customers.auditLog({
+        params: { id },
+        query: { page: 1, limit: 50 },
       }),
   })
 }
@@ -179,14 +175,14 @@ export function customerAuditLogQueryOptions(id: string) {
 export function customerMembersQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer-members', id],
-    queryFn: () => calibraApi.customers.listMembers<PortalMember>(id),
+    queryFn: () => calibraApi.customers.listMembers({ params: { id } }),
   })
 }
 
 export function customerInvitationsQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer-invitations', id],
-    queryFn: () => calibraApi.customers.listInvitations<PortalInvitation>(id),
+    queryFn: () => calibraApi.customers.listInvitations({ params: { id } }),
   })
 }
 

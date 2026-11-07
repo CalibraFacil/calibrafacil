@@ -93,7 +93,7 @@ export function CustomerCreateForm({
 
   const createMutation = useMutation({
     mutationFn: (data: CreateCustomerInput) =>
-      calibraApi.customers.create(data),
+      calibraApi.customers.create({ body: data }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
       onSaved(data)

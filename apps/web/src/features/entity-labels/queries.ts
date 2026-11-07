@@ -20,8 +20,8 @@ export function customerLabelQueryOptions(id: string) {
     queryKey: ['customers', id, 'label'],
     queryFn: async () => {
       try {
-        const customer = await calibraApi.customers.get<EntityLabelData>(id)
-        return customer.name ?? null
+        const customer = await calibraApi.customers.get({ params: { id } })
+        return customer.name
       } catch {
         return null
       }

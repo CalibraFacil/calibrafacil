@@ -9,7 +9,7 @@ import { nullableNumber, nullableString, paginationSchema } from "./common";
 
 /**
  * Response contracts for the reference data a technician reads and captures in
- * the field: customers, assets, asset types and calibration methods. Wire
+ * the field: assets, asset types and calibration methods (customers live in `endpoints/customers.ts`). Wire
  * schemas (see `jobs.ts` for the rules). The cloud API and the desktop
  * local-server (offline mirror) both serve these shapes; the API contract
  * specs and the local-server contract tests parse the real responses with the
@@ -21,54 +21,6 @@ import { nullableNumber, nullableString, paginationSchema } from "./common";
  */
 
 const jsonRecordSchema = z.record(z.string(), z.unknown());
-
-// ---------------------------------------------------------------------------
-// Customers
-// ---------------------------------------------------------------------------
-
-const customerComplianceSchema = z.object({
-  qualificationStatus: z
-    .enum(["pending", "qualified", "suspended", "expired"])
-    .optional(),
-});
-
-/** One customer row as GET /api/customers lists it. */
-const customerSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  tradeName: nullableString.optional(),
-  taxId: nullableString,
-  email: nullableString,
-  phone: nullableString,
-  address: jsonRecordSchema.nullable(),
-  /** The CLIENT organization behind the portal; the offline mirror has none. */
-  authOrganizationId: nullableString,
-  groupId: nullableNumber.optional(),
-  groupName: nullableString.optional(),
-  compliance: customerComplianceSchema.nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-/** GET /api/customers */
-export const customersListResponseSchema = z.object({
-  data: z.array(customerSchema),
-  pagination: paginationSchema,
-});
-export type CustomersListResponse = z.infer<typeof customersListResponseSchema>;
-
-/** GET /api/customers/:id: the row plus its financial standing. */
-export const customerDetailSchema = customerSchema.extend({
-  financialSummary: z.object({
-    openDocumentsCount: z.number(),
-    overdueDocumentsCount: z.number(),
-    openBalanceCents: z.number(),
-    overdueBalanceCents: z.number(),
-    overdueBalanceFlag: z.boolean(),
-  }),
-  group: z.object({ id: z.number(), name: z.string() }).nullable().optional(),
-});
-export type CustomerDetail = z.infer<typeof customerDetailSchema>;
 
 // ---------------------------------------------------------------------------
 // Asset types

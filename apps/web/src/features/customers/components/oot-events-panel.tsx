@@ -2,10 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 
 import { calibraApi } from '@/utils/api'
-import {
-  ASSET_OOT_EVENT_STATUS,
-  type AssetOotEventStatus,
-} from '@calibra-facil/schemas/machines'
+import { ASSET_OOT_EVENT_STATUS } from '@calibra-facil/schemas/machines'
 import { Badge } from '@calibra-facil/ui/badge'
 import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
@@ -18,23 +15,6 @@ import {
   TableRow,
 } from '@calibra-facil/ui/table'
 import { formatInstant } from '@calibra-facil/shared/format'
-
-type CustomerOotEvent = {
-  id: number
-  status: AssetOotEventStatus
-  detectedAt: string
-  assetId: number
-  assetTag: string
-  assetName: string
-  jobId: number
-  jobIdentifier: string
-  assessmentDecision:
-    | 'NO_IMPACT'
-    | 'IMPACT_CONTAINED'
-    | 'IMPACT_ESCALATED'
-    | null
-  assessmentCreatedAt: string | null
-}
 
 const DECISION_LABELS: Record<string, string> = {
   NO_IMPACT: 'Sem impacto',
@@ -51,7 +31,7 @@ export function CustomerOotEventsPanel({ customerId }: { customerId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['customer-oot-events', customerId],
     queryFn: () =>
-      calibraApi.customers.ootEvents<{ data: CustomerOotEvent[] }>(customerId),
+      calibraApi.customers.ootEvents({ params: { id: customerId } }),
   })
 
   const events = data?.data ?? []

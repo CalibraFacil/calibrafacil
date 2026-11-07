@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  ENDPOINT_GROUPS,
+  endpointLabel,
   SYNC_COMMAND_OPERATIONS,
   SYNC_OPERATIONS,
   type SyncCommandOperation,
@@ -147,7 +149,8 @@ describe("REQ-SYNC-RBAC-5: the unit role is the one of the event's unit", () => 
 
 // The online route an operation was derived from still asks for the same
 // permission: reads the route source and finds
-// `.<method>("<path>", ...withLabPermission({...}))`.
+// `.<method>("<path>", ...withLabPermission({...}))`, or, for a domain converted
+// to endpoint definitions, `mount(router, prefix, <group>.<name>, withLabPermission({...}), ...)`.
 const ROUTE_FILES: Record<string, string> = {
   "/api/jobs": "../../routes/jobs.ts",
   "/api/assets": "../../routes/assets.ts",
@@ -200,9 +203,19 @@ describe("REQ-SYNC-RBAC-2: the table follows the online routes", () => {
       );
       const path = route.slice(prefix.length) || "/";
       const escaped = path.replace(/[/:.]/g, (ch) => `\\${ch}`);
-      const pattern = new RegExp(
-        `\\.${method.toLowerCase()}\\(\\s*"${escaped}",\\s*\\.\\.\\.withLabPermission\\((\\{[^}]*\\})\\)`,
-      );
+      const defined = Object.values(ENDPOINT_GROUPS)
+        .flatMap((group) => Object.entries(group))
+        .find(
+          ([, def]) =>
+            endpointLabel(def) === `${method.toUpperCase()} ${route}`,
+        );
+      const pattern = defined
+        ? new RegExp(
+            `Endpoints\\.${defined[0]},\\s*withLabPermission\\((\\{[^}]*\\})\\)`,
+          )
+        : new RegExp(
+            `\\.${method.toLowerCase()}\\(\\s*"${escaped}",\\s*\\.\\.\\.withLabPermission\\((\\{[^}]*\\})\\)`,
+          );
       const found = pattern.exec(source);
       expect(found, `${method} ${route} not found in ${file}`).not.toBeNull();
       expect(squash(found?.[1] ?? "")).toBe(

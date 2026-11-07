@@ -91,9 +91,9 @@ export function ClientUsersTab({ id }: { id: string }) {
 
   const inviteMutation = useMutation({
     mutationFn: async (email: string) => {
-      return calibraApi.customers.createInvitation(id, {
-        email,
-        role: defaultPortalRole,
+      return calibraApi.customers.createInvitation({
+        params: { id },
+        body: { email, role: defaultPortalRole },
       })
     },
     onSuccess: () => {
@@ -109,7 +109,7 @@ export function ClientUsersTab({ id }: { id: string }) {
 
   const resendMutation = useMutation({
     mutationFn: async (invId: string) => {
-      return calibraApi.customers.resendInvitation(id, invId)
+      return calibraApi.customers.resendInvitation({ params: { id, invId } })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
@@ -122,7 +122,7 @@ export function ClientUsersTab({ id }: { id: string }) {
 
   const cancelInvitationMutation = useMutation({
     mutationFn: async (invId: string) => {
-      return calibraApi.customers.cancelInvitation(id, invId)
+      return calibraApi.customers.cancelInvitation({ params: { id, invId } })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
@@ -135,7 +135,7 @@ export function ClientUsersTab({ id }: { id: string }) {
 
   const removeMemberMutation = useMutation({
     mutationFn: async (memberId: string) => {
-      return calibraApi.customers.removeMember(id, memberId)
+      return calibraApi.customers.removeMember({ params: { id, memberId } })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-members', id] })

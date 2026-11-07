@@ -3,7 +3,6 @@ import type {
   CalibraApi,
   CreateApiKeyInput,
   CreateAssetInput,
-  CreateCustomerInput,
   CreateMaterialInput,
   CreateServiceInput,
   CreateServiceOrderInput,
@@ -30,8 +29,6 @@ import type {
   StartSsoInput,
   UpdateAssetInput,
   UpdateCertificateNumberingProfileInput,
-  UpdateCustomerComplianceInput,
-  UpdateCustomerInput,
   UpdateMaterialInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
@@ -41,6 +38,7 @@ import {
   createRawCloudClient,
   type CreateCloudApiClientOptions,
 } from "./transport/cloud";
+import { createCloudEndpointTransport } from "./transport/endpoint-client";
 import type { CreateDesktopHybridApiClientOptions } from "./transport/desktop";
 import {
   composeDesktopHybridApi,
@@ -107,6 +105,7 @@ export * from "./availability";
 export function createCloudApiClient(
   options: CreateCloudApiClientOptions,
 ): CalibraApi {
+  const endpointTransport = createCloudEndpointTransport(options);
   // oxlint-disable-next-line typescript/consistent-type-assertions -- the raw Hono client type is narrowed to the browser-supported route subset used by runtime modules.
   const rawCloudClient = createRawCloudClient(options) as unknown as {
     api: {
@@ -538,60 +537,7 @@ export function createCloudApiClient(
           }): Promise<Response>;
         };
       };
-      customers: {
-        $get(input: {
-          query: {
-            page?: string;
-            limit?: string;
-            query?: string;
-          };
-        }): Promise<Response>;
-        $post(input: { json: CreateCustomerInput }): Promise<Response>;
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $put(input: {
-            param: { id: string };
-            json: UpdateCustomerInput;
-          }): Promise<Response>;
-          "audit-log": {
-            $get(input: {
-              param: { id: string };
-              query: { page: string; limit: string };
-            }): Promise<Response>;
-          };
-          compliance: {
-            $put(input: {
-              param: { id: string };
-              json: UpdateCustomerComplianceInput;
-            }): Promise<Response>;
-          };
-          members: {
-            $get(input: { param: { id: string } }): Promise<Response>;
-            ":memberId": {
-              $delete(input: {
-                param: { id: string; memberId: string };
-              }): Promise<Response>;
-            };
-          };
-          invitations: {
-            $get(input: { param: { id: string } }): Promise<Response>;
-            $post(input: {
-              param: { id: string };
-              json: { email: string; role: string };
-            }): Promise<Response>;
-            ":invId": {
-              $delete(input: {
-                param: { id: string; invId: string };
-              }): Promise<Response>;
-              resend: {
-                $post(input: {
-                  param: { id: string; invId: string };
-                }): Promise<Response>;
-              };
-            };
-          };
-        };
-      };
+
       assets: {
         $get(input: {
           query: {
@@ -725,7 +671,7 @@ export function createCloudApiClient(
     profileMedia: createProfileMediaApi(options),
     organizationMedia: createOrganizationMediaApi(options),
     signingCertificates: createSigningCertificatesApi(rawCloudClient),
-    customers: createCustomersApi(rawCloudClient),
+    customers: createCustomersApi(endpointTransport, options),
     customerGroups: createCustomerGroupsApi(rawCloudClient),
     assets: createAssetsApi(rawCloudClient),
     assetTypes: createAssetTypesApi(rawCloudClient),

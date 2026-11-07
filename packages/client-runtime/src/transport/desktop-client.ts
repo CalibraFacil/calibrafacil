@@ -1,4 +1,10 @@
 import { slugify } from "@calibra-facil/shared/text";
+import {
+  customerEndpoints,
+  ENDPOINT_GROUPS,
+  type EndpointDef,
+  type EndpointGroups,
+} from "@calibra-facil/contracts";
 import type {
   JobDetail,
   JobsListResponse,
@@ -13,8 +19,6 @@ import type {
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
   CreateServiceOrderResult,
-  CustomerDetailData,
-  CustomersListData,
   DashboardUnitsResponse,
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
@@ -47,6 +51,10 @@ import {
   type CalibraApiNamespace,
   type DataPolicy,
 } from "../data-policy";
+import {
+  createDesktopEndpointTransport,
+  endpointClient,
+} from "./endpoint-client";
 import { readApiError } from "./response";
 import { apiRouteParam } from "./url";
 import {
@@ -129,10 +137,48 @@ function desktopCloudOnlyStubs<TNamespace extends CalibraApiNamespace>(
   >;
 }
 
+/**
+ * The same throw-stubs for a domain converted to endpoint definitions: the
+ * `cloud-only` endpoints of its group, labelled by each definition's
+ * `desktopLabel`. Local-first methods are not stubbed here: the caller supplies
+ * them (typically the group's own client over the desktop transport).
+ */
+function desktopEndpointStubs<
+  TNamespace extends keyof EndpointGroups & CalibraApiNamespace,
+>(
+  namespace: TNamespace,
+): Pick<
+  CalibraApi[TNamespace],
+  CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
+    keyof CalibraApi[TNamespace]
+> {
+  const stubs: Record<string, () => Promise<never>> = {};
+  for (const [method, entry] of Object.entries(ENDPOINT_GROUPS[namespace])) {
+    const def: EndpointDef = entry;
+    if (def.policy !== "cloud-only") continue;
+    const flavor = def.desktopFlavor ?? "web-api";
+    stubs[method] = async () => {
+      throw desktopUnsupportedError(def.desktopLabel, flavor);
+    };
+  }
+
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- the stub keys are exactly the cloud-only entries of the group, which is what the registry (derived from the same group) classifies as cloud-only; the single trust point tying the runtime object to the Pick above.
+  return stubs as Pick<
+    CalibraApi[TNamespace],
+    CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
+      keyof CalibraApi[TNamespace]
+  >;
+}
+
 export function createDesktopApiClient(
   options: CreateDesktopApiClientOptions,
 ): CalibraApi {
   const fetchImpl = options.fetch ?? fetch;
+  const localCustomers = endpointClient(
+    customerEndpoints,
+    createDesktopEndpointTransport(options),
+    options,
+  );
   let localSessionCache: {
     expiresAt: number;
     promise: Promise<LocalSessionSnapshotResponse>;
@@ -341,54 +387,11 @@ export function createDesktopApiClient(
       },
     },
     customers: {
-      ...desktopCloudOnlyStubs("customers", {
-        action: "Clientes",
-        actionByMethod: {
-          lookupCnpj: "Consulta de CNPJ",
-          ootEvents: "Eventos fora de tolerância",
-        },
-      }),
-      async list(input) {
-        const url = new URL("/api/customers", options.baseUrl);
-        url.searchParams.set("page", String(input.page));
-        url.searchParams.set("limit", String(input.limit));
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar clientes");
-        }
-
-        return readDesktopJson<CustomersListData>(response);
-      },
-      // Cloud-only enrichment: it reaches the external Receita Federal mirrors,
-      // which the offline local server can't proxy. The cadastro still works
-      // with manual entry; the autofill is simply unavailable in desktop mode.
-      async get<TCustomer = CustomerDetailData>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar cliente");
-        }
-
-        return readDesktopJson<TCustomer>(response);
-      },
+      ...desktopEndpointStubs("customers"),
+      // Read-through from the local mirror: the local server answers the
+      // definitions' own response schemas (`apps/local-server/src/contract.test.ts`).
+      list: localCustomers.list,
+      get: localCustomers.get,
     },
     assets: {
       ...desktopCloudOnlyStubs("assets", { action: "Edição de ativos" }),

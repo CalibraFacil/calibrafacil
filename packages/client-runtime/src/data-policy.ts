@@ -1,11 +1,11 @@
+import {
+  ENDPOINT_GROUPS,
+  endpointPolicies,
+  type DataPolicy,
+} from "@calibra-facil/contracts";
 import type { CalibraApi } from "./types";
 
-export type DataPolicy =
-  | "cloud-only"
-  | "cloud-first-read-fallback"
-  | "local-first-read-through-sync"
-  | "local-command-sync"
-  | "local-only";
+export type { DataPolicy };
 
 type MethodKeys<TNamespace> = {
   [TKey in keyof TNamespace]: TNamespace[TKey] extends (
@@ -208,22 +208,8 @@ export const calibraApiPolicyRegistry = {
     setPolicy: "cloud-only",
     setUnsignedIssuance: "cloud-only",
   },
-  customers: {
-    list: "local-first-read-through-sync",
-    lookupCnpj: "cloud-only",
-    ootEvents: "cloud-only",
-    create: "cloud-only",
-    get: "local-first-read-through-sync",
-    update: "cloud-only",
-    auditLog: "cloud-only",
-    updateCompliance: "cloud-only",
-    listMembers: "cloud-only",
-    listInvitations: "cloud-only",
-    createInvitation: "cloud-only",
-    resendInvitation: "cloud-only",
-    cancelInvitation: "cloud-only",
-    removeMember: "cloud-only",
-  },
+  // Derived from the endpoint definitions (`policy`), not listed here.
+  customers: endpointPolicies(ENDPOINT_GROUPS.customers),
   customerGroups: {
     list: "cloud-only",
     get: "cloud-only",

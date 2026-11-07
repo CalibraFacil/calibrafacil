@@ -1,3 +1,8 @@
+import {
+  buildCustomerDetail,
+  buildCustomerRecord,
+  buildCustomersListResponse,
+} from "@calibra-facil/contracts/customers-fixtures";
 import { buildStandard } from "@calibra-facil/contracts/standards-fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -2881,6 +2886,16 @@ describe("desktop hybrid runtime adapter", () => {
         throw new Error(`Unexpected local request: ${url.toString()}`);
       }
 
+      // The customers client parses its answers with the endpoint contract.
+      if (url.pathname === "/api/customers") {
+        return init?.method === "POST"
+          ? Response.json({ ...buildCustomerRecord(), invitationId: null })
+          : Response.json(buildCustomersListResponse());
+      }
+      if (url.pathname === "/api/customers/1") {
+        return Response.json(buildCustomerRecord());
+      }
+
       return Response.json({ ok: true, data: { id: "cloud-1" } });
     };
     const client = createDesktopHybridApiClient({
@@ -2896,12 +2911,17 @@ describe("desktop hybrid runtime adapter", () => {
     });
 
     await client.customers.create({
-      name: "Cliente",
-      email: "cliente@example.test",
-      phone: "555",
-      taxId: "123",
+      body: {
+        name: "Cliente",
+        email: "cliente@example.test",
+        phone: "555",
+        taxId: "123",
+      },
     });
-    await client.customers.update(1, { name: "Cliente atualizado" });
+    await client.customers.update({
+      params: { id: 1 },
+      body: { name: "Cliente atualizado" },
+    });
     await client.assets.update(1, { name: "Ativo atualizado" });
     await client.serviceOrders.createQuote("service-order-1", { items: [] });
     await client.serviceOrders.saveExecution("service-order-1", {
@@ -2984,7 +3004,7 @@ describe("desktop hybrid runtime adapter", () => {
       },
     });
 
-    await client.customers.list({ page: 1, limit: 20 });
+    await client.customers.list({ query: { page: 1, limit: 20 } });
     await client.assets.list({ page: 1, limit: 20 });
     await client.assetTypes.list();
     await client.methods.list({ page: 1, limit: 20 });
@@ -3061,6 +3081,9 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/service-orders/service-order-1") {
         return Response.json({ data: { id: "service-order-1" } });
       }
+      if (url.pathname === "/api/customers/1") {
+        return Response.json(buildCustomerDetail());
+      }
 
       return Response.json({
         id: url.pathname.split("/").at(-1),
@@ -3082,8 +3105,8 @@ describe("desktop hybrid runtime adapter", () => {
       },
     });
 
-    await client.customers.list({ page: 1, limit: 20 });
-    await client.customers.get(1);
+    await client.customers.list({ query: { page: 1, limit: 20 } });
+    await client.customers.get({ params: { id: 1 } });
     await client.assets.list({ page: 1, limit: 20 });
     await client.assets.get(1);
     await client.assetTypes.list();

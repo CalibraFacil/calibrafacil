@@ -179,7 +179,10 @@ function ClientComplianceForm({
       compliance: CustomerCompliance
       reason: string
     }) => {
-      return calibraApi.customers.updateCompliance(customerId, data)
+      return calibraApi.customers.updateCompliance({
+        params: { id: customerId },
+        body: data,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
