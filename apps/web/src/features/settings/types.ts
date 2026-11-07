@@ -17,10 +17,8 @@ import type {
 } from '@calibra-facil/shared'
 import type { UnitAssignmentRole } from '@calibra-facil/contracts'
 
-
 export type SettingsCertificateNumberingData =
   CertificateNumberingProfileResponse
-
 
 export type SettingsEnvironmentalLimitsData = EnvironmentalLimitsResponse
 
