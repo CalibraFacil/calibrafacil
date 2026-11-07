@@ -1,52 +1,25 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { tsImport } from "tsx/esm/api";
+import { assert, getAvailablePort } from "./lib/script-helpers.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const tempDir = await mkdtemp(
   path.join(os.tmpdir(), "calibra-electron-smoke-"),
 );
-// The same surface apps/desktop/src/preload/preload.test.ts pins: this checks
-// that the built preload exposes it, and nothing more.
-const expectedBridgeKeys = [
-  "activateLocalPartition",
-  "authFetch",
-  "checkForUpdate",
-  "deleteSecret",
-  "downloadUpdate",
-  "exportSupportBundle",
-  "forgetOfflineAccess",
-  "getAppInfo",
-  "getLocalEnvironmentBootstrap",
-  "getSecretStatuses",
-  "getSettings",
-  "getSyncState",
-  "getSyncStatus",
-  "getUpdateState",
-  "installUpdate",
-  "notifyDeepLinkReady",
-  "onDeepLink",
-  "onHistoryCommand",
-  "onSyncStatus",
-  "onUpdateState",
-  "openExternal",
-  "pauseSync",
-  "pickFile",
-  "pickFolder",
-  "publishNotifications",
-  "resumeSync",
-  "retrySync",
-  "saveFile",
-  "setSettings",
-  "startSync",
-  "wakeSync",
-].sort();
+// The bridge surface comes from the table in @calibra-facil/contracts, the same
+// one the preload is built from: this checks that the built preload exposes it.
+const { desktopBridgeMethods } = await tsImport(
+  "../packages/contracts/src/desktop-bridge.ts",
+  import.meta.url,
+);
+const expectedBridgeKeys = [...desktopBridgeMethods].sort();
 const expectedLocalDbSchemaVersion = 5;
 
-await run("pnpm", ["--dir", "apps/desktop", "run", "build"]);
+await runCaptured("pnpm", ["--dir", "apps/desktop", "run", "build"]);
 
 const localPort = await getAvailablePort();
 const rendererPort = await getAvailablePort();
@@ -447,23 +420,6 @@ function closeServer(server) {
   return new Promise((resolve) => server.close(resolve));
 }
 
-function getAvailablePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      server.close(() => {
-        if (address && typeof address === "object") {
-          resolve(address.port);
-        } else {
-          reject(new Error("failed to allocate local port"));
-        }
-      });
-    });
-  });
-}
-
 function withTimeout(promise, timeoutMs) {
   let timer;
   return Promise.race([
@@ -477,7 +433,7 @@ function withTimeout(promise, timeoutMs) {
   ]).finally(() => clearTimeout(timer));
 }
 
-function run(executable, args) {
+function runCaptured(executable, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd: root,
@@ -501,8 +457,4 @@ function run(executable, args) {
       );
     });
   });
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
 }

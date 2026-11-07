@@ -23,6 +23,7 @@
     "make": "node ../../scripts/build-desktop-artifact.mjs"
   },
   "dependencies": {
+    "@calibra-facil/config": "workspace:^",
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "better-sqlite3": "^12.11.1",

@@ -47,6 +47,7 @@ export type { PlatformEmailTransport } from "./groups/email";
 export {
   readAuthConfig,
   readDatabaseConfig,
+  readDesktopConfig,
   readEmailConfig,
   readJobsConfig,
   readObservabilityConfig,
@@ -59,6 +60,18 @@ export {
   readSyncConfig,
   readStorageConfig,
 } from "./runtimes";
+export {
+  localServerEnvNames,
+  readLocalServerEnvironment,
+  type LocalServerSettings,
+} from "./groups/local-server";
+export {
+  LOCAL_SERVER_BOOTSTRAP_ENV,
+  LOCAL_SERVER_BOOTSTRAP_STDIN_ENV,
+  LOCAL_SERVER_DEFAULT_HOST,
+  LOCAL_SERVER_DEFAULT_PORT,
+  LOCAL_SERVER_DEFAULT_URL,
+} from "./local-server-defaults";
 export { rawEnv, setProcessEnv, setProcessEnvDefault } from "./process-env";
 export { failFast, failFastAsync } from "./startup";
 export { workerSigningEnv, type WorkerSigningEnv } from "./worker-env";

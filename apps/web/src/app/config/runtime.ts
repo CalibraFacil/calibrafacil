@@ -1,9 +1,9 @@
+import { LOCAL_SERVER_DEFAULT_URL } from '@calibra-facil/config/local-server-defaults'
 import { runtimeEnv } from './runtime-env'
 
 export const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 
 const DEFAULT_LOCAL_API_URL = 'http://localhost:3000'
-const DEFAULT_DESKTOP_LOCAL_API_URL = 'http://127.0.0.1:4317'
 const DEFAULT_DEVELOPMENT_PORTAL_PORT = '5174'
 
 function isLocalHostname(hostname: string) {
@@ -21,7 +21,7 @@ export function getDefaultCloudApiUrl() {
 }
 
 export function getDefaultDesktopLocalApiUrl() {
-  return DEFAULT_DESKTOP_LOCAL_API_URL
+  return LOCAL_SERVER_DEFAULT_URL
 }
 
 export function getPortalBaseUrl() {

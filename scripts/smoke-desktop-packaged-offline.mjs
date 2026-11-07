@@ -1,11 +1,16 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { tsImport } from "tsx/esm/api";
+import {
+  assert,
+  authHeaders,
+  getAvailablePort,
+} from "./lib/script-helpers.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const appPath = path.join(root, "apps/desktop/out/linux-unpacked/calibrafacil");
@@ -58,28 +63,38 @@ const onlineWebParityRoutes = [
     text: "Gerencie seu perfil de usuário.",
   },
 ];
-const offlineCachedRoutes = [
+// What each offline-capable list page says once it has loaded. This is UI copy
+// and cannot be derived; which routes are offline-capable can, and is: the
+// routes visited below are the desktop offline allowlist's, never a second list.
+const offlinePageCopy = {
+  "/dashboard/standards":
+    "Gerencie os padrões e equipamentos de calibração do laboratório",
+  "/dashboard/assets": "Gerencie os ativos e instrumentos do laboratório.",
+  "/dashboard/clients": "Gerencie os clientes do laboratório.",
+  "/dashboard/jobs": "Gerencie jobs de calibração e emissão de certificados",
+  "/dashboard/service-orders":
+    "Recebimento, avaliação, orçamento, execução e entrega",
+};
+const { desktopOfflineRoutes, isDesktopOfflineRoute } = await tsImport(
+  "../apps/web/src/runtime/desktop-offline-routes.ts",
   {
-    path: "/dashboard/standards",
-    text: "Gerencie os padrões e equipamentos de calibração do laboratório",
+    parentURL: import.meta.url,
+    tsconfig: path.join(root, "apps/web/tsconfig.json"),
   },
-  {
-    path: "/dashboard/assets",
-    text: "Gerencie os ativos e instrumentos do laboratório.",
-  },
-  {
-    path: "/dashboard/clients",
-    text: "Gerencie os clientes do laboratório.",
-  },
-  {
-    path: "/dashboard/jobs",
-    text: "Gerencie jobs de calibração e emissão de certificados",
-  },
-  {
-    path: "/dashboard/service-orders",
-    text: "Recebimento, avaliação, orçamento, execução e entrega",
-  },
-];
+);
+const offlineCachedRoutes = desktopOfflineRoutes
+  .filter(
+    (route) =>
+      isDesktopOfflineRoute(route.to) && Object.hasOwn(offlinePageCopy, route.to),
+  )
+  .map((route) => ({ path: route.to, text: offlinePageCopy[route.to] }));
+const retiredCopy = Object.keys(offlinePageCopy).filter(
+  (routePath) => !offlineCachedRoutes.some((route) => route.path === routePath),
+);
+assert(
+  retiredCopy.length === 0,
+  `Page copy for routes that are no longer offline routes in desktop-offline-routes.ts: ${retiredCopy.join(", ")}`,
+);
 
 if (!email || !password) {
   console.error(`Packaged offline desktop smoke requires credentials.
@@ -158,7 +173,7 @@ try {
 
   const firstBootstrap = await waitForLocalBootstrap(firstPage);
   latestBootstrap = firstBootstrap;
-  const firstLocalHeaders = authHeaders(firstBootstrap);
+  const firstLocalHeaders = authHeaders(firstBootstrap.localApiToken);
   const localStandards = await localJson(
     firstBootstrap.httpBaseUrl,
     "/api/standards?page=1&limit=20",
@@ -321,7 +336,7 @@ try {
   await waitForBridge(secondPage);
   const secondBootstrap = await waitForLocalBootstrap(secondPage);
   latestBootstrap = secondBootstrap;
-  const secondLocalHeaders = authHeaders(secondBootstrap);
+  const secondLocalHeaders = authHeaders(secondBootstrap.localApiToken);
   const statusAfterRestart = await evaluate(
     secondPage,
     "window.calibraBridge.getSyncStatus()",
@@ -911,7 +926,7 @@ async function uploadLocalAttachment(baseUrl, headers, input) {
 
 async function runConflictUxSmoke(page, bootstrap, customer) {
   const conflict = seedCustomerConflict(customer);
-  const headers = authHeaders(bootstrap);
+  const headers = authHeaders(bootstrap.localApiToken);
   const list = await localJson(
     bootstrap.httpBaseUrl,
     "/api/local/sync/conflicts?status=open",
@@ -1285,35 +1300,10 @@ function localDatabasePath() {
   return path.join(userData, "local-data", "calibra.sqlite");
 }
 
-function authHeaders(bootstrap) {
-  return { Authorization: `Bearer ${bootstrap.localApiToken}` };
-}
-
 function normalizeBaseUrl(value) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
-function getAvailablePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      server.close(() => {
-        if (address && typeof address === "object") {
-          resolve(address.port);
-        } else {
-          reject(new Error("failed to allocate local port"));
-        }
-      });
-    });
-  });
-}
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
 }

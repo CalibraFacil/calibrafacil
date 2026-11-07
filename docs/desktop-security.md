@@ -7,6 +7,12 @@ out of reach of any other page. Roadmap 2, item A5.
 
 ## IPC sender check
 
+Every bridge method is a row of one table, `desktopBridge` in
+`packages/contracts/src/desktop-bridge.ts` (channel, argument schema, response schema).
+The preload exposes exactly those rows, and `registerBridgeHandlers`
+(`apps/desktop/src/main/ipc/bridge-ipc.ts`) registers one handler per row behind three gates, in
+order: the sender check below, the argument schema, then the response schema.
+
 `assertTrustedSender` (`apps/desktop/src/main/main.ts`) parses the calling frame's URL
 and compares scheme and host exactly (`trusted-origins.ts`). Userinfo
 (`http://localhost:5173@evil.example/`), prefix-sharing hosts or ports

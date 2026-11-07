@@ -13,6 +13,12 @@ type DesktopUpdaterOptions = {
   getSyncStatus: () => Promise<SyncStatusSnapshot>;
   getLocalDiagnostics: () => Promise<LocalDiagnostics | null>;
   beforeInstall: () => void;
+  /**
+   * Start with this version already downloaded. Set only by the smoke scripts
+   * (through the desktop configuration), so they can reach the install gate
+   * without a release server.
+   */
+  smokeDownloadedVersion?: string | null;
   onStateChange?: (state: DesktopUpdateState) => void;
 };
 
@@ -66,7 +72,7 @@ export class DesktopUpdater {
       });
     });
 
-    const smokeDownloadedVersion = getSmokeDownloadedUpdateVersion();
+    const smokeDownloadedVersion = options.smokeDownloadedVersion;
     if (smokeDownloadedVersion) {
       this.setState({
         status: "downloaded",
@@ -186,11 +192,4 @@ export class DesktopUpdater {
 
 function formatUpdaterError(error: unknown) {
   return error instanceof Error ? error.message : "Desktop update failed.";
-}
-
-function getSmokeDownloadedUpdateVersion() {
-  if (process.env.CALIBRA_DESKTOP_ENABLE_SMOKE_HOOKS !== "1") return null;
-
-  const version = process.env.CALIBRA_DESKTOP_SMOKE_DOWNLOADED_UPDATE_VERSION;
-  return version && version.trim() ? version.trim() : null;
 }

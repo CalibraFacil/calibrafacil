@@ -53,6 +53,7 @@ function createUpdater(
     diagnostics?: LocalDiagnostics | null;
     beforeInstall?: () => void;
     seedDownloadedEvent?: boolean;
+    smokeDownloadedVersion?: string;
   } = {},
 ) {
   const beforeInstall = options.beforeInstall ?? vi.fn(() => {});
@@ -75,6 +76,7 @@ function createUpdater(
     getSyncStatus: vi.fn(async () => syncStatus),
     getLocalDiagnostics: vi.fn(async () => options.diagnostics ?? null),
     beforeInstall,
+    smokeDownloadedVersion: options.smokeDownloadedVersion ?? null,
   });
 
   if (options.seedDownloadedEvent !== false) {
@@ -122,17 +124,13 @@ describe("DesktopUpdater", () => {
     mocks.autoUpdater.logger = {};
     mocks.autoUpdater.allowPrerelease = false;
     mocks.autoUpdater.channel = null;
-    vi.unstubAllEnvs();
   });
 
   it("supports a guarded smoke hook for downloaded update state", () => {
-    vi.stubEnv("CALIBRA_DESKTOP_ENABLE_SMOKE_HOOKS", "1");
-    vi.stubEnv(
-      "CALIBRA_DESKTOP_SMOKE_DOWNLOADED_UPDATE_VERSION",
-      "9.9.9-smoke",
-    );
-
-    const { updater } = createUpdater({ seedDownloadedEvent: false });
+    const { updater } = createUpdater({
+      seedDownloadedEvent: false,
+      smokeDownloadedVersion: "9.9.9-smoke",
+    });
 
     expect(updater.getState()).toMatchObject({
       status: "downloaded",

@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { assert, sha256 } from "./lib/script-helpers.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const rendererOutDir = path.join(root, "apps/desktop/dist/renderer");
@@ -95,16 +95,16 @@ function artifactSourcePaths() {
 function mainSourcePaths() {
   return [
     "apps/desktop/src/main/main.ts",
-    "apps/desktop/src/main/ipc-contracts.ts",
+    "apps/desktop/src/main/ipc/bridge-ipc.ts",
     "apps/desktop/src/main/local-server-manager.ts",
-    "apps/desktop/src/main/channels.ts",
+    "packages/contracts/src/desktop-bridge.ts",
   ].map((relativePath) => path.join(root, relativePath));
 }
 
 function preloadSourcePaths() {
   return [
     "apps/desktop/src/preload/preload.ts",
-    "apps/desktop/src/main/channels.ts",
+    "packages/contracts/src/desktop-bridge.ts",
   ].map((relativePath) => path.join(root, relativePath));
 }
 
@@ -133,10 +133,3 @@ function isLocalAssetReference(reference) {
   );
 }
 
-function sha256(input) {
-  return createHash("sha256").update(input).digest("hex");
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}

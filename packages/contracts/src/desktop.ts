@@ -308,9 +308,9 @@ export type LocalEnvironmentBootstrap = z.infer<
 export type LocalServerBootstrapConfig = z.infer<
   typeof localServerBootstrapConfigSchema
 >;
-type AppInfo = z.infer<typeof appInfoSchema>;
+export type AppInfo = z.infer<typeof appInfoSchema>;
 export type DesktopSettings = z.infer<typeof desktopSettingsSchema>;
-type DesktopSettingsPatch = z.infer<typeof desktopSettingsPatchSchema>;
+export type DesktopSettingsPatch = z.infer<typeof desktopSettingsPatchSchema>;
 export type DesktopSecretName = z.infer<typeof desktopSecretNameSchema>;
 export type DesktopSecretStatus = z.infer<typeof desktopSecretStatusSchema>;
 export type SyncActionResult = z.infer<typeof syncActionResultSchema>;
@@ -336,82 +336,3 @@ export type DesktopAuthFetchRequest = z.infer<
 export type DesktopAuthFetchResponse = z.infer<
   typeof desktopAuthFetchResponseSchema
 >;
-
-export interface CalibraBridge {
-  authFetch(
-    request: DesktopAuthFetchRequest,
-  ): Promise<DesktopAuthFetchResponse>;
-  getAppInfo(): Promise<AppInfo>;
-  getLocalEnvironmentBootstrap(): Promise<LocalEnvironmentBootstrap | null>;
-  getSettings(): Promise<DesktopSettings>;
-  setSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings>;
-  getSecretStatuses(): Promise<DesktopSecretStatus[]>;
-  deleteSecret(name: DesktopSecretName): Promise<DesktopSecretStatus>;
-  getSyncState(): Promise<SyncState>;
-  getSyncStatus(): Promise<SyncStatusSnapshot>;
-  onSyncStatus(listener: (status: SyncStatusSnapshot) => void): () => void;
-  startSync(): Promise<SyncActionResult>;
-  pauseSync(): Promise<SyncActionResult>;
-  resumeSync(): Promise<SyncActionResult>;
-  retrySync(): Promise<SyncActionResult>;
-  /**
-   * Nudge the continuous sync loop because something outside it changed —
-   * the network came back, the window regained focus, the machine woke.
-   * Coalesced by the scheduler, so calling it liberally is safe and calling
-   * it twice is not two syncs.
-   */
-  wakeSync(trigger: SyncTrigger): Promise<SyncActionResult>;
-  /**
-   * Subscribe to `calibrafacil://` links the OS handed the app. The payload is
-   * an in-app route path, already validated by the main process.
-   */
-  onDeepLink(listener: (path: string) => void): () => void;
-  /**
-   * Tell the main process the renderer can receive links. A link that arrived
-   * during a cold launch is buffered until this is called, so the first thing
-   * a user sees after clicking a link is the linked screen — not the
-   * dashboard, with the link silently dropped.
-   */
-  notifyDeepLinkReady(): Promise<boolean>;
-  /**
-   * Publish the unread count and the current feed page so the host can update
-   * the taskbar badge and announce anything new. Safe to call on every poll:
-   * the host de-duplicates by notification id and stays quiet while the window
-   * is focused.
-   */
-  publishNotifications(payload: DesktopNotificationsPublish): Promise<boolean>;
-  /**
-   * Back/forward gestures the OS reports to the host rather than the page:
-   * mouse thumb buttons on Windows and Linux, trackpad swipe on macOS.
-   * Keyboard shortcuts are handled in the renderer, where text-field focus is
-   * visible.
-   */
-  onHistoryCommand(listener: (command: string) => void): () => void;
-  /**
-   * Ask the host to open the local database for this account and organization.
-   *
-   * The host decides — a caller cannot assert its way into another account's
-   * data. `switched` in the result means a different database is now open and
-   * the renderer must drop everything it had cached.
-   */
-  activateLocalPartition(
-    request: LocalPartitionActivationRequest,
-  ): Promise<LocalPartitionActivationResult>;
-  /**
-   * Forget the offline-access grant (sign-out): the next offline start opens no
-   * account's database until someone signs in online again. The database and
-   * its queued field work stay on disk for that sign-in. Optional: an older
-   * desktop build does not have it.
-   */
-  forgetOfflineAccess?(): Promise<boolean>;
-  pickFile(): Promise<string | null>;
-  pickFolder(): Promise<string | null>;
-  saveFile(): Promise<string | null>;
-  openExternal(url: string): Promise<boolean>;
-  exportSupportBundle(): Promise<string | null>;
-  getUpdateState(): Promise<DesktopUpdateState>;
-  onUpdateState(listener: (state: DesktopUpdateState) => void): () => void;
-  checkForUpdate(): Promise<DesktopUpdateState>;
-  downloadUpdate(): Promise<DesktopUpdateState>;
-  installUpdate(): Promise<DesktopUpdateState>;
-}
