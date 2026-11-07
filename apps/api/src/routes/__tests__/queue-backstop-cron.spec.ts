@@ -5,7 +5,7 @@ import { GET } from "../../cron/dispatch";
 // contract as every other cron (503 without a CRON_SECRET in production, 401 on a
 // wrong secret), and on success it returns runStaleJobBackstop's summary verbatim
 // so a broken run surfaces in the cron heartbeat. The backstop itself is mocked
-// here (its DB + wake behavior is covered by the real-DB integration tier); this
+// here (its DB behavior is covered by the real-DB integration tier); this
 // only asserts the cron wiring + auth.
 
 const mocks = vi.hoisted(() => ({
@@ -69,7 +69,6 @@ beforeEach(() => {
   mocks.runStaleJobBackstop.mockResolvedValue({
     released: 0,
     pending: 0,
-    woke: false,
   });
 });
 
@@ -82,7 +81,6 @@ describe("queue-backstop cron (REQ-REL-PDF-001)", () => {
     mocks.runStaleJobBackstop.mockResolvedValue({
       released: 2,
       pending: 3,
-      woke: true,
     });
 
     const response = await GET(request("/api/cron/queue-backstop"));
@@ -91,7 +89,6 @@ describe("queue-backstop cron (REQ-REL-PDF-001)", () => {
     await expect(response.json()).resolves.toEqual({
       released: 2,
       pending: 3,
-      woke: true,
     });
     expect(mocks.runStaleJobBackstop).toHaveBeenCalledTimes(1);
   });

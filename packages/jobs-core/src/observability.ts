@@ -6,10 +6,10 @@ import {
   type StructuredLogger,
 } from "@calibra-facil/shared/telemetry";
 
-// Server-side error tracking for the worker surfaces: every run
-// mode reports through this singleton — the local Bun poller, and the Cloudflare
-// document-worker container. Errors are written as one
-// redacted JSON line on stderr (see packages/shared/src/telemetry/error-reporter.ts).
+// Server-side error tracking for the worker surfaces: every run mode (the
+// always-on Bun worker, the API's in-process `local` runner) reports through
+// this singleton. Errors are written as one redacted JSON line on stderr (see
+// packages/shared/src/telemetry/error-reporter.ts).
 
 let reporter: ErrorReporter | null = null;
 

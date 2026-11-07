@@ -62,10 +62,7 @@ import {
 } from "drizzle-orm";
 import { advanceAssetCalibrationDates } from "./asset-calibration-advance";
 import { recordAssetOotEvent } from "./asset-oot-events";
-import {
-  dispatchStagedBackgroundJob,
-  stageBackgroundJob,
-} from "./background-job-outbox";
+import { stageBackgroundJob } from "./background-job-outbox";
 import { enqueueBackgroundJob } from "./background-jobs";
 
 /** A job approved this recently is not reconciled yet. */
@@ -137,8 +134,6 @@ export async function reconcileApprovalEffects(
     failures: 0,
     ootGapsOlderThanWindow: 0,
   };
-  // Jobs staged in the database queue wait for one wake-up at the end.
-  let stagedAny = false;
   const afterCommit: QueueMessage[] = [];
 
   // ---- 1. approved NON_CONFORMING jobs with no out-of-tolerance event --------
@@ -172,7 +167,6 @@ export async function reconcileApprovalEffects(
       const staged = await repairMissingOotEvent(candidate, afterCommit);
       if (staged === null) continue;
       result.ootEventsCreated += 1;
-      stagedAny = stagedAny || staged;
     } catch (error) {
       result.failures += 1;
       console.error(
@@ -308,8 +302,7 @@ export async function reconcileApprovalEffects(
         SYSTEM_ACTOR,
         ({ tx }) => stageBackgroundJob(tx, message),
       );
-      if (staged) stagedAny = true;
-      else afterCommit.push(message);
+      if (!staged) afterCommit.push(message);
       result.notificationsRestaged += 1;
     } catch (error) {
       result.failures += 1;
@@ -321,7 +314,6 @@ export async function reconcileApprovalEffects(
   }
 
   // ---- delivery: everything above is committed ------------------------------
-  if (stagedAny) await dispatchStagedBackgroundJob();
   for (const message of afterCommit) {
     try {
       await enqueueBackgroundJob(message);

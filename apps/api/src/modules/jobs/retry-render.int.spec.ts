@@ -74,7 +74,6 @@ beforeEach(async () => {
   await truncateAll();
   vi.mocked(enqueueBackgroundJob).mockClear();
   vi.stubEnv("BACKGROUND_JOBS_MODE", "local");
-  vi.stubEnv("DOCUMENT_WORKER_URL", "");
 });
 
 afterEach(() => {

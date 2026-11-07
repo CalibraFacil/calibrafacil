@@ -377,6 +377,15 @@ queue job to the worker, and `app_queue_job.max_attempts` is its delivery ceilin
 `VERCEL_ENV` no longer imply production, so set `NODE_ENV=production`; and `VERCEL_GIT_COMMIT_SHA`
 became `APP_RELEASE`.
 
+**One worker topology.** `BACKGROUND_JOBS_MODE=inline` (run a job inside the request) and the
+document-worker container (`Dockerfile.document-worker`, `services/document-worker`, the
+`DOCUMENT_WORKER_URL`/`_TOKEN` ping and its three `DOCUMENT_WORKER_WAKE_*` tuning variables) are
+removed: the only modes are `local` (development) and `queue` (the always-on worker polling the
+database queue). A configuration that still sets `inline` or any `DOCUMENT_WORKER_*` variable now
+refuses to start with an error naming it: unset it (use `queue`, or `local` in development). The
+`queue-backstop` cron no longer reports `woke`, and the API no longer retries the first query of
+the public invitation endpoints (`withDbWakeRetry` was a Neon cold-start guard).
+
 **Before deploying**, validate the environment you are about to run, without starting anything,
 from a checkout of this release:
 
@@ -559,13 +568,11 @@ otherwise the signature records `icpBrasilConformant: false`, so a generic autho
 presented as legally conformant. The settings are validated at start-up (the address must be an
 `http://` or `https://` URL).
 
-They take effect on **every worker path**: the cron handlers, the
-inline and local (`BACKGROUND_JOBS_MODE=local`) runner in the API process, the database-queue
-drain (`apps/worker` `serve`, including the document-worker container) and the always-on Bun
-worker (`bun src/bun.ts`, the `worker` service of the Docker setup). All of them build the
+They take effect on **every worker path**: the cron handlers, the `local`
+(`BACKGROUND_JOBS_MODE=local`) runner in the API process and the always-on Bun worker
+(`bun src/bun.ts`, the `worker` service of the Docker setup). All of them build the
 signing part of the worker environment from one function, `workerSigningEnv` in
-`packages/config`. On Cloudflare, the document-worker container receives them from the Worker's
-own variables and secrets.
+`packages/config`.
 
 With `SIGNING_TSA_URL` unset nothing changes: no time-stamp is requested and the signed PDF is
 byte-identical to what earlier releases produced.
@@ -589,8 +596,8 @@ byte-identical to what earlier releases produced.
   `GENERATING_PDF` and the row is re-queued, so a short outage of the authority heals itself.
 - On the final delivery the job is `REJECTED`, with the reason `Falha na assinatura digital do
 certificado: Falha ao obter carimbo do tempo RFC 3161 ...`, and can be sent for approval again
-  once the authority is back. Runners that never redeliver (the inline and local ones) treat the
-  first failure as final.
+  once the authority is back. The `local` runner never redelivers, so it treats the first
+  failure as final.
 
 Laboratories that sign certificates therefore depend on the authority being available: monitor
 it, or leave `SIGNING_TSA_URL` empty until you have a contracted one.
@@ -751,9 +758,6 @@ and pass the environment above with `--env-file`.
 - `Dockerfile.api`: the API, on port 3000. `bun src/cli/init.ts` and
   `bun src/cli/create-lab.ts` run from the same image.
 - `Dockerfile.worker`: the polling worker, for `BACKGROUND_JOBS_MODE=queue`.
-- `Dockerfile.document-worker`: the same worker as an HTTP server on port 8080 that sleeps until
-  woken. Point the API's `DOCUMENT_WORKER_URL` at it and the API wakes it after each enqueue
-  instead of it polling. `services/document-worker` deploys it as a Cloudflare Container.
 - `Dockerfile.static`: the lab app (`--build-arg APP_NAME=web`) or the client portal
   (`APP_NAME=portal`) on port 8080. `--build-arg VITE_API_URL=https://api.example.com` bakes in
   the API's address; leave it out when a reverse proxy serves the API under `/api` on the same

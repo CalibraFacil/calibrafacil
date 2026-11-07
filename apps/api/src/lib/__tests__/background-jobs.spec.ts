@@ -13,10 +13,8 @@ vi.mock("@calibra-facil/db/queue", async (importOriginal) => ({
 }));
 
 // The in-process runners load these lazily.
-vi.mock("../worker-modules", () => ({
-  importWorkerModule: async () => ({
-    processBackgroundJob: mocks.processBackgroundJob,
-  }),
+vi.mock("@calibra-facil/jobs-core", () => ({
+  processBackgroundJob: mocks.processBackgroundJob,
 }));
 
 vi.mock("../../modules/integrations", () => ({
@@ -27,23 +25,13 @@ vi.mock("../runtime-env", () => ({
   createWorkerRuntimeEnv: vi.fn(() => ({})),
 }));
 
-import { enqueueBackgroundJob, wakeDocumentWorker } from "../background-jobs";
+import { enqueueBackgroundJob } from "../background-jobs";
 
-const DOCUMENT_WORKER_ENV_KEYS = [
-  "BACKGROUND_JOBS_MODE",
-  "DOCUMENT_WORKER_URL",
-  "DOCUMENT_WORKER_TOKEN",
-  "DOCUMENT_WORKER_WAKE_TIMEOUT_MS",
-  "DOCUMENT_WORKER_WAKE_ATTEMPTS",
-  "DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS",
-] as const;
+const savedMode = process.env.BACKGROUND_JOBS_MODE;
 
-const savedEnv: Record<string, string | undefined> = {};
-
-// A document-worker-routable job used as the sample for the routing rules
-// below. Was CERTIFICATE_XLSX_PREVIEW until the XLSX certificate path was
-// removed (#865); the routing under test is job-type agnostic.
-const documentWorkerMessage: BackgroundJobMessage = {
+// A queue job used as the sample for the routing rules below; the routing under
+// test is job-type agnostic.
+const auditPackMessage: BackgroundJobMessage = {
   type: "AUDIT_PACK",
   exportId: 1,
   userId: "user-1",
@@ -61,182 +49,29 @@ const serviceOrderQuoteMessage: BackgroundJobMessage = {
   userId: "user-1",
 };
 
-describe("enqueueBackgroundJob — document-worker wake", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    for (const key of DOCUMENT_WORKER_ENV_KEYS) {
-      savedEnv[key] = process.env[key];
-      delete process.env[key];
-    }
-    // The dispatch path of a self-hosted install (not the in-process modes).
-    process.env.BACKGROUND_JOBS_MODE = "queue";
-    // Single wake attempt with no backoff by default, so the fire-and-forget
-    // wake in enqueueBackgroundJob can't leak a retry into the next test. The
-    // retry-specific tests opt back into multiple attempts and await the wake.
-    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "1";
-    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
-    mocks.processBackgroundJob.mockResolvedValue(undefined);
-    mocks.enqueueQueueJob.mockResolvedValue(42);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-  });
-
-  afterEach(() => {
-    for (const key of DOCUMENT_WORKER_ENV_KEYS) {
-      if (savedEnv[key] === undefined) delete process.env[key];
-      else process.env[key] = savedEnv[key];
-    }
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  it("writes the job to app_queue_job without a wake ping when DOCUMENT_WORKER_URL is not set", async () => {
-    const result = await enqueueBackgroundJob(documentWorkerMessage);
-
-    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
-    expect(result.messageId).toBe("app-queue-42");
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-  });
-
-  it("writes the job to app_queue_job and wakes the container", async () => {
-    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_TOKEN = "secret-token";
-
-    const result = await enqueueBackgroundJob(documentWorkerMessage);
-
-    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
-    expect(result.messageId).toBe("app-queue-42");
-
-    const fetchMock = vi.mocked(fetch);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url.toString()).toBe("https://dw.example.com/drain");
-    expect(init?.method).toBe("POST");
-    expect(new Headers(init?.headers).get("X-Worker-Token")).toBe(
-      "secret-token",
-    );
-  });
-
-  it("normalizes an omitted CERTIFICATE type", async () => {
-    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-
-    const result = await enqueueBackgroundJob(certificateMessage);
-
-    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(certificateMessage);
-    expect(result.messageId).toBe("app-queue-42");
-  });
-
-  it("never routes SCHEDULED_NOTIFICATIONS to the container", async () => {
-    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    mocks.processBackgroundJob.mockResolvedValue(undefined);
-
-    const result = await enqueueBackgroundJob({
-      type: "SCHEDULED_NOTIFICATIONS",
-    });
-
-    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-    expect(result.messageId).toMatch(/^local-/);
-  });
-
-  it("still returns success when the wake ping fails (job is durable)", async () => {
-    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    vi.mocked(fetch).mockRejectedValue(new Error("worker unreachable"));
-
-    const result = await enqueueBackgroundJob(documentWorkerMessage);
-
-    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
-    expect(result.messageId).toBe("app-queue-42");
-  });
-
-  it("retries the drain wake when the first attempt fails (cold start)", async () => {
-    process.env.DOCUMENT_WORKER_TOKEN = "secret-token";
-    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "3";
-    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
-    const fetchMock = vi.mocked(fetch);
-    fetchMock
-      .mockRejectedValueOnce(new Error("cold start in progress"))
-      .mockResolvedValueOnce(new Response(null, { status: 202 }));
-
-    await expect(
-      wakeDocumentWorker("https://dw.example.com"),
-    ).resolves.toBeUndefined();
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(
-      new Headers(fetchMock.mock.calls[0][1]?.headers).get("X-Worker-Token"),
-    ).toBe("secret-token");
-  });
-
-  it("retries when the drain ping returns a non-2xx response", async () => {
-    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "2";
-    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
-    const fetchMock = vi.mocked(fetch);
-    fetchMock
-      .mockResolvedValueOnce(new Response(null, { status: 503 }))
-      .mockResolvedValueOnce(new Response(null, { status: 202 }));
-
-    await expect(
-      wakeDocumentWorker("https://dw.example.com"),
-    ).resolves.toBeUndefined();
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("throws after exhausting the configured wake attempts", async () => {
-    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "2";
-    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockRejectedValue(new Error("worker unreachable"));
-
-    await expect(wakeDocumentWorker("https://dw.example.com")).rejects.toThrow(
-      "worker unreachable",
-    );
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("stops after the first successful attempt", async () => {
-    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "3";
-    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
-
-    await wakeDocumentWorker("https://dw.example.com");
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-});
+function restoreMode() {
+  if (savedMode === undefined) delete process.env.BACKGROUND_JOBS_MODE;
+  else process.env.BACKGROUND_JOBS_MODE = savedMode;
+}
 
 describe("enqueueBackgroundJob — database queue mode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    for (const key of DOCUMENT_WORKER_ENV_KEYS) {
-      savedEnv[key] = process.env[key];
-      delete process.env[key];
-    }
     process.env.BACKGROUND_JOBS_MODE = "queue";
-    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "1";
-    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
     mocks.enqueueQueueJob.mockResolvedValue(42);
     mocks.processBackgroundJob.mockResolvedValue(undefined);
     mocks.runIntegrationSync.mockResolvedValue(undefined);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    for (const key of DOCUMENT_WORKER_ENV_KEYS) {
-      if (savedEnv[key] === undefined) delete process.env[key];
-      else process.env[key] = savedEnv[key];
-    }
-    vi.unstubAllGlobals();
+    restoreMode();
     vi.restoreAllMocks();
   });
 
   it("writes every queue job to app_queue_job", async () => {
     for (const message of [
-      documentWorkerMessage,
+      auditPackMessage,
       certificateMessage,
       serviceOrderQuoteMessage,
     ]) {
@@ -244,25 +79,7 @@ describe("enqueueBackgroundJob — database queue mode", () => {
       expect(result.messageId).toBe("app-queue-42");
       expect(mocks.enqueueQueueJob).toHaveBeenLastCalledWith(message);
     }
-
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-  });
-
-  it("wakes the document worker when DOCUMENT_WORKER_URL is set", async () => {
-    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-
-    const result = await enqueueBackgroundJob(serviceOrderQuoteMessage);
-
-    expect(result.messageId).toBe("app-queue-42");
-    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(
-      serviceOrderQuoteMessage,
-    );
-    await vi.waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-        new URL("https://dw.example.com/drain"),
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
+    expect(mocks.processBackgroundJob).not.toHaveBeenCalled();
   });
 
   it("runs the cron-only messages in this process", async () => {
@@ -301,5 +118,59 @@ describe("enqueueBackgroundJob — database queue mode", () => {
         expect.objectContaining({ integrationId: "integration-1" }),
       ),
     );
+  });
+});
+
+describe("enqueueBackgroundJob — local mode", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.BACKGROUND_JOBS_MODE = "local";
+    mocks.processBackgroundJob.mockResolvedValue(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    restoreMode();
+    vi.restoreAllMocks();
+  });
+
+  it("runs every job in this process and writes nothing to the queue", async () => {
+    const result = await enqueueBackgroundJob(auditPackMessage);
+
+    expect(result.messageId).toMatch(/^local-/);
+    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(mocks.processBackgroundJob).toHaveBeenCalledWith(
+        expect.anything(),
+        auditPackMessage,
+      ),
+    );
+  });
+
+  it("logs a failed local job instead of failing the enqueue", async () => {
+    mocks.processBackgroundJob.mockRejectedValue(new Error("render failed"));
+
+    await expect(enqueueBackgroundJob(auditPackMessage)).resolves.toMatchObject(
+      { messageId: expect.stringMatching(/^local-/) },
+    );
+    await vi.waitFor(() =>
+      expect(console.error).toHaveBeenCalledWith(
+        "[BackgroundJobs] Local job failed",
+        expect.objectContaining({ message: auditPackMessage }),
+      ),
+    );
+  });
+});
+
+describe("enqueueBackgroundJob — removed inline mode", () => {
+  afterEach(restoreMode);
+
+  it("refuses a configuration that still asks for `inline`", async () => {
+    process.env.BACKGROUND_JOBS_MODE = "inline";
+
+    await expect(enqueueBackgroundJob(auditPackMessage)).rejects.toThrow(
+      /BACKGROUND_JOBS_MODE/,
+    );
+    expect(mocks.processBackgroundJob).not.toHaveBeenCalled();
   });
 });

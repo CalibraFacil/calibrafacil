@@ -74,20 +74,4 @@ describe("worker shutdown plan", () => {
     });
     expect(closeDatabases).toHaveBeenCalledTimes(1);
   });
-
-  it("closes the listener of the HTTP drain server when there is one", async () => {
-    const stopListening = vi.fn();
-
-    await runGracefulShutdown(
-      createWorkerShutdownPlan({
-        stopWork: async () => {},
-        stopListening,
-        closeDatabases: async () => {},
-        deadlineMs: 1_000,
-      }),
-      { logger: quiet },
-    );
-
-    expect(stopListening).toHaveBeenCalledTimes(1);
-  });
 });

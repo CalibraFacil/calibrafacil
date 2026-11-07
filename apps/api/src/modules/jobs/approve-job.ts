@@ -18,10 +18,7 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import { enqueueBackgroundJob } from "../../lib/background-jobs";
-import {
-  dispatchStagedBackgroundJob,
-  stageBackgroundJob,
-} from "../../lib/background-job-outbox";
+import { stageBackgroundJob } from "../../lib/background-job-outbox";
 import { buildAsFoundReliabilityVerdict } from "../../lib/as-found-reliability-verdict";
 import {
   classifyJobScopeCompliance,
@@ -700,11 +697,9 @@ export async function approveJob(
   }
   const { updated, staged, effects, ootEventId, dateAdvance } = outcome;
 
-  if (staged) {
-    // The certificate job and the notification jobs are rows of the queue,
-    // committed with the approval; one wake-up drains them all.
-    await dispatchStagedBackgroundJob();
-  } else {
+  // The certificate job and the notification jobs of a `queue` approval are
+  // rows committed with it (`staged`): the polling worker claims them.
+  if (!staged) {
     try {
       await enqueueBackgroundJob({ jobId, userId: approverId });
     } catch (error) {

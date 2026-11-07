@@ -311,6 +311,23 @@ export function list(opts: VarOptions): z.ZodType<readonly string[]> {
 // Groups: the variables of one concern
 // ---------------------------------------------------------------------------
 
+/**
+ * A variable (or one value of a variable) that an earlier release read and this
+ * one no longer does. Setting it is a start-up error that names it, not a silent
+ * no-op: an operator who still sets it believes a behaviour that is gone.
+ */
+export interface RetiredVar {
+  readonly env: string;
+  /**
+   * Only this value is retired (compared case-insensitively, as the variable's
+   * own parser does); every other value is the variable's normal business.
+   * Omitted: any non-blank value is retired.
+   */
+  readonly value?: string;
+  /** What to do instead. Never carries the configured value. */
+  readonly message: string;
+}
+
 export interface GroupMeta {
   readonly name: string;
   /** Heading of the section in generated documentation. */
@@ -318,6 +335,7 @@ export interface GroupMeta {
   /** Lines printed under the heading. */
   readonly intro: readonly string[];
   readonly vars: Readonly<Record<string, z.ZodType>>;
+  readonly retired: readonly RetiredVar[];
 }
 
 const groupRegistry = new WeakMap<object, GroupMeta>();
@@ -342,6 +360,8 @@ interface GroupDefinition<Shape extends Record<string, z.ZodType>, Derived> {
   title: string;
   intro?: readonly string[];
   vars: Shape;
+  /** Variables the group used to read; setting one fails the start-up. */
+  retired?: readonly RetiredVar[];
   derive?: (
     values: z.output<z.ZodObject<Shape>>,
     ctx: DeriveContext,
@@ -410,6 +430,7 @@ export function defineGroup(
     title: def.title,
     intro: def.intro ?? [],
     vars: def.vars,
+    retired: def.retired ?? [],
   });
   return schema;
 }
@@ -529,6 +550,20 @@ export function defineRuntime<
         }
       }
 
+      // A retired variable replaces whatever the group's own parser said about
+      // it (an enum that no longer lists its old value would otherwise report a
+      // generic "invalid option").
+      const retired = Object.values(def.groups).flatMap(
+        (group) => groupMetaOf(group)?.retired ?? [],
+      );
+      for (const entry of retired) {
+        if (!isRetiredSet(entry, env)) continue;
+        for (let at = issues.length - 1; at >= 0; at -= 1) {
+          if (issues[at]?.variable === entry.env) issues.splice(at, 1);
+        }
+        issues.push({ variable: entry.env, message: entry.message });
+      }
+
       // Required variables are checked against the raw environment, so they
       // are reported even when an unrelated variable failed to parse.
       for (const group of Object.values(def.groups)) {
@@ -568,6 +603,12 @@ export function defineRuntime<
       return deepFreeze(parsed.data);
     },
   };
+}
+
+function isRetiredSet(entry: RetiredVar, env: EnvSource): boolean {
+  const raw = env[entry.env]?.trim();
+  if (!raw) return false;
+  return entry.value === undefined || raw.toLowerCase() === entry.value;
 }
 
 function isRequired(flagValue: RequiredInProduction, runtime: RuntimeName) {

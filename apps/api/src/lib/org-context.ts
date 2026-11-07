@@ -28,10 +28,7 @@ import {
   visitAuditLog,
 } from "@calibra-facil/db/schema";
 import type { BackgroundJobMessage } from "@calibra-facil/schemas";
-import {
-  dispatchStagedBackgroundJob,
-  stageBackgroundJob,
-} from "./background-job-outbox";
+import { stageBackgroundJob } from "./background-job-outbox";
 import { enqueueBackgroundJob } from "./background-jobs";
 import type { OrgRawTransaction } from "./org-transaction";
 
@@ -248,7 +245,6 @@ export async function withOrg<R>(
   run: (ctx: OrgContext) => Promise<R>,
 ): Promise<R> {
   const deferred: AfterCommitTask[] = [];
-  let staged = false;
 
   const result = await db.transaction(async (tx) => {
     await setTransactionOrganization(tx, org);
@@ -260,10 +256,7 @@ export async function withOrg<R>(
       tx,
       audit: auditOn({ o, org, actor }),
       emit: async (message) => {
-        if (await stageBackgroundJob(tx, message)) {
-          staged = true;
-          return;
-        }
+        if (await stageBackgroundJob(tx, message)) return;
         deferred.push(() => enqueueBackgroundJob(message));
       },
       afterCommit: (task) => {
@@ -273,7 +266,6 @@ export async function withOrg<R>(
     return run(ctx);
   });
 
-  if (staged) deferred.unshift(dispatchStagedBackgroundJob);
   for (const task of deferred) {
     // Inside the desktop sync's transaction this was a savepoint: the work
     // waits for that transaction's commit.

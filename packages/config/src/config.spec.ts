@@ -62,7 +62,6 @@ describe("REQ-CFG-1 defaults", () => {
     expect(config.database.poolMax).toBe(5);
     expect(config.jobs.mode).toBe("local");
     expect(config.jobs.queueReceiptsMode).toBe("enforce");
-    expect(config.jobs.documentWorkerWakeTimeoutMs).toBe(12_000);
     expect(config.retention.purgeEnabled).toBe(false);
     expect(config.retention.purgeMode).toBe("dry-run");
     expect(config.auth.publicSignupEnabled).toBe(false);
@@ -110,6 +109,46 @@ describe("REQ-CFG-1 defaults", () => {
     );
     expect(() => readJobsConfig({ BACKGROUND_JOBS_MODE: "vercel" })).toThrow(
       /BACKGROUND_JOBS_MODE/,
+    );
+  });
+
+  it("REQ-CFG-1: a removed jobs mode or document-worker variable stops the start naming it", () => {
+    const inline = loadFailure(() =>
+      loadApiConfig({ BACKGROUND_JOBS_MODE: "INLINE" }),
+    );
+    expect(inline.issues).toHaveLength(1);
+    expect(inline.issues[0]?.variable).toBe("BACKGROUND_JOBS_MODE");
+    expect(inline.issues[0]?.message).toContain("`inline`");
+
+    const key = Buffer.alloc(32, 9).toString("base64");
+    const workerEnv = {
+      DATABASE_URL: "postgres://a/b",
+      R2_ENDPOINT: "http://localhost:59000",
+      R2_ACCESS_KEY_ID: "id",
+      R2_SECRET_ACCESS_KEY: "secret",
+      R2_BUCKET_NAME: "docs",
+      R2_MEDIA_BUCKET_NAME: "media",
+      SIGNING_MASTER_KEY: key,
+      INTEGRATIONS_MASTER_KEY: key,
+    };
+    expect(loadWorkerConfig(workerEnv).jobs.mode).toBe("local");
+    for (const name of [
+      "DOCUMENT_WORKER_URL",
+      "DOCUMENT_WORKER_TOKEN",
+      "DOCUMENT_WORKER_WAKE_TIMEOUT_MS",
+      "DOCUMENT_WORKER_WAKE_ATTEMPTS",
+      "DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS",
+    ]) {
+      const env = { [name]: "https://worker.example.test" };
+      for (const load of [loadApiConfig, loadWorkerConfig]) {
+        const failure = loadFailure(() => load({ ...workerEnv, ...env }));
+        expect(failure.issues.map((issue) => issue.variable)).toContain(name);
+      }
+    }
+
+    // Blank is unset, as everywhere else.
+    expect(loadApiConfig({ DOCUMENT_WORKER_URL: "  " }).jobs.mode).toBe(
+      "local",
     );
   });
 

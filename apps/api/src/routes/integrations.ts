@@ -614,7 +614,6 @@ export async function dispatchSyncRun(params: {
   target: IntegrationSyncTarget;
   limit: number;
   trigger: "manual" | "event" | "scheduled" | "retry";
-  waitUntil?: (promise: Promise<void>) => void;
 }) {
   const record = await orgDb(params.organizationId).transaction((o) =>
     getIntegrationRecord(params.organizationId, params.integrationId, o),
@@ -2504,7 +2503,6 @@ export const integrationsRouter = createRouter<{
           target: input.target,
           limit: input.limit,
           trigger: "manual",
-          waitUntil: (promise) => c.executionCtx.waitUntil(promise),
         });
       } catch (error) {
         throw new DomainError({
@@ -2937,7 +2935,6 @@ export const integrationsRouter = createRouter<{
           target: originalRun.target,
           limit: requestedLimit,
           trigger: "retry",
-          waitUntil: (promise) => c.executionCtx.waitUntil(promise),
         });
       } catch (error) {
         throw new DomainError({

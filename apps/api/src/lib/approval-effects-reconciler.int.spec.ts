@@ -376,7 +376,6 @@ describe("approval effects reconciler (REQ-B2-RECON-1..3)", () => {
 
   it("REQ-B2-RECON-1: with the database queue the alert is a queue row, staged in the repair's own transaction", async () => {
     vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
-    vi.stubEnv("DOCUMENT_WORKER_URL", "");
     const lab = await seedBillingLab("lab-a");
     await seedApproved(lab, "CAL-A-1", {
       nonConforming: true,
@@ -502,7 +501,6 @@ describe("approval effects reconciler (REQ-B2-RECON-1..3)", () => {
 
   it("REQ-B2-RECON-4: a superseded non-conforming job gets no event and no alert (its amendment carries the verdict)", async () => {
     vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
-    vi.stubEnv("DOCUMENT_WORKER_URL", "");
     const lab = await seedBillingLab("lab-a");
     await seedApproved(lab, "CAL-A-1", {
       nonConforming: true,
@@ -545,7 +543,6 @@ describe("approval effects reconciler (REQ-B2-RECON-1..3)", () => {
 
   it("REQ-B2-RECON-1: re-stages the customer alert of an event whose alert never left, unless it is queued or was delivered", async () => {
     vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
-    vi.stubEnv("DOCUMENT_WORKER_URL", "");
     const lab = await seedBillingLab("lab-a");
     const never = await seedApproved(lab, "CAL-A-1", {
       nonConforming: true,

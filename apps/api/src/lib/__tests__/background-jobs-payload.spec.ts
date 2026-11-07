@@ -10,10 +10,8 @@ vi.mock("@calibra-facil/db/queue", async (importOriginal) => ({
   enqueueQueueJob: mocks.enqueueQueueJob,
 }));
 
-vi.mock("../worker-modules", () => ({
-  importWorkerModule: async () => ({
-    processBackgroundJob: mocks.processBackgroundJob,
-  }),
+vi.mock("@calibra-facil/jobs-core", () => ({
+  processBackgroundJob: mocks.processBackgroundJob,
 }));
 
 vi.mock("../runtime-env", () => ({
@@ -35,7 +33,7 @@ describe("enqueueBackgroundJob validates its payload (REQ-Q-2)", () => {
     else process.env.BACKGROUND_JOBS_MODE = savedMode;
   });
 
-  it.each(["queue", "local", "inline"])(
+  it.each(["queue", "local"])(
     "REQ-Q-2 refuses a payload that fails its schema before any dispatch (mode %s)",
     async (mode) => {
       process.env.BACKGROUND_JOBS_MODE = mode;

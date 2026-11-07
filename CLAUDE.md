@@ -107,8 +107,8 @@ keep these in parity:
   the original deployment), Gotenberg for PDFs and SMTP or Resend for email
   (`packages/email-sender/src/transport.ts`). Background work (PDF
   generation, compliance checks, syncs) is implemented in `packages/jobs-core` (the dispatcher and
-  the per-type handlers) and driven by `apps/worker`, a thin runtime (queue drain loop, Bun entry,
-  HTTP drain server): in-process in development (`BACKGROUND_JOBS_MODE=local`), via the database
+  the per-type handlers) and driven by `apps/worker`, a thin runtime (queue poll loop, Bun entry):
+  in-process in development (`BACKGROUND_JOBS_MODE=local`), via the database
   queue (`app_queue_job`) drained by the always-on worker in production (`BACKGROUND_JOBS_MODE=queue`).
   The API is self-hosted only: `apps/api/src/bun.ts` serves the app plus the `/api/cron/*` handlers,
   and `apps/api/src/lib/cron-scheduler.ts` schedules them in-process (`CRON_SCHEDULER=internal`). The Hono app itself

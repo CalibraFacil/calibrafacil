@@ -44,10 +44,6 @@
       "entry": [
         "scripts/*.mjs",
         "src/cli/*.ts",
-        // background-jobs.ts loads this through a variable specifier
-        // (`import(modulePath)`), so it is not statically imported. Not dead: it
-        // is the in-process dev runner.
-        "src/lib/worker-modules.ts",
         "test/**/*.ts"
       ],
       "project": [
