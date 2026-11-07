@@ -174,7 +174,6 @@ export const authClient = labAuthClient;
 // Lab auth exports (for apps/web)
 export const {
   signIn,
-  signUp,
   signOut,
   useSession,
   useListOrganizations,
@@ -190,8 +189,6 @@ export const {
 } = labAuthClient;
 
 // Portal-specific exports (for apps/portal)
-export const portalSignIn = portalAuthClient.signIn;
-export const portalSignUp = portalAuthClient.signUp;
 export const portalSignOut = portalAuthClient.signOut;
 export const usePortalSession = portalAuthClient.useSession;
 let inflightPortalSession: ReturnType<
@@ -209,9 +206,7 @@ export const usePortalListOrganizations = portalAuthClient.useListOrganizations;
 export const usePortalActiveOrganization =
   portalAuthClient.useActiveOrganization;
 export const portalOrganization = portalAuthClient.organization;
-export const labAdmin = labAuthClient.admin;
 export const labPasskey = labAuthClient.passkey;
-export const labEmailOtp = labAuthClient.emailOtp;
 
 // =============================================================================
 // PERMISSION CHECKING UTILITIES

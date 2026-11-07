@@ -136,15 +136,6 @@ export const EMAIL_DOMAIN_KEY_MACHINE = defineStateMachine({
 export const NOTIFICATION_STATUSES = ["UNREAD", "READ", "ARCHIVED"] as const;
 export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];
 
-export const NOTIFICATION_STATUS = defineStatusVocabulary(
-  NOTIFICATION_STATUSES,
-  {
-    UNREAD: { label: "Não lida", tone: "info" },
-    READ: { label: "Lida", tone: "neutral" },
-    ARCHIVED: { label: "Arquivada", tone: "neutral" },
-  },
-);
-
 export const NOTIFICATION_MACHINE = defineStateMachine({
   name: "notification",
   states: NOTIFICATION_STATUSES,

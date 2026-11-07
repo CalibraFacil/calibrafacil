@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { compileMethodDraft } from "@calibra-facil/method-definition";
+import {
+  compileMethodDraft,
+  createMethodExecutionEngine,
+  methodEngineMetadata,
+} from "@calibra-facil/method-definition";
 
-import { createTemplateEngine, templateEngineMetadata } from "./engine";
 import { listTemplates } from "./registry";
 import type { TemplateModule } from "./types";
 
@@ -15,8 +18,8 @@ import type { TemplateModule } from "./types";
  * template and this test must go RED.
  */
 describe("method-templates registry — publishable oracle", () => {
-  const engine = createTemplateEngine();
-  const engineMetadata = templateEngineMetadata();
+  const engine = createMethodExecutionEngine();
+  const engineMetadata = methodEngineMetadata();
 
   for (const template of listTemplates()) {
     describe(template.key, () => {

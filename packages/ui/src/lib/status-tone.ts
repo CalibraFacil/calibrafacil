@@ -25,8 +25,6 @@ import type { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 export type StatusToneClasses = {
   /** Filled pill / chip: tinted background plus readable text. */
   surface: string;
-  /** Same as `surface`; kept for timeline-style "soft" markers. */
-  soft: string;
   /** Text colour only. */
   text: string;
   /** Solid indicator dot. */
@@ -44,7 +42,6 @@ export type StatusToneClasses = {
 export const STATUS_TONE: Record<SignalTone, StatusToneClasses> = {
   ok: {
     surface: "bg-signal-ok/10 text-signal-ok-text",
-    soft: "bg-signal-ok/10 text-signal-ok-text",
     text: "text-signal-ok-text",
     dot: "bg-signal-ok-dot",
     tile: "bg-signal-ok/10",
@@ -55,7 +52,6 @@ export const STATUS_TONE: Record<SignalTone, StatusToneClasses> = {
   },
   critical: {
     surface: "bg-destructive/10 text-destructive",
-    soft: "bg-destructive/10 text-destructive",
     text: "text-destructive",
     dot: "bg-destructive",
     tile: "bg-destructive/10",
@@ -66,7 +62,6 @@ export const STATUS_TONE: Record<SignalTone, StatusToneClasses> = {
   },
   warning: {
     surface: "bg-signal-warning/10 text-signal-warning-text",
-    soft: "bg-signal-warning/10 text-signal-warning-text",
     text: "text-signal-warning-text",
     dot: "bg-signal-warning-dot",
     tile: "bg-signal-warning/10",
@@ -77,7 +72,6 @@ export const STATUS_TONE: Record<SignalTone, StatusToneClasses> = {
   },
   info: {
     surface: "bg-primary/10 text-primary",
-    soft: "bg-primary/10 text-primary",
     text: "text-primary",
     dot: "bg-primary",
     tile: "bg-primary/10",
@@ -88,7 +82,6 @@ export const STATUS_TONE: Record<SignalTone, StatusToneClasses> = {
   },
   neutral: {
     surface: "bg-muted text-muted-foreground",
-    soft: "bg-muted text-muted-foreground",
     text: "text-muted-foreground",
     dot: "bg-muted-foreground",
     tile: "bg-muted/45",

@@ -28,14 +28,11 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
-  calibraApiPolicyRegistry,
   createCloudApiClient,
   createDesktopApiClient,
   createDesktopHybridApiClient,
-  getCalibraApiDataPolicy,
   getDesktopDataPolicyUnavailableMessage,
   isDesktopRuntime,
-  listCalibraApiPolicyEntries,
 } from "./index";
 import type { CreateServiceOrderInput, JobExecutionPayload } from "./index";
 
@@ -58,57 +55,7 @@ function formDataBody(init: RequestInit | undefined): FormData {
 }
 
 describe("client runtime data policy registry", () => {
-  it("documents the current desktop parity boundary", () => {
-    expect(getCalibraApiDataPolicy("standards", "list")).toBe(
-      "local-first-read-through-sync",
-    );
-    expect(getCalibraApiDataPolicy("customers", "list")).toBe(
-      "local-first-read-through-sync",
-    );
-    expect(getCalibraApiDataPolicy("sync", "getSession")).toBe("local-only");
-    expect(getCalibraApiDataPolicy("jobs", "saveExecution")).toBe(
-      "local-command-sync",
-    );
-    expect(getCalibraApiDataPolicy("serviceOrders", "create")).toBe(
-      "local-command-sync",
-    );
-    // Q13: everything outside field capture, intake and reference reads is
-    // online-only.
-    expect(getCalibraApiDataPolicy("serviceOrders", "createQuote")).toBe(
-      "cloud-only",
-    );
-    expect(getCalibraApiDataPolicy("serviceOrders", "saveExecution")).toBe(
-      "cloud-only",
-    );
-    expect(
-      getCalibraApiDataPolicy("serviceOrders", "issueDeliveryDocument"),
-    ).toBe("cloud-only");
-    expect(getCalibraApiDataPolicy("customers", "create")).toBe("cloud-only");
-    expect(getCalibraApiDataPolicy("customers", "update")).toBe("cloud-only");
-    expect(getCalibraApiDataPolicy("assets", "update")).toBe("cloud-only");
-    expect(getCalibraApiDataPolicy("nonConformances", "create")).toBe(
-      "cloud-only",
-    );
-    expect(getCalibraApiDataPolicy("dashboard", "getStats")).toBe("cloud-only");
-  });
-
-  it("exposes every namespace as policy entries for runtime inspection", () => {
-    const entries = listCalibraApiPolicyEntries();
-    const namespaces = new Set(entries.map((entry) => entry.namespace));
-
-    expect(entries.length).toBeGreaterThan(0);
-    expect(namespaces.size).toBe(Object.keys(calibraApiPolicyRegistry).length);
-    expect(entries).toContainEqual({
-      namespace: "standards",
-      method: "list",
-      policy: "local-first-read-through-sync",
-    });
-  });
-
   it("keeps policy-specific unavailable messages centralized", () => {
-    expect(
-      getDesktopDataPolicyUnavailableMessage("cloud-first-read-fallback"),
-    ).toContain("fallback local");
     expect(getDesktopDataPolicyUnavailableMessage("cloud-only")).toContain(
       "API da nuvem",
     );

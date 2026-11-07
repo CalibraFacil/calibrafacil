@@ -49,7 +49,7 @@ export function Timeline({
                 "relative z-10 mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full",
                 state === "upcoming"
                   ? "border-border text-muted-foreground/50 border border-dashed bg-card"
-                  : STATUS_TONE[tone].soft,
+                  : STATUS_TONE[tone].surface,
               )}
             >
               {state === "current" ? (

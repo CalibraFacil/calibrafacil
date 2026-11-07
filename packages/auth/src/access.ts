@@ -790,18 +790,8 @@ export function roleNameFromUnknown(value: unknown): RoleName {
   return isRoleName(value) ? value : "member";
 }
 
-/**
- * Default role for new members joining the organization via invitation.
- * New members start with minimal permissions until upgraded by an admin/owner.
- */
-export const DEFAULT_ROLE: RoleName = "member";
-
-/**
- * Role hierarchy for permission inheritance checks.
- * Higher index = more permissions.
- * Note: client_user is separate as it's for external portal access.
- */
-export const ROLE_HIERARCHY: RoleName[] = [
+/** Every role name. */
+const ROLE_NAMES: readonly RoleName[] = [
   "client_user",
   "member",
   "operator",
@@ -848,14 +838,10 @@ export type PortalVisibleMemberRole =
 export type PortalManageableMemberRole =
   (typeof PORTAL_MANAGEABLE_MEMBER_ROLES)[number];
 
-export function isPortalAccessRole(role: string): role is PortalAccessRole {
-  return role === "client_user";
-}
-
 export function isPortalVisibleMemberRole(
   role: string,
 ): role is PortalVisibleMemberRole {
-  return isPortalAccessRole(role);
+  return role === "client_user";
 }
 
 export function isPortalManageableMemberRole(
@@ -875,23 +861,6 @@ export const roleLabels: Record<RoleName, string> = {
   owner: "Proprietario",
   client_user: "Cliente",
 };
-
-/**
- * Get the hierarchy level of a role (0 = lowest, 4 = highest)
- */
-export function getRoleLevel(role: RoleName): number {
-  return ROLE_HIERARCHY.indexOf(role);
-}
-
-/**
- * Check if roleA has equal or higher permissions than roleB
- */
-export function hasEqualOrHigherRole(
-  roleA: RoleName,
-  roleB: RoleName,
-): boolean {
-  return getRoleLevel(roleA) >= getRoleLevel(roleB);
-}
 
 // =============================================================================
 // RESOURCE TYPE DEFINITIONS
@@ -980,30 +949,7 @@ export function canPerformCalibrationAction(
  */
 export function rolesAllowedTo(action: CalibrationAction): RoleName[] {
   const { permission } = CALIBRATION_ACTIONS[action];
-  return ROLE_HIERARCHY.filter((role) => roleHoldsPermission(role, permission));
-}
-
-/**
- * Get all allowed actions for a role in a given job status.
- *
- * @example
- * const actions = getAllowedCalibrationActions("technician", "DRAFT");
- * // ["edit", "delete", "submit"]
- */
-export function getAllowedCalibrationActions(
-  role: RoleName,
-  status: JobStatus,
-): CalibrationAction[] {
-  const actions: CalibrationAction[] = [
-    "edit",
-    "delete",
-    "submit",
-    "approve",
-    "reject",
-  ];
-  return actions.filter((action) =>
-    canPerformCalibrationAction(role, status, action),
-  );
+  return ROLE_NAMES.filter((role) => roleHoldsPermission(role, permission));
 }
 
 // =============================================================================

@@ -159,8 +159,3 @@ export const SIGNUP_EMAIL_REJECTION_MESSAGES: Record<
   disposable:
     "Este endereço é de e-mail temporário. Use o e-mail do domínio do seu laboratório.",
 };
-
-/** True when the address may open a self-serve account. */
-export function isCorporateSignupEmail(email: string): boolean {
-  return checkSignupEmail(email).ok;
-}

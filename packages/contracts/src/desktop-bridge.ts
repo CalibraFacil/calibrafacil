@@ -17,6 +17,7 @@ import {
   syncStatusSnapshotSchema,
   syncTriggerSchema,
 } from "./desktop";
+import { nullableString } from "./common";
 
 /**
  * The desktop bridge, declared once.
@@ -89,7 +90,6 @@ function event<Payload extends z.ZodType>(row: {
 }
 
 const noArgs = z.tuple([]);
-const nullableString = z.string().nullable();
 
 export const desktopBridge = {
   authFetch: invoke({

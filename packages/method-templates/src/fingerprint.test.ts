@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   compileMethodDraft,
   type MethodDraft,
+  createMethodExecutionEngine,
+  methodEngineMetadata,
 } from "@calibra-facil/method-definition";
 
-import { createTemplateEngine, templateEngineMetadata } from "./engine";
 import { buildDraft as buildMassBalanceDraft } from "./templates/mass-balance";
 import type { BuildDraftArgs } from "./types";
 
@@ -37,8 +38,8 @@ const FINGERPRINT_FIXTURES: ReadonlyArray<{
 ];
 
 describe("lab-method fingerprint stability", () => {
-  const engine = createTemplateEngine();
-  const engineMetadata = templateEngineMetadata();
+  const engine = createMethodExecutionEngine();
+  const engineMetadata = methodEngineMetadata();
 
   for (const fixture of FINGERPRINT_FIXTURES) {
     it(`${fixture.label} reproduces the pinned fingerprint`, () => {

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isLocalHostname,
-  normalizeHostname,
-  normalizeOrigin,
-} from "./domain-utils";
+import { isLocalHostname, normalizeHostname } from "./domain-utils";
 
 // REQ-DOM-001: protocol + path → lowercase host only
 describe("normalizeHostname — protocol and path stripping", () => {
@@ -90,53 +86,7 @@ describe("normalizeHostname — leading/trailing dot rejection", () => {
 });
 
 // REQ-DOM-007: valid absolute URL → lowercased "<protocol>//<host>"
-describe("normalizeOrigin — valid URL handling", () => {
-  it("REQ-DOM-007: returns lowercased protocol+host for a simple https URL", () => {
-    expect(normalizeOrigin("https://example.com/path?q=1#frag")).toBe(
-      "https://example.com",
-    );
-  });
-
-  it("REQ-DOM-007: preserves an explicit port in the origin", () => {
-    expect(normalizeOrigin("http://localhost:3000/api/v1")).toBe(
-      "http://localhost:3000",
-    );
-  });
-
-  it("REQ-DOM-007: lowercases the host portion", () => {
-    expect(normalizeOrigin("HTTPS://Lab.Example.com/x")).toBe(
-      "https://lab.example.com",
-    );
-  });
-
-  it("REQ-DOM-007: drops path and query, keeps protocol and host", () => {
-    const result = normalizeOrigin(
-      "https://api.calibrafacil.com/v2/jobs?foo=bar",
-    );
-    expect(result).toBe("https://api.calibrafacil.com");
-  });
-});
-
 // REQ-DOM-008: non-URL string → null, no throw
-describe("normalizeOrigin — invalid input", () => {
-  it("REQ-DOM-008: returns null (not throws) for a bare hostname", () => {
-    expect(normalizeOrigin("example.com")).toBeNull();
-  });
-
-  it("REQ-DOM-008: returns null for an empty string", () => {
-    expect(normalizeOrigin("")).toBeNull();
-  });
-
-  it("REQ-DOM-008: returns null for a random non-URL string", () => {
-    expect(normalizeOrigin("not a url at all")).toBeNull();
-  });
-
-  it("REQ-DOM-008: does not throw — wraps error internally", () => {
-    expect(() => normalizeOrigin(":::bad:::")).not.toThrow();
-    expect(normalizeOrigin(":::bad:::")).toBeNull();
-  });
-});
-
 // REQ-DOM-009: "localhost", "*.local", dotted-quad IPv4 → true
 describe("isLocalHostname — local host detection", () => {
   it("REQ-DOM-009: returns true for 'localhost'", () => {

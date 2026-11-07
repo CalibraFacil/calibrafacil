@@ -142,25 +142,6 @@ export async function createResendDomain(
   }
 }
 
-/** List the domains registered in the account that owns `apiKey`. */
-export async function listResendDomains(
-  apiKey: string,
-): Promise<ResendDomainsResult<ResendDomainSummary[]>> {
-  try {
-    const resend = new Resend(apiKey);
-    const { data, error } = await resend.domains.list();
-    if (error) return failure(error);
-    const domains = (data?.data ?? []).map((domain) => ({
-      id: domain.id,
-      name: domain.name,
-      status: domain.status,
-    }));
-    return { ok: true, data: domains };
-  } catch (error) {
-    return thrownFailure(error);
-  }
-}
-
 /** Fetch one domain (status + generated DNS records) by Resend domain id. */
 export async function getResendDomain(
   apiKey: string,
@@ -213,27 +194,6 @@ export async function verifyResendDomain(
   } catch (error) {
     return thrownFailure(error);
   }
-}
-
-/**
- * Live-validate a pasted API key by listing its domains (requires at least
- * domain-read permission — exactly what the BYOK flow needs).
- */
-export async function validateResendApiKey(
-  apiKey: string,
-): Promise<
-  | { valid: true; domains: ResendDomainSummary[] }
-  | { valid: false; failureClass: ResendFailureClass; message: string }
-> {
-  const result = await listResendDomains(apiKey);
-  if (result.ok) {
-    return { valid: true, domains: result.data };
-  }
-  return {
-    valid: false,
-    failureClass: result.failureClass,
-    message: result.message,
-  };
 }
 
 /** Delete only a domain whose provider ID belongs to the caller's organization. */

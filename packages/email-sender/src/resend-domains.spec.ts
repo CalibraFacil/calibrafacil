@@ -19,8 +19,6 @@ import {
   createResendDomain,
   deleteResendDomain,
   getResendDomain,
-  listResendDomains,
-  validateResendApiKey,
   verifyResendDomain,
 } from "./resend-domains";
 
@@ -74,54 +72,6 @@ describe("classifyResendErrorName", () => {
   });
 });
 
-describe("listResendDomains", () => {
-  it("returns the account's domains", async () => {
-    domainsMock.list.mockResolvedValue({
-      data: {
-        data: [
-          { id: "d1", name: "mail.lab.com.br", status: "verified" },
-          { id: "d2", name: "news.lab.com.br", status: "pending" },
-        ],
-      },
-      error: null,
-    });
-
-    const result = await listResendDomains("re_key");
-    expect(result).toEqual({
-      ok: true,
-      data: [
-        { id: "d1", name: "mail.lab.com.br", status: "verified" },
-        { id: "d2", name: "news.lab.com.br", status: "pending" },
-      ],
-    });
-  });
-
-  it("classifies an API error", async () => {
-    domainsMock.list.mockResolvedValue({
-      data: null,
-      error: { name: "invalid_api_key", message: "API key is invalid" },
-    });
-
-    const result = await listResendDomains("re_key");
-    expect(result).toEqual({
-      ok: false,
-      errorName: "invalid_api_key",
-      message: "API key is invalid",
-      failureClass: "invalid_key",
-    });
-  });
-
-  it("normalizes a thrown transport error to transient", async () => {
-    domainsMock.list.mockRejectedValue(new Error("fetch failed"));
-
-    const result = await listResendDomains("re_key");
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failureClass).toBe("transient");
-    }
-  });
-});
-
 describe("getResendDomain", () => {
   it("returns status and DNS records as plain records", async () => {
     domainsMock.get.mockResolvedValue({
@@ -166,37 +116,6 @@ describe("verifyResendDomain", () => {
     domainsMock.verify.mockResolvedValue({ data: { id: "d1" }, error: null });
     const result = await verifyResendDomain("re_key", "d1");
     expect(result).toEqual({ ok: true, data: { id: "d1" } });
-  });
-});
-
-describe("validateResendApiKey", () => {
-  it("accepts a key that can list domains", async () => {
-    domainsMock.list.mockResolvedValue({
-      data: {
-        data: [{ id: "d1", name: "mail.lab.com.br", status: "verified" }],
-      },
-      error: null,
-    });
-
-    const result = await validateResendApiKey("re_key");
-    expect(result.valid).toBe(true);
-  });
-
-  it("rejects a key Resend rejects, with the failure class", async () => {
-    domainsMock.list.mockResolvedValue({
-      data: null,
-      error: {
-        name: "restricted_api_key",
-        message: "insufficient permissions",
-      },
-    });
-
-    const result = await validateResendApiKey("re_key");
-    expect(result).toEqual({
-      valid: false,
-      failureClass: "invalid_key",
-      message: "insufficient permissions",
-    });
   });
 });
 

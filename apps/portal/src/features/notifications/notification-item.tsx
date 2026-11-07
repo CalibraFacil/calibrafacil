@@ -54,7 +54,7 @@ export function NotificationItem({
       <span
         className={cn(
           "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg",
-          STATUS_TONE[meta.tone].soft,
+          STATUS_TONE[meta.tone].surface,
         )}
       >
         <HugeiconsIcon icon={meta.icon} className="size-4" strokeWidth={2} />

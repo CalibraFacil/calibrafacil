@@ -1,6 +1,7 @@
 import {
   createCalculationEngine,
   METHOD_ENGINE_OPTIONS,
+  normalizeEngineOptions,
   type CalculationEngineOptions,
 } from "@calibra-facil/math-engine";
 import {
@@ -14,11 +15,14 @@ import {
 } from "@calibra-facil/shared";
 import { isRecord, toRecord } from "@calibra-facil/shared/record";
 import { executeCompiledMethod } from "./execute";
-import type {
-  CalculationEngineLike,
-  CalibrationPhaseSnapshot,
-  CompiledMethod,
-  CompiledMethodExecutionResult,
+import { fingerprintJson } from "./fingerprint";
+import {
+  METHOD_ENGINE_PACKAGE_NAME,
+  type CalculationEngineLike,
+  type CalibrationPhaseSnapshot,
+  type CompiledMethod,
+  type CompiledMethodExecutionResult,
+  type EngineMetadata,
 } from "./types";
 
 /**
@@ -43,6 +47,23 @@ export function createMethodExecutionEngine(
   options: CalculationEngineOptions = METHOD_ENGINE_OPTIONS,
 ): CalculationEngineLike {
   return createCalculationEngine(options);
+}
+
+/**
+ * The engine metadata (version + options fingerprint) a method is compiled with.
+ * The fingerprint is folded into every published method's hash, so the compile
+ * and the execution must read it from here: one assembler, never two that can
+ * disagree.
+ */
+export function methodEngineMetadata(
+  options: CalculationEngineOptions = METHOD_ENGINE_OPTIONS,
+): EngineMetadata {
+  const normalized = normalizeEngineOptions(options);
+  return {
+    packageName: METHOD_ENGINE_PACKAGE_NAME,
+    version: normalized.engineVersion,
+    optionsFingerprint: fingerprintJson(normalized, "engine-options"),
+  };
 }
 
 // ---------------------------------------------------------------------------

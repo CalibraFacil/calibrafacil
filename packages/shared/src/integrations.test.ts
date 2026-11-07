@@ -4,7 +4,6 @@ import {
   INTEGRATION_PROVIDER_CAPABILITIES,
   INTEGRATION_PROVIDER_CAPABILITY_FLAGS,
   normalizeIntegrationBaseUrl,
-  providerSupports,
   type IntegrationProvider,
 } from "./integrations";
 
@@ -62,14 +61,6 @@ describe("integration provider capabilities", () => {
       supportsSellers: true,
       supportsBranchAddresses: false,
     });
-  });
-
-  it("checks individual capability flags without exposing mutable registry state", () => {
-    const capabilities = getProviderCapabilities("conta_azul");
-    capabilities.canUseWebhooks = true;
-
-    expect(providerSupports("conta_azul", "canUseWebhooks")).toBe(false);
-    expect(providerSupports("conta_azul", "requiresPolling")).toBe(true);
   });
 });
 

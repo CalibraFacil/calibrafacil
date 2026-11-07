@@ -5,7 +5,6 @@ import {
   dateOnlyDaysBetween,
   dateOnlyToInputValue,
   instantToDateInputValue,
-  labDaysBetween,
   todayDateInputValue,
 } from "./calendar-date";
 
@@ -53,18 +52,6 @@ describe("dateInputToNoonIso", () => {
     expect(dateInputToNoonIso("")).toBeNull();
     expect(dateInputToNoonIso("2026-05")).toBeNull();
     expect(dateInputToNoonIso("2026-13-40")).toBeNull();
-  });
-});
-
-describe("labDaysBetween", () => {
-  it("REQ-DATE-003: counts laboratory days even when the browser is on UTC", () => {
-    process.env.TZ = "UTC";
-    const dueTomorrow = new Date("2026-05-21T12:00:00-03:00");
-    expect(labDaysBetween(EVENING, dueTomorrow)).toBe(1);
-    expect(labDaysBetween(EVENING, EVENING)).toBe(0);
-    expect(labDaysBetween(EVENING, new Date("2026-05-19T12:00:00-03:00"))).toBe(
-      -1,
-    );
   });
 });
 

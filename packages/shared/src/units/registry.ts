@@ -212,10 +212,6 @@ export function unitKind(unit: unknown): QuantityKind | null {
   return normalized ? UNIT_REGISTRY[normalized].kind : null;
 }
 
-export function isUnitOfKind(unit: unknown, kind: QuantityKind): boolean {
-  return unitKind(unit) === kind;
-}
-
 export function canonicalUnitFor(kind: QuantityKind): MeasurementUnit {
   return CANONICAL_BY_KIND[kind];
 }

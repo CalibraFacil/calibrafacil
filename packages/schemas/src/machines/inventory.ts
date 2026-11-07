@@ -117,14 +117,6 @@ export const REFERENCE_STANDARD_MACHINE = defineStateMachine({
 const MASS_PROFILE_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 export type MassProfileStatus = (typeof MASS_PROFILE_STATUSES)[number];
 
-export const MASS_PROFILE_STATUS = defineStatusVocabulary(
-  MASS_PROFILE_STATUSES,
-  {
-    ACTIVE: { label: "Ativo", tone: "ok" },
-    INACTIVE: { label: "Inativo", tone: "neutral" },
-  },
-);
-
 export const MASS_PROFILE_MACHINE = defineStateMachine({
   name: "mass composition profile",
   states: MASS_PROFILE_STATUSES,
