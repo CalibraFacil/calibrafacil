@@ -20,19 +20,18 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { createCorrectiveActionRecord } from "../lib/corrective-actions";
+import {
+  createCorrectiveActionRecord,
+  requireLabCapa,
+} from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { orgDb } from "../lib/org-db";
-import {
-  conflict,
-  domainErrorResponse,
-  forbidden,
-  invalid,
-} from "../lib/domain-errors";
+import { conflict, forbidden, invalid } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import { assessCapaVerifierIndependence } from "../lib/capa-verification-independence";
 import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
 import { CORRECTIVE_ACTION_MACHINE } from "@calibra-facil/schemas/machines";
-import { clientIp } from "../lib/client-ip";
 
 /**
  * CAPA Router - ISO 17025:2017 Clause 8.2 (Corrective Actions)
@@ -308,32 +307,8 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id/label", ...withLabPermission({ capa: ["read"] }), async (c) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const [capa] = await o
-        .select({
-          id: correctiveAction.id,
-          label: correctiveAction.capaNumber,
-        })
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.id, id),
-            eq(correctiveAction.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!capa) {
-        return c.json({ error: "CAPA nao encontrada" }, 404);
-      }
-
-      return c.json(capa);
+      const capa = await requireLabCapa(o, c.req.param("id"));
+      return c.json({ id: capa.id, label: capa.capaNumber });
     });
   })
 
@@ -342,27 +317,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ capa: ["read"] }), async (c) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const [capa] = await o
-        .select()
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.id, id),
-            eq(correctiveAction.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!capa) {
-        return c.json({ error: "CAPA nao encontrada" }, 404);
-      }
+      const capa = await requireLabCapa(o, c.req.param("id"));
 
       // Get linked NCs
       const linkedNCs = await o
@@ -437,50 +392,54 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ capa: ["create"] }),
     zValidator("json", CreateCorrectiveActionSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
 
-        // The responsible is a body-supplied user id: a member of THIS org only
-        // (otherwise GET /:id would resolve another tenant's user name).
-        if (
-          input.responsibleId &&
-          !(await userIsOrganizationMember(
-            member.organizationId,
-            input.responsibleId,
-            o,
-          ))
-        ) {
-          return c.json({ error: RESPONSIBLE_REFUSED }, 400);
-        }
+      const newCapa = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          // The responsible is a body-supplied user id: a member of THIS org only
+          // (otherwise GET /:id would resolve another tenant's user name).
+          if (
+            input.responsibleId &&
+            !(await userIsOrganizationMember(
+              member.organizationId,
+              input.responsibleId,
+              ctx.o,
+            ))
+          ) {
+            throw invalid("invalid_request", RESPONSIBLE_REFUSED);
+          }
 
-        const newCapa = await createCorrectiveActionRecord(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            source: input.source,
-            sourceReference: input.sourceReference || null,
-            title: input.title,
-            description: input.description,
-            detectionDate: new Date(input.detectionDate),
-            type: input.type,
-            severity: input.severity,
-            category: input.category,
-            rootCauseAnalysis: input.rootCauseAnalysis ?? null,
-            rootCauseAnalysisMethod: input.rootCauseAnalysisMethod ?? null,
-            actionPlan: input.actionPlan,
-            preventiveMeasures: input.preventiveMeasures ?? null,
-            responsibleId: input.responsibleId,
-            dueDate: new Date(input.dueDate),
-            ipAddress: clientIp(c),
-            auditChanges: { initial: input },
-          },
-          o,
-        );
+          return createCorrectiveActionRecord(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              source: input.source,
+              sourceReference: input.sourceReference || null,
+              title: input.title,
+              description: input.description,
+              detectionDate: new Date(input.detectionDate),
+              type: input.type,
+              severity: input.severity,
+              category: input.category,
+              rootCauseAnalysis: input.rootCauseAnalysis ?? null,
+              rootCauseAnalysisMethod: input.rootCauseAnalysisMethod ?? null,
+              actionPlan: input.actionPlan,
+              preventiveMeasures: input.preventiveMeasures ?? null,
+              responsibleId: input.responsibleId,
+              dueDate: new Date(input.dueDate),
+              ipAddress: ctx.actor.ipAddress,
+              auditChanges: { initial: input },
+            },
+            ctx.o,
+          );
+        },
+      );
 
-        return c.json(newCapa, 201);
-      });
+      return c.json(newCapa, 201);
     },
   )
 
@@ -492,121 +451,111 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ capa: ["update"] }),
     zValidator("json", UpdateCorrectiveActionSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabCapa(ctx.o, c.req.param("id"));
+          const id = existing.id;
 
-        const [existing] = await o
-          .select()
-          .from(correctiveAction)
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+          if (
+            !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "edit")
+          ) {
+            throw invalid(
+              "invalid_request",
+              "CAPA fechada nao pode ser editada",
+            );
+          }
 
-        if (!existing) {
-          return c.json({ error: "CAPA nao encontrada" }, 404);
-        }
+          if (
+            input.responsibleId &&
+            input.responsibleId !== existing.responsibleId &&
+            !(await userIsOrganizationMember(
+              member.organizationId,
+              input.responsibleId,
+              ctx.o,
+            ))
+          ) {
+            throw invalid("invalid_request", RESPONSIBLE_REFUSED);
+          }
 
-        if (!CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "edit")) {
-          return c.json({ error: "CAPA fechada nao pode ser editada" }, 400);
-        }
+          const updateData: Record<string, unknown> = {};
 
-        if (
-          input.responsibleId &&
-          input.responsibleId !== existing.responsibleId &&
-          !(await userIsOrganizationMember(
-            member.organizationId,
-            input.responsibleId,
-            o,
-          ))
-        ) {
-          return c.json({ error: RESPONSIBLE_REFUSED }, 400);
-        }
+          if (input.title !== undefined) updateData.title = input.title;
+          if (input.description !== undefined)
+            updateData.description = input.description;
+          if (input.source !== undefined) updateData.source = input.source;
+          if (input.sourceReference !== undefined)
+            updateData.sourceReference = input.sourceReference || null;
+          if (input.type !== undefined) updateData.type = input.type;
+          if (input.severity !== undefined)
+            updateData.severity = input.severity;
+          if (input.category !== undefined)
+            updateData.category = input.category;
+          if (input.actionPlan !== undefined)
+            updateData.actionPlan = input.actionPlan;
+          if (input.responsibleId !== undefined)
+            updateData.responsibleId = input.responsibleId;
+          if (input.dueDate !== undefined)
+            updateData.dueDate = input.dueDate ? new Date(input.dueDate) : null;
+          if (input.rootCauseAnalysis !== undefined)
+            updateData.rootCauseAnalysis = input.rootCauseAnalysis;
+          if (input.rootCauseAnalysisMethod !== undefined)
+            updateData.rootCauseAnalysisMethod = input.rootCauseAnalysisMethod;
+          if (input.preventiveMeasures !== undefined)
+            updateData.preventiveMeasures = input.preventiveMeasures;
 
-        const updateData: Record<string, unknown> = {};
+          // Auto-transition to INVESTIGATION when root cause is added
+          if (
+            input.rootCauseAnalysis &&
+            CORRECTIVE_ACTION_MACHINE.canTransition(
+              existing.status,
+              "investigate",
+            )
+          ) {
+            updateData.status = CORRECTIVE_ACTION_MACHINE.requireTargetOf(
+              existing.status,
+              "investigate",
+            );
+            updateData.investigationCompletedAt = new Date();
+          }
 
-        if (input.title !== undefined) updateData.title = input.title;
-        if (input.description !== undefined)
-          updateData.description = input.description;
-        if (input.source !== undefined) updateData.source = input.source;
-        if (input.sourceReference !== undefined)
-          updateData.sourceReference = input.sourceReference || null;
-        if (input.type !== undefined) updateData.type = input.type;
-        if (input.severity !== undefined) updateData.severity = input.severity;
-        if (input.category !== undefined) updateData.category = input.category;
-        if (input.actionPlan !== undefined)
-          updateData.actionPlan = input.actionPlan;
-        if (input.responsibleId !== undefined)
-          updateData.responsibleId = input.responsibleId;
-        if (input.dueDate !== undefined)
-          updateData.dueDate = input.dueDate ? new Date(input.dueDate) : null;
-        if (input.rootCauseAnalysis !== undefined)
-          updateData.rootCauseAnalysis = input.rootCauseAnalysis;
-        if (input.rootCauseAnalysisMethod !== undefined)
-          updateData.rootCauseAnalysisMethod = input.rootCauseAnalysisMethod;
-        if (input.preventiveMeasures !== undefined)
-          updateData.preventiveMeasures = input.preventiveMeasures;
+          const [row] = await ctx.o
+            .update(correctiveAction)
+            .set(updateData)
+            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // above so the UPDATE stays org-scoped even if the guarding read is
+            // refactored away. Reuses the in-scope member.organizationId.
+            .where(
+              and(
+                eq(correctiveAction.id, id),
+                eq(correctiveAction.organizationId, member.organizationId),
+                eq(correctiveAction.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) {
+            // The compare-and-set on the status matched no row: the CAPA moved
+            // under the caller (CORRECTIVE_ACTION_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+            );
+          }
 
-        // Auto-transition to INVESTIGATION when root cause is added
-        if (
-          input.rootCauseAnalysis &&
-          CORRECTIVE_ACTION_MACHINE.canTransition(
-            existing.status,
-            "investigate",
-          )
-        ) {
-          updateData.status = CORRECTIVE_ACTION_MACHINE.requireTargetOf(
-            existing.status,
-            "investigate",
-          );
-          updateData.investigationCompletedAt = new Date();
-        }
+          await ctx.audit("correctiveAction", id, {
+            action: "update",
+            changes: { before: existing, after: input },
+          });
 
-        const [updated] = await o
-          .update(correctiveAction)
-          .set(updateData)
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-          // above so the UPDATE stays org-scoped even if the guarding read is
-          // refactored away. Reuses the in-scope member.organizationId.
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-              eq(correctiveAction.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!updated) {
-          // The compare-and-set on the status matched no row: the CAPA moved
-          // under the caller (CORRECTIVE_ACTION_MACHINE).
-          throw conflict(
-            "status_transition_conflict",
-            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
-          );
-        }
+          return row;
+        },
+      );
 
-        // Audit log
-        await o.insert(correctiveActionAuditLog).values({
-          organizationId: member.organizationId,
-          capaId: id,
-          action: "update",
-          changes: { before: existing, after: input },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-
-        return c.json(updated);
-      });
+      return c.json(updated);
     },
   )
 
@@ -618,90 +567,73 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ capa: ["implement"] }),
     zValidator("json", ImplementCorrectiveActionSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabCapa(ctx.o, c.req.param("id"));
+          const id = existing.id;
 
-        const [existing] = await o
-          .select()
-          .from(correctiveAction)
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "CAPA nao encontrada" }, 404);
-        }
-
-        if (
-          !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "implement")
-        ) {
-          return c.json(
-            {
-              error:
-                "CAPA deve estar em status OPEN, INVESTIGATION ou IMPLEMENTATION para ser implementada",
-            },
-            400,
-          );
-        }
-
-        const [updated] = await o
-          .update(correctiveAction)
-          .set({
-            implementationEvidence: input.implementationEvidence,
-            implementedAt: new Date(),
-            status: CORRECTIVE_ACTION_MACHINE.requireTargetOf(
+          if (
+            !CORRECTIVE_ACTION_MACHINE.canTransition(
               existing.status,
               "implement",
-            ),
-          })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-          // above so the UPDATE stays org-scoped even if the guarding read is
-          // refactored away. Reuses the in-scope member.organizationId.
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-              eq(correctiveAction.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!updated) {
-          // The compare-and-set on the status matched no row: the CAPA moved
-          // under the caller (CORRECTIVE_ACTION_MACHINE).
-          throw conflict(
-            "status_transition_conflict",
-            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
-          );
-        }
+            )
+          ) {
+            throw invalid(
+              "invalid_request",
+              "CAPA deve estar em status OPEN, INVESTIGATION ou IMPLEMENTATION para ser implementada",
+            );
+          }
 
-        // Audit log
-        await o.insert(correctiveActionAuditLog).values({
-          organizationId: member.organizationId,
-          capaId: id,
-          action: "implement",
-          changes: {
-            status: { old: existing.status, new: "IMPLEMENTATION" },
-            implementationEvidence: input.implementationEvidence,
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          const [row] = await ctx.o
+            .update(correctiveAction)
+            .set({
+              implementationEvidence: input.implementationEvidence,
+              implementedAt: new Date(),
+              status: CORRECTIVE_ACTION_MACHINE.requireTargetOf(
+                existing.status,
+                "implement",
+              ),
+            })
+            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // above so the UPDATE stays org-scoped even if the guarding read is
+            // refactored away. Reuses the in-scope member.organizationId.
+            .where(
+              and(
+                eq(correctiveAction.id, id),
+                eq(correctiveAction.organizationId, member.organizationId),
+                eq(correctiveAction.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) {
+            // The compare-and-set on the status matched no row: the CAPA moved
+            // under the caller (CORRECTIVE_ACTION_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+            );
+          }
 
-        return c.json({
-          message: "CAPA marcada como implementada",
-          data: updated,
-        });
+          await ctx.audit("correctiveAction", id, {
+            action: "implement",
+            changes: {
+              status: { old: existing.status, new: "IMPLEMENTATION" },
+              implementationEvidence: input.implementationEvidence,
+            },
+          });
+
+          return row;
+        },
+      );
+
+      return c.json({
+        message: "CAPA marcada como implementada",
+        data: updated,
       });
     },
   )
@@ -714,71 +646,52 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ capa: ["verify"] }),
     zValidator("json", VerifyCorrectiveActionSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabCapa(ctx.o, c.req.param("id"));
+          const id = existing.id;
 
-        const [existing] = await o
-          .select()
-          .from(correctiveAction)
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+          if (
+            !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "verify")
+          ) {
+            throw invalid(
+              "invalid_request",
+              "CAPA deve estar em status IMPLEMENTATION para verificacao de eficacia",
+            );
+          }
+          // After an ineffective verification the CAPA is back in implementation
+          // with no implementation recorded: a new one comes before a new check.
+          if (!existing.implementedAt) {
+            throw invalid(
+              "invalid_request",
+              "Registre a implementação das ações antes de verificar a eficácia",
+            );
+          }
 
-        if (!existing) {
-          return c.json({ error: "CAPA nao encontrada" }, 404);
-        }
-
-        if (
-          !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "verify")
-        ) {
-          return c.json(
-            {
-              error:
-                "CAPA deve estar em status IMPLEMENTATION para verificacao de eficacia",
-            },
-            400,
-          );
-        }
-        // After an ineffective verification the CAPA is back in implementation
-        // with no implementation recorded: a new one comes before a new check.
-        if (!existing.implementedAt) {
-          throw invalid(
-            "invalid_request",
-            "Registre a implementação das ações antes de verificar a eficácia",
-          );
-        }
-
-        // Separation of duties (ISO/IEC 17025 §8.7, decision Q50): the verifier
-        // is independent of the CAPA, i.e. neither its owner now or ever nor
-        // anyone who implemented it. A lab with no other eligible verifier lets
-        // the sole one verify with a written justification (recorded, flagged).
-        const independence = await assessCapaVerifierIndependence(o, {
-          organizationId: member.organizationId,
-          capaId: id,
-          currentResponsibleId: existing.responsibleId,
-          verifierUserId: session.user.id,
-        });
-        const waived =
-          independence.status === "waivable" &&
-          !!input.independenceJustification;
-        if (
-          independence.status === "blocked" ||
-          (independence.status === "waivable" && !waived)
-        ) {
-          return domainErrorResponse(
-            c,
-            forbidden(
+          // Separation of duties (ISO/IEC 17025 §8.7, decision Q50): the verifier
+          // is independent of the CAPA, i.e. neither its owner now or ever nor
+          // anyone who implemented it. A lab with no other eligible verifier lets
+          // the sole one verify with a written justification (recorded, flagged).
+          const independence = await assessCapaVerifierIndependence(ctx.o, {
+            organizationId: member.organizationId,
+            capaId: id,
+            currentResponsibleId: existing.responsibleId,
+            verifierUserId: session.user.id,
+          });
+          const waived =
+            independence.status === "waivable" &&
+            !!input.independenceJustification;
+          if (
+            independence.status === "blocked" ||
+            (independence.status === "waivable" && !waived)
+          ) {
+            throw forbidden(
               "self_approval_blocked",
               independence.status === "waivable"
                 ? `Separação de responsabilidades (ISO/IEC 17025): você é responsável pela CAPA ou registrou sua implementação, mas é o único verificador disponível. Informe a justificativa (mínimo ${CAPA_INDEPENDENCE_JUSTIFICATION_MIN_LENGTH} caracteres) para verificar sem independência.`
@@ -789,80 +702,77 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
                     independence.status === "waivable",
                 },
               },
-            ),
+            );
+          }
+          const verificationIndependence: CapaVerificationIndependence = waived
+            ? "waived_single_verifier"
+            : "independent";
+
+          // `verify` (CORRECTIVE_ACTION_MACHINE): effective → VERIFICATION, not
+          // effective → back to IMPLEMENTATION (decision Q61).
+          const verifiedStatus = CORRECTIVE_ACTION_MACHINE.requireTransition(
+            existing.status,
+            "verify",
+            input.effectivenessConfirmed ? "VERIFICATION" : "IMPLEMENTATION",
           );
-        }
-        const verificationIndependence: CapaVerificationIndependence = waived
-          ? "waived_single_verifier"
-          : "independent";
+          const [row] = await ctx.o
+            .update(correctiveAction)
+            .set({
+              verifiedAt: new Date(),
+              verifiedBy: session.user.id,
+              verificationNotes: input.verificationNotes,
+              effectivenessConfirmed: input.effectivenessConfirmed,
+              verificationIndependence,
+              verificationIndependenceJustification: waived
+                ? (input.independenceJustification ?? null)
+                : null,
+              status: verifiedStatus,
+              // Not effective: a new implementation cycle starts, so the previous
+              // implementation is cleared from the row (the audit log keeps it).
+              ...(input.effectivenessConfirmed
+                ? {}
+                : { implementedAt: null, implementationEvidence: null }),
+            })
+            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // above so the UPDATE stays org-scoped even if the guarding read is
+            // refactored away. Reuses the in-scope member.organizationId.
+            .where(
+              and(
+                eq(correctiveAction.id, id),
+                eq(correctiveAction.organizationId, member.organizationId),
+                eq(correctiveAction.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) {
+            // The compare-and-set on the status matched no row: the CAPA moved
+            // under the caller (CORRECTIVE_ACTION_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+            );
+          }
 
-        // `verify` (CORRECTIVE_ACTION_MACHINE): effective → VERIFICATION, not
-        // effective → back to IMPLEMENTATION (decision Q61).
-        const verifiedStatus = CORRECTIVE_ACTION_MACHINE.requireTransition(
-          existing.status,
-          "verify",
-          input.effectivenessConfirmed ? "VERIFICATION" : "IMPLEMENTATION",
-        );
-        const [updated] = await o
-          .update(correctiveAction)
-          .set({
-            verifiedAt: new Date(),
-            verifiedBy: session.user.id,
-            verificationNotes: input.verificationNotes,
-            effectivenessConfirmed: input.effectivenessConfirmed,
-            verificationIndependence,
-            verificationIndependenceJustification: waived
-              ? (input.independenceJustification ?? null)
-              : null,
-            status: verifiedStatus,
-            // Not effective: a new implementation cycle starts, so the previous
-            // implementation is cleared from the row (the audit log keeps it).
-            ...(input.effectivenessConfirmed
-              ? {}
-              : { implementedAt: null, implementationEvidence: null }),
-          })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-          // above so the UPDATE stays org-scoped even if the guarding read is
-          // refactored away. Reuses the in-scope member.organizationId.
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-              eq(correctiveAction.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!updated) {
-          // The compare-and-set on the status matched no row: the CAPA moved
-          // under the caller (CORRECTIVE_ACTION_MACHINE).
-          throw conflict(
-            "status_transition_conflict",
-            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
-          );
-        }
+          await ctx.audit("correctiveAction", id, {
+            action: "verify",
+            changes: {
+              status: { old: existing.status, new: verifiedStatus },
+              effectivenessConfirmed: input.effectivenessConfirmed,
+              verificationNotes: input.verificationNotes,
+              verification_independence: verificationIndependence,
+              ...(waived
+                ? { independenceJustification: input.independenceJustification }
+                : {}),
+            },
+          });
 
-        // Audit log
-        await o.insert(correctiveActionAuditLog).values({
-          organizationId: member.organizationId,
-          capaId: id,
-          action: "verify",
-          changes: {
-            status: { old: existing.status, new: verifiedStatus },
-            effectivenessConfirmed: input.effectivenessConfirmed,
-            verificationNotes: input.verificationNotes,
-            verification_independence: verificationIndependence,
-            ...(waived
-              ? { independenceJustification: input.independenceJustification }
-              : {}),
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          return row;
+        },
+      );
 
-        return c.json({
-          message: "Verificacao de eficacia registrada",
-          data: updated,
-        });
+      return c.json({
+        message: "Verificacao de eficacia registrada",
+        data: updated,
       });
     },
   )
@@ -875,90 +785,72 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ capa: ["close"] }),
     zValidator("json", CloseCorrectiveActionSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabCapa(ctx.o, c.req.param("id"));
+          const id = existing.id;
 
-        const [existing] = await o
-          .select()
-          .from(correctiveAction)
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+          if (
+            !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "close")
+          ) {
+            throw invalid(
+              "invalid_request",
+              "CAPA deve estar em status VERIFICATION para ser fechada",
+            );
+          }
 
-        if (!existing) {
-          return c.json({ error: "CAPA nao encontrada" }, 404);
-        }
+          const [row] = await ctx.o
+            .update(correctiveAction)
+            .set({
+              status: CORRECTIVE_ACTION_MACHINE.requireTargetOf(
+                existing.status,
+                "close",
+              ),
+              closedAt: new Date(),
+              closedBy: session.user.id,
+            })
+            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // above so the UPDATE stays org-scoped even if the guarding read is
+            // refactored away. Reuses the in-scope member.organizationId.
+            .where(
+              and(
+                eq(correctiveAction.id, id),
+                eq(correctiveAction.organizationId, member.organizationId),
+                eq(correctiveAction.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) {
+            // The compare-and-set on the status matched no row: the CAPA moved
+            // under the caller (CORRECTIVE_ACTION_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+            );
+          }
 
-        if (
-          !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "close")
-        ) {
-          return c.json(
-            {
-              error: "CAPA deve estar em status VERIFICATION para ser fechada",
+          await ctx.audit("correctiveAction", id, {
+            action: "close",
+            changes: {
+              status: { old: existing.status, new: "CLOSED" },
+              reason: input.reason,
             },
-            400,
-          );
-        }
+            reason: input.reason || null,
+          });
 
-        const [updated] = await o
-          .update(correctiveAction)
-          .set({
-            status: CORRECTIVE_ACTION_MACHINE.requireTargetOf(
-              existing.status,
-              "close",
-            ),
-            closedAt: new Date(),
-            closedBy: session.user.id,
-          })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-          // above so the UPDATE stays org-scoped even if the guarding read is
-          // refactored away. Reuses the in-scope member.organizationId.
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-              eq(correctiveAction.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!updated) {
-          // The compare-and-set on the status matched no row: the CAPA moved
-          // under the caller (CORRECTIVE_ACTION_MACHINE).
-          throw conflict(
-            "status_transition_conflict",
-            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
-          );
-        }
+          return row;
+        },
+      );
 
-        // Audit log
-        await o.insert(correctiveActionAuditLog).values({
-          organizationId: member.organizationId,
-          capaId: id,
-          action: "close",
-          changes: {
-            status: { old: existing.status, new: "CLOSED" },
-            reason: input.reason,
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-          reason: input.reason || null,
-        });
-
-        return c.json({
-          message: "CAPA fechada com sucesso",
-          data: updated,
-        });
+      return c.json({
+        message: "CAPA fechada com sucesso",
+        data: updated,
       });
     },
   )
@@ -971,28 +863,8 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ capa: ["read"] }),
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const id = parseInt(c.req.param("id"), 10);
-
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
         // Verify CAPA exists and belongs to organization
-        const [existing] = await o
-          .select({ id: correctiveAction.id })
-          .from(correctiveAction)
-          .where(
-            and(
-              eq(correctiveAction.id, id),
-              eq(correctiveAction.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "CAPA nao encontrada" }, 404);
-        }
+        const { id } = await requireLabCapa(o, c.req.param("id"));
 
         const logs = await o
           .select({

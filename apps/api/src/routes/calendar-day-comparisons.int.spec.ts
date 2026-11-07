@@ -35,8 +35,11 @@ import {
 import { dashboardRouter } from "./dashboard";
 import { jobsRouter } from "./jobs";
 import { portalRouter } from "./portal";
-import { standardsRouter } from "./standards";
+import { standardsRouter as bareStandardsRouter } from "./standards";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const standardsRouter = withErrorHandling(bareStandardsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 // The portal resolves the host lab from the request Origin; a local host is the

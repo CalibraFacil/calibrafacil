@@ -32,14 +32,18 @@ import {
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 import { portalNotificationsRouter } from "./portal-notifications";
-import { portalRequestsRouter } from "./portal-requests";
-import { portalVisitsRouter } from "./portal-visits";
+import { portalRequestsRouter as barePortalRequestsRouter } from "./portal-requests";
+import { portalVisitsRouter as barePortalVisitsRouter } from "./portal-visits";
 import { portalRouter } from "./portal";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRequestsRouter = withErrorHandling(barePortalRequestsRouter);
+const portalVisitsRouter = withErrorHandling(barePortalVisitsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

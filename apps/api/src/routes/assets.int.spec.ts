@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { assetsRouter } from "./assets";
+import { assetsRouter as bareAssetsRouter } from "./assets";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -13,6 +13,9 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const assetsRouter = withErrorHandling(bareAssetsRouter);
 
 // Real-DB + real-RBAC integration tests for the assets router.
 // Only the better-auth session is mocked (see test/integration/setup.ts);

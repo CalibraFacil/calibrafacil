@@ -29,14 +29,20 @@ import { db } from "@calibra-facil/db";
 import { asset, assetType, calibrationMethod } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 import { assetTypesRouter } from "./asset-types";
-import { assetsRouter } from "./assets";
-import { customersRouter } from "./customers";
-import { methodsRouter } from "./methods";
+import { assetsRouter as bareAssetsRouter } from "./assets";
+import { customersRouter as bareCustomersRouter } from "./customers";
+import { methodsRouter as bareMethodsRouter } from "./methods";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { serviceOrdersRouter } from "./service-orders";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+const assetsRouter = withErrorHandling(bareAssetsRouter);
+const customersRouter = withErrorHandling(bareCustomersRouter);
+
+const methodsRouter = withErrorHandling(bareMethodsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

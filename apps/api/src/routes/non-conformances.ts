@@ -26,10 +26,12 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { createNonConformanceRecord } from "../lib/non-conformances";
+import {
+  createNonConformanceRecord,
+  requireLabNonConformance,
+} from "../lib/non-conformances";
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
-import { afterCommitQueue } from "../lib/after-commit";
 import { orgDb } from "../lib/org-db";
 import {
   and,
@@ -44,12 +46,13 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { conflict } from "../lib/domain-errors";
+import { conflict, forbidden, invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import {
   NON_CONFORMANCE_MACHINE,
   OOT_NOTIFICATION_MACHINE,
 } from "@calibra-facil/schemas/machines";
-import { clientIp } from "../lib/client-ip";
 
 /**
  * Non-Conformance Router - ISO 17025:2017 Clause 8.7 (Control of Nonconforming Work)
@@ -259,32 +262,8 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["read"] }),
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const id = parseInt(c.req.param("id"), 10);
-
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
-        const [nc] = await o
-          .select({
-            id: nonConformance.id,
-            label: nonConformance.ncNumber,
-          })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!nc) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
-
-        return c.json(nc);
+        const nc = await requireLabNonConformance(o, c.req.param("id"));
+        return c.json({ id: nc.id, label: nc.ncNumber });
       });
     },
   )
@@ -298,26 +277,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
         const member = c.get("member");
-        const id = parseInt(c.req.param("id"), 10);
-
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
-        const [nc] = await o
-          .select()
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!nc) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
+        const nc = await requireLabNonConformance(o, c.req.param("id"));
 
         // Get related CAPA if exists
         let capa = null;
@@ -407,55 +367,45 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["create"] }),
     zValidator("json", CreateNonConformanceSchema),
     async (c) => {
-      const queue = afterCommitQueue();
-      const response = await orgDb(c.get("member").organizationId).transaction(
-        async (o) => {
-          const member = c.get("member");
-          const session = c.get("session");
-          const input = c.req.valid("json");
+      const input = c.req.valid("json");
+      const org = c.get("member").organizationId;
 
-          // If jobId provided, verify it belongs to the organization
-          if (input.jobId) {
-            const [job] = await o
-              .select({ id: calibrationJob.id })
-              .from(calibrationJob)
-              .where(
-                and(
-                  eq(calibrationJob.id, input.jobId),
-                  eq(calibrationJob.organizationId, member.organizationId),
-                ),
-              )
-              .limit(1);
+      const newNc = await withOrg(org, requestActor(c), async (ctx) => {
+        // If jobId provided, verify it belongs to the organization
+        if (input.jobId) {
+          const [job] = await ctx.o
+            .select({ id: calibrationJob.id })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.id, input.jobId),
+                eq(calibrationJob.organizationId, org),
+              ),
+            )
+            .limit(1);
 
-            if (!job) {
-              return c.json({ error: "Ordem de servico nao encontrada" }, 404);
-            }
+          if (!job) {
+            throw notFound("job_not_found", "Ordem de servico nao encontrada");
           }
+        }
 
-          // Shared creator: NC number sequence + audit log + admin/owner
-          // notification (also used by the OOT flag flow and the desktop sync
-          // ingest, so all entry points stay identical).
-          const newNc = await createNonConformanceRecord(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              type: input.type,
-              description: input.description,
-              detectedAt: new Date(input.detectedAt),
-              jobId: input.jobId ?? null,
-              triggerSource: "manual",
-              ipAddress: clientIp(c),
-              auditChanges: { initial: input },
-            },
-            { executor: o, afterCommit: queue.add },
-          );
+        // Shared creator: NC number sequence + audit log + admin/owner
+        // notification (also used by the OOT flag flow and the desktop sync
+        // ingest, so all entry points stay identical).
+        return createNonConformanceRecord(
+          {
+            type: input.type,
+            description: input.description,
+            detectedAt: new Date(input.detectedAt),
+            jobId: input.jobId ?? null,
+            triggerSource: "manual",
+            auditChanges: { initial: input },
+          },
+          ctx,
+        );
+      });
 
-          return c.json(newNc, 201);
-        },
-      );
-      // The admin/owner notification reads the NC back: it waits for the commit.
-      await queue.run();
-      return response;
+      return c.json(newNc, 201);
     },
   )
 
@@ -467,116 +417,105 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["update"] }),
     zValidator("json", SetDispositionSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
-        // Get existing NC
-        const [existing] = await o
-          .select()
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
-
-        if (
-          !NON_CONFORMANCE_MACHINE.canTransition(
-            existing.status,
-            "set_disposition",
-          )
-        ) {
-          return c.json({ error: "Nao conformidade ja foi resolvida" }, 400);
-        }
-
-        // For "use_as_is" and "concession", require admin/owner role
-        const requiresApproval =
-          input.disposition === "use_as_is" ||
-          input.disposition === "concession";
-
-        if (
-          requiresApproval &&
-          member.role !== "admin" &&
-          member.role !== "owner"
-        ) {
-          return c.json(
-            {
-              error:
-                "Disposicao 'uso como esta' ou 'concessao' requer aprovacao do gerente tecnico",
-            },
-            403,
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabNonConformance(
+            ctx.o,
+            c.req.param("id"),
           );
-        }
+          const id = existing.id;
 
-        // Update NC
-        const updateData: Record<string, unknown> = {
-          disposition: input.disposition,
-          dispositionJustification: input.justification || null,
-          status: NON_CONFORMANCE_MACHINE.requireTargetOf(
-            existing.status,
-            "set_disposition",
-          ),
-        };
+          if (
+            !NON_CONFORMANCE_MACHINE.canTransition(
+              existing.status,
+              "set_disposition",
+            )
+          ) {
+            throw invalid(
+              "invalid_request",
+              "Nao conformidade ja foi resolvida",
+            );
+          }
 
-        // If requires approval and user is admin/owner, auto-approve
-        if (requiresApproval) {
-          updateData.dispositionApprovedBy = session.user.id;
-          updateData.dispositionApprovedAt = new Date();
-        }
+          // For "use_as_is" and "concession", require admin/owner role
+          const requiresApproval =
+            input.disposition === "use_as_is" ||
+            input.disposition === "concession";
 
-        const [updated] = await o
-          .update(nonConformance)
-          .set(updateData)
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-          // above so the UPDATE stays org-scoped even if the guarding read is
-          // refactored away. Reuses the in-scope member.organizationId.
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-              eq(nonConformance.status, existing.status),
+          if (
+            requiresApproval &&
+            member.role !== "admin" &&
+            member.role !== "owner"
+          ) {
+            throw forbidden(
+              "forbidden",
+              "Disposicao 'uso como esta' ou 'concessao' requer aprovacao do gerente tecnico",
+            );
+          }
+
+          // Update NC
+          const updateData: Record<string, unknown> = {
+            disposition: input.disposition,
+            dispositionJustification: input.justification || null,
+            status: NON_CONFORMANCE_MACHINE.requireTargetOf(
+              existing.status,
+              "set_disposition",
             ),
-          )
-          .returning();
-        if (!updated) {
-          throw conflict(
-            "status_transition_conflict",
-            "A nao conformidade mudou de status durante a operacao. Recarregue e tente novamente.",
-          );
-        }
+          };
 
-        // Audit log
-        await o.insert(nonConformanceAuditLog).values({
-          organizationId: member.organizationId,
-          ncId: id,
-          action: "disposition",
-          changes: {
-            disposition: { old: existing.disposition, new: input.disposition },
-            justification: {
-              old: existing.dispositionJustification,
-              new: input.justification || null,
+          // If requires approval and user is admin/owner, auto-approve
+          if (requiresApproval) {
+            updateData.dispositionApprovedBy = session.user.id;
+            updateData.dispositionApprovedAt = new Date();
+          }
+
+          const [row] = await ctx.o
+            .update(nonConformance)
+            .set(updateData)
+            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // above so the UPDATE stays org-scoped even if the guarding read is
+            // refactored away. Reuses the in-scope member.organizationId.
+            .where(
+              and(
+                eq(nonConformance.id, id),
+                eq(nonConformance.organizationId, member.organizationId),
+                eq(nonConformance.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) {
+            throw conflict(
+              "status_transition_conflict",
+              "A nao conformidade mudou de status durante a operacao. Recarregue e tente novamente.",
+            );
+          }
+
+          await ctx.audit("nonConformance", id, {
+            action: "disposition",
+            changes: {
+              disposition: {
+                old: existing.disposition,
+                new: input.disposition,
+              },
+              justification: {
+                old: existing.dispositionJustification,
+                new: input.justification || null,
+              },
             },
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-          reason: input.justification || null,
-        });
+            reason: input.justification || null,
+          });
 
-        return c.json(updated);
-      });
+          return row;
+        },
+      );
+
+      return c.json(updated);
     },
   )
 
@@ -588,97 +527,85 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["update"] }),
     zValidator("json", ResolveNonConformanceSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
-        const [existing] = await o
-          .select()
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
-
-        if (
-          !NON_CONFORMANCE_MACHINE.canTransition(existing.status, "resolve")
-        ) {
-          return c.json({ error: "Nao conformidade ja foi resolvida" }, 400);
-        }
-
-        if (!existing.disposition) {
-          return c.json(
-            {
-              error: "Defina a disposicao antes de resolver a nao conformidade",
-            },
-            400,
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabNonConformance(
+            ctx.o,
+            c.req.param("id"),
           );
-        }
+          const id = existing.id;
 
-        const [updated] = await o
-          .update(nonConformance)
-          .set({
-            correctionTaken: input.correctionTaken,
-            resolvedAt: new Date(),
-            resolvedBy: session.user.id,
-            status: NON_CONFORMANCE_MACHINE.requireTargetOf(
-              existing.status,
-              "resolve",
-            ),
-          })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-          // above so the UPDATE stays org-scoped even if the guarding read is
-          // refactored away. Reuses the in-scope member.organizationId.
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-              eq(nonConformance.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!updated) {
-          // The compare-and-set on the status matched no row: the record moved
-          // under the caller.
-          throw conflict(
-            "status_transition_conflict",
-            "A nao conformidade mudou de status durante a operacao. Recarregue e tente novamente.",
-          );
-        }
+          if (
+            !NON_CONFORMANCE_MACHINE.canTransition(existing.status, "resolve")
+          ) {
+            throw invalid(
+              "invalid_request",
+              "Nao conformidade ja foi resolvida",
+            );
+          }
 
-        // Audit log
-        await o.insert(nonConformanceAuditLog).values({
-          organizationId: member.organizationId,
-          ncId: id,
-          action: "resolve",
-          changes: {
-            status: { old: existing.status, new: "resolved" },
-            correctionTaken: {
-              old: existing.correctionTaken,
-              new: input.correctionTaken,
+          if (!existing.disposition) {
+            throw invalid(
+              "invalid_request",
+              "Defina a disposicao antes de resolver a nao conformidade",
+            );
+          }
+
+          const [row] = await ctx.o
+            .update(nonConformance)
+            .set({
+              correctionTaken: input.correctionTaken,
+              resolvedAt: new Date(),
+              resolvedBy: session.user.id,
+              status: NON_CONFORMANCE_MACHINE.requireTargetOf(
+                existing.status,
+                "resolve",
+              ),
+            })
+            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // above so the UPDATE stays org-scoped even if the guarding read is
+            // refactored away. Reuses the in-scope member.organizationId.
+            .where(
+              and(
+                eq(nonConformance.id, id),
+                eq(nonConformance.organizationId, member.organizationId),
+                eq(nonConformance.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) {
+            // The compare-and-set on the status matched no row: the record moved
+            // under the caller.
+            throw conflict(
+              "status_transition_conflict",
+              "A nao conformidade mudou de status durante a operacao. Recarregue e tente novamente.",
+            );
+          }
+
+          await ctx.audit("nonConformance", id, {
+            action: "resolve",
+            changes: {
+              status: { old: existing.status, new: "resolved" },
+              correctionTaken: {
+                old: existing.correctionTaken,
+                new: input.correctionTaken,
+              },
             },
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          });
 
-        return c.json({
-          message: "Nao conformidade resolvida com sucesso",
-          data: updated,
-        });
+          return row;
+        },
+      );
+
+      return c.json({
+        message: "Nao conformidade resolvida com sucesso",
+        data: updated,
       });
     },
   )
@@ -691,37 +618,24 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["escalate"] }),
     zValidator("json", EscalateToCapaSchema),
     async (c) => {
-      const queue = afterCommitQueue();
-      const response = await orgDb(c.get("member").organizationId).transaction(
-        async (o) => {
-          const member = c.get("member");
-          const session = c.get("session");
-          const id = parseInt(c.req.param("id"), 10);
-          const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
 
-          if (isNaN(id)) {
-            return c.json({ error: "ID invalido" }, 400);
-          }
-
-          const [existing] = await o
-            .select()
-            .from(nonConformance)
-            .where(
-              and(
-                eq(nonConformance.id, id),
-                eq(nonConformance.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-          }
+      const escalated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabNonConformance(
+            ctx.o,
+            c.req.param("id"),
+          );
+          const id = existing.id;
 
           if (existing.capaId) {
-            return c.json(
-              { error: "Nao conformidade ja possui CAPA vinculada" },
-              400,
+            throw invalid(
+              "invalid_request",
+              "Nao conformidade ja possui CAPA vinculada",
             );
           }
 
@@ -730,15 +644,12 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             !(await userIsOrganizationMember(
               member.organizationId,
               input.responsibleId,
-              o,
+              ctx.o,
             ))
           ) {
-            return c.json(
-              {
-                error:
-                  "Responsavel nao encontrado ou nao pertence a organizacao",
-              },
-              400,
+            throw invalid(
+              "invalid_request",
+              "Responsavel nao encontrado ou nao pertence a organizacao",
             );
           }
 
@@ -765,13 +676,13 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
               actionPlan: input.actionPlan || null,
               responsibleId: input.responsibleId || null,
               dueDate: input.dueDate ? new Date(input.dueDate) : null,
-              ipAddress: clientIp(c),
+              ipAddress: ctx.actor.ipAddress,
             },
-            o,
+            ctx.o,
           );
 
           // Link NC to CAPA
-          await o
+          await ctx.o
             .update(nonConformance)
             .set({ capaId: newCapa.id })
             // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
@@ -784,23 +695,17 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
               ),
             );
 
-          // Audit log
-          await o.insert(nonConformanceAuditLog).values({
-            organizationId: member.organizationId,
-            ncId: id,
+          await ctx.audit("nonConformance", id, {
             action: "escalate_to_capa",
             changes: {
               capaId: { old: null, new: newCapa.id },
               capaNumber: newCapa.capaNumber,
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          // Notify admins/owners of escalation (fire-and-forget, after the commit:
-          // the notification reads the CAPA back). The task does not return the
-          // promise, so the response does not wait for it.
-          queue.add(() => {
+          // Notify admins/owners of escalation, after the commit: the
+          // notification reads the CAPA back.
+          ctx.afterCommit(() =>
             notifyNCEscalatedToCapa(
               id,
               existing.ncNumber,
@@ -809,28 +714,20 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
               existing.description,
               member.organizationId,
               session.user.id,
-            ).catch((err) =>
-              console.error(
-                "[NC] Failed to send escalation notification:",
-                err,
-              ),
-            );
-          });
-
-          return c.json(
-            {
-              message: "CAPA criada com sucesso",
-              data: {
-                nc: { ...existing, capaId: newCapa.id },
-                capa: newCapa,
-              },
-            },
-            201,
+            ),
           );
+
+          return {
+            nc: { ...existing, capaId: newCapa.id },
+            capa: newCapa,
+          };
         },
       );
-      await queue.run();
-      return response;
+
+      return c.json(
+        { message: "CAPA criada com sucesso", data: escalated },
+        201,
+      );
     },
   )
 
@@ -842,28 +739,8 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["read"] }),
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const id = parseInt(c.req.param("id"), 10);
-
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
         // Verify NC exists and belongs to organization
-        const [existing] = await o
-          .select({ id: nonConformance.id })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
+        const { id } = await requireLabNonConformance(o, c.req.param("id"));
 
         const logs = await o
           .select()
@@ -885,27 +762,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["read"] }),
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const id = parseInt(c.req.param("id"), 10);
-
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
-        const [existing] = await o
-          .select({ id: nonConformance.id })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
+        const { id } = await requireLabNonConformance(o, c.req.param("id"));
 
         const [notification] = await o
           .select({
@@ -945,64 +802,29 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", RegisterOotAcknowledgementSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabNonConformance(
+            ctx.o,
+            c.req.param("id"),
+          );
+          const id = existing.id;
 
-      const alreadyAcknowledged = () =>
-        c.json(
-          {
-            error:
-              "O recebimento desta notificação já foi confirmado. O primeiro registro foi mantido.",
-            code: "ALREADY_ACKNOWLEDGED",
-          },
-          409,
-        );
-
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const [existing] = await o
-            .select({
-              id: nonConformance.id,
-              ncNumber: nonConformance.ncNumber,
-            })
-            .from(nonConformance)
-            .where(
-              and(
-                eq(nonConformance.id, id),
-                eq(nonConformance.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return {
-              response: c.json(
-                { error: "Nao conformidade nao encontrada" },
-                404,
-              ),
-              stamped: null,
-            };
-          }
-
-          const [notification] = await o
+          const [notification] = await ctx.o
             .select()
             .from(ootNotification)
             .where(eq(ootNotification.ncId, id))
             .limit(1);
 
           if (!notification) {
-            return {
-              response: c.json(
-                { error: "Esta nao conformidade nao possui notificacao 7.10" },
-                404,
-              ),
-              stamped: null,
-            };
+            throw notFound(
+              "not_found",
+              "Esta nao conformidade nao possui notificacao 7.10",
+            );
           }
 
           // First acknowledgement wins (decision Q34): the stamp is the
@@ -1010,7 +832,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           // `acknowledged_at IS NULL` and a manual registration racing the
           // e-mailed link (or another registration) can never overwrite it.
           // Defense-in-depth (SEC-08): org predicate repeated in the WHERE.
-          const [updated] = await o
+          const [row] = await ctx.o
             .update(ootNotification)
             .set({
               status: "ACKNOWLEDGED",
@@ -1031,47 +853,35 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .returning();
 
-          if (!updated) {
-            return { response: alreadyAcknowledged(), stamped: null };
+          if (!row) {
+            throw conflict(
+              "ALREADY_ACKNOWLEDGED",
+              "O recebimento desta notificação já foi confirmado. O primeiro registro foi mantido.",
+            );
           }
 
-          await o.insert(nonConformanceAuditLog).values({
-            organizationId: member.organizationId,
-            ncId: id,
+          await ctx.audit("nonConformance", id, {
             action: "oot_acknowledged",
             changes: { acknowledgedVia: "manual" },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
             reason: input.note,
           });
 
-          return {
-            response: c.json({
-              message: "Recebimento registrado",
-              data: updated,
-            }),
-            stamped: {
-              notificationId: updated.id,
-              ncNumber: existing.ncNumber,
-            },
-          };
+          // Like the public link: only the call that stamped notifies, and only
+          // after the stamp is committed.
+          ctx.afterCommit(() =>
+            notifyOotAcknowledged(
+              row.id,
+              id,
+              existing.ncNumber,
+              member.organizationId,
+            ),
+          );
+
+          return row;
         },
       );
 
-      // Like the public link: only the call that stamped notifies, and only
-      // after the stamp is committed.
-      if (outcome.stamped) {
-        notifyOotAcknowledged(
-          outcome.stamped.notificationId,
-          id,
-          outcome.stamped.ncNumber,
-          member.organizationId,
-        ).catch((err) =>
-          console.error("[OOT] Failed to notify acknowledgement:", err),
-        );
-      }
-
-      return outcome.response;
+      return c.json({ message: "Recebimento registrado", data: updated });
     },
   )
 
@@ -1084,27 +894,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["read"] }),
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const id = parseInt(c.req.param("id"), 10);
-
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
-
-        const [existing] = await o
-          .select({ id: nonConformance.id })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
+        const { id } = await requireLabNonConformance(o, c.req.param("id"));
 
         const [assessment] = await o
           .select()
@@ -1126,103 +916,85 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["update"] }),
     zValidator("json", SaveOotImpactAssessmentSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
+      const saved = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const nc = await requireLabNonConformance(ctx.o, c.req.param("id"));
+          const id = nc.id;
 
-        const [nc] = await o
-          .select({ id: nonConformance.id, type: nonConformance.type })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+          if (nc.type !== "out_of_tolerance") {
+            throw conflict(
+              "conflict",
+              "Avaliacao de impacto aplica-se apenas a NCs de fora de tolerancia",
+            );
+          }
 
-        if (!nc) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
+          const [existing] = await ctx.o
+            .select()
+            .from(ootImpactAssessment)
+            .where(eq(ootImpactAssessment.ncId, id))
+            .limit(1);
 
-        if (nc.type !== "out_of_tolerance") {
-          return c.json(
-            {
-              error:
-                "Avaliacao de impacto aplica-se apenas a NCs de fora de tolerancia",
-            },
-            409,
-          );
-        }
+          if (existing?.signedAt) {
+            throw conflict(
+              "ASSESSMENT_SIGNED",
+              "Avaliacao de impacto ja assinada — registro imutavel",
+            );
+          }
 
-        const [existing] = await o
-          .select()
-          .from(ootImpactAssessment)
-          .where(eq(ootImpactAssessment.ncId, id))
-          .limit(1);
+          const values = {
+            deviationSummary: input.deviationSummary,
+            deviationMagnitude: input.deviationMagnitude ?? null,
+            customerTolerance: input.customerTolerance ?? null,
+            toleranceUnit: input.toleranceUnit ?? null,
+            affectedFrom: input.affectedFrom
+              ? new Date(input.affectedFrom)
+              : null,
+            affectedTo: input.affectedTo ? new Date(input.affectedTo) : null,
+            items: input.items,
+            conclusion: input.conclusion ?? null,
+            correctiveActionNote: input.correctiveActionNote ?? null,
+          };
 
-        if (existing?.signedAt) {
-          return c.json(
-            {
-              error: "Avaliacao de impacto ja assinada — registro imutavel",
-              code: "ASSESSMENT_SIGNED",
-            },
-            409,
-          );
-        }
+          const [row] = existing
+            ? await ctx.o
+                .update(ootImpactAssessment)
+                .set(values)
+                .where(
+                  and(
+                    eq(ootImpactAssessment.id, existing.id),
+                    eq(
+                      ootImpactAssessment.organizationId,
+                      member.organizationId,
+                    ),
+                  ),
+                )
+                .returning()
+            : await ctx.o
+                .insert(ootImpactAssessment)
+                .values({
+                  ...values,
+                  organizationId: member.organizationId,
+                  ncId: id,
+                  createdBy: session.user.id,
+                })
+                .returning();
 
-        const values = {
-          deviationSummary: input.deviationSummary,
-          deviationMagnitude: input.deviationMagnitude ?? null,
-          customerTolerance: input.customerTolerance ?? null,
-          toleranceUnit: input.toleranceUnit ?? null,
-          affectedFrom: input.affectedFrom
-            ? new Date(input.affectedFrom)
-            : null,
-          affectedTo: input.affectedTo ? new Date(input.affectedTo) : null,
-          items: input.items,
-          conclusion: input.conclusion ?? null,
-          correctiveActionNote: input.correctiveActionNote ?? null,
-        };
+          await ctx.audit("nonConformance", id, {
+            action: "impact_assessment_saved",
+            changes: { conclusion: input.conclusion ?? null },
+          });
 
-        const [saved] = existing
-          ? await o
-              .update(ootImpactAssessment)
-              .set(values)
-              .where(
-                and(
-                  eq(ootImpactAssessment.id, existing.id),
-                  eq(ootImpactAssessment.organizationId, member.organizationId),
-                ),
-              )
-              .returning()
-          : await o
-              .insert(ootImpactAssessment)
-              .values({
-                ...values,
-                organizationId: member.organizationId,
-                ncId: id,
-                createdBy: session.user.id,
-              })
-              .returning();
+          return row;
+        },
+      );
 
-        await o.insert(nonConformanceAuditLog).values({
-          organizationId: member.organizationId,
-          ncId: id,
-          action: "impact_assessment_saved",
-          changes: { conclusion: input.conclusion ?? null },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-
-        return c.json({ message: "Avaliacao de impacto salva", data: saved });
-      });
+      return c.json({ message: "Avaliacao de impacto salva", data: saved });
     },
   )
 
@@ -1234,101 +1006,76 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/oot-impact-assessment/sign",
     ...withLabPermission({ non_conformance: ["update"] }),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
+      const member = c.get("member");
+      const session = c.get("session");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
+      const signed = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          if (member.role !== "admin" && member.role !== "owner") {
+            throw forbidden(
+              "forbidden",
+              "A assinatura da avaliacao de impacto requer um administrador ou responsavel",
+            );
+          }
 
-        if (member.role !== "admin" && member.role !== "owner") {
-          return c.json(
-            {
-              error:
-                "A assinatura da avaliacao de impacto requer um administrador ou responsavel",
-            },
-            403,
+          const { id } = await requireLabNonConformance(
+            ctx.o,
+            c.req.param("id"),
           );
-        }
 
-        const [nc] = await o
-          .select({ id: nonConformance.id })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+          const [assessment] = await ctx.o
+            .select()
+            .from(ootImpactAssessment)
+            .where(eq(ootImpactAssessment.ncId, id))
+            .limit(1);
 
-        if (!nc) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
+          if (!assessment) {
+            throw notFound(
+              "not_found",
+              "Nenhuma avaliacao de impacto para assinar",
+            );
+          }
+          if (assessment.signedAt) {
+            throw conflict("ASSESSMENT_SIGNED", "Avaliacao ja assinada");
+          }
+          if (!assessment.conclusion) {
+            throw conflict(
+              "CONCLUSION_REQUIRED",
+              "Defina a conclusao antes de assinar a avaliacao",
+            );
+          }
 
-        const [assessment] = await o
-          .select()
-          .from(ootImpactAssessment)
-          .where(eq(ootImpactAssessment.ncId, id))
-          .limit(1);
+          const [row] = await ctx.o
+            .update(ootImpactAssessment)
+            .set({ signedBy: session.user.id, signedAt: new Date() })
+            .where(
+              and(
+                eq(ootImpactAssessment.id, assessment.id),
+                eq(ootImpactAssessment.organizationId, member.organizationId),
+                // Guard against a concurrent sign racing this one.
+                sql`${ootImpactAssessment.signedAt} IS NULL`,
+              ),
+            )
+            .returning();
 
-        if (!assessment) {
-          return c.json(
-            { error: "Nenhuma avaliacao de impacto para assinar" },
-            404,
-          );
-        }
-        if (assessment.signedAt) {
-          return c.json(
-            { error: "Avaliacao ja assinada", code: "ASSESSMENT_SIGNED" },
-            409,
-          );
-        }
-        if (!assessment.conclusion) {
-          return c.json(
-            {
-              error: "Defina a conclusao antes de assinar a avaliacao",
-              code: "CONCLUSION_REQUIRED",
-            },
-            409,
-          );
-        }
+          if (!row) {
+            throw conflict("ASSESSMENT_SIGNED", "Avaliacao ja assinada");
+          }
 
-        const [signed] = await o
-          .update(ootImpactAssessment)
-          .set({ signedBy: session.user.id, signedAt: new Date() })
-          .where(
-            and(
-              eq(ootImpactAssessment.id, assessment.id),
-              eq(ootImpactAssessment.organizationId, member.organizationId),
-              // Guard against a concurrent sign racing this one.
-              sql`${ootImpactAssessment.signedAt} IS NULL`,
-            ),
-          )
-          .returning();
+          await ctx.audit("nonConformance", id, {
+            action: "impact_assessment_signed",
+            changes: { conclusion: row.conclusion },
+          });
 
-        if (!signed) {
-          return c.json(
-            { error: "Avaliacao ja assinada", code: "ASSESSMENT_SIGNED" },
-            409,
-          );
-        }
+          return row;
+        },
+      );
 
-        await o.insert(nonConformanceAuditLog).values({
-          organizationId: member.organizationId,
-          ncId: id,
-          action: "impact_assessment_signed",
-          changes: { conclusion: signed.conclusion },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-
-        return c.json({
-          message: "Avaliacao de impacto assinada",
-          data: signed,
-        });
+      return c.json({
+        message: "Avaliacao de impacto assinada",
+        data: signed,
       });
     },
   );

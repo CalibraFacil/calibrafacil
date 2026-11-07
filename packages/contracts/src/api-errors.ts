@@ -60,6 +60,8 @@ export const API_ERROR_CODES = [
   "standard_deleted",
   "standard_inactive",
   "standard_backdate_reason_required",
+  "standard_not_out_of_tolerance",
+  "jobs_not_linked_to_standard",
   "performed_at_invalid",
   "performed_at_future",
   "backdate_reason_required",
@@ -74,9 +76,20 @@ export const API_ERROR_CODES = [
   // Customers, assets, units, services.
   "customer_not_found",
   "customer_create_failed",
+  "customer_group_not_found",
+  "customer_group_create_failed",
+  "customer_not_in_group",
+  "cnpj_invalid",
+  "cnpj_not_found",
+  "portal_invitation_failed",
+  "portal_invitation_not_found",
+  "portal_invitation_not_pending",
+  "portal_member_not_found",
+  "portal_member_not_removable",
   "asset_not_found",
   "asset_type_not_found",
   "asset_tag_conflict",
+  "asset_create_failed",
   "asset_base_measurement_unit_required",
   "invalid_assets",
   "unit_not_found",
@@ -100,12 +113,44 @@ export const API_ERROR_CODES = [
   "member_not_found",
   "unit_default_not_archivable",
   "unit_active_required",
+  // Methods (the lifecycle machine, the dimensional gate, the template catalog)
+  // and the commercial services built on them.
+  "method_not_found",
+  "method_name_taken",
+  "method_not_editable",
+  "method_not_submittable",
+  "method_has_no_inputs",
+  "method_not_reviewable",
+  "method_not_publishable",
+  "method_review_required",
+  "method_not_returnable",
+  "method_not_archivable",
+  "method_not_versionable",
+  "method_draft_exists",
+  "method_not_deletable",
+  "method_compile_failed",
+  "method_asset_type_mismatch",
+  "template_not_found",
+  "template_acknowledgements_missing",
+  // Quality records (non-conformances, CAPA).
+  "non_conformance_not_found",
+  "capa_not_found",
 
   // Service requests.
   "request_not_found",
   "request_not_editable",
   "request_not_cancelable",
   "multi_unit_request_not_allowed",
+  "request_status_invalid",
+  "request_already_active",
+
+  // On-site visits.
+  "visit_not_found",
+  "visit_closed",
+  "visit_not_proposed",
+  "visit_not_scheduled",
+  "visit_reschedule_pending",
+  "visit_reschedule_request_not_found",
 
   // Records retention (decision Q16): organization lifecycle and the
   // customers / API keys that depend on it.
@@ -132,6 +177,13 @@ export const API_ERROR_CODES = [
   "JOB_STATUS_CONFLICT",
   // Shipped with the unit-governance route and asserted by its clients.
   "LAST_CALIBRATION_APPROVER",
+  // Shipped with the method routes' dimensional gate (DOM-10); the editor and
+  // the integration specs branch on it.
+  "DIMENSIONAL_ERROR",
+  // The out-of-tolerance (§7.10) notification and impact-assessment routes.
+  "ALREADY_ACKNOWLEDGED",
+  "ASSESSMENT_SIGNED",
+  "CONCLUSION_REQUIRED",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

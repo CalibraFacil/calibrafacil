@@ -128,9 +128,11 @@ const AUDIT_WRITERS = {
       reason: entry.reason ?? null,
     }),
   calibrationRequest: (ctx, id, entry) =>
-    ctx.o
-      .insert(calibrationRequestAuditLog)
-      .values({ ...common(ctx, entry), requestId: id }),
+    ctx.o.insert(calibrationRequestAuditLog).values({
+      ...common(ctx, entry),
+      requestId: id,
+      reason: entry.reason ?? null,
+    }),
   correctiveAction: (ctx, id, entry) =>
     ctx.o.insert(correctiveActionAuditLog).values({
       ...common(ctx, entry),
@@ -189,6 +191,19 @@ const AUDIT_WRITERS = {
 export type AuditedEntity = keyof typeof AUDIT_WRITERS;
 
 /**
+ * The `ctx.audit` of a handle: appends the entity's audit row on `o`. For a
+ * lib that still joins a caller's transaction through an `OrgScope` and has to
+ * hand a context-shaped writer to a function that takes one.
+ */
+export function auditOn(
+  base: Pick<OrgContext, "o" | "org" | "actor">,
+): OrgContext["audit"] {
+  return async (entity, entityId, entry) => {
+    await AUDIT_WRITERS[entity](base, entityId, entry);
+  };
+}
+
+/**
  * The one way to write in a laboratory. Opens the transaction that names the
  * laboratory for row-level security (a savepoint when the desktop sync already
  * opened one), hands `run` the context, and once the transaction has committed
@@ -211,9 +226,7 @@ export async function withOrg<R>(
       actor,
       o,
       tx,
-      audit: async (entity, entityId, entry) => {
-        await AUDIT_WRITERS[entity]({ o, org, actor }, entityId, entry);
-      },
+      audit: auditOn({ o, org, actor }),
       emit: async (message) => {
         if (await stageBackgroundJob(tx, message)) {
           staged = true;

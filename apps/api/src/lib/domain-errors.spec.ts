@@ -61,10 +61,16 @@ describe("DomainError (REQ-DE-1)", () => {
     const nonSnake = API_ERROR_CODES.filter(
       (code) => !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(code),
     );
-    expect(nonSnake).toEqual([
-      "JOB_STATUS_CONFLICT",
-      "LAST_CALIBRATION_APPROVER",
-    ]);
+    expect([...nonSnake].sort()).toEqual(
+      [
+        "ALREADY_ACKNOWLEDGED",
+        "ASSESSMENT_SIGNED",
+        "CONCLUSION_REQUIRED",
+        "DIMENSIONAL_ERROR",
+        "JOB_STATUS_CONFLICT",
+        "LAST_CALIBRATION_APPROVER",
+      ].sort(),
+    );
     expect(new Set(API_ERROR_CODES).size).toBe(API_ERROR_CODES.length);
   });
 });

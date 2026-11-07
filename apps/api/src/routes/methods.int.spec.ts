@@ -44,7 +44,8 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { methodsRouter } from "./methods";
+import { methodsRouter as bareMethodsRouter } from "./methods";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { db } from "@calibra-facil/db";
 import {
   assetType,
@@ -60,6 +61,8 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+const methodsRouter = withErrorHandling(bareMethodsRouter);
 
 // ---------------------------------------------------------------------------
 // No notifications or background-jobs imports in methods.ts — no mocks needed.

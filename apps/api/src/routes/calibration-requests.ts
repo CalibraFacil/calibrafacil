@@ -7,7 +7,6 @@ import {
   assetType,
   calibrationJob,
   calibrationRequest,
-  calibrationRequestAuditLog,
   calibrationRequestItem,
   calibrationVisit,
   customer,
@@ -51,8 +50,11 @@ import { buildUnitScopeCondition } from "../lib/units";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
 import { isAssignableTechnician } from "../lib/tenant-refs";
 import { orgDb } from "../lib/org-db";
-import { orgTransactionWithExecutor } from "../lib/org-transaction";
-import { clientIp } from "../lib/client-ip";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
+import { requireRouteId } from "../lib/route-id";
+import { requireLockedLabRequest } from "../lib/calibration-request-access";
+import { conflict, invalid, notFound } from "../lib/domain-errors";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");
@@ -68,60 +70,12 @@ type ConvertedRequestJob = {
   technicianId: string | null;
 };
 
-type ApprovalRequestResult =
-  | {
-      success: true;
-    }
-  | {
-      error: {
-        status: 400 | 404 | 409;
-        body: string;
-      };
-    };
-
-type ReviewRequestResult =
-  | {
-      success: true;
-      startedReview: boolean;
-    }
-  | {
-      error: {
-        status: 400 | 404 | 409;
-        body: string;
-      };
-    };
-
-type RejectRequestResult =
-  | {
-      success: true;
-    }
-  | {
-      error: {
-        status: 400 | 404 | 409;
-        body: string;
-      };
-    };
-
-type ConvertRequestResult =
-  | {
-      createdJobs: ConvertedRequestJob[];
-      visitId: number | null;
-      visitConfirmed: boolean;
-    }
-  | {
-      error: {
-        status: 400 | 404;
-        body: string;
-      };
-    };
-
-class RequestTransitionError extends Error {
-  status: 400 | 404 | 409;
-
-  constructor(status: 400 | 404 | 409, message: string) {
-    super(message);
-    this.status = status;
-  }
+/** The conditional write matched no row: another user moved the request first. */
+function requestChangedByAnother() {
+  return conflict(
+    "status_transition_conflict",
+    "Solicitacao foi atualizada por outro usuario",
+  );
 }
 
 async function getRequestItems(
@@ -349,11 +303,7 @@ export const calibrationRequestsRouter = new Hono<{
   )
   .get("/:id", ...withLabPermission({ request: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
-
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
+    const id = requireRouteId(c.req.param("id"));
 
     const request = await orgDb(member.organizationId).transaction((o) =>
       getRequestDetail(
@@ -365,7 +315,7 @@ export const calibrationRequestsRouter = new Hono<{
     );
 
     if (!request) {
-      return c.json({ error: "Solicitacao nao encontrada" }, 404);
+      throw notFound("request_not_found", "Solicitacao nao encontrada");
     }
 
     return c.json(request);
@@ -376,58 +326,24 @@ export const calibrationRequestsRouter = new Hono<{
     zValidator("json", ReviewCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const result: ReviewRequestResult = await orgDb(
-        member.organizationId,
-      ).transaction(async (tx) => {
-        const [existing] = await tx
-          .select({
-            id: calibrationRequest.id,
-            status: calibrationRequest.status,
-            reviewedBy: calibrationRequest.reviewedBy,
-            reviewedAt: calibrationRequest.reviewedAt,
-          })
-          .from(calibrationRequest)
-          .where(
-            and(
-              eq(calibrationRequest.id, id),
-              eq(calibrationRequest.organizationId, member.organizationId),
-              buildUnitScopeCondition(calibrationRequest.unitId, member),
-            ),
-          )
-          .limit(1)
-          .for("update");
-
-        if (!existing) {
-          return {
-            error: {
-              status: 404 as const,
-              body: "Solicitacao nao encontrada",
-            },
-          };
-        }
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const existing = await requireLockedLabRequest(id, member, ctx.o);
 
         if (
           !CALIBRATION_REQUEST_MACHINE.canTransition(existing.status, "review")
         ) {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Somente solicitacoes pendentes podem entrar em revisao",
-            },
-          };
+          throw invalid(
+            "request_status_invalid",
+            "Somente solicitacoes pendentes podem entrar em revisao",
+          );
         }
 
         const now = new Date();
 
-        const [updated] = await tx
+        const [updated] = await ctx.o
           .update(calibrationRequest)
           .set({
             status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
@@ -437,8 +353,8 @@ export const calibrationRequestsRouter = new Hono<{
             internalNotes: input.internalNotes || null,
             reviewedBy:
               existing.status === "UNDER_REVIEW"
-                ? (existing.reviewedBy ?? session.user.id)
-                : session.user.id,
+                ? (existing.reviewedBy ?? ctx.actor.userId)
+                : ctx.actor.userId,
             reviewedAt:
               existing.status === "UNDER_REVIEW"
                 ? (existing.reviewedAt ?? now)
@@ -452,18 +368,9 @@ export const calibrationRequestsRouter = new Hono<{
           )
           .returning();
 
-        if (!updated) {
-          return {
-            error: {
-              status: 409 as const,
-              body: "Solicitacao foi atualizada por outro usuario",
-            },
-          };
-        }
+        if (!updated) throw requestChangedByAnother();
 
-        await tx.insert(calibrationRequestAuditLog).values({
-          organizationId: member.organizationId,
-          requestId: id,
+        await ctx.audit("calibrationRequest", id, {
           action: "review",
           changes: {
             status: {
@@ -472,30 +379,14 @@ export const calibrationRequestsRouter = new Hono<{
             },
             internalNotes: input.internalNotes || null,
           },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
         });
 
-        return {
-          success: true,
-          startedReview: existing.status === "PENDING",
-        };
-      });
-
-      if ("error" in result) {
-        return c.json({ error: result.error.body }, result.error.status);
-      }
-
-      if (result.startedReview) {
-        try {
-          await notifyCalibrationRequestUnderReview(id, session.user.id);
-        } catch (error) {
-          console.error(
-            "[Calibration Requests] Failed to send review notification:",
-            error,
+        if (existing.status === "PENDING") {
+          ctx.afterCommit(() =>
+            notifyCalibrationRequestUnderReview(id, ctx.actor.userId),
           );
         }
-      }
+      });
 
       return c.json({ success: true });
     },
@@ -506,58 +397,24 @@ export const calibrationRequestsRouter = new Hono<{
     zValidator("json", ApproveCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const result: ApprovalRequestResult = await orgDb(
-        member.organizationId,
-      ).transaction(async (tx) => {
-        const [existing] = await tx
-          .select({
-            id: calibrationRequest.id,
-            status: calibrationRequest.status,
-            reviewedBy: calibrationRequest.reviewedBy,
-            reviewedAt: calibrationRequest.reviewedAt,
-          })
-          .from(calibrationRequest)
-          .where(
-            and(
-              eq(calibrationRequest.id, id),
-              eq(calibrationRequest.organizationId, member.organizationId),
-              buildUnitScopeCondition(calibrationRequest.unitId, member),
-            ),
-          )
-          .limit(1)
-          .for("update");
-
-        if (!existing) {
-          return {
-            error: {
-              status: 404 as const,
-              body: "Solicitacao nao encontrada",
-            },
-          };
-        }
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const existing = await requireLockedLabRequest(id, member, ctx.o);
 
         if (
           !CALIBRATION_REQUEST_MACHINE.canTransition(existing.status, "approve")
         ) {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Somente solicitacoes pendentes podem ser aprovadas",
-            },
-          };
+          throw invalid(
+            "request_status_invalid",
+            "Somente solicitacoes pendentes podem ser aprovadas",
+          );
         }
 
         const now = new Date();
 
-        const [updated] = await tx
+        const [updated] = await ctx.o
           .update(calibrationRequest)
           .set({
             status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
@@ -565,9 +422,9 @@ export const calibrationRequestsRouter = new Hono<{
               "approve",
             ),
             internalNotes: input.internalNotes || null,
-            reviewedBy: existing.reviewedBy ?? session.user.id,
+            reviewedBy: existing.reviewedBy ?? ctx.actor.userId,
             reviewedAt: existing.reviewedAt ?? now,
-            approvedBy: session.user.id,
+            approvedBy: ctx.actor.userId,
             approvedAt: now,
             rejectedBy: null,
             rejectedAt: null,
@@ -581,18 +438,9 @@ export const calibrationRequestsRouter = new Hono<{
           )
           .returning();
 
-        if (!updated) {
-          return {
-            error: {
-              status: 409 as const,
-              body: "Solicitacao foi atualizada por outro usuario",
-            },
-          };
-        }
+        if (!updated) throw requestChangedByAnother();
 
-        await tx.insert(calibrationRequestAuditLog).values({
-          organizationId: member.organizationId,
-          requestId: id,
+        await ctx.audit("calibrationRequest", id, {
           action: "approve",
           changes: {
             status: {
@@ -601,25 +449,12 @@ export const calibrationRequestsRouter = new Hono<{
             },
             internalNotes: input.internalNotes || null,
           },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
         });
 
-        return { success: true };
-      });
-
-      if ("error" in result) {
-        return c.json({ error: result.error.body }, result.error.status);
-      }
-
-      try {
-        await notifyCalibrationRequestApproved(id, session.user.id);
-      } catch (error) {
-        console.error(
-          "[Calibration Requests] Failed to send approval notification:",
-          error,
+        ctx.afterCommit(() =>
+          notifyCalibrationRequestApproved(id, ctx.actor.userId),
         );
-      }
+      });
 
       return c.json({ success: true });
     },
@@ -630,67 +465,31 @@ export const calibrationRequestsRouter = new Hono<{
     zValidator("json", RejectCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const result: RejectRequestResult = await orgDb(
-        member.organizationId,
-      ).transaction(async (tx) => {
-        const [existing] = await tx
-          .select({
-            id: calibrationRequest.id,
-            status: calibrationRequest.status,
-            reviewedBy: calibrationRequest.reviewedBy,
-            reviewedAt: calibrationRequest.reviewedAt,
-          })
-          .from(calibrationRequest)
-          .where(
-            and(
-              eq(calibrationRequest.id, id),
-              eq(calibrationRequest.organizationId, member.organizationId),
-              buildUnitScopeCondition(calibrationRequest.unitId, member),
-            ),
-          )
-          .limit(1)
-          .for("update");
-
-        if (!existing) {
-          return {
-            error: {
-              status: 404 as const,
-              body: "Solicitacao nao encontrada",
-            },
-          };
-        }
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const existing = await requireLockedLabRequest(id, member, ctx.o);
 
         if (existing.status === "REJECTED") {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Solicitacao ja foi rejeitada",
-            },
-          };
+          throw invalid(
+            "request_status_invalid",
+            "Solicitacao ja foi rejeitada",
+          );
         }
 
         if (existing.status === "CONVERTED") {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Solicitacoes convertidas nao podem ser rejeitadas",
-            },
-          };
+          throw invalid(
+            "request_status_invalid",
+            "Solicitacoes convertidas nao podem ser rejeitadas",
+          );
         }
         // Every other status rejects (CALIBRATION_REQUEST_MACHINE `reject`).
         CALIBRATION_REQUEST_MACHINE.requireTargetOf(existing.status, "reject");
 
         const now = new Date();
 
-        const [updated] = await tx
+        const [updated] = await ctx.o
           .update(calibrationRequest)
           .set({
             status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
@@ -698,9 +497,9 @@ export const calibrationRequestsRouter = new Hono<{
               "reject",
             ),
             internalNotes: input.internalNotes || null,
-            reviewedBy: existing.reviewedBy ?? session.user.id,
+            reviewedBy: existing.reviewedBy ?? ctx.actor.userId,
             reviewedAt: existing.reviewedAt ?? now,
-            rejectedBy: session.user.id,
+            rejectedBy: ctx.actor.userId,
             rejectedAt: now,
             rejectionReason: input.reason,
             approvedBy: null,
@@ -714,18 +513,9 @@ export const calibrationRequestsRouter = new Hono<{
           )
           .returning();
 
-        if (!updated) {
-          return {
-            error: {
-              status: 409 as const,
-              body: "Solicitacao foi atualizada por outro usuario",
-            },
-          };
-        }
+        if (!updated) throw requestChangedByAnother();
 
-        await tx.insert(calibrationRequestAuditLog).values({
-          organizationId: member.organizationId,
-          requestId: id,
+        await ctx.audit("calibrationRequest", id, {
           action: "reject",
           changes: {
             status: {
@@ -734,30 +524,13 @@ export const calibrationRequestsRouter = new Hono<{
             },
             internalNotes: input.internalNotes || null,
           },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
           reason: input.reason,
         });
 
-        return { success: true };
+        ctx.afterCommit(() =>
+          notifyCalibrationRequestRejected(id, ctx.actor.userId, input.reason),
+        );
       });
-
-      if ("error" in result) {
-        return c.json({ error: result.error.body }, result.error.status);
-      }
-
-      try {
-        await notifyCalibrationRequestRejected(
-          id,
-          session.user.id,
-          input.reason,
-        );
-      } catch (error) {
-        console.error(
-          "[Calibration Requests] Failed to send rejection notification:",
-          error,
-        );
-      }
 
       return c.json({ success: true });
     },
@@ -771,331 +544,248 @@ export const calibrationRequestsRouter = new Hono<{
     zValidator("json", ConvertCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireRouteId(c.req.param("id"));
       const input = c.req.valid("json");
-      const ipAddress = clientIp(c);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const createdJobs = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const request = await requireLockedLabRequest(id, member, ctx.o);
 
-      let result: ConvertRequestResult;
-      try {
-        result = await orgTransactionWithExecutor(
-          member.organizationId,
-          async (tx, rawTx) => {
-            const [request] = await tx
-              .select({
-                id: calibrationRequest.id,
-                status: calibrationRequest.status,
-                customerId: calibrationRequest.customerId,
-                unitId: calibrationRequest.unitId,
-                deliveryMethod: calibrationRequest.deliveryMethod,
-                onsiteAddress: calibrationRequest.onsiteAddress,
-              })
-              .from(calibrationRequest)
-              .where(
-                and(
-                  eq(calibrationRequest.id, id),
-                  eq(calibrationRequest.organizationId, member.organizationId),
-                  buildUnitScopeCondition(calibrationRequest.unitId, member),
+          if (
+            !CALIBRATION_REQUEST_MACHINE.canTransition(
+              request.status,
+              "convert",
+            )
+          ) {
+            throw invalid(
+              "request_status_invalid",
+              "Somente solicitacoes aprovadas podem ser convertidas",
+            );
+          }
+
+          const requestItems = await ctx.o
+            .select({
+              id: calibrationRequestItem.id,
+              assetId: calibrationRequestItem.assetId,
+              convertedJobId: calibrationRequestItem.convertedJobId,
+            })
+            .from(calibrationRequestItem)
+            .where(
+              and(
+                eq(calibrationRequestItem.requestId, request.id),
+                eq(
+                  calibrationRequestItem.organizationId,
+                  member.organizationId,
                 ),
-              )
-              .limit(1)
-              .for("update");
+              ),
+            )
+            .orderBy(calibrationRequestItem.id);
 
-            if (!request) {
-              return {
-                error: {
-                  status: 404 as const,
-                  body: "Solicitacao nao encontrada",
-                },
-              };
-            }
+          if (requestItems.some((item) => item.convertedJobId)) {
+            throw invalid(
+              "request_status_invalid",
+              "Esta solicitacao ja possui itens convertidos",
+            );
+          }
 
+          if (requestItems.length !== input.items.length) {
+            throw invalid(
+              "invalid_request",
+              "Informe exatamente um mapeamento para cada item da solicitacao",
+            );
+          }
+
+          const requestItemIds = new Set(requestItems.map((item) => item.id));
+          if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
+            throw invalid(
+              "invalid_request",
+              "Um ou mais itens informados nao pertencem a esta solicitacao",
+            );
+          }
+
+          const requestItemById = new Map(
+            requestItems.map((item) => [item.id, item] as const),
+          );
+          const createdJobs: ConvertedRequestJob[] = [];
+
+          // On-site requests pre-freeze each job's calibration location to the
+          // customer's site so the technician doesn't re-enter it on execution.
+          const onsiteLocation =
+            request.deliveryMethod === "onsite"
+              ? {
+                  addressText: formatOnsiteAddressText(request.onsiteAddress),
+                }
+              : null;
+
+          // On-site: create one visit for the whole conversion (the trip). The
+          // lab can schedule it now (date + technician → CONFIRMED) or leave it
+          // PROPOSED to schedule from the visits view later. Jobs link via visit_id.
+          let visitId: number | null = null;
+          let visitConfirmed = false;
+          if (request.deliveryMethod === "onsite") {
+            const scheduledAt = input.visit?.scheduledAt
+              ? new Date(input.visit.scheduledAt)
+              : null;
+            const visitTechnicianId = input.visit?.technicianId ?? null;
+            // The visit technician is a body-supplied user id: it must be a
+            // member of this organization, assignable in the request's unit.
             if (
-              !CALIBRATION_REQUEST_MACHINE.canTransition(
-                request.status,
-                "convert",
-              )
-            ) {
-              return {
-                error: {
-                  status: 400 as const,
-                  body: "Somente solicitacoes aprovadas podem ser convertidas",
+              visitTechnicianId &&
+              !(await isAssignableTechnician(
+                {
+                  organizationId: member.organizationId,
+                  userId: visitTechnicianId,
+                  unitId: request.unitId,
                 },
-              };
+                ctx.o,
+              ))
+            ) {
+              throw invalid(
+                "technician_not_found",
+                "Tecnico nao encontrado ou sem permissao",
+              );
+            }
+            const scheduled = Boolean(scheduledAt && visitTechnicianId);
+            const [visit] = await ctx.o
+              .insert(calibrationVisit)
+              .values({
+                organizationId: member.organizationId,
+                unitId: request.unitId,
+                customerId: request.customerId,
+                sourceRequestId: request.id,
+                technicianId: visitTechnicianId,
+                status: scheduled ? "CONFIRMED" : "PROPOSED",
+                scheduledAt,
+                address: request.onsiteAddress ?? null,
+                createdBy: ctx.actor.userId,
+                confirmedBy: scheduled ? ctx.actor.userId : null,
+                confirmedAt: scheduled ? new Date() : null,
+              })
+              .returning();
+            visitId = visit?.id ?? null;
+            visitConfirmed = scheduled;
+          }
+
+          for (const item of input.items) {
+            const requestItem = requestItemById.get(item.itemId);
+
+            if (!requestItem) {
+              throw invalid("invalid_request", "Item de solicitacao invalido");
             }
 
-            const requestItems = await tx
-              .select({
-                id: calibrationRequestItem.id,
-                assetId: calibrationRequestItem.assetId,
-                convertedJobId: calibrationRequestItem.convertedJobId,
-              })
-              .from(calibrationRequestItem)
+            let newJob;
+            try {
+              newJob = await createCalibrationJob({
+                organizationId: member.organizationId,
+                unitId: request.unitId,
+                createdBy: ctx.actor.userId,
+                assetId: requestItem.assetId,
+                serviceId: item.serviceId,
+                technicianId: item.technicianId,
+                dueDate: item.dueDate,
+                ipAddress: ctx.actor.ipAddress,
+                sourceRequestId: request.id,
+                sourceRequestItemId: requestItem.id,
+                executor: ctx.tx,
+                notifyOnAssignment: false,
+                onsiteLocation,
+                visitId,
+              });
+            } catch (error) {
+              if (
+                error instanceof Error &&
+                jobCreationClientErrors.has(error.message)
+              ) {
+                throw invalid("invalid_request", error.message);
+              }
+
+              throw error;
+            }
+
+            createdJobs.push({
+              requestItemId: requestItem.id,
+              jobId: newJob.id,
+              jobCode: newJob.jobId,
+              status: newJob.status,
+              technicianId: newJob.technicianId,
+            });
+
+            await ctx.o
+              .update(calibrationRequestItem)
+              .set({ convertedJobId: newJob.id })
               .where(
                 and(
-                  eq(calibrationRequestItem.requestId, request.id),
+                  eq(calibrationRequestItem.id, requestItem.id),
                   eq(
                     calibrationRequestItem.organizationId,
                     member.organizationId,
                   ),
                 ),
-              )
-              .orderBy(calibrationRequestItem.id);
-
-            if (requestItems.some((item) => item.convertedJobId)) {
-              return {
-                error: {
-                  status: 400 as const,
-                  body: "Esta solicitacao ja possui itens convertidos",
-                },
-              };
-            }
-
-            if (requestItems.length !== input.items.length) {
-              return {
-                error: {
-                  status: 400 as const,
-                  body: "Informe exatamente um mapeamento para cada item da solicitacao",
-                },
-              };
-            }
-
-            const requestItemIds = new Set(requestItems.map((item) => item.id));
-            if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
-              return {
-                error: {
-                  status: 400 as const,
-                  body: "Um ou mais itens informados nao pertencem a esta solicitacao",
-                },
-              };
-            }
-
-            const requestItemById = new Map(
-              requestItems.map((item) => [item.id, item] as const),
-            );
-            const createdJobs: ConvertedRequestJob[] = [];
-
-            // On-site requests pre-freeze each job's calibration location to the
-            // customer's site so the technician doesn't re-enter it on execution.
-            const onsiteLocation =
-              request.deliveryMethod === "onsite"
-                ? {
-                    addressText: formatOnsiteAddressText(request.onsiteAddress),
-                  }
-                : null;
-
-            // On-site: create one visit for the whole conversion (the trip). The
-            // lab can schedule it now (date + technician → CONFIRMED) or leave it
-            // PROPOSED to schedule from the visits view later. Jobs link via visit_id.
-            let visitId: number | null = null;
-            let visitConfirmed = false;
-            if (request.deliveryMethod === "onsite") {
-              const scheduledAt = input.visit?.scheduledAt
-                ? new Date(input.visit.scheduledAt)
-                : null;
-              const visitTechnicianId = input.visit?.technicianId ?? null;
-              // The visit technician is a body-supplied user id: it must be a
-              // member of this organization, assignable in the request's unit.
-              if (
-                visitTechnicianId &&
-                !(await isAssignableTechnician(
-                  {
-                    organizationId: member.organizationId,
-                    userId: visitTechnicianId,
-                    unitId: request.unitId,
-                  },
-                  tx,
-                ))
-              ) {
-                return {
-                  error: {
-                    status: 400 as const,
-                    body: "Tecnico nao encontrado ou sem permissao",
-                  },
-                };
-              }
-              const scheduled = Boolean(scheduledAt && visitTechnicianId);
-              const [visit] = await tx
-                .insert(calibrationVisit)
-                .values({
-                  organizationId: member.organizationId,
-                  unitId: request.unitId,
-                  customerId: request.customerId,
-                  sourceRequestId: request.id,
-                  technicianId: visitTechnicianId,
-                  status: scheduled ? "CONFIRMED" : "PROPOSED",
-                  scheduledAt,
-                  address: request.onsiteAddress ?? null,
-                  createdBy: session.user.id,
-                  confirmedBy: scheduled ? session.user.id : null,
-                  confirmedAt: scheduled ? new Date() : null,
-                })
-                .returning();
-              visitId = visit?.id ?? null;
-              visitConfirmed = scheduled;
-            }
-
-            for (const item of input.items) {
-              const requestItem = requestItemById.get(item.itemId);
-
-              if (!requestItem) {
-                throw new RequestTransitionError(
-                  400,
-                  "Item de solicitacao invalido",
-                );
-              }
-
-              let newJob;
-              try {
-                newJob = await createCalibrationJob({
-                  organizationId: member.organizationId,
-                  unitId: request.unitId,
-                  createdBy: session.user.id,
-                  assetId: requestItem.assetId,
-                  serviceId: item.serviceId,
-                  technicianId: item.technicianId,
-                  dueDate: item.dueDate,
-                  ipAddress,
-                  sourceRequestId: request.id,
-                  sourceRequestItemId: requestItem.id,
-                  executor: rawTx,
-                  notifyOnAssignment: false,
-                  onsiteLocation,
-                  visitId,
-                });
-              } catch (error) {
-                if (
-                  error instanceof Error &&
-                  jobCreationClientErrors.has(error.message)
-                ) {
-                  throw new RequestTransitionError(400, error.message);
-                }
-
-                throw error;
-              }
-
-              createdJobs.push({
-                requestItemId: requestItem.id,
-                jobId: newJob.id,
-                jobCode: newJob.jobId,
-                status: newJob.status,
-                technicianId: newJob.technicianId,
-              });
-
-              await tx
-                .update(calibrationRequestItem)
-                .set({ convertedJobId: newJob.id })
-                .where(
-                  and(
-                    eq(calibrationRequestItem.id, requestItem.id),
-                    eq(
-                      calibrationRequestItem.organizationId,
-                      member.organizationId,
-                    ),
-                  ),
-                );
-            }
-
-            await tx
-              .update(calibrationRequest)
-              .set({
-                status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
-                  request.status,
-                  "convert",
-                ),
-                convertedBy: session.user.id,
-                convertedAt: new Date(),
-              })
-              // The row is locked (FOR UPDATE above); the status predicate
-              // repeats the check the lock made safe.
-              .where(
-                and(
-                  eq(calibrationRequest.id, request.id),
-                  eq(calibrationRequest.status, request.status),
-                ),
               );
-
-            await tx.insert(calibrationRequestAuditLog).values({
-              organizationId: member.organizationId,
-              requestId: request.id,
-              action: "convert",
-              changes: {
-                jobs: createdJobs.map(
-                  ({ technicianId: _technicianId, ...job }) => job,
-                ),
-              },
-              performedBy: session.user.id,
-              ipAddress,
-            });
-
-            return { createdJobs, visitId, visitConfirmed };
-          },
-        );
-      } catch (error) {
-        if (error instanceof RequestTransitionError) {
-          return c.json({ error: error.message }, error.status);
-        }
-
-        throw error;
-      }
-
-      if ("error" in result) {
-        return c.json({ error: result.error.body }, result.error.status);
-      }
-
-      const notificationResults = await Promise.allSettled(
-        result.createdJobs
-          .filter((job) => job.technicianId)
-          .map((job) =>
-            notifyJobAssigned(job.jobId, job.technicianId!, session.user.id),
-          ),
-      );
-
-      for (const notificationResult of notificationResults) {
-        if (notificationResult.status === "rejected") {
-          console.error(
-            "[Calibration Requests] Failed to send assignment notification:",
-            notificationResult.reason,
-          );
-        }
-      }
-
-      try {
-        await notifyCalibrationRequestConverted(
-          id,
-          session.user.id,
-          result.createdJobs.map((job) => job.jobCode),
-        );
-      } catch (error) {
-        console.error(
-          "[Calibration Requests] Failed to send conversion notification:",
-          error,
-        );
-      }
-
-      if (result.visitId !== null) {
-        try {
-          await notifyVisitScheduled(result.visitId, session.user.id);
-          if (result.visitConfirmed) {
-            await notifyVisitConfirmed(result.visitId, session.user.id);
           }
-        } catch (error) {
-          console.error(
-            "[Calibration Requests] Failed to send visit notification:",
-            error,
+
+          await ctx.o
+            .update(calibrationRequest)
+            .set({
+              status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
+                request.status,
+                "convert",
+              ),
+              convertedBy: ctx.actor.userId,
+              convertedAt: new Date(),
+            })
+            // The row is locked (FOR UPDATE above); the status predicate
+            // repeats the check the lock made safe.
+            .where(
+              and(
+                eq(calibrationRequest.id, request.id),
+                eq(calibrationRequest.status, request.status),
+              ),
+            );
+
+          await ctx.audit("calibrationRequest", request.id, {
+            action: "convert",
+            changes: {
+              jobs: createdJobs.map(
+                ({ technicianId: _technicianId, ...job }) => job,
+              ),
+            },
+          });
+
+          for (const job of createdJobs) {
+            const technicianId = job.technicianId;
+            if (technicianId) {
+              ctx.afterCommit(() =>
+                notifyJobAssigned(job.jobId, technicianId, ctx.actor.userId),
+              );
+            }
+          }
+          ctx.afterCommit(() =>
+            notifyCalibrationRequestConverted(
+              id,
+              ctx.actor.userId,
+              createdJobs.map((job) => job.jobCode),
+            ),
           );
-        }
-      }
+          if (visitId !== null) {
+            const convertedVisitId = visitId;
+            ctx.afterCommit(async () => {
+              await notifyVisitScheduled(convertedVisitId, ctx.actor.userId);
+              if (visitConfirmed) {
+                await notifyVisitConfirmed(convertedVisitId, ctx.actor.userId);
+              }
+            });
+          }
+
+          return createdJobs;
+        },
+      );
 
       return c.json({
         success: true,
-        jobs: result.createdJobs.map(
-          ({ technicianId: _technicianId, ...job }) => job,
-        ),
+        jobs: createdJobs.map(({ technicianId: _technicianId, ...job }) => job),
       });
     },
   );

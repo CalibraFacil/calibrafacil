@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type Context, type Next } from "hono";
+import type { Env } from "../../server/env";
+import { Hono, type Context, type Next } from "hono";
 
 // FIFO queue of canned drizzle results (see portal-overview.spec.ts).
 const dbQueue: Array<unknown> = [];
@@ -36,7 +37,12 @@ vi.mock("@calibra-facil/db", () => {
   // (the organization setting is a statement that consumes no canned result).
   builder.transaction = async (run: (tx: unknown) => unknown) => run(builder);
   builder.execute = async () => [];
-  return { db: builder, systemDb: builder };
+  return {
+    db: builder,
+    systemDb: builder,
+    isInTransactionScope: () => false,
+    afterTransactionCommit: (task: () => unknown) => task(),
+  };
 });
 
 const createClientOrganizationAsServiceOwner = vi.fn(async () => ({
@@ -68,6 +74,12 @@ vi.mock("../../middleware/permission", () => {
 });
 
 const { customerGroupsRouter } = await import("../customer-groups");
+const { applyErrorHandling } = await import("../../server/error-handling");
+
+// Domain failures are thrown and rendered once by the app's error handler.
+const app = new Hono<{ Bindings: Env }>();
+applyErrorHandling(app, { report: vi.fn(), flush: vi.fn(async () => {}) });
+app.route("/", customerGroupsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -86,7 +98,7 @@ describe("POST /customer-groups", () => {
       { id: 5, name: "Rede X", authOrganizationId: "group-org-1" },
     ]); // insert..returning
 
-    const res = await customerGroupsRouter.request("/", {
+    const res = await app.request("/", {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({ name: "Rede X" }),
@@ -102,7 +114,7 @@ describe("POST /customer-groups", () => {
       { id: 5, name: "Rede X", authOrganizationId: "group-org-1" },
     ]);
 
-    const res = await customerGroupsRouter.request("/", {
+    const res = await app.request("/", {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({ name: "Rede X", email: "qa@rede.com" }),
@@ -119,7 +131,7 @@ describe("POST /customer-groups/:id/branches", () => {
       [], // branch NOT found under this lab
     );
 
-    const res = await customerGroupsRouter.request("/5/branches", {
+    const res = await app.request("/5/branches", {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({ customerId: 99 }),
@@ -135,7 +147,7 @@ describe("POST /customer-groups/:id/branches", () => {
       [], // audit insert
     );
 
-    const res = await customerGroupsRouter.request("/5/branches", {
+    const res = await app.request("/5/branches", {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({ customerId: 7 }),
@@ -163,7 +175,7 @@ describe("GET /customer-groups/:id", () => {
       [{ customerId: 7, total: 3, overdue: 1, dueSoon: 2 }], // grouped counts
     );
 
-    const res = await customerGroupsRouter.request("/5");
+    const res = await app.request("/5");
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.branches).toHaveLength(2);
@@ -176,7 +188,7 @@ describe("GET /customer-groups/:id", () => {
 
   it("returns 404 for a group in another lab", async () => {
     dbQueue.push([]); // group not found under this lab
-    const res = await customerGroupsRouter.request("/5");
+    const res = await app.request("/5");
     expect(res.status).toBe(404);
   });
 });
@@ -198,14 +210,14 @@ describe("GET /customer-groups/:id/members", () => {
       ], // members
     );
 
-    const res = await customerGroupsRouter.request("/5/members");
+    const res = await app.request("/5/members");
     expect(res.status).toBe(200);
     expect(await res.json()).toHaveLength(1);
   });
 
   it("returns 404 when the group belongs to another lab", async () => {
     dbQueue.push([]); // resolveLabGroupOrg → null
-    const res = await customerGroupsRouter.request("/5/members");
+    const res = await app.request("/5/members");
     expect(res.status).toBe(404);
   });
 });
@@ -214,7 +226,7 @@ describe("POST /customer-groups/:id/invitations", () => {
   it("invites a manager on the group's portal org", async () => {
     dbQueue.push([{ id: 5, authOrganizationId: "group-org-1" }]); // resolveLabGroupOrg
 
-    const res = await customerGroupsRouter.request("/5/invitations", {
+    const res = await app.request("/5/invitations", {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({ email: "qa@rede.com" }),
@@ -229,7 +241,7 @@ describe("POST /customer-groups/:id/invitations", () => {
   it("returns 404 for a cross-lab group (the cross-tenant gate)", async () => {
     dbQueue.push([]); // resolveLabGroupOrg → null
 
-    const res = await customerGroupsRouter.request("/5/invitations", {
+    const res = await app.request("/5/invitations", {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({ email: "qa@rede.com" }),
@@ -246,7 +258,7 @@ describe("DELETE /customer-groups/:id/members/:memberId", () => {
       [{ id: "m1", role: "client_user" }], // member lookup
     );
 
-    const res = await customerGroupsRouter.request("/5/members/m1", {
+    const res = await app.request("/5/members/m1", {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
@@ -259,7 +271,7 @@ describe("DELETE /customer-groups/:id/members/:memberId", () => {
       [{ id: "m1", role: "owner" }], // not a portal-manageable role
     );
 
-    const res = await customerGroupsRouter.request("/5/members/m1", {
+    const res = await app.request("/5/members/m1", {
       method: "DELETE",
     });
     expect(res.status).toBe(403);

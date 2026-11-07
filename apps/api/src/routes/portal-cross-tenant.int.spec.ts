@@ -37,8 +37,8 @@ import {
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
 import { portalRouter } from "./portal";
-import { portalRequestsRouter } from "./portal-requests";
-import { portalVisitsRouter } from "./portal-visits";
+import { portalRequestsRouter as barePortalRequestsRouter } from "./portal-requests";
+import { portalVisitsRouter as barePortalVisitsRouter } from "./portal-visits";
 import { portalNotificationsRouter } from "./portal-notifications";
 import { portalServiceOrdersRouter } from "./service-orders";
 import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
@@ -51,6 +51,10 @@ import {
   seedStandard,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRequestsRouter = withErrorHandling(barePortalRequestsRouter);
+const portalVisitsRouter = withErrorHandling(barePortalVisitsRouter);
 
 const ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = { ...ORIGIN, "content-type": "application/json" };

@@ -14,7 +14,11 @@ import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { orgDb } from "./org-db";
 import { afterCommitQueue, type OrgScope } from "./after-commit";
 import { enqueueBackgroundJob } from "./background-jobs";
-import { createNonConformanceRecord } from "./non-conformances";
+import {
+  createNonConformanceRecord,
+  type NonConformanceWriteContext,
+} from "./non-conformances";
+import { auditOn } from "./org-context";
 
 /**
  * §7.10 out-of-tolerance workflow (#426 Phase 0).
@@ -30,6 +34,35 @@ import { createNonConformanceRecord } from "./non-conformances";
  * gates certificate issuance — OOT opens a quality workflow, it never blocks
  * approval.
  */
+
+/**
+ * The write context the NC creator takes, over the caller's transaction (an
+ * `OrgScope`): the audit row joins it and the NC notification waits for the
+ * scope's commit. A failing after-commit task is logged, never thrown at the
+ * committed change (what `withOrg` does for its own tasks).
+ */
+function ncWriteContext(
+  scope: OrgScope,
+  organizationId: string,
+  actorUserId: string,
+  ipAddress: string | null | undefined,
+): NonConformanceWriteContext {
+  const actor = { userId: actorUserId, ipAddress: ipAddress ?? null };
+  return {
+    org: organizationId,
+    actor,
+    o: scope.executor,
+    audit: auditOn({ o: scope.executor, org: organizationId, actor }),
+    afterCommit: (task) =>
+      scope.afterCommit(async () => {
+        try {
+          await task();
+        } catch (error) {
+          console.error("[oot] after-commit task failed", error);
+        }
+      }),
+  };
+}
 
 /** Stable outbox dedup key: one notification email per oot_notification row. */
 const OOT_NOTIFICATION_EVENT_KEY = "oot_notification";
@@ -301,14 +334,11 @@ async function flagJobOutOfToleranceIn(
 
   const newNc = await createNonConformanceRecord(
     {
-      organizationId: params.organizationId,
-      actorUserId: params.actorUserId,
       type: "out_of_tolerance",
       description: fullDescription,
       detectedAt: new Date(),
       jobId: job.id,
       triggerSource: params.triggerSource,
-      ipAddress: params.ipAddress,
       auditChanges: {
         initial: {
           type: "out_of_tolerance",
@@ -318,7 +348,12 @@ async function flagJobOutOfToleranceIn(
         },
       },
     },
-    scope,
+    ncWriteContext(
+      scope,
+      params.organizationId,
+      params.actorUserId,
+      params.ipAddress,
+    ),
   );
 
   const notification = params.notifyCustomer
@@ -438,18 +473,36 @@ export type RecallStandardIdentity = {
  *
  * `scope` joins the caller's org-bound transaction (the NC, the recall and
  * their audit entry are written in it; the NC notification waits for
- * `scope.afterCommit`). Without it everything goes through the plain `db`.
+ * `scope.afterCommit`). Without it the work runs in a transaction of its own.
  */
 export async function ensureStandardRecall(
-  input: {
-    organizationId: string;
-    actorUserId: string;
-    standard: RecallStandardIdentity;
-    ipAddress?: string | null;
-  },
+  input: StandardRecallInput,
   scope?: OrgScope,
 ): Promise<{ recall: typeof standardRecall.$inferSelect; created: boolean }> {
-  const writer: Pick<OrgExecutor, "select" | "insert"> = scope?.executor ?? db;
+  if (scope) return ensureStandardRecallIn(input, scope);
+
+  // Without the caller's transaction: one that names the laboratory, with the
+  // NC notification sent after it commits.
+  const queue = afterCommitQueue();
+  const result = await orgDb(input.organizationId).transaction((o) =>
+    ensureStandardRecallIn(input, { executor: o, afterCommit: queue.add }),
+  );
+  await queue.run();
+  return result;
+}
+
+type StandardRecallInput = {
+  organizationId: string;
+  actorUserId: string;
+  standard: RecallStandardIdentity;
+  ipAddress?: string | null;
+};
+
+async function ensureStandardRecallIn(
+  input: StandardRecallInput,
+  scope: OrgScope,
+): Promise<{ recall: typeof standardRecall.$inferSelect; created: boolean }> {
+  const writer = scope.executor;
   const [existingDraft] = await writer
     .select()
     .from(standardRecall)
@@ -466,8 +519,6 @@ export async function ensureStandardRecall(
 
   const nc = await createNonConformanceRecord(
     {
-      organizationId: input.organizationId,
-      actorUserId: input.actorUserId,
       type: "out_of_tolerance",
       description:
         `Padrão de referência ${input.standard.name} (nº de série ${input.standard.serialNumber}, ` +
@@ -477,7 +528,6 @@ export async function ensureStandardRecall(
         )} e notificar os clientes afetados.`,
       detectedAt: new Date(),
       triggerSource: "standard_recall",
-      ipAddress: input.ipAddress,
       auditChanges: {
         initial: {
           type: "out_of_tolerance",
@@ -486,7 +536,12 @@ export async function ensureStandardRecall(
         },
       },
     },
-    scope,
+    ncWriteContext(
+      scope,
+      input.organizationId,
+      input.actorUserId,
+      input.ipAddress,
+    ),
   );
 
   const [recall] = await writer

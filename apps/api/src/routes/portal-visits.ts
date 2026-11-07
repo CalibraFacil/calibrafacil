@@ -12,7 +12,6 @@ import {
   calibrationVisit,
   customer,
   user,
-  visitAuditLog,
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
 import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
@@ -26,26 +25,37 @@ import {
   requirePortalProtected,
   type AuthVariables,
 } from "../middleware/permission";
-import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalCustomerScope } from "../lib/portal-customer-scope";
 import { orgDb } from "../lib/org-db";
-import { clientIp, type ClientIpContext } from "../lib/client-ip";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
+import { requireRouteId } from "../lib/route-id";
+import { conflict, notFound } from "../lib/domain-errors";
 
-function requestIp(c: ClientIpContext) {
-  return clientIp(c);
-}
-
-function requestUserAgent(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  return c.req.header("user-agent") ?? null;
+/**
+ * The customers and laboratory the portal session reaches. Throws 404 when it
+ * reaches none (the same answer as a visit that is not theirs), 403 for a
+ * blocked host.
+ */
+async function requirePortalVisitScope(
+  c: Parameters<typeof requirePortalLabScope>[0],
+  activeOrgId: string,
+) {
+  const scope = await resolvePortalCustomerScope({
+    activeOrgId,
+    labScope: await requirePortalLabScope(c),
+  });
+  if (!scope || scope.customerIds.length === 0) {
+    throw notFound("visit_not_found", "Visita nao encontrada");
+  }
+  return scope;
 }
 
 /**
  * Loads a visit only if it belongs to a customer in the portal scope, inside
- * the laboratory that scope resolved to.
+ * the laboratory that scope resolved to. Throws 404 otherwise.
  */
-async function getPortalScopedVisit(
+async function requirePortalScopedVisit(
   id: number,
   customerIds: number[],
   labOrganizationId: string,
@@ -62,7 +72,15 @@ async function getPortalScopedVisit(
       )
       .limit(1),
   );
-  return visit ?? null;
+  if (!visit) throw notFound("visit_not_found", "Visita nao encontrada");
+  return visit;
+}
+
+function pendingRescheduleExists() {
+  return conflict(
+    "visit_reschedule_pending",
+    "Ja existe uma solicitacao de reagendamento pendente",
+  );
 }
 
 /**
@@ -189,35 +207,24 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
     requirePermission({ request: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
 
-      const portalLabScope = await requirePortalLabScope(c);
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: member.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        return c.json({ error: "Visita nao encontrada" }, 404);
-      }
-
-      const visit = await getPortalScopedVisit(
+      const scope = await requirePortalVisitScope(c, member.organizationId);
+      const visit = await requirePortalScopedVisit(
         id,
         scope.customerIds,
         scope.labOrganizationId,
       );
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
       if (visit.status !== "PROPOSED" && visit.status !== "CONFIRMED") {
-        return c.json(
-          { error: "Esta visita nao pode mais ser confirmada" },
-          409,
+        throw conflict(
+          "visit_closed",
+          "Esta visita nao pode mais ser confirmada",
         );
       }
       if (!visit.scheduledAt || visit.scheduledAt.getTime() <= Date.now()) {
-        return c.json(
-          { error: "A visita ainda nao tem uma data futura agendada" },
-          409,
+        throw conflict(
+          "visit_not_scheduled",
+          "A visita ainda nao tem uma data futura agendada",
         );
       }
       if (visit.customerConfirmedAt) {
@@ -229,37 +236,27 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const customerConfirmedAt = new Date();
-      await orgDb(scope.labOrganizationId).transaction(async (tx) => {
-        await tx
+      await withOrg(scope.labOrganizationId, requestActor(c), async (ctx) => {
+        await ctx.o
           .update(calibrationVisit)
           .set({
-            customerConfirmedBy: session.user.id,
+            customerConfirmedBy: ctx.actor.userId,
             customerConfirmedAt,
           })
           .where(eq(calibrationVisit.id, id));
 
-        await tx.insert(visitAuditLog).values({
-          organizationId: visit.organizationId,
-          visitId: id,
+        await ctx.audit("visit", id, {
           action: "customer_confirm",
           changes: {
             customerConfirmedAt: { old: null, new: customerConfirmedAt },
             scheduledAt: visit.scheduledAt,
           },
-          performedBy: session.user.id,
-          ipAddress: requestIp(c),
-          userAgent: requestUserAgent(c),
         });
-      });
 
-      try {
-        await notifyVisitCustomerConfirmed(id, session.user.id);
-      } catch (error) {
-        console.error(
-          "[PortalVisits] Failed to notify customer confirmation:",
-          error,
+        ctx.afterCommit(() =>
+          notifyVisitCustomerConfirmed(id, ctx.actor.userId),
         );
-      }
+      });
 
       return c.json({
         ok: true,
@@ -279,30 +276,19 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", PortalVisitRescheduleRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      const portalLabScope = await requirePortalLabScope(c);
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: member.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        return c.json({ error: "Visita nao encontrada" }, 404);
-      }
-
-      const visit = await getPortalScopedVisit(
+      const scope = await requirePortalVisitScope(c, member.organizationId);
+      const visit = await requirePortalScopedVisit(
         id,
         scope.customerIds,
         scope.labOrganizationId,
       );
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
       if (visit.status !== "PROPOSED" && visit.status !== "CONFIRMED") {
-        return c.json(
-          { error: "Esta visita nao pode mais ser reagendada" },
-          409,
+        throw conflict(
+          "visit_closed",
+          "Esta visita nao pode mais ser reagendada",
         );
       }
 
@@ -318,23 +304,20 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .limit(1),
       );
-      if (pending) {
-        return c.json(
-          { error: "Ja existe uma solicitacao de reagendamento pendente" },
-          409,
-        );
-      }
+      if (pending) throw pendingRescheduleExists();
 
       try {
-        const requestId = await orgDb(scope.labOrganizationId).transaction(
-          async (tx) => {
-            const [created] = await tx
+        const requestId = await withOrg(
+          scope.labOrganizationId,
+          requestActor(c),
+          async (ctx) => {
+            const [created] = await ctx.o
               .insert(visitRescheduleRequest)
               .values({
                 visitId: id,
                 organizationId: visit.organizationId,
                 customerId: visit.customerId,
-                requestedBy: session.user.id,
+                requestedBy: ctx.actor.userId,
                 reason: input.reason ?? null,
                 preferredWindows: input.preferredWindows,
               })
@@ -343,32 +326,21 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
               throw new Error("Falha ao criar a solicitacao de reagendamento");
             }
 
-            await tx.insert(visitAuditLog).values({
-              organizationId: visit.organizationId,
-              visitId: id,
+            await ctx.audit("visit", id, {
               action: "reschedule_request",
               changes: {
                 rescheduleRequestId: created.id,
                 preferredWindows: input.preferredWindows,
               },
-              performedBy: session.user.id,
-              ipAddress: requestIp(c),
-              userAgent: requestUserAgent(c),
               reason: input.reason ?? null,
             });
 
+            ctx.afterCommit(() =>
+              notifyVisitRescheduleRequested(id, ctx.actor.userId),
+            );
             return created.id;
           },
         );
-
-        try {
-          await notifyVisitRescheduleRequested(id, session.user.id);
-        } catch (error) {
-          console.error(
-            "[PortalVisits] Failed to notify reschedule request:",
-            error,
-          );
-        }
 
         return c.json({
           ok: true,
@@ -381,10 +353,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
           error instanceof Error &&
           error.message.includes("visit_reschedule_request_pending_uidx")
         ) {
-          return c.json(
-            { error: "Ja existe uma solicitacao de reagendamento pendente" },
-            409,
-          );
+          throw pendingRescheduleExists();
         }
         throw error;
       }
