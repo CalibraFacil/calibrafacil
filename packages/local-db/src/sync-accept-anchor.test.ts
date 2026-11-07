@@ -8,10 +8,12 @@ import {
   applySyncPushResult,
   listPendingOutboxEvents,
   openLocalDatabase,
-  saveLocalServiceOrderExecutionNotes,
-  updateLocalAsset,
-  updateLocalCustomer,
 } from "./index";
+import {
+  updateLocalCustomer,
+  updateLocalAsset,
+  saveLocalServiceOrderExecutionNotes,
+} from "./legacy-outbox-fixtures";
 
 // REL-01 slice 3 — when the desktop's pushed asset / customer / OS-execution
 // change is ACCEPTED by the cloud, `remote_base_updated_at` must be refreshed to

@@ -6,7 +6,6 @@ import {
   applySyncPushResult,
   countDeadOutbox,
   countPendingOutbox,
-  createLocalCustomer,
   discardDeadOutboxEvent,
   listDeadOutboxEvents,
   listPendingOutboxEvents,
@@ -15,6 +14,7 @@ import {
   requeueDeadOutboxEvent,
   runLocalMigrations,
 } from "./index";
+import { createLocalCustomer } from "./legacy-outbox-fixtures";
 import { localDbMigrations } from "./migrations";
 
 const tempDirectories: string[] = [];

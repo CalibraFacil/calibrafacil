@@ -63,16 +63,10 @@ export type ApplyDesktopSyncEventInput = {
 };
 
 /**
- * Side effects of an event that need a database connection of their own
- * (better-auth creates an organization through its own adapter) cannot run in
- * the event's transaction: with a small pool the transaction holds the only
- * connection and the side effect waits for it forever, and what it writes would
- * survive the rollback of the event. They run first, outside the transaction,
- * idempotently on the event id, and the transaction only references the result.
+ * What an event needs before its own transaction (it talks to the object store, which must
+ * not hold the transaction's connection).
  */
 export type PreparedDesktopEventSideEffects = {
-  /** `create_local_customer`: the client organization created for this event. */
-  clientOrganizationId?: string;
   /** The event cannot be applied (permanent): reported without opening a transaction. */
   refusal?: { code: string; reason: string };
 };

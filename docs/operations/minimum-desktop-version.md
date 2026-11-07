@@ -7,7 +7,8 @@ The desktop app pushes its offline work to `POST /api/sync/push` with the protoc
 too. The cloud has a built-in floor, `SYNC_DESKTOP_VERSION_FLOOR` (`packages/contracts/src/sync-protocol.ts`),
 currently **0.3.0**: the first release that reports its own version, speaks protocol 3 (the
 commit-ordered pull and the paged bootstrap), stamps the calibration record on its execution events
-and no longer writes the sync operations retired in Q69. `SYNC_MIN_DESKTOP_VERSION`
+and no longer writes the sync operations retired in Q69 (customer create/edit/compliance, instrument edit,
+job drafts, non-conformances, quote, delivery and execution-notes documents, certificate drafts and PDFs). `SYNC_MIN_DESKTOP_VERSION`
 (`MAJOR.MINOR.PATCH`, for example `1.4.0`) can only raise the minimum above the floor; unset (the
 default) the floor is the minimum, and a value below it changes nothing.
 
@@ -26,6 +27,10 @@ not performed, so that upgrading did not dead-letter the outbox; its audit row s
 `calibrationRecordCheck: "legacy_exempt"`. With a minimum configured an unstamped submit is held to
 the rule like any other and refused with `CALIBRATION_RECORD_INCOMPLETE` (a permanent refusal: it waits
 in the desktop's refused list for a person).
+
+A desktop at or above the floor whose outbox still holds one of those operations (it was upgraded from 0.2.x or
+earlier before it ever synced) sends them: the cloud refuses each for good as `UNSUPPORTED_SYNC_OPERATION`, and the desktop
+shows it in its refused list with a pt-BR label, where a person discards it. Nothing else in the push is held back by it.
 
 Raising the minimum: ship the desktop build that carries the change, wait until the laboratories have
 updated and drained their queues, then set the variable to that build's version. The value is checked

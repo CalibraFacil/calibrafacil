@@ -3,28 +3,10 @@ import {
   type ApplyDesktopSyncEventInput,
   type ApplyDesktopSyncEventResult,
 } from "./desktop-event-support";
-import {
-  applyCreateLocalAsset,
-  applyCreateLocalJobDraft,
-} from "./apply-job-draft-and-asset-create";
-import { applyUpdateLocalAsset } from "./apply-asset-update";
+import { applyCreateLocalAsset } from "./apply-asset-create";
 import { applyCreateLocalAttachment } from "./apply-attachment";
-import {
-  applyCreateLocalCustomer,
-  applyUpdateLocalCustomer,
-  applyUpdateLocalCustomerCompliance,
-} from "./apply-customers";
 import { applyLocalJobExecution } from "./apply-job-execution";
-import {
-  applyCreateLocalNonConformance,
-  applyCreateLocalServiceOrderIntake,
-} from "./apply-service-order-intake";
-import {
-  applyCreateLocalServiceOrderDeliveryDocumentDraft,
-  applyCreateLocalServiceOrderQuoteDraft,
-  applyLocalServiceOrderExecutionNotes,
-} from "./apply-service-order-documents";
-import { writeDesktopSyncAudit } from "./desktop-sync-support";
+import { applyCreateLocalServiceOrderIntake } from "./apply-service-order-intake";
 
 export async function applyDesktopSyncEvent(
   input: ApplyDesktopSyncEventInput,
@@ -41,55 +23,18 @@ export async function applyDesktopSyncEvent(
     // sync-protocol.ts): adding an operation there fails to compile here until
     // the cloud says what it does with it.
     switch (input.event.operation) {
-      case "create_local_job_draft":
-        return await applyCreateLocalJobDraft(input, actorUserId);
       case "create_local_asset":
         return await applyCreateLocalAsset(input, actorUserId);
-      case "update_local_asset":
-        return await applyUpdateLocalAsset(input, actorUserId);
-      case "create_local_customer":
-        return await applyCreateLocalCustomer(input, actorUserId);
-      case "update_local_customer":
-        return await applyUpdateLocalCustomer(input, actorUserId);
-      case "update_local_customer_compliance":
-        return await applyUpdateLocalCustomerCompliance(input, actorUserId);
       case "save_local_execution":
       case "submit_local_execution":
         return await applyLocalJobExecution(input, actorUserId);
       case "create_local_service_order_intake":
         return await applyCreateLocalServiceOrderIntake(input, actorUserId);
-      case "create_local_non_conformance":
-        return await applyCreateLocalNonConformance(input, actorUserId);
-      case "create_local_service_order_quote_draft":
-        return await applyCreateLocalServiceOrderQuoteDraft(input, actorUserId);
-      case "save_local_service_order_execution_notes":
-        return await applyLocalServiceOrderExecutionNotes(input, actorUserId);
-      case "create_local_service_order_delivery_document_draft":
-        return await applyCreateLocalServiceOrderDeliveryDocumentDraft(
-          input,
-          actorUserId,
-        );
-      // Certificates are issued online only: the cloud worker renders and signs
-      // them after the cloud approval. A queued offline "publish certificate
-      // PDF" event (an older desktop build) is refused with its own code, never
-      // applied, never acknowledged, so the desktop keeps showing it as refused.
-      case "generate_local_certificate_pdf":
-        return {
-          ok: false,
-          code: "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
-          reason:
-            "Certificates are issued online only: approve the job in the cloud app and the certificate is generated and signed there. Client-rendered certificate PDFs are not accepted.",
-        };
       // The attachment's bytes travel through the attachment endpoints; the event
       // is recorded only once they were verified (prepareCreateLocalAttachment
       // refused it before this point otherwise).
       case "create_local_attachment":
         return await applyCreateLocalAttachment(input, actorUserId);
-      // Audit-only: the legacy certificate-draft marker carries no data, so the
-      // cloud has nothing to apply.
-      case "create_local_certificate_draft":
-        await writeDesktopSyncAudit(input, actorUserId);
-        return { ok: true };
       default:
         return assertNever(input.event);
     }

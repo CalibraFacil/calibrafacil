@@ -306,21 +306,20 @@ describe("the desktop's events are members of the typed push protocol (REQ-SP-1)
         actorUserId: event.actorUserId ?? "user-1",
       });
       expect(parsed.ok, event.operation).toBe(true);
-      expect(
-        SYNC_OPERATIONS[
-          event.operation === "submit_local_execution"
-            ? "submit_local_execution"
-            : "save_local_execution"
-        ].support,
-      ).toBe("current");
     }
     database.close();
   });
 
-  it("REQ-SP-1: every operation a local-db writer names is a member of the protocol, and every `current` member is named by one", () => {
+  it("REQ-SP-1: every operation a local-db writer names is a member of the protocol, and every member is named by one", () => {
     const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
     const writerSource = readdirSync(sourceDirectory)
-      .filter((name) => name.endsWith(".ts") && !name.includes(".test."))
+      .filter(
+        (name) =>
+          name.endsWith(".ts") &&
+          !name.includes(".test.") &&
+          // What an older build wrote, for the suites of an upgraded database: not a writer.
+          name !== "legacy-outbox-fixtures.ts",
+      )
       .map((name) => readFileSync(path.join(sourceDirectory, name), "utf8"))
       .join("\n");
 
@@ -335,9 +334,8 @@ describe("the desktop's events are members of the typed push protocol (REQ-SP-1)
 
     const members = new Set<string>(SYNC_COMMAND_OPERATIONS);
     expect([...named].filter((name) => !members.has(name))).toEqual([]);
-    const current = Object.entries(SYNC_OPERATIONS)
-      .filter(([, definition]) => definition.support === "current")
-      .map(([operation]) => operation);
-    expect(current.filter((operation) => !named.has(operation))).toEqual([]);
+    expect(
+      Object.keys(SYNC_OPERATIONS).filter((operation) => !named.has(operation)),
+    ).toEqual([]);
   });
 });

@@ -25,9 +25,8 @@ function createdIn<S extends string>(
 // asset.status: the customer instrument's condition, a classification the lab
 // edits freely. Every status may be created and set from every other:
 //   create      routes/assets.ts POST, public-api-v2/assets-create.ts, the
-//                 desktop asset create (sync apply-job-draft-and-asset-create.ts)
-//   set_status  routes/assets.ts PUT, public-api-v2/assets-update.ts, the
-//                 desktop asset update (sync apply-asset-update.ts)
+//                 desktop asset create (sync apply-asset-create.ts)
+//   set_status  routes/assets.ts PUT, public-api-v2/assets-update.ts
 // SCRAPPED is reversible by design today (audit decision Q60: asset statuses
 // stay free classifications).
 export const ASSET_STATUSES = [

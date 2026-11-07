@@ -1,5 +1,4 @@
 import { SyncCommandOperation } from "@calibra-facil/contracts/sync-protocol";
-import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
@@ -11,7 +10,7 @@ import { toRecord } from "@calibra-facil/shared/record";
 
 type JsonRecord = Record<string, unknown>;
 
-export type LocalServiceOrderStatus = ServiceOrderStatus;
+type LocalServiceOrderStatus = ServiceOrderStatus;
 
 type LocalServiceOrderPriority = "normal" | "urgent" | "contract" | "warranty";
 
@@ -42,21 +41,6 @@ type LocalServiceOrderExecutionResult =
   | "condemned"
   | "returned_without_service"
   | "sent_to_third_party";
-
-export type LocalServiceOrderPricedItemInput = {
-  type: LocalServiceOrderItemType;
-  description: string;
-  materialId?: number | null;
-  quantity: number;
-  unit?: string;
-  unitCostCents?: number;
-  unitPriceCents: number;
-  taxable?: boolean;
-  warrantyCovered?: boolean;
-  warrantyUntil?: string | null;
-  warrantyTerms?: string | null;
-  notes?: string | null;
-};
 
 export type CreateLocalServiceOrderIntakeInput = {
   organizationId?: string | null;
@@ -130,18 +114,6 @@ export type LocalServiceOrdersListData = {
     total: number;
     totalPages: number;
   };
-};
-
-export type SaveLocalServiceOrderExecutionNotesInput = {
-  routeId: string;
-  actorUserId?: string | null;
-  deviceId?: string | null;
-  servicePerformed?: string | null;
-  partsUsedSummary?: string | null;
-  technicalNotes?: string | null;
-  calibrationRequiredAfterRepair?: boolean;
-  result?: LocalServiceOrderExecutionResult;
-  items?: LocalServiceOrderPricedItemInput[];
 };
 
 export function createLocalServiceOrderIntake(
@@ -585,157 +557,6 @@ export function getLocalServiceOrderDetail(
 }
 
 /**
- * Offline mode no longer exposes this write (Q13: repair execution on a service order is online-only), so no
- * route calls it. It stays because a database upgraded from an earlier build can
- * still hold its queued outbox events, and the sync anchor/conflict suites use it
- * to put a pending local change on an already-synced row.
- */
-export function saveLocalServiceOrderExecutionNotes(
-  database: LocalDatabase,
-  input: SaveLocalServiceOrderExecutionNotesInput,
-) {
-  const serviceOrder = findLocalServiceOrder(database, input.routeId);
-  if (!serviceOrder) {
-    throw new Error("Ordem de servico nao encontrada");
-  }
-
-  const now = new Date().toISOString();
-  const existing = getLocalServiceOrderExecutionRow(database, serviceOrder.id);
-  const executionId =
-    existing?.id ?? `service-order-execution:local:${randomUUID()}`;
-  const items = input.items ? normalizePricedItems(input.items) : null;
-  const payload = {
-    serviceOrderId: serviceOrder.id,
-    servicePerformed: input.servicePerformed ?? null,
-    partsUsedSummary: input.partsUsedSummary ?? null,
-    technicalNotes: input.technicalNotes ?? null,
-    calibrationRequiredAfterRepair:
-      input.calibrationRequiredAfterRepair ?? false,
-    result: input.result ?? null,
-    items: input.items ?? null,
-  };
-
-  database.transaction(() => {
-    if (!existing) {
-      database
-        .prepare(
-          `
-INSERT INTO service_order_executions (
-  id,
-  remote_id,
-  service_order_id,
-  started_at,
-  started_by_user_id,
-  service_performed,
-  parts_used_summary,
-  technical_notes,
-  calibration_required_after_repair,
-  result,
-  created_at,
-  updated_at,
-  sync_state
-) VALUES (
-  @id,
-  NULL,
-  @serviceOrderId,
-  @startedAt,
-  @startedByUserId,
-  @servicePerformed,
-  @partsUsedSummary,
-  @technicalNotes,
-  @calibrationRequiredAfterRepair,
-  @result,
-  @createdAt,
-  @updatedAt,
-  'local'
-)
-`,
-        )
-        .run({
-          id: executionId,
-          serviceOrderId: serviceOrder.id,
-          startedAt: now,
-          startedByUserId: input.actorUserId ?? null,
-          servicePerformed: input.servicePerformed ?? null,
-          partsUsedSummary: input.partsUsedSummary ?? null,
-          technicalNotes: input.technicalNotes ?? null,
-          calibrationRequiredAfterRepair: input.calibrationRequiredAfterRepair
-            ? 1
-            : 0,
-          result: input.result ?? null,
-          createdAt: now,
-          updatedAt: now,
-        });
-    } else {
-      database
-        .prepare(
-          `
-UPDATE service_order_executions
-SET service_performed = @servicePerformed,
-  parts_used_summary = @partsUsedSummary,
-  technical_notes = @technicalNotes,
-  calibration_required_after_repair = @calibrationRequiredAfterRepair,
-  result = @result,
-  updated_at = @updatedAt,
-  sync_state = 'local'
-WHERE id = @id
-`,
-        )
-        .run({
-          id: executionId,
-          servicePerformed: input.servicePerformed ?? null,
-          partsUsedSummary: input.partsUsedSummary ?? null,
-          technicalNotes: input.technicalNotes ?? null,
-          calibrationRequiredAfterRepair: input.calibrationRequiredAfterRepair
-            ? 1
-            : 0,
-          result: input.result ?? null,
-          updatedAt: now,
-        });
-    }
-
-    if (items) {
-      replaceLocalExecutionItems(database, executionId, items);
-    }
-
-    // `start_repair` in SERVICE_ORDER_MACHINE, as the cloud: only an order with
-    // an approved quote moves to repair; notes on an order at another stage keep
-    // its stage.
-    if (
-      SERVICE_ORDER_MACHINE.canTransition(serviceOrder.status, "start_repair")
-    ) {
-      updateServiceOrderStatus(database, {
-        id: serviceOrder.id,
-        status: SERVICE_ORDER_MACHINE.requireTargetOf(
-          serviceOrder.status,
-          "start_repair",
-        ),
-        updatedAt: now,
-      });
-    }
-    appendLocalAudit(database, {
-      entityType: "service_order_execution",
-      entityId: executionId,
-      action: "save_notes",
-      actorUserId: input.actorUserId,
-      details: { serviceOrderId: serviceOrder.id },
-      createdAt: now,
-    });
-    appendOutboxEvent(database, {
-      entityType: "service_order_execution",
-      entityId: executionId,
-      operation: "save_local_service_order_execution_notes",
-      payload,
-      actorUserId: input.actorUserId,
-      deviceId: input.deviceId,
-      occurredAt: now,
-    });
-  })();
-
-  return getLocalServiceOrderExecution(database, serviceOrder.id);
-}
-
-/**
  * Resolves the id carried in the dashboard URL. That id is opaque: for an order
  * that has synced it is the cloud `publicId`, and for one created offline (which
  * has no publicId until the cloud assigns one) it is the local id. The numeric
@@ -1054,102 +875,6 @@ function toLocalDeliveryDocument(row: LocalServiceOrderDeliveryDocumentRow) {
     createdAt: row.created_at,
     syncState: row.sync_state,
   };
-}
-
-function normalizePricedItems(items: LocalServiceOrderPricedItemInput[]) {
-  return items.map((item, index) => {
-    const quantity = Number(item.quantity);
-    const totalPriceCents = Math.round(quantity * item.unitPriceCents);
-    return {
-      ...item,
-      quantity,
-      unit: item.unit ?? "un",
-      materialId: item.materialId ?? null,
-      unitCostCents: item.unitCostCents ?? null,
-      taxable: item.taxable ?? true,
-      warrantyCovered: item.warrantyCovered ?? false,
-      warrantyUntil: item.warrantyUntil ?? null,
-      warrantyTerms: item.warrantyTerms ?? null,
-      notes: item.notes ?? null,
-      totalPriceCents,
-      sortOrder: index,
-    };
-  });
-}
-
-function replaceLocalExecutionItems(
-  database: LocalDatabase,
-  executionId: string,
-  items: ReturnType<typeof normalizePricedItems>,
-) {
-  database
-    .prepare(
-      "DELETE FROM service_order_execution_items WHERE execution_id = @executionId",
-    )
-    .run({ executionId });
-
-  const insert = database.prepare(
-    `
-INSERT INTO service_order_execution_items (
-  id,
-  execution_id,
-  remote_id,
-  quote_item_id,
-  type,
-  description,
-  material_id,
-  quantity,
-  unit,
-  unit_cost_cents,
-  unit_price_cents,
-  total_price_cents,
-  technician_id,
-  sort_order
-) VALUES (
-  @id,
-  @executionId,
-  NULL,
-  NULL,
-  @type,
-  @description,
-  @materialId,
-  @quantity,
-  @unit,
-  @unitCostCents,
-  @unitPriceCents,
-  @totalPriceCents,
-  @technicianId,
-  @sortOrder
-)
-`,
-  );
-
-  for (const item of items) {
-    insert.run({
-      id: `service-order-execution-item:local:${randomUUID()}`,
-      executionId,
-      technicianId: null,
-      ...item,
-      unitCostCents: item.unitCostCents ?? 0,
-    });
-  }
-}
-
-function updateServiceOrderStatus(
-  database: LocalDatabase,
-  input: { id: string; status: LocalServiceOrderStatus; updatedAt: string },
-) {
-  database
-    .prepare(
-      `
-UPDATE service_orders
-SET status = @status,
-  updated_at = @updatedAt,
-  sync_state = 'local'
-WHERE id = @id
-`,
-    )
-    .run(input);
 }
 
 function appendLocalAudit(

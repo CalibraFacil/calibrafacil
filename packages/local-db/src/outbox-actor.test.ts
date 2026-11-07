@@ -4,11 +4,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   countPendingOutboxForOtherUsers,
-  createLocalCustomer,
   listPendingOutboxEvents,
   markOutboxEventsFailedForRetry,
   openLocalDatabase,
 } from "./index";
+import { createLocalCustomer } from "./legacy-outbox-fixtures";
 
 // On a shared desktop the outbox can hold events recorded by more than one
 // account. The cloud attributes a pushed event to the session that pushes it,

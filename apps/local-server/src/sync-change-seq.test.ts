@@ -10,13 +10,13 @@ import {
 } from "@calibra-facil/contracts";
 import {
   applySyncBootstrap,
-  createLocalCustomer,
   listPendingOutboxEvents,
   getBootstrapPageToken,
   getSyncCursor,
   hasIncompleteBootstrap,
   openLocalDatabase,
 } from "@calibra-facil/local-db";
+import { createLocalCustomer } from "@calibra-facil/local-db/legacy-outbox-fixtures";
 import type { LocalServerConfig } from "./bootstrap";
 import { createLocalSyncRuntime } from "./sync";
 

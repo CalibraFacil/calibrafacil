@@ -1,7 +1,6 @@
 // service_order_quote.status as data.
 //
-//   create   service-order.quotes.ts `createServiceOrderQuote`, the desktop
-//              quote sync (apply-service-order-documents.ts): a draft
+//   create   service-order.quotes.ts `createServiceOrderQuote`: a draft
 //   edit     service-order.quotes.ts update / items: only a draft is editable
 //   send     service-order.quotes.ts `sendServiceOrderQuote`
 //   approve  manual approval (service-order.quotes.ts), the public link

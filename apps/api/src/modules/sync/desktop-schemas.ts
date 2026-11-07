@@ -1,7 +1,4 @@
-import {
-  CreateAssetSchema,
-  UpdateServiceOrderExecutionSchema,
-} from "@calibra-facil/schemas";
+import { CreateAssetSchema } from "@calibra-facil/schemas";
 
 // ============================================================================
 // Desktop payload tolerance
@@ -23,20 +20,6 @@ export const DesktopCreateAssetSchema = CreateAssetSchema.extend({
   installedAt: CreateAssetSchema.shape.installedAt.nullable(),
   specifications: CreateAssetSchema.shape.specifications.nullable(),
 });
-
-export const DesktopUpdateAssetSchema = DesktopCreateAssetSchema.partial().omit(
-  {
-    customerId: true,
-    assetTypeId: true,
-    baseMeasurementUnit: true,
-  },
-);
-
-export const DesktopUpdateServiceOrderExecutionSchema =
-  UpdateServiceOrderExecutionSchema.extend({
-    result: UpdateServiceOrderExecutionSchema.shape.result.nullable(),
-    items: UpdateServiceOrderExecutionSchema.shape.items.nullable(),
-  });
 
 // `CreateServiceOrderSchema` carries a superRefine, so it cannot be extended
 // (Zod throws at runtime and `safeExtend` rejects the widened field types).

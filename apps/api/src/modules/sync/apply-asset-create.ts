@@ -8,9 +8,6 @@ import {
 import { and, eq } from "drizzle-orm";
 import { resolveAssetRegimeWrite } from "../../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../../lib/regulated-interval";
-import { getNullableString, getNumber } from "./helpers";
-import { createCalibrationJob } from "../../lib/jobs";
-import { withOrg } from "../../lib/org-context";
 import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
@@ -25,68 +22,6 @@ import {
 } from "./desktop-sync-support";
 import { DesktopCreateAssetSchema } from "./desktop-schemas";
 import { parseSyncDate } from "./snapshot-parsers";
-
-export async function applyCreateLocalJobDraft(
-  input: ApplyDesktopSyncEventInput,
-  actorUserId: string,
-): Promise<ApplyDesktopSyncEventResult> {
-  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
-    input.memberData.organizationId,
-    input.event.entityId,
-    input.o,
-  );
-  if (existingRemoteEntityId !== null) {
-    return { ok: true, remoteEntityId: existingRemoteEntityId };
-  }
-
-  const payload = toRecord(input.event.payload);
-  const assetId = getNumber(payload, "assetId");
-  const serviceId = getNumber(payload, "serviceId");
-  const unitId =
-    input.event.unitId ??
-    getNumber(payload, "unitId") ??
-    input.memberData.activeUnitId;
-
-  if (!assetId || !serviceId || !unitId) {
-    return {
-      ok: false,
-      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
-      reason: "Desktop job draft event is missing asset, service, or unit.",
-    };
-  }
-
-  const job = await withOrg(
-    input.memberData.organizationId,
-    { userId: actorUserId, ipAddress: null },
-    (ctx) =>
-      createCalibrationJob({
-        organizationId: ctx.org,
-        unitId,
-        createdBy: actorUserId,
-        assetId,
-        serviceId,
-        technicianId: getNullableString(payload, "technicianId"),
-        dueDate: getNullableString(payload, "dueDate"),
-        executor: ctx.tx,
-      }),
-  );
-
-  await writeDesktopSyncAudit(input, actorUserId, {
-    remoteEntityId: job.id,
-    remoteJobId: job.jobId,
-  });
-
-  return {
-    ok: true,
-    remoteEntityId: job.id,
-    remoteEntity: {
-      id: job.id,
-      jobId: job.jobId,
-      status: job.status,
-      certificateName: job.certificateName,
-    },
-  };
-}
 
 export async function applyCreateLocalAsset(
   input: ApplyDesktopSyncEventInput,

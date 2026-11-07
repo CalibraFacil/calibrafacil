@@ -1,18 +1,12 @@
 import { toRecord } from "@calibra-facil/shared/record";
-import { asset, calibrationJob, customer } from "@calibra-facil/db/schema";
-import {
-  CreateNonConformanceSchema,
-  CreateServiceOrderSchema,
-} from "@calibra-facil/schemas";
+import { asset, customer } from "@calibra-facil/db/schema";
+import { CreateServiceOrderSchema } from "@calibra-facil/schemas";
 import { and, eq } from "drizzle-orm";
 import {
   isAssignableTechnician,
   serviceOrderBelongsToOrganization,
 } from "../../lib/tenant-refs";
 import { getNumber } from "./helpers";
-import { createNonConformanceRecord } from "../../lib/non-conformances";
-import { withOrg } from "../../lib/org-context";
-import { ensureOotNotificationForNc } from "../../lib/oot-notifications";
 import { createInitialServiceOrderRecords } from "../../lib/service-order-workflow";
 import {
   type ApplyDesktopSyncEventInput,
@@ -192,119 +186,6 @@ export async function applyCreateLocalServiceOrderIntake(
       serviceOrderNumber: created.serviceOrderNumber,
       status: created.status,
       openedAt: created.openedAt?.toISOString?.() ?? created.openedAt,
-    },
-  };
-}
-
-// #426 Phase 0: NC captured offline on the desktop. Reuses the shared cloud
-// creator so the synced NC gets the same number sequence, audit-log entry and
-// admin/owner notification as an online creation. When the NC is
-// out-of-tolerance-typed with a job link, the §7.10 customer notification is
-// created SERVER-SIDE here (outbox row + PDF job) — the desktop outbox carries
-// only the data mutation, and the email dispatches on reconnect.
-export async function applyCreateLocalNonConformance(
-  input: ApplyDesktopSyncEventInput,
-  actorUserId: string,
-): Promise<ApplyDesktopSyncEventResult> {
-  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
-    input.memberData.organizationId,
-    input.event.entityId,
-    input.o,
-  );
-  if (existingRemoteEntityId !== null) {
-    return { ok: true, remoteEntityId: existingRemoteEntityId };
-  }
-
-  const payload = toRecord(input.event.payload);
-  const parseResult = CreateNonConformanceSchema.safeParse(
-    stripDesktopNullEntries(payload, ["jobId"]),
-  );
-  if (!parseResult.success) {
-    return {
-      ok: false,
-      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
-      reason:
-        parseResult.error.issues[0]?.message ??
-        "Desktop non-conformance event is invalid.",
-    };
-  }
-
-  const values = parseResult.data;
-  const detectedAt = new Date(values.detectedAt);
-  if (Number.isNaN(detectedAt.getTime())) {
-    return {
-      ok: false,
-      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
-      reason: "Desktop non-conformance event has an invalid detectedAt.",
-    };
-  }
-
-  if (values.jobId) {
-    const [job] = await input.o
-      .select({ id: calibrationJob.id })
-      .from(calibrationJob)
-      .where(
-        and(
-          eq(calibrationJob.id, values.jobId),
-          eq(calibrationJob.organizationId, input.memberData.organizationId),
-        ),
-      )
-      .limit(1);
-    if (!job) {
-      return {
-        ok: false,
-        code: "DOMAIN_VALIDATION_FAILED",
-        reason: "Calibracao invalida para esta nao conformidade",
-      };
-    }
-  }
-
-  // Inside the sync's transaction scope `withOrg` is a savepoint, and the NC
-  // notification waits for that transaction's commit.
-  const created = await withOrg(
-    input.memberData.organizationId,
-    { userId: actorUserId, ipAddress: null },
-    (ctx) =>
-      createNonConformanceRecord(
-        {
-          type: values.type,
-          description: values.description,
-          detectedAt,
-          jobId: values.jobId ?? null,
-          triggerSource: "manual",
-          auditChanges: { initial: values, source: "desktop_sync" },
-        },
-        ctx,
-      ),
-  );
-
-  await withOrg(
-    input.memberData.organizationId,
-    { userId: actorUserId, ipAddress: null },
-    (ctx) =>
-      ensureOotNotificationForNc(
-        {
-          nc: created,
-          organizationId: input.memberData.organizationId,
-          actorUserId,
-        },
-        ctx,
-      ),
-  );
-
-  await writeDesktopSyncAudit(input, actorUserId, {
-    remoteEntityId: created.id,
-    remoteNcNumber: created.ncNumber,
-  });
-
-  return {
-    ok: true,
-    remoteEntityId: created.id,
-    remoteEntity: {
-      id: created.id,
-      ncNumber: created.ncNumber,
-      status: created.status,
-      detectedAt: created.detectedAt.toISOString(),
     },
   };
 }

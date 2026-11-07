@@ -26,6 +26,7 @@ import {
   syncAppliedEvent,
 } from "@calibra-facil/db/schema";
 import {
+  RETIRED_SYNC_OPERATIONS,
   SYNC_DESKTOP_VERSION_FLOOR,
   classifyOutboxRejection,
   syncPushResponseSchema,
@@ -308,7 +309,7 @@ describe("REQ-SP-2: an event that fails its schema is refused for good", () => {
         eventId: "evt-sp2-mismatch",
         entityType: "calibration_job",
         entityId: "local-y",
-        operation: "update_local_asset",
+        operation: "create_local_asset",
         payload: {},
       }),
     ]);
@@ -318,6 +319,38 @@ describe("REQ-SP-2: an event that fails its schema is refused for good", () => {
       "UNSUPPORTED_SYNC_OPERATION",
       "UNSUPPORTED_SYNC_OPERATION",
     ]);
+  });
+
+  it("REQ-SP-2 (Q69): every retired operation an older outbox may still hold is refused for good as unsupported, writes nothing, and does not hold back a current event beside it", async () => {
+    const world = await seedWorld();
+    const retired = Object.keys(RETIRED_SYNC_OPERATIONS);
+
+    const body = await push(world, [
+      ...retired.map((operation, index) =>
+        wireEvent(world.org, {
+          eventId: `evt-sp2-retired-${index}`,
+          entityType: "customer",
+          entityId: `local-retired-${index}`,
+          operation,
+          payload: { name: "Cliente legado" },
+        }),
+      ),
+      createAssetEvent(world, "evt-sp2-current", "SP2-CURRENT"),
+    ]);
+
+    expect(body.rejected.map((entry) => entry.code)).toEqual(
+      retired.map(() => "UNSUPPORTED_SYNC_OPERATION"),
+    );
+    expect(body.accepted.map((entry) => entry.eventId)).toEqual([
+      "evt-sp2-current",
+    ]);
+    for (const [index] of retired.entries()) {
+      // eslint-disable-next-line no-await-in-loop
+      expect(await claimsFor(`evt-sp2-retired-${index}`)).toEqual([]);
+    }
+    expect(classifyOutboxRejection("UNSUPPORTED_SYNC_OPERATION")).toBe(
+      "permanent",
+    );
   });
 
   it("REQ-SP-2: a request header that is not a push request at all is a client error, not a server one", async () => {

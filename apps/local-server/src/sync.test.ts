@@ -5,15 +5,17 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applySyncBootstrap,
-  createLocalCustomer,
   getSyncCursor,
   listSyncConflicts,
   listPendingOutboxEvents,
   markOutboxEventsFailedForRetry,
   openLocalDatabase,
   resolveSyncConflict,
-  updateLocalCustomer,
 } from "@calibra-facil/local-db";
+import {
+  createLocalCustomer,
+  updateLocalCustomer,
+} from "@calibra-facil/local-db/legacy-outbox-fixtures";
 import { asBootstrapPage } from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";
 import { createLocalSyncRuntime } from "./sync";

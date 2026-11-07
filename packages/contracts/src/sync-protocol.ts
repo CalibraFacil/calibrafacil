@@ -17,11 +17,12 @@ import { syncEventSchema } from "./sync";
  *   carries it (`protocolVersion`) with the desktop app version
  *   (`desktopVersion`). A request without `protocolVersion` comes from a build
  *   that predates versioning: protocol 1, which the cloud still accepts.
- * - The members below are `current` (a desktop build of today still produces
- *   them) or `legacy` (an older build may still hold them in its outbox; the
- *   cloud applies or refuses them exactly as before, and a build of today never
- *   writes one). A legacy member is explicit so that dropping one is a
- *   deliberate act with a test to change, never a silent narrowing.
+ * - Every member below is an operation a desktop build of today writes. The operations
+ *   older builds wrote (customers, instrument edits, job drafts, non-conformances, quote,
+ *   delivery and execution-notes documents, certificate drafts and PDFs) were retired in
+ *   Q69 (`RETIRED_SYNC_OPERATIONS`): the cloud no longer applies them, and an event of
+ *   one left in an upgraded outbox is refused for good like any operation outside the
+ *   union (`UNSUPPORTED_SYNC_OPERATION`), readable in the desktop's refused list.
  * - An operation outside the union is not a schema failure: it is an operation
  *   this server does not support (`UNSUPPORTED_SYNC_OPERATION`).
  * - Protocol 3 adds the commit-ordered pull and the paged bootstrap
@@ -71,9 +72,6 @@ export const SYNC_DESKTOP_VERSION_FLOOR = "0.3.0";
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
-/** An open object: the keys of the row the desktop merged into the payload. */
-const rowPayloadSchema = z.looseObject({});
-
 /**
  * `save_local_execution` / `submit_local_execution`. Only the keys the cloud
  * reads to decide are typed; the snapshots travel whole and are validated by
@@ -102,13 +100,7 @@ export const SYNC_COMMAND_ENTITY_TYPES = [
   "asset",
   "attachment",
   "calibration_job",
-  "customer",
-  "non_conformance",
   "service_order",
-  "service_order_execution",
-  "service_order_quote",
-  "service_order_delivery_document",
-  "certificate_draft",
 ] as const;
 
 export type SyncCommandEntityType = (typeof SYNC_COMMAND_ENTITY_TYPES)[number];
@@ -125,8 +117,6 @@ function command<
     payload,
   });
 }
-
-// ---- current members: a desktop build of today still produces these --------
 
 /**
  * `create_local_asset`: the fields the cloud reads (`CreateAssetSchema`, which
@@ -200,73 +190,8 @@ const createLocalAttachmentCommandSchema = command(
   syncAttachmentPayloadSchema,
 );
 
-// ---- legacy members: only an older build's outbox can still hold these -----
-
-const updateLocalAssetCommandSchema = command(
-  "asset",
-  "update_local_asset",
-  rowPayloadSchema,
-);
-const createLocalCustomerCommandSchema = command(
-  "customer",
-  "create_local_customer",
-  rowPayloadSchema,
-);
-const updateLocalCustomerCommandSchema = command(
-  "customer",
-  "update_local_customer",
-  rowPayloadSchema,
-);
-const updateLocalCustomerComplianceCommandSchema = command(
-  "customer",
-  "update_local_customer_compliance",
-  rowPayloadSchema,
-);
-const createLocalJobDraftCommandSchema = command(
-  "calibration_job",
-  "create_local_job_draft",
-  rowPayloadSchema,
-);
-const createLocalNonConformanceCommandSchema = command(
-  "non_conformance",
-  "create_local_non_conformance",
-  rowPayloadSchema,
-);
-const createLocalServiceOrderQuoteDraftCommandSchema = command(
-  "service_order_quote",
-  "create_local_service_order_quote_draft",
-  rowPayloadSchema,
-);
-const saveLocalServiceOrderExecutionNotesCommandSchema = command(
-  "service_order_execution",
-  "save_local_service_order_execution_notes",
-  rowPayloadSchema,
-);
-const createLocalServiceOrderDeliveryDocumentDraftCommandSchema = command(
-  "service_order_delivery_document",
-  "create_local_service_order_delivery_document_draft",
-  rowPayloadSchema,
-);
-const createLocalCertificateDraftCommandSchema = command(
-  "certificate_draft",
-  "create_local_certificate_draft",
-  rowPayloadSchema,
-);
 /**
- * A client-rendered certificate PDF, from a build that published offline. The
- * cloud refuses it for good (certificates are issued online only), so it is a
- * member only to be refused with its own code. Older builds wrote its entity
- * type inconsistently, so any is accepted.
- */
-const generateLocalCertificatePdfCommandSchema = z.object({
-  ...envelopeShape,
-  operation: z.literal("generate_local_certificate_pdf"),
-  payload: z.unknown(),
-});
-
-/**
- * Every operation of the push protocol, keyed by `operation`. Order is the
- * documentation order: current members first.
+ * Every operation of the push protocol, keyed by `operation`.
  */
 const syncCommandSchema = z.discriminatedUnion("operation", [
   createLocalAssetCommandSchema,
@@ -274,24 +199,10 @@ const syncCommandSchema = z.discriminatedUnion("operation", [
   submitLocalExecutionCommandSchema,
   createLocalServiceOrderIntakeCommandSchema,
   createLocalAttachmentCommandSchema,
-  updateLocalAssetCommandSchema,
-  createLocalCustomerCommandSchema,
-  updateLocalCustomerCommandSchema,
-  updateLocalCustomerComplianceCommandSchema,
-  createLocalJobDraftCommandSchema,
-  createLocalNonConformanceCommandSchema,
-  createLocalServiceOrderQuoteDraftCommandSchema,
-  saveLocalServiceOrderExecutionNotesCommandSchema,
-  createLocalServiceOrderDeliveryDocumentDraftCommandSchema,
-  createLocalCertificateDraftCommandSchema,
-  generateLocalCertificatePdfCommandSchema,
 ]);
 
 export type SyncCommand = z.infer<typeof syncCommandSchema>;
 export type SyncCommandOperation = SyncCommand["operation"];
-
-/** Whether a build of today still writes the operation. */
-export type SyncCommandSupport = "current" | "legacy";
 
 /**
  * The rights an operation needs, as the online route that does the same thing states
@@ -316,8 +227,6 @@ export type SyncOperationPermission = {
 export type SyncOperationOrdering = "create" | "follow";
 
 export type SyncOperationDefinition = {
-  /** Whether a desktop of today still produces it. */
-  readonly support: SyncCommandSupport;
   /** What the person looking at the outbox reads (pt-BR). */
   readonly label: string;
   /** The event carries regulated calibration readings. */
@@ -331,17 +240,13 @@ export type SyncOperationDefinition = {
 
 /**
  * The one table of the push protocol's operations, exhaustive by type: adding a member to
- * the union fails to compile here until someone says whether a desktop of today still
- * writes it, what it is called, whether it carries regulated readings, how it is ordered
+ * the union fails to compile here until someone says what it is called, whether it carries regulated readings, how it is ordered
  * and who may send it. The API's handler switch (`apply-event.ts`) is the other
  * exhaustive place. A spec ties the table to the union (every member listed, none twice)
  * and another to the writers of packages/local-db.
- *
- * Order is the documentation order: current members first.
  */
 export const SYNC_OPERATIONS = {
   create_local_asset: {
-    support: "current",
     label: "Cadastro de instrumento",
     regulated: false,
     ordering: "create",
@@ -349,7 +254,6 @@ export const SYNC_OPERATIONS = {
     onlineRoute: "POST /api/assets",
   },
   save_local_execution: {
-    support: "current",
     label: "Rascunho da execução",
     regulated: true,
     ordering: "follow",
@@ -357,7 +261,6 @@ export const SYNC_OPERATIONS = {
     onlineRoute: "POST /api/jobs/:id/execute",
   },
   submit_local_execution: {
-    support: "current",
     label: "Envio da execução para aprovação",
     regulated: true,
     ordering: "follow",
@@ -365,7 +268,6 @@ export const SYNC_OPERATIONS = {
     onlineRoute: "POST /api/jobs/:id/submit",
   },
   create_local_service_order_intake: {
-    support: "current",
     label: "Recebimento de ordem de serviço",
     regulated: false,
     ordering: "create",
@@ -373,7 +275,6 @@ export const SYNC_OPERATIONS = {
     onlineRoute: "POST /api/service-orders",
   },
   create_local_attachment: {
-    support: "current",
     label: "Anexo",
     regulated: false,
     ordering: "create",
@@ -383,100 +284,66 @@ export const SYNC_OPERATIONS = {
     permission: { calibration: ["create"] },
     onlineRoute: "POST /api/sync/attachments/init-upload",
   },
-  update_local_asset: {
-    support: "legacy",
-    label: "Edição de instrumento",
-    regulated: false,
-    ordering: "follow",
-    permission: { equipment: ["update"] },
-    onlineRoute: "PUT /api/assets/:id",
-  },
-  create_local_customer: {
-    support: "legacy",
-    label: "Cadastro de cliente",
-    regulated: false,
-    ordering: "create",
-    permission: { client: ["create"] },
-    onlineRoute: "POST /api/customers",
-  },
-  update_local_customer: {
-    support: "legacy",
-    label: "Edição de cliente",
-    regulated: false,
-    ordering: "follow",
-    permission: { client: ["update"] },
-    onlineRoute: "PUT /api/customers/:id",
-  },
+} as const satisfies Record<SyncCommandOperation, SyncOperationDefinition>;
+
+/**
+ * The operations older builds wrote and the cloud no longer applies (Q69), with the label
+ * the desktop shows when one of them, left in an upgraded outbox, is refused, and how it is
+ * ordered there (a refused creation still holds back the events that refer to it). They are
+ * not members of the protocol: an event of one is `UNSUPPORTED_SYNC_OPERATION`.
+ */
+export const RETIRED_SYNC_OPERATIONS = {
+  update_local_asset: { label: "Edição de instrumento", ordering: "follow" },
+  create_local_customer: { label: "Cadastro de cliente", ordering: "create" },
+  update_local_customer: { label: "Edição de cliente", ordering: "follow" },
   update_local_customer_compliance: {
-    support: "legacy",
     label: "Conformidade do cliente",
-    regulated: false,
     ordering: "follow",
-    permission: { client: ["update"] },
-    onlineRoute: "PUT /api/customers/:id/compliance",
   },
   create_local_job_draft: {
-    support: "legacy",
     label: "Abertura de calibração",
-    regulated: false,
     ordering: "create",
-    permission: { calibration: ["create"] },
-    onlineRoute: "POST /api/jobs",
   },
   create_local_non_conformance: {
-    support: "legacy",
     label: "Registro de não conformidade",
-    regulated: false,
     ordering: "create",
-    permission: { non_conformance: ["create"] },
-    onlineRoute: "POST /api/nc",
   },
   create_local_service_order_quote_draft: {
-    support: "legacy",
     label: "Orçamento da ordem de serviço",
-    regulated: false,
     ordering: "create",
-    permission: { service_order: ["quote_create"] },
-    onlineRoute: "POST /api/service-orders/:id/quotes",
   },
   save_local_service_order_execution_notes: {
-    support: "legacy",
     label: "Notas da execução da OS",
-    regulated: false,
     ordering: "follow",
-    permission: { service_order: ["execute"] },
-    onlineRoute: "PATCH /api/service-orders/:id/execution",
   },
   create_local_service_order_delivery_document_draft: {
-    support: "legacy",
     label: "Documento de entrega",
-    regulated: false,
     ordering: "create",
-    permission: { service_order: ["deliver"] },
-    onlineRoute: "POST /api/service-orders/:id/delivery-document",
   },
-  // An audit-only marker of an older build: it writes one audit row, so it needs what
-  // the push needed before the permission table existed.
   create_local_certificate_draft: {
-    support: "legacy",
     label: "Rascunho de certificado",
-    regulated: false,
     ordering: "create",
-    permission: { calibration: ["create"] },
-    onlineRoute: "POST /api/sync/push (audit marker)",
   },
-  // Certificates are issued online only, after the approval; an offline "publish PDF"
-  // is the approve decision, so it asks for the approve right (and is refused for good
-  // whoever sends it).
   generate_local_certificate_pdf: {
-    support: "legacy",
     label: "Publicação de certificado",
-    regulated: false,
     ordering: "follow",
-    permission: { calibration: ["approve"] },
-    onlineRoute: "POST /api/jobs/:id/approve",
   },
-} as const satisfies Record<SyncCommandOperation, SyncOperationDefinition>;
+} as const satisfies Record<
+  string,
+  { readonly label: string; readonly ordering: SyncOperationOrdering }
+>;
+
+/** The entity types of the retired operations (for the labels of a refused event). */
+export const RETIRED_SYNC_ENTITY_TYPES = [
+  "customer",
+  "non_conformance",
+  "service_order_execution",
+  "service_order_quote",
+  "service_order_delivery_document",
+  "certificate_draft",
+] as const;
+
+export type RetiredSyncEntityType = (typeof RETIRED_SYNC_ENTITY_TYPES)[number];
 
 export const SYNC_COMMAND_OPERATIONS: readonly SyncCommandOperation[] =
   syncCommandSchema.options.map((member) => member.shape.operation.value);
@@ -487,21 +354,16 @@ export function isSyncCommandOperation(
   return Object.hasOwn(SYNC_OPERATIONS, value);
 }
 
-export function syncCommandSupport(
-  operation: string,
-): SyncCommandSupport | null {
-  return isSyncCommandOperation(operation)
-    ? SYNC_OPERATIONS[operation].support
-    : null;
-}
-
 /** The pt-BR label of an operation, or undefined for one this build does not know. */
 export function syncOperationLabel(
   operation: string | null,
 ): string | undefined {
-  return operation !== null && isSyncCommandOperation(operation)
-    ? SYNC_OPERATIONS[operation].label
-    : undefined;
+  if (operation === null) return undefined;
+  if (isSyncCommandOperation(operation))
+    return SYNC_OPERATIONS[operation].label;
+  return Object.entries(RETIRED_SYNC_OPERATIONS).find(
+    ([candidate]) => candidate === operation,
+  )?.[1].label;
 }
 
 /** Whether the operation's events carry regulated calibration readings. */
@@ -511,17 +373,26 @@ export function isRegulatedSyncOperation(operation: string): boolean {
   );
 }
 
-/** Whether the operation creates a record the cloud may not have yet (`SyncOperationOrdering`). */
+/**
+ * Whether the operation creates a record the cloud may not have yet (`SyncOperationOrdering`).
+ * A retired creation counts: one left in an upgraded outbox and refused still holds back the
+ * events that refer to its record.
+ */
 export function isCreateSyncOperation(operation: string): boolean {
-  return (
-    isSyncCommandOperation(operation) &&
-    SYNC_OPERATIONS[operation].ordering === "create"
+  if (isSyncCommandOperation(operation)) {
+    return SYNC_OPERATIONS[operation].ordering === "create";
+  }
+  return Object.entries(RETIRED_SYNC_OPERATIONS).some(
+    ([candidate, definition]) =>
+      candidate === operation && definition.ordering === "create",
   );
 }
 
 /** The operations that create a record, for the places that need the list (SQL `IN (...)`). */
-export const SYNC_CREATE_OPERATIONS: readonly SyncCommandOperation[] =
-  SYNC_COMMAND_OPERATIONS.filter(isCreateSyncOperation);
+export const SYNC_CREATE_OPERATIONS: readonly string[] = [
+  ...SYNC_COMMAND_OPERATIONS,
+  ...Object.keys(RETIRED_SYNC_OPERATIONS),
+].filter(isCreateSyncOperation);
 
 export type SyncCommandParseResult =
   | { ok: true; command: SyncCommand }

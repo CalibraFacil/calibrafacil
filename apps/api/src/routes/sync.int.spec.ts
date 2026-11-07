@@ -349,201 +349,140 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // REQ-SEC-TAG-001 (desktop RENAME, cross-org): applyUpdateLocalAsset's tag
-  // collision check was still the GLOBAL, unscoped `WHERE tag=@tag` — the same
-  // bug class as the CREATE path above, on the rename path instead. Unscoped it
-  // over-rejected a rename to a tag only ANOTHER lab holds (the DB now only
-  // enforces UNIQUE(lab_organization_id, tag)) and re-exposed the cross-tenant
-  // existence oracle. RED today: the rename is rejected TAG_ALREADY_EXISTS even
-  // though org B, not org A, holds the tag.
+  // REQ-SEC-TAG-001/002 (desktop CREATE, tag uniqueness): the tag collision check is
+  // scoped to the device's laboratory (the DB enforces UNIQUE(lab_organization_id, tag)).
+  // Unscoped it would over-reject a tag only ANOTHER lab holds and re-expose a
+  // cross-tenant existence oracle. (The rename path, `update_local_asset`, was retired
+  // in Q69; the create path is the one a desktop still writes.)
   // ───────────────────────────────────────────────────────────────────────────
-  it("REQ-SEC-TAG-001: POST /push update_local_asset rename to a tag used ONLY by another org → accepted, tag persisted", async () => {
-    const orgA = await seedOrg({ orgId: "org-a", role: "operator" });
-    const orgB = await seedOrg({ orgId: "org-b", role: "operator" });
-
-    const customerA = await seedCustomerRow({
-      labOrgId: orgA.orgId,
-      clientOrgId: "client-a-rename-xorg",
-      name: "Acme",
-    });
-    const customerB = await seedCustomerRow({
-      labOrgId: orgB.orgId,
-      clientOrgId: "client-b-rename-xorg",
-      name: "Beta",
-    });
+  async function seedTagFixture(slug: string) {
     const [type] = await db
       .insert(assetType)
-      .values({
-        name: "Instrumento",
-        slug: "instrumento-rename-xorg",
-        definition: [],
-      })
+      .values({ name: "Instrumento", slug, definition: [] })
       .returning({ id: assetType.id });
     if (!type) throw new Error("assetType insert failed");
+    return type.id;
+  }
 
-    // Org B already holds the target tag.
-    await withStatusRepair((tx) =>
-      tx.insert(asset).values({
-        unitId: orgB.unitId,
-        customerId: customerB,
-        labOrganizationId: orgB.orgId,
-        assetTypeId: type.id,
-        name: "Ativo Org B",
-        serialNumber: "SN-ORGB-RENAME",
-        tag: "XORG-RENAME-TARGET",
-        status: "ACTIVE",
-      }),
-    );
-
-    // Org A's own asset, to be renamed.
-    const [ownAsset] = await withStatusRepair((tx) =>
-      tx
-        .insert(asset)
-        .values({
-          unitId: orgA.unitId,
-          customerId: customerA,
-          labOrganizationId: orgA.orgId,
-          assetTypeId: type.id,
-          name: "Ativo Org A",
-          serialNumber: "SN-ORGA-RENAME",
-          tag: "ORGA-ORIGINAL-TAG",
-          status: "ACTIVE",
-        })
-        .returning({ id: asset.id }),
-    );
-    if (!ownAsset) throw new Error("ownAsset insert failed");
-
-    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-
-    const res = await syncRouter.request("/push", {
-      method: "POST",
-      headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
-      body: buildPushBody([
-        {
-          eventId: "evt-rename-xorg-001",
-          entityType: "asset",
-          entityId: "local-asset-rename-xorg",
-          operation: "update_local_asset",
-          payload: {
-            remoteId: ownAsset.id,
-            tag: "XORG-RENAME-TARGET",
-          },
-          occurredAt: new Date().toISOString(),
-          actorUserId: orgA.userId,
-          organizationId: orgA.orgId,
-          unitId: orgA.unitId,
-          idempotencyKey: "idem-rename-xorg-001",
-          localVersion: 0,
-        },
-      ]),
-    });
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.rejected).toHaveLength(0);
-    expect(body.accepted).toHaveLength(1);
-
-    const [renamed] = await db
-      .select({ tag: asset.tag })
-      .from(asset)
-      .where(eq(asset.id, ownAsset.id))
-      .limit(1);
-    expect(renamed?.tag).toBe("XORG-RENAME-TARGET");
-
-    // Both orgs now hold the tag, each scoped to its own lab org.
-    const holders = await db
-      .select({ id: asset.id })
-      .from(asset)
-      .where(eq(asset.tag, "XORG-RENAME-TARGET"));
-    expect(holders).toHaveLength(2);
-  });
-
-  // REQ-SEC-TAG-002 (desktop RENAME, same-org) ------------------------------
-  it("REQ-SEC-TAG-002: POST /push update_local_asset rename to a tag already used in the SAME org → rejected, tag unchanged", async () => {
-    const org = await seedOrg({ orgId: "org-a", role: "operator" });
-    const customerId = await seedCustomerRow({
-      labOrgId: org.orgId,
-      clientOrgId: "client-a-rename-same",
-      name: "Acme",
-    });
-    const [type] = await db
-      .insert(assetType)
-      .values({
-        name: "Instrumento",
-        slug: "instrumento-rename-same",
-        definition: [],
-      })
-      .returning({ id: assetType.id });
-    if (!type) throw new Error("assetType insert failed");
-
-    // Another asset in the SAME org already holds the target tag.
-    await withStatusRepair((tx) =>
-      tx.insert(asset).values({
-        unitId: org.unitId,
-        customerId,
-        labOrganizationId: org.orgId,
-        assetTypeId: type.id,
-        name: "Outro Ativo",
-        serialNumber: "SN-SAME-RENAME-OTHER",
-        tag: "SAME-ORG-TAKEN",
-        status: "ACTIVE",
-      }),
-    );
-
-    const [ownAsset] = await withStatusRepair((tx) =>
-      tx
-        .insert(asset)
-        .values({
-          unitId: org.unitId,
-          customerId,
-          labOrganizationId: org.orgId,
-          assetTypeId: type.id,
-          name: "Ativo a renomear",
-          serialNumber: "SN-SAME-RENAME-SELF",
-          tag: "SAME-ORG-ORIGINAL",
-          status: "ACTIVE",
-        })
-        .returning({ id: asset.id }),
-    );
-    if (!ownAsset) throw new Error("ownAsset insert failed");
-
+  async function pushCreateAsset(
+    org: { userId: string; orgId: string; unitId: number },
+    event: { eventId: string; customerId: number; typeId: number; tag: string },
+  ) {
     loginAs({ userId: org.userId, organizationId: org.orgId });
-
     const res = await syncRouter.request("/push", {
       method: "POST",
       headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
       body: buildPushBody([
         {
-          eventId: "evt-rename-same-002",
+          eventId: event.eventId,
           entityType: "asset",
-          entityId: "local-asset-rename-same",
-          operation: "update_local_asset",
+          entityId: `local-${event.eventId}`,
+          operation: "create_local_asset",
           payload: {
-            remoteId: ownAsset.id,
-            tag: "SAME-ORG-TAKEN",
+            customerId: event.customerId,
+            assetTypeId: event.typeId,
+            name: "Ativo novo",
+            serialNumber: `SN-${event.eventId}`,
+            tag: event.tag,
           },
           occurredAt: new Date().toISOString(),
           actorUserId: org.userId,
           organizationId: org.orgId,
           unitId: org.unitId,
-          idempotencyKey: "idem-rename-same-002",
+          idempotencyKey: `idem-${event.eventId}`,
           localVersion: 0,
         },
       ]),
     });
-
     expect(res.status).toBe(200);
-    const body = await res.json();
+    return res.json();
+  }
+
+  it("REQ-SEC-TAG-001: POST /push create_local_asset with a tag used ONLY by another org → accepted, tag persisted", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "operator" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "operator" });
+    const customerA = await seedCustomerRow({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-tag-xorg",
+      name: "Acme",
+    });
+    const customerB = await seedCustomerRow({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b-tag-xorg",
+      name: "Beta",
+    });
+    const typeId = await seedTagFixture("instrumento-tag-xorg");
+
+    // Org B already holds the tag.
+    await withStatusRepair((tx) =>
+      tx.insert(asset).values({
+        unitId: orgB.unitId,
+        customerId: customerB,
+        labOrganizationId: orgB.orgId,
+        assetTypeId: typeId,
+        name: "Ativo Org B",
+        serialNumber: "SN-ORGB-TAG",
+        tag: "XORG-TAG-TARGET",
+        status: "ACTIVE",
+      }),
+    );
+
+    const body = await pushCreateAsset(orgA, {
+      eventId: "evt-tag-xorg-001",
+      customerId: customerA,
+      typeId,
+      tag: "XORG-TAG-TARGET",
+    });
+    expect(body.rejected).toHaveLength(0);
+    expect(body.accepted).toHaveLength(1);
+
+    // Both orgs now hold the tag, each scoped to its own lab org.
+    const holders = await db
+      .select({ org: asset.labOrganizationId })
+      .from(asset)
+      .where(eq(asset.tag, "XORG-TAG-TARGET"));
+    expect(holders.map((row) => row.org).toSorted()).toEqual([
+      orgA.orgId,
+      orgB.orgId,
+    ]);
+  });
+
+  it("REQ-SEC-TAG-002: POST /push create_local_asset with a tag already used in the SAME org → rejected, nothing created", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    const customerId = await seedCustomerRow({
+      labOrgId: org.orgId,
+      clientOrgId: "client-a-tag-same",
+      name: "Acme",
+    });
+    const typeId = await seedTagFixture("instrumento-tag-same");
+    await withStatusRepair((tx) =>
+      tx.insert(asset).values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: org.orgId,
+        assetTypeId: typeId,
+        name: "Outro Ativo",
+        serialNumber: "SN-SAME-TAG-OTHER",
+        tag: "SAME-ORG-TAKEN",
+        status: "ACTIVE",
+      }),
+    );
+
+    const body = await pushCreateAsset(org, {
+      eventId: "evt-tag-same-002",
+      customerId,
+      typeId,
+      tag: "SAME-ORG-TAKEN",
+    });
     expect(body.accepted).toHaveLength(0);
     expect(body.rejected).toHaveLength(1);
     expect(body.rejected[0].code).toBe("TAG_ALREADY_EXISTS");
-
-    const [unchanged] = await db
-      .select({ tag: asset.tag })
-      .from(asset)
-      .where(eq(asset.id, ownAsset.id))
-      .limit(1);
-    expect(unchanged?.tag).toBe("SAME-ORG-ORIGINAL");
+    expect(
+      await db
+        .select({ id: asset.id })
+        .from(asset)
+        .where(eq(asset.tag, "SAME-ORG-TAKEN")),
+    ).toHaveLength(1);
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -781,7 +720,7 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     expect(audit).toHaveLength(0);
   });
 
-  it("REQ-SYNC-PUSH-UNKNOWN-002: the audit-only legacy certificate-draft marker is still acknowledged; an attachment is not (sync-attachments.int.spec.ts)", async () => {
+  it("REQ-SYNC-PUSH-UNKNOWN-002 (Q69): the retired audit-only certificate-draft marker is refused as unsupported, like an attachment that names no uploaded file (sync-attachments.int.spec.ts)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "operator" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
@@ -814,10 +753,11 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
 
     const body = await res.json();
     // An attachment event that names no uploaded file is no longer acknowledged.
-    expect(body.rejected).toHaveLength(1);
+    expect(body.accepted).toHaveLength(0);
+    expect(body.rejected).toHaveLength(2);
     expect(body.rejected[0].eventId).toBe("evt-attachment-001");
-    expect(body.accepted).toHaveLength(1);
-    expect(body.accepted[0].eventId).toBe("evt-draft-001");
+    expect(body.rejected[1].eventId).toBe("evt-draft-001");
+    expect(body.rejected[1].code).toBe("UNSUPPORTED_SYNC_OPERATION");
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -1055,12 +995,12 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
         .returning({ id: asset.id }),
     );
     if (!existing) throw new Error("seed failed");
-    // An update that already applied and wrote its audit row (the last thing an
+    // A creation that already applied and wrote its audit row (the last thing an
     // op does); the process died before marking the claim applied, and the
-    // lease has since run out. Applying it again would rename the asset again.
+    // lease has since run out. Applying it again would create the instrument again.
     await db.insert(organizationEventLog).values({
       organizationId: org.orgId,
-      action: "desktop_sync.update_local_asset",
+      action: "desktop_sync.create_local_asset",
       entityType: "asset",
       entityId: "local-asset-diedlate",
       details: { eventId: "evt-diedlate", remoteEntityId: existing.id },
@@ -1079,8 +1019,14 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
           eventId: "evt-diedlate",
           entityType: "asset",
           entityId: "local-asset-diedlate",
-          operation: "update_local_asset",
-          payload: { name: "Nome do replay" },
+          operation: "create_local_asset",
+          payload: {
+            customerId: context.customerId,
+            assetTypeId: context.assetTypeId,
+            name: "Nome do replay",
+            serialNumber: "SN-DL-REPLAY",
+            tag: "DIEDLATE-REPLAY",
+          },
           occurredAt: new Date().toISOString(),
           actorUserId: org.userId,
           organizationId: org.orgId,
@@ -1094,6 +1040,13 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     expect(body.rejected).toHaveLength(0);
     expect(body.accepted).toHaveLength(1);
     expect(body.accepted[0].remoteEntityId).toBe(existing.id);
+    // Not applied again: no second instrument, the first untouched.
+    expect(
+      await db
+        .select({ id: asset.id })
+        .from(asset)
+        .where(eq(asset.tag, "DIEDLATE-REPLAY")),
+    ).toEqual([]);
     const [after] = await db
       .select({ name: asset.name })
       .from(asset)
@@ -1153,7 +1106,7 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     for (let index = 0; index < 30; index += 1) {
       await db.insert(organizationEventLog).values({
         organizationId: org.orgId,
-        action: "desktop_sync.update_local_asset",
+        action: "desktop_sync.save_local_execution",
         entityType: "asset",
         entityId: "local-busy-asset",
         details: { eventId: `evt-noise-${index}` },

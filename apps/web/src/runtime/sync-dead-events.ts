@@ -7,6 +7,7 @@ import {
   isKnownOutboxRejectionCode,
 } from '@calibra-facil/contracts/outbox-rejections'
 import {
+  type RetiredSyncEntityType,
   type SyncCommandEntityType,
   syncOperationLabel,
 } from '@calibra-facil/contracts/sync-protocol'
@@ -32,8 +33,6 @@ const GENERIC_REASON =
 const REASONS: Partial<Record<OutboxFailureCode, string>> = {
   UNSUPPORTED_SYNC_OPERATION:
     'A nuvem não reconhece este tipo de alteração, provavelmente feita por uma versão antiga do aplicativo.',
-  OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED:
-    'Certificados são emitidos somente online: aprove a calibração na nuvem e o certificado é gerado e assinado lá.',
   STATUS_PAYLOAD_MISMATCH:
     'O status informado por esta alteração não é o que a calibração assume na nuvem.',
   INVALID_DESKTOP_EVENT_PAYLOAD:
@@ -89,8 +88,14 @@ const REASONS: Partial<Record<OutboxFailureCode, string>> = {
     'O técnico da calibração não tem competência ativa para este tipo de instrumento.',
 }
 
-/** The entity types of the push protocol's commands, in the words of the person at the queue. */
-const ENTITY_LABELS: Record<SyncCommandEntityType, string> = {
+/**
+ * The entity types of the push protocol's commands and of the retired ones an upgraded
+ * outbox may still hold, in the words of the person at the queue.
+ */
+const ENTITY_LABELS: Record<
+  SyncCommandEntityType | RetiredSyncEntityType,
+  string
+> = {
   asset: 'Ativo',
   attachment: 'Anexo',
   calibration_job: 'Calibração',

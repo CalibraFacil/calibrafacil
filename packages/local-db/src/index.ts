@@ -46,7 +46,6 @@ export {
   createLocalAsset,
   getLocalAssetDetail,
   listLocalAssets,
-  updateLocalAsset,
 } from "./assets";
 export { listLocalAssetTypes } from "./asset-types";
 export {
@@ -56,12 +55,7 @@ export {
   markAttachmentUploaded,
   markAttachmentUploadDead,
 } from "./attachments";
-export {
-  createLocalCustomer,
-  getLocalCustomerDetail,
-  listLocalCustomers,
-  updateLocalCustomer,
-} from "./customers";
+export { getLocalCustomerDetail, listLocalCustomers } from "./customers";
 export { getLocalMethodDetail, listLocalMethods } from "./methods";
 export {
   getLocalStandardDetail,
@@ -80,7 +74,6 @@ export {
   createLocalServiceOrderIntake,
   getLocalServiceOrderDetail,
   listLocalServiceOrders,
-  saveLocalServiceOrderExecutionNotes,
 } from "./service-orders";
 export { currentLocalDbSchemaVersion, localDbMigrations } from "./migrations";
 export { countSkippedRows, releaseSettledSkippedRows } from "./skipped-rows";

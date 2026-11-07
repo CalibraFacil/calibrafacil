@@ -3,6 +3,7 @@ import {
   DESKTOP_UPDATE_REQUIRED_CODE,
   LEGACY_SYNC_PROTOCOL_VERSION,
   SYNC_COMMAND_OPERATIONS,
+  RETIRED_SYNC_OPERATIONS,
   SYNC_CREATE_OPERATIONS,
   SYNC_DESKTOP_VERSION_FLOOR,
   SYNC_OPERATIONS,
@@ -15,7 +16,7 @@ import {
   isCreateSyncOperation,
   isRegulatedSyncOperation,
   parseSyncCommand,
-  syncCommandSupport,
+  isSyncCommandOperation,
   syncOperationLabel,
   syncPushRequestEnvelopeSchema,
   syncPushRequestSchema,
@@ -44,29 +45,6 @@ const SAMPLES = [
   ],
   ["service_order", "create_local_service_order_intake", { assetId: 1 }],
   ["attachment", "create_local_attachment", { fileName: "a.pdf" }],
-  ["asset", "update_local_asset", { name: "Novo" }],
-  ["customer", "create_local_customer", { name: "ACME" }],
-  ["customer", "update_local_customer", { name: "ACME 2" }],
-  ["customer", "update_local_customer_compliance", { compliance: {} }],
-  ["calibration_job", "create_local_job_draft", { assetId: 1, serviceId: 2 }],
-  ["non_conformance", "create_local_non_conformance", { description: "x" }],
-  [
-    "service_order_quote",
-    "create_local_service_order_quote_draft",
-    { serviceOrderId: "so-1" },
-  ],
-  [
-    "service_order_execution",
-    "save_local_service_order_execution_notes",
-    { notes: "n" },
-  ],
-  [
-    "service_order_delivery_document",
-    "create_local_service_order_delivery_document_draft",
-    {},
-  ],
-  ["certificate_draft", "create_local_certificate_draft", {}],
-  ["calibration_job", "generate_local_certificate_pdf", { pdf: "bytes" }],
 ] as const;
 
 function sorted(values: readonly string[]): string[] {
@@ -90,28 +68,45 @@ describe("SyncCommand union (REQ-SP-1)", () => {
     );
   });
 
-  it("REQ-SP-1: the support table lists every member exactly once, with the operations a desktop still produces as current", () => {
+  it("REQ-SP-1: the operation table lists every member exactly once", () => {
     expect(sorted(Object.keys(SYNC_OPERATIONS))).toEqual(
       sorted(SYNC_COMMAND_OPERATIONS),
     );
     expect(new Set(SYNC_COMMAND_OPERATIONS).size).toBe(
       SYNC_COMMAND_OPERATIONS.length,
     );
-    const current = sorted(
-      Object.entries(SYNC_OPERATIONS)
-        .filter(([, definition]) => definition.support === "current")
-        .map(([operation]) => operation),
-    );
-    expect(current).toEqual([
+    expect(sorted(SYNC_COMMAND_OPERATIONS)).toEqual([
       "create_local_asset",
       "create_local_attachment",
       "create_local_service_order_intake",
       "save_local_execution",
       "submit_local_execution",
     ]);
-    expect(syncCommandSupport("update_local_asset")).toBe("legacy");
-    expect(syncCommandSupport("save_local_execution")).toBe("current");
-    expect(syncCommandSupport("approve_from_the_future")).toBeNull();
+  });
+
+  it("REQ-SP-1 (Q69): the retired operations are not members: they are unsupported, and still have a label for the refused list", () => {
+    for (const [operation, { label }] of Object.entries(
+      RETIRED_SYNC_OPERATIONS,
+    )) {
+      expect(isSyncCommandOperation(operation), operation).toBe(false);
+      expect(syncOperationLabel(operation), operation).toBe(label);
+    }
+    expect(
+      parseSyncCommand({
+        ...envelope,
+        entityType: "customer",
+        operation: "create_local_customer",
+        payload: { name: "ACME" },
+      }),
+    ).toMatchObject({ ok: false, kind: "unsupported_operation" });
+    expect(
+      parseSyncCommand({
+        ...envelope,
+        entityType: "calibration_job",
+        operation: "generate_local_certificate_pdf",
+        payload: {},
+      }),
+    ).toMatchObject({ ok: false, kind: "unsupported_operation" });
   });
 
   it("REQ-SP-1: the operation table says which operations carry regulated readings and which create a record", () => {
@@ -123,9 +118,11 @@ describe("SyncCommand union (REQ-SP-1)", () => {
       ),
     ).toEqual(["save_local_execution", "submit_local_execution"]);
     expect(isRegulatedSyncOperation("submit_local_execution")).toBe(true);
-    expect(isRegulatedSyncOperation("create_local_customer")).toBe(false);
+    expect(isRegulatedSyncOperation("create_local_asset")).toBe(false);
     expect(isRegulatedSyncOperation("approve_from_the_future")).toBe(false);
 
+    // The retired creations count too: one left in an upgraded outbox and refused still
+    // holds back what refers to its record.
     expect(sorted(SYNC_CREATE_OPERATIONS)).toEqual([
       "create_local_asset",
       "create_local_attachment",
@@ -137,8 +134,9 @@ describe("SyncCommand union (REQ-SP-1)", () => {
       "create_local_service_order_intake",
       "create_local_service_order_quote_draft",
     ]);
+    expect(isCreateSyncOperation("update_local_customer")).toBe(false);
     expect(isCreateSyncOperation("create_local_asset")).toBe(true);
-    expect(isCreateSyncOperation("update_local_asset")).toBe(false);
+    expect(isCreateSyncOperation("submit_local_execution")).toBe(false);
     expect(isCreateSyncOperation("create_local_from_the_future")).toBe(false);
   });
 
@@ -169,7 +167,7 @@ describe("SyncCommand union (REQ-SP-1)", () => {
       parseSyncCommand({
         ...envelope,
         entityType: "calibration_job",
-        operation: "update_local_asset",
+        operation: "create_local_asset",
         payload: {},
       }),
     ).toMatchObject({ ok: false, kind: "unsupported_operation" });

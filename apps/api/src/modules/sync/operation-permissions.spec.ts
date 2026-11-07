@@ -35,7 +35,6 @@ const FIELD_ROLES: readonly RoleName[] = [
   "technician",
   "operator",
 ];
-const MANAGER_ROLES: readonly RoleName[] = ["owner", "admin"];
 
 /**
  * Who the ONLINE routes let through, written out by hand from the role
@@ -43,22 +42,11 @@ const MANAGER_ROLES: readonly RoleName[] = ["owner", "admin"];
  * table entry that drifts (or a role that gains a right) turns this red.
  */
 const EXPECTED_ALLOWED: Record<Operation, readonly RoleName[]> = {
-  create_local_job_draft: FIELD_ROLES,
   create_local_asset: FIELD_ROLES,
-  update_local_asset: FIELD_ROLES,
-  create_local_customer: FIELD_ROLES,
-  update_local_customer: FIELD_ROLES,
-  update_local_customer_compliance: FIELD_ROLES,
   save_local_execution: FIELD_ROLES,
   submit_local_execution: FIELD_ROLES,
   create_local_service_order_intake: ["owner", "admin", "operator", "member"],
-  create_local_non_conformance: ["owner", "admin", "technician"],
-  create_local_service_order_quote_draft: MANAGER_ROLES,
-  save_local_service_order_execution_notes: FIELD_ROLES,
-  create_local_service_order_delivery_document_draft: MANAGER_ROLES,
   create_local_attachment: FIELD_ROLES,
-  create_local_certificate_draft: FIELD_ROLES,
-  generate_local_certificate_pdf: MANAGER_ROLES,
 };
 
 describe("REQ-SYNC-RBAC-1: the push permission table", () => {
@@ -90,21 +78,22 @@ describe("REQ-SYNC-RBAC-1: the push permission table", () => {
     }
   });
 
-  it("a unit role elevates only on unit-scoped resources, as the online guard does", () => {
-    // service_order is unit-scoped: a unit_admin operator may quote.
+  it("a unit role elevates the member role, as the online guard does", () => {
+    const allowed = (
+      role: RoleName,
+      unitRole: "unit_admin" | null,
+      op: Operation,
+    ) => authorizeSyncOperation({ role, unitRole }, op).allowed;
+    // A technician may not open an intake alone, a unit_admin technician may.
     expect(
-      authorizeSyncOperation(
-        { role: "operator", unitRole: "unit_admin" },
-        "create_local_service_order_quote_draft",
-      ).allowed,
-    ).toBe(true);
-    // client is not: the member role alone decides.
-    expect(
-      authorizeSyncOperation(
-        { role: "member", unitRole: "unit_admin" },
-        "create_local_customer",
-      ).allowed,
+      allowed("technician", null, "create_local_service_order_intake"),
     ).toBe(false);
+    expect(
+      allowed("technician", "unit_admin", "create_local_service_order_intake"),
+    ).toBe(true);
+    // A plain member may not create an instrument; as unit_admin of the event's unit they may.
+    expect(allowed("member", null, "create_local_asset")).toBe(false);
+    expect(allowed("member", "unit_admin", "create_local_asset")).toBe(true);
   });
 });
 
@@ -154,9 +143,7 @@ describe("REQ-SYNC-RBAC-5: the unit role is the one of the event's unit", () => 
 const ROUTE_FILES: Record<string, string> = {
   "/api/jobs": "../../routes/jobs.ts",
   "/api/assets": "../../routes/assets.ts",
-  "/api/customers": "../../routes/customers.ts",
   "/api/service-orders": "../../routes/service-orders.ts",
-  "/api/nc": "../../routes/non-conformances.ts",
 };
 
 function squash(text: string) {
@@ -179,16 +166,11 @@ describe("REQ-SYNC-RBAC-2: the table follows the online routes", () => {
     return method && route && prefix ? [{ op, method, route, prefix }] : [];
   });
 
-  it("derives every operation from a route file except the two with no route of their own", () => {
-    // The attachment event follows the attachment endpoints' permission and the
-    // legacy certificate-draft marker the push's former gate: neither is a
+  it("derives every operation from a route file except the attachment event", () => {
+    // The attachment event follows the attachment endpoints' permission, not a
     // `withLabPermission` literal in a route file.
     expect(derived.map(({ op }) => op).toSorted()).toEqual(
-      OPERATIONS.filter(
-        (op) =>
-          op !== "create_local_attachment" &&
-          op !== "create_local_certificate_draft",
-      ).toSorted(),
+      OPERATIONS.filter((op) => op !== "create_local_attachment").toSorted(),
     );
   });
 

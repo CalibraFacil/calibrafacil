@@ -12,7 +12,7 @@ operation, so a technician or operator could offline do what the online routes d
 a non-conformance, a service order). The route now only requires authentication, membership and a LAB organization; each
 event is checked, after its schema and scope checks and before anything is prepared or applied, against
 the permission of its row in the push-operation table (`SYNC_OPERATIONS` in `packages/contracts/src/sync-protocol.ts`,
-which also holds each operation's label, regulated flag, support and ordering).
+which also holds each operation's label, regulated flag and ordering).
 
 The role is the member's role **in the event's unit** (`memberForEventUnit`: `event.unitId`, then a numeric `payload.unitId`, then the
 active unit; no assignment there means no unit elevation): the desktop sends no `x-active-unit-id`, so the request's own unit role is
@@ -23,31 +23,21 @@ The check is the online one: `getEffectivePermissionRole(member, permission)` (a
 resources) then `hasPermissionLocally(role, permission)`, the two functions `requirePermission` uses. The table is exhaustive by
 type (`satisfies Record<SyncCommandOperation, ...>`): a new push operation does not compile until someone says who may send it.
 `operation-permissions.spec.ts` reads the online route sources and fails when a route's `withLabPermission(...)` and the table
-disagree, and pins who is allowed per role by hand.
+disagree, and pins who is allowed per role by hand. The operations older builds wrote (customers, instrument edits, job drafts,
+non-conformances, quote, delivery and execution-notes documents, certificate drafts and PDFs) were retired in Q69: the cloud no
+longer applies them, and one left in an upgraded outbox is refused `UNSUPPORTED_SYNC_OPERATION`, before any permission is decided.
 
-| Operation                                            | Permission                   | Online route                                     |
-| ---------------------------------------------------- | ---------------------------- | ------------------------------------------------ |
-| `create_local_job_draft`                             | `calibration:create`         | `POST /api/jobs`                                 |
-| `create_local_asset`                                 | `equipment:create`           | `POST /api/assets`                               |
-| `update_local_asset`                                 | `equipment:update`           | `PUT /api/assets/:id`                            |
-| `create_local_customer`                              | `client:create`              | `POST /api/customers`                            |
-| `update_local_customer`                              | `client:update`              | `PUT /api/customers/:id`                         |
-| `update_local_customer_compliance`                   | `client:update`              | `PUT /api/customers/:id/compliance`              |
-| `save_local_execution`                               | `calibration:execute`        | `POST /api/jobs/:id/execute`                     |
-| `submit_local_execution`                             | `calibration:submit`         | `POST /api/jobs/:id/submit`                      |
-| `create_local_service_order_intake`                  | `service_order:create`       | `POST /api/service-orders`                       |
-| `create_local_non_conformance`                       | `non_conformance:create`     | `POST /api/non-conformances`                     |
-| `create_local_service_order_quote_draft`             | `service_order:quote_create` | `POST /api/service-orders/:id/quotes`            |
-| `save_local_service_order_execution_notes`           | `service_order:execute`      | `PATCH /api/service-orders/:id/execution`        |
-| `create_local_service_order_delivery_document_draft` | `service_order:deliver`      | `POST /api/service-orders/:id/delivery-document` |
-| `create_local_attachment`                            | `calibration:create`         | `/api/sync/attachments/*` (same permission)      |
-| `create_local_certificate_draft` (legacy marker)     | `calibration:create`         | the push's former gate                           |
-| `generate_local_certificate_pdf` (legacy, refused)   | `calibration:approve`        | `POST /api/jobs/:id/approve`                     |
+| Operation                           | Permission             | Online route                                |
+| ----------------------------------- | ---------------------- | ------------------------------------------- |
+| `create_local_asset`                | `equipment:create`     | `POST /api/assets`                          |
+| `save_local_execution`              | `calibration:execute`  | `POST /api/jobs/:id/execute`                |
+| `submit_local_execution`            | `calibration:submit`   | `POST /api/jobs/:id/submit`                 |
+| `create_local_service_order_intake` | `service_order:create` | `POST /api/service-orders`                  |
+| `create_local_attachment`           | `calibration:create`   | `/api/sync/attachments/*` (same permission) |
 
 A denied event is rejected with `SYNC_PERMISSION_DENIED`, classified `permanent` in `OUTBOX_REJECTION_CLASSES`: the desktop
 moves it to its refused list (pt-BR copy in `apps/web/src/runtime/sync-dead-events.ts`), where a person discards it or re-queues
-it after the role changes. Nothing is claimed, applied, audited or provisioned for it (a denied `create_local_customer`
-does not create the CLIENT organization). An older desktop does not know the code and retries with backoff (unknown codes are
+it after the role changes. Nothing is claimed, applied or audited for it. An older desktop does not know the code and retries with backoff (unknown codes are
 transient), which is noise, not loss.
 
 ## 2. The attachment upload leg (P0-5)

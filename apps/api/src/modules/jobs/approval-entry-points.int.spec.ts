@@ -38,7 +38,6 @@ import {
   authorizedSignatory,
   calibrationJob,
   customer,
-  customerAuditLog,
   jobAuditLog,
   member,
   organization,
@@ -858,69 +857,60 @@ describe("approval policy — one policy across every entry point", () => {
     return res.json();
   }
 
-  it("REQ-APR-008: a synced asset update is audited as the session user; the claimed actor is metadata only", async () => {
-    const body = await pushEvent(CHECKER, {
-      entityType: "asset",
-      entityId: "local-asset-1",
-      operation: "update_local_asset",
-      actorUserId: MAKER,
-      payload: { remoteId: fixture.assetId, comments: "Ajustado offline" },
+  it("REQ-APR-008: a synced instrument creation is audited as the session user; the claimed actor is metadata only; 'local' adds none", async () => {
+    const [instrument] = await db
+      .select({
+        customerId: asset.customerId,
+        assetTypeId: asset.assetTypeId,
+      })
+      .from(asset)
+      .where(eq(asset.id, fixture.assetId));
+    if (!instrument) throw new Error("asset missing");
+    const payload = (tag: string) => ({
+      customerId: instrument.customerId,
+      assetTypeId: instrument.assetTypeId,
+      name: `Ativo ${tag}`,
+      serialNumber: `SN-${tag}`,
+      tag,
     });
-
-    expect(body.rejected).toEqual([]);
-    expect(body.accepted).toHaveLength(1);
-    const audits = await db
-      .select({ performedBy: assetAuditLog.performedBy })
-      .from(assetAuditLog)
-      .where(eq(assetAuditLog.assetId, fixture.assetId));
-    expect(audits.map((row) => row.performedBy)).toEqual([CHECKER]);
-
-    const [event] = await db
-      .select()
-      .from(organizationEventLog)
-      .where(
-        eq(organizationEventLog.action, "desktop_sync.update_local_asset"),
-      );
-    expect(event?.actorUserId).toBe(CHECKER);
-    expect(event?.details).toMatchObject({ claimedActorUserId: MAKER });
-  });
-
-  it("REQ-APR-008: a synced customer update is audited as the session user; claimed actor kept as metadata; 'local' adds none", async () => {
-    const [cust] = await db.select({ id: customer.id }).from(customer);
-    if (!cust) throw new Error("customer missing");
 
     const claimed = await pushEvent(CHECKER, {
-      entityType: "customer",
-      entityId: "local-customer-1",
-      operation: "update_local_customer",
+      entityType: "asset",
+      entityId: "local-asset-1",
+      operation: "create_local_asset",
       actorUserId: MAKER,
-      payload: { remoteId: cust.id, name: "Renamed by desktop" },
+      payload: payload("APR8-1"),
     });
+    expect(claimed.rejected).toEqual([]);
     expect(claimed.accepted).toHaveLength(1);
 
     const local = await pushEvent(CHECKER, {
-      entityType: "customer",
-      entityId: "local-customer-1",
-      operation: "update_local_customer",
+      entityType: "asset",
+      entityId: "local-asset-2",
+      operation: "create_local_asset",
       actorUserId: "local",
-      payload: { remoteId: cust.id, name: "Renamed again" },
+      payload: payload("APR8-2"),
     });
+    expect(local.rejected).toEqual([]);
     expect(local.accepted).toHaveLength(1);
 
     const audits = await db
-      .select({ performedBy: customerAuditLog.performedBy })
-      .from(customerAuditLog);
+      .select({ performedBy: assetAuditLog.performedBy })
+      .from(assetAuditLog)
+      .where(eq(assetAuditLog.action, "create"));
     expect(audits.map((row) => row.performedBy)).toEqual([CHECKER, CHECKER]);
 
     const events = await db
-      .select({ details: organizationEventLog.details })
+      .select({
+        actorUserId: organizationEventLog.actorUserId,
+        details: organizationEventLog.details,
+      })
       .from(organizationEventLog)
       .where(
-        and(
-          eq(organizationEventLog.action, "desktop_sync.update_local_customer"),
-        ),
+        eq(organizationEventLog.action, "desktop_sync.create_local_asset"),
       );
     expect(events).toHaveLength(2);
+    expect(events.map((row) => row.actorUserId)).toEqual([CHECKER, CHECKER]);
     expect(
       events.filter((row) => JSON.stringify(row.details).includes(MAKER)),
     ).toHaveLength(1);
@@ -988,7 +978,7 @@ describe("approval policy — one policy across every entry point", () => {
     },
   );
 
-  it("REQ-P01-2: a queued generate_local_certificate_pdf event is refused with a precise code, never published", async () => {
+  it("REQ-P01-2 (Q69): a queued generate_local_certificate_pdf event is refused for good as an operation the cloud no longer knows, never published", async () => {
     const jobId = await seedReviewJob(fixture);
 
     const body = await pushEvent(CHECKER, {
@@ -1007,9 +997,7 @@ describe("approval policy — one policy across every entry point", () => {
 
     expect(body.accepted).toHaveLength(0);
     expect(body.rejected).toHaveLength(1);
-    expect(body.rejected[0]?.code).toBe(
-      "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
-    );
+    expect(body.rejected[0]?.code).toBe("UNSUPPORTED_SYNC_OPERATION");
     expect(mocks.uploadToR2).not.toHaveBeenCalled();
     expect(await readJob(jobId)).toMatchObject({
       status: "REVIEW",
