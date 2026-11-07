@@ -1,12 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  portalDriftSeriesResponseSchema,
-  portalFleetAnalyticsResponseSchema,
-  portalOotEventsResponseSchema,
-} from "@calibra-facil/contracts";
-
-import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalKeys } from "@/lib/portal-keys";
 import type {
   AssetDriftSeries,
@@ -15,6 +8,7 @@ import type {
   OotEvent,
   OotEventStatus,
 } from "./types";
+import { portalApi } from "@/lib/portal-api";
 
 export type FleetAnalyticsParams = {
   periodMonths: number;
@@ -26,17 +20,13 @@ export type FleetAnalyticsParams = {
 async function fetchFleetAnalytics(
   params: FleetAnalyticsParams,
 ): Promise<FleetAnalytics> {
-  const searchParams = new URLSearchParams({
-    periodMonths: String(params.periodMonths),
-    bucket: params.bucket,
+  return portalApi.reliability.fleetAnalytics({
+    query: {
+      periodMonths: params.periodMonths,
+      bucket: params.bucket,
+      unitId: params.unitId || undefined,
+    },
   });
-  if (params.unitId) searchParams.set("unitId", String(params.unitId));
-
-  return fetchPortalJson(
-    `/api/portal/analytics/fleet?${searchParams.toString()}`,
-    portalFleetAnalyticsResponseSchema,
-    { errorMessage: "Falha ao carregar os indicadores de confiabilidade" },
-  );
 }
 
 /** Fleet as-found reliability analytics (EOPR) — lab verdicts, never recomputed. */
@@ -55,11 +45,7 @@ export function useDriftSeries(assetId: number) {
   return useQuery({
     queryKey: keys.driftSeries(assetId),
     queryFn: (): Promise<AssetDriftSeries> =>
-      fetchPortalJson(
-        `/api/portal/assets/${assetId}/drift-series`,
-        portalDriftSeriesResponseSchema,
-        { errorMessage: "Falha ao carregar a análise de deriva" },
-      ),
+      portalApi.assets.driftSeries({ params: { id: assetId } }),
     staleTime: 60_000,
   });
 }
@@ -73,16 +59,40 @@ export function useOotEvents(status?: OotEventStatus) {
   return useQuery({
     queryKey: keys.ootEventsByStatus(status),
     queryFn: async (): Promise<Array<OotEvent>> => {
-      const searchParams = new URLSearchParams();
-      if (status) searchParams.set("status", status);
-      const suffix = status ? `?${searchParams.toString()}` : "";
-      const payload = await fetchPortalJson(
-        `/api/portal/oot-events${suffix}`,
-        portalOotEventsResponseSchema,
-        { errorMessage: "Falha ao carregar eventos fora de tolerância" },
-      );
+      const payload = await portalApi.reliability.ootEvents({
+        query: { status },
+      });
       return payload.data;
     },
     staleTime: 60_000,
+  });
+}
+
+type OotAssessmentInput = Parameters<
+  typeof portalApi.reliability.assessOotEvent
+>[0]["body"];
+
+/**
+ * Records the customer's impact assessment of an out-of-tolerance event
+ * (ISO 9001:2015 §7.1.5.2): the event leaves OPEN, so the events refetch.
+ */
+export function useAssessOotEvent(
+  eventId: number,
+  callbacks: { onSuccess: () => void; onError: (error: Error) => void },
+) {
+  const queryClient = useQueryClient();
+  const keys = usePortalKeys();
+  return useMutation({
+    mutationFn: async (body: OotAssessmentInput): Promise<void> => {
+      await portalApi.reliability.assessOotEvent({
+        params: { id: eventId },
+        body,
+      });
+    },
+    onSuccess: () => {
+      callbacks.onSuccess();
+      queryClient.invalidateQueries({ queryKey: keys.ootEvents });
+    },
+    onError: callbacks.onError,
   });
 }

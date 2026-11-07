@@ -1,14 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
-  portalOverviewResponseSchema,
-  portalUnitsSummaryResponseSchema,
   type PortalOverviewResponse,
   type PortalUnitsSummaryResponse,
 } from "@calibra-facil/contracts";
 
-import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalKeys } from "@/lib/portal-keys";
+import { portalApi } from "@/lib/portal-api";
 
 export type PortalOverview = PortalOverviewResponse;
 
@@ -16,9 +14,7 @@ export type OverviewCertificate =
   PortalOverview["certificates"]["recent"][number];
 
 async function fetchOverview(): Promise<PortalOverview> {
-  return fetchPortalJson("/api/portal/overview", portalOverviewResponseSchema, {
-    errorMessage: "Falha ao carregar o painel",
-  });
+  return portalApi.dashboard.overview();
 }
 
 export function useOverview() {
@@ -37,12 +33,7 @@ export function useUnitSummary() {
   const keys = usePortalKeys();
   return useQuery({
     queryKey: keys.unitSummary,
-    queryFn: () =>
-      fetchPortalJson(
-        "/api/portal/units/summary",
-        portalUnitsSummaryResponseSchema,
-        { errorMessage: "Falha ao carregar o resumo por unidade" },
-      ),
+    queryFn: () => portalApi.dashboard.unitsSummary(),
     staleTime: 60_000,
   });
 }

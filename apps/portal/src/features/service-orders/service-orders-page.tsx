@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -11,6 +10,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Button } from "@calibra-facil/ui/button";
 import { StatusBadge } from "@calibra-facil/ui/status-badge";
+import type { PortalServiceOrdersResponse } from "@calibra-facil/contracts";
 import {
   SERVICE_ORDER_STATUS,
   type ServiceOrderStatus,
@@ -34,33 +34,10 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@calibra-facil/ui/select";
-import { portalServiceOrdersResponseSchema } from "@calibra-facil/contracts";
-import { fetchPortalJson } from "@/lib/api-fetch";
-import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
-import { usePortalKeys } from "@/lib/portal-keys";
+import { useServiceOrders } from "./queries";
 import { formatInstant } from "@calibra-facil/shared/format";
 
-type PortalServiceOrder = {
-  id: number;
-  publicId: string;
-  serviceOrderNumber: string;
-  status: ServiceOrderStatus;
-  statusLabel: string;
-  openedAt: string;
-  readyAt: string | null;
-  assetName: string;
-  assetSerialNumber: string | null;
-};
-
-type ServiceOrdersResponse = {
-  data: Array<PortalServiceOrder>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
+type PortalServiceOrder = PortalServiceOrdersResponse["data"][number];
 
 // Module-level so the header/cell renderers are stable component types
 // instead of being re-created on every render of the page.
@@ -133,30 +110,11 @@ export function ServiceOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<ServiceOrderStatus | "">("");
   const limit = 20;
 
-  const keys = usePortalKeys();
-  const { data, isLoading, error } = useQuery({
-    queryKey: keys.serviceOrdersPage({ page, limit, search, statusFilter }),
-    queryFn: async (): Promise<ServiceOrdersResponse> => {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-      });
-
-      if (search) {
-        params.set("query", search);
-      }
-
-      if (statusFilter) {
-        params.set("status", statusFilter);
-      }
-
-      return fetchPortalJson(
-        `/api/portal/service-orders?${params.toString()}`,
-        portalServiceOrdersResponseSchema,
-        { errorMessage: "Falha ao carregar ordens de serviço." },
-      );
-    },
-    placeholderData: keepPreviousDataInScope(keys.serviceOrders),
+  const { data, isLoading, error } = useServiceOrders({
+    page,
+    limit,
+    search,
+    statusFilter,
   });
 
   return (

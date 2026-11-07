@@ -2,10 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
-import {
-  portalCertificatesResponseSchema,
-  portalFleetAssetsResponseSchema,
-} from "@calibra-facil/contracts";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
@@ -22,10 +18,10 @@ import type { IconSvgElement } from "@hugeicons/react";
 
 import { cn } from "@calibra-facil/ui/utils";
 import { usePortalKeys } from "@/lib/portal-keys";
-import { fetchPortalJson } from "@/lib/api-fetch";
 import { getCalibrationStatus } from "@/lib/calibration-status";
 import { Dialog, DialogContent } from "@calibra-facil/ui/dialog";
 import { StatusPill } from "@/components/status-pill";
+import { portalApi } from "@/lib/portal-api";
 
 type AssetHit = {
   id: number;
@@ -45,13 +41,10 @@ type CertificateHit = {
 
 /** The palette is best-effort: a failed or malformed search is an empty list. */
 async function searchAssets(query: string): Promise<Array<AssetHit>> {
-  const params = new URLSearchParams({ query, page: "1", limit: "5" });
   try {
-    const result = await fetchPortalJson(
-      `/api/portal/assets?${params.toString()}`,
-      portalFleetAssetsResponseSchema,
-      { errorMessage: "Falha na busca" },
-    );
+    const result = await portalApi.assets.list({
+      query: { query, page: 1, limit: 5 },
+    });
     return result.data;
   } catch {
     return [];
@@ -61,13 +54,10 @@ async function searchAssets(query: string): Promise<Array<AssetHit>> {
 async function searchCertificates(
   query: string,
 ): Promise<Array<CertificateHit>> {
-  const params = new URLSearchParams({ query, page: "1", limit: "5" });
   try {
-    const result = await fetchPortalJson(
-      `/api/portal/certificates?${params.toString()}`,
-      portalCertificatesResponseSchema,
-      { errorMessage: "Falha na busca" },
-    );
+    const result = await portalApi.certificates.list({
+      query: { query, page: 1, limit: 5 },
+    });
     return result.data;
   } catch {
     return [];

@@ -1,9 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { portalCalendarResponseSchema } from "@calibra-facil/contracts";
-
-import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalKeys } from "@/lib/portal-keys";
+import { portalApi } from "@/lib/portal-api";
 
 export type CalendarDueAsset = {
   id: number;
@@ -24,13 +22,7 @@ async function fetchCalendar(
   to: string,
   unitId?: number,
 ): Promise<CalendarResponse> {
-  const params = new URLSearchParams({ from, to });
-  if (unitId) params.set("unitId", String(unitId));
-  return fetchPortalJson(
-    `/api/portal/calendar?${params.toString()}`,
-    portalCalendarResponseSchema,
-    { errorMessage: "Falha ao carregar o calendário" },
-  );
+  return portalApi.dashboard.calendar({ query: { from, to, unitId } });
 }
 
 /** Instruments coming due inside [from, to] (inclusive, YYYY-MM-DD). */

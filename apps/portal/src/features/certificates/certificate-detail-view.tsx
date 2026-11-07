@@ -50,11 +50,7 @@ import { AccreditationSeal } from "@calibra-facil/ui/accreditation-seal";
 import { StatusPill } from "@/components/status-pill";
 import { CertificateLifecyclePill } from "@/components/certificate-lifecycle-pill";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
-import {
-  portalDownloadLinkResponseSchema,
-  type PortalCertificateDetail,
-} from "@calibra-facil/contracts";
-import { fetchPortalJson } from "@/lib/api-fetch";
+import type { PortalCertificateDetail } from "@calibra-facil/contracts";
 import {
   useSignatureVerdict,
   type SignatureVerdictOverall,
@@ -68,6 +64,7 @@ import {
   formatCalendarDate,
   formatInstant,
 } from "@calibra-facil/shared/format";
+import { portalApi } from "@/lib/portal-api";
 
 /**
  * Amendment chain info (ISO/IEC 17025 §7.8.8) attached by
@@ -470,17 +467,14 @@ export function CertificateDetailView({
   const referenceStandards = certificate.referenceStandards ?? [];
   const isPaymentPending = certificate.releaseStatus === "PAYMENT_PENDING";
   const canDownload = Boolean(certificate.certificateUrl);
-  const certPath = encodeURIComponent(certificate.jobId);
 
   const handleDownload = async () => {
     if (isDownloading || !certificate.certificateUrl) return;
     setIsDownloading(true);
     try {
-      const { url, filename } = await fetchPortalJson(
-        `/api/portal/certificates/${certPath}/download`,
-        portalDownloadLinkResponseSchema,
-        { errorMessage: "Falha ao baixar o certificado" },
-      );
+      const { url, filename } = await portalApi.certificates.download({
+        params: { id: certificate.jobId },
+      });
       await downloadFromUrl(url, filename);
     } catch {
       toast.error("Não foi possível baixar o certificado");
@@ -500,11 +494,10 @@ export function CertificateDetailView({
     if (downloadingStandardId) return;
     setDownloadingStandardId(standardId);
     try {
-      const { url, filename } = await fetchPortalJson(
-        `/api/portal/certificates/${certPath}/reference-standards/${standardId}/certificate/download`,
-        portalDownloadLinkResponseSchema,
-        { errorMessage: "Falha ao baixar" },
-      );
+      const { url, filename } =
+        await portalApi.certificates.referenceStandardDownload({
+          params: { id: certificate.jobId, standardId },
+        });
       await downloadFromUrl(url, filename);
     } catch {
       toast.error("Não foi possível baixar o certificado do padrão");

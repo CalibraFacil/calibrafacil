@@ -1,10 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { prefetchBranding } from "@/features/branding/queries";
-import { portalOrganizationsResponseSchema } from "@calibra-facil/contracts";
+import type { PortalOrganizationsResponse } from "@calibra-facil/contracts";
 
-import { fetchPortalJson } from "@/lib/api-fetch";
+import { prefetchBranding } from "@/features/branding/queries";
+
+import { portalApi } from "@/lib/portal-api";
 import { PORTAL_ORG_KEY } from "@calibra-facil/shared/client-storage-keys";
 import { isRecord } from "@calibra-facil/shared/record";
 import { portalPublicKeys } from "@/lib/portal-keys";
@@ -17,17 +18,7 @@ import { portalPublicKeys } from "@/lib/portal-keys";
  * is switching the session's active organization when it differs from the
  * one the user should land on, and that is skipped in the common case.
  */
-export type PortalOrganization = {
-  id: string;
-  name: string;
-  slug: string;
-  logo: string | null;
-  type: string | null;
-  createdAt: string;
-  memberRole: string;
-  /** `group` = the consolidated "rede" organization. */
-  kind: "unit" | "group";
-};
+export type PortalOrganization = PortalOrganizationsResponse[number];
 
 /**
  * CLIENT organizations where the user holds an external portal role. This is
@@ -38,11 +29,7 @@ export function portalOrganizationsQueryOptions() {
   return queryOptions({
     queryKey: portalPublicKeys.organizations,
     queryFn: (): Promise<Array<PortalOrganization>> =>
-      fetchPortalJson(
-        "/api/portal/organizations",
-        portalOrganizationsResponseSchema,
-        { errorMessage: "Falha ao carregar as organizações" },
-      ),
+      portalApi.shell.organizations(),
   });
 }
 

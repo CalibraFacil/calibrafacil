@@ -30,7 +30,7 @@ apps/portal/src/
   features/          # Extracted domain modules (page + queries + types + components + tests)
   components/        # App components: status-pill, timeline, page-header…
                      # (primitives and instrument-panel come from @calibra-facil/ui)
-  lib/               # calibration-status, status-labels, format, platform, api-fetch (getApiBaseUrl)
+  lib/               # calibration-status, status-labels, format, platform, api-fetch (getApiBaseUrl), portal-api (portalApi)
   hooks/             # use-large-screen (use-mount-effect and use-mobile come from @calibra-facil/ui)
 ```
 
@@ -103,15 +103,42 @@ Do not introduce ad-hoc color choices for status; map to a tone instead.
 
 The portal does **not** use `@calibra-facil/client-runtime` and must **never**
 import `@calibra-facil/api` or `apps/api/*`. It talks to a narrow, cookie-
-authenticated `/api/portal/*` surface with raw `fetch`, wrapped in TanStack Query:
+authenticated `/api/portal/*` surface with raw `fetch`, wrapped in TanStack Query.
+
+Each endpoint is declared **once**, as an endpoint definition in
+`packages/contracts/src/endpoints/portal*.ts` (method, path, query/body schemas,
+response schema, failure message), grouped in `PORTAL_ENDPOINT_GROUPS`. The portal
+turns a definition into a typed call with `portalApi` (`lib/portal-api.ts`):
 
 ```ts
-const response = await fetch(`${getApiBaseUrl()}/api/portal/overview`, {
-  credentials: "include", // session cookie — the portal has no token plumbing
-});
-if (!response.ok) throw new Error("Falha ao carregar o painel");
-return response.json();
+const overview = await portalApi.dashboard.overview();
+const { data } = await portalApi.assets.list({ query: { page: 2, limit: 20 } });
+await portalApi.visits.confirm(
+  { params: { id } },
+  { serverErrorMessage: true },
+);
 ```
+
+- The input is one object, `{ params, query, body }` (each key only when the
+  endpoint has it); the result is the response schema's type. Never write a
+  `/api/portal/...` string, a `URLSearchParams` or a hand-typed response in the
+  portal: add or change the definition instead. Types of a response are
+  `z.infer` aliases of the contract (`PortalOverviewResponse`, ...).
+- It is the portal's own transport (`fetchPortalJson`: `credentials: "include"`,
+  non-2xx becomes a `PortalApiError` with the definition's `failure` message, or
+  the API's own message with `{ serverErrorMessage: true }`, and the body is
+  parsed with the schema: strict in development and tests, a warning in
+  production). It is not `endpointClient` of `client-runtime` because the portal
+  must not depend on that package; the two share only the pure request builder of
+  `@calibra-facil/contracts` (`buildEndpointRequest`: how a definition and an input
+  become a path and a query string).
+- A link the browser opens (a document, not JSON) uses `portalEndpointUrl(def, input)`.
+- The API mounts its handlers against the same definitions (`mount`), and the
+  route-drift spec checks that every definition is served at its method and path.
+  The portal groups are kept out of `ENDPOINT_GROUPS`: the lab SDK, the data-policy
+  registry and the desktop stubs are built from that list, and none of them call
+  the portal. The portal never runs on the desktop, so every portal definition is
+  `cloud-only`.
 
 **Session and organization state are the exception:** those go through the Better
 Auth client (`portalAuthClient` — `usePortalSession`, `usePortalActiveOrganization`,

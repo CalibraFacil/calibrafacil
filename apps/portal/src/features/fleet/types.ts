@@ -5,20 +5,17 @@
  * "in lab"), and the latest approved certificate per instrument.
  */
 
-import type {
-  PortalFleetAsset,
-  PortalFleetAssetsResponse,
+import {
+  PortalListAssetsQuerySchema,
+  type PortalFleetAsset,
+  type PortalFleetAssetsResponse,
 } from "@calibra-facil/contracts";
 
 export type FleetAsset = PortalFleetAsset;
 
 /** Server-side sort fields accepted by `/api/portal/assets`. */
-const FLEET_SORT_FIELDS = [
-  "tag",
-  "name",
-  "nextCalibrationDate",
-  "lastCalibrationDate",
-] as const;
+const FLEET_SORT_FIELDS =
+  PortalListAssetsQuerySchema.shape.sortBy.unwrap().options;
 
 export type FleetSortBy = (typeof FLEET_SORT_FIELDS)[number];
 

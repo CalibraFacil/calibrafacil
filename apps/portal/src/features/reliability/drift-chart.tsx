@@ -17,6 +17,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@calibra-facil/ui/chart";
+import { DRIFT_REGRESSION_MS_PER_MONTH } from "@calibra-facil/contracts";
 import type { AssetDriftSeries, DriftPointSeries } from "./types";
 import { formatInstant, formatNumber } from "@calibra-facil/shared/format";
 
@@ -24,9 +25,6 @@ import { formatInstant, formatNumber } from "@calibra-facil/shared/format";
  * The recharts half of the drift panel. Kept in its own module so recharts/d3
  * load only when a drift chart is actually drawn (the panel lazy-imports it).
  */
-
-/** Must match the API's regression time unit (portal-fleet-reliability.ts). */
-const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
 
 /** How many matched-point series the chart shows at most. */
 const MAX_SERIES = 3;
@@ -107,7 +105,7 @@ export function DriftChart({ data }: { data: AssetDriftSeries }) {
   /** Regression y at a wall-clock time, in the API's months-since-first-cycle axis. */
   const fittedAt = (entry: DriftPointSeries, timeMs: number): number | null => {
     if (!entry.regression) return null;
-    const t = (timeMs - firstCycleMs) / MS_PER_MONTH;
+    const t = (timeMs - firstCycleMs) / DRIFT_REGRESSION_MS_PER_MONTH;
     return entry.regression.intercept + entry.regression.slope * t;
   };
 

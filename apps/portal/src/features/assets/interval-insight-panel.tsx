@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { CheckmarkCircle02Icon, File01Icon } from "@hugeicons/core-free-icons";
@@ -24,10 +23,9 @@ import {
   PanelHeader,
   type SignalTone,
 } from "@calibra-facil/ui/instrument-panel";
-import { portalIntervalUpdateResponseSchema } from "@calibra-facil/contracts";
-import { fetchPortalJson, getApiBaseUrl, jsonInit } from "@/lib/api-fetch";
-import { usePortalKeys } from "@/lib/portal-keys";
-import { useIntervalInsight } from "./queries";
+import { portalAssetEndpoints } from "@calibra-facil/contracts";
+import { portalEndpointUrl } from "@/lib/portal-api";
+import { useIntervalInsight, useSetAssetInterval } from "./queries";
 import type { IntervalInsight } from "./types";
 
 const CLASSIFICATION_META: Record<
@@ -61,8 +59,6 @@ export function IntervalInsightPanel({
   assetId: number;
   currentIntervalMonths: number | null;
 }) {
-  const queryClient = useQueryClient();
-  const keys = usePortalKeys();
   const query = useIntervalInsight(assetId);
   const insight = query.data;
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -70,33 +66,22 @@ export function IntervalInsightPanel({
   // REQ-ENGINE-APPLY: apply the suggestion (writes engine_applied + an auditable
   // rationale citing the method). The customer confirming in the dialog IS their
   // agreement — the dialog exists so the current → proposed change is explicit.
-  const applyMutation = useMutation({
-    mutationFn: async () => {
-      const recommendation = insight?.recommendation;
-      if (!recommendation) return;
-      await fetchPortalJson(
-        `/api/portal/assets/${assetId}/interval`,
-        portalIntervalUpdateResponseSchema,
-        {
-          errorMessage: "Não foi possível aplicar a sugestão.",
-          init: jsonInit("PUT", {
-            intervalMonths: recommendation.proposedIntervalMonths,
-            rationale: `Sugestão do motor de confiabilidade (ILAC-G24 / NCSL RP-1) aplicada — ${insight?.classification}, método ${recommendation.method}.`,
-            source: "engine",
-          }),
-        },
-      );
-    },
+  const applyMutation = useSetAssetInterval(assetId, {
     onSuccess: () => {
       setConfirmOpen(false);
       toast.success("Periodicidade atualizada a partir da sugestão.");
-      queryClient.invalidateQueries({ queryKey: keys.assetDetails });
-      queryClient.invalidateQueries({
-        queryKey: keys.intervalInsights,
-      });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: () => toast.error("Não foi possível aplicar a sugestão."),
   });
+  const applySuggestion = () => {
+    const recommendation = insight?.recommendation;
+    if (!recommendation) return;
+    applyMutation.mutate({
+      intervalMonths: recommendation.proposedIntervalMonths,
+      rationale: `Sugestão do motor de confiabilidade (ILAC-G24 / NCSL RP-1) aplicada — ${insight?.classification}, método ${recommendation.method}.`,
+      source: "engine",
+    });
+  };
 
   return (
     <Panel className="p-5">
@@ -132,7 +117,7 @@ export function IntervalInsightPanel({
             confirmOpen={confirmOpen}
             onConfirmOpenChange={setConfirmOpen}
             applyPending={applyMutation.isPending}
-            onApply={() => applyMutation.mutate()}
+            onApply={applySuggestion}
           />
         )}
       </div>
@@ -262,7 +247,12 @@ function InsightBody({
           size="sm"
           render={
             <a
-              href={`${getApiBaseUrl()}/api/portal/assets/${assetId}/interval-insight/report`}
+              href={portalEndpointUrl(
+                portalAssetEndpoints.intervalInsightReport,
+                {
+                  params: { id: assetId },
+                },
+              )}
               target="_blank"
               rel="noopener noreferrer"
             />

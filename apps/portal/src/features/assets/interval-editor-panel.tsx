@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -16,9 +15,7 @@ import {
   Panel,
   PanelHeader,
 } from "@calibra-facil/ui/instrument-panel";
-import { portalIntervalUpdateResponseSchema } from "@calibra-facil/contracts";
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalKeys } from "@/lib/portal-keys";
+import { useSetAssetInterval } from "./queries";
 import type { AssetDetail } from "./types";
 
 /**
@@ -30,8 +27,6 @@ import type { AssetDetail } from "./types";
  * technical record); submission is blocked without it (REQ-INTERVAL-040/041).
  */
 export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
-  const queryClient = useQueryClient();
-  const keys = usePortalKeys();
   const [months, setMonths] = useState(
     asset.calibrationIntervalMonths != null
       ? String(asset.calibrationIntervalMonths)
@@ -39,29 +34,12 @@ export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
   );
   const [rationale, setRationale] = useState("");
 
-  const mutation = useMutation({
-    mutationFn: async (input: {
-      intervalMonths: number;
-      rationale: string;
-    }) => {
-      await fetchPortalJson(
-        `/api/portal/assets/${asset.id}/interval`,
-        portalIntervalUpdateResponseSchema,
-        {
-          errorMessage: "Não foi possível salvar a periodicidade.",
-          init: jsonInit("PUT", input),
-        },
-      );
-    },
+  const mutation = useSetAssetInterval(asset.id, {
     onSuccess: () => {
       toast.success("Periodicidade atualizada.");
       setRationale("");
-      queryClient.invalidateQueries({ queryKey: keys.assetDetails });
-      queryClient.invalidateQueries({ queryKey: keys.fleetAssets });
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => toast.error(error.message),
   });
 
   // REQ-MLR-040: the customer owns the calibration interval for EVERY regime — there is

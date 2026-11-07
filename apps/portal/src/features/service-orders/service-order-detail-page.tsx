@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -22,119 +21,23 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { Timeline, type TimelineItem } from "@/components/timeline";
-import {
-  FinancialSummaryCard,
-  type PortalFinancialSummary,
-} from "@/features/service-orders/financial-summary-card";
+import { FinancialSummaryCard } from "@/features/service-orders/financial-summary-card";
 import { getServiceOrderStatus } from "@/lib/status-labels";
+import type { PortalServiceOrderDetail } from "@calibra-facil/contracts";
 import {
-  portalFinancialSummaryResponseSchema,
-  portalQuoteDecisionResponseSchema,
-  portalServiceOrderDetailResponseSchema,
-} from "@calibra-facil/contracts";
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalKeys } from "@/lib/portal-keys";
+  useApproveQuote,
+  useRejectQuote,
+  useServiceOrderDetail,
+  useServiceOrderFinancialSummary,
+} from "./queries";
 import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";
 
-type QuoteItem = {
-  id: number;
-  type: string;
-  description: string;
-  quantity: string | number;
-  unit: string;
-  unitPriceCents: number;
-  totalPriceCents: number;
-  warrantyCovered: boolean;
-};
-
-type ExecutionItem = {
-  id: number;
-  type: string;
-  description: string;
-  quantity: string | number;
-  unit: string;
-  unitPriceCents: number;
-  totalPriceCents: number;
-};
-
-type ServiceOrderDetail = {
-  id: number;
-  serviceOrderNumber: string;
-  status: string;
-  openedAt: string;
-  evaluatedAt?: string | null;
-  repairStartedAt?: string | null;
-  repairFinishedAt?: string | null;
-  readyAt?: string | null;
-  deliveredAt?: string | null;
-  deliveredToName?: string | null;
-  deliveryNotes?: string | null;
-  claimedDefect: string | null;
-  intakeCondition: string | null;
-  accessories: string | null;
-  clientVisibleNotes: string | null;
-  removedSealingMarkNumber?: string | null;
-  affixedSealingMarkNumber?: string | null;
-  inmetroRepairMarkNumber?: string | null;
-  inmetroRepairMarkNotes?: string | null;
-  warrantyUntil?: string | null;
-  warrantyTerms?: string | null;
-  assetSnapshot?: {
-    assetName?: string | null;
-    assetType?: string | null;
-    manufacturer?: string | null;
-    model?: string | null;
-    serialNumber?: string | null;
-    patrimonyNumber?: string | null;
-  } | null;
-  evaluations?: Array<{
-    id: number;
-    diagnosis: string | null;
-    detectedIssues: string | null;
-    clientVisibleNotes: string | null;
-    evaluatedAt: string | null;
-  }>;
-  execution?: {
-    id: number;
-    startedAt: string | null;
-    finishedAt: string | null;
-    servicePerformed: string | null;
-    partsUsedSummary: string | null;
-    technicalNotes: string | null;
-    result: string | null;
-    calibrationRequiredAfterRepair?: boolean;
-    items?: Array<ExecutionItem>;
-  } | null;
-  quotes?: Array<{
-    id: number;
-    quoteNumber: string;
-    version: number;
-    status: string;
-    totalCents: number;
-    validUntil: string | null;
-    clientMessage: string | null;
-    warrantyTerms: string | null;
-    items?: Array<QuoteItem>;
-  }>;
-  intakeDocuments?: Array<{
-    id: number;
-    documentNumber: string;
-    version: number;
-    pdfR2Key: string | null;
-  }>;
-  deliveryDocuments?: Array<{
-    id: number;
-    documentNumber: string;
-    version: number;
-    pdfR2Key: string | null;
-  }>;
-  certificateLinks?: Array<{
-    id: number;
-    certificateJobId: number;
-    jobId?: string | null;
-  }>;
-  events?: Array<{ id: number; eventType: string; createdAt: string }>;
-};
+type QuoteItem = NonNullable<
+  NonNullable<PortalServiceOrderDetail["quotes"]>[number]["items"]
+>[number];
+type ExecutionItem = NonNullable<
+  NonNullable<PortalServiceOrderDetail["execution"]>["items"]
+>[number];
 
 const ITEM_TYPE_LABEL: Record<string, string> = {
   service: "Serviço",
@@ -282,81 +185,22 @@ function DocRow({ label, ready }: { label: string; ready: boolean }) {
 }
 
 export function ServiceOrderDetailPage({ id }: { id: string }) {
-  const keys = usePortalKeys();
-  const queryClient = useQueryClient();
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const orderQuery = useQuery({
-    queryKey: keys.serviceOrder(id),
-    queryFn: async (): Promise<ServiceOrderDetail> => {
-      const result = await fetchPortalJson(
-        `/api/portal/service-orders/${id}`,
-        portalServiceOrderDetailResponseSchema,
-        { errorMessage: "Falha ao carregar ordem de serviço." },
-      );
-      return result.data;
-    },
+  const orderQuery = useServiceOrderDetail(id);
+  const financialSummaryQuery = useServiceOrderFinancialSummary(id);
+
+  const approveMutation = useApproveQuote(id, {
+    onSuccess: () => toast.success("Orçamento aprovado."),
+    onError: (error) => toast.error(error.message || "Erro ao aprovar."),
   });
 
-  const financialSummaryQuery = useQuery({
-    queryKey: keys.serviceOrderFinancialSummary(id),
-    queryFn: async (): Promise<PortalFinancialSummary> => {
-      const result = await fetchPortalJson(
-        `/api/portal/service-orders/${id}/financial-summary`,
-        portalFinancialSummaryResponseSchema,
-        { errorMessage: "Falha ao carregar informações financeiras." },
-      );
-      return result.data;
-    },
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: async (quoteId: number) => {
-      return fetchPortalJson(
-        `/api/portal/service-orders/${id}/quotes/${quoteId}/approve`,
-        portalQuoteDecisionResponseSchema,
-        {
-          errorMessage: "Falha ao aprovar orçamento.",
-          init: jsonInit("POST", {}),
-        },
-      );
-    },
-    onSuccess: async () => {
-      toast.success("Orçamento aprovado.");
-      await queryClient.invalidateQueries({
-        queryKey: keys.serviceOrder(id),
-      });
-      await queryClient.invalidateQueries({ queryKey: keys.serviceOrders });
-      await queryClient.invalidateQueries({ queryKey: keys.overview });
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Erro ao aprovar.");
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async (quoteId: number) => {
-      return fetchPortalJson(
-        `/api/portal/service-orders/${id}/quotes/${quoteId}/reject`,
-        portalQuoteDecisionResponseSchema,
-        {
-          errorMessage: "Falha ao recusar orçamento.",
-          init: jsonInit("POST", { rejectionReason }),
-        },
-      );
-    },
-    onSuccess: async () => {
+  const rejectMutation = useRejectQuote(id, {
+    onSuccess: () => {
       toast.success("Orçamento recusado.");
       setRejectionReason("");
-      await queryClient.invalidateQueries({
-        queryKey: keys.serviceOrder(id),
-      });
-      await queryClient.invalidateQueries({ queryKey: keys.serviceOrders });
-      await queryClient.invalidateQueries({ queryKey: keys.overview });
     },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Erro ao recusar.");
-    },
+    onError: (error) => toast.error(error.message || "Erro ao recusar."),
   });
 
   const order = orderQuery.data;
@@ -489,7 +333,12 @@ export function ServiceOrderDetailPage({ id }: { id: string }) {
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => rejectMutation.mutate(latestQuote.id)}
+              onClick={() =>
+                rejectMutation.mutate({
+                  quoteId: latestQuote.id,
+                  rejectionReason,
+                })
+              }
               disabled={approveMutation.isPending || rejectMutation.isPending}
             >
               Recusar orçamento

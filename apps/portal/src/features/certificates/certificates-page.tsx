@@ -1,5 +1,4 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -15,7 +14,6 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
 import { CertificateLifecyclePill } from "@/components/certificate-lifecycle-pill";
-import type { CertificateLifecycleStatus } from "@calibra-facil/schemas";
 import { Card, CardContent } from "@calibra-facil/ui/card";
 import {
   Empty,
@@ -31,49 +29,13 @@ import { DateRangePicker } from "@calibra-facil/ui/date-range-picker";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { DataTable } from "@calibra-facil/ui/data-table";
 import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
-import {
-  portalCertificatesResponseSchema,
-  portalDownloadLinkResponseSchema,
-} from "@calibra-facil/contracts";
-import { fetchPortalJson } from "@/lib/api-fetch";
-import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
-import { usePortalKeys } from "@/lib/portal-keys";
+import type { PortalCertificateListItem } from "@calibra-facil/contracts";
+import { useCertificates } from "./queries";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
 import { formatInstant } from "@calibra-facil/shared/format";
+import { portalApi } from "@/lib/portal-api";
 
-type Certificate = {
-  id: number;
-  jobId: string;
-  status: string;
-  performedAt: string | null;
-  approvedAt: string | null;
-  certificateUrl: string | null;
-  verificationToken: string;
-  assetId: number;
-  assetName: string;
-  assetTag: string;
-  assetManufacturer: string | null;
-  assetModel: string | null;
-  assetSerialNumber: string;
-  serviceName: string;
-  labName: string;
-  /** Amendment chain (ISO 17025 §7.8.8) — see GET /api/portal/certificates. */
-  isSuperseded: boolean;
-  isAmendment: boolean;
-  amendmentNumber: number | null;
-  /** Lifecycle of the issued certificate (ISO 17025 §7.10): WITHDRAWN = do not rely on it. */
-  certificateStatus: CertificateLifecycleStatus;
-};
-
-type CertificatesResponse = {
-  data: Array<Certificate>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
+type Certificate = PortalCertificateListItem;
 
 function toDateParam(date: Date | undefined): string {
   if (!date) return "";
@@ -93,11 +55,9 @@ function DownloadButton({ certificate }: { certificate: Certificate }) {
 
     setIsDownloading(true);
     try {
-      const { url, filename } = await fetchPortalJson(
-        `/api/portal/certificates/${certificate.id}/download`,
-        portalDownloadLinkResponseSchema,
-        { errorMessage: "Falha ao baixar" },
-      );
+      const { url, filename } = await portalApi.certificates.download({
+        params: { id: certificate.id },
+      });
 
       const link = document.createElement("a");
       link.href = url;
@@ -236,46 +196,13 @@ export function CertificatesPage({ assetId }: { assetId?: number }) {
   const dateTo = toDateParam(dateRange?.to);
   const hasFilters = Boolean(search || dateFrom || dateTo || assetId);
 
-  const keys = usePortalKeys();
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: keys.certificatesPage({
-      page,
-      limit,
-      search,
-      dateFrom,
-      dateTo,
-      assetId,
-    }),
-    queryFn: async (): Promise<CertificatesResponse> => {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-      });
-
-      if (search) {
-        params.set("query", search);
-      }
-
-      if (dateFrom) {
-        params.set("dateFrom", dateFrom);
-      }
-
-      if (dateTo) {
-        params.set("dateTo", dateTo);
-      }
-
-      if (assetId) {
-        params.set("assetId", String(assetId));
-      }
-
-      return fetchPortalJson(
-        `/api/portal/certificates?${params.toString()}`,
-        portalCertificatesResponseSchema,
-        { errorMessage: "Falha ao carregar certificados" },
-      );
-    },
-    placeholderData: keepPreviousDataInScope(keys.certificates),
+  const { data, isLoading, error } = useCertificates({
+    page,
+    limit,
+    search,
+    dateFrom,
+    dateTo,
+    assetId,
   });
 
   const handleRowClick = (certificate: Certificate) => {
