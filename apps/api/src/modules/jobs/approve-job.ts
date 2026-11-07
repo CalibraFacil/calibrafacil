@@ -118,7 +118,7 @@ export type ApproveJobResult =
   | { status: "invalid_status"; currentStatus: JobRow["status"] }
   /** An API key whose creator is no longer a member: nobody is accountable. */
   | { status: "approval_requires_signatory" }
-  /** The actor's role may not approve (`calibrationWorkflowPermissions`). */
+  /** The actor's role may not approve (`canPerformCalibrationAction`). */
   | { status: "role_not_permitted" }
   | { status: "self_approval_blocked" }
   | { status: "not_authorized_signatory" }
@@ -317,14 +317,14 @@ export async function approveJob(
   }
   const approverId = memberData.userId;
 
-  // Role gate: the workflow matrix (`calibrationWorkflowPermissions`) — REVIEW
-  // is the `in_review` workflow state. Same effective-role mapping as the
+  // Role gate: the role must hold the approve permission for a job in REVIEW
+  // (`canPerformCalibrationAction`). Same effective-role mapping as the
   // `requireCalibrationAction` guard, so a caller that bypassed (or never had)
   // the route guard — a future entry point — is still held to it.
   if (
     !canPerformCalibrationAction(
       getCalibrationAuthorizationRole(memberData),
-      "in_review",
+      "REVIEW",
       "approve",
     )
   ) {

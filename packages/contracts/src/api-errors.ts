@@ -286,6 +286,7 @@ export const API_ERROR_CODES = [
   // LEGACY (upper-case): shipped before this registry existed and still
   // asserted by clients/tests of the job and visit routes. Kept verbatim so
   // existing clients keep working; new code must use `job_status_conflict`.
+  // Six of these have a snake_case twin above (`LEGACY_API_ERROR_CODE_ALIASES`).
   "JOB_STATUS_CONFLICT",
   // Shipped with the unit-governance route and asserted by its clients.
   "LAST_CALIBRATION_APPROVER",
@@ -317,6 +318,35 @@ export const API_ERROR_CODES = [
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 
 const API_ERROR_CODE_SET: ReadonlySet<string> = new Set(API_ERROR_CODES);
+
+/**
+ * The six failures that the registry lists twice. The public API v2 (documented
+ * for integrators) answers with the snake_case spelling; the internal job routes
+ * still answer with the upper-case one. The snake_case spelling is the canonical
+ * one: it is the registry's rule and the one outside clients read.
+ *
+ * Remove an entry, and the upper-case code in `API_ERROR_CODES`, when the route
+ * that sends it moves to the canonical spelling.
+ */
+export const LEGACY_API_ERROR_CODE_ALIASES = {
+  JOB_STATUS_CONFLICT: "job_status_conflict",
+  APPROVAL_CONFLICT: "approval_conflict",
+  APPROVAL_DISPATCH_FAILED: "approval_dispatch_failed",
+  JOB_NOT_FOUND: "job_not_found",
+  SCOPE_VIOLATION: "scope_violation",
+  SELF_APPROVAL_BLOCKED: "self_approval_blocked",
+} as const satisfies Partial<Record<ApiErrorCode, ApiErrorCode>>;
+
+function isLegacyAlias(
+  code: ApiErrorCode,
+): code is keyof typeof LEGACY_API_ERROR_CODE_ALIASES {
+  return Object.hasOwn(LEGACY_API_ERROR_CODE_ALIASES, code);
+}
+
+/** The one spelling a client should branch on: a legacy alias maps to its canonical code. */
+export function canonicalApiErrorCode(code: ApiErrorCode): ApiErrorCode {
+  return isLegacyAlias(code) ? LEGACY_API_ERROR_CODE_ALIASES[code] : code;
+}
 
 export function isApiErrorCode(value: unknown): value is ApiErrorCode {
   return typeof value === "string" && API_ERROR_CODE_SET.has(value);

@@ -23,6 +23,7 @@
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/email-sender": "workspace:^",
     "@calibra-facil/lab-email-domain": "workspace:^",
+    "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/email": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@simplewebauthn/server": "13.3.2",

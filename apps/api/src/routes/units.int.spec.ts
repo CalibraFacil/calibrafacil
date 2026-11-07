@@ -463,7 +463,7 @@ describe("unitsRouter — real DB + real middleware", () => {
 
   // REQ-DOM-ADM-001: demoting the ONLY calibration approver is rejected + role unchanged.
   // "Approver" is derived from the real ISO 17025 separation-of-duties matrix
-  // (calibrationWorkflowPermissions.canApprove -> {admin, owner}); this org's single
+  // (rolesAllowedTo("approve") -> {admin, owner}); this org's single
   // member is a global admin, so demoting them would leave zero approvers.
   it("REQ-DOM-ADM-001: demoting the only calibration approver is rejected with a named error and the role is unchanged", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });

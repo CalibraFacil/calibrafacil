@@ -24,17 +24,17 @@ describe("lab operator role", () => {
   });
 
   it("participates in draft/rejected workflow entry but not deletion", () => {
-    expect(canPerformCalibrationAction("operator", "draft", "edit")).toBe(true);
-    expect(canPerformCalibrationAction("operator", "draft", "submit")).toBe(
+    expect(canPerformCalibrationAction("operator", "DRAFT", "edit")).toBe(true);
+    expect(canPerformCalibrationAction("operator", "DRAFT", "submit")).toBe(
       true,
     );
-    expect(canPerformCalibrationAction("operator", "draft", "delete")).toBe(
+    expect(canPerformCalibrationAction("operator", "DRAFT", "delete")).toBe(
       false,
     );
-    expect(canPerformCalibrationAction("operator", "rejected", "edit")).toBe(
+    expect(canPerformCalibrationAction("operator", "REJECTED", "edit")).toBe(
       true,
     );
-    expect(canPerformCalibrationAction("operator", "approved", "edit")).toBe(
+    expect(canPerformCalibrationAction("operator", "APPROVED", "edit")).toBe(
       false,
     );
   });

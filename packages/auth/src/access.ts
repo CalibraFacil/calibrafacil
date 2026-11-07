@@ -10,6 +10,11 @@ import {
   defaultStatements as platformDefaultStatements,
   userAc as platformUserAc,
 } from "better-auth/plugins/admin/access";
+import type { JobStatus } from "@calibra-facil/schemas";
+import {
+  canTransition,
+  type JobCommand,
+} from "@calibra-facil/schemas/job-transitions";
 
 /**
  * =============================================================================
@@ -910,18 +915,13 @@ export type PermissionCheck = {
 };
 
 // =============================================================================
-// WORKFLOW STATE PERMISSIONS (ISO 17025 Compliance)
+// WORKFLOW ACTIONS (ISO 17025 Compliance)
 // =============================================================================
-
-/**
- * Calibration workflow states
- */
-export type CalibrationState =
-  | "draft"
-  | "submitted"
-  | "in_review"
-  | "approved"
-  | "rejected";
+// Who may do what to a calibration job is the product of two facts that each
+// have one owner: the job status machine says which command runs from which
+// status (`@calibra-facil/schemas/job-transitions`), and the role definitions
+// above say which role holds the `calibration` permission of that command.
+// There is no third table of (role, status, action).
 
 /**
  * Calibration workflow action types
@@ -933,92 +933,66 @@ export type CalibrationAction =
   | "approve"
   | "reject";
 
-/**
- * Defines which roles can perform actions based on calibration state.
- * This enforces ISO 17025 requirements for separation of duties and
- * immutability of approved records.
- */
-export const calibrationWorkflowPermissions: Record<
-  CalibrationState,
-  Record<`can${Capitalize<CalibrationAction>}`, RoleName[]>
-> = {
-  draft: {
-    canEdit: ["operator", "technician", "admin", "owner"],
-    canDelete: ["technician", "admin", "owner"],
-    canSubmit: ["operator", "technician", "admin", "owner"],
-    canApprove: [],
-    canReject: [],
-  },
-  submitted: {
-    canEdit: [], // Cannot edit once submitted
-    canDelete: ["admin", "owner"], // Only admin/owner can cancel
-    canSubmit: [],
-    canApprove: ["admin", "owner"],
-    canReject: ["admin", "owner"],
-  },
-  in_review: {
-    canEdit: ["admin", "owner"], // Reviewer can make corrections
-    canDelete: [],
-    canSubmit: [],
-    canApprove: ["admin", "owner"],
-    canReject: ["admin", "owner"],
-  },
-  approved: {
-    // Immutable - ISO 17025 requirement
-    canEdit: [],
-    canDelete: [],
-    canSubmit: [],
-    canApprove: [],
-    canReject: [],
-  },
-  rejected: {
-    canEdit: ["operator", "technician", "admin", "owner"], // Can revise after rejection
-    canDelete: ["technician", "admin", "owner"],
-    canSubmit: ["operator", "technician", "admin", "owner"],
-    canApprove: [],
-    canReject: [],
-  },
-};
+/** What each action is, in the job status machine and in the role definitions. */
+const CALIBRATION_ACTIONS = {
+  edit: { command: "execute", permission: "execute" },
+  delete: { command: "cancel", permission: "delete" },
+  submit: { command: "submit", permission: "submit" },
+  approve: { command: "approve", permission: "approve" },
+  reject: { command: "reject", permission: "reject" },
+} as const satisfies Record<
+  CalibrationAction,
+  { command: JobCommand; permission: ActionForResource<"calibration"> }
+>;
+
+function roleHoldsPermission(
+  role: RoleName,
+  permission: ActionForResource<"calibration">,
+): boolean {
+  return roles[role].authorize({ calibration: [permission] }).success;
+}
 
 /**
- * Helper to check if a role can perform an action on a calibration
- * based on its current state.
+ * Whether a role can perform an action on a calibration job in its current
+ * status: the status machine allows the command from that status AND the role
+ * holds the command's permission. Approved records are immutable (ISO 17025)
+ * because the machine lists no editing command from `APPROVED`.
  *
  * @example
- * if (canPerformCalibrationAction("technician", "draft", "submit")) {
+ * if (canPerformCalibrationAction("technician", "DRAFT", "submit")) {
  *   // Allow submit action
  * }
  */
 export function canPerformCalibrationAction(
   role: RoleName,
-  state: CalibrationState,
+  status: JobStatus,
   action: CalibrationAction,
 ): boolean {
-  const permissions = calibrationWorkflowPermissions[state];
-  switch (action) {
-    case "edit":
-      return permissions.canEdit.includes(role);
-    case "delete":
-      return permissions.canDelete.includes(role);
-    case "submit":
-      return permissions.canSubmit.includes(role);
-    case "approve":
-      return permissions.canApprove.includes(role);
-    case "reject":
-      return permissions.canReject.includes(role);
-  }
+  const { command, permission } = CALIBRATION_ACTIONS[action];
+  return (
+    canTransition(status, command) && roleHoldsPermission(role, permission)
+  );
 }
 
 /**
- * Get all allowed actions for a role in a given calibration state.
+ * The roles that hold the permission of an action, whatever the status. The
+ * answer to "who may approve" when no job is at hand.
+ */
+export function rolesAllowedTo(action: CalibrationAction): RoleName[] {
+  const { permission } = CALIBRATION_ACTIONS[action];
+  return ROLE_HIERARCHY.filter((role) => roleHoldsPermission(role, permission));
+}
+
+/**
+ * Get all allowed actions for a role in a given job status.
  *
  * @example
- * const actions = getAllowedCalibrationActions("technician", "draft");
+ * const actions = getAllowedCalibrationActions("technician", "DRAFT");
  * // ["edit", "delete", "submit"]
  */
 export function getAllowedCalibrationActions(
   role: RoleName,
-  state: CalibrationState,
+  status: JobStatus,
 ): CalibrationAction[] {
   const actions: CalibrationAction[] = [
     "edit",
@@ -1028,7 +1002,7 @@ export function getAllowedCalibrationActions(
     "reject",
   ];
   return actions.filter((action) =>
-    canPerformCalibrationAction(role, state, action),
+    canPerformCalibrationAction(role, status, action),
   );
 }
 

@@ -1,10 +1,16 @@
-import { isApiErrorCode, type ApiErrorCode } from "@calibra-facil/contracts";
+import {
+  canonicalApiErrorCode,
+  isApiErrorCode,
+  type ApiErrorCode,
+} from "@calibra-facil/contracts";
 
 export class CalibraApiError extends Error {
   /**
    * Stable machine-readable error code from the API body (`{ error, code }`),
    * when the server sent one this client knows. Branch on this, not on the
-   * pt-BR `message`. Undefined for bodies without a code.
+   * pt-BR `message`. Undefined for bodies without a code. A legacy upper-case
+   * spelling is reported as its snake_case code (`canonicalApiErrorCode`), so one
+   * branch covers both; `payload` keeps what the server sent.
    */
   readonly code: ApiErrorCode | undefined;
 
@@ -22,5 +28,5 @@ export class CalibraApiError extends Error {
 function readApiErrorCode(payload: unknown): ApiErrorCode | undefined {
   if (typeof payload !== "object" || payload === null) return undefined;
   const code: unknown = Reflect.get(payload, "code");
-  return isApiErrorCode(code) ? code : undefined;
+  return isApiErrorCode(code) ? canonicalApiErrorCode(code) : undefined;
 }
