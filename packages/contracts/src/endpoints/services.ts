@@ -11,7 +11,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The laboratory's commercial service catalog (what it sells, linked to the
  * technical method that executes it). Response schemas are wire schemas written
- * from what the handlers in `apps/api/src/routes/services.ts` return. Every
+ * from what the handlers in `apps/api/src/domains/catalog/routes/services.ts` return. Every
  * endpoint is `cloud-only`: the desktop does not manage the catalog.
  *
  * Not client-facing, so not defined here: `GET /api/services/:id/label` (the web

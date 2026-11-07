@@ -257,6 +257,9 @@ describe("layerOf and normalizeTestName", () => {
     expect(layerOf("apps/api/src/modules/jobs/service.ts")).toBe(
       "modules/jobs",
     );
+    expect(layerOf("apps/api/src/domains/jobs/routes/jobs.ts")).toBe(
+      "domains/jobs",
+    );
     expect(layerOf("apps/api/src/app.ts")).toBe("(root)");
     expect(layerOf("packages/jobs-core/src/x.ts")).toBe("packages/jobs-core");
     expect(layerOf(UNATTRIBUTED)).toBe(UNATTRIBUTED);

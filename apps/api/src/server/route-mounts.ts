@@ -18,7 +18,7 @@ import { certificateNumberingRouter } from "../routes/certificate-numbering";
 import { competencesRouter } from "../routes/competences";
 import { customerGroupsRouter } from "../routes/customer-groups";
 import { customersRouter } from "../routes/customers";
-import { dashboardRouter } from "../routes/dashboard";
+import { dashboardRouter } from "../domains/reports/routes";
 import { environmentalLimitsRouter } from "../routes/environmental-limits";
 import { financeRouter } from "../routes/finance";
 import { integrationsRouter } from "../routes/integrations";
@@ -28,7 +28,7 @@ import { legalMetrologyRegulationsRouter } from "../routes/legal-metrology-regul
 import { runApiHealthCheck } from "../lib/health";
 import { jobsRouter } from "../routes/jobs";
 import { methodsRouter } from "../routes/methods";
-import { notificationsRouter } from "../domains/notifications";
+import { notificationsRouter } from "../domains/notifications/routes";
 import { nonConformancesRouter } from "../routes/non-conformances";
 import { ootAckRouter } from "../routes/oot-ack";
 import { organizationLifecycleRouter } from "../routes/organization-lifecycle";
@@ -47,14 +47,14 @@ import {
   publicApiV2Router,
 } from "../routes/public-api-v2";
 import { publicSignupRouter } from "../routes/public-signup";
-import { reportsRouter } from "../routes/reports";
+import { reportsRouter } from "../domains/reports/routes";
 import {
   portalServiceOrdersRouter,
   publicServiceOrderAccessRouter,
   serviceOrdersRouter,
 } from "../routes/service-orders";
-import { materialsRouter } from "../routes/materials";
-import { servicesRouter } from "../routes/services";
+import { materialsRouter } from "../domains/catalog/routes";
+import { servicesRouter } from "../domains/catalog/routes";
 import { sessionsRouter } from "../routes/sessions";
 import { signaturesRouter } from "../routes/signatures";
 import { signingRouter } from "../routes/signing";
@@ -64,8 +64,8 @@ import { syncRouter } from "../routes/sync";
 import { trainingRecordsRouter } from "../routes/training-records";
 import { unitsRouter } from "../routes/units";
 import { magicLinkRouter } from "../routes/magic-link";
-import { verifyRouter } from "../domains/verify";
-import { webhooksRouter } from "../domains/notifications";
+import { verifyRouter } from "../domains/verify/routes";
+import { webhooksRouter } from "../domains/notifications/routes";
 import type { Env } from "./env";
 
 import { readCronSuccesses, readHealthAlerts } from "../lib/health-alerts";

@@ -3,9 +3,9 @@ import { servicesRouter } from "./services";
 import { db } from "@calibra-facil/db";
 import { serviceAuditLog } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg, seedService } from "../../test/integration/seed";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg, seedService } from "../../../../test/integration/seed";
 
 // Real-DB + real-RBAC integration test. Only the better-auth session is mocked
 // (see test/integration/setup.ts); requireLabAuth -> requireOrganization ->

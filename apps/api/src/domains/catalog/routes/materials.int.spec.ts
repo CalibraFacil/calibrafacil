@@ -3,9 +3,9 @@ import { materialsRouter } from "./materials";
 import { db } from "@calibra-facil/db";
 import { material } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
 
 // Real-DB + real-RBAC integration test for the materials catalog CRUD.
 // Only the better-auth session is mocked (see test/integration/setup.ts);

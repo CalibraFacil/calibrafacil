@@ -10,9 +10,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { materialEndpoints } from "@calibra-facil/contracts";
 import { materialsRouter } from "./materials";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

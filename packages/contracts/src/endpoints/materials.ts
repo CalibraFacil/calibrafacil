@@ -11,7 +11,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * The parts and materials catalog (pecas e materiais). Response schemas are wire
- * schemas written from what `apps/api/src/routes/materials.ts` returns.
+ * schemas written from what `apps/api/src/domains/catalog/routes/materials.ts` returns.
  *
  * The catalog is cloud-only in v1: the desktop service-order flow keeps the
  * free-form part-item fallback (materialId stays null), and the desktop client

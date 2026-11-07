@@ -4,7 +4,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The consolidated (multi-unit) reports of the laboratory. Response schemas are
- * the wire bodies written from what `apps/api/src/routes/reports.ts` returns.
+ * the wire bodies written from what `apps/api/src/domains/reports/routes/reports.ts` returns.
  *
  * Not client-facing, so not defined here: `GET /consolidated/summary` (no SDK
  * method). Cloud-only: consolidated reporting has no offline counterpart.

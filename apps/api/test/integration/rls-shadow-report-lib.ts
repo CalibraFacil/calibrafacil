@@ -79,8 +79,10 @@ export function layerOf(module: string): string {
   if (module.startsWith(api)) {
     const segments = module.slice(api.length).split("/");
     if (segments.length === 1) return "(root)";
-    return segments[0] === "modules" && segments.length > 2
-      ? `modules/${segments[1]}`
+    // `domains/<d>` and `modules/<m>` are the layers that have sub-areas.
+    return (segments[0] === "modules" || segments[0] === "domains") &&
+      segments.length > 2
+      ? `${segments[0]}/${segments[1]}`
       : (segments[0] ?? "(root)");
   }
   if (module === UNATTRIBUTED) return UNATTRIBUTED;

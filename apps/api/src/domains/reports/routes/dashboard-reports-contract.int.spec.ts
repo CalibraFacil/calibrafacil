@@ -24,18 +24,18 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
-import { certificateNumberingRouter } from "./certificate-numbering";
+import { certificateNumberingRouter } from "../../../routes/certificate-numbering";
 import { dashboardRouter } from "./dashboard";
 import { reportsRouter } from "./reports";
-import { insertJobs } from "../../test/integration/job-fixtures";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
 import {
   seedCustomer,
   seedOrg,
   seedStandard,
-} from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+} from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

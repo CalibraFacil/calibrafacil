@@ -5,9 +5,9 @@ import {
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { service } from "@calibra-facil/db/schema";
 import { and, eq, or } from "drizzle-orm";
-import type { AuthVariables } from "../middleware/permission";
-import { invalid, notFound } from "./domain-errors";
-import { buildUnitScopeCondition } from "./units";
+import type { AuthVariables } from "../../middleware/permission";
+import { invalid, notFound } from "../../lib/domain-errors";
+import { buildUnitScopeCondition } from "../../lib/units";
 
 /**
  * The id of the service in the member's unit scope that a route parameter names

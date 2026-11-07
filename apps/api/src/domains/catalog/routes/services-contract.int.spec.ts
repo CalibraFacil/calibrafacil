@@ -11,9 +11,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { serviceEndpoints } from "@calibra-facil/contracts";
 import { servicesRouter } from "./services";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg, seedService } from "../../test/integration/seed";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg, seedService } from "../../../../test/integration/seed";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
