@@ -21,7 +21,9 @@ import {
   requireUnitOperationalSettingsManager,
   resolveAccessibleUnitContext,
 } from "../lib/unit-operational-settings";
-import { clientIp } from "../lib/client-ip";
+import { invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 
 type ScopeLineRow = typeof accreditedScopeLine.$inferSelect;
 
@@ -130,10 +132,9 @@ export const accreditedScopeRouter = new Hono<{
     async (c) => {
       const input = c.req.valid("json");
       const memberData = c.get("member");
-      const session = c.get("session");
 
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [before] = await tx
+      await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+        const [before] = await ctx.o
           .select({
             scopeEnforcementMode: organization.scopeEnforcementMode,
             accreditationActive: organization.accreditationActive,
@@ -155,7 +156,7 @@ export const accreditedScopeRouter = new Hono<{
         // The mode change and its audit row commit (or fail) together. Choosing
         // a mode makes it explicit, even one equal to the default: from then on
         // the lab's choice is never overridden by the default.
-        await tx
+        await ctx.o
           .update(organization)
           .set({ scopeEnforcementMode: input.mode })
           .where(eq(organization.id, memberData.organizationId));
@@ -166,7 +167,9 @@ export const accreditedScopeRouter = new Hono<{
           before &&
           (effectiveBefore !== input.mode || !before.scopeEnforcementMode)
         ) {
-          await tx.insert(accreditedScopeLineAuditLog).values({
+          // Not a line's audit entry (`scopeLineId` is null: the change is
+          // the organization's), so it stays off `ctx.audit`.
+          await ctx.o.insert(accreditedScopeLineAuditLog).values({
             scopeLineId: null,
             organizationId: memberData.organizationId,
             action: "enforcement_mode_change",
@@ -177,8 +180,8 @@ export const accreditedScopeRouter = new Hono<{
               },
               wasDefault: !before.scopeEnforcementMode,
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
+            performedBy: ctx.actor.userId,
+            ipAddress: ctx.actor.ipAddress,
           });
           // B4a: also on the compliance trail the accreditation profile uses.
           await writeComplianceAuditEvent(
@@ -194,20 +197,20 @@ export const accreditedScopeRouter = new Hono<{
                 },
                 after: { scopeEnforcementMode: input.mode },
               },
-              performedBy: session.user.id,
+              performedBy: ctx.actor.userId,
               ipAddress: c.req.header("x-forwarded-for") || null,
             },
-            tx,
+            ctx.o,
           );
         }
+      });
 
-        return c.json({
-          message:
-            input.mode === "enforce"
-              ? "Guarda de escopo ativada: violações bloqueiam a emissão acreditada"
-              : "Guarda de escopo em modo aviso",
-          enforcementMode: input.mode,
-        });
+      return c.json({
+        message:
+          input.mode === "enforce"
+            ? "Guarda de escopo ativada: violações bloqueiam a emissão acreditada"
+            : "Guarda de escopo em modo aviso",
+        enforcementMode: input.mode,
       });
     },
   )
@@ -233,9 +236,9 @@ export const accreditedScopeRouter = new Hono<{
         unitKind(input.rangeUnit) !== input.quantityKind ||
         unitKind(input.cmcUnit) !== input.quantityKind
       ) {
-        return c.json(
-          { error: "Unidades incompatíveis com a grandeza da linha" },
-          400,
+        throw invalid(
+          "scope_line_unit_mismatch",
+          "Unidades incompatíveis com a grandeza da linha",
         );
       }
 
@@ -254,81 +257,81 @@ export const accreditedScopeRouter = new Hono<{
         updatedBy: session.user.id,
       };
 
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        if (input.id != null) {
-          const [existing] = await tx
-            .select()
-            .from(accreditedScopeLine)
-            .where(
-              and(
-                eq(accreditedScopeLine.id, input.id),
-                eq(
-                  accreditedScopeLine.organizationId,
-                  memberData.organizationId,
+      const result = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          if (input.id != null) {
+            const [existing] = await ctx.o
+              .select()
+              .from(accreditedScopeLine)
+              .where(
+                and(
+                  eq(accreditedScopeLine.id, input.id),
+                  eq(
+                    accreditedScopeLine.organizationId,
+                    memberData.organizationId,
+                  ),
+                  eq(accreditedScopeLine.unitId, unit.unitId),
                 ),
-                eq(accreditedScopeLine.unitId, unit.unitId),
-              ),
-            )
-            .limit(1);
-          if (!existing) {
-            return c.json({ error: "Linha de escopo não encontrada" }, 404);
+              )
+              .limit(1);
+            if (!existing) {
+              throw notFound(
+                "scope_line_not_found",
+                "Linha de escopo não encontrada",
+              );
+            }
+
+            const [updated] = await ctx.o
+              .update(accreditedScopeLine)
+              .set({
+                ...values,
+                // Omitted on the wire = preserve; the web dialog has no k field.
+                coverageFactor: input.coverageFactor ?? existing.coverageFactor,
+              })
+              .where(eq(accreditedScopeLine.id, existing.id))
+              .returning();
+
+            if (updated) {
+              await ctx.audit("accreditedScopeLine", existing.id, {
+                action: "update",
+                changes: diffScopeLine(existing, updated),
+              });
+            }
+
+            return {
+              message: "Linha de escopo atualizada",
+              data: updated,
+              unit,
+            };
           }
 
-          const [updated] = await tx
-            .update(accreditedScopeLine)
-            .set({
+          const [created] = await ctx.o
+            .insert(accreditedScopeLine)
+            .values({
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
               ...values,
-              // Omitted on the wire = preserve; the web dialog has no k field.
-              coverageFactor: input.coverageFactor ?? existing.coverageFactor,
+              coverageFactor: input.coverageFactor ?? 2,
             })
-            .where(eq(accreditedScopeLine.id, existing.id))
             .returning();
 
-          if (updated) {
-            await tx.insert(accreditedScopeLineAuditLog).values({
-              scopeLineId: existing.id,
-              organizationId: memberData.organizationId,
-              action: "update",
-              changes: diffScopeLine(existing, updated),
-              performedBy: session.user.id,
-              ipAddress: clientIp(c),
+          if (created) {
+            await ctx.audit("accreditedScopeLine", created.id, {
+              action: "create",
+              changes: null,
             });
           }
 
-          return c.json({
-            message: "Linha de escopo atualizada",
-            data: updated,
+          return {
+            message: "Linha de escopo adicionada",
+            data: created,
             unit,
-          });
-        }
-
-        const [created] = await tx
-          .insert(accreditedScopeLine)
-          .values({
-            organizationId: memberData.organizationId,
-            unitId: unit.unitId,
-            ...values,
-            coverageFactor: input.coverageFactor ?? 2,
-          })
-          .returning();
-
-        if (created) {
-          await tx.insert(accreditedScopeLineAuditLog).values({
-            scopeLineId: created.id,
-            organizationId: memberData.organizationId,
-            action: "create",
-            changes: null,
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
-          });
-        }
-
-        return c.json({
-          message: "Linha de escopo adicionada",
-          data: created,
-          unit,
-        });
-      });
+          };
+        },
+      );
+      return c.json(result);
     },
   )
 
@@ -337,17 +340,16 @@ export const accreditedScopeRouter = new Hono<{
   // ===========================================================================
   .delete("/:id", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const memberData = c.get("member");
-    const session = c.get("session");
     const id = parseInt(c.req.param("id"), 10);
     requireUnitOperationalSettingsManager(memberData);
     const unit = resolveAccessibleUnitContext(memberData);
 
     if (isNaN(id)) {
-      return c.json({ error: "ID inválido" }, 400);
+      throw invalid("invalid_request", "ID inválido");
     }
 
-    return await orgDb(memberData.organizationId).transaction(async (tx) => {
-      const [deleted] = await tx
+    await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+      const [deleted] = await ctx.o
         .delete(accreditedScopeLine)
         .where(
           and(
@@ -359,18 +361,16 @@ export const accreditedScopeRouter = new Hono<{
         .returning();
 
       if (!deleted) {
-        return c.json({ error: "Linha de escopo não encontrada" }, 404);
+        throw notFound(
+          "scope_line_not_found",
+          "Linha de escopo não encontrada",
+        );
       }
 
-      await tx.insert(accreditedScopeLineAuditLog).values({
-        scopeLineId: deleted.id,
-        organizationId: memberData.organizationId,
+      await ctx.audit("accreditedScopeLine", deleted.id, {
         action: "delete",
         changes: null,
-        performedBy: session.user.id,
-        ipAddress: clientIp(c),
       });
-
-      return c.json({ message: "Linha de escopo removida" });
     });
+    return c.json({ message: "Linha de escopo removida" });
   });

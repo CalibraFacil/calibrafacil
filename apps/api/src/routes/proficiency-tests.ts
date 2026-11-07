@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   proficiencyTest,
   proficiencyTestAuditLog,
@@ -35,7 +36,9 @@ import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, or, ilike, desc, asc, count } from "drizzle-orm";
 import { PT_OVERALL_MACHINE } from "@calibra-facil/schemas/machines";
-import { clientIp } from "../lib/client-ip";
+import { invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 
 /**
  * Proficiency Testing Router - ISO/IEC 17025 §7.7.2 (issue #60 Phase 0)
@@ -102,6 +105,58 @@ function addMonths(date: Date, months: number): Date {
   const next = new Date(date.getTime());
   next.setMonth(next.getMonth() + months);
   return next;
+}
+
+function requireId(raw: string): number {
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) throw invalid("invalid_request", "ID inválido");
+  return id;
+}
+
+/** The laboratory's PT round, or a 404. */
+async function requireProficiencyTest(
+  id: number,
+  organizationId: string,
+  executor: Pick<OrgExecutor, "select">,
+) {
+  const [round] = await executor
+    .select()
+    .from(proficiencyTest)
+    .where(
+      and(
+        eq(proficiencyTest.id, id),
+        eq(proficiencyTest.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  if (!round) {
+    throw notFound(
+      "proficiency_test_not_found",
+      "Ensaio de proficiência não encontrado",
+    );
+  }
+  return round;
+}
+
+/** A reference standard of the laboratory, or a 404. */
+async function requireLabStandard(
+  standardId: number,
+  organizationId: string,
+  executor: Pick<OrgExecutor, "select">,
+) {
+  const [standard] = await executor
+    .select({ id: referenceStandard.id })
+    .from(referenceStandard)
+    .where(
+      and(
+        eq(referenceStandard.id, standardId),
+        eq(referenceStandard.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  if (!standard) {
+    throw notFound("standard_not_found", "Padrão de referência não encontrado");
+  }
 }
 
 export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -286,7 +341,6 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreatePtPlanItemSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
 
       // A body-supplied unit must be one the caller can access (403 otherwise).
@@ -298,25 +352,30 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       const lastSatisfactoryAt = input.lastSatisfactoryAt
         ? new Date(input.lastSatisfactoryAt)
         : null;
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [created] = await tx
-          .insert(ptPlanItem)
-          .values({
-            organizationId: member.organizationId,
-            unitId: planUnitId,
-            scopePart: input.scopePart,
-            riskJustification: input.riskJustification ?? null,
-            frequencyMonths: input.frequencyMonths,
-            lastSatisfactoryAt,
-            nextDueAt: lastSatisfactoryAt
-              ? addMonths(lastSatisfactoryAt, input.frequencyMonths)
-              : new Date(),
-            createdBy: session.user.id,
-          })
-          .returning();
+      const created = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [item] = await ctx.o
+            .insert(ptPlanItem)
+            .values({
+              organizationId: member.organizationId,
+              unitId: planUnitId,
+              scopePart: input.scopePart,
+              riskJustification: input.riskJustification ?? null,
+              frequencyMonths: input.frequencyMonths,
+              lastSatisfactoryAt,
+              nextDueAt: lastSatisfactoryAt
+                ? addMonths(lastSatisfactoryAt, input.frequencyMonths)
+                : new Date(),
+              createdBy: ctx.actor.userId,
+            })
+            .returning();
+          return item;
+        },
+      );
 
-        return c.json(created, 201);
-      });
+      return c.json(created, 201);
     },
   )
 
@@ -329,60 +388,65 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdatePtPlanItemSchema),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireId(c.req.param("id"));
       const input = c.req.valid("json");
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [existing] = await tx
-          .select()
-          .from(ptPlanItem)
-          .where(
-            and(
-              eq(ptPlanItem.id, id),
-              eq(ptPlanItem.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-        if (!existing) {
-          return c.json({ error: "Item do plano não encontrado" }, 404);
-        }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [existing] = await ctx.o
+            .select()
+            .from(ptPlanItem)
+            .where(
+              and(
+                eq(ptPlanItem.id, id),
+                eq(ptPlanItem.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+          if (!existing) {
+            throw notFound(
+              "pt_plan_item_not_found",
+              "Item do plano não encontrado",
+            );
+          }
 
-        const frequencyMonths =
-          input.frequencyMonths ?? existing.frequencyMonths;
-        const lastSatisfactoryAt =
-          input.lastSatisfactoryAt === undefined
-            ? existing.lastSatisfactoryAt
-            : input.lastSatisfactoryAt === null
-              ? null
-              : new Date(input.lastSatisfactoryAt);
+          const frequencyMonths =
+            input.frequencyMonths ?? existing.frequencyMonths;
+          const lastSatisfactoryAt =
+            input.lastSatisfactoryAt === undefined
+              ? existing.lastSatisfactoryAt
+              : input.lastSatisfactoryAt === null
+                ? null
+                : new Date(input.lastSatisfactoryAt);
 
-        const [updated] = await tx
-          .update(ptPlanItem)
-          .set({
-            scopePart: input.scopePart ?? existing.scopePart,
-            riskJustification:
-              input.riskJustification === undefined
-                ? existing.riskJustification
-                : input.riskJustification,
-            frequencyMonths,
-            lastSatisfactoryAt,
-            nextDueAt: lastSatisfactoryAt
-              ? addMonths(lastSatisfactoryAt, frequencyMonths)
-              : existing.nextDueAt,
-          })
-          .where(
-            and(
-              eq(ptPlanItem.id, id),
-              eq(ptPlanItem.organizationId, member.organizationId),
-            ),
-          )
-          .returning();
+          const [item] = await ctx.o
+            .update(ptPlanItem)
+            .set({
+              scopePart: input.scopePart ?? existing.scopePart,
+              riskJustification:
+                input.riskJustification === undefined
+                  ? existing.riskJustification
+                  : input.riskJustification,
+              frequencyMonths,
+              lastSatisfactoryAt,
+              nextDueAt: lastSatisfactoryAt
+                ? addMonths(lastSatisfactoryAt, frequencyMonths)
+                : existing.nextDueAt,
+            })
+            .where(
+              and(
+                eq(ptPlanItem.id, id),
+                eq(ptPlanItem.organizationId, member.organizationId),
+              ),
+            )
+            .returning();
+          return item;
+        },
+      );
 
-        return c.json(updated);
-      });
+      return c.json(updated);
     },
   )
 
@@ -394,12 +458,9 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ proficiency_test: ["delete"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const deleted = await tx
+      const id = requireId(c.req.param("id"));
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const deleted = await ctx.o
           .delete(ptPlanItem)
           .where(
             and(
@@ -409,10 +470,13 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .returning();
         if (deleted.length === 0) {
-          return c.json({ error: "Item do plano não encontrado" }, 404);
+          throw notFound(
+            "pt_plan_item_not_found",
+            "Item do plano não encontrado",
+          );
         }
-        return c.json({ message: "Item removido" });
       });
+      return c.json({ message: "Item removido" });
     },
   )
 
@@ -424,10 +488,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ proficiency_test: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+      const id = requireId(c.req.param("id"));
 
       return await orgDb(member.organizationId).transaction(async (tx) => {
         const [round] = await tx
@@ -468,9 +529,9 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
           .limit(1);
 
         if (!round) {
-          return c.json(
-            { error: "Ensaio de proficiência não encontrado" },
-            404,
+          throw notFound(
+            "proficiency_test_not_found",
+            "Ensaio de proficiência não encontrado",
           );
         }
         return c.json(round);
@@ -486,29 +547,11 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ proficiency_test: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+      const id = requireId(c.req.param("id"));
 
       // Tenant check before exposing the (FK-less) audit trail
       return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [round] = await tx
-          .select({ id: proficiencyTest.id })
-          .from(proficiencyTest)
-          .where(
-            and(
-              eq(proficiencyTest.id, id),
-              eq(proficiencyTest.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-        if (!round) {
-          return c.json(
-            { error: "Ensaio de proficiência não encontrado" },
-            404,
-          );
-        }
+        await requireProficiencyTest(id, member.organizationId, tx);
 
         const entries = await tx
           .select({
@@ -539,74 +582,63 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateProficiencyTestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        if (input.standardId) {
-          const [standard] = await tx
-            .select({ id: referenceStandard.id })
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.id, input.standardId),
-                eq(referenceStandard.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-          if (!standard) {
-            return c.json(
-              { error: "Padrão de referência não encontrado" },
-              404,
+      const created = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          if (input.standardId) {
+            await requireLabStandard(
+              input.standardId,
+              member.organizationId,
+              ctx.o,
             );
           }
-        }
 
-        // A body-supplied unit must be one the caller can access (403 otherwise).
-        const testUnitId =
-          input.unitId == null
-            ? null
-            : resolveAccessibleUnitContext(member, input.unitId).unitId;
+          // A body-supplied unit must be one the caller can access (403 otherwise).
+          const testUnitId =
+            input.unitId == null
+              ? null
+              : resolveAccessibleUnitContext(member, input.unitId).unitId;
 
-        const [created] = await tx
-          .insert(proficiencyTest)
-          .values({
-            organizationId: member.organizationId,
-            unitId: testUnitId,
-            activityType: input.activityType,
-            provider: input.provider,
-            providerAccreditation: input.providerAccreditation ?? null,
-            ptRound: input.ptRound,
-            scopePart: input.scopePart,
-            metrologyKind: input.metrologyKind ?? null,
-            standardId: input.standardId ?? null,
-            registrationDate: input.registrationDate
-              ? new Date(input.registrationDate)
-              : null,
-            participationDate: input.participationDate
-              ? new Date(input.participationDate)
-              : null,
-            overallStatus: "pending",
-            notes: input.notes ?? null,
-            createdBy: session.user.id,
-          })
-          .returning();
+          const [round] = await ctx.o
+            .insert(proficiencyTest)
+            .values({
+              organizationId: member.organizationId,
+              unitId: testUnitId,
+              activityType: input.activityType,
+              provider: input.provider,
+              providerAccreditation: input.providerAccreditation ?? null,
+              ptRound: input.ptRound,
+              scopePart: input.scopePart,
+              metrologyKind: input.metrologyKind ?? null,
+              standardId: input.standardId ?? null,
+              registrationDate: input.registrationDate
+                ? new Date(input.registrationDate)
+                : null,
+              participationDate: input.participationDate
+                ? new Date(input.participationDate)
+                : null,
+              overallStatus: "pending",
+              notes: input.notes ?? null,
+              createdBy: ctx.actor.userId,
+            })
+            .returning();
 
-        if (!created) {
-          return c.json({ error: "Falha ao registrar ensaio" }, 500);
-        }
+          if (!round) {
+            throw new Error("Falha ao registrar ensaio");
+          }
 
-        await tx.insert(proficiencyTestAuditLog).values({
-          organizationId: member.organizationId,
-          proficiencyTestId: created.id,
-          action: "create",
-          changes: { initial: input },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          await ctx.audit("proficiencyTest", round.id, {
+            action: "create",
+            changes: { initial: input },
+          });
 
-        return c.json(created, 201);
-      });
+          return round;
+        },
+      );
+      return c.json(created, 201);
     },
   )
 
@@ -619,102 +651,77 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateProficiencyTestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireId(c.req.param("id"));
       const input = c.req.valid("json");
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [existing] = await tx
-          .select()
-          .from(proficiencyTest)
-          .where(
-            and(
-              eq(proficiencyTest.id, id),
-              eq(proficiencyTest.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-        if (!existing) {
-          return c.json(
-            { error: "Ensaio de proficiência não encontrado" },
-            404,
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireProficiencyTest(
+            id,
+            member.organizationId,
+            ctx.o,
           );
-        }
 
-        if (input.standardId) {
-          const [standard] = await tx
-            .select({ id: referenceStandard.id })
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.id, input.standardId),
-                eq(referenceStandard.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-          if (!standard) {
-            return c.json(
-              { error: "Padrão de referência não encontrado" },
-              404,
+          if (input.standardId) {
+            await requireLabStandard(
+              input.standardId,
+              member.organizationId,
+              ctx.o,
             );
           }
-        }
 
-        const [updated] = await tx
-          .update(proficiencyTest)
-          .set({
-            activityType: input.activityType ?? existing.activityType,
-            provider: input.provider ?? existing.provider,
-            providerAccreditation:
-              input.providerAccreditation === undefined
-                ? existing.providerAccreditation
-                : input.providerAccreditation,
-            ptRound: input.ptRound ?? existing.ptRound,
-            scopePart: input.scopePart ?? existing.scopePart,
-            metrologyKind:
-              input.metrologyKind === undefined
-                ? existing.metrologyKind
-                : input.metrologyKind,
-            standardId:
-              input.standardId === undefined
-                ? existing.standardId
-                : input.standardId,
-            registrationDate:
-              input.registrationDate === undefined
-                ? existing.registrationDate
-                : input.registrationDate === null
-                  ? null
-                  : new Date(input.registrationDate),
-            participationDate:
-              input.participationDate === undefined
-                ? existing.participationDate
-                : input.participationDate === null
-                  ? null
-                  : new Date(input.participationDate),
-            notes: input.notes === undefined ? existing.notes : input.notes,
-          })
-          .where(
-            and(
-              eq(proficiencyTest.id, id),
-              eq(proficiencyTest.organizationId, member.organizationId),
-            ),
-          )
-          .returning();
+          const [round] = await ctx.o
+            .update(proficiencyTest)
+            .set({
+              activityType: input.activityType ?? existing.activityType,
+              provider: input.provider ?? existing.provider,
+              providerAccreditation:
+                input.providerAccreditation === undefined
+                  ? existing.providerAccreditation
+                  : input.providerAccreditation,
+              ptRound: input.ptRound ?? existing.ptRound,
+              scopePart: input.scopePart ?? existing.scopePart,
+              metrologyKind:
+                input.metrologyKind === undefined
+                  ? existing.metrologyKind
+                  : input.metrologyKind,
+              standardId:
+                input.standardId === undefined
+                  ? existing.standardId
+                  : input.standardId,
+              registrationDate:
+                input.registrationDate === undefined
+                  ? existing.registrationDate
+                  : input.registrationDate === null
+                    ? null
+                    : new Date(input.registrationDate),
+              participationDate:
+                input.participationDate === undefined
+                  ? existing.participationDate
+                  : input.participationDate === null
+                    ? null
+                    : new Date(input.participationDate),
+              notes: input.notes === undefined ? existing.notes : input.notes,
+            })
+            .where(
+              and(
+                eq(proficiencyTest.id, id),
+                eq(proficiencyTest.organizationId, member.organizationId),
+              ),
+            )
+            .returning();
 
-        await tx.insert(proficiencyTestAuditLog).values({
-          organizationId: member.organizationId,
-          proficiencyTestId: id,
-          action: "update",
-          changes: { input },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          await ctx.audit("proficiencyTest", id, {
+            action: "update",
+            changes: { input },
+          });
 
-        return c.json(updated);
-      });
+          return round;
+        },
+      );
+      return c.json(updated);
     },
   )
 
@@ -730,130 +737,119 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", RecordPtResultsSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireId(c.req.param("id"));
       const input = c.req.valid("json");
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [existing] = await tx
-          .select()
-          .from(proficiencyTest)
-          .where(
-            and(
-              eq(proficiencyTest.id, id),
-              eq(proficiencyTest.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-        if (!existing) {
-          return c.json(
-            { error: "Ensaio de proficiência não encontrado" },
-            404,
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireProficiencyTest(
+            id,
+            member.organizationId,
+            ctx.o,
           );
-        }
 
-        const results = input.results.map(computeResultPoint);
-        const overallStatus = overallStatusFromResults(results);
-        const resultReportedAt = new Date(input.resultReportedAt);
+          const results = input.results.map(computeResultPoint);
+          const overallStatus = overallStatusFromResults(results);
+          const resultReportedAt = new Date(input.resultReportedAt);
 
-        // §7.7.3 auto-escalation — guarded against double-escalation like the
-        // NC escalate-to-capa flow.
-        let capaId = existing.capaId;
-        if (overallStatus === "unsatisfactory" && !existing.capaId) {
-          const failedPoints = results
-            .filter((r) => r.verdict === "unsatisfactory")
-            .map(
-              (r) =>
-                `${r.label}: ${r.scoreType} = ${r.score == null ? "n/d" : r.score.toFixed(2)}`,
-            )
-            .join("; ");
-          const newCapa = await createCorrectiveActionRecord(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              source: "proficiency_test",
-              sourceReference: `${existing.ptRound} (${existing.provider})`,
-              title: `Resultado insatisfatório no EP ${existing.ptRound}`,
-              description: `Ensaio de proficiência "${existing.ptRound}" (${existing.provider}) com resultado insatisfatório no escopo "${existing.scopePart}". Pontos reprovados: ${failedPoints}.`,
-              detectionDate: resultReportedAt,
-              severity: "major",
-              category: "method",
-              ipAddress: clientIp(c),
-            },
-            tx,
-          );
-          capaId = newCapa.id;
-        }
+          // §7.7.3 auto-escalation — guarded against double-escalation like the
+          // NC escalate-to-capa flow.
+          let capaId = existing.capaId;
+          if (overallStatus === "unsatisfactory" && !existing.capaId) {
+            const failedPoints = results
+              .filter((r) => r.verdict === "unsatisfactory")
+              .map(
+                (r) =>
+                  `${r.label}: ${r.scoreType} = ${r.score == null ? "n/d" : r.score.toFixed(2)}`,
+              )
+              .join("; ");
+            const newCapa = await createCorrectiveActionRecord(
+              {
+                organizationId: member.organizationId,
+                actorUserId: ctx.actor.userId,
+                source: "proficiency_test",
+                sourceReference: `${existing.ptRound} (${existing.provider})`,
+                title: `Resultado insatisfatório no EP ${existing.ptRound}`,
+                description: `Ensaio de proficiência "${existing.ptRound}" (${existing.provider}) com resultado insatisfatório no escopo "${existing.scopePart}". Pontos reprovados: ${failedPoints}.`,
+                detectionDate: resultReportedAt,
+                severity: "major",
+                category: "method",
+                ipAddress: ctx.actor.ipAddress,
+              },
+              ctx.o,
+            );
+            capaId = newCapa.id;
+          }
 
-        const [updated] = await tx
-          .update(proficiencyTest)
-          .set({
-            results,
-            overallStatus: PT_OVERALL_MACHINE.requireTransition(
-              existing.overallStatus,
-              "record_results",
-              overallStatus,
-            ),
-            resultReportedAt,
-            capaId,
-          })
-          .where(
-            and(
-              eq(proficiencyTest.id, id),
-              eq(proficiencyTest.organizationId, member.organizationId),
-              eq(proficiencyTest.overallStatus, existing.overallStatus),
-            ),
-          )
-          .returning();
-
-        await tx.insert(proficiencyTestAuditLog).values({
-          organizationId: member.organizationId,
-          proficiencyTestId: id,
-          action: capaId !== existing.capaId ? "escalate" : "record_results",
-          changes: {
-            overallStatus: { old: existing.overallStatus, new: overallStatus },
-            points: results.length,
-            ...(capaId !== existing.capaId ? { capaId } : {}),
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-
-        // Advance the 4-year compliance clock for this scope part
-        if (overallStatus === "satisfactory") {
-          const [planItem] = await tx
-            .select()
-            .from(ptPlanItem)
+          const [round] = await ctx.o
+            .update(proficiencyTest)
+            .set({
+              results,
+              overallStatus: PT_OVERALL_MACHINE.requireTransition(
+                existing.overallStatus,
+                "record_results",
+                overallStatus,
+              ),
+              resultReportedAt,
+              capaId,
+            })
             .where(
               and(
-                eq(ptPlanItem.organizationId, member.organizationId),
-                eq(ptPlanItem.scopePart, existing.scopePart),
+                eq(proficiencyTest.id, id),
+                eq(proficiencyTest.organizationId, member.organizationId),
+                eq(proficiencyTest.overallStatus, existing.overallStatus),
               ),
             )
-            .limit(1);
-          if (
-            planItem &&
-            (!planItem.lastSatisfactoryAt ||
-              planItem.lastSatisfactoryAt < resultReportedAt)
-          ) {
-            await tx
-              .update(ptPlanItem)
-              .set({
-                lastSatisfactoryAt: resultReportedAt,
-                nextDueAt: addMonths(
-                  resultReportedAt,
-                  planItem.frequencyMonths,
-                ),
-              })
-              .where(eq(ptPlanItem.id, planItem.id));
-          }
-        }
+            .returning();
 
-        return c.json(updated);
-      });
+          await ctx.audit("proficiencyTest", id, {
+            action: capaId !== existing.capaId ? "escalate" : "record_results",
+            changes: {
+              overallStatus: {
+                old: existing.overallStatus,
+                new: overallStatus,
+              },
+              points: results.length,
+              ...(capaId !== existing.capaId ? { capaId } : {}),
+            },
+          });
+
+          // Advance the 4-year compliance clock for this scope part
+          if (overallStatus === "satisfactory") {
+            const [planItem] = await ctx.o
+              .select()
+              .from(ptPlanItem)
+              .where(
+                and(
+                  eq(ptPlanItem.organizationId, member.organizationId),
+                  eq(ptPlanItem.scopePart, existing.scopePart),
+                ),
+              )
+              .limit(1);
+            if (
+              planItem &&
+              (!planItem.lastSatisfactoryAt ||
+                planItem.lastSatisfactoryAt < resultReportedAt)
+            ) {
+              await ctx.o
+                .update(ptPlanItem)
+                .set({
+                  lastSatisfactoryAt: resultReportedAt,
+                  nextDueAt: addMonths(
+                    resultReportedAt,
+                    planItem.frequencyMonths,
+                  ),
+                })
+                .where(eq(ptPlanItem.id, planItem.id));
+            }
+          }
+
+          return round;
+        },
+      );
+      return c.json(updated);
     },
   )
 
@@ -865,14 +861,10 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ proficiency_test: ["delete"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+      const id = requireId(c.req.param("id"));
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const deleted = await tx
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const deleted = await ctx.o
           .delete(proficiencyTest)
           .where(
             and(
@@ -882,22 +874,15 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .returning();
         if (deleted.length === 0) {
-          return c.json(
-            { error: "Ensaio de proficiência não encontrado" },
-            404,
+          throw notFound(
+            "proficiency_test_not_found",
+            "Ensaio de proficiência não encontrado",
           );
         }
 
         // Audit rows are FK-less on purpose — the trail survives the delete.
-        await tx.insert(proficiencyTestAuditLog).values({
-          organizationId: member.organizationId,
-          proficiencyTestId: id,
-          action: "delete",
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-
-        return c.json({ message: "Ensaio removido" });
+        await ctx.audit("proficiencyTest", id, { action: "delete" });
       });
+      return c.json({ message: "Ensaio removido" });
     },
   );

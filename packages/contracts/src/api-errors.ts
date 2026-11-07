@@ -84,6 +84,23 @@ export const API_ERROR_CODES = [
   "service_not_found",
   "technician_not_found",
 
+  // Quality records (SPC, proficiency testing) and the laboratory's setup.
+  "control_chart_not_found",
+  "control_chart_exists",
+  "control_chart_already_escalated",
+  "control_chart_in_control",
+  "check_standard_reading_not_found",
+  "proficiency_test_not_found",
+  "pt_plan_item_not_found",
+  "scope_line_not_found",
+  "scope_line_unit_mismatch",
+  "environmental_limits_not_found",
+  "material_not_found",
+  "material_sku_conflict",
+  "member_not_found",
+  "unit_default_not_archivable",
+  "unit_active_required",
+
   // Service requests.
   "request_not_found",
   "request_not_editable",
@@ -113,6 +130,8 @@ export const API_ERROR_CODES = [
   // asserted by clients/tests of the job and visit routes. Kept verbatim so
   // existing clients keep working; new code must use `job_status_conflict`.
   "JOB_STATUS_CONFLICT",
+  // Shipped with the unit-governance route and asserted by its clients.
+  "LAST_CALIBRATION_APPROVER",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

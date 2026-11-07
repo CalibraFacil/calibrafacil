@@ -18,10 +18,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { ptPlanItem } from "@calibra-facil/db/schema";
-import { proficiencyTestsRouter } from "./proficiency-tests";
+import { proficiencyTestsRouter as bareProficiencyTestsRouter } from "./proficiency-tests";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const proficiencyTestsRouter = withErrorHandling(bareProficiencyTestsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
