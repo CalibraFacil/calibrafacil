@@ -8,9 +8,11 @@ export function slugify(
   value: string,
   maxLength = Number.POSITIVE_INFINITY,
 ): string {
+  // Runs are collapsed first, so at most one `-` sits at either end: the trims
+  // below need no quantifier (linear time on any input).
   return foldText(value)
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/^-|-$/g, "")
     .slice(0, maxLength)
-    .replace(/-+$/, "");
+    .replace(/-$/, "");
 }
