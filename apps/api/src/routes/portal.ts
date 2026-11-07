@@ -7,6 +7,7 @@ import {
   PORTAL_NOTIFICATION_TYPES,
   PortalUpdateNotificationPreferencesSchema,
 } from "@calibra-facil/schemas";
+import { resolvePortalLabScope } from "../lib/portal-lab-scope";
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -572,62 +573,6 @@ async function withMatchingPortalStandardDocuments(
   });
 }
 
-function getPortalHostOrigin(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  return c.req.header("origin") ?? c.req.header("referer") ?? null;
-}
-
-function isDefaultPortalHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-
-  let configuredPortalHostname: string | null = null;
-  try {
-    configuredPortalHostname = new URL(portalBaseUrl()).hostname.toLowerCase();
-  } catch {
-    configuredPortalHostname = null;
-  }
-
-  return (
-    normalized === configuredPortalHostname ||
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "[::1]" ||
-    normalized.startsWith("10.") ||
-    normalized.startsWith("192.168.")
-  );
-}
-
-type PortalLabScope = {
-  labOrganizationId: string | null;
-  blocked: boolean;
-};
-
-async function getPortalLabScope(c: {
-  req: { header: (name: string) => string | undefined };
-}): Promise<PortalLabScope> {
-  const origin = getPortalHostOrigin(c);
-  if (!origin) return { labOrganizationId: null, blocked: true };
-
-  try {
-    const url = new URL(origin);
-    const hostname = url.hostname.toLowerCase();
-    const labOrganizationId =
-      await resolveLabOrganizationIdByPortalHostname(hostname);
-
-    if (labOrganizationId) {
-      return { labOrganizationId, blocked: false };
-    }
-
-    return {
-      labOrganizationId: null,
-      blocked: !isDefaultPortalHostname(hostname),
-    };
-  } catch {
-    return { labOrganizationId: null, blocked: true };
-  }
-}
-
 /**
  * Portal routes - endpoints specific to the client portal.
  * These routes handle client-facing functionality.
@@ -642,11 +587,11 @@ export const portalRouter = new Hono<{
   // =========================================================================
   // Unauthenticated on purpose: the sign-in page needs the lab's name + logo
   // before a session exists. Resolved from the request Origin via the custom
-  // domain (getPortalLabScope). Degrades to nulls on the default portal host
+  // domain (resolvePortalLabScope). Degrades to nulls on the default portal host
   // or an unrecognized domain, so the SPA falls back to CalibraFácil branding.
   // =========================================================================
   .get("/branding", async (c) => {
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (!portalLabScope.labOrganizationId) {
       return c.json({
         name: null,
@@ -679,7 +624,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/organizations", requirePortalAuth, async (c) => {
     const session = c.get("session");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -712,7 +657,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/overview", ...requirePortalProtected, async (c) => {
     const member = c.get("member");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -935,7 +880,7 @@ export const portalRouter = new Hono<{
     zValidator("query", PortalListAssetsQuerySchema),
     async (c) => {
       const member = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -1103,7 +1048,7 @@ export const portalRouter = new Hono<{
     requirePermission({ equipment: ["read"] }),
     async (c) => {
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -1248,7 +1193,7 @@ export const portalRouter = new Hono<{
     zValidator("query", PortalCalendarQuerySchema),
     async (c) => {
       const member = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -1334,7 +1279,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/units", ...requirePortalProtected, async (c) => {
     const member = c.get("member");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -1372,7 +1317,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/units/summary", ...requirePortalProtected, async (c) => {
     const member = c.get("member");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -1444,7 +1389,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/notification-preferences", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -1492,7 +1437,7 @@ export const portalRouter = new Hono<{
     requirePermission({ equipment: ["read"] }),
     async (c) => {
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -1617,7 +1562,7 @@ export const portalRouter = new Hono<{
     requirePermission({ equipment: ["read"] }),
     async (c) => {
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -1761,7 +1706,7 @@ export const portalRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -1890,7 +1835,7 @@ export const portalRouter = new Hono<{
     zValidator("json", PortalUpdateNotificationPreferencesSchema),
     async (c) => {
       const session = c.get("session");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -1955,7 +1900,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/certificates", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -2122,7 +2067,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/certificates/:id", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -2334,7 +2279,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/certificates/:id/download", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -2433,7 +2378,7 @@ export const portalRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -2553,7 +2498,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/audit-packs", ...requirePortalProtected, async (c) => {
     const portalMember = c.get("member");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -2619,7 +2564,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/audit-packs/:id/download", ...requirePortalProtected, async (c) => {
     const portalMember = c.get("member");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -2731,7 +2676,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get("/oot-notifications", ...requirePortalProtected, async (c) => {
     const portalMember = c.get("member");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await resolvePortalLabScope(c);
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
@@ -2814,7 +2759,7 @@ export const portalRouter = new Hono<{
     ...requirePortalProtected,
     async (c) => {
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -2925,7 +2870,7 @@ export const portalRouter = new Hono<{
     ...requirePortalProtected,
     async (c) => {
       const session = c.get("session");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -3043,7 +2988,7 @@ export const portalRouter = new Hono<{
     zValidator("query", FleetAnalyticsQuerySchema),
     async (c) => {
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -3130,7 +3075,7 @@ export const portalRouter = new Hono<{
     requirePermission({ equipment: ["read"] }),
     async (c) => {
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -3209,7 +3154,7 @@ export const portalRouter = new Hono<{
     ),
     async (c) => {
       const portalMember = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
@@ -3306,7 +3251,7 @@ export const portalRouter = new Hono<{
     async (c) => {
       const portalMember = c.get("member");
       const session = c.get("session");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await resolvePortalLabScope(c);
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }

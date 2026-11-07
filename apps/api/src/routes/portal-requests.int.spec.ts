@@ -33,7 +33,7 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 // customerId being bound from the session scope (linkedCustomer.id) rather than
 // any client-supplied value, with cross-customer assets rejected (:321).
 
-// The portal resolves the host lab from the request Origin (getPortalLabScope).
+// The portal resolves the host lab from the request Origin (resolvePortalLabScope).
 // A default/local host yields labScope=null (resolveLabOrganizationIdByPortalHostname
 // returns null for an unknown host), which is the clean path: scope is then
 // resolved purely from customer.authOrganizationId.

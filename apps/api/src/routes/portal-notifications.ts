@@ -1,3 +1,4 @@
+import { requirePortalLabScope } from "../lib/portal-lab-scope";
 import { Hono } from "hono";
 import type {
   PortalNotificationCountResponse,
@@ -31,19 +32,6 @@ import {
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalNotificationOrgIds } from "../lib/portal-customer-scope";
 import { orgDb, orgSetDb } from "../lib/org-db";
-
-async function getPortalLabScope(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  const origin = c.req.header("origin") ?? c.req.header("referer") ?? null;
-  if (!origin) return null;
-  try {
-    const url = new URL(origin);
-    return resolveLabOrganizationIdByPortalHostname(url.hostname);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Portal notification center (#741): the read surface for the IN_APP rows the
@@ -88,7 +76,7 @@ export const portalNotificationsRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const { cursor, limit, status } = c.req.valid("query");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
 
       try {
         const orgIds = await resolvePortalNotificationOrgIds({
@@ -149,7 +137,7 @@ export const portalNotificationsRouter = new Hono<{
   // =========================================================================
   .get("/unread-count", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await requirePortalLabScope(c);
 
     try {
       const orgIds = await resolvePortalNotificationOrgIds({
@@ -194,7 +182,7 @@ export const portalNotificationsRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const { notificationIds } = c.req.valid("json");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
 
       try {
         const orgIds = await resolvePortalNotificationOrgIds({
@@ -265,7 +253,7 @@ export const portalNotificationsRouter = new Hono<{
   // =========================================================================
   .post("/mark-all-read", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
-    const portalLabScope = await getPortalLabScope(c);
+    const portalLabScope = await requirePortalLabScope(c);
 
     try {
       const orgIds = await resolvePortalNotificationOrgIds({

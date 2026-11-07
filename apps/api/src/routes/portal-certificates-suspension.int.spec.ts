@@ -29,7 +29,7 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 // "Conta suspensa. Entre em contato com o suporte da CalibraFácil."). The gate
 // runs BEFORE the handler, so it fires regardless of the URL cert id.
 
-// The portal resolves the host lab from the request Origin (getPortalLabScope).
+// The portal resolves the host lab from the request Origin (resolvePortalLabScope).
 // A default/local host yields labScope=null with blocked=false — the clean path:
 // scope is resolved purely from customer.authOrganizationId.
 const LOCAL_ORIGIN = { origin: "http://localhost" };
@@ -122,7 +122,7 @@ describe("portalRouter certificate routes — SUSPENDED org gate (SEC-05)", () =
   // suspended org. Today (requirePortalAuth only) a suspended org still reaches
   // the handler: list/detail → 200, download → 400, standard → 404. The
   // "suspensa" body text pins the rejection to requireOrganization's gate
-  // rather than any other 403 (getPortalLabScope / requirePortalAccess).
+  // rather than any other 403 (resolvePortalLabScope / requirePortalAccess).
   // =========================================================================
   it("REQ-SEC-PORT-001: SUSPENDED client org is rejected (403) on all 4 certificate routes", async () => {
     const ctx = await seedPortalContext({

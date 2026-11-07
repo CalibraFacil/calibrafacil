@@ -24,7 +24,7 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 // by the handler's `inArray(calibrationVisit.customerId, scope.customerIds)` WHERE
 // clause (portal-visits.ts:70).
 
-// The portal resolves the host lab from the request Origin (getPortalLabScope).
+// The portal resolves the host lab from the request Origin (resolvePortalLabScope).
 // A default/local host yields labScope=null, which is the clean path: scope is then
 // resolved purely from customer.authOrganizationId.
 const LOCAL_ORIGIN = { origin: "http://localhost" };

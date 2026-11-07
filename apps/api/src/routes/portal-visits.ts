@@ -1,3 +1,4 @@
+import { requirePortalLabScope } from "../lib/portal-lab-scope";
 import { Hono } from "hono";
 import type {
   PortalVisitConfirmResponse,
@@ -29,19 +30,6 @@ import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains"
 import { resolvePortalCustomerScope } from "../lib/portal-customer-scope";
 import { orgDb } from "../lib/org-db";
 import { clientIp, type ClientIpContext } from "../lib/client-ip";
-
-async function getPortalLabScope(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  const origin = c.req.header("origin") ?? c.req.header("referer") ?? null;
-  if (!origin) return null;
-  try {
-    const url = new URL(origin);
-    return resolveLabOrganizationIdByPortalHostname(url.hostname);
-  } catch {
-    return null;
-  }
-}
 
 function requestIp(c: ClientIpContext) {
   return clientIp(c);
@@ -90,7 +78,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
     requirePermission({ request: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
 
       const scope = await resolvePortalCustomerScope({
         activeOrgId: member.organizationId,
@@ -205,7 +193,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
 
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
       const scope = await resolvePortalCustomerScope({
         activeOrgId: member.organizationId,
         labScope: portalLabScope,
@@ -296,7 +284,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const input = c.req.valid("json");
 
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
       const scope = await resolvePortalCustomerScope({
         activeOrgId: member.organizationId,
         labScope: portalLabScope,
