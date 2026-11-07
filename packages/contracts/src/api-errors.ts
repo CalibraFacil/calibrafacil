@@ -141,6 +141,16 @@ export const API_ERROR_CODES = [
   "request_not_editable",
   "request_not_cancelable",
   "multi_unit_request_not_allowed",
+  "request_status_invalid",
+  "request_already_active",
+
+  // On-site visits.
+  "visit_not_found",
+  "visit_closed",
+  "visit_not_proposed",
+  "visit_not_scheduled",
+  "visit_reschedule_pending",
+  "visit_reschedule_request_not_found",
 
   // Records retention (decision Q16): organization lifecycle and the
   // customers / API keys that depend on it.

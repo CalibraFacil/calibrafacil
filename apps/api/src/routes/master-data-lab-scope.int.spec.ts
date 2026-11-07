@@ -52,7 +52,7 @@ import { organizationOf } from "../../test/integration/organization-of";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { assetsRouter as bareAssetsRouter } from "./assets";
-import { calibrationRequestsRouter } from "./calibration-requests";
+import { calibrationRequestsRouter as bareCalibrationRequestsRouter } from "./calibration-requests";
 import { customerGroupsRouter as bareCustomerGroupsRouter } from "./customer-groups";
 import { customersRouter as bareCustomersRouter } from "./customers";
 import { materialsRouter as bareMaterialsRouter } from "./materials";
@@ -61,7 +61,7 @@ import { unitsRouter as bareUnitsRouter } from "./units";
 import { materialsRouter } from "./materials";
 import { servicesRouter as bareServicesRouter } from "./services";
 import { unitsRouter } from "./units";
-import { visitJobsRouter } from "./visits";
+import { visitJobsRouter as bareVisitJobsRouter } from "./visits";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
 
@@ -71,6 +71,10 @@ const customersRouter = withErrorHandling(bareCustomersRouter);
 const materialsRouter = withErrorHandling(bareMaterialsRouter);
 const unitsRouter = withErrorHandling(bareUnitsRouter);
 const servicesRouter = withErrorHandling(bareServicesRouter);
+const calibrationRequestsRouter = withErrorHandling(
+  bareCalibrationRequestsRouter,
+);
+const visitJobsRouter = withErrorHandling(bareVisitJobsRouter);
 
 // The request-state notifications read what the transaction wrote and send
 // e-mail; they are not under test here.

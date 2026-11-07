@@ -33,12 +33,10 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
 
   ["apps/api/src/routes/dashboard.ts", 1],
 
-  ["apps/api/src/routes/portal-requests.ts", 1],
   ["apps/api/src/routes/portal.ts", 13],
   ["apps/api/src/routes/reports.ts", 8],
   ["apps/api/src/routes/signing.ts", 9],
 
-  ["apps/api/src/routes/visits.ts", 26],
 ]);
 
 const MESSAGE =

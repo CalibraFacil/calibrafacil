@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
-import { portalRequestsRouter } from "./portal-requests";
+import { portalRequestsRouter as barePortalRequestsRouter } from "./portal-requests";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -16,6 +16,9 @@ import {
   seedPortalCustomer,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRequestsRouter = withErrorHandling(barePortalRequestsRouter);
 
 // Real-DB + real-RBAC integration test for the CLIENT PORTAL calibration-request
 // endpoints (portal-requests.ts) — the customer-facing tenant boundary. Only the

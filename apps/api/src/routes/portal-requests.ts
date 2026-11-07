@@ -12,7 +12,6 @@ import {
   assetType,
   calibrationJob,
   calibrationRequest,
-  calibrationRequestAuditLog,
   calibrationRequestItem,
   calibrationVisit,
   customer,
@@ -25,20 +24,29 @@ import {
 } from "@calibra-facil/schemas";
 import { AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 import { notifyCalibrationRequestSubmitted } from "@calibra-facil/notifications";
+import { invalid, notFound } from "../lib/domain-errors";
 import { and, count, desc, eq, inArray, isNull, ilike, sql } from "drizzle-orm";
 import {
   requirePermission,
   requirePortalProtected,
   type AuthVariables,
 } from "../middleware/permission";
-import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import {
   resolvePortalCustomerScope,
   resolvePortalLinkedCustomer,
 } from "../lib/portal-customer-scope";
 import { orgDb } from "../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { clientIp } from "../lib/client-ip";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
+import { requireRouteId } from "../lib/route-id";
+
+function requestAlreadyActive() {
+  return invalid(
+    "request_already_active",
+    "Um ou mais ativos ja possuem uma solicitacao ativa",
+  );
+}
 
 async function getRequestItems(o: OrgDb, requestIds: number[]) {
   if (requestIds.length === 0) return [];
@@ -177,11 +185,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const portalLabScope = await requirePortalLabScope(c);
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const id = requireRouteId(c.req.param("id"));
 
       const scope = await resolvePortalCustomerScope({
         activeOrgId: member.organizationId,
@@ -189,7 +193,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       if (!scope || scope.customerIds.length === 0) {
-        return c.json({ error: "Solicitacao nao encontrada" }, 404);
+        throw notFound("request_not_found", "Solicitacao nao encontrada");
       }
 
       return await orgDb(scope.labOrganizationId).transaction(async (o) => {
@@ -228,7 +232,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           .limit(1);
 
         if (!request) {
-          return c.json({ error: "Solicitacao nao encontrada" }, 404);
+          throw notFound("request_not_found", "Solicitacao nao encontrada");
         }
 
         const items = await getRequestItems(o, [request.id]);
@@ -261,10 +265,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const portalLabScope = await requirePortalLabScope(c);
       const input = c.req.valid("json");
-      const ipAddress = clientIp(c);
 
       const linkedCustomer = await resolvePortalLinkedCustomer({
         authOrganizationId: member.organizationId,
@@ -272,7 +274,10 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       if (!linkedCustomer) {
-        return c.json({ error: "Cliente vinculado nao encontrado" }, 404);
+        throw notFound(
+          "customer_not_found",
+          "Cliente vinculado nao encontrado",
+        );
       }
 
       const lab = orgDb(linkedCustomer.labOrganizationId);
@@ -296,20 +301,17 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       );
 
       if (assets.length !== input.assetIds.length) {
-        return c.json(
-          { error: "Um ou mais ativos selecionados nao pertencem ao cliente" },
-          400,
+        throw invalid(
+          "invalid_assets",
+          "Um ou mais ativos selecionados nao pertencem ao cliente",
         );
       }
 
       const unitIds = [...new Set(assets.map((item) => item.unitId))];
       if (unitIds.length !== 1) {
-        return c.json(
-          {
-            error:
-              "Selecione ativos da mesma unidade para enviar a solicitacao",
-          },
-          400,
+        throw invalid(
+          "multi_unit_request_not_allowed",
+          "Selecione ativos da mesma unidade para enviar a solicitacao",
         );
       }
 
@@ -336,108 +338,94 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.preferredVisitDate)
           : null;
 
-      const request = await lab.transaction(async (tx) => {
-        const lockAssetIds = [...input.assetIds].sort(
-          (left, right) => left - right,
-        );
-
-        for (const assetId of lockAssetIds) {
-          await tx.advisoryXactLock(linkedCustomer.id, assetId);
-        }
-
-        const existingItems = await tx
-          .select({
-            assetId: calibrationRequestItem.assetId,
-          })
-          .from(calibrationRequestItem)
-          .innerJoin(
-            calibrationRequest,
-            eq(calibrationRequestItem.requestId, calibrationRequest.id),
-          )
-          .where(
-            and(
-              inArray(calibrationRequestItem.assetId, input.assetIds),
-              eq(calibrationRequest.customerId, linkedCustomer.id),
-              inArray(
-                calibrationRequest.status,
-                AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES,
-              ),
-            ),
+      const request = await withOrg(
+        linkedCustomer.labOrganizationId,
+        requestActor(c),
+        async (ctx) => {
+          const lockAssetIds = [...input.assetIds].sort(
+            (left, right) => left - right,
           );
 
-        if (existingItems.length > 0) {
-          return null;
-        }
+          for (const assetId of lockAssetIds) {
+            await ctx.o.advisoryXactLock(linkedCustomer.id, assetId);
+          }
 
-        const [createdRequest] = await tx
-          .insert(calibrationRequest)
-          .values({
-            organizationId: linkedCustomer.labOrganizationId,
-            unitId: unitIds[0]!,
-            customerId: linkedCustomer.id,
-            authOrganizationId: member.organizationId,
-            observations: input.observations || null,
-            requestedDueDate,
-            deliveryMethod: input.deliveryMethod,
-            invoiceRemittanceNumber: isCarrier
-              ? input.invoiceRemittanceNumber || null
-              : null,
-            invoiceRemittanceKey: isCarrier
-              ? input.invoiceRemittanceKey || null
-              : null,
-            invoiceRemittanceIssuedAt,
-            carrierName: isCarrier ? input.carrierName || null : null,
-            onsiteAddress,
-            preferredVisitDate,
-            submittedBy: session.user.id,
-          })
-          .returning();
+          const existingItems = await ctx.o
+            .select({
+              assetId: calibrationRequestItem.assetId,
+            })
+            .from(calibrationRequestItem)
+            .innerJoin(
+              calibrationRequest,
+              eq(calibrationRequestItem.requestId, calibrationRequest.id),
+            )
+            .where(
+              and(
+                inArray(calibrationRequestItem.assetId, input.assetIds),
+                eq(calibrationRequest.customerId, linkedCustomer.id),
+                inArray(
+                  calibrationRequest.status,
+                  AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES,
+                ),
+              ),
+            );
 
-        if (!createdRequest) {
-          throw new Error("Erro ao criar solicitacao");
-        }
+          if (existingItems.length > 0) throw requestAlreadyActive();
 
-        await tx.insert(calibrationRequestItem).values(
-          input.assetIds.map((assetId) => ({
-            organizationId: createdRequest.organizationId,
-            requestId: createdRequest.id,
-            assetId,
-          })),
-        );
-
-        await tx.insert(calibrationRequestAuditLog).values({
-          organizationId: createdRequest.organizationId,
-          requestId: createdRequest.id,
-          action: "create",
-          changes: {
-            initial: {
-              assetIds: input.assetIds,
+          const [createdRequest] = await ctx.o
+            .insert(calibrationRequest)
+            .values({
+              organizationId: linkedCustomer.labOrganizationId,
+              unitId: unitIds[0]!,
+              customerId: linkedCustomer.id,
+              authOrganizationId: member.organizationId,
               observations: input.observations || null,
-              requestedDueDate: requestedDueDate?.toISOString() ?? null,
+              requestedDueDate,
+              deliveryMethod: input.deliveryMethod,
+              invoiceRemittanceNumber: isCarrier
+                ? input.invoiceRemittanceNumber || null
+                : null,
+              invoiceRemittanceKey: isCarrier
+                ? input.invoiceRemittanceKey || null
+                : null,
+              invoiceRemittanceIssuedAt,
+              carrierName: isCarrier ? input.carrierName || null : null,
+              onsiteAddress,
+              preferredVisitDate,
+              submittedBy: ctx.actor.userId,
+            })
+            .returning();
+
+          if (!createdRequest) {
+            throw new Error("Erro ao criar solicitacao");
+          }
+
+          await ctx.o.insert(calibrationRequestItem).values(
+            input.assetIds.map((assetId) => ({
+              organizationId: createdRequest.organizationId,
+              requestId: createdRequest.id,
+              assetId,
+            })),
+          );
+
+          await ctx.audit("calibrationRequest", createdRequest.id, {
+            action: "create",
+            changes: {
+              initial: {
+                assetIds: input.assetIds,
+                observations: input.observations || null,
+                requestedDueDate: requestedDueDate?.toISOString() ?? null,
+              },
             },
-          },
-          performedBy: session.user.id,
-          ipAddress,
-        });
+          });
 
-        return createdRequest;
-      });
+          ctx.afterCommit(() =>
+            notifyCalibrationRequestSubmitted(createdRequest.id),
+          );
 
-      if (!request) {
-        return c.json(
-          { error: "Um ou mais ativos ja possuem uma solicitacao ativa" },
-          400,
-        );
-      }
-
-      try {
-        await notifyCalibrationRequestSubmitted(request.id);
-      } catch (error) {
-        console.error(
-          "[Portal Requests] Failed to send request submission notification:",
-          error,
-        );
-      }
+          return createdRequest;
+        },
+      );
 
       return c.json(
         {
@@ -464,17 +452,18 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const portalLabScope = await requirePortalLabScope(c);
       const input = c.req.valid("json");
-      const ipAddress = clientIp(c);
 
       const scope = await resolvePortalCustomerScope({
         activeOrgId: member.organizationId,
         labScope: portalLabScope,
       });
       if (!scope || scope.customerIds.length === 0) {
-        return c.json({ error: "Cliente vinculado nao encontrado" }, 404);
+        throw notFound(
+          "customer_not_found",
+          "Cliente vinculado nao encontrado",
+        );
       }
 
       const lab = orgDb(scope.labOrganizationId);
@@ -500,11 +489,9 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       );
 
       if (assets.length !== input.assetIds.length) {
-        return c.json(
-          {
-            error: "Um ou mais ativos selecionados nao pertencem a este acesso",
-          },
-          400,
+        throw invalid(
+          "invalid_assets",
+          "Um ou mais ativos selecionados nao pertencem a este acesso",
         );
       }
 
@@ -550,131 +537,114 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.preferredVisitDate)
           : null;
 
-      const created = await lab.transaction(async (tx) => {
-        // Lock every (customer, asset) pair, globally ordered for deadlock safety.
-        const lockPairs = assets
-          .map((item) => ({ customerId: item.customerId, assetId: item.id }))
-          .sort(
-            (left, right) =>
-              left.customerId - right.customerId ||
-              left.assetId - right.assetId,
-          );
-        for (const pair of lockPairs) {
-          await tx.advisoryXactLock(pair.customerId, pair.assetId);
-        }
-
-        // All-or-nothing dedup across the whole batch.
-        const existingItems = await tx
-          .select({ assetId: calibrationRequestItem.assetId })
-          .from(calibrationRequestItem)
-          .innerJoin(
-            calibrationRequest,
-            eq(calibrationRequestItem.requestId, calibrationRequest.id),
-          )
-          .where(
-            and(
-              inArray(calibrationRequestItem.assetId, input.assetIds),
-              inArray(calibrationRequest.customerId, scope.customerIds),
-              inArray(
-                calibrationRequest.status,
-                AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES,
-              ),
-            ),
-          );
-
-        if (existingItems.length > 0) {
-          return null;
-        }
-
-        const results: Array<{
-          id: number;
-          status: typeof calibrationRequest.$inferSelect.status;
-          customerId: number;
-          unitId: number;
-          itemCount: number;
-        }> = [];
-
-        for (const group of groups.values()) {
-          const [createdRequest] = await tx
-            .insert(calibrationRequest)
-            .values({
-              organizationId: group.labOrganizationId,
-              unitId: group.unitId,
-              customerId: group.customerId,
-              authOrganizationId: group.authOrganizationId,
-              observations: input.observations || null,
-              requestedDueDate,
-              deliveryMethod: input.deliveryMethod,
-              invoiceRemittanceNumber: isCarrier
-                ? input.invoiceRemittanceNumber || null
-                : null,
-              invoiceRemittanceKey: isCarrier
-                ? input.invoiceRemittanceKey || null
-                : null,
-              invoiceRemittanceIssuedAt,
-              carrierName: isCarrier ? input.carrierName || null : null,
-              onsiteAddress,
-              preferredVisitDate,
-              submittedBy: session.user.id,
-            })
-            .returning();
-
-          if (!createdRequest) {
-            throw new Error("Erro ao criar solicitacao");
+      const created = await withOrg(
+        scope.labOrganizationId,
+        requestActor(c),
+        async (ctx) => {
+          // Lock every (customer, asset) pair, globally ordered for deadlock safety.
+          const lockPairs = assets
+            .map((item) => ({ customerId: item.customerId, assetId: item.id }))
+            .sort(
+              (left, right) =>
+                left.customerId - right.customerId ||
+                left.assetId - right.assetId,
+            );
+          for (const pair of lockPairs) {
+            await ctx.o.advisoryXactLock(pair.customerId, pair.assetId);
           }
 
-          await tx.insert(calibrationRequestItem).values(
-            group.assetIds.map((assetId) => ({
-              organizationId: createdRequest.organizationId,
-              requestId: createdRequest.id,
-              assetId,
-            })),
-          );
+          // All-or-nothing dedup across the whole batch.
+          const existingItems = await ctx.o
+            .select({ assetId: calibrationRequestItem.assetId })
+            .from(calibrationRequestItem)
+            .innerJoin(
+              calibrationRequest,
+              eq(calibrationRequestItem.requestId, calibrationRequest.id),
+            )
+            .where(
+              and(
+                inArray(calibrationRequestItem.assetId, input.assetIds),
+                inArray(calibrationRequest.customerId, scope.customerIds),
+                inArray(
+                  calibrationRequest.status,
+                  AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES,
+                ),
+              ),
+            );
 
-          await tx.insert(calibrationRequestAuditLog).values({
-            organizationId: createdRequest.organizationId,
-            requestId: createdRequest.id,
-            action: "create",
-            changes: {
-              initial: {
-                assetIds: group.assetIds,
+          if (existingItems.length > 0) throw requestAlreadyActive();
+
+          const results: Array<{
+            id: number;
+            status: typeof calibrationRequest.$inferSelect.status;
+            customerId: number;
+            unitId: number;
+            itemCount: number;
+          }> = [];
+
+          for (const group of groups.values()) {
+            const [createdRequest] = await ctx.o
+              .insert(calibrationRequest)
+              .values({
+                organizationId: group.labOrganizationId,
+                unitId: group.unitId,
+                customerId: group.customerId,
+                authOrganizationId: group.authOrganizationId,
                 observations: input.observations || null,
-                requestedDueDate: requestedDueDate?.toISOString() ?? null,
+                requestedDueDate,
+                deliveryMethod: input.deliveryMethod,
+                invoiceRemittanceNumber: isCarrier
+                  ? input.invoiceRemittanceNumber || null
+                  : null,
+                invoiceRemittanceKey: isCarrier
+                  ? input.invoiceRemittanceKey || null
+                  : null,
+                invoiceRemittanceIssuedAt,
+                carrierName: isCarrier ? input.carrierName || null : null,
+                onsiteAddress,
+                preferredVisitDate,
+                submittedBy: ctx.actor.userId,
+              })
+              .returning();
+
+            if (!createdRequest) {
+              throw new Error("Erro ao criar solicitacao");
+            }
+
+            await ctx.o.insert(calibrationRequestItem).values(
+              group.assetIds.map((assetId) => ({
+                organizationId: createdRequest.organizationId,
+                requestId: createdRequest.id,
+                assetId,
+              })),
+            );
+
+            await ctx.audit("calibrationRequest", createdRequest.id, {
+              action: "create",
+              changes: {
+                initial: {
+                  assetIds: group.assetIds,
+                  observations: input.observations || null,
+                  requestedDueDate: requestedDueDate?.toISOString() ?? null,
+                },
               },
-            },
-            performedBy: session.user.id,
-            ipAddress,
-          });
+            });
+            ctx.afterCommit(() =>
+              notifyCalibrationRequestSubmitted(createdRequest.id),
+            );
 
-          results.push({
-            id: createdRequest.id,
-            status: createdRequest.status,
-            customerId: group.customerId,
-            unitId: group.unitId,
-            itemCount: group.assetIds.length,
-          });
-        }
+            results.push({
+              id: createdRequest.id,
+              status: createdRequest.status,
+              customerId: group.customerId,
+              unitId: group.unitId,
+              itemCount: group.assetIds.length,
+            });
+          }
 
-        return results;
-      });
-
-      if (!created) {
-        return c.json(
-          { error: "Um ou mais ativos ja possuem uma solicitacao ativa" },
-          400,
-        );
-      }
-
-      for (const result of created) {
-        try {
-          await notifyCalibrationRequestSubmitted(result.id);
-        } catch (error) {
-          console.error(
-            "[Portal Requests] Failed to send batch submission notification:",
-            error,
-          );
-        }
-      }
+          return results;
+        },
+      );
 
       return c.json(
         { created } satisfies ServerShape<PortalRequestBatchResponse>,

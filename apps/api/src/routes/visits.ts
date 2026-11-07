@@ -1,4 +1,4 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -18,19 +18,13 @@ import {
   VISIT_RESCHEDULE_REQUEST_MACHINE,
   isVisitTerminal,
 } from "@calibra-facil/schemas/machines";
-import {
-  conflict,
-  DomainError,
-  domainErrorResponse,
-  notFound,
-} from "../lib/domain-errors";
+import { conflict, invalid, notFound } from "../lib/domain-errors";
 import {
   asset,
   calibrationJob,
   calibrationVisit,
   customer,
   user,
-  visitAuditLog,
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
 import {
@@ -49,7 +43,10 @@ import {
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
 import { orgDb } from "../lib/org-db";
-import { orgTransactionWithExecutor } from "../lib/org-transaction";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
+import { requireRouteId } from "../lib/route-id";
+import { requireScopedVisit } from "../lib/visit-access";
 import { isAssignableTechnician } from "../lib/tenant-refs";
 import {
   notifyVisitCancelled,
@@ -64,10 +61,10 @@ import { formatOnsiteAddressText } from "../lib/onsite-address";
 import { jobStatusConflict } from "../modules/jobs/job-status-transitions";
 import {
   assertAssetBelongsToVisitCustomer,
+  assertGuard,
   canAddJobToVisit,
   resolveVisitJobRemoval,
 } from "../lib/visit-jobs";
-import { clientIp } from "../lib/client-ip";
 
 const technicianUser = alias(user, "calibrationVisitTechnician");
 
@@ -82,22 +79,6 @@ const technicianUser = alias(user, "calibrationVisitTechnician");
 /** A visit the lab can no longer edit (VISIT_MACHINE: no `edit` from it). */
 const isTerminal = isVisitTerminal;
 
-/** Thrown inside the job-creation transaction to roll it back with a pt-BR 400. */
-class VisitJobRefusal extends Error {}
-
-/**
- * A domain failure thrown inside a route's transaction (it rolled back) answered
- * as its response: `{ error, code }` with its status.
- */
-function answerDomainError(c: Context) {
-  return (error: unknown): { response: Response } => {
-    if (error instanceof DomainError) {
-      return { response: domainErrorResponse(c, error) };
-    }
-    throw error;
-  };
-}
-
 /** A compare-and-set on the visit's status matched no row: it moved under the caller. */
 const VISIT_STATUS_CHANGED =
   "A visita mudou durante a operacao. Recarregue e tente novamente.";
@@ -110,25 +91,11 @@ const VISIT_STATUS_CHANGED =
  */
 const TECHNICIAN_REFUSED = "Tecnico nao encontrado ou sem permissao";
 
-/** Load one visit scoped to the org + unit, or null. */
-async function getScopedVisit(
-  id: number,
-  member: AuthVariables["member"],
-  // The caller's org-bound transaction (row-level security).
-  o: Pick<OrgDb, "select">,
-) {
-  const [visit] = await o
-    .select()
-    .from(calibrationVisit)
-    .where(
-      and(
-        eq(calibrationVisit.id, id),
-        eq(calibrationVisit.organizationId, member.organizationId),
-        buildUnitScopeCondition(calibrationVisit.unitId, member),
-      ),
-    )
-    .limit(1);
-  return visit ?? null;
+/** The visit can still be edited: VISIT_MACHINE has no `edit` from a terminal one. */
+function assertVisitOpen(status: string) {
+  if (isTerminal(status)) {
+    throw conflict("visit_closed", "Visita ja finalizada ou cancelada");
+  }
 }
 
 /**
@@ -316,8 +283,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
   // ===========================================================================
   .get("/:id", ...withLabPermission({ request: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
-    if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+    const id = requireRouteId(c.req.param("id"));
 
     return await orgDb(member.organizationId).transaction(async (o) => {
       const [visit] = await o
@@ -354,7 +320,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         )
         .limit(1);
 
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+      if (!visit) throw notFound("visit_not_found", "Visita nao encontrada");
 
       const jobs = await o
         .select({
@@ -404,27 +370,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", AssignVisitTechnicianSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
       const { technicianId } = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) {
-            return {
-              response: c.json({ error: "Visita nao encontrada" }, 404),
-            };
-          }
-          if (isTerminal(visit.status)) {
-            return {
-              response: c.json(
-                { error: "Visita ja finalizada ou cancelada" },
-                409,
-              ),
-            };
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const visit = await requireScopedVisit(id, member, ctx.o);
+          assertVisitOpen(visit.status);
           if (
             technicianId !== visit.technicianId &&
             !(await isAssignableTechnician(
@@ -433,13 +387,13 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
                 userId: technicianId,
                 unitId: visit.unitId,
               },
-              o,
+              ctx.o,
             ))
           ) {
-            return { response: c.json({ error: TECHNICIAN_REFUSED }, 400) };
+            throw invalid("technician_not_found", TECHNICIAN_REFUSED);
           }
 
-          const [updated] = await o
+          const [updated] = await ctx.o
             .update(calibrationVisit)
             .set({ technicianId })
             .where(
@@ -452,19 +406,13 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           if (!updated) {
             throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
           }
-          return { visit, updated };
-        })
-        .catch(answerDomainError(c));
-      if ("response" in outcome) return outcome.response;
-      const { visit, updated } = outcome;
 
-      if (technicianId !== visit.technicianId) {
-        try {
-          await notifyVisitScheduled(id, session.user.id);
-        } catch (error) {
-          console.error("[Visits] Failed to notify technician:", error);
-        }
-      }
+          if (technicianId !== visit.technicianId) {
+            ctx.afterCommit(() => notifyVisitScheduled(id, ctx.actor.userId));
+          }
+          return updated;
+        },
+      );
 
       return c.json(updated);
     },
@@ -478,39 +426,25 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", ConfirmVisitSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) {
-            return {
-              response: c.json({ error: "Visita nao encontrada" }, 404),
-            };
-          }
-          if (isTerminal(visit.status)) {
-            return {
-              response: c.json(
-                { error: "Visita ja finalizada ou cancelada" },
-                409,
-              ),
-            };
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const visit = await requireScopedVisit(id, member, ctx.o);
+          assertVisitOpen(visit.status);
 
           const scheduledAt = input.scheduledAt
             ? new Date(input.scheduledAt)
             : visit.scheduledAt;
           const technicianId = input.technicianId ?? visit.technicianId;
           if (!scheduledAt || !technicianId) {
-            return {
-              response: c.json(
-                { error: "Defina a data e o técnico para confirmar a visita" },
-                400,
-              ),
-            };
+            throw invalid(
+              "invalid_request",
+              "Defina a data e o técnico para confirmar a visita",
+            );
           }
           if (
             technicianId !== visit.technicianId &&
@@ -520,16 +454,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
                 userId: technicianId,
                 unitId: visit.unitId,
               },
-              o,
+              ctx.o,
             ))
           ) {
-            return { response: c.json({ error: TECHNICIAN_REFUSED }, 400) };
+            throw invalid("technician_not_found", TECHNICIAN_REFUSED);
           }
 
           const confirmDateChanged =
             scheduledAt.getTime() !== visit.scheduledAt?.getTime();
 
-          const [updated] = await o
+          const [updated] = await ctx.o
             .update(calibrationVisit)
             .set({
               // `confirm`: a proposed visit becomes CONFIRMED; a confirmed or
@@ -537,7 +471,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
               status: VISIT_MACHINE.requireTargetOf(visit.status, "confirm"),
               scheduledAt,
               technicianId,
-              confirmedBy: session.user.id,
+              confirmedBy: ctx.actor.userId,
               confirmedAt: new Date(),
               ...(confirmDateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
             })
@@ -553,22 +487,22 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           if (confirmDateChanged) {
-            await supersedePendingRescheduleRequests(o, id, session.user.id);
+            await supersedePendingRescheduleRequests(
+              ctx.o,
+              id,
+              ctx.actor.userId,
+            );
           }
-          return { visit, technicianId, updated };
-        })
-        .catch(answerDomainError(c));
-      if ("response" in outcome) return outcome.response;
-      const { visit, technicianId, updated } = outcome;
 
-      try {
-        await notifyVisitConfirmed(id, session.user.id);
-        if (technicianId !== visit.technicianId) {
-          await notifyVisitScheduled(id, session.user.id);
-        }
-      } catch (error) {
-        console.error("[Visits] Failed to send confirm notifications:", error);
-      }
+          ctx.afterCommit(async () => {
+            await notifyVisitConfirmed(id, ctx.actor.userId);
+            if (technicianId !== visit.technicianId) {
+              await notifyVisitScheduled(id, ctx.actor.userId);
+            }
+          });
+          return updated;
+        },
+      );
 
       return c.json(updated);
     },
@@ -582,27 +516,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", RescheduleVisitSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) {
-            return {
-              response: c.json({ error: "Visita nao encontrada" }, 404),
-            };
-          }
-          if (isTerminal(visit.status)) {
-            return {
-              response: c.json(
-                { error: "Visita ja finalizada ou cancelada" },
-                409,
-              ),
-            };
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const visit = await requireScopedVisit(id, member, ctx.o);
+          assertVisitOpen(visit.status);
 
           const nextScheduledAt = input.scheduledAt
             ? new Date(input.scheduledAt)
@@ -610,7 +532,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           const dateChanged =
             nextScheduledAt?.getTime() !== visit.scheduledAt?.getTime();
 
-          const [updated] = await o
+          const [updated] = await ctx.o
             .update(calibrationVisit)
             .set({
               scheduledAt: nextScheduledAt,
@@ -633,21 +555,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           if (dateChanged) {
-            await supersedePendingRescheduleRequests(o, id, session.user.id);
+            await supersedePendingRescheduleRequests(
+              ctx.o,
+              id,
+              ctx.actor.userId,
+            );
+            ctx.afterCommit(() => notifyVisitRescheduled(id, ctx.actor.userId));
           }
-          return { dateChanged, updated };
-        })
-        .catch(answerDomainError(c));
-      if ("response" in outcome) return outcome.response;
-      const { dateChanged, updated } = outcome;
-
-      if (dateChanged) {
-        try {
-          await notifyVisitRescheduled(id, session.user.id);
-        } catch (error) {
-          console.error("[Visits] Failed to notify reschedule:", error);
-        }
-      }
+          return updated;
+        },
+      );
 
       return c.json(updated);
     },
@@ -661,33 +578,21 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CancelVisitSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
       const { reason } = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) {
-            return {
-              response: c.json({ error: "Visita nao encontrada" }, 404),
-            };
-          }
-          if (isTerminal(visit.status)) {
-            return {
-              response: c.json(
-                { error: "Visita ja finalizada ou cancelada" },
-                409,
-              ),
-            };
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const visit = await requireScopedVisit(id, member, ctx.o);
+          assertVisitOpen(visit.status);
 
-          const [updated] = await o
+          const [updated] = await ctx.o
             .update(calibrationVisit)
             .set({
               status: VISIT_MACHINE.requireTargetOf(visit.status, "cancel"),
-              cancelledBy: session.user.id,
+              cancelledBy: ctx.actor.userId,
               cancelledAt: new Date(),
               cancelReason: reason ?? null,
             })
@@ -703,18 +608,14 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           }
           // A cancelled trip has no date to move: its pending customer request
           // is superseded with it.
-          await supersedePendingRescheduleRequests(o, id, session.user.id);
-          return { updated };
-        })
-        .catch(answerDomainError(c));
-      if ("response" in outcome) return outcome.response;
-      const { updated } = outcome;
+          await supersedePendingRescheduleRequests(ctx.o, id, ctx.actor.userId);
 
-      try {
-        await notifyVisitCancelled(id, session.user.id, reason ?? undefined);
-      } catch (error) {
-        console.error("[Visits] Failed to notify cancellation:", error);
-      }
+          ctx.afterCommit(() =>
+            notifyVisitCancelled(id, ctx.actor.userId, reason ?? undefined),
+          );
+          return updated;
+        },
+      );
 
       return c.json(updated);
     },
@@ -727,24 +628,22 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ request: ["update"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
 
-      return await orgDb(member.organizationId)
-        .transaction(async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-          if (isTerminal(visit.status)) {
-            return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const visit = await requireScopedVisit(id, member, ctx.o);
+          assertVisitOpen(visit.status);
           if (!VISIT_MACHINE.canTransition(visit.status, "complete")) {
-            return c.json(
-              { error: "Confirme a visita antes de concluí-la" },
-              409,
+            throw conflict(
+              "status_transition_conflict",
+              "Confirme a visita antes de concluí-la",
             );
           }
 
-          const [updated] = await o
+          const [updated] = await ctx.o
             .update(calibrationVisit)
             .set({
               status: VISIT_MACHINE.requireTargetOf(visit.status, "complete"),
@@ -756,21 +655,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
               ),
             )
             .returning();
-          if (!updated)
+          if (!updated) {
             throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
-          await supersedePendingRescheduleRequests(
-            o,
-            id,
-            c.get("session").user.id,
-          );
+          }
+          await supersedePendingRescheduleRequests(ctx.o, id, ctx.actor.userId);
+          return updated;
+        },
+      );
 
-          return c.json(updated);
-        })
-        .catch((error: unknown) => {
-          if (error instanceof DomainError)
-            return domainErrorResponse(c, error);
-          throw error;
-        });
+      return c.json(updated);
     },
   );
 
@@ -790,90 +683,70 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", AddVisitJobSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
       const { assetId, serviceId } = c.req.valid("json");
 
-      try {
-        // One organization-named transaction: the visit and asset guards, and
-        // the job it creates, commit together. Job creation still takes a
-        // Drizzle executor with `execute` (the numbering locks), hence `rawTx`.
-        return await orgTransactionWithExecutor(
-          member.organizationId,
-          async (o, rawTx) => {
-            // REQ-VISITJOB-005: scope via getScopedVisit (org+unit scoped)
-            const visit = await getScopedVisit(id, member, o);
-            if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+      // One organization-named transaction: the visit and asset guards, and
+      // the job it creates, commit together. Job creation still takes a
+      // Drizzle executor with `execute` (the numbering locks), hence `ctx.tx`.
+      const newJob = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          // REQ-VISITJOB-005: scope via requireScopedVisit (org+unit scoped)
+          const visit = await requireScopedVisit(id, member, ctx.o);
 
-            // REQ-VISITJOB-003: visit must be PROPOSED
-            const statusGuard = canAddJobToVisit(visit);
-            if (!statusGuard.ok) {
-              return c.json({ error: statusGuard.body }, statusGuard.status);
+          // REQ-VISITJOB-003: visit must be PROPOSED
+          assertGuard(canAddJobToVisit(visit));
+
+          // REQ-VISITJOB-004: asset must belong to visit's customer (scope via customer.labOrganizationId)
+          const [foundAsset] = await ctx.o
+            .select({ id: asset.id, customerId: asset.customerId })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(
+              and(
+                eq(asset.id, assetId),
+                eq(customer.labOrganizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+
+          if (!foundAsset) {
+            throw invalid("asset_not_found", "Ativo nao encontrado");
+          }
+
+          assertGuard(assertAssetBelongsToVisitCustomer(foundAsset, visit));
+
+          // REQ-VISITJOB-001,002: create job via createCalibrationJob with onsiteLocation
+          try {
+            return await createCalibrationJob({
+              organizationId: member.organizationId,
+              unitId: visit.unitId,
+              createdBy: ctx.actor.userId,
+              assetId,
+              serviceId,
+              notifyOnAssignment: false,
+              onsiteLocation: {
+                addressText: formatOnsiteAddressText(visit.address),
+              },
+              visitId: id,
+              executor: ctx.tx,
+            });
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              jobCreationClientErrors.has(error.message)
+            ) {
+              // Thrown out of the door: nothing of the refused job stays.
+              throw invalid("invalid_request", error.message);
             }
+            throw error;
+          }
+        },
+      );
 
-            // REQ-VISITJOB-004: asset must belong to visit's customer (scope via customer.labOrganizationId)
-            const [foundAsset] = await o
-              .select({ id: asset.id, customerId: asset.customerId })
-              .from(asset)
-              .innerJoin(customer, eq(asset.customerId, customer.id))
-              .where(
-                and(
-                  eq(asset.id, assetId),
-                  eq(customer.labOrganizationId, member.organizationId),
-                ),
-              )
-              .limit(1);
-
-            if (!foundAsset) {
-              return c.json({ error: "Ativo nao encontrado" }, 400);
-            }
-
-            const customerGuard = assertAssetBelongsToVisitCustomer(
-              foundAsset,
-              visit,
-            );
-            if (!customerGuard.ok) {
-              return c.json(
-                { error: customerGuard.body },
-                customerGuard.status,
-              );
-            }
-
-            // REQ-VISITJOB-001,002: create job via createCalibrationJob with onsiteLocation
-            try {
-              const newJob = await createCalibrationJob({
-                organizationId: member.organizationId,
-                unitId: visit.unitId,
-                createdBy: session.user.id,
-                assetId,
-                serviceId,
-                notifyOnAssignment: false,
-                onsiteLocation: {
-                  addressText: formatOnsiteAddressText(visit.address),
-                },
-                visitId: id,
-                executor: rawTx,
-              });
-              return c.json(newJob, 201);
-            } catch (error) {
-              if (
-                error instanceof Error &&
-                jobCreationClientErrors.has(error.message)
-              ) {
-                // Roll the transaction back: nothing of the refused job stays.
-                throw new VisitJobRefusal(error.message);
-              }
-              throw error;
-            }
-          },
-        );
-      } catch (error) {
-        if (error instanceof VisitJobRefusal) {
-          return c.json({ error: error.message }, 400);
-        }
-        throw error;
-      }
+      return c.json(newJob, 201);
     },
   )
   // ===========================================================================
@@ -884,24 +757,18 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ request: ["update"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      const jobId = parseInt(c.req.param("jobId"), 10);
-      if (isNaN(id) || isNaN(jobId))
-        return c.json({ error: "ID invalido" }, 400);
+      const id = requireRouteId(c.req.param("id"));
+      const jobId = requireRouteId(c.req.param("jobId"));
 
-      // REQ-VISITJOB-005: scope via getScopedVisit
-      const guarded = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) {
-            return {
-              response: c.json({ error: "Visita nao encontrada" }, 404),
-            };
-          }
+      const job = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          // REQ-VISITJOB-005: scope via requireScopedVisit
+          const visit = await requireScopedVisit(id, member, ctx.o);
 
           // Load the job scoped to org
-          const [foundJob] = await o
+          const [foundJob] = await ctx.o
             .select({
               id: calibrationJob.id,
               status: calibrationJob.status,
@@ -917,96 +784,68 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
             .limit(1);
 
           // REQ-VISITJOB-006,007,008,009: run all guards
-          const removalGuard = resolveVisitJobRemoval({
-            visitStatus: visit.status,
-            job: foundJob ?? null,
-            visitId: id,
-          });
-
-          if (!removalGuard.ok) {
-            return {
-              response: c.json(
-                { error: removalGuard.body },
-                removalGuard.status,
-              ),
-            };
-          }
+          assertGuard(
+            resolveVisitJobRemoval({
+              visitStatus: visit.status,
+              job: foundJob ?? null,
+              visitId: id,
+            }),
+          );
           // The guard already rejects a missing job with 404; narrow for TS.
           if (!foundJob) {
-            return {
-              response: c.json(
-                { error: "Job nao encontrado nesta visita" },
-                404,
-              ),
-            };
+            throw notFound("job_not_found", "Job nao encontrado nesta visita");
           }
-          return { foundJob };
-        },
-      );
-      if ("response" in guarded) return guarded.response;
-      const { foundJob } = guarded;
 
-      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus
-      // enum). The guards above allow DRAFT only; `cancelJob` keeps the
-      // transition table as the final word, pins the status the guards
-      // validated (a job that moved meanwhile is a 409) and commits the audit
-      // row (append-only ISO 17025 trail, parity with the main job-cancel
-      // route) with the write.
-      const result = await cancelJob(
-        {
-          actor: {
-            kind: "user",
-            userId: session.user.id,
-            ipAddress: clientIp(c),
-          },
-          jobId,
-          organizationId: member.organizationId,
-          // The visit was scoped above (getScopedVisit) and the removal guard
-          // checked that the job belongs to it.
-          unitScope: null,
-          reason: `Instrumento removido da visita #${id}`,
-          expectedStatus: foundJob.status,
-        },
-        {
-          // The read of the job and the transaction of the write each name the
-          // laboratory (row-level security); they stay two transactions so the
-          // compare-and-set keeps guarding the status between them.
-          read: (run) => orgDb(member.organizationId).transaction(run),
-          write: (run) =>
-            orgTransactionWithExecutor(member.organizationId, (_o, tx) =>
-              run(tx),
-            ),
+          // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus
+          // enum). The guards above allow DRAFT only; `cancelJob` keeps the
+          // transition table as the final word, pins the status the guards
+          // validated (a job that moved meanwhile is a 409) and commits the audit
+          // row (append-only ISO 17025 trail, parity with the main job-cancel
+          // route) with the write.
+          const result = await cancelJob(
+            {
+              actor: {
+                kind: "user",
+                userId: ctx.actor.userId,
+                ipAddress: ctx.actor.ipAddress,
+              },
+              jobId,
+              organizationId: member.organizationId,
+              // The visit was scoped above (requireScopedVisit) and the removal
+              // guard checked that the job belongs to it.
+              unitScope: null,
+              reason: `Instrumento removido da visita #${id}`,
+              expectedStatus: foundJob.status,
+            },
+            // The command reads and writes on the door's transaction; its
+            // compare-and-set keeps guarding the status.
+            { read: (run) => run(ctx.o), write: (run) => run(ctx.tx) },
+          );
+          switch (result.status) {
+            case "not_found":
+              throw notFound(
+                "job_not_found",
+                "Job nao encontrado nesta visita",
+              );
+            case "illegal_transition":
+              throw conflict(
+                "job_not_cancelable",
+                "Apenas jobs com status DRAFT podem ser removidos da visita",
+              );
+            case "concurrent_update":
+              throw await jobStatusConflict(jobId, ctx.o);
+            case "ok":
+              return result.job;
+          }
         },
       );
-      switch (result.status) {
-        case "not_found":
-          return domainErrorResponse(
-            c,
-            notFound("job_not_found", "Job nao encontrado nesta visita"),
-          );
-        case "illegal_transition":
-          return domainErrorResponse(
-            c,
-            conflict(
-              "job_not_cancelable",
-              "Apenas jobs com status DRAFT podem ser removidos da visita",
-            ),
-          );
-        case "concurrent_update":
-          return domainErrorResponse(
-            c,
-            await orgDb(member.organizationId).transaction((o) =>
-              jobStatusConflict(jobId, o),
-            ),
-          );
-        case "ok":
-          return c.json(result.job);
-      }
+
+      return c.json(job);
     },
   );
 
 /** Load a reschedule request that belongs to the given visit (any status). */
-async function getVisitRescheduleRequestById(
+async function requireVisitRescheduleRequest(
   requestId: number,
   visitId: number,
   o: Pick<OrgDb, "select">,
@@ -1021,8 +860,16 @@ async function getVisitRescheduleRequestById(
       ),
     )
     .limit(1);
-  return request ?? null;
+  if (!request) {
+    throw notFound(
+      "visit_reschedule_request_not_found",
+      "Solicitacao nao encontrada",
+    );
+  }
+  return request;
 }
+
+const RESCHEDULE_REQUEST_RESOLVED = "Solicitacao ja resolvida";
 
 /**
  * #739: lab resolution of customer reschedule requests. Mounted separately
@@ -1043,37 +890,22 @@ export const visitRescheduleRequestsRouter = new Hono<{
     zValidator("json", AcceptVisitRescheduleRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      const requestId = parseInt(c.req.param("requestId"), 10);
-      if (isNaN(id) || isNaN(requestId)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const id = requireRouteId(c.req.param("id"));
+      const requestId = requireRouteId(c.req.param("requestId"));
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) {
-            return {
-              response: c.json({ error: "Visita nao encontrada" }, 404),
-            };
-          }
-          if (isTerminal(visit.status)) {
-            return {
-              response: c.json(
-                { error: "Visita ja finalizada ou cancelada" },
-                409,
-              ),
-            };
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const visit = await requireScopedVisit(id, member, ctx.o);
+          assertVisitOpen(visit.status);
 
-          const request = await getVisitRescheduleRequestById(requestId, id, o);
-          if (!request) {
-            return {
-              response: c.json({ error: "Solicitacao nao encontrada" }, 404),
-            };
-          }
+          const request = await requireVisitRescheduleRequest(
+            requestId,
+            id,
+            ctx.o,
+          );
           if (
             !VISIT_RESCHEDULE_REQUEST_MACHINE.canTransition(
               request.status,
@@ -1082,12 +914,12 @@ export const visitRescheduleRequestsRouter = new Hono<{
           ) {
             throw conflict(
               "status_transition_conflict",
-              "Solicitacao ja resolvida",
+              RESCHEDULE_REQUEST_RESOLVED,
             );
           }
 
           const nextScheduledAt = new Date(input.scheduledAt);
-          const [row] = await o
+          const [row] = await ctx.o
             .update(calibrationVisit)
             .set({
               scheduledAt: nextScheduledAt,
@@ -1107,14 +939,14 @@ export const visitRescheduleRequestsRouter = new Hono<{
             throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
           }
 
-          const [accepted] = await o
+          const [accepted] = await ctx.o
             .update(visitRescheduleRequest)
             .set({
               status: VISIT_RESCHEDULE_REQUEST_MACHINE.requireTargetOf(
                 request.status,
                 "accept",
               ),
-              resolvedBy: session.user.id,
+              resolvedBy: ctx.actor.userId,
               resolvedAt: new Date(),
               resolutionNote: input.resolutionNote ?? null,
             })
@@ -1130,37 +962,23 @@ export const visitRescheduleRequestsRouter = new Hono<{
           if (!accepted) {
             throw conflict(
               "status_transition_conflict",
-              "Solicitacao ja resolvida",
+              RESCHEDULE_REQUEST_RESOLVED,
             );
           }
 
-          await o.insert(visitAuditLog).values({
-            organizationId: member.organizationId,
-            visitId: id,
+          await ctx.audit("visit", id, {
             action: "reschedule_request_accept",
             changes: {
               rescheduleRequestId: requestId,
               scheduledAt: { old: visit.scheduledAt, new: nextScheduledAt },
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
             reason: input.resolutionNote ?? null,
           });
 
-          return { updated: row };
-        })
-        .catch(answerDomainError(c));
-      if ("response" in outcome) return outcome.response;
-      const { updated } = outcome;
-
-      try {
-        await notifyVisitRescheduled(id, session.user.id);
-      } catch (error) {
-        console.error(
-          "[Visits] Failed to notify reschedule acceptance:",
-          error,
-        );
-      }
+          ctx.afterCommit(() => notifyVisitRescheduled(id, ctx.actor.userId));
+          return row;
+        },
+      );
 
       return c.json(updated);
     },
@@ -1175,29 +993,21 @@ export const visitRescheduleRequestsRouter = new Hono<{
     zValidator("json", DeclineVisitRescheduleRequestSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      const requestId = parseInt(c.req.param("requestId"), 10);
-      if (isNaN(id) || isNaN(requestId)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const id = requireRouteId(c.req.param("id"));
+      const requestId = requireRouteId(c.req.param("requestId"));
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
-          const visit = await getScopedVisit(id, member, o);
-          if (!visit) {
-            return {
-              response: c.json({ error: "Visita nao encontrada" }, 404),
-            };
-          }
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          await requireScopedVisit(id, member, ctx.o);
 
-          const request = await getVisitRescheduleRequestById(requestId, id, o);
-          if (!request) {
-            return {
-              response: c.json({ error: "Solicitacao nao encontrada" }, 404),
-            };
-          }
+          const request = await requireVisitRescheduleRequest(
+            requestId,
+            id,
+            ctx.o,
+          );
           if (
             !VISIT_RESCHEDULE_REQUEST_MACHINE.canTransition(
               request.status,
@@ -1206,18 +1016,18 @@ export const visitRescheduleRequestsRouter = new Hono<{
           ) {
             throw conflict(
               "status_transition_conflict",
-              "Solicitacao ja resolvida",
+              RESCHEDULE_REQUEST_RESOLVED,
             );
           }
 
-          const rows = await o
+          const rows = await ctx.o
             .update(visitRescheduleRequest)
             .set({
               status: VISIT_RESCHEDULE_REQUEST_MACHINE.requireTargetOf(
                 request.status,
                 "decline",
               ),
-              resolvedBy: session.user.id,
+              resolvedBy: ctx.actor.userId,
               resolvedAt: new Date(),
               resolutionNote: input.resolutionNote ?? null,
             })
@@ -1231,35 +1041,26 @@ export const visitRescheduleRequestsRouter = new Hono<{
           if (rows.length === 0) {
             throw conflict(
               "status_transition_conflict",
-              "Solicitacao ja resolvida",
+              RESCHEDULE_REQUEST_RESOLVED,
             );
           }
 
-          await o.insert(visitAuditLog).values({
-            organizationId: member.organizationId,
-            visitId: id,
+          await ctx.audit("visit", id, {
             action: "reschedule_request_decline",
             changes: { rescheduleRequestId: requestId },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
             reason: input.resolutionNote ?? null,
           });
 
-          return { updated: rows };
-        })
-        .catch(answerDomainError(c));
-      if ("response" in outcome) return outcome.response;
-      const { updated } = outcome;
-
-      try {
-        await notifyVisitRescheduleDeclined(
-          id,
-          session.user.id,
-          input.resolutionNote ?? undefined,
-        );
-      } catch (error) {
-        console.error("[Visits] Failed to notify reschedule decline:", error);
-      }
+          ctx.afterCommit(() =>
+            notifyVisitRescheduleDeclined(
+              id,
+              ctx.actor.userId,
+              input.resolutionNote ?? undefined,
+            ),
+          );
+          return rows;
+        },
+      );
 
       return c.json(updated);
     },

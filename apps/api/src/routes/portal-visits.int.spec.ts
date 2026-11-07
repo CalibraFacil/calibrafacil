@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { portalVisitsRouter } from "./portal-visits";
+import { portalVisitsRouter as barePortalVisitsRouter } from "./portal-visits";
 import { db } from "@calibra-facil/db";
 import {
   calibrationVisit,
@@ -14,6 +14,9 @@ import {
   seedPortalCustomer,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalVisitsRouter = withErrorHandling(barePortalVisitsRouter);
 
 // Real-DB + real-RBAC integration test for the CLIENT PORTAL on-site VISITS feed
 // (GET /api/portal/visits). This is a customer-facing tenant boundary, so only the

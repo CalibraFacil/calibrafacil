@@ -128,9 +128,11 @@ const AUDIT_WRITERS = {
       reason: entry.reason ?? null,
     }),
   calibrationRequest: (ctx, id, entry) =>
-    ctx.o
-      .insert(calibrationRequestAuditLog)
-      .values({ ...common(ctx, entry), requestId: id }),
+    ctx.o.insert(calibrationRequestAuditLog).values({
+      ...common(ctx, entry),
+      requestId: id,
+      reason: entry.reason ?? null,
+    }),
   correctiveAction: (ctx, id, entry) =>
     ctx.o.insert(correctiveActionAuditLog).values({
       ...common(ctx, entry),
