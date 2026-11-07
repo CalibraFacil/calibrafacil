@@ -1,5 +1,6 @@
 // Notification Service - Core exports
 export {
+  notify,
   getRecipientsByRole,
   notifyJobSubmittedForReview,
   notifyJobApproved,
@@ -42,6 +43,7 @@ export {
   notifyVisitRescheduleDeclined,
   sendPortalDueDigests,
   getLabEmailBrand,
+  type NotificationPayloads,
   type PortalDigestRunResult,
 } from "./service";
 
