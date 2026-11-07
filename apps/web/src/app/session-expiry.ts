@@ -9,8 +9,14 @@
  *   readings as a local draft before leaving. Later 401s while the notice is up
  *   add nothing.
  *
- * The desktop is out of scope: it has its own session (desktop-auth) and the
- * sync reports `auth_required`.
+ * The desktop follows the same rule. Its 401s come from the cloud (a cloud-only
+ * screen, or the session behind the sync, which also shows `auth_required` in
+ * the data-source indicator), so the way back in is the same sign-in page; the
+ * only difference is that a desktop with an offline snapshot would bounce
+ * `/sign-in` straight back to the dashboard (`hasDesktopSession`), so the
+ * action first marks the desktop signed out (`prepareSignIn`). That keeps the
+ * local database and the queued changes: it is not a sign-out, nothing is
+ * forgotten, and offline work keeps going until the person chooses to sign in.
  *
  * Pure: the toast and the navigation are injected.
  */
@@ -36,6 +42,15 @@ export type SessionExpiryDeps = {
   notify: (actions: { onSignIn: () => void; onDismiss: () => void }) => void
   /** Goes to sign-in through the router. */
   goToSignIn: (redirect: string) => void
+  /** Runs when the person chooses to sign in, just before `goToSignIn`. */
+  prepareSignIn?: () => void
+}
+
+/** The text of the notice; the desktop also says what happens to local work. */
+export function sessionExpiredDescription(isDesktop: boolean) {
+  return isDesktop
+    ? 'Entre novamente para continuar e sincronizar. Leituras não salvas podem ser mantidas como rascunho e as alterações locais continuam guardadas.'
+    : 'Entre novamente para continuar. Leituras não salvas podem ser mantidas como rascunho.'
 }
 
 /** The `onError` of the query and mutation caches. */
@@ -48,6 +63,7 @@ export function createSessionExpiryHandler(deps: SessionExpiryDeps) {
     deps.notify({
       onSignIn: () => {
         noticeShown = false
+        deps.prepareSignIn?.()
         deps.goToSignIn(
           location.startsWith('/sign-in') ? '/dashboard' : location,
         )
