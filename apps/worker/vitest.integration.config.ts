@@ -1,8 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// Worker real-DB integration tier (Docker Postgres). Cloned from
-// apps/api/vitest.integration.config.ts. Load @vitejs/plugin-react (as the api
+// Worker real-DB integration tier (Docker Postgres). Load @vitejs/plugin-react (as the api
 // config does) so the React-Email `.tsx` templates in @calibra-facil/email — which
 // the scheduled-compliance handler transitively imports through
 // @calibra-facil/notifications — are transformed; without it Vite's import-analysis

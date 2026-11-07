@@ -18,7 +18,7 @@ import {
 } from "../test/integration/seed-scheduled";
 
 /**
- * The daily compliance sweep as `calibra_app` (P2-18j). The laboratories are
+ * The daily compliance sweep as `calibra_app`. The laboratories are
  * listed on the owner connection (`DATABASE_OWNER_URL`, one statement); every
  * step then runs per laboratory on the application connection, each statement in
  * a short transaction that names the laboratory, and every `check*` query also

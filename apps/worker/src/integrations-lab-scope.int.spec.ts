@@ -27,7 +27,7 @@ import {
 } from "../test/integration/seed-scheduled-syncs";
 
 /**
- * The generic_http ERP sync as `calibra_app` (P2-18j): every connection the
+ * The generic_http ERP sync as `calibra_app`: every connection the
  * handlers open is a session of the application role, which the
  * `tenant_isolation` policies bind (migration 0123). The scheduler lists the
  * active integrations of every laboratory on the owner connection

@@ -9,11 +9,11 @@ import type { LocalSyncRuntime } from "./sync";
 /**
  * Continuous sync lifecycle.
  *
- * Before this existed, the only way local changes reached the cloud was a user
- * opening a screen that happened to issue a local-first read (which fired a
- * throttled background request) or pressing "sincronizar". A technician who
- * finished work offline, closed the laptop, and reopened it connected would
- * keep pending writes indefinitely.
+ * Without it, local changes would reach the cloud only when a user opened a
+ * screen that happened to issue a local-first read (which fires a throttled
+ * background request) or pressed "sincronizar": a technician who finished work
+ * offline, closed the laptop, and reopened it connected would keep pending
+ * writes indefinitely.
  *
  * The scheduler owns *when* to sync; `LocalSyncRuntime` still owns *how*.
  * Invariants:

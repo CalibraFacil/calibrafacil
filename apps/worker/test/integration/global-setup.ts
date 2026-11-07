@@ -5,14 +5,11 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { GlobalSetupContext } from "vitest/node";
 import { assertEphemeralTestDb } from "./guard";
 
-// Vitest globalSetup for the worker real-DB integration tier. Cloned from
-// apps/api/test/integration/global-setup.ts — the Docker boot + `drizzle-kit
-// push` + schema build are data-layer agnostic. Boots ONE ephemeral Postgres
-// via raw `docker run` (the repo's pnpm build-script allowlist rejects
+// Vitest globalSetup for the worker real-DB integration tier. Boots ONE ephemeral
+// Postgres via raw `docker run` (the repo's pnpm build-script allowlist rejects
 // testcontainers' native deps, so we avoid the dependency), builds the schema
-// once via `drizzle-kit push` (the corrected schema cold-builds — see migration
-// 0060), and hands the connection URL to workers via `provide`. The per-worker
-// `setup.ts` sets process.env.DATABASE_URL before any db access; the worker
+// once via `drizzle-kit push` and hands the connection URL to workers via
+// `provide`. The per-worker `setup.ts` sets process.env.DATABASE_URL before any db access; the worker
 // handlers connect via a raw `pg.Client` keyed on that same DATABASE_URL, so
 // they hit the same physical Postgres the drizzle seed writes to.
 //

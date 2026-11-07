@@ -14,8 +14,8 @@ import type { CertificateReleaseStatus } from "@calibra-facil/shared";
 import { storedObjectUrl } from "@calibra-facil/shared/public-urls";
 import { withStatusRepair } from "./state-fixtures";
 
-// Seed helpers SPECIFIC to the worker's AUDIT_PACK handler (#738,
-// processAuditPackJob). The handler reads: a portal_export_job row (whose
+// Seed helpers SPECIFIC to the worker's AUDIT_PACK handler
+// (processAuditPackJob). The handler reads: a portal_export_job row (whose
 // params carry the frozen customer scope), APPROVED calibration_jobs with a
 // certificate_url inside the approval-date window, their certificate_release
 // rows (the gate re-check), and the customer's active assets for the fleet

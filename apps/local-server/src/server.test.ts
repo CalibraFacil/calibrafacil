@@ -2206,8 +2206,7 @@ INSERT INTO environmental_limits (
     });
 
     // REQ-P01-3: approval and certificates are online-only, so the desktop has
-    // no local certificate-draft surface at all (it used to be a stub that
-    // always refused, feeding a PDF-upload sync path that no longer exists).
+    // no local certificate-draft surface at all.
     for (const [method, draftPath] of [
       ["POST", `/api/jobs/${createdId}/certificate-draft`],
       ["GET", `/api/jobs/${createdId}/certificate-draft/file`],

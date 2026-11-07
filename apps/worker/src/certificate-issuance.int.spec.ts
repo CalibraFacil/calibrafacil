@@ -7,8 +7,8 @@ import { seedOrg } from "../test/integration/seed";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 
 /**
- * Real-DB integration tier for the fixed-layout certificate issuance (#865
- * Phase 3). `processBackgroundJob({type:"CERTIFICATE",...})` routes through
+ * Real-DB integration tier for the fixed-layout certificate issuance.
+ * `processBackgroundJob({type:"CERTIFICATE",...})` routes through
  * processDocumentMessage → processJob, which fetches the frozen job, builds the
  * layout prop, renders through Gotenberg, signs, stores and records.
  *
@@ -143,7 +143,7 @@ async function issuedSnapshotRows(jobId: number) {
  * makeTestEnv's fake bucket keeps its Map private, so to assert which keys were
  * written we wrap put() and record, still delegating so the object stays
  * readable. GOTENBERG_URL is set here because the fixed layout renders through
- * Chromium — the XLSX path used to fall back to a local LibreOffice.
+ * Chromium.
  */
 function makeRecordingEnv(): { env: Env; putKeys: string[] } {
   const base = makeTestEnv();
