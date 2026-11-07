@@ -1,3 +1,4 @@
+import { backgroundJobType } from "@calibra-facil/schemas";
 import { readJobsConfig } from "@calibra-facil/config";
 import {
   afterTransactionCommit,
@@ -15,7 +16,6 @@ import {
   getBackgroundJobsMode,
   getDocumentWorkerUrl,
   isContaAzulSyncMessage,
-  resolveQueueJobType,
   routesToDatabaseQueue,
 } from "./background-job-routing";
 
@@ -165,7 +165,7 @@ async function enqueueViaDocumentWorker(
   // until the next enqueue's drain or a manual drain.
   void wakeDocumentWorker(baseUrl).catch((error) => {
     console.error("[BackgroundJobs] Failed to wake document worker", {
-      type: resolveQueueJobType(message),
+      type: backgroundJobType(message),
       error: error instanceof Error ? error.message : "unknown error",
     });
   });
@@ -218,7 +218,7 @@ async function wakeAfterCommit(message: QueueMessage, baseUrl: string) {
     await wakeDocumentWorker(baseUrl);
   } catch (error) {
     console.error("[BackgroundJobs] Failed to wake document worker", {
-      type: resolveQueueJobType(message),
+      type: backgroundJobType(message),
       error: error instanceof Error ? error.message : "unknown error",
     });
   }

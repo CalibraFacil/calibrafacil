@@ -4,20 +4,23 @@
 // the database guard generated from it (migration 0140) refuses any other move.
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "./db.js";
+import { appQueueJob, type AppQueueJobStatus } from "./schema.js";
 import {
-  appQueueJob,
-  type AppQueueJobStatus,
-  type AppQueueJobType,
-} from "./schema.js";
-import { parseQueueMessage, type QueueMessage } from "@calibra-facil/schemas";
-import { PUBLIC_API_WEBHOOK_MAX_ATTEMPTS } from "@calibra-facil/shared";
+  backgroundJobType,
+  isQueueJobType,
+  parseQueueMessage,
+  queueJobMaxAttempts,
+  queueJobRetryDelayMs,
+  type QueueJobType,
+  type QueueMessage,
+} from "@calibra-facil/schemas";
 import { toRecord } from "@calibra-facil/shared/record";
 
 export type { QueueMessage };
 
 export type ClaimedQueueJob = {
   id: number;
-  type: AppQueueJobType;
+  type: QueueJobType;
   payload: QueueMessage;
   attempts: number;
   maxAttempts: number;
@@ -38,25 +41,6 @@ function getInsertedQueueJobId(result: unknown): number | null {
 /** Whether a message can be written to `app_queue_job` (cron-only ones cannot). */
 export function isQueueMessage(value: unknown): value is QueueMessage {
   return parseQueueMessage(value).ok;
-}
-
-function getMessageType(message: QueueMessage): AppQueueJobType {
-  switch (message.type) {
-    case "LABEL":
-    case "SERVICE_ORDER_INTAKE_DOCUMENT":
-    case "SERVICE_ORDER_TAG":
-    case "SERVICE_ORDER_QUOTE":
-    case "SERVICE_ORDER_DELIVERY_RECEIPT":
-    case "INTEGRATION_SYNC":
-    case "AUDIT_PACK":
-    case "OOT_NOTIFICATION":
-    case "WEBHOOK_DELIVERY":
-    case "JOB_APPROVED_NOTIFICATION":
-    case "ASSET_OOT_NOTIFICATION":
-      return message.type;
-    default:
-      return "CERTIFICATE";
-  }
 }
 
 type ClaimedRow =
@@ -85,7 +69,7 @@ function toClaimedRow(value: unknown): ClaimedRow {
     ok: true,
     job: {
       id: row.id,
-      type: getMessageType(parsed.message),
+      type: backgroundJobType(parsed.message),
       payload: parsed.message,
       attempts: row.attempts,
       maxAttempts: row.maxAttempts,
@@ -97,23 +81,6 @@ function toClaimedRow(value: unknown): ClaimedRow {
  * Attempts a job of this type gets unless the producer says otherwise. A
  * webhook subscriber that is down for a while is retried longer than a render.
  */
-function defaultMaxAttempts(type: AppQueueJobType) {
-  return type === "WEBHOOK_DELIVERY" ? PUBLIC_API_WEBHOOK_MAX_ATTEMPTS : 3;
-}
-
-/**
- * Wait before the next attempt, doubling per attempt. A webhook subscriber is
- * an outside system that may need minutes to recover (30 s, 2 min, 8 min,
- * 32 min, capped at an hour), unlike our own jobs (5 s, 10 s, ... capped at
- * five minutes).
- */
-export function getRetryDelayMs(attempts: number, type?: string) {
-  const step = Math.max(0, attempts - 1);
-  if (type === "WEBHOOK_DELIVERY") {
-    return Math.min(60 * 60_000, 30_000 * 4 ** step);
-  }
-  return Math.min(5 * 60_000, 5_000 * 2 ** step);
-}
 
 /** A db handle or an open transaction: anything that can `execute` SQL. */
 export type QueueExecutor = Pick<typeof db, "execute">;
@@ -143,9 +110,9 @@ export async function enqueueQueueJob(
   const result = await (options.executor ?? db).execute(sql`
     insert into app_queue_job (type, payload, max_attempts, available_at)
     values (
-      ${getMessageType(validMessage)},
+      ${backgroundJobType(validMessage)},
       ${JSON.stringify(validMessage)}::jsonb,
-      ${options.maxAttempts ?? defaultMaxAttempts(getMessageType(validMessage))},
+      ${options.maxAttempts ?? queueJobMaxAttempts(backgroundJobType(validMessage))},
       ${availableAt.toISOString()}::timestamptz
     )
     returning id
@@ -316,7 +283,7 @@ export async function failQueueJob(
   const status: AppQueueJobStatus = exhausted ? "FAILED" : "PENDING";
   const availableAt = exhausted
     ? new Date()
-    : new Date(Date.now() + getRetryDelayMs(job.attempts, job.type));
+    : new Date(Date.now() + queueJobRetryDelayMs(job.type, job.attempts));
 
   // The same fence on the write: the lease can be reclaimed between the read
   // above and this update, and `attempts` is only valid for the claim we read.
@@ -396,7 +363,7 @@ export async function forceCompleteQueueJob(id: number): Promise<void> {
 /** A queue row the lease reclaim gave up on (see `releaseStaleQueueJobs`). */
 export type DeadLetteredQueueJob = {
   id: number;
-  type: AppQueueJobType;
+  type: QueueJobType;
   payload: Record<string, unknown>;
 };
 
@@ -406,23 +373,6 @@ export type ReleaseStaleQueueJobsResult = {
   /** Rows moved to FAILED because the lease expired on their final attempt. */
   deadLettered: DeadLetteredQueueJob[];
 };
-
-function isAppQueueJobType(value: unknown): value is AppQueueJobType {
-  return (
-    value === "CERTIFICATE" ||
-    value === "LABEL" ||
-    value === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
-    value === "SERVICE_ORDER_TAG" ||
-    value === "SERVICE_ORDER_QUOTE" ||
-    value === "SERVICE_ORDER_DELIVERY_RECEIPT" ||
-    value === "INTEGRATION_SYNC" ||
-    value === "AUDIT_PACK" ||
-    value === "OOT_NOTIFICATION" ||
-    value === "WEBHOOK_DELIVERY" ||
-    value === "JOB_APPROVED_NOTIFICATION" ||
-    value === "ASSET_OOT_NOTIFICATION"
-  );
-}
 
 // Reclaim rows whose PROCESSING lease has expired (a worker died mid-job, or a
 // drain crashed). A row with attempts left goes back to PENDING so it can be
@@ -465,7 +415,7 @@ export async function releaseStaleQueueJobs(
       released += 1;
       continue;
     }
-    if (typeof row.id === "number" && isAppQueueJobType(row.type)) {
+    if (typeof row.id === "number" && isQueueJobType(row.type)) {
       deadLettered.push({
         id: row.id,
         type: row.type,

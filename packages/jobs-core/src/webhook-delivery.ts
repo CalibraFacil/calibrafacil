@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { getRetryDelayMs } from "@calibra-facil/db/queue";
+import { queueJobRetryDelayMs } from "@calibra-facil/schemas";
 import type { WebhookDeliveryBackgroundJobMessage } from "@calibra-facil/schemas";
 import {
   PUBLIC_API_WEBHOOK_AUTO_DISABLE_AFTER,
@@ -262,9 +262,9 @@ export async function processWebhookDelivery(
 
     const final = outcome.permanent || isFinalDelivery(delivery);
     if (!final) {
-      const delayMs = getRetryDelayMs(
-        delivery?.attempt ?? attemptNumber,
+      const delayMs = queueJobRetryDelayMs(
         "WEBHOOK_DELIVERY",
+        delivery?.attempt ?? attemptNumber,
       );
       await session.query(
         `update public_api_webhook_delivery
