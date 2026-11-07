@@ -60,6 +60,8 @@ export const API_ERROR_CODES = [
   "standard_deleted",
   "standard_inactive",
   "standard_backdate_reason_required",
+  "standard_not_out_of_tolerance",
+  "jobs_not_linked_to_standard",
   "performed_at_invalid",
   "performed_at_future",
   "backdate_reason_required",

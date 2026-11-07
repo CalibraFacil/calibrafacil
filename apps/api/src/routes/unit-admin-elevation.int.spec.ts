@@ -53,6 +53,10 @@ import { withErrorHandling } from "../../test/integration/with-error-handling";
 
 const nonConformancesRouter = withErrorHandling(bareNonConformancesRouter);
 const capaRouter = withErrorHandling(bareCapaRouter);
+import { capaRouter } from "./capa";
+import { competencesRouter as bareCompetencesRouter } from "./competences";
+import { nonConformancesRouter } from "./non-conformances";
+const competencesRouter = withErrorHandling(bareCompetencesRouter);
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),

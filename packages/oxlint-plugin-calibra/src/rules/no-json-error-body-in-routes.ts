@@ -24,11 +24,10 @@ const ROUTES_PATTERN = /(^|\/)apps\/api\/src\/routes\//;
 const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/api-keys.ts", 2],
   ["apps/api/src/routes/asset-types.ts", 4],
-  ["apps/api/src/routes/authorized-signatories.ts", 3],
+
   ["apps/api/src/routes/calibration-requests.ts", 11],
   ["apps/api/src/routes/certificate-numbering.ts", 2],
-  ["apps/api/src/routes/competences.ts", 34],
-  ["apps/api/src/routes/customers.ts", 1],
+
   ["apps/api/src/routes/dashboard.ts", 1],
   ["apps/api/src/routes/email-domains.ts", 7],
   ["apps/api/src/routes/finance/automatic-send.ts", 6],
@@ -60,9 +59,8 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/signatures.ts", 12],
   ["apps/api/src/routes/signing.ts", 16],
   ["apps/api/src/routes/sso.ts", 11],
-  ["apps/api/src/routes/standards.ts", 43],
   ["apps/api/src/routes/sync/attachments.ts", 3],
-  ["apps/api/src/routes/training-records.ts", 12],
+
   ["apps/api/src/routes/verify.ts", 13],
   ["apps/api/src/routes/visits.ts", 40],
   ["apps/api/src/routes/webhooks.ts", 3],

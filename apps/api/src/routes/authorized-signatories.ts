@@ -2,15 +2,11 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { orgDb } from "../lib/org-db";
-import {
-  conflict,
-  domainErrorResponse,
-  invalid,
-  notFound,
-} from "../lib/domain-errors";
+import { conflict, invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import {
   authorizedSignatory,
-  authorizedSignatoryAuditLog,
   member,
   user,
   assetType,
@@ -22,7 +18,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { clientIp } from "../lib/client-ip";
 
 /**
  * Authorized Signatories Router - ISO/IEC 17025:2017 Clause 6.2.6
@@ -111,50 +106,54 @@ export const authorizedSignatoriesRouter = new Hono<{
       // entry; the granted user MUST be an active member of the caller's
       // organization. Mirror the membership check in signatures.ts
       // (GET /member/:memberId) so a record can never point at a foreign user.
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [targetMember] = await tx
-          .select({ id: member.id })
-          .from(member)
-          .where(
-            and(
-              eq(member.userId, input.userId),
-              eq(member.organizationId, memberData.organizationId),
-            ),
-          )
-          .limit(1);
+      const created = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [targetMember] = await ctx.o
+            .select({ id: member.id })
+            .from(member)
+            .where(
+              and(
+                eq(member.userId, input.userId),
+                eq(member.organizationId, memberData.organizationId),
+              ),
+            )
+            .limit(1);
 
-        if (!targetMember) {
-          return c.json({ error: "Usuário não é membro da organização" }, 400);
-        }
+          if (!targetMember) {
+            throw invalid(
+              "invalid_request",
+              "Usuário não é membro da organização",
+            );
+          }
 
-        const [created] = await tx
-          .insert(authorizedSignatory)
-          .values({
-            organizationId: memberData.organizationId,
-            userId: input.userId,
-            assetTypeId: input.assetTypeId ?? null,
-            scopeDescription: input.scopeDescription ?? null,
-            title: input.title || null,
-            status: "ACTIVE",
-            authorizedBy: session.user.id,
-            expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-            notes: input.notes ?? null,
-          })
-          .returning();
+          const [row] = await ctx.o
+            .insert(authorizedSignatory)
+            .values({
+              organizationId: memberData.organizationId,
+              userId: input.userId,
+              assetTypeId: input.assetTypeId ?? null,
+              scopeDescription: input.scopeDescription ?? null,
+              title: input.title || null,
+              status: "ACTIVE",
+              authorizedBy: session.user.id,
+              expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+              notes: input.notes ?? null,
+            })
+            .returning();
 
-        if (created) {
-          await tx.insert(authorizedSignatoryAuditLog).values({
-            organizationId: memberData.organizationId,
-            signatoryId: created.id,
-            action: "grant",
-            changes: { status: { old: null, new: "ACTIVE" } },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
-          });
-        }
+          if (row) {
+            await ctx.audit("authorizedSignatory", row.id, {
+              action: "grant",
+              changes: { status: { old: null, new: "ACTIVE" } },
+            });
+          }
+          return row;
+        },
+      );
 
-        return c.json({ signatory: created }, 201);
-      });
+      return c.json({ signatory: created }, 201);
     },
   )
 
@@ -167,61 +166,62 @@ export const authorizedSignatoriesRouter = new Hono<{
     zValidator("json", UpdateSignatoryTitleSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
       const id = Number(c.req.param("id"));
       if (!Number.isInteger(id)) {
-        return domainErrorResponse(
-          c,
-          invalid("invalid_request", "ID invalido"),
-        );
+        throw invalid("invalid_request", "ID invalido");
       }
       const input = c.req.valid("json");
 
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [existing] = await tx
-          .select()
-          .from(authorizedSignatory)
-          .where(
-            and(
-              eq(authorizedSignatory.id, id),
-              eq(authorizedSignatory.organizationId, memberData.organizationId),
-              isNull(authorizedSignatory.deletedAt),
-            ),
-          )
-          .limit(1);
+      const result = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [existing] = await ctx.o
+            .select()
+            .from(authorizedSignatory)
+            .where(
+              and(
+                eq(authorizedSignatory.id, id),
+                eq(
+                  authorizedSignatory.organizationId,
+                  memberData.organizationId,
+                ),
+                isNull(authorizedSignatory.deletedAt),
+              ),
+            )
+            .limit(1);
 
-        if (!existing) {
-          return domainErrorResponse(
-            c,
-            notFound("not_found", "Signatário não encontrado"),
-          );
-        }
-        if (existing.title === input.title) {
-          return c.json({ signatory: existing });
-        }
+          if (!existing) {
+            throw notFound("not_found", "Signatário não encontrado");
+          }
+          if (existing.title === input.title) {
+            return existing;
+          }
 
-        const [updated] = await tx
-          .update(authorizedSignatory)
-          .set({ title: input.title })
-          .where(
-            and(
-              eq(authorizedSignatory.id, id),
-              eq(authorizedSignatory.organizationId, memberData.organizationId),
-            ),
-          )
-          .returning();
+          const [updated] = await ctx.o
+            .update(authorizedSignatory)
+            .set({ title: input.title })
+            .where(
+              and(
+                eq(authorizedSignatory.id, id),
+                eq(
+                  authorizedSignatory.organizationId,
+                  memberData.organizationId,
+                ),
+              ),
+            )
+            .returning();
 
-        await tx.insert(authorizedSignatoryAuditLog).values({
-          organizationId: memberData.organizationId,
-          signatoryId: id,
-          action: "update",
-          changes: { title: { old: existing.title, new: input.title } },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
+          await ctx.audit("authorizedSignatory", id, {
+            action: "update",
+            changes: { title: { old: existing.title, new: input.title } },
+          });
 
-        return c.json({ signatory: updated });
-      });
+          return updated;
+        },
+      );
+
+      return c.json({ signatory: result });
     },
   )
 
@@ -237,74 +237,82 @@ export const authorizedSignatoriesRouter = new Hono<{
       const session = c.get("session");
       const id = Number(c.req.param("id"));
       if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+        throw invalid("invalid_request", "ID invalido");
       }
       const input = c.req.valid("json");
 
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [existing] = await tx
-          .select()
-          .from(authorizedSignatory)
-          .where(
-            and(
-              eq(authorizedSignatory.id, id),
-              eq(authorizedSignatory.organizationId, memberData.organizationId),
-              isNull(authorizedSignatory.deletedAt),
-            ),
-          )
-          .limit(1);
+      const revoked = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [existing] = await ctx.o
+            .select()
+            .from(authorizedSignatory)
+            .where(
+              and(
+                eq(authorizedSignatory.id, id),
+                eq(
+                  authorizedSignatory.organizationId,
+                  memberData.organizationId,
+                ),
+                isNull(authorizedSignatory.deletedAt),
+              ),
+            )
+            .limit(1);
 
-        if (!existing) {
-          return c.json({ error: "Signatário não encontrado" }, 404);
-        }
-        // `revoke` (SIGNATORY_MACHINE): only an active grant is revoked. A second
-        // revoke used to overwrite who revoked it and when.
-        if (!SIGNATORY_MACHINE.canTransition(existing.status, "revoke")) {
-          throw conflict(
-            "status_transition_conflict",
-            "Signatário já revogado",
-          );
-        }
+          if (!existing) {
+            throw notFound("not_found", "Signatário não encontrado");
+          }
+          // `revoke` (SIGNATORY_MACHINE): only an active grant is revoked. A second
+          // revoke used to overwrite who revoked it and when.
+          if (!SIGNATORY_MACHINE.canTransition(existing.status, "revoke")) {
+            throw conflict(
+              "status_transition_conflict",
+              "Signatário já revogado",
+            );
+          }
 
-        const [updated] = await tx
-          .update(authorizedSignatory)
-          .set({
-            status: SIGNATORY_MACHINE.requireTargetOf(
-              existing.status,
-              "revoke",
-            ),
-            revokedBy: session.user.id,
-            revokedAt: new Date(),
-          })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-          // above so the UPDATE stays org-scoped even if the guarding read is
-          // refactored away. Reuses the in-scope memberData.organizationId.
-          .where(
-            and(
-              eq(authorizedSignatory.id, id),
-              eq(authorizedSignatory.organizationId, memberData.organizationId),
-              eq(authorizedSignatory.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!updated) {
-          throw conflict(
-            "status_transition_conflict",
-            "Signatário já revogado",
-          );
-        }
+          const [updated] = await ctx.o
+            .update(authorizedSignatory)
+            .set({
+              status: SIGNATORY_MACHINE.requireTargetOf(
+                existing.status,
+                "revoke",
+              ),
+              revokedBy: session.user.id,
+              revokedAt: new Date(),
+            })
+            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // above so the UPDATE stays org-scoped even if the guarding read is
+            // refactored away. Reuses the in-scope memberData.organizationId.
+            .where(
+              and(
+                eq(authorizedSignatory.id, id),
+                eq(
+                  authorizedSignatory.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(authorizedSignatory.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!updated) {
+            throw conflict(
+              "status_transition_conflict",
+              "Signatário já revogado",
+            );
+          }
 
-        await tx.insert(authorizedSignatoryAuditLog).values({
-          organizationId: memberData.organizationId,
-          signatoryId: id,
-          action: "revoke",
-          changes: { status: { old: existing.status, new: "REVOKED" } },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-          reason: input.reason || null,
-        });
+          await ctx.audit("authorizedSignatory", id, {
+            action: "revoke",
+            changes: { status: { old: existing.status, new: "REVOKED" } },
+            reason: input.reason || null,
+          });
 
-        return c.json({ signatory: updated });
-      });
+          return updated;
+        },
+      );
+
+      return c.json({ signatory: revoked });
     },
   );
