@@ -70,7 +70,7 @@ import type {
  *     ARITHMETICALLY (correlated), not in quadrature (cg-18 §7.1.2.1; UKAS LAB 14
  *     §4.2.2 applies the same arithmetic sum to combined weights). Arithmetic
  *     sum ≥ RSS, so the cg-18/LAB-14 treatment is the CONSERVATIVE one. The open
- *     question in issue #506 (item 3) is the inverse code risk OUTSIDE this
+ *     question is the inverse code risk OUTSIDE this
  *     template: whether the composition layer (`uncertaintyMode: "expanded_rss"`)
  *     actually sums ARITHMETICALLY or in QUADRATURE — RSS would UNDER-state for
  *     stacked loads, so it still needs a code check in the composition layer.

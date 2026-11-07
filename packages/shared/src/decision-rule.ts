@@ -1,6 +1,6 @@
 /**
  * Decision rules for statements of conformity (ISO/IEC 17025 7.8.6, 7.1.3;
- * ILAC-G8:09/2019), roadmap 2 C4.
+ * ILAC-G8:09/2019).
  *
  * A point is judged from its conformity margin m = T - |E| (tolerance minus the
  * absolute error; m >= 0 is inside the tolerance) and, for the rules that use a

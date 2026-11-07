@@ -26,7 +26,7 @@ import type {
  * Lab-specific magnitudes (reference U + its k) stay as lab-filled inputs marked
  * [VERIFICAR] on the VALUE only. Sources:
  *   - EURAMET cg-15 v2.0 (03/2011) "Guidelines on the Calibration of Digital
- *     Multimeters" (formerly EA-10/15) (read):
+ *     Multimeters" (EA-10/15 before the renumbering) (read):
  *     - §5.1.4.1 is only the certificate COLUMN HEADINGS ("Applied Value",
  *       "Instrument Reading", "Error of Indication", "Measurement Uncertainty")
  *       — it does NOT state the measurement model; the model is EA-4/02 §S9.3.

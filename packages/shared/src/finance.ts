@@ -92,7 +92,7 @@ export const RECEIVABLE_INSTALLMENT_STATUS = defineStatusVocabulary(
 );
 
 // =============================================================================
-// CERTIFICATE RELEASE — Phase 2 slice 1. Separates technical certificate
+// CERTIFICATE RELEASE. Separates technical certificate
 // approval (calibrationJob.status === "APPROVED") from commercial release
 // to the customer portal. Provider-neutral.
 // =============================================================================
@@ -150,7 +150,7 @@ export type CertificateReleaseAuditSource =
   | "policy_change"
   | "backfill";
 
-// Phase 2 slice 4 — automatic send rules by milestone.
+// Automatic send rules by milestone.
 // Provider-neutral. Rules say: "when MILESTONE fires for a service
 // order whose policy points at me, send it to the configured financial
 // provider." Triggered automatically by the engine; audited.
@@ -169,12 +169,12 @@ export type AutomaticSendOutcome =
   | "skipped_milestone_not_matched"
   | "failed";
 
-// Phase 2 slice 7 — supplier and transporter records, normalized from
-// the free-text supplierName captured in slice 6.
+// Supplier and transporter records, normalized from the free-text supplier
+// name of an outsourced cost.
 
 export type SupplierKind = "outsourced_lab" | "transporter" | "both" | "other";
 
-// Phase 2 slice 9 — batch / consolidated billing groups.
+// Batch / consolidated billing groups.
 
 export type BillingGroupStatus = "OPEN" | "CLOSED" | "VOID";
 
@@ -394,7 +394,7 @@ export interface FinancialInstallmentStatus {
   paymentMethod: FinancialPaymentMethod | null;
 }
 
-// Phase 2 slice 2 — installments + partial-payment lab surface.
+// Installments + partial-payment lab surface.
 // Provider-neutral summary that the lab UI consumes to render
 // "N de M pagas · R$ X em aberto · R$ Y em atraso" chips without
 // recomputing on every render.

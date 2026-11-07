@@ -1,6 +1,6 @@
 /**
- * Proficiency-testing performance scores per ISO 13528:2022 §9 (issue #60,
- * ISO/IEC 17025 §7.7.2). Pure + deterministic.
+ * Proficiency-testing performance scores per ISO 13528:2022 §9
+ * (ISO/IEC 17025 §7.7.2). Pure + deterministic.
  *
  * - z  = (x − x_pt) / σ_pt                       (§9.4)
  * - z′ = (x − x_pt) / √(σ_pt² + u(x_pt)²)        (§9.5)

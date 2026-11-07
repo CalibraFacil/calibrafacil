@@ -1,6 +1,6 @@
 /**
  * Statistical process control for check/working-standard monitoring
- * (ISO/IEC 17025 §7.7.1, issue #60). Pure + deterministic — same style as
+ * (ISO/IEC 17025 §7.7.1). Pure + deterministic — same style as
  * `analyzeInterval`: typed result, engine version, provenance fingerprint.
  *
  * I-MR is the default chart: check-standard monitoring usually yields one

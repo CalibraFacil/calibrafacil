@@ -3,7 +3,7 @@ export interface CalibrationValueFormatOptions {
   significantDigits?: number;
   maxAdaptiveFractionDigits?: number;
   /**
-   * Default "," (pt-BR, Q47; roadmap 2 F3): measurement values read as in the
+   * Default "," (pt-BR): measurement values read as in the
    * certificate. "." only where a machine reads the text.
    */
   decimalSeparator?: "." | ",";
@@ -11,7 +11,7 @@ export interface CalibrationValueFormatOptions {
 }
 
 /**
- * Parse a measurement typed by a person (roadmap 2 F3): one decimal separator,
+ * Parse a measurement typed by a person: one decimal separator,
  * comma (pt-BR) or point, an optional sign and exponent, no thousands grouping
  * ("1.234,5" is refused: ambiguous for a reading). Null when it is not a number.
  */

@@ -14,8 +14,8 @@ import type { TemplateModule } from "./types";
  * option (kept out of the fingerprint) so they validate the metrology without
  * perturbing the method fingerprint.
  *
- * Step 0 of the /loop pack: flip a `previewScenarios.expected` value in a
- * template and this test must go RED.
+ * Flipping a `previewScenarios.expected` value in a template must turn this
+ * test RED.
  */
 describe("method-templates registry — publishable oracle", () => {
   const engine = createMethodExecutionEngine();

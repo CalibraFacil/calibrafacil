@@ -1,6 +1,6 @@
 /**
- * HTTP CRL fetcher for the injected `VerifyPdfOptions.fetchCrl` seam
- * (#646 fase b). Kept separate from verify.ts so the verifier itself stays
+ * HTTP CRL fetcher for the injected `VerifyPdfOptions.fetchCrl` seam.
+ * Kept separate from verify.ts so the verifier itself stays
  * network-free; the API verify route and the worker precompute share this.
  *
  * ICP-Brasil LCRs are re-published on fixed schedules (hours), so a short
