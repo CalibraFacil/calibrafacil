@@ -18,7 +18,7 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { portalIntervalUpdateResponseSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import type { AssetDetail } from "./types";
 
 /**
@@ -31,7 +31,7 @@ import type { AssetDetail } from "./types";
  */
 export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
   const queryClient = useQueryClient();
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const [months, setMonths] = useState(
     asset.calibrationIntervalMonths != null
       ? String(asset.calibrationIntervalMonths)
@@ -56,8 +56,8 @@ export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
     onSuccess: () => {
       toast.success("Periodicidade atualizada.");
       setRationale("");
-      queryClient.invalidateQueries({ queryKey: key("portal-asset") });
-      queryClient.invalidateQueries({ queryKey: key("portal-assets") });
+      queryClient.invalidateQueries({ queryKey: keys.assetDetails });
+      queryClient.invalidateQueries({ queryKey: keys.fleetAssets });
     },
     onError: (error: Error) => {
       toast.error(error.message);

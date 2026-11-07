@@ -7,7 +7,7 @@ import {
 } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import type {
   AssetDriftSeries,
   FleetAnalytics,
@@ -41,9 +41,9 @@ async function fetchFleetAnalytics(
 
 /** Fleet as-found reliability analytics (EOPR) — lab verdicts, never recomputed. */
 export function useFleetAnalytics(params: FleetAnalyticsParams) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-fleet-analytics", params),
+    queryKey: keys.fleetAnalytics(params),
     queryFn: () => fetchFleetAnalytics(params),
     staleTime: 60_000,
   });
@@ -51,9 +51,9 @@ export function useFleetAnalytics(params: FleetAnalyticsParams) {
 
 /** Matched-point as-found margin series + OLS drift regression for one asset. */
 export function useDriftSeries(assetId: number) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-drift-series", assetId),
+    queryKey: keys.driftSeries(assetId),
     queryFn: (): Promise<AssetDriftSeries> =>
       fetchPortalJson(
         `/api/portal/assets/${assetId}/drift-series`,
@@ -69,9 +69,9 @@ export function useDriftSeries(assetId: number) {
  * fetch OPEN and ASSESSED together (the asset panel filters client-side).
  */
 export function useOotEvents(status?: OotEventStatus) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-oot-events", status ?? "all"),
+    queryKey: keys.ootEventsByStatus(status),
     queryFn: async (): Promise<Array<OotEvent>> => {
       const searchParams = new URLSearchParams();
       if (status) searchParams.set("status", status);

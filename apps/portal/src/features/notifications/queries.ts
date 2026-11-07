@@ -15,7 +15,7 @@ import {
 } from "@calibra-facil/contracts";
 
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 
 /**
  * General in-app notification center (issue #741). Shapes mirror
@@ -48,18 +48,14 @@ export type NotificationPreferences = {
   preferences: Partial<Record<PortalNotificationType, NotificationChannels>>;
 };
 
-const NOTIFICATION_FEED_SCOPE = "portal-notification-feed";
-const NOTIFICATION_COUNT_SCOPE = "portal-notification-count";
-const NOTIFICATION_PREFERENCES_SCOPE = "portal-notification-preferences";
-
 /**
  * Bell badge. Polled — the portal has no realtime channel by design; a
  * once-a-minute count is plenty for a surface visited a few times a week.
  */
 export function useUnreadNotificationCount() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key(NOTIFICATION_COUNT_SCOPE),
+    queryKey: keys.notificationCount,
     queryFn: async (): Promise<number> => {
       const result = await fetchPortalJson(
         "/api/portal/notifications/unread-count",
@@ -78,9 +74,9 @@ export function useUnreadNotificationCount() {
 
 /** Cursor-paginated feed; fetched only while the popover/page is open. */
 export function useNotificationFeed(enabled: boolean) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useInfiniteQuery({
-    queryKey: key(NOTIFICATION_FEED_SCOPE),
+    queryKey: keys.notificationFeed,
     queryFn: async ({
       pageParam,
     }: {
@@ -105,13 +101,13 @@ export function useNotificationFeed(enabled: boolean) {
 }
 
 function useInvalidateNotifications() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const queryClient = useQueryClient();
   return async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: key(NOTIFICATION_FEED_SCOPE) }),
+      queryClient.invalidateQueries({ queryKey: keys.notificationFeed }),
       queryClient.invalidateQueries({
-        queryKey: key(NOTIFICATION_COUNT_SCOPE),
+        queryKey: keys.notificationCount,
       }),
     ]);
   };
@@ -154,9 +150,9 @@ export function useMarkAllNotificationsRead() {
 }
 
 export function useNotificationPreferences() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key(NOTIFICATION_PREFERENCES_SCOPE),
+    queryKey: keys.notificationPreferences,
     queryFn: async (): Promise<NotificationPreferences> => {
       return fetchPortalJson(
         "/api/portal/notification-preferences",
@@ -182,7 +178,7 @@ export type UpdatePreferencesInput = {
  * the server truth.
  */
 export function useUpdateNotificationPreferences() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (
@@ -200,14 +196,14 @@ export function useUpdateNotificationPreferences() {
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({
-        queryKey: key(NOTIFICATION_PREFERENCES_SCOPE),
+        queryKey: keys.notificationPreferences,
       });
       const previous = queryClient.getQueryData<NotificationPreferences>(
-        key(NOTIFICATION_PREFERENCES_SCOPE),
+        keys.notificationPreferences,
       );
       if (previous) {
         queryClient.setQueryData<NotificationPreferences>(
-          key(NOTIFICATION_PREFERENCES_SCOPE),
+          keys.notificationPreferences,
           {
             digestFrequency: input.digestFrequency ?? previous.digestFrequency,
             emailEnabled: input.emailEnabled ?? previous.emailEnabled,
@@ -220,14 +216,14 @@ export function useUpdateNotificationPreferences() {
     onError: (_error, _input, context) => {
       if (context?.previous) {
         queryClient.setQueryData(
-          key(NOTIFICATION_PREFERENCES_SCOPE),
+          keys.notificationPreferences,
           context.previous,
         );
       }
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: key(NOTIFICATION_PREFERENCES_SCOPE),
+        queryKey: keys.notificationPreferences,
       });
     },
   });

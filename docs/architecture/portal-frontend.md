@@ -126,10 +126,13 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
 - **Authenticated query keys are scoped to the active client organization.** The
   API answers for whichever org the session names, and a customer can belong to
   several, so a key without the org id would serve one org's cache to another.
-  Build every key with `usePortalQueryKey()` (`lib/portal-org-context.tsx`, backed
-  by `portalQueryKey` in `lib/portal-query-keys.ts`) — for `useQuery` and for
-  `invalidateQueries` alike. Only public/pre-auth queries (verification, invites,
-  magic link, branding) and the user-level org list stay unscoped. The org
+  Keys are built only by the factory in `lib/portal-keys.ts` (`usePortalKeys()`:
+  `keys.asset(id)`, `keys.requests`, ...), which prepends the org through
+  `portalQueryKey` (`lib/portal-query-keys.ts`) — for `useQuery`,
+  `invalidateQueries`, `setQueryData` and placeholder scopes alike; never a
+  literal array or a retyped `key("portal-...")` string at a call site. Public
+  and pre-auth queries (verification, invites, magic link, branding) and the
+  user-level org list stay unscoped, under `portalPublicKeys`. The org
   switcher also cancels in-flight portal queries and removes the previous
   org's entries when it switches.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint

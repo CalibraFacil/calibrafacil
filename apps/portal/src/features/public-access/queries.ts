@@ -10,6 +10,7 @@ import {
   jsonInit,
   readPortalJsonResult,
 } from "@/lib/api-fetch";
+import { portalPublicKeys } from "@/lib/portal-keys";
 
 /**
  * Public quote-access transport (spec quote-approval-public-access, mini-spec E).
@@ -72,7 +73,7 @@ async function fetchPublicServiceOrder(
 
 export function usePublicServiceOrder(token: string) {
   return useQuery({
-    queryKey: ["public-service-order", token],
+    queryKey: portalPublicKeys.publicServiceOrder(token),
     queryFn: () => fetchPublicServiceOrder(token),
     // REQ-QPUB-043: after a decision the token is revoked — a background
     // refetch would 410 and blank the page. The snapshot is the source of

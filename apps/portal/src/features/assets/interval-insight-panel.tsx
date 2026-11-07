@@ -26,7 +26,7 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { portalIntervalUpdateResponseSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson, getApiBaseUrl, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import { useIntervalInsight } from "./queries";
 import type { IntervalInsight } from "./types";
 
@@ -62,7 +62,7 @@ export function IntervalInsightPanel({
   currentIntervalMonths: number | null;
 }) {
   const queryClient = useQueryClient();
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const query = useIntervalInsight(assetId);
   const insight = query.data;
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -90,9 +90,9 @@ export function IntervalInsightPanel({
     onSuccess: () => {
       setConfirmOpen(false);
       toast.success("Periodicidade atualizada a partir da sugestão.");
-      queryClient.invalidateQueries({ queryKey: key("portal-asset") });
+      queryClient.invalidateQueries({ queryKey: keys.assetDetails });
       queryClient.invalidateQueries({
-        queryKey: key("portal-interval-insight"),
+        queryKey: keys.intervalInsights,
       });
     },
     onError: (error: Error) => toast.error(error.message),

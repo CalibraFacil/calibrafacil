@@ -7,7 +7,7 @@ import {
 
 import { fetchPortalJson } from "@/lib/api-fetch";
 import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import type { CalibrationFilter } from "@/lib/calibration-status";
 import type { FleetAssetsResponse, FleetSortBy } from "./types";
 
@@ -43,19 +43,19 @@ async function fetchFleetAssets(
 }
 
 export function useFleetAssets(params: FleetAssetsParams) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-assets", params),
+    queryKey: keys.fleetAssetsPage(params),
     queryFn: () => fetchFleetAssets(params),
-    placeholderData: keepPreviousDataInScope(key("portal-assets")),
+    placeholderData: keepPreviousDataInScope(keys.fleetAssets),
   });
 }
 
 /** Units (branch customers) in the active scope; more than one only in group mode. */
 export function usePortalUnits() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-units"),
+    queryKey: keys.units,
     queryFn: () =>
       fetchPortalJson("/api/portal/units", portalUnitsResponseSchema, {
         errorMessage: "Falha ao carregar unidades",

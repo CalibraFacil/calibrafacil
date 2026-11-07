@@ -33,7 +33,7 @@ import {
 } from "@calibra-facil/contracts";
 import { fetchExternalJson, fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { cn } from "@calibra-facil/ui/utils";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import {
   EMPTY_ADDRESS_FORM,
   type AddressForm,
@@ -134,7 +134,7 @@ function Field({
 
 export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
   const navigate = useNavigate();
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const queryClient = useQueryClient();
 
   const [selectedAssets, setSelectedAssets] = useState<Array<PortalAsset>>([]);
@@ -148,7 +148,7 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
       ? [...assetIds].sort((a, b) => a - b).join(",")
       : null;
   const preselectQuery = useQuery({
-    queryKey: key("portal-request-preselect", preselectKey),
+    queryKey: keys.requestPreselect(preselectKey),
     enabled: preselectKey !== null,
     staleTime: Infinity,
     queryFn: async (): Promise<AssetsResponse> => {
@@ -205,7 +205,7 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: key("portal-request-assets", page, limit, deferredSearch),
+    queryKey: keys.requestAssets(page, limit, deferredSearch),
     queryFn: async (): Promise<AssetsResponse> => {
       const params = new URLSearchParams({
         page: String(page),
@@ -278,8 +278,8 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
       return { ids: getCreatedRequestIds(result) };
     },
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: key("portal-requests") });
-      await queryClient.invalidateQueries({ queryKey: key("portal-overview") });
+      await queryClient.invalidateQueries({ queryKey: keys.requests });
+      await queryClient.invalidateQueries({ queryKey: keys.overview });
       // A cross-unit selection becomes one request per unit. Land on the detail
       // page for a single request; otherwise go to the list.
       if (result.ids.length === 1) {

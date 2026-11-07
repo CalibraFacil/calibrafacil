@@ -8,7 +8,7 @@ import { Card, CardContent } from "@calibra-facil/ui/card";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { portalCertificateDetailSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import {
   CertificateDetailView,
   type Certificate,
@@ -20,14 +20,14 @@ export const Route = createFileRoute("/_authenticated/certificates/$id")({
 
 function CertificateDetailPage() {
   const { id } = Route.useParams();
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
 
   const {
     data: certificate,
     isLoading,
     error,
   } = useQuery({
-    queryKey: key("portal-certificate", id),
+    queryKey: keys.certificate(id),
     queryFn: async (): Promise<Certificate> => {
       return fetchPortalJson(
         `/api/portal/certificates/${encodeURIComponent(id)}`,

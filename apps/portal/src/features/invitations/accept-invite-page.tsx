@@ -18,6 +18,7 @@ import { Spinner } from "@calibra-facil/ui/spinner";
 import { useMountEffect } from "@calibra-facil/ui/use-mount-effect";
 import { invitationLookupResponseSchema } from "@calibra-facil/contracts";
 import { PortalApiError, fetchPortalJson } from "@/lib/api-fetch";
+import { portalPublicKeys } from "@/lib/portal-keys";
 
 type InvitationData = {
   id: string;
@@ -35,11 +36,9 @@ function LoggedInInviteAcceptance({
   invitation: InvitationData;
 }) {
   const organizationsQuery = useQuery({
-    queryKey: [
-      "portal-organizations",
-      "accept-invite",
+    queryKey: portalPublicKeys.acceptInviteOrganization(
       invitation.organizationSlug,
-    ],
+    ),
     queryFn: async () => {
       const orgsResult = await portalAuthClient.organization.list();
       return orgsResult.data ?? [];
@@ -194,7 +193,7 @@ export function AcceptInvitePage({ token }: { token?: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
   const invitationQuery = useQuery({
-    queryKey: ["portal-invitation", token],
+    queryKey: portalPublicKeys.invitation(token),
     queryFn: async (): Promise<InvitationData> => {
       if (!token) {
         throw new Error("Token de convite não fornecido.");

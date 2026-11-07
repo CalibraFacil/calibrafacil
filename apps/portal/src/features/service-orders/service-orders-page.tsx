@@ -37,7 +37,7 @@ import {
 import { portalServiceOrdersResponseSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson } from "@/lib/api-fetch";
 import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import { formatInstant } from "@calibra-facil/shared/format";
 
 type PortalServiceOrder = {
@@ -133,9 +133,9 @@ export function ServiceOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<ServiceOrderStatus | "">("");
   const limit = 20;
 
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const { data, isLoading, error } = useQuery({
-    queryKey: key("portal-service-orders", page, limit, search, statusFilter),
+    queryKey: keys.serviceOrdersPage({ page, limit, search, statusFilter }),
     queryFn: async (): Promise<ServiceOrdersResponse> => {
       const params = new URLSearchParams({
         page: String(page),
@@ -156,7 +156,7 @@ export function ServiceOrdersPage() {
         { errorMessage: "Falha ao carregar ordens de serviço." },
       );
     },
-    placeholderData: keepPreviousDataInScope(key("portal-service-orders")),
+    placeholderData: keepPreviousDataInScope(keys.serviceOrders),
   });
 
   return (

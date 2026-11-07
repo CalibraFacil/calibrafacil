@@ -43,7 +43,7 @@ import { portalRequestsResponseSchema } from "@calibra-facil/contracts";
 import { PortalApiError, fetchPortalJson } from "@/lib/api-fetch";
 import { cn } from "@calibra-facil/ui/utils";
 import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import {
   CALIBRATION_REQUEST_STATUS,
   type CalibrationRequestStatus,
@@ -203,9 +203,14 @@ export function RequestsPage({
   const overview = useOverview();
   const requestStats = overview.data?.requests;
 
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const { data, isLoading, error } = useQuery({
-    queryKey: key("portal-requests", page, limit, deferredSearch, statusFilter),
+    queryKey: keys.requestsPage({
+      page,
+      limit,
+      search: deferredSearch,
+      statusFilter,
+    }),
     queryFn: async (): Promise<RequestsResponse> => {
       const params = new URLSearchParams({
         page: String(page),
@@ -232,7 +237,7 @@ export function RequestsPage({
         );
       }
     },
-    placeholderData: keepPreviousDataInScope(key("portal-requests")),
+    placeholderData: keepPreviousDataInScope(keys.requests),
   });
 
   function applyStatusFilter(next: CalibrationRequestStatus | "") {

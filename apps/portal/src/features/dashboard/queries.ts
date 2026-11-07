@@ -8,7 +8,7 @@ import {
 } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 
 export type PortalOverview = PortalOverviewResponse;
 
@@ -22,9 +22,9 @@ async function fetchOverview(): Promise<PortalOverview> {
 }
 
 export function useOverview() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-overview"),
+    queryKey: keys.overview,
     queryFn: fetchOverview,
     staleTime: 60_000,
   });
@@ -34,9 +34,9 @@ export type UnitSummaryItem = PortalUnitsSummaryResponse["units"][number];
 
 /** Per-unit calibration breakdown; more than one unit only in group mode. */
 export function useUnitSummary() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-unit-summary"),
+    queryKey: keys.unitSummary,
     queryFn: () =>
       fetchPortalJson(
         "/api/portal/units/summary",

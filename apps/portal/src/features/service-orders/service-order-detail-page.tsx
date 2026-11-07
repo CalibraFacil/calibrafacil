@@ -33,7 +33,7 @@ import {
   portalServiceOrderDetailResponseSchema,
 } from "@calibra-facil/contracts";
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";
 
 type QuoteItem = {
@@ -282,12 +282,12 @@ function DocRow({ label, ready }: { label: string; ready: boolean }) {
 }
 
 export function ServiceOrderDetailPage({ id }: { id: string }) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const queryClient = useQueryClient();
   const [rejectionReason, setRejectionReason] = useState("");
 
   const orderQuery = useQuery({
-    queryKey: key("portal-service-order", id),
+    queryKey: keys.serviceOrder(id),
     queryFn: async (): Promise<ServiceOrderDetail> => {
       const result = await fetchPortalJson(
         `/api/portal/service-orders/${id}`,
@@ -299,7 +299,7 @@ export function ServiceOrderDetailPage({ id }: { id: string }) {
   });
 
   const financialSummaryQuery = useQuery({
-    queryKey: key("portal-service-order", id, "financial-summary"),
+    queryKey: keys.serviceOrderFinancialSummary(id),
     queryFn: async (): Promise<PortalFinancialSummary> => {
       const result = await fetchPortalJson(
         `/api/portal/service-orders/${id}/financial-summary`,
@@ -324,9 +324,9 @@ export function ServiceOrderDetailPage({ id }: { id: string }) {
     onSuccess: async () => {
       toast.success("Orçamento aprovado.");
       await queryClient.invalidateQueries({
-        queryKey: key("portal-service-order", id),
+        queryKey: keys.serviceOrder(id),
       });
-      await queryClient.invalidateQueries({ queryKey: key("portal-overview") });
+      await queryClient.invalidateQueries({ queryKey: keys.overview });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao aprovar.");
@@ -348,9 +348,9 @@ export function ServiceOrderDetailPage({ id }: { id: string }) {
       toast.success("Orçamento recusado.");
       setRejectionReason("");
       await queryClient.invalidateQueries({
-        queryKey: key("portal-service-order", id),
+        queryKey: keys.serviceOrder(id),
       });
-      await queryClient.invalidateQueries({ queryKey: key("portal-overview") });
+      await queryClient.invalidateQueries({ queryKey: keys.overview });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao recusar.");

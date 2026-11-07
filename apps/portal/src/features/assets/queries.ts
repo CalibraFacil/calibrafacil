@@ -6,13 +6,13 @@ import {
 } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import type { AssetDetail, IntervalInsight } from "./types";
 
 export function useAssetDetail(assetId: string) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-asset", assetId),
+    queryKey: keys.asset(assetId),
     queryFn: async (): Promise<AssetDetail> => {
       const result = await fetchPortalJson(
         `/api/portal/assets/${encodeURIComponent(assetId)}`,
@@ -29,9 +29,9 @@ export function useAssetDetail(assetId: string) {
  * attention strip and the analysis panel — same key, one request.
  */
 export function useIntervalInsight(assetId: number) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-interval-insight", assetId),
+    queryKey: keys.intervalInsight(assetId),
     queryFn: (): Promise<IntervalInsight> =>
       fetchPortalJson(
         `/api/portal/assets/${assetId}/interval-insight`,

@@ -11,6 +11,7 @@ import {
 } from "@calibra-facil/contracts";
 
 import { fetchPortalResponse, readPortalJsonResult } from "@/lib/api-fetch";
+import { portalPublicKeys } from "@/lib/portal-keys";
 
 /**
  * Public certificate verification — the unauthenticated `/v/:token` page.
@@ -57,7 +58,7 @@ async function fetchVerification(token: string): Promise<VerificationData> {
 
 export function useVerification(token: string) {
   return useQuery({
-    queryKey: ["verification", token],
+    queryKey: portalPublicKeys.verification(token),
     queryFn: () => fetchVerification(token),
     retry: false,
   });
@@ -94,7 +95,7 @@ async function fetchSignatureVerification(
  */
 export function useSignatureVerdict(token: string, enabled: boolean) {
   return useQuery({
-    queryKey: ["verification-signature", token],
+    queryKey: portalPublicKeys.verificationSignature(token),
     queryFn: () => fetchSignatureVerification(token),
     enabled,
     staleTime: 5 * 60_000,
