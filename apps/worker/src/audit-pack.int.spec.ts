@@ -155,7 +155,7 @@ describe("processAuditPackJob (worker real-DB integration)", () => {
 
     for (const cert of [released, legacy, held]) {
       await env.CERTIFICATES_BUCKET.put(cert.certificateR2Key, FAKE_PDF_BYTES, {
-        httpMetadata: { contentType: "application/pdf" },
+        contentType: "application/pdf",
       });
     }
 
@@ -237,7 +237,7 @@ describe("processAuditPackJob (worker real-DB integration)", () => {
     });
     for (const cert of [myCert, otherCert]) {
       await env.CERTIFICATES_BUCKET.put(cert.certificateR2Key, FAKE_PDF_BYTES, {
-        httpMetadata: { contentType: "application/pdf" },
+        contentType: "application/pdf",
       });
     }
 
@@ -291,7 +291,7 @@ describe("processAuditPackJob (worker real-DB integration)", () => {
     });
     for (const cert of [inWindow, outOfWindow]) {
       await env.CERTIFICATES_BUCKET.put(cert.certificateR2Key, FAKE_PDF_BYTES, {
-        httpMetadata: { contentType: "application/pdf" },
+        contentType: "application/pdf",
       });
     }
 
@@ -334,7 +334,7 @@ describe("processAuditPackJob (worker real-DB integration)", () => {
       releaseStatus: "RELEASED",
     });
     await env.CERTIFICATES_BUCKET.put(cert.certificateR2Key, FAKE_PDF_BYTES, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
     const { exportId } = await seedAuditPackExport({
       organizationId: org.orgId,
@@ -417,7 +417,7 @@ describe("processAuditPackJob (worker real-DB integration)", () => {
       present.certificateR2Key,
       FAKE_PDF_BYTES,
       {
-        httpMetadata: { contentType: "application/pdf" },
+        contentType: "application/pdf",
       },
     );
 

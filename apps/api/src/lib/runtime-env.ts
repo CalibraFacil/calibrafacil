@@ -19,7 +19,7 @@ export type WorkerRuntimeEnv = WorkerSigningEnv & {
     put(
       key: string,
       body: Buffer | Uint8Array | ArrayBuffer,
-      options?: { httpMetadata?: { contentType?: string } },
+      options?: { contentType?: string },
     ): Promise<void>;
   };
   MEDIA_BUCKET: {
@@ -27,7 +27,7 @@ export type WorkerRuntimeEnv = WorkerSigningEnv & {
     put(
       key: string,
       body: Buffer | Uint8Array | ArrayBuffer,
-      options?: { httpMetadata?: { contentType?: string } },
+      options?: { contentType?: string },
     ): Promise<void>;
   };
   GOTENBERG_URL?: string;
@@ -96,14 +96,14 @@ function createR2Bucket(storage: StorageSettings, bucketName: string) {
     async put(
       key: string,
       body: Buffer | Uint8Array | ArrayBuffer,
-      options?: { httpMetadata?: { contentType?: string } },
+      options?: { contentType?: string },
     ) {
       await client.send(
         new PutObjectCommand({
           Bucket: bucketName,
           Key: key,
           Body: body instanceof ArrayBuffer ? new Uint8Array(body) : body,
-          ContentType: options?.httpMetadata?.contentType,
+          ContentType: options?.contentType,
         }),
       );
     },

@@ -300,7 +300,7 @@ export async function processServiceOrderIntakeDocument(
       version: 1,
     });
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
     await withOrgDbClient(env, organizationId, async (client) => {
       if (documentId) {

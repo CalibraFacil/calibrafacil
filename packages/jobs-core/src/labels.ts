@@ -201,7 +201,7 @@ export async function processLabelJob(
       year,
     });
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
     console.log(
       `[LABEL ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`,

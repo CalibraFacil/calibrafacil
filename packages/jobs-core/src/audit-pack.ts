@@ -374,7 +374,7 @@ export async function processAuditPackJob(
       generatedAt: new Date(generatedAtIso),
     });
     await bucketBinding(env, storage.bucket).put(storage.key, zipBytes, {
-      httpMetadata: { contentType: "application/zip" },
+      contentType: "application/zip",
     });
 
     await withOrgDbClient(env, labId, (client) =>

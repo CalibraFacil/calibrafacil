@@ -1,17 +1,16 @@
 /**
  * A bucket of the S3-compatible object store, reduced to the two calls the
- * handlers make. (`httpMetadata.contentType` keeps the name of the put option
- * the call sites already use; the builders map it to S3's `ContentType`.)
+ * handlers make. (`contentType` is S3's `ContentType` of the object.)
  */
 export interface ObjectBucket {
   get(key: string): Promise<{
     arrayBuffer(): Promise<ArrayBuffer>;
-    httpMetadata?: { contentType?: string };
+    contentType?: string;
   } | null>;
   put(
     key: string,
     body: Buffer | Uint8Array | ArrayBuffer,
-    options?: { httpMetadata?: { contentType?: string } },
+    options?: { contentType?: string },
   ): Promise<void>;
 }
 

@@ -64,7 +64,7 @@ export async function resolveOrganizationLogoDataUrl(
 
     const logoBuffer = await logoObject.arrayBuffer();
     const contentType =
-      logoObject.httpMetadata?.contentType ?? inferImageContentType(logoBuffer);
+      logoObject.contentType ?? inferImageContentType(logoBuffer);
     const base64 = arrayBufferToBase64(logoBuffer);
     return `data:${contentType};base64,${base64}`;
   } catch (err) {

@@ -90,7 +90,7 @@ export async function processServiceOrderTag(
       tagNumber,
     });
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
     await withOrgDbClient(env, organizationId, async (client) => {
       if (tagId ?? data.tag_id) {
@@ -187,7 +187,7 @@ export async function processServiceOrderQuote(
       version: quote.row.version,
     });
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
     await withOrgDbClient(env, organizationId, (client) =>
       client.query(
@@ -347,7 +347,7 @@ export async function processServiceOrderDeliveryReceipt(
       version: payload.document.version,
     });
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
     await withOrgDbClient(env, organizationId, (client) =>
       client.query(
