@@ -31,12 +31,39 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from '@calibra-facil/ui/native-select'
+import {
+  getSettingsNavGroups,
+  type SettingsNavRouteId,
+} from '@/app/router/route-registry'
 import { cn } from '@/lib/utils'
+
+const settingsNavIcons = {
+  '/dashboard/settings/profile': UserIcon,
+  '/dashboard/settings/notifications': Notification01Icon,
+  '/dashboard/settings/appearance': Settings02Icon,
+  '/dashboard/settings/security': ShieldKeyIcon,
+  '/dashboard/settings/authentication': Key01Icon,
+  '/dashboard/settings/passkeys': FingerPrintIcon,
+  '/dashboard/settings/organization': Building06Icon,
+  '/dashboard/settings/units': HierarchyIcon,
+  '/dashboard/settings/members': UserGroupIcon,
+  '/dashboard/settings/environment': ThermometerIcon,
+  '/dashboard/settings/accredited-scope': SecurityCheckIcon,
+  '/dashboard/settings/certificate-numbering': Certificate01Icon,
+  '/dashboard/settings/signature': PenTool01Icon,
+  '/dashboard/settings/certificates': Certificate01Icon,
+  '/dashboard/settings/certificate-release': SecurityCheckIcon,
+  '/dashboard/settings/automatic-send': Mail01Icon,
+  '/dashboard/settings/portal-domain': LinkSquare02Icon,
+  '/dashboard/settings/email-domain': Mail01Icon,
+  '/dashboard/settings/integrations': LinkSquare02Icon,
+  '/dashboard/settings/danger': AlertDiamondIcon,
+} satisfies Record<SettingsNavRouteId, typeof UserIcon>
 
 interface SettingsNavItem {
   value: string
   label: string
-  href: string
+  href: SettingsNavRouteId
   icon: React.ReactNode
 }
 
@@ -45,156 +72,41 @@ interface SettingsNavGroup {
   items: SettingsNavItem[]
 }
 
-const settingsNavGroups: Array<SettingsNavGroup> = [
-  {
-    label: 'Conta',
-    items: [
-      {
-        value: 'profile',
-        label: 'Perfil',
-        href: '/dashboard/settings/profile',
-        icon: <HugeiconsIcon icon={UserIcon} className="size-4" />,
-      },
-      {
-        value: 'notifications',
-        label: 'Notificações',
-        href: '/dashboard/settings/notifications',
-        icon: <HugeiconsIcon icon={Notification01Icon} className="size-4" />,
-      },
-      {
-        value: 'appearance',
-        label: 'Aparência',
-        href: '/dashboard/settings/appearance',
-        icon: <HugeiconsIcon icon={Settings02Icon} className="size-4" />,
-      },
-      {
-        value: 'security',
-        label: 'Segurança',
-        href: '/dashboard/settings/security',
-        icon: <HugeiconsIcon icon={ShieldKeyIcon} className="size-4" />,
-      },
-      {
-        value: 'authentication',
-        label: 'Autenticação',
-        href: '/dashboard/settings/authentication',
-        icon: <HugeiconsIcon icon={Key01Icon} className="size-4" />,
-      },
-      {
-        value: 'passkeys',
-        label: 'Passkeys',
-        href: '/dashboard/settings/passkeys',
-        icon: <HugeiconsIcon icon={FingerPrintIcon} className="size-4" />,
-      },
-    ],
-  },
-  {
-    label: 'Laboratório',
-    items: [
-      {
-        value: 'organization',
-        label: 'Geral',
-        href: '/dashboard/settings/organization',
-        icon: <HugeiconsIcon icon={Building06Icon} className="size-4" />,
-      },
-      {
-        value: 'units',
-        label: 'Unidades & governança',
-        href: '/dashboard/settings/units',
-        icon: <HugeiconsIcon icon={HierarchyIcon} className="size-4" />,
-      },
-      {
-        value: 'members',
-        label: 'Membros & convites',
-        href: '/dashboard/settings/members',
-        icon: <HugeiconsIcon icon={UserGroupIcon} className="size-4" />,
-      },
-      {
-        value: 'environment',
-        label: 'Ambiente',
-        href: '/dashboard/settings/environment',
-        icon: <HugeiconsIcon icon={ThermometerIcon} className="size-4" />,
-      },
-      {
-        value: 'accredited-scope',
-        label: 'Escopo acreditado (CMC)',
-        href: '/dashboard/settings/accredited-scope',
-        icon: <HugeiconsIcon icon={SecurityCheckIcon} className="size-4" />,
-      },
-    ],
-  },
-  {
-    // Everything about the certificate, from its number to its delivery:
-    // release and automatic send used to be reachable only from Finance.
-    label: 'Certificados',
-    items: [
-      {
-        value: 'certificate-numbering',
-        label: 'Numeração',
-        href: '/dashboard/settings/certificate-numbering',
-        icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
-      },
-      {
-        value: 'signature',
-        label: 'Assinatura digital',
-        href: '/dashboard/settings/signature',
-        icon: <HugeiconsIcon icon={PenTool01Icon} className="size-4" />,
-      },
-      {
-        value: 'certificates',
-        label: 'Certificados ICP',
-        href: '/dashboard/settings/certificates',
-        icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
-      },
-      {
-        value: 'certificate-release',
-        label: 'Liberação ao cliente',
-        href: '/dashboard/settings/certificate-release',
-        icon: <HugeiconsIcon icon={SecurityCheckIcon} className="size-4" />,
-      },
-      {
-        value: 'automatic-send',
-        label: 'Envio automático',
-        href: '/dashboard/settings/automatic-send',
-        icon: <HugeiconsIcon icon={Mail01Icon} className="size-4" />,
-      },
-    ],
-  },
-  {
-    label: 'Portal e integrações',
-    items: [
-      {
-        value: 'portal-domain',
-        label: 'Domínio do portal',
-        href: '/dashboard/settings/portal-domain',
-        icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
-      },
-      {
-        value: 'email-domain',
-        label: 'Domínio de e-mail',
-        href: '/dashboard/settings/email-domain',
-        icon: <HugeiconsIcon icon={Mail01Icon} className="size-4" />,
-      },
-      {
-        value: 'integrations',
-        label: 'Integrações',
-        href: '/dashboard/settings/integrations',
-        icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
-      },
-    ],
-  },
-]
+const dangerRoute = '/dashboard/settings/danger'
 
-const dangerNavItem: SettingsNavItem = {
-  value: 'danger',
-  label: 'Zona de perigo',
-  href: '/dashboard/settings/danger',
-  icon: (
-    <HugeiconsIcon
-      icon={AlertDiamondIcon}
-      className="size-4 text-destructive"
-    />
-  ),
+function toNavItem(item: {
+  to: SettingsNavRouteId
+  value: string
+  label: string
+}): SettingsNavItem {
+  return {
+    value: item.value,
+    label: item.label,
+    href: item.to,
+    icon: (
+      <HugeiconsIcon
+        icon={settingsNavIcons[item.to]}
+        className={cn('size-4', item.to === dangerRoute && 'text-destructive')}
+      />
+    ),
+  }
 }
+
+// Titles, grouping and order come from the route registry; only the icons are
+// local. The "Avançado" group holds the danger zone, which sits apart.
+const registryGroups = getSettingsNavGroups()
+const advancedGroup = registryGroups.find((group) => group.id === 'advanced')
+const dangerEntry = advancedGroup?.items.find((item) => item.to === dangerRoute)
+if (!advancedGroup || !dangerEntry) {
+  throw new Error('The route registry has no settings danger zone')
+}
+
+const settingsNavGroups: Array<SettingsNavGroup> = registryGroups
+  .filter((group) => group.id !== 'advanced')
+  .map((group) => ({ label: group.label, items: group.items.map(toNavItem) }))
+
+const dangerNavItem = toNavItem(dangerEntry)
+const advancedLabel = advancedGroup.label
 
 const allNavItems: SettingsNavItem[] = [
   ...settingsNavGroups.flatMap((group) => group.items),
@@ -257,7 +169,7 @@ export function SettingsNav() {
             ))}
           </optgroup>
         ))}
-        <optgroup label="Avançado">
+        <optgroup label={advancedLabel}>
           <NativeSelectOption value={dangerNavItem.value}>
             {dangerNavItem.label}
           </NativeSelectOption>

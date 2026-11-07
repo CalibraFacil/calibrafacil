@@ -4,12 +4,11 @@ import { ExecuteJobPage } from '@/features/jobs/execute-page'
 import { useExecutionDraftOwner } from '@/features/jobs/use-execution-draft-owner'
 import { TanStackUnsavedChangesGate } from '@/lib/unsaved-changes-gate'
 import { parseSyncConflictReturnSearch } from '@/runtime/sync-conflict-return'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/execute')({
   validateSearch: parseSyncConflictReturnSearch,
-  head: () => ({
-    meta: [{ title: 'Executar Calibração | CalibraFacil' }],
-  }),
+  head: () => routeHead('/dashboard/jobs/$id/execute'),
   component: ExecuteJobRoute,
 })
 

@@ -9,6 +9,7 @@ import {
 import {
   prewarmCustomerAssets,
   prewarmCustomerCompliance,
+  prewarmCustomersSearch,
   prewarmCustomerDetail,
   prewarmCustomersIndex,
   prewarmCustomerUsers,
@@ -81,48 +82,28 @@ import {
 } from '@/features/standards/queries'
 import { getStoredDashboardActiveUnitId } from '@/features/dashboard/dashboard-scope-storage'
 import { prewarmDashboardIndex } from '@/features/dashboard/queries'
-import {
-  getStoredDashboardOrganizationId,
-  prewarmRouteQueries,
-} from '@/lib/route-data'
-import { calibraApi } from '@/utils/api'
+import { getStoredDashboardOrganizationId } from '@/lib/route-data'
 import { isDesktopRuntime } from '@/runtime/desktop'
+import {
+  listDashboardRouteIds,
+  matchRoutePath,
+  type DashboardRouteId,
+} from '@/app/router/route-registry'
 
 const PREWARM_COOLDOWN_MS = 3_000
-const DEFAULT_PREWARM_STALE_TIME_MS = 15_000
 
-type PrewarmQuery = {
-  queryKey: readonly unknown[]
-  queryFn: () => Promise<unknown>
-  staleTime?: number
-}
+// The route registry owns which routes exist and which pathname belongs to
+// which; this module only says what to warm for the ones that have a loader.
+type PrewarmRouteId = DashboardRouteId | '/accept-invitation/$id'
 
 type RoutePrewarmContext = {
   queryClient: QueryClient
   url: URL
-  pathname: string
-  match: RegExpMatchArray
+  /** Decoded `$param` values of the matched route. */
+  params: Record<string, string>
 }
 
-type RoutePrewarmSpec = {
-  id: string
-  match: RegExp
-  prewarm: (context: RoutePrewarmContext) => Promise<void>
-}
-
-function query(options: PrewarmQuery) {
-  return {
-    staleTime: DEFAULT_PREWARM_STALE_TIME_MS,
-    ...options,
-  }
-}
-
-function prewarmQueries(
-  queryClient: QueryClient,
-  queries: Array<PrewarmQuery | null | undefined>,
-) {
-  return prewarmRouteQueries(queryClient, queries)
-}
+type RoutePrewarm = (context: RoutePrewarmContext) => Promise<void>
 
 function dashboardOrgId() {
   return getStoredDashboardOrganizationId()
@@ -133,369 +114,140 @@ function dashboardUnitId() {
   return Number.isFinite(unitId) && unitId > 0 ? unitId : null
 }
 
-function segment(match: RegExpMatchArray, index = 1) {
-  const value = match[index]
-  return value ? decodeURIComponent(value) : ''
+function param({ params }: RoutePrewarmContext, name: string) {
+  return params[name] ?? ''
 }
 
-function maybeOrgQuery(
-  factory: (organizationId: string) => PrewarmQuery | null | undefined,
-) {
-  const organizationId = dashboardOrgId()
-  return organizationId ? factory(organizationId) : null
+const routePrewarms: Partial<Record<PrewarmRouteId, RoutePrewarm>> = {
+  '/dashboard': ({ queryClient }) => prewarmDashboardIndex(queryClient),
+  '/dashboard/jobs': ({ queryClient, url }) =>
+    prewarmJobsIndex(queryClient, url),
+  '/dashboard/clients': ({ queryClient, url }) =>
+    prewarmCustomersIndex(queryClient, url),
+  '/dashboard/assets': async ({ queryClient, url }) => {
+    const organizationId = dashboardOrgId()
+    await Promise.all([
+      prewarmAssetsIndex(queryClient, url),
+      organizationId
+        ? prewarmCustomersSearch(queryClient, organizationId)
+        : null,
+    ])
+  },
+  '/dashboard/standards': ({ queryClient, url }) =>
+    prewarmStandardsIndex(queryClient, url),
+  '/dashboard/services': ({ queryClient, url }) =>
+    prewarmServicesIndex(queryClient, url),
+  '/dashboard/methods': ({ queryClient, url }) =>
+    prewarmMethodsIndex(queryClient, url),
+  '/dashboard/service-orders': ({ queryClient, url }) =>
+    prewarmServiceOrdersIndex(queryClient, url),
+  '/dashboard/requests': ({ queryClient, url }) =>
+    prewarmRequestsIndex(queryClient, url),
+  '/dashboard/personnel': ({ queryClient, url }) =>
+    prewarmPersonnelIndex(queryClient, url),
+  '/dashboard/nc': ({ queryClient, url }) =>
+    prewarmNonConformancesIndex(queryClient, url),
+  '/dashboard/capa': ({ queryClient, url }) =>
+    prewarmCapasIndex(queryClient, url),
+  '/dashboard/finance': ({ queryClient }) =>
+    prewarmFinanceOverview(queryClient),
+  '/dashboard/finance/documents': ({ queryClient, url }) =>
+    prewarmFinanceDocuments(queryClient, url),
+  '/dashboard/finance/contracts': ({ queryClient, url }) =>
+    prewarmFinanceContracts(queryClient, url),
+  '/dashboard/finance/receipts': ({ queryClient }) =>
+    prewarmFinanceReceipts(queryClient),
+  '/dashboard/finance/erp': ({ queryClient }) => prewarmFinanceErp(queryClient),
+  '/dashboard/jobs/new': ({ queryClient }) => prewarmNewJob(queryClient),
+  '/dashboard/service-orders/new': ({ queryClient }) =>
+    prewarmNewServiceOrder(queryClient),
+  '/dashboard/personnel/new': ({ queryClient }) =>
+    prewarmNewCompetence(queryClient),
+  '/dashboard/assets/new': ({ queryClient }) => prewarmNewAsset(queryClient),
+  '/dashboard/services/new': ({ queryClient }) =>
+    prewarmNewService(queryClient),
+  '/dashboard/nc/new': ({ queryClient }) =>
+    prewarmNewNonConformance(queryClient),
+  '/dashboard/capa/new': ({ queryClient }) => prewarmNewCapa(queryClient),
+  '/dashboard/finance/documents/new': ({ queryClient }) =>
+    prewarmNewFinanceDocument(queryClient),
+  '/dashboard/finance/contracts/new': ({ queryClient }) =>
+    prewarmNewFinanceContract(queryClient),
+  '/dashboard/assets/$id': (context) =>
+    prewarmAssetDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/assets/$id/edit': (context) =>
+    prewarmAssetEdit(context.queryClient, param(context, 'id')),
+  '/dashboard/clients/$id': (context) =>
+    prewarmCustomerDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/clients/$id/info': (context) =>
+    prewarmCustomerDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/clients/$id/assets': (context) =>
+    prewarmCustomerAssets(context.queryClient, param(context, 'id')),
+  '/dashboard/clients/$id/calibrations': (context) =>
+    prewarmCustomerDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/clients/$id/compliance': (context) =>
+    prewarmCustomerCompliance(context.queryClient, param(context, 'id')),
+  '/dashboard/clients/$id/users': (context) =>
+    prewarmCustomerUsers(context.queryClient, param(context, 'id')),
+  '/dashboard/jobs/$id': (context) =>
+    prewarmJobDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/jobs/$id/execute': (context) =>
+    prewarmJobExecute(context.queryClient, param(context, 'id')),
+  '/dashboard/standards/$id': (context) =>
+    prewarmStandardDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/standards/$id/edit': (context) =>
+    prewarmStandardDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/services/$id': (context) =>
+    prewarmServiceDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/services/$id/edit': (context) =>
+    prewarmServiceEdit(context.queryClient, param(context, 'id')),
+  '/dashboard/methods/$id': (context) =>
+    prewarmMethodDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/methods/$id/edit': (context) =>
+    prewarmMethodEdit(context.queryClient, param(context, 'id')),
+  '/dashboard/service-orders/$publicId': (context) =>
+    prewarmServiceOrderDetail(context.queryClient, param(context, 'publicId')),
+  '/dashboard/requests/$id': (context) =>
+    prewarmRequestDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/personnel/$id': (context) =>
+    prewarmCompetenceDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/personnel/$id/training': (context) =>
+    prewarmCompetenceDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/personnel/$id/audit': (context) =>
+    prewarmCompetenceAudit(context.queryClient, param(context, 'id')),
+  '/dashboard/nc/$id': (context) =>
+    prewarmNonConformanceDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/capa/$id': (context) =>
+    prewarmCapaDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/finance/documents/$id': (context) =>
+    prewarmFinanceDocumentDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/finance/contracts/$id': (context) =>
+    prewarmFinanceContractDetail(context.queryClient, param(context, 'id')),
+  '/dashboard/reports': ({ queryClient }) =>
+    prewarmReportsIndex(queryClient, dashboardOrgId()),
+  '/dashboard/settings/authentication': ({ queryClient }) =>
+    prewarmAuthenticationSettings(queryClient, dashboardOrgId()),
+  '/dashboard/settings/certificate-numbering': ({ queryClient }) =>
+    prewarmCertificateNumberingSettings(queryClient),
+  '/dashboard/settings/certificates': ({ queryClient }) =>
+    prewarmCertificateSettings(queryClient),
+  '/dashboard/settings/signature': ({ queryClient }) =>
+    prewarmSignatureSettings(queryClient),
+  '/dashboard/settings/portal-domain': ({ queryClient }) =>
+    prewarmPortalDomainSettings(queryClient),
+  '/dashboard/settings/environment': ({ queryClient }) =>
+    prewarmEnvironmentSettings(queryClient, dashboardUnitId()),
+  '/dashboard/settings/notifications': ({ queryClient }) =>
+    prewarmNotificationSettings(queryClient),
+  '/accept-invitation/$id': (context) =>
+    prewarmInvitation(context.queryClient, param(context, 'id')),
 }
 
-function customersSearchQuery(organizationId: string, search = '') {
-  return query({
-    queryKey: ['customers', organizationId, 'search', search],
-    queryFn: async () =>
-      calibraApi.customers.list({
-        page: 1,
-        limit: 50,
-        query: search || undefined,
-      }),
-    staleTime: 30_000,
-  })
-}
-
-const routePrewarmSpecs: RoutePrewarmSpec[] = [
-  {
-    id: 'dashboard:index',
-    match: /^\/dashboard\/?$/,
-    prewarm: ({ queryClient }) => prewarmDashboardIndex(queryClient),
-  },
-  {
-    id: 'dashboard:jobs:index',
-    match: /^\/dashboard\/jobs\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmJobsIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:clients:index',
-    match: /^\/dashboard\/clients\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmCustomersIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:assets:index',
-    match: /^\/dashboard\/assets\/?$/,
-    prewarm: async ({ queryClient, url }) => {
-      await Promise.all([
-        prewarmAssetsIndex(queryClient, url),
-        prewarmQueries(queryClient, [
-          maybeOrgQuery((organizationId) =>
-            customersSearchQuery(organizationId),
-          ),
-        ]),
-      ])
-    },
-  },
-  {
-    id: 'dashboard:standards:index',
-    match: /^\/dashboard\/standards\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmStandardsIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:services:index',
-    match: /^\/dashboard\/services\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmServicesIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:methods:index',
-    match: /^\/dashboard\/methods\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmMethodsIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:service-orders:index',
-    match: /^\/dashboard\/service-orders\/?$/,
-    prewarm: ({ queryClient, url }) =>
-      prewarmServiceOrdersIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:requests:index',
-    match: /^\/dashboard\/requests\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmRequestsIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:personnel:index',
-    match: /^\/dashboard\/personnel\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmPersonnelIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:nc:index',
-    match: /^\/dashboard\/nc\/?$/,
-    prewarm: ({ queryClient, url }) =>
-      prewarmNonConformancesIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:capa:index',
-    match: /^\/dashboard\/capa\/?$/,
-    prewarm: ({ queryClient, url }) => prewarmCapasIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:finance:index',
-    match: /^\/dashboard\/finance\/?$/,
-    prewarm: ({ queryClient }) => prewarmFinanceOverview(queryClient),
-  },
-  {
-    id: 'dashboard:finance:documents:index',
-    match: /^\/dashboard\/finance\/documents\/?$/,
-    prewarm: ({ queryClient, url }) =>
-      prewarmFinanceDocuments(queryClient, url),
-  },
-  {
-    id: 'dashboard:finance:contracts:index',
-    match: /^\/dashboard\/finance\/contracts\/?$/,
-    prewarm: ({ queryClient, url }) =>
-      prewarmFinanceContracts(queryClient, url),
-  },
-  {
-    id: 'dashboard:finance:receipts',
-    match: /^\/dashboard\/finance\/receipts\/?$/,
-    prewarm: ({ queryClient }) => prewarmFinanceReceipts(queryClient),
-  },
-  {
-    id: 'dashboard:finance:erp',
-    match: /^\/dashboard\/finance\/erp\/?$/,
-    prewarm: ({ queryClient }) => prewarmFinanceErp(queryClient),
-  },
-  {
-    id: 'dashboard:jobs:new',
-    match: /^\/dashboard\/jobs\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewJob(queryClient),
-  },
-  {
-    id: 'dashboard:service-orders:new',
-    match: /^\/dashboard\/service-orders\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewServiceOrder(queryClient),
-  },
-  {
-    id: 'dashboard:personnel:new',
-    match: /^\/dashboard\/personnel\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewCompetence(queryClient),
-  },
-  {
-    id: 'dashboard:assets:new',
-    match: /^\/dashboard\/assets\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewAsset(queryClient),
-  },
-  {
-    id: 'dashboard:services:new',
-    match: /^\/dashboard\/services\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewService(queryClient),
-  },
-  {
-    id: 'dashboard:nc:new',
-    match: /^\/dashboard\/nc\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewNonConformance(queryClient),
-  },
-  {
-    id: 'dashboard:capa:new',
-    match: /^\/dashboard\/capa\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewCapa(queryClient),
-  },
-  {
-    id: 'dashboard:finance:documents:new',
-    match: /^\/dashboard\/finance\/documents\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewFinanceDocument(queryClient),
-  },
-  {
-    id: 'dashboard:finance:contracts:new',
-    match: /^\/dashboard\/finance\/contracts\/new\/?$/,
-    prewarm: ({ queryClient }) => prewarmNewFinanceContract(queryClient),
-  },
-  {
-    id: 'dashboard:asset-detail',
-    match: /^\/dashboard\/assets\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmAssetDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:asset-edit',
-    match: /^\/dashboard\/assets\/([^/]+)\/edit\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmAssetEdit(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:client-detail',
-    match: /^\/dashboard\/clients\/([^/]+)(?:\/(?:info)?)?\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCustomerDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:client-assets',
-    match: /^\/dashboard\/clients\/([^/]+)\/assets\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCustomerAssets(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:client-calibrations',
-    match: /^\/dashboard\/clients\/([^/]+)\/calibrations\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCustomerDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:client-compliance',
-    match: /^\/dashboard\/clients\/([^/]+)\/compliance\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCustomerCompliance(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:client-users',
-    match: /^\/dashboard\/clients\/([^/]+)\/users\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCustomerUsers(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:job-detail',
-    match: /^\/dashboard\/jobs\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmJobDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:job-execute',
-    match: /^\/dashboard\/jobs\/([^/]+)\/execute\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmJobExecute(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:standard-detail',
-    match: /^\/dashboard\/standards\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmStandardDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:standard-edit',
-    match: /^\/dashboard\/standards\/([^/]+)\/edit\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmStandardDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:service-detail',
-    match: /^\/dashboard\/services\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmServiceDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:service-edit',
-    match: /^\/dashboard\/services\/([^/]+)\/edit\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmServiceEdit(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:method-detail',
-    match: /^\/dashboard\/methods\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmMethodDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:method-edit',
-    match: /^\/dashboard\/methods\/([^/]+)\/edit\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmMethodEdit(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:service-order-detail',
-    match: /^\/dashboard\/service-orders\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmServiceOrderDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:request-detail',
-    match: /^\/dashboard\/requests\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmRequestDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:competence-detail',
-    match: /^\/dashboard\/personnel\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCompetenceDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:competence-training',
-    match: /^\/dashboard\/personnel\/([^/]+)\/training\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCompetenceDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:competence-audit',
-    match: /^\/dashboard\/personnel\/([^/]+)\/audit\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCompetenceAudit(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:nc-detail',
-    match: /^\/dashboard\/nc\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmNonConformanceDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:capa-detail',
-    match: /^\/dashboard\/capa\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmCapaDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:finance:document-detail',
-    match: /^\/dashboard\/finance\/documents\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmFinanceDocumentDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:finance:contract-detail',
-    match: /^\/dashboard\/finance\/contracts\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmFinanceContractDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:reports',
-    match: /^\/dashboard\/reports\/?$/,
-    prewarm: ({ queryClient }) =>
-      prewarmReportsIndex(queryClient, dashboardOrgId()),
-  },
-  {
-    id: 'dashboard:settings:authentication',
-    match: /^\/dashboard\/settings\/authentication\/?$/,
-    prewarm: ({ queryClient }) =>
-      prewarmAuthenticationSettings(queryClient, dashboardOrgId()),
-  },
-  {
-    id: 'dashboard:settings:certificate-numbering',
-    match: /^\/dashboard\/settings\/certificate-numbering\/?$/,
-    prewarm: ({ queryClient }) =>
-      prewarmCertificateNumberingSettings(queryClient),
-  },
-  {
-    id: 'dashboard:settings:certificates',
-    match: /^\/dashboard\/settings\/certificates\/?$/,
-    prewarm: ({ queryClient }) => prewarmCertificateSettings(queryClient),
-  },
-  {
-    id: 'dashboard:settings:signature',
-    match: /^\/dashboard\/settings\/signature\/?$/,
-    prewarm: ({ queryClient }) => prewarmSignatureSettings(queryClient),
-  },
-  {
-    id: 'dashboard:settings:portal-domain',
-    match: /^\/dashboard\/settings\/portal-domain\/?$/,
-    prewarm: ({ queryClient }) => prewarmPortalDomainSettings(queryClient),
-  },
-  {
-    id: 'dashboard:settings:environment',
-    match: /^\/dashboard\/settings\/environment\/?$/,
-    prewarm: ({ queryClient }) =>
-      prewarmEnvironmentSettings(queryClient, dashboardUnitId()),
-  },
-  {
-    id: 'dashboard:settings:notifications',
-    match: /^\/dashboard\/settings\/notifications\/?$/,
-    prewarm: ({ queryClient }) => prewarmNotificationSettings(queryClient),
-  },
-  {
-    id: 'accept-invitation',
-    match: /^\/accept-invitation\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmInvitation(queryClient, segment(match)),
-  },
+// Matched against every route, not just the ones with a loader, so a static
+// page (`/dashboard/clients/new`) is not taken for a `$id` one.
+const routePatterns: readonly PrewarmRouteId[] = [
+  ...listDashboardRouteIds(),
+  '/accept-invitation/$id',
 ]
 
 const prewarmState = new Map<
@@ -506,31 +258,21 @@ const prewarmState = new Map<
 export function prewarmRouteDataForPath(url: URL, queryClient: QueryClient) {
   if (isDesktopRuntime()) return
 
-  const specMatch = routePrewarmSpecs
-    .map((candidate) => ({
-      spec: candidate,
-      match: url.pathname.match(candidate.match),
-    }))
-    .find((candidate) => candidate.match)
+  const match = matchRoutePath(url.pathname, routePatterns)
+  const prewarm = match ? routePrewarms[match.pattern] : undefined
+  if (!match || !prewarm) return
 
-  if (!specMatch?.match) return
-
-  const stateKey = `${specMatch.spec.id}:${url.pathname}${url.search}`
+  const stateKey = `${match.pattern}:${url.pathname}${url.search}`
   const existing = prewarmState.get(stateKey)
   if (existing && Date.now() - existing.lastStartedAt < PREWARM_COOLDOWN_MS) {
     return existing.promise
   }
 
-  const promise = specMatch.spec
-    .prewarm({
-      queryClient,
-      url,
-      pathname: url.pathname,
-      match: specMatch.match,
-    })
-    .catch(() => {
+  const promise = prewarm({ queryClient, url, params: match.params }).catch(
+    () => {
       // Prewarming is opportunistic; navigation should own user-facing errors.
-    })
+    },
+  )
 
   prewarmState.set(stateKey, {
     lastStartedAt: Date.now(),

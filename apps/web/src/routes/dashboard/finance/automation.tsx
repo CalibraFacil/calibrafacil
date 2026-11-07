@@ -1,10 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { FinanceAutomationHubPage } from '@/features/finance/automation-hub-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/finance/automation')({
-  head: () => ({
-    meta: [{ title: 'Automação financeira | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/finance/automation'),
   component: FinanceAutomationHubPage,
 })

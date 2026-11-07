@@ -7,6 +7,7 @@ import {
   loadFinanceReceiptsData,
 } from '@/features/finance/queries'
 import { routeLocationToUrl } from '@/lib/route-data'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/finance/receivables/')({
   validateSearch: parseReceivablesSearch,
@@ -18,9 +19,7 @@ export const Route = createFileRoute('/dashboard/finance/receivables/')({
       ),
       loadFinanceReceiptsData(context.queryClient),
     ]),
-  head: () => ({
-    meta: [{ title: 'Recebíveis | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/finance/receivables'),
   component: FinanceReceivablesRoute,
 })
 

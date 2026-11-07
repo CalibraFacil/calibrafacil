@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { CustomerGroupUnidadesTab } from '@/features/customer-groups/unidades-page'
 import { loadCustomerGroupDetailData } from '@/features/customer-groups/queries'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute(
   '/dashboard/clients/groups/$groupId/unidades',
@@ -11,9 +12,7 @@ export const Route = createFileRoute(
       context.queryClient,
       Number.parseInt(params.groupId, 10),
     ),
-  head: () => ({
-    meta: [{ title: 'Grupo | Unidades | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/clients/groups/$groupId/unidades'),
   component: CustomerGroupUnidadesRoute,
 })
 

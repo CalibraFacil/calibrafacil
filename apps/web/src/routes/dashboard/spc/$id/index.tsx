@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { SpcChartPage } from '@/features/spc/chart-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/spc/$id/')({
-  head: () => ({
-    meta: [{ title: 'Carta de Controle | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/spc/$id'),
   component: SpcChartDetailRoute,
 })
 

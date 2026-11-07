@@ -2,13 +2,12 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { CompetenceDetailPage } from '@/features/personnel/detail-page'
 import { loadCompetenceDetailData } from '@/features/personnel/queries'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/personnel/$id/')({
   loader: ({ context, params }) =>
     loadCompetenceDetailData(context.queryClient, params.id),
-  head: () => ({
-    meta: [{ title: 'Detalhes da Competência | CalibraFacil' }],
-  }),
+  head: () => routeHead('/dashboard/personnel/$id'),
   component: CompetenceDetailRoute,
 })
 

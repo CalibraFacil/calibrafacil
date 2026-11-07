@@ -1,13 +1,11 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { getDashboardRedirectPath } from '@/app/router/route-meta'
+import { getDashboardRedirectTarget } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/settings/branding')({
   beforeLoad: () => {
     throw redirect({
-      to:
-        getDashboardRedirectPath('/dashboard/settings/branding') ??
-        '/dashboard/settings',
+      to: getDashboardRedirectTarget('/dashboard/settings/branding'),
     })
   },
 })

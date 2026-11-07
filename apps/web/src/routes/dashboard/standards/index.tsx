@@ -5,14 +5,13 @@ import { validateOnboardingSearch } from '@/features/onboarding/search'
 import { StandardsListPage } from '@/features/standards/list-page'
 import { loadStandardsIndexData } from '@/features/standards/queries'
 import { routeLocationToUrl } from '@/lib/route-data'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/standards/')({
   validateSearch: validateOnboardingSearch,
   loader: ({ context, location }) =>
     loadStandardsIndexData(context.queryClient, routeLocationToUrl(location)),
-  head: () => ({
-    meta: [{ title: 'Padroes de Referencia | CalibraFacil' }],
-  }),
+  head: () => routeHead('/dashboard/standards'),
   component: StandardsListPageRoute,
 })
 

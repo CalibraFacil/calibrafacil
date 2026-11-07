@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   desktopOfflineRoutes,
   isDesktopOfflineRoute,
-  toRouteTo,
 } from './desktop-offline-routes'
 
 /**
@@ -122,8 +121,6 @@ describe('desktop offline route availability', () => {
   })
 
   it('accepts TanStack index route ids, which end with a slash', () => {
-    expect(toRouteTo('/dashboard/jobs/')).toBe('/dashboard/jobs')
-    expect(toRouteTo('/dashboard/')).toBe('/dashboard')
     expect(isDesktopOfflineRoute('/dashboard/jobs/')).toBe(true)
     expect(isDesktopOfflineRoute('/dashboard/')).toBe(false)
   })

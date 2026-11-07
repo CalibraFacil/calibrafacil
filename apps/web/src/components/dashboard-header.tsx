@@ -12,6 +12,7 @@ import {
 } from '@calibra-facil/ui/breadcrumb'
 import { Separator } from '@calibra-facil/ui/separator'
 import { SidebarTrigger } from '@calibra-facil/ui/sidebar'
+import { getDashboardRouteTitle } from '@/app/router/route-registry'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import {
   useAssetLabelData,
@@ -30,155 +31,6 @@ import {
   DesktopDataSourceIndicator,
   DesktopSyncButton,
 } from '@/runtime/sync-status'
-
-const routeLabels: Record<string, string> = {
-  // Dashboard
-  '/dashboard': 'Painel de Controle',
-
-  // Settings
-  '/dashboard/settings': 'Configurações',
-  '/dashboard/settings/profile': 'Perfil',
-  '/dashboard/settings/organization': 'Organização',
-  '/dashboard/settings/portal-domain': 'Portal Domain',
-  '/dashboard/settings/email-domain': 'Domínio de E-mail',
-  '/dashboard/settings/branding': 'Branding',
-  '/dashboard/settings/notifications': 'Notificações',
-  '/dashboard/settings/security': 'Segurança',
-  '/dashboard/settings/authentication': 'Autenticação',
-  '/dashboard/settings/passkeys': 'Passkeys',
-  '/dashboard/settings/integrations': 'Integrações',
-  '/dashboard/settings/appearance': 'Aparência',
-  '/dashboard/settings/signature': 'Assinatura',
-  '/dashboard/settings/certificates': 'Certificados ICP',
-  '/dashboard/settings/certificate-numbering': 'Numeração de Certificados',
-  '/dashboard/settings/danger': 'Zona de Perigo',
-  '/dashboard/finance': 'Financeiro',
-  '/dashboard/finance/billing-readiness': 'Pronto para faturar',
-  '/dashboard/finance/receivables': 'Recebíveis',
-  '/dashboard/finance/documents': 'Documentos financeiros',
-  '/dashboard/finance/documents/new': 'Nova cobrança',
-  '/dashboard/finance/documents/$id': 'Documento financeiro',
-  '/dashboard/finance/receipts': 'Recebimentos',
-  '/dashboard/finance/contracts': 'Contratos comerciais',
-  '/dashboard/finance/contracts/new': 'Novo contrato comercial',
-  '/dashboard/finance/contracts/$id': 'Contrato comercial',
-  '/dashboard/finance/analytics': 'Análises financeiras',
-  '/dashboard/finance/automation': 'Automação financeira',
-  '/dashboard/finance/erp': 'ERP financeiro',
-  '/dashboard/finance/cash-forecast': 'Previsão de caixa',
-  '/dashboard/finance/margin-dashboards': 'Painel de margens',
-  '/dashboard/finance/operations-to-cash': 'Operação ao caixa',
-  '/dashboard/finance/revenue-leakage': 'Alertas de receita',
-
-  // Clients
-  '/dashboard/clients': 'Clientes',
-  '/dashboard/clients/new': 'Novo Cliente',
-  '/dashboard/clients/groups': 'Grupos de Clientes',
-  '/dashboard/clients/groups/$groupId': 'Grupo',
-  '/dashboard/clients/groups/$groupId/overview': 'Visão geral',
-  '/dashboard/clients/groups/$groupId/unidades': 'Unidades',
-  '/dashboard/clients/groups/$groupId/gestor': 'Gestor',
-  '/dashboard/clients/$id': 'Cliente',
-  '/dashboard/clients/$id/overview': 'Visão geral',
-  '/dashboard/clients/$id/info': 'Informações',
-  '/dashboard/clients/$id/users': 'Usuários',
-  '/dashboard/clients/$id/assets': 'Ativos',
-  '/dashboard/clients/$id/calibrations': 'Calibrações',
-  '/dashboard/clients/$id/compliance': 'Conformidade',
-
-  // Assets
-  '/dashboard/assets': 'Ativos',
-  '/dashboard/assets/new': 'Novo Ativo',
-  '/dashboard/assets/$id': 'Ativo',
-  '/dashboard/assets/$id/edit': 'Editar Ativo',
-
-  // Methods
-  '/dashboard/methods': 'Métodos de Calibração',
-  '/dashboard/methods/new': 'Novo Método',
-  '/dashboard/methods/from-template': 'A partir de modelo',
-  '/dashboard/methods/$id': 'Método',
-  '/dashboard/methods/$id/edit': 'Editar Método',
-
-  // Calibration jobs
-  '/dashboard/jobs': 'Calibrações',
-  '/dashboard/service-orders': 'Ordens de Serviço',
-  '/dashboard/service-orders/new': 'Nova OS',
-  '/dashboard/service-orders/$publicId': 'Ordem de Serviço',
-  '/dashboard/jobs/new': 'Nova Calibração',
-  '/dashboard/jobs/$id': 'Calibração',
-  '/dashboard/jobs/$id/execute': 'Executar',
-
-  // Reports
-  '/dashboard/reports': 'Relatórios',
-
-  // Calibration Requests
-  '/dashboard/requests': 'Solicitações de Calibração',
-  '/dashboard/requests/$id': 'Solicitação',
-
-  // Services
-  '/dashboard/services': 'Serviços',
-  '/dashboard/services/new': 'Novo Serviço',
-  '/dashboard/services/$id': 'Serviço',
-  '/dashboard/services/$id/edit': 'Editar Serviço',
-
-  // Materials
-  '/dashboard/materials': 'Materiais',
-  '/dashboard/materials/new': 'Novo Material',
-  '/dashboard/materials/$id': 'Material',
-  '/dashboard/materials/$id/edit': 'Editar Material',
-
-  // Standards
-  '/dashboard/standards': 'Padrões',
-  '/dashboard/standards/new': 'Novo Padrão',
-  '/dashboard/standards/composition-profiles': 'Perfis de composição',
-  '/dashboard/standards/$id': 'Padrão',
-  '/dashboard/standards/$id/edit': 'Editar Padrão',
-
-  // Non-Conformances
-  '/dashboard/nc': 'Não Conformidades',
-  '/dashboard/nc/new': 'Registrar NC',
-  '/dashboard/nc/$id': 'Não Conformidade',
-
-  // CAPA
-  '/dashboard/capa': 'Ações Corretivas (CAPA)',
-  '/dashboard/capa/new': 'Nova CAPA',
-  '/dashboard/capa/$id': 'CAPA',
-
-  // Personnel Competences
-  '/dashboard/personnel': 'Competências do Pessoal',
-  '/dashboard/personnel/new': 'Nova Solicitação',
-  '/dashboard/personnel/$id': 'Competência',
-  '/dashboard/personnel/$id/training': 'Treinamentos',
-  '/dashboard/personnel/$id/audit': 'Histórico',
-
-  // Proficiency tests
-  '/dashboard/proficiency-tests': 'Ensaios de Proficiência',
-  '/dashboard/proficiency-tests/new': 'Novo Ensaio',
-  '/dashboard/proficiency-tests/plan': 'Plano de Participação',
-  '/dashboard/proficiency-tests/$id': 'Ensaio',
-
-  // Control charts (SPC)
-  '/dashboard/spc': 'Cartas de Controle',
-  '/dashboard/spc/$id': 'Carta',
-
-  // Visits
-  '/dashboard/visits': 'Visitas',
-  '/dashboard/visits/$id': 'Visita',
-
-  // Sync
-  '/dashboard/sync/conflicts': 'Conflitos de Sincronização',
-
-  // Certificate Templates
-
-  // Settings (extra pages)
-  '/dashboard/settings/accredited-scope': 'Escopo Acreditado',
-  '/dashboard/settings/automatic-send': 'Envio Automático',
-  '/dashboard/settings/certificate-release': 'Liberação de Certificados',
-  '/dashboard/settings/environment': 'Condições Ambientais',
-  '/dashboard/settings/members': 'Membros e Convites',
-  '/dashboard/settings/units': 'Unidades e Governança',
-  '/dashboard/settings/integrations/drift': 'Divergências de Integração',
-}
 
 function getCachedLabel(
   queryClient: { getQueryData: (queryKey: readonly unknown[]) => unknown },
@@ -564,7 +416,7 @@ export function DashboardHeader({
             ? m.routeId.slice(0, -1)
             : m.routeId
 
-          let label = routeLabels[normalizedRouteId]
+          let label = getDashboardRouteTitle(normalizedRouteId)
 
           // Entity routes end in a dynamic segment — $id, $publicId, whatever
           // the route names it. Swap the raw segment for the entity's own name

@@ -2,13 +2,12 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { EditMethodPage } from '@/features/methods/edit-page'
 import { loadMethodEditData } from '@/features/methods/queries'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/methods/$id/edit')({
   loader: ({ context, params }) =>
     loadMethodEditData(context.queryClient, params.id),
-  head: () => ({
-    meta: [{ title: 'Editar Método | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/methods/$id/edit'),
   component: EditMethodRoute,
 })
 

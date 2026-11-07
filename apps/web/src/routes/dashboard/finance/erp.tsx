@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { FinanceErpPage } from '@/features/finance/erp-page'
 import { loadFinanceErpData } from '@/features/finance/queries'
+import { routeHead } from '@/app/router/route-registry'
 
 type ErpSearch = { export?: string }
 
@@ -17,9 +18,7 @@ function parseErpSearch(input: Record<string, unknown>): ErpSearch {
 export const Route = createFileRoute('/dashboard/finance/erp')({
   validateSearch: parseErpSearch,
   loader: ({ context }) => loadFinanceErpData(context.queryClient),
-  head: () => ({
-    meta: [{ title: 'ERP financeiro | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/finance/erp'),
   component: FinanceErpRoute,
 })
 

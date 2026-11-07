@@ -2,12 +2,11 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { validateOnboardingSearch } from '@/features/onboarding/search'
 import { CertificatesSettingsPage } from '@/features/settings/certificates-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/settings/certificates')({
   validateSearch: validateOnboardingSearch,
-  head: () => ({
-    meta: [{ title: 'Certificados ICP-Brasil | Configurações | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/settings/certificates'),
   component: CertificatesSettingsPageRoute,
 })
 

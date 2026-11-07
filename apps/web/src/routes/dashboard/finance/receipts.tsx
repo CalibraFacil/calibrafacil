@@ -1,13 +1,11 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { getDashboardRedirectPath } from '@/app/router/route-meta'
+import { getDashboardRedirectTarget } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/finance/receipts')({
   beforeLoad: () => {
     throw redirect({
-      to:
-        getDashboardRedirectPath('/dashboard/finance/receipts') ??
-        '/dashboard/finance/receivables',
+      to: getDashboardRedirectTarget('/dashboard/finance/receipts'),
     })
   },
 })

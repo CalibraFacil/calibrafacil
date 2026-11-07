@@ -71,6 +71,15 @@ function customersSearchQueryOptions(organizationId: string, search = '') {
   })
 }
 
+export async function prewarmCustomersSearch(
+  queryClient: QueryClient,
+  organizationId: string,
+) {
+  await prewarmRouteQueries(queryClient, [
+    customersSearchQueryOptions(organizationId),
+  ])
+}
+
 export function customerDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer', id],

@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { CustomerGroupOverviewTab } from '@/features/customer-groups/overview-page'
 import { loadCustomerGroupDetailData } from '@/features/customer-groups/queries'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute(
   '/dashboard/clients/groups/$groupId/overview',
@@ -11,9 +12,7 @@ export const Route = createFileRoute(
       context.queryClient,
       Number.parseInt(params.groupId, 10),
     ),
-  head: () => ({
-    meta: [{ title: 'Grupo | Visão geral | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/clients/groups/$groupId/overview'),
   component: CustomerGroupOverviewRoute,
 })
 

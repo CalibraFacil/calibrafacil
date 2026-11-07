@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { FinanceDocumentDetailsPage } from '@/features/finance/document-detail-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/finance/documents/$id')({
-  head: () => ({
-    meta: [{ title: 'Documento financeiro | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/finance/documents/$id'),
   component: FinanceDocumentDetailsRoute,
 })
 
