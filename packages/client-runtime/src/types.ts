@@ -5,6 +5,11 @@
 // the wire actually accepts.
 import type { z } from "zod";
 import type {
+  AssetStatus,
+  OotNotificationStatus,
+  ReferenceStandardStatus,
+} from "@calibra-facil/schemas/machines";
+import type {
   AdjustMaterialStockSchema,
   CreateAssetSchema,
   CreateCustomerSchema,
@@ -646,11 +651,7 @@ export interface MethodsApi {
   fromTemplate(input: MethodFromTemplateInput): Promise<MethodDetailData>;
 }
 
-export type StandardStatus =
-  | "ACTIVE"
-  | "INACTIVE"
-  | "OUT_OF_TOLERANCE"
-  | "SENT_FOR_CALIBRATION";
+export type StandardStatus = ReferenceStandardStatus;
 
 /** A standard as the list and the detail return it (contract type). */
 export type StandardData = Standard;
@@ -901,7 +902,7 @@ export type AssetsListInput = {
   query?: string;
 };
 
-export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
+export type { AssetStatus };
 
 export type AssetsListData = {
   data: Array<{
@@ -1183,7 +1184,7 @@ export type OotNotificationData = {
   recipientName: string | null;
   recipientEmail: string | null;
   affectedScope: string | null;
-  status: "PENDING" | "GENERATED" | "SENT" | "ACKNOWLEDGED";
+  status: OotNotificationStatus;
   pdfR2Key: string | null;
   sentAt: string | null;
   acknowledgedAt: string | null;

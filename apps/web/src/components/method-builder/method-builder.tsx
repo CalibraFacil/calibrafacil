@@ -10,7 +10,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@calibra-facil/ui/button'
-import { Badge } from '@calibra-facil/ui/badge'
+import { MethodStatusBadge } from '@/features/methods/components/method-status-badge'
 import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
@@ -99,14 +99,6 @@ const validationOperators: Array<MethodDraftValidation['operator']> = [
 const distributionOptions: Array<
   MethodDraftUncertaintyComponent['distribution']
 > = ['normal', 'rectangular', 'triangular', 'u-shaped']
-
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Rascunho',
-  PENDING_APPROVAL: 'Em aprovação',
-  TECHNICAL_REVIEWED: 'Revisão técnica',
-  PUBLISHED: 'Publicado',
-  ARCHIVED: 'Arquivado',
-}
 
 const SECTION_NAV = [
   { id: 'mb-identificacao', label: 'Identificação' },
@@ -371,11 +363,7 @@ export function MethodBuilder({
             <h1 className="text-xl font-semibold tracking-tight">
               {isNew ? 'Novo método' : 'Editar método'}
             </h1>
-            {!isNew ? (
-              <Badge variant="secondary">
-                {STATUS_LABELS[draft.status] ?? draft.status}
-              </Badge>
-            ) : null}
+            {!isNew ? <MethodStatusBadge status={draft.status} /> : null}
           </div>
           <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
             Edite o rascunho, compile as fórmulas e valide o preview no

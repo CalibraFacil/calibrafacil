@@ -20,53 +20,18 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@calibra-facil/ui/select'
-import { Badge } from '@calibra-facil/ui/badge'
 import { DataTable } from '@calibra-facil/ui/data-table'
-import { cn } from '@/lib/utils'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   COMPETENCES_LIST_LIMIT,
   useCompetencesListData,
   useCompetencesMatrixData,
 } from '@/features/personnel/queries'
-import {
-  competenceColumns,
-  getStatusBadge,
-} from '@/features/personnel/components/columns'
-import {
-  COMPETENCE_STATUSES,
-  type CompetencesMatrixData,
-  type CompetenceStatus,
-} from '@/features/personnel/types'
-type StatusFilter = CompetenceStatus | ''
+import { competenceColumns } from '@/features/personnel/components/columns'
+import { CompetenceStatusBadge } from '@/features/personnel/components/status-badges'
+import { COMPETENCE_STATUS } from '@calibra-facil/schemas/machines'
+import { type CompetencesMatrixData } from '@/features/personnel/types'
 type ViewMode = 'list' | 'matrix'
-
-const STATUS_LABELS: Record<CompetenceStatus, string> = {
-  REQUESTED: 'Solicitada',
-  TRAINING_ASSIGNED: 'Treinamento Atribuído',
-  IN_TRAINING: 'Em Treinamento',
-  PENDING_EVALUATION: 'Aguardando Avaliação',
-  ACTIVE: 'Ativa',
-  SUSPENDED: 'Suspensa',
-  EXPIRED: 'Expirada',
-  CANCELLED: 'Cancelada',
-}
-
-function parseStatusFilter(value: string | null): StatusFilter {
-  switch (value) {
-    case 'REQUESTED':
-    case 'TRAINING_ASSIGNED':
-    case 'IN_TRAINING':
-    case 'PENDING_EVALUATION':
-    case 'ACTIVE':
-    case 'SUSPENDED':
-    case 'EXPIRED':
-    case 'CANCELLED':
-      return value
-    default:
-      return ''
-  }
-}
 
 export function PersonnelPage() {
   const { activeOrganizationId, isContextSwitching } =
@@ -74,7 +39,7 @@ export function PersonnelPage() {
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...COMPETENCE_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...COMPETENCE_STATUS.states, '']).withDefault(''),
   )
   const [viewMode, setViewMode] = useState<ViewMode>('list')
 
@@ -155,7 +120,7 @@ export function PersonnelPage() {
                 <Select
                   value={statusFilter}
                   onValueChange={(v) => {
-                    setStatusFilter(parseStatusFilter(v))
+                    setStatusFilter(COMPETENCE_STATUS.parse(v) ?? '')
                     setPage(1)
                   }}
                 >
@@ -165,15 +130,15 @@ export function PersonnelPage() {
                   >
                     <span>
                       {statusFilter
-                        ? STATUS_LABELS[statusFilter]
+                        ? COMPETENCE_STATUS.label(statusFilter)
                         : 'Todos os Status'}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Todos os Status</SelectItem>
-                    {COMPETENCE_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {STATUS_LABELS[status]}
+                    {COMPETENCE_STATUS.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -337,19 +302,16 @@ function MatrixView({
                     </td>
                   )
                 }
-                const badge = getStatusBadge(comp.status)
                 return (
                   <td key={at.id} className="text-center py-3 px-2">
                     <Link
                       to="/dashboard/personnel/$id"
                       params={{ id: String(comp.id) }}
                     >
-                      <Badge
-                        variant={badge.variant}
-                        className={cn('cursor-pointer', badge.className)}
-                      >
-                        {badge.label}
-                      </Badge>
+                      <CompetenceStatusBadge
+                        status={comp.status}
+                        className="cursor-pointer"
+                      />
                     </Link>
                   </td>
                 )

@@ -66,12 +66,8 @@ import {
   parseControlChartForm,
   type ControlChartFormData,
 } from '@/features/spc/forms'
-import {
-  SPC_STATUSES,
-  SPC_STATUS_LABELS,
-  type SpcChartType,
-  type SpcStatus,
-} from '@/features/spc/types'
+import { type SpcChartType, type SpcStatus } from '@/features/spc/types'
+import { SPC_STATUS } from '@calibra-facil/schemas/machines'
 import { spcChartColumns } from '@/features/spc/components/spc-chart-columns'
 
 const CHART_TYPE_OPTIONS: Array<{
@@ -103,47 +99,30 @@ const CHART_TYPE_OPTIONS: Array<{
 
 const STATUS_TILES: Array<{
   status: SpcStatus
-  label: string
   icon: typeof Alert02Icon
   tone: (count: number) => SignalTone
 }> = [
   {
     status: 'in_control',
-    label: 'Sob controle',
     icon: CheckmarkCircle01Icon,
     tone: () => 'ok',
   },
   {
     status: 'trending',
-    label: 'Tendência',
     icon: Analytics01Icon,
     tone: (count) => (count > 0 ? 'warning' : 'neutral'),
   },
   {
     status: 'out_of_control',
-    label: 'Fora de controle',
     icon: Alert02Icon,
     tone: (count) => (count > 0 ? 'critical' : 'neutral'),
   },
   {
     status: 'insufficient_data',
-    label: 'Dados insuficientes',
     icon: AlertCircleIcon,
     tone: () => 'neutral',
   },
 ]
-
-function parseSpcStatusFilter(value: string | null): SpcStatus | '' {
-  switch (value) {
-    case 'insufficient_data':
-    case 'in_control':
-    case 'trending':
-    case 'out_of_control':
-      return value
-    default:
-      return ''
-  }
-}
 
 function numericStandardId(value: string): number | undefined {
   if (!value) return undefined
@@ -158,7 +137,7 @@ export function SpcOverviewPage() {
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...SPC_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...SPC_STATUS.states, '']).withDefault(''),
   )
   const [standardIdParam, setStandardIdParam] = useQueryState(
     'standardId',
@@ -256,7 +235,9 @@ export function SpcOverviewPage() {
                   aria-pressed={active}
                   onClick={() => toggleStatusFilter(tile.status)}
                   title={
-                    active ? 'Remover filtro' : `Filtrar por "${tile.label}"`
+                    active
+                      ? 'Remover filtro'
+                      : `Filtrar por "${SPC_STATUS.label(tile.status)}"`
                   }
                   className={cn(
                     'block w-full rounded-xl text-left transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -266,7 +247,7 @@ export function SpcOverviewPage() {
                 >
                   <SignalTile
                     icon={tile.icon}
-                    label={tile.label}
+                    label={SPC_STATUS.label(tile.status)}
                     value={count}
                     tone={tile.tone(count)}
                   />
@@ -284,25 +265,24 @@ export function SpcOverviewPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(parseSpcStatusFilter(v))
+                setStatusFilter(SPC_STATUS.parse(v) ?? '')
                 setPage(1)
               }}
             >
               <SelectTrigger aria-label="Filtrar por status" className="w-52">
                 <span>
                   {statusFilter
-                    ? SPC_STATUS_LABELS[statusFilter]
+                    ? SPC_STATUS.label(statusFilter)
                     : 'Todos os status'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos os status</SelectItem>
-                <SelectItem value="in_control">Sob controle</SelectItem>
-                <SelectItem value="trending">Tendência</SelectItem>
-                <SelectItem value="out_of_control">Fora de controle</SelectItem>
-                <SelectItem value="insufficient_data">
-                  Dados insuficientes
-                </SelectItem>
+                {SPC_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {standardId !== undefined && (

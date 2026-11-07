@@ -1,12 +1,6 @@
-const VISIT_STATUSES = [
-  'PROPOSED',
-  'CONFIRMED',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'CANCELLED',
-] as const
+import type { VisitStatus } from '@calibra-facil/schemas/machines'
 
-export type VisitStatus = (typeof VISIT_STATUSES)[number]
+export type { VisitStatus }
 
 export type VisitAddress = {
   cep?: string
@@ -95,25 +89,6 @@ export const PREFERRED_PERIOD_LABELS: Record<
   MORNING: 'Manhã',
   AFTERNOON: 'Tarde',
   ANY: 'Qualquer horário',
-}
-
-export const VISIT_STATUS_LABELS: Record<VisitStatus, string> = {
-  PROPOSED: 'Proposta',
-  CONFIRMED: 'Confirmada',
-  IN_PROGRESS: 'Em andamento',
-  COMPLETED: 'Concluída',
-  CANCELLED: 'Cancelada',
-}
-
-export const VISIT_STATUS_VARIANTS: Record<
-  VisitStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  PROPOSED: 'secondary',
-  CONFIRMED: 'default',
-  IN_PROGRESS: 'default',
-  COMPLETED: 'outline',
-  CANCELLED: 'destructive',
 }
 
 export function formatVisitAddress(address: VisitAddress): string {

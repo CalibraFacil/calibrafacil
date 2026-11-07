@@ -48,20 +48,11 @@ import { useCapaListData, useCapaSummaryData } from '@/features/quality/queries'
 import {
   CAPA_CATEGORIES,
   CAPA_SEVERITIES,
-  CAPA_STATUSES,
   type CapaCategory,
   type CapaSeverity,
-  type CapaStatus,
 } from '@/features/quality/types'
+import { CORRECTIVE_ACTION_STATUS } from '@calibra-facil/schemas/machines'
 import { capaColumns } from '@/features/quality/components/capa-columns'
-
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Abertas',
-  INVESTIGATION: 'Em Investigação',
-  IMPLEMENTATION: 'Implementação',
-  VERIFICATION: 'Verificação',
-  CLOSED: 'Fechadas',
-}
 
 const SEVERITY_LABELS: Record<string, string> = {
   minor: 'Menor',
@@ -76,19 +67,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   procedure: 'Procedimento',
   environment: 'Ambiente',
   other: 'Outro',
-}
-
-function parseCapaStatusFilter(value: string | null): CapaStatus | '' {
-  switch (value) {
-    case 'OPEN':
-    case 'INVESTIGATION':
-    case 'IMPLEMENTATION':
-    case 'VERIFICATION':
-    case 'CLOSED':
-      return value
-    default:
-      return ''
-  }
 }
 
 function parseCapaSeverityFilter(value: string | null): CapaSeverity | '' {
@@ -127,7 +105,9 @@ export function CAPAListPage() {
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...CAPA_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...CORRECTIVE_ACTION_STATUS.states, '']).withDefault(
+      '',
+    ),
   )
   const [severityFilter, setSeverityFilter] = useQueryState(
     'severity',
@@ -226,7 +206,7 @@ export function CAPAListPage() {
           <StaggerItem>
             <SignalTile
               icon={Clock01Icon}
-              label="Em investigação"
+              label={CORRECTIVE_ACTION_STATUS.label('INVESTIGATION')}
               value={getStatusCount('INVESTIGATION')}
               tone="info"
             />
@@ -234,7 +214,7 @@ export function CAPAListPage() {
           <StaggerItem>
             <SignalTile
               icon={Analytics01Icon}
-              label="Implementação"
+              label={CORRECTIVE_ACTION_STATUS.label('IMPLEMENTATION')}
               value={getStatusCount('IMPLEMENTATION')}
               tone="info"
             />
@@ -271,24 +251,24 @@ export function CAPAListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(parseCapaStatusFilter(v))
+                setStatusFilter(CORRECTIVE_ACTION_STATUS.parse(v) ?? '')
                 setPage(1)
               }}
             >
               <SelectTrigger aria-label="Filtrar por status" className="w-48">
                 <span>
                   {statusFilter
-                    ? STATUS_LABELS[statusFilter]
+                    ? CORRECTIVE_ACTION_STATUS.label(statusFilter)
                     : 'Todos os Status'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos os Status</SelectItem>
-                <SelectItem value="OPEN">Abertas</SelectItem>
-                <SelectItem value="INVESTIGATION">Em Investigação</SelectItem>
-                <SelectItem value="IMPLEMENTATION">Implementação</SelectItem>
-                <SelectItem value="VERIFICATION">Verificação</SelectItem>
-                <SelectItem value="CLOSED">Fechadas</SelectItem>
+                {CORRECTIVE_ACTION_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select

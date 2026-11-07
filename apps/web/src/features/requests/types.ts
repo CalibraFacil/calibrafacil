@@ -1,13 +1,6 @@
-export const CALIBRATION_REQUEST_STATUSES = [
-  'PENDING',
-  'UNDER_REVIEW',
-  'APPROVED',
-  'REJECTED',
-  'CONVERTED',
-] as const
+import type { CalibrationRequestStatus } from '@calibra-facil/schemas/machines'
 
-export type CalibrationRequestStatus =
-  (typeof CALIBRATION_REQUEST_STATUSES)[number]
+export type { CalibrationRequestStatus }
 
 export type CalibrationRequestListItem = {
   id: number

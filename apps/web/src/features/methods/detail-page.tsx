@@ -1,5 +1,9 @@
 import { Link } from '@tanstack/react-router'
-import { METHOD_MACHINE } from '@calibra-facil/schemas/machines'
+import {
+  METHOD_MACHINE,
+  METHOD_STATUS,
+  type MethodStatus,
+} from '@calibra-facil/schemas/machines'
 import { Fragment, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -17,6 +21,7 @@ import {
   useMethodDetailData,
 } from '@/features/methods/queries'
 import type { MethodDetail } from '@/features/methods/types'
+import { MethodStatusBadge } from '@/features/methods/components/method-status-badge'
 import {
   MethodSpecCounts,
   MethodSpecPreview,
@@ -54,43 +59,19 @@ type ReturnToDraftMutation = {
   isPending: boolean
 }
 
-const statusLabels: Record<string, string> = {
-  DRAFT: 'Rascunho',
-  PENDING_APPROVAL: 'Em aprovação',
-  TECHNICAL_REVIEWED: 'Revisão técnica',
-  PUBLISHED: 'Publicado',
-  ARCHIVED: 'Arquivado',
-}
-
-const statusVariants: Record<string, 'default' | 'secondary' | 'outline'> = {
-  DRAFT: 'secondary',
-  PENDING_APPROVAL: 'outline',
-  TECHNICAL_REVIEWED: 'outline',
-  PUBLISHED: 'default',
-  ARCHIVED: 'outline',
-}
-
 const LIFECYCLE = [
-  { key: 'DRAFT', label: 'Rascunho' },
-  { key: 'PENDING_APPROVAL', label: 'Em aprovação' },
-  { key: 'TECHNICAL_REVIEWED', label: 'Revisão técnica' },
-  { key: 'PUBLISHED', label: 'Publicado' },
-] as const
-
-function getStatusLabel(status: string) {
-  return statusLabels[status] ?? status
-}
-
-function getStatusVariant(status: string) {
-  return statusVariants[status] ?? 'outline'
-}
+  'DRAFT',
+  'PENDING_APPROVAL',
+  'TECHNICAL_REVIEWED',
+  'PUBLISHED',
+] as const satisfies readonly MethodStatus[]
 
 /** Horizontal approval-lifecycle stepper — governance at a glance. */
 function LifecycleStepper({ status }: { status: string }) {
   const archived = status === 'ARCHIVED'
   const currentIndex = archived
     ? LIFECYCLE.length - 1
-    : LIFECYCLE.findIndex((stage) => stage.key === status)
+    : LIFECYCLE.findIndex((stage) => stage === status)
 
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -99,7 +80,7 @@ function LifecycleStepper({ status }: { status: string }) {
         const active = index === currentIndex && !archived
         const isLast = index === LIFECYCLE.length - 1
         return (
-          <Fragment key={stage.key}>
+          <Fragment key={stage}>
             <div className="flex shrink-0 items-center gap-2">
               <span
                 className={cn(
@@ -132,7 +113,7 @@ function LifecycleStepper({ status }: { status: string }) {
                       : 'text-muted-foreground',
                 )}
               >
-                {stage.label}
+                {METHOD_STATUS.label(stage)}
               </span>
             </div>
             {!isLast && (
@@ -238,9 +219,7 @@ export function MethodDetailPage({ id }: { id: string }) {
                 {method.assetTypeName ? (
                   <Badge variant="outline">{method.assetTypeName}</Badge>
                 ) : null}
-                <Badge variant={getStatusVariant(method.status)}>
-                  {getStatusLabel(method.status)}
-                </Badge>
+                <MethodStatusBadge status={method.status} />
               </div>
               {method.description ? (
                 <p className="mt-1 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground">

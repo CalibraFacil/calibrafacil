@@ -1,15 +1,6 @@
-export const COMPETENCE_STATUSES = [
-  'REQUESTED',
-  'TRAINING_ASSIGNED',
-  'IN_TRAINING',
-  'PENDING_EVALUATION',
-  'ACTIVE',
-  'SUSPENDED',
-  'EXPIRED',
-  'CANCELLED',
-] as const
+import type { CompetenceStatus } from '@calibra-facil/schemas/machines'
 
-export type CompetenceStatus = (typeof COMPETENCE_STATUSES)[number]
+export type { CompetenceStatus }
 
 export type CompetenceRow = {
   id: number

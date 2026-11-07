@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Delete02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { ReferenceStandardKind } from '@calibra-facil/schemas'
+import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
 
 import {
   applyPastedCertifiedValues,
@@ -34,7 +35,6 @@ import {
   createStandardCertifiedValueDraft,
   createStandardChannelDraft,
   createStandardPointDraft,
-  STANDARD_STATUS_LABELS,
   type StandardCertifiedValueFormData,
   type StandardFormData,
   type StandardFormField,
@@ -58,18 +58,6 @@ function parseReferenceStandardKind(value: string): ReferenceStandardKind {
     METROLOGY_KIND_DEFINITIONS.find((definition) => definition.kind === value)
       ?.kind ?? 'generic_scalar'
   )
-}
-
-function parseStandardStatus(value: string): StandardFormData['status'] {
-  switch (value) {
-    case 'ACTIVE':
-    case 'INACTIVE':
-    case 'OUT_OF_TOLERANCE':
-    case 'SENT_FOR_CALIBRATION':
-      return value
-    default:
-      return 'ACTIVE'
-  }
 }
 
 function parseDegreesOfFreedomOperator(
@@ -832,13 +820,16 @@ export function StandardFormSections({
             className="w-full max-w-xs"
             value={formData.status}
             onChange={(event) =>
-              updateField('status', parseStandardStatus(event.target.value))
+              updateField(
+                'status',
+                REFERENCE_STANDARD_STATUS.parse(event.target.value) ?? 'ACTIVE',
+              )
             }
             disabled={disabled}
           >
-            {Object.entries(STANDARD_STATUS_LABELS).map(([value, label]) => (
-              <NativeSelectOption key={value} value={value}>
-                {label}
+            {REFERENCE_STANDARD_STATUS.options.map((option) => (
+              <NativeSelectOption key={option.value} value={option.value}>
+                {option.label}
               </NativeSelectOption>
             ))}
           </NativeSelect>

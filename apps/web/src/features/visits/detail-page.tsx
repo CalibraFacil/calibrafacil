@@ -12,9 +12,14 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
-import { VISIT_MACHINE, isVisitTerminal } from '@calibra-facil/schemas/machines'
+import {
+  VISIT_MACHINE,
+  VISIT_STATUS,
+  isVisitTerminal,
+} from '@calibra-facil/schemas/machines'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Input } from '@calibra-facil/ui/input'
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { Spinner } from '@calibra-facil/ui/spinner'
@@ -57,8 +62,6 @@ import { useVisitDetailData } from '@/features/visits/queries'
 import {
   formatVisitAddress,
   PREFERRED_PERIOD_LABELS,
-  VISIT_STATUS_LABELS,
-  VISIT_STATUS_VARIANTS,
   type VisitDetail,
   type VisitDetailJob,
   type VisitPendingRescheduleRequest,
@@ -312,9 +315,9 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
             <h1 className="text-2xl font-semibold tracking-tight">
               {visit.customerName}
             </h1>
-            <Badge variant={VISIT_STATUS_VARIANTS[visit.status]}>
-              {VISIT_STATUS_LABELS[visit.status]}
-            </Badge>
+            <StatusBadge tone={VISIT_STATUS.tone(visit.status)}>
+              {VISIT_STATUS.label(visit.status)}
+            </StatusBadge>
             {visit.customerConfirmedAt ? (
               <Badge variant="outline">Cliente confirmou ✓</Badge>
             ) : null}

@@ -2,7 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 
 import { calibraApi } from '@/utils/api'
+import {
+  ASSET_OOT_EVENT_STATUS,
+  type AssetOotEventStatus,
+} from '@calibra-facil/schemas/machines'
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Table,
@@ -16,7 +21,7 @@ import { formatInstant } from '@calibra-facil/shared/format'
 
 type CustomerOotEvent = {
   id: number
-  status: 'OPEN' | 'ASSESSED'
+  status: AssetOotEventStatus
   detectedAt: string
   assetId: number
   assetTag: string
@@ -121,7 +126,11 @@ export function CustomerOotEventsPanel({ customerId }: { customerId: string }) {
                       ) : null}
                     </div>
                   ) : (
-                    <Badge variant="outline">Pendente</Badge>
+                    <StatusBadge
+                      tone={ASSET_OOT_EVENT_STATUS.tone(event.status)}
+                    >
+                      {ASSET_OOT_EVENT_STATUS.label(event.status)}
+                    </StatusBadge>
                   )}
                 </TableCell>
               </TableRow>

@@ -41,10 +41,7 @@ import {
   STANDARDS_LIST_LIMIT,
   useStandardsListData,
 } from '@/features/standards/queries'
-import {
-  STANDARD_STATUSES,
-  type StandardStatus,
-} from '@/features/standards/types'
+import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
 
 export function StandardsListPage({
   onboardingStep,
@@ -62,7 +59,9 @@ export function StandardsListPage({
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...STANDARD_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...REFERENCE_STANDARD_STATUS.states, '']).withDefault(
+      '',
+    ),
   )
 
   const { data, isLoading, error } = useStandardsListData({
@@ -169,34 +168,24 @@ export function StandardsListPage({
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to standard statuses.
-                setStatusFilter(v as StandardStatus | '')
+                setStatusFilter(REFERENCE_STANDARD_STATUS.parse(v) ?? '')
                 setPage(1)
               }}
             >
               <SelectTrigger aria-label="Filtrar por status" className="w-48">
                 <span>
-                  {statusFilter === 'ACTIVE'
-                    ? 'Ativos'
-                    : statusFilter === 'INACTIVE'
-                      ? 'Inativos'
-                      : statusFilter === 'OUT_OF_TOLERANCE'
-                        ? 'Fora de Tolerancia'
-                        : statusFilter === 'SENT_FOR_CALIBRATION'
-                          ? 'Em Calibração'
-                          : 'Todos os Status'}
+                  {statusFilter
+                    ? REFERENCE_STANDARD_STATUS.label(statusFilter)
+                    : 'Todos os Status'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos os Status</SelectItem>
-                <SelectItem value="ACTIVE">Ativos</SelectItem>
-                <SelectItem value="INACTIVE">Inativos</SelectItem>
-                <SelectItem value="OUT_OF_TOLERANCE">
-                  Fora de Tolerancia
-                </SelectItem>
-                <SelectItem value="SENT_FOR_CALIBRATION">
-                  Em Calibração
-                </SelectItem>
+                {REFERENCE_STANDARD_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button type="submit" variant="secondary">

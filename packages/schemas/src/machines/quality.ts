@@ -1,5 +1,6 @@
 // The quality system's records as data (ISO/IEC 17025 §7.10 nonconforming
 // work, §8.7 corrective action).
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine } from "../state-machine";
 
 // corrective_action.status
@@ -22,6 +23,17 @@ export const CORRECTIVE_ACTION_STATUSES = [
 ] as const;
 export type CorrectiveActionStatus =
   (typeof CORRECTIVE_ACTION_STATUSES)[number];
+
+export const CORRECTIVE_ACTION_STATUS = defineStatusVocabulary(
+  CORRECTIVE_ACTION_STATUSES,
+  {
+    OPEN: { label: "Aberta", tone: "critical" },
+    INVESTIGATION: { label: "Em investigação", tone: "warning" },
+    IMPLEMENTATION: { label: "Implementação", tone: "info" },
+    VERIFICATION: { label: "Verificação", tone: "info" },
+    CLOSED: { label: "Fechada", tone: "ok" },
+  },
+);
 
 export const CORRECTIVE_ACTION_MACHINE = defineStateMachine({
   name: "corrective action",
@@ -60,6 +72,15 @@ export const NON_CONFORMANCE_STATUSES = [
 ] as const;
 export type NonConformanceStatus = (typeof NON_CONFORMANCE_STATUSES)[number];
 
+export const NON_CONFORMANCE_STATUS = defineStatusVocabulary(
+  NON_CONFORMANCE_STATUSES,
+  {
+    open: { label: "Aberta", tone: "critical" },
+    under_review: { label: "Em análise", tone: "warning" },
+    resolved: { label: "Resolvida", tone: "ok" },
+  },
+);
+
 export const NON_CONFORMANCE_MACHINE = defineStateMachine({
   name: "nonconformance",
   states: NON_CONFORMANCE_STATUSES,
@@ -83,6 +104,14 @@ export const NON_CONFORMANCE_MACHINE = defineStateMachine({
 const STANDARD_RECALL_STATUSES = ["DRAFT", "SENT"] as const;
 export type StandardRecallStatus = (typeof STANDARD_RECALL_STATUSES)[number];
 
+export const STANDARD_RECALL_STATUS = defineStatusVocabulary(
+  STANDARD_RECALL_STATUSES,
+  {
+    DRAFT: { label: "Rascunho", tone: "neutral" },
+    SENT: { label: "Enviado", tone: "ok" },
+  },
+);
+
 export const STANDARD_RECALL_MACHINE = defineStateMachine({
   name: "standard recall",
   states: STANDARD_RECALL_STATUSES,
@@ -102,13 +131,23 @@ export const STANDARD_RECALL_MACHINE = defineStateMachine({
 //                  (routes/portal.ts) and a manual registration
 //                  (routes/non-conformances.ts); first acknowledgement wins
 //                  (Q34), from any state before it
-const OOT_NOTIFICATION_STATUSES = [
+export const OOT_NOTIFICATION_STATUSES = [
   "PENDING",
   "GENERATED",
   "SENT",
   "ACKNOWLEDGED",
 ] as const;
 export type OotNotificationStatus = (typeof OOT_NOTIFICATION_STATUSES)[number];
+
+export const OOT_NOTIFICATION_STATUS = defineStatusVocabulary(
+  OOT_NOTIFICATION_STATUSES,
+  {
+    PENDING: { label: "Pendente", tone: "neutral" },
+    GENERATED: { label: "Gerada", tone: "info" },
+    SENT: { label: "Enviada", tone: "warning" },
+    ACKNOWLEDGED: { label: "Confirmada", tone: "ok" },
+  },
+);
 
 export const OOT_NOTIFICATION_MACHINE = defineStateMachine({
   name: "out-of-tolerance notification",
@@ -132,8 +171,16 @@ export const OOT_NOTIFICATION_MACHINE = defineStateMachine({
 // found; the customer records its impact assessment in the portal.
 //   create  apps/api/src/lib/asset-oot-events.ts (non-conforming as-found)
 //   assess  routes/portal.ts POST /fleet/oot-events/:id/assessment (one per event)
-const ASSET_OOT_EVENT_STATUSES = ["OPEN", "ASSESSED"] as const;
+export const ASSET_OOT_EVENT_STATUSES = ["OPEN", "ASSESSED"] as const;
 export type AssetOotEventStatus = (typeof ASSET_OOT_EVENT_STATUSES)[number];
+
+export const ASSET_OOT_EVENT_STATUS = defineStatusVocabulary(
+  ASSET_OOT_EVENT_STATUSES,
+  {
+    OPEN: { label: "Pendente", tone: "warning" },
+    ASSESSED: { label: "Avaliado", tone: "ok" },
+  },
+);
 
 export const ASSET_OOT_EVENT_MACHINE = defineStateMachine({
   name: "asset out-of-tolerance event",

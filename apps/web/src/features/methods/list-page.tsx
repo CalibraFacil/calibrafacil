@@ -41,7 +41,7 @@ import {
   METHODS_LIST_LIMIT,
   useMethodsListData,
 } from '@/features/methods/queries'
-import { METHOD_STATUSES, type MethodStatus } from '@/features/methods/types'
+import { METHOD_STATUS } from '@calibra-facil/schemas/machines'
 import {
   type Method,
   type MethodsTableMeta,
@@ -52,27 +52,6 @@ import { useOperationAvailability } from '@/runtime/use-operation-availability'
 
 // The from-template catalog is cloud-only (the route is cloud-gated); hide the
 // affordance entirely in the desktop/offline runtime.
-
-const statusLabels: Record<MethodStatus, string> = {
-  DRAFT: 'Rascunho',
-  PENDING_APPROVAL: 'Em aprovação',
-  TECHNICAL_REVIEWED: 'Revisão técnica',
-  PUBLISHED: 'Publicado',
-  ARCHIVED: 'Arquivado',
-}
-
-function parseMethodStatus(value: string | null): MethodStatus | '' {
-  switch (value) {
-    case 'DRAFT':
-    case 'PENDING_APPROVAL':
-    case 'TECHNICAL_REVIEWED':
-    case 'PUBLISHED':
-    case 'ARCHIVED':
-      return value
-    default:
-      return ''
-  }
-}
 
 export function MethodsListPage({
   onboardingStep,
@@ -99,7 +78,7 @@ export function MethodsListPage({
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...METHOD_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...METHOD_STATUS.states, '']).withDefault(''),
   )
 
   const { data, isLoading, error } = useMethodsListData({
@@ -129,7 +108,7 @@ export function MethodsListPage({
       const result = await calibraApi.methods.createNewVersion(id)
       return {
         ...result,
-        status: parseMethodStatus(result.status) || 'DRAFT',
+        status: METHOD_STATUS.parse(result.status) ?? 'DRAFT',
       }
     },
     onSuccess: (data) => {
@@ -224,26 +203,24 @@ export function MethodsListPage({
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(parseMethodStatus(v))
+                setStatusFilter(METHOD_STATUS.parse(v) ?? '')
                 setPage(1)
               }}
             >
               <SelectTrigger aria-label="Filtrar por status" className="w-40">
                 <span>
                   {statusFilter
-                    ? statusLabels[statusFilter]
+                    ? METHOD_STATUS.label(statusFilter)
                     : 'Todos os status'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos os status</SelectItem>
-                <SelectItem value="DRAFT">Rascunho</SelectItem>
-                <SelectItem value="PENDING_APPROVAL">Em aprovação</SelectItem>
-                <SelectItem value="TECHNICAL_REVIEWED">
-                  Revisão técnica
-                </SelectItem>
-                <SelectItem value="PUBLISHED">Publicado</SelectItem>
-                <SelectItem value="ARCHIVED">Arquivado</SelectItem>
+                {METHOD_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button type="submit" variant="secondary">

@@ -7,6 +7,7 @@
 //   reject   routes/calibration-requests.ts POST /:id/reject, and the public
 //              API cancel (DELETE), which records a rejection
 //   convert  routes/calibration-requests.ts POST /:id/convert (jobs created)
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine } from "../state-machine";
 
 export const CALIBRATION_REQUEST_STATUSES = [
@@ -18,6 +19,29 @@ export const CALIBRATION_REQUEST_STATUSES = [
 ] as const;
 export type CalibrationRequestStatus =
   (typeof CALIBRATION_REQUEST_STATUSES)[number];
+
+export const CALIBRATION_REQUEST_STATUS = defineStatusVocabulary(
+  CALIBRATION_REQUEST_STATUSES,
+  {
+    PENDING: { label: "Pendente", tone: "info" },
+    UNDER_REVIEW: { label: "Em análise", tone: "warning" },
+    APPROVED: { label: "Aprovada", tone: "ok" },
+    REJECTED: { label: "Recusada", tone: "critical" },
+    CONVERTED: { label: "Convertida", tone: "neutral" },
+  },
+);
+
+/** Not yet decided: the laboratory still has to review it. */
+export const OPEN_CALIBRATION_REQUEST_STATUSES = [
+  "PENDING",
+  "UNDER_REVIEW",
+] as const satisfies readonly CalibrationRequestStatus[];
+
+/** Awaiting conversion into jobs: neither rejected nor converted yet. */
+export const AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES = [
+  ...OPEN_CALIBRATION_REQUEST_STATUSES,
+  "APPROVED",
+] as const satisfies readonly CalibrationRequestStatus[];
 
 export const CALIBRATION_REQUEST_MACHINE = defineStateMachine({
   name: "calibration request",

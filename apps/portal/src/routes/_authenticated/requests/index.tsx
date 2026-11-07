@@ -46,11 +46,9 @@ import { cn } from "@/lib/utils";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import {
-  REQUEST_STATUS,
-  getRequestStatus,
-  normalizeRequestStatus,
-  type RequestStatus,
-} from "@/lib/status-labels";
+  CALIBRATION_REQUEST_STATUS,
+  type CalibrationRequestStatus,
+} from "@calibra-facil/schemas/machines";
 import {
   formatCalendarDate,
   formatInstant,
@@ -58,23 +56,20 @@ import {
 } from "@calibra-facil/shared/format";
 
 type RequestsSearch = {
-  status?: RequestStatus;
+  status?: CalibrationRequestStatus;
 };
 
 export const Route = createFileRoute("/_authenticated/requests/")({
   validateSearch: (search: Record<string, unknown>): RequestsSearch => {
-    const status = search.status;
-    if (typeof status !== "string" || !(status in REQUEST_STATUS)) {
-      return {};
-    }
-    return { status: normalizeRequestStatus(status) };
+    const status = CALIBRATION_REQUEST_STATUS.parse(search.status);
+    return status ? { status } : {};
   },
   component: RequestsPage,
 });
 
 type CalibrationRequest = {
   id: number;
-  status: RequestStatus;
+  status: CalibrationRequestStatus;
   observations: string | null;
   requestedDueDate: string | null;
   submittedAt: string;
@@ -165,10 +160,10 @@ const columns: Array<ColumnDef<CalibrationRequest>> = [
       <DataTableColumnHeader column={column} title="Status" />
     ),
     cell: ({ row }) => {
-      const status = getRequestStatus(row.original.status);
+      const status = row.original.status;
       return (
-        <StatusPill tone={status.tone} size="sm">
-          {status.label}
+        <StatusPill tone={CALIBRATION_REQUEST_STATUS.tone(status)} size="sm">
+          {CALIBRATION_REQUEST_STATUS.label(status)}
         </StatusPill>
       );
     },
@@ -179,9 +174,9 @@ function RequestsPage() {
   const { status: initialStatus } = Route.useSearch();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<RequestStatus | "">(
-    initialStatus ?? "",
-  );
+  const [statusFilter, setStatusFilter] = useState<
+    CalibrationRequestStatus | ""
+  >(initialStatus ?? "");
   const deferredSearch = useDeferredValue(search.trim());
   const limit = 20;
 
@@ -220,7 +215,7 @@ function RequestsPage() {
     placeholderData: keepPreviousDataInScope(key("portal-requests")),
   });
 
-  function applyStatusFilter(next: RequestStatus | "") {
+  function applyStatusFilter(next: CalibrationRequestStatus | "") {
     setStatusFilter(next);
     setPage(1);
   }
@@ -309,9 +304,7 @@ function RequestsPage() {
           <Select
             value={statusFilter || "all"}
             onValueChange={(value) => {
-              applyStatusFilter(
-                value && value !== "all" ? normalizeRequestStatus(value) : "",
-              );
+              applyStatusFilter(CALIBRATION_REQUEST_STATUS.parse(value) ?? "");
             }}
           >
             <SelectTrigger
@@ -319,14 +312,16 @@ function RequestsPage() {
               className="w-full sm:w-48"
             >
               <span>
-                {statusFilter ? REQUEST_STATUS[statusFilter].label : "Status"}
+                {statusFilter
+                  ? CALIBRATION_REQUEST_STATUS.label(statusFilter)
+                  : "Status"}
               </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {Object.entries(REQUEST_STATUS).map(([value, meta]) => (
-                <SelectItem key={value} value={value}>
-                  {meta.label}
+              {CALIBRATION_REQUEST_STATUS.options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
                 </SelectItem>
               ))}
             </SelectContent>

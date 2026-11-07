@@ -20,8 +20,6 @@ import {
   formatInvitationTimeRemaining,
   getGovernanceActivityDescription,
   getGovernanceActivityLabel,
-  getInvitationStatusLabel,
-  getInvitationStatusVariant,
   getAccreditationPreviewStatus,
   getInviterName,
   getOrganizationRoleLabel,
@@ -291,8 +289,6 @@ describe('organization-model', () => {
     expect(
       formatInvitationTimeRemaining(new Date('2026-01-01T11:00:00Z'), now),
     ).toBe('expirado')
-    expect(getInvitationStatusLabel('accepted')).toBe('Aceito')
-    expect(getInvitationStatusVariant('rejected')).toBe('destructive')
 
     const members: OrganizationMember[] = [
       {

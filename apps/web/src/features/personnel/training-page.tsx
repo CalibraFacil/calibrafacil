@@ -14,7 +14,8 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
-import { getStatusBadge } from '@/features/personnel/components/columns'
+import { COMPETENCE_STATUS } from '@calibra-facil/schemas/machines'
+import { TrainingStatusBadge } from '@/features/personnel/components/status-badges'
 import { formatInstant } from '@calibra-facil/shared/format'
 
 const typeLabels: Record<string, string> = {
@@ -22,23 +23,6 @@ const typeLabels: Record<string, string> = {
   external: 'Externo',
   ojt: 'Em Serviço',
   proficiency_test: 'Teste de Proficiência',
-}
-
-const statusLabels: Record<string, string> = {
-  planned: 'Planejado',
-  in_progress: 'Em Andamento',
-  completed: 'Concluído',
-  failed: 'Reprovado',
-}
-
-const statusVariants: Record<
-  string,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  planned: 'outline',
-  in_progress: 'secondary',
-  completed: 'default',
-  failed: 'destructive',
 }
 
 export function TrainingTab({ id }: { id: string }) {
@@ -55,7 +39,7 @@ export function TrainingTab({ id }: { id: string }) {
   }
 
   const trainings = comp?.trainingRecords ?? []
-  const competenceBadge = comp ? getStatusBadge(comp.status) : null
+  const competenceStatus = comp ? COMPETENCE_STATUS.parse(comp.status) : null
 
   if (trainings.length === 0) {
     return (
@@ -64,8 +48,8 @@ export function TrainingTab({ id }: { id: string }) {
           <CardTitle>Registros de Treinamento</CardTitle>
           <CardDescription>
             Treinamentos vinculados a esta competência.
-            {competenceBadge
-              ? ` Competência atual: ${competenceBadge.label}.`
+            {competenceStatus
+              ? ` Competência atual: ${COMPETENCE_STATUS.label(competenceStatus)}.`
               : ''}
           </CardDescription>
         </CardHeader>
@@ -91,8 +75,8 @@ export function TrainingTab({ id }: { id: string }) {
         <CardDescription>
           {trainings.length} treinamento{trainings.length !== 1 ? 's' : ''}{' '}
           vinculado{trainings.length !== 1 ? 's' : ''}.
-          {competenceBadge
-            ? ` Competência atual: ${competenceBadge.label}.`
+          {competenceStatus
+            ? ` Competência atual: ${COMPETENCE_STATUS.label(competenceStatus)}.`
             : ''}
         </CardDescription>
         <p className="text-sm text-muted-foreground">
@@ -106,9 +90,10 @@ export function TrainingTab({ id }: { id: string }) {
             <div className="flex items-center justify-between">
               <h4 className="font-medium">{tr.title}</h4>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <Badge variant={statusVariants[tr.status] ?? 'secondary'}>
-                  Status do treinamento: {statusLabels[tr.status] ?? tr.status}
-                </Badge>
+                <TrainingStatusBadge
+                  status={tr.status}
+                  prefix="Status do treinamento: "
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

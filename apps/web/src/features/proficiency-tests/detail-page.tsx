@@ -20,10 +20,7 @@ import {
 } from '@/features/proficiency-tests/queries'
 import {
   PT_ACTIVITY_TYPE_LABELS,
-  PT_STATUS_BADGE_CLASSES,
-  PT_STATUS_LABELS,
   SCORE_TYPE_LABELS,
-  type PtDetail,
   type PtResultPoint,
   type PtScoreType,
 } from '@/features/proficiency-tests/types'
@@ -48,21 +45,15 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-  type SignalTone,
 } from '@calibra-facil/ui/instrument-panel'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
+import { PT_OVERALL_STATUS } from '@calibra-facil/schemas/machines'
 import { StandardRecallCallout } from '@/features/spc/components/standard-recall-callout'
 import { formatInstant } from '@calibra-facil/shared/format'
-
-const STATUS_TONES: Record<PtDetail['overallStatus'], SignalTone> = {
-  pending: 'info',
-  satisfactory: 'ok',
-  questionable: 'warning',
-  unsatisfactory: 'critical',
-}
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {
   create: 'Criação',
@@ -135,12 +126,9 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
               <Badge variant="outline">
                 {PT_ACTIVITY_TYPE_LABELS[pt.activityType]}
               </Badge>
-              <Badge
-                variant="outline"
-                className={PT_STATUS_BADGE_CLASSES[pt.overallStatus]}
-              >
-                {PT_STATUS_LABELS[pt.overallStatus]}
-              </Badge>
+              <StatusBadge tone={PT_OVERALL_STATUS.tone(pt.overallStatus)}>
+                {PT_OVERALL_STATUS.label(pt.overallStatus)}
+              </StatusBadge>
             </div>
             <p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
               {pt.provider}
@@ -152,8 +140,8 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
             <StaggerItem>
               <SignalTile
                 label="Resultado"
-                value={PT_STATUS_LABELS[pt.overallStatus]}
-                tone={STATUS_TONES[pt.overallStatus]}
+                value={PT_OVERALL_STATUS.label(pt.overallStatus)}
+                tone={PT_OVERALL_STATUS.tone(pt.overallStatus)}
               />
             </StaggerItem>
             <StaggerItem>
@@ -335,12 +323,11 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
                     </td>
                     <td className="px-3 py-2.5">
                       {point.verdict ? (
-                        <Badge
-                          variant="outline"
-                          className={PT_STATUS_BADGE_CLASSES[point.verdict]}
+                        <StatusBadge
+                          tone={PT_OVERALL_STATUS.tone(point.verdict)}
                         >
-                          {PT_STATUS_LABELS[point.verdict]}
-                        </Badge>
+                          {PT_OVERALL_STATUS.label(point.verdict)}
+                        </StatusBadge>
                       ) : (
                         '-'
                       )}

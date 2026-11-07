@@ -1,5 +1,3 @@
-export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
-
 import type {
   PortalAssetDetail,
   PortalIntervalInsight,

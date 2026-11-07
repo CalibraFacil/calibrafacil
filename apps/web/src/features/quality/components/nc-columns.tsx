@@ -3,7 +3,9 @@ import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { MoreHorizontalIcon, ViewIcon } from '@hugeicons/core-free-icons'
 
+import { NON_CONFORMANCE_STATUS } from '@calibra-facil/schemas/machines'
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Button } from '@calibra-facil/ui/button'
 import {
   DropdownMenu,
@@ -15,27 +17,9 @@ import { cn } from '@/lib/utils'
 import type {
   NonConformanceDisposition,
   NonConformanceRow,
-  NonConformanceStatus,
   NonConformanceType,
 } from '@/features/quality/types'
 import { formatInstant } from '@calibra-facil/shared/format'
-
-function getStatusBadge(status: NonConformanceStatus) {
-  switch (status) {
-    case 'open':
-      return { variant: 'destructive' as const, label: 'Aberta' }
-    case 'under_review':
-      return {
-        variant: 'outline' as const,
-        label: 'Em Análise',
-        className: 'border-orange-500 text-orange-600',
-      }
-    case 'resolved':
-      return { variant: 'default' as const, label: 'Resolvida' }
-    default:
-      return { variant: 'secondary' as const, label: status }
-  }
-}
 
 function getTypeBadge(type: NonConformanceType) {
   switch (type) {
@@ -143,15 +127,12 @@ export const ncColumns: ColumnDef<NonConformanceRow>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const badge = getStatusBadge(row.original.status)
+      const status = row.original.status
       return (
         <div className="flex items-center gap-2">
-          <Badge
-            variant={badge.variant}
-            className={'className' in badge ? badge.className : undefined}
-          >
-            {badge.label}
-          </Badge>
+          <StatusBadge tone={NON_CONFORMANCE_STATUS.tone(status)}>
+            {NON_CONFORMANCE_STATUS.label(status)}
+          </StatusBadge>
           {row.original.capaId && (
             <Badge variant="outline" className="border-blue-500 text-blue-600">
               CAPA

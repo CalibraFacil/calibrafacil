@@ -13,7 +13,12 @@ import {
   PanelHeader,
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
-import { getRequestStatus, type RequestStatus } from "@/lib/status-labels";
+import {
+  CALIBRATION_REQUEST_STATUS,
+  VISIT_STATUS,
+  type CalibrationRequestStatus,
+  type VisitStatus,
+} from "@calibra-facil/schemas/machines";
 import { portalRequestDetailSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
@@ -43,7 +48,7 @@ type RequestItem = {
 
 type RequestDetail = {
   id: number;
-  status: RequestStatus;
+  status: CalibrationRequestStatus;
   observations: string | null;
   requestedDueDate: string | null;
   deliveryMethod: "dropoff" | "carrier" | "onsite";
@@ -62,12 +67,7 @@ type RequestDetail = {
   } | null;
   preferredVisitDate: string | null;
   visit: {
-    status:
-      | "PROPOSED"
-      | "CONFIRMED"
-      | "IN_PROGRESS"
-      | "COMPLETED"
-      | "CANCELLED";
+    status: VisitStatus;
     scheduledAt: string | null;
     technicianName: string | null;
   } | null;
@@ -79,17 +79,6 @@ type RequestDetail = {
   convertedAt: string | null;
   customerName: string;
   items: Array<RequestItem>;
-};
-
-const VISIT_STATUS_LABELS: Record<
-  NonNullable<RequestDetail["visit"]>["status"],
-  string
-> = {
-  PROPOSED: "Proposta",
-  CONFIRMED: "Confirmada",
-  IN_PROGRESS: "Em andamento",
-  COMPLETED: "Concluída",
-  CANCELLED: "Cancelada",
 };
 
 /** Single-line address for the on-site visit, or "" when none was provided. */
@@ -138,7 +127,6 @@ function RequestDetailPage() {
     );
   }
 
-  const status = getRequestStatus(data.status);
   const isCarrier = data.deliveryMethod === "carrier";
   const isOnsite = data.deliveryMethod === "onsite";
   const hasRemittance =
@@ -169,7 +157,9 @@ function RequestDetailPage() {
               Solicitação{" "}
               <span className="font-mono tabular-nums">#{data.id}</span>
             </h1>
-            <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            <StatusPill tone={CALIBRATION_REQUEST_STATUS.tone(data.status)}>
+              {CALIBRATION_REQUEST_STATUS.label(data.status)}
+            </StatusPill>
           </div>
           <p className="text-muted-foreground mt-1 text-sm">
             Enviada em{" "}
@@ -266,7 +256,7 @@ function RequestDetailPage() {
             </BlueprintField>
             {data.visit ? (
               <BlueprintField label="Situação da visita">
-                {VISIT_STATUS_LABELS[data.visit.status]}
+                {VISIT_STATUS.label(data.visit.status)}
               </BlueprintField>
             ) : null}
             {data.visit?.scheduledAt ? (

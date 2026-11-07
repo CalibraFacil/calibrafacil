@@ -15,7 +15,6 @@ import {
   isWorkflowStepCompleted,
   isWorkflowStepCurrent,
   toggleTrainingSelection,
-  TRAINING_STATUS_LABELS,
   TRAINING_TYPE_LABELS,
 } from './detail-model'
 
@@ -59,7 +58,6 @@ describe('personnel detail model', () => {
     expect(isTrainingType('internal')).toBe(true)
     expect(isTrainingType('invalid')).toBe(false)
     expect(TRAINING_TYPE_LABELS.ojt).toBe('Em Serviço')
-    expect(TRAINING_STATUS_LABELS.completed).toBe('Concluído')
     expect(
       createTrainingRecordPayload({
         userId: 'user-1',

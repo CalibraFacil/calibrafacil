@@ -11,8 +11,8 @@ import {
   prewarmRouteQueries,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
+import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
 import {
-  ASSET_STATUSES,
   type AssetAuditLogData,
   type AssetAuditLogRecord,
   type AssetDetail,
@@ -26,7 +26,7 @@ import {
 export const ASSETS_LIST_LIMIT = 20
 
 function statusFromUrl(url?: URL): AssetStatus | '' {
-  return optionFromUrl(ASSET_STATUSES, url?.searchParams.get('status'))
+  return optionFromUrl(ASSET_STATUS.states, url?.searchParams.get('status'))
 }
 
 function customerIdFromUrl(url?: URL) {

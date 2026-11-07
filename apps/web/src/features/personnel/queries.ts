@@ -1,5 +1,6 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
+import { COMPETENCE_STATUS } from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
@@ -25,21 +26,7 @@ function pageFromUrl(url?: URL) {
 }
 
 function statusFromUrl(url?: URL): CompetenceStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  switch (status) {
-    case 'REQUESTED':
-    case 'TRAINING_ASSIGNED':
-    case 'IN_TRAINING':
-    case 'PENDING_EVALUATION':
-    case 'ACTIVE':
-    case 'SUSPENDED':
-    case 'EXPIRED':
-    case 'CANCELLED':
-      return status
-    default:
-      return ''
-  }
+  return COMPETENCE_STATUS.parse(url?.searchParams.get('status')) ?? ''
 }
 
 export function competencesListQueryInputFromUrl(

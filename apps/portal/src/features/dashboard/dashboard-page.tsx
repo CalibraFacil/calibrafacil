@@ -25,7 +25,12 @@ import {
   getCalibrationStatus,
   type CalibrationFilter,
 } from "@/lib/calibration-status";
-import { getRequestStatus, getServiceOrderStatus } from "@/lib/status-labels";
+import {
+  CALIBRATION_REQUEST_STATUS,
+  OPEN_CALIBRATION_REQUEST_STATUSES,
+} from "@calibra-facil/schemas/machines";
+import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
+import { getServiceOrderStatus } from "@/lib/status-labels";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@calibra-facil/ui/button";
 import { Skeleton } from "@calibra-facil/ui/skeleton";
@@ -681,9 +686,8 @@ function RecentCertificates({
 
 function OpenRequests({ requests }: { requests: PortalOverview["requests"] }) {
   const open = requests.recent
-    .filter(
-      (request) =>
-        request.status === "PENDING" || request.status === "UNDER_REVIEW",
+    .filter((request) =>
+      isOneOf(OPEN_CALIBRATION_REQUEST_STATUSES, request.status),
     )
     .slice(0, 4);
 
@@ -701,7 +705,6 @@ function OpenRequests({ requests }: { requests: PortalOverview["requests"] }) {
         {open.length > 0 ? (
           <StaggerGroup className="space-y-1">
             {open.map((request) => {
-              const status = getRequestStatus(request.status);
               return (
                 <StaggerItem key={request.id}>
                   <Link
@@ -721,8 +724,11 @@ function OpenRequests({ requests }: { requests: PortalOverview["requests"] }) {
                         {formatInstant(request.submittedAt, "date-medium")}
                       </p>
                     </div>
-                    <StatusPill tone={status.tone} size="sm">
-                      {status.label}
+                    <StatusPill
+                      tone={CALIBRATION_REQUEST_STATUS.tone(request.status)}
+                      size="sm"
+                    >
+                      {CALIBRATION_REQUEST_STATUS.label(request.status)}
                     </StatusPill>
                   </Link>
                 </StaggerItem>

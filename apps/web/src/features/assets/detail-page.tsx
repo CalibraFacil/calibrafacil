@@ -23,7 +23,8 @@ import {
   formatDate,
   type AssetCalibrationLevel,
 } from '@/features/assets/detail-model'
-import type { AssetStatus } from '@/features/assets/types'
+import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -53,34 +54,6 @@ import {
 import { cn } from '@/lib/utils'
 
 type HugeIcon = Parameters<typeof HugeiconsIcon>[0]['icon']
-
-const statusLabels: Record<AssetStatus, string> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  MAINTENANCE: 'Em Manutenção',
-  SCRAPPED: 'Descartado',
-}
-
-const statusVariants: Record<
-  AssetStatus,
-  'default' | 'secondary' | 'outline' | 'destructive'
-> = {
-  ACTIVE: 'default',
-  INACTIVE: 'secondary',
-  MAINTENANCE: 'outline',
-  SCRAPPED: 'destructive',
-}
-
-function parseStatus(status: string): AssetStatus {
-  switch (status) {
-    case 'INACTIVE':
-    case 'MAINTENANCE':
-    case 'SCRAPPED':
-      return status
-    default:
-      return 'ACTIVE'
-  }
-}
 
 const LEVEL_ICON: Record<AssetCalibrationLevel, HugeIcon> = {
   valid: CheckmarkBadge02Icon,
@@ -147,6 +120,7 @@ export function AssetDetailPage({ id }: { id: string }) {
   })
 
   const calibration = buildAssetCalibrationStatus(asset)
+  const assetStatus = ASSET_STATUS.parse(asset.status) ?? 'ACTIVE'
   const days = calibration.daysUntilNext
 
   const nextHint =
@@ -205,12 +179,12 @@ export function AssetDetailPage({ id }: { id: string }) {
                 </Link>
               </p>
             </div>
-            <Badge
-              variant={statusVariants[parseStatus(asset.status)]}
+            <StatusBadge
+              tone={ASSET_STATUS.tone(assetStatus)}
               className="shrink-0"
             >
-              {statusLabels[parseStatus(asset.status)]}
-            </Badge>
+              {ASSET_STATUS.label(assetStatus)}
+            </StatusBadge>
           </div>
 
           <div className="grid gap-4 border-t border-foreground/10 pt-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">

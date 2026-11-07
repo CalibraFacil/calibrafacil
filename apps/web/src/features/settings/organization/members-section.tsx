@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { InvitationStatusBadge } from '@/components/invitation-status-badge'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -20,8 +21,6 @@ import {
 import type { OrganizationMember } from '@/features/settings/types'
 import {
   formatInvitationTimeRemaining,
-  getInvitationStatusLabel,
-  getInvitationStatusVariant,
   getInviterName,
   getOrganizationRoleLabel,
   isGlobalMemberRole,
@@ -461,13 +460,7 @@ export function OrganizationMembersSection({
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge
-                            variant={getInvitationStatusVariant(
-                              invitation.status,
-                            )}
-                          >
-                            {getInvitationStatusLabel(invitation.status)}
-                          </Badge>
+                          <InvitationStatusBadge status={invitation.status} />
                           {isPending && !isExpired && (
                             <Button
                               variant="ghost"

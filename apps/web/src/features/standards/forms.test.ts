@@ -8,7 +8,6 @@ import {
   parseStandardEditForm,
   parseStandardForm,
   parseStandardRenewForm,
-  STANDARD_STATUS_LABELS,
   type StandardFormData,
   type StandardRenewFormData,
 } from './forms'
@@ -271,7 +270,6 @@ describe('standard feature forms', () => {
         ],
       }),
     ).toBe(true)
-    expect(STANDARD_STATUS_LABELS.OUT_OF_TOLERANCE).toBe('Fora de Tolerância')
   })
 
   it('infers mass forms for generic scalar standards with legacy mass values', () => {

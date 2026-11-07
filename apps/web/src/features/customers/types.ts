@@ -1,4 +1,5 @@
 import type { JobStatus } from '@calibra-facil/schemas'
+import type { AssetStatus } from '@calibra-facil/schemas/machines'
 import type { CustomersListData as ClientRuntimeCustomersListData } from '@calibra-facil/client-runtime'
 import type { CustomerFinancialTimeline } from '@calibra-facil/shared'
 
@@ -78,11 +79,7 @@ export type CustomerDetail = {
   group?: { id: number; name: string } | null
 }
 
-export type CustomerAssetStatus =
-  | 'ACTIVE'
-  | 'INACTIVE'
-  | 'MAINTENANCE'
-  | 'SCRAPPED'
+type CustomerAssetStatus = AssetStatus
 
 type CustomerAsset = {
   id: number

@@ -18,7 +18,6 @@ import {
   YAxis,
 } from 'recharts'
 
-import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'
 import { Input } from '@calibra-facil/ui/input'
 import { Label } from '@calibra-facil/ui/label'
@@ -63,15 +62,12 @@ import {
 } from '@/features/spc/forms'
 import {
   SPC_CHART_TYPE_LABELS,
-  SPC_STATUS_LABELS,
   type SpcChartDetail,
   type SpcChartType,
-  type SpcRuleSeverity,
 } from '@/features/spc/types'
-import {
-  SPC_STATUS_TONES,
-  SpcStatusBadge,
-} from '@/features/spc/components/spc-status-badge'
+import { SpcStatusBadge } from '@/features/spc/components/spc-status-badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
+import { SPC_STATUS } from '@calibra-facil/schemas/machines'
 import { StandardRecallCallout } from '@/features/spc/components/standard-recall-callout'
 import { formatInstant, formatNumber } from '@calibra-facil/shared/format'
 
@@ -84,17 +80,6 @@ const chartConfig: ChartConfig = {
     label: 'Sinal',
     color: 'hsl(0 84.2% 60.2%)',
   },
-}
-
-const RULE_SEVERITY_LABELS: Record<SpcRuleSeverity, string> = {
-  trending: 'Tendência',
-  out_of_control: 'Fora de controle',
-}
-
-const RULE_SEVERITY_BADGE_CLASSES: Record<SpcRuleSeverity, string> = {
-  trending:
-    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  out_of_control: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 }
 
 function parseSpcChartType(value: string | null): SpcChartType | null {
@@ -156,7 +141,7 @@ export function SpcChartPage({ id }: { id: string }) {
     recalculateMutation.mutate(undefined, {
       onSuccess: (updated) => {
         toast.success(
-          `Carta recalculada — status: ${SPC_STATUS_LABELS[updated.status]}`,
+          `Carta recalculada — status: ${SPC_STATUS.label(updated.status)}`,
         )
       },
       onError: (error) => {
@@ -251,8 +236,8 @@ export function SpcChartPage({ id }: { id: string }) {
             <StaggerItem>
               <SignalTile
                 label="Status"
-                value={SPC_STATUS_LABELS[chart.status]}
-                tone={SPC_STATUS_TONES[chart.status]}
+                value={SPC_STATUS.label(chart.status)}
+                tone={SPC_STATUS.tone(chart.status)}
               />
             </StaggerItem>
             <StaggerItem>
@@ -321,12 +306,9 @@ export function SpcChartPage({ id }: { id: string }) {
                       {hit.pointIndices.map((i) => i + 1).join(', ')}
                     </p>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={RULE_SEVERITY_BADGE_CLASSES[hit.severity]}
-                  >
-                    {RULE_SEVERITY_LABELS[hit.severity]}
-                  </Badge>
+                  <StatusBadge tone={SPC_STATUS.tone(hit.severity)}>
+                    {SPC_STATUS.label(hit.severity)}
+                  </StatusBadge>
                 </div>
               ))
             )}

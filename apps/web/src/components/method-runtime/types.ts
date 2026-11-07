@@ -1,3 +1,4 @@
+import type { MethodStatus } from '@calibra-facil/schemas/machines'
 import type { MeasurementUnit } from '@calibra-facil/shared/units'
 
 /**
@@ -211,13 +212,6 @@ interface MethodCertificateContent {
   uncertaintyBudgetDisplay?: 'full' | 'hidden'
   sections?: Array<MethodCertificateContentSection>
 }
-
-type MethodStatus =
-  | 'DRAFT'
-  | 'PENDING_APPROVAL'
-  | 'TECHNICAL_REVIEWED'
-  | 'PUBLISHED'
-  | 'ARCHIVED'
 
 export interface MethodData {
   id?: number

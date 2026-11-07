@@ -28,26 +28,8 @@ import {
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
+import { CapaStatusBadge } from '@/features/quality/components/capa-status-badge'
 import { isIndependenceWaiverOffered } from '@/features/quality/capa-verification'
-
-const statusLabels: Record<string, string> = {
-  OPEN: 'Aberta',
-  INVESTIGATION: 'Investigação',
-  IMPLEMENTATION: 'Implementação',
-  VERIFICATION: 'Verificação',
-  CLOSED: 'Fechada',
-}
-
-const statusVariants: Record<string, string> = {
-  OPEN: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  INVESTIGATION:
-    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  IMPLEMENTATION:
-    'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  VERIFICATION:
-    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  CLOSED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-}
 
 const severityLabels: Record<string, string> = {
   minor: 'Menor',
@@ -194,12 +176,7 @@ export function CAPADetailPage({ id }: { id: string }) {
               <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                 {capa.capaNumber}
               </h1>
-              <Badge
-                variant="outline"
-                className={statusVariants[capa.status] ?? ''}
-              >
-                {statusLabels[capa.status] ?? capa.status}
-              </Badge>
+              <CapaStatusBadge status={capa.status} />
               {capa.isOverdue && <Badge variant="destructive">Atrasada</Badge>}
             </div>
             <p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">

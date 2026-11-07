@@ -6,15 +6,14 @@ import {
   portalVisitsResponseSchema,
 } from "@calibra-facil/contracts";
 
+import type {
+  VisitRescheduleRequestStatus,
+  VisitStatus,
+} from "@calibra-facil/schemas/machines";
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 
-export type PortalVisitStatus =
-  | "PROPOSED"
-  | "CONFIRMED"
-  | "IN_PROGRESS"
-  | "COMPLETED"
-  | "CANCELLED";
+type PortalVisitStatus = VisitStatus;
 
 export type PortalVisitAddress = {
   cep?: string;
@@ -37,7 +36,7 @@ type PortalVisitPreferredWindow = {
 
 type PortalVisitRescheduleRequest = {
   id: number;
-  status: "PENDING" | "ACCEPTED" | "DECLINED" | "SUPERSEDED";
+  status: VisitRescheduleRequestStatus;
   reason: string | null;
   preferredWindows: Array<PortalVisitPreferredWindow>;
   resolutionNote: string | null;
@@ -141,14 +140,6 @@ export function useRequestVisitReschedule() {
     onSuccess: invalidate,
   });
 }
-
-export const PORTAL_VISIT_STATUS_LABELS: Record<PortalVisitStatus, string> = {
-  PROPOSED: "Proposta",
-  CONFIRMED: "Confirmada",
-  IN_PROGRESS: "Em andamento",
-  COMPLETED: "Concluída",
-  CANCELLED: "Cancelada",
-};
 
 export const PREFERRED_PERIOD_LABELS: Record<
   PortalVisitReschedulePeriod,

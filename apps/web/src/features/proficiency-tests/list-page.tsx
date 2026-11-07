@@ -52,24 +52,10 @@ import {
 import {
   PT_ACTIVITY_TYPES,
   PT_ACTIVITY_TYPE_LABELS,
-  PT_STATUSES,
-  PT_STATUS_LABELS,
   type PtActivityType,
-  type PtStatus,
 } from '@/features/proficiency-tests/types'
+import { PT_OVERALL_STATUS } from '@calibra-facil/schemas/machines'
 import { ptColumns } from '@/features/proficiency-tests/components/pt-columns'
-
-function parsePtStatusFilter(value: string | null): PtStatus | '' {
-  switch (value) {
-    case 'pending':
-    case 'satisfactory':
-    case 'questionable':
-    case 'unsatisfactory':
-      return value
-    default:
-      return ''
-  }
-}
 
 function parsePtActivityTypeFilter(value: string | null): PtActivityType | '' {
   switch (value) {
@@ -92,7 +78,7 @@ export function ProficiencyTestListPage() {
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...PT_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...PT_OVERALL_STATUS.states, '']).withDefault(''),
   )
   const [activityTypeFilter, setActivityTypeFilter] = useQueryState(
     'activityType',
@@ -241,23 +227,24 @@ export function ProficiencyTestListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(parsePtStatusFilter(v))
+                setStatusFilter(PT_OVERALL_STATUS.parse(v) ?? '')
                 setPage(1)
               }}
             >
               <SelectTrigger className="w-48">
                 <span>
                   {statusFilter
-                    ? PT_STATUS_LABELS[statusFilter]
+                    ? PT_OVERALL_STATUS.label(statusFilter)
                     : 'Todos os resultados'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos os resultados</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-                <SelectItem value="satisfactory">Satisfatório</SelectItem>
-                <SelectItem value="questionable">Questionável</SelectItem>
-                <SelectItem value="unsatisfactory">Insatisfatório</SelectItem>
+                {PT_OVERALL_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select

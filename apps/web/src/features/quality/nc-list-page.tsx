@@ -47,25 +47,11 @@ import {
   useNonConformanceSummaryData,
 } from '@/features/quality/queries'
 import {
-  NON_CONFORMANCE_STATUSES,
   NON_CONFORMANCE_TYPES,
-  type NonConformanceStatus,
   type NonConformanceType,
 } from '@/features/quality/types'
+import { NON_CONFORMANCE_STATUS } from '@calibra-facil/schemas/machines'
 import { ncColumns } from '@/features/quality/components/nc-columns'
-
-function parseNonConformanceStatus(
-  value: string | null,
-): NonConformanceStatus | '' {
-  switch (value) {
-    case 'open':
-    case 'under_review':
-    case 'resolved':
-      return value
-    default:
-      return ''
-  }
-}
 
 function parseNonConformanceType(
   value: string | null,
@@ -91,7 +77,9 @@ export function NCListPage() {
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...NON_CONFORMANCE_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...NON_CONFORMANCE_STATUS.states, '']).withDefault(
+      '',
+    ),
   )
   const [typeFilter, setTypeFilter] = useQueryState(
     'type',
@@ -188,7 +176,7 @@ export function NCListPage() {
           <StaggerItem>
             <SignalTile
               icon={Clock01Icon}
-              label="Em análise"
+              label={NON_CONFORMANCE_STATUS.label('under_review')}
               value={reviewCount}
               tone={reviewCount > 0 ? 'warning' : 'neutral'}
             />
@@ -219,26 +207,24 @@ export function NCListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(parseNonConformanceStatus(v))
+                setStatusFilter(NON_CONFORMANCE_STATUS.parse(v) ?? '')
                 setPage(1)
               }}
             >
               <SelectTrigger aria-label="Filtrar por status" className="w-48">
                 <span>
-                  {statusFilter === 'open'
-                    ? 'Abertas'
-                    : statusFilter === 'under_review'
-                      ? 'Em Análise'
-                      : statusFilter === 'resolved'
-                        ? 'Resolvidas'
-                        : 'Todos os Status'}
+                  {statusFilter
+                    ? NON_CONFORMANCE_STATUS.label(statusFilter)
+                    : 'Todos os Status'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos os Status</SelectItem>
-                <SelectItem value="open">Abertas</SelectItem>
-                <SelectItem value="under_review">Em Análise</SelectItem>
-                <SelectItem value="resolved">Resolvidas</SelectItem>
+                {NON_CONFORMANCE_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select

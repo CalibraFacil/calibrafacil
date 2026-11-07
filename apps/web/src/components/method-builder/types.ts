@@ -1,10 +1,6 @@
+import type { MethodStatus } from '@calibra-facil/schemas/machines'
 import type { DecisionRuleKind } from '@calibra-facil/shared/decision-rule'
-type MethodDraftStatus =
-  | 'DRAFT'
-  | 'PENDING_APPROVAL'
-  | 'TECHNICAL_REVIEWED'
-  | 'PUBLISHED'
-  | 'ARCHIVED'
+type MethodDraftStatus = MethodStatus
 
 export type MethodDraftInputType = 'text' | 'number' | 'select' | 'table'
 

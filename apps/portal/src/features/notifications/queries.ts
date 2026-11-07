@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import type { NotificationStatus } from "@calibra-facil/schemas/machines";
 import {
   portalNotificationCountResponseSchema,
   portalNotificationFeedResponseSchema,
@@ -26,7 +27,7 @@ export type PortalNotificationItem = {
   id: number;
   type: string;
   priority: "HIGH" | "MEDIUM" | "LOW";
-  status: "UNREAD" | "READ" | "ARCHIVED";
+  status: NotificationStatus;
   title: string;
   message: string;
   actionUrl: string | null;

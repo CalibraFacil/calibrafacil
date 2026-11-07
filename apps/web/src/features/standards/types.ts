@@ -1,15 +1,12 @@
 import type {
+  OotNotificationStatus,
+  StandardRecallStatus as RecallStatus,
+} from '@calibra-facil/schemas/machines'
+import type {
   StandardData,
   StandardStatus,
   StandardsListData as ClientRuntimeStandardsListData,
 } from '@calibra-facil/client-runtime'
-
-export const STANDARD_STATUSES = [
-  'ACTIVE',
-  'INACTIVE',
-  'OUT_OF_TOLERANCE',
-  'SENT_FOR_CALIBRATION',
-] as const satisfies readonly StandardStatus[]
 
 export type { StandardStatus }
 
@@ -62,13 +59,9 @@ export type ImpactedCertificatesData = {
   window: { from: string; to: string }
 }
 
-type StandardRecallStatus = 'DRAFT' | 'SENT'
+type StandardRecallStatus = RecallStatus
 
-type StandardRecallNotificationStatus =
-  | 'PENDING'
-  | 'GENERATED'
-  | 'SENT'
-  | 'ACKNOWLEDGED'
+type StandardRecallNotificationStatus = OotNotificationStatus
 
 export type StandardRecallAcknowledgedVia =
   | 'email_link'

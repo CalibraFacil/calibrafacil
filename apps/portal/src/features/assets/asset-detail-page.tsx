@@ -9,6 +9,7 @@ import {
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
 
+import { ASSET_STATUS } from "@calibra-facil/schemas/machines";
 import { Badge } from "@calibra-facil/ui/badge";
 import { Button } from "@calibra-facil/ui/button";
 import { Skeleton } from "@calibra-facil/ui/skeleton";
@@ -28,11 +29,7 @@ import {
 import { getInstrumentStatus } from "@/lib/calibration-status";
 import { DriftChartPanel } from "@/features/reliability/drift-chart-panel";
 import { OotAssessmentPanel } from "@/features/reliability/oot-assessment-panel";
-import {
-  formatSpecificationLabel,
-  formatSpecificationValue,
-  statusLabels,
-} from "./lib";
+import { formatSpecificationLabel, formatSpecificationValue } from "./lib";
 import { useAssetDetail, useIntervalInsight } from "./queries";
 import { IntervalEditorPanel } from "./interval-editor-panel";
 import { IntervalInsightPanel } from "./interval-insight-panel";
@@ -132,10 +129,8 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
                 {calibration.label}
               </StatusPill>
               {asset.status !== "ACTIVE" ? (
-                <StatusPill
-                  tone={asset.status === "SCRAPPED" ? "critical" : "neutral"}
-                >
-                  {statusLabels[asset.status]}
+                <StatusPill tone={ASSET_STATUS.tone(asset.status)}>
+                  {ASSET_STATUS.label(asset.status)}
                 </StatusPill>
               ) : null}
               <Badge variant="secondary">{asset.assetTypeName}</Badge>
@@ -267,7 +262,7 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
                 {asset.customerName.trim() || "—"}
               </BlueprintField>
               <BlueprintField label="Situação">
-                {statusLabels[asset.status]}
+                {ASSET_STATUS.label(asset.status)}
               </BlueprintField>
               <BlueprintField label="Atualizado em" mono>
                 {formatInstant(asset.updatedAt, "date-medium")}

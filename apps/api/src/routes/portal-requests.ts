@@ -23,6 +23,7 @@ import {
   CreateCalibrationRequestSchema,
   ListCalibrationRequestsQuerySchema,
 } from "@calibra-facil/schemas";
+import { AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 import { notifyCalibrationRequestSubmitted } from "@calibra-facil/notifications";
 import { and, count, desc, eq, inArray, isNull, ilike, sql } from "drizzle-orm";
 import {
@@ -357,11 +358,10 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               inArray(calibrationRequestItem.assetId, input.assetIds),
               eq(calibrationRequest.customerId, linkedCustomer.id),
-              inArray(calibrationRequest.status, [
-                "PENDING",
-                "UNDER_REVIEW",
-                "APPROVED",
-              ]),
+              inArray(
+                calibrationRequest.status,
+                AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES,
+              ),
             ),
           );
 
@@ -575,11 +575,10 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               inArray(calibrationRequestItem.assetId, input.assetIds),
               inArray(calibrationRequest.customerId, scope.customerIds),
-              inArray(calibrationRequest.status, [
-                "PENDING",
-                "UNDER_REVIEW",
-                "APPROVED",
-              ]),
+              inArray(
+                calibrationRequest.status,
+                AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES,
+              ),
             ),
           );
 

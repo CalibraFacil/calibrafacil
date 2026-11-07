@@ -15,7 +15,8 @@ import {
   useStandardAuditLogData,
   useStandardDetailData,
 } from '@/features/standards/queries'
-import type { StandardStatus } from '@/features/standards/types'
+import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -81,19 +82,6 @@ interface MetrologyChannel {
   }>
 }
 
-const statusConfig: Record<
-  StandardStatus,
-  {
-    label: string
-    variant: 'default' | 'secondary' | 'destructive' | 'outline'
-  }
-> = {
-  ACTIVE: { label: 'Ativo', variant: 'default' },
-  INACTIVE: { label: 'Inativo', variant: 'secondary' },
-  OUT_OF_TOLERANCE: { label: 'Fora de Tolerância', variant: 'destructive' },
-  SENT_FOR_CALIBRATION: { label: 'Em Calibração', variant: 'outline' },
-}
-
 function formatDegreesOfFreedom(
   point: NonNullable<MetrologyChannel['points']>[number],
 ) {
@@ -140,7 +128,6 @@ export function StandardDetailPage({ id }: { id: string }) {
     )
   }
 
-  const statusInfo = statusConfig[standard.status]
   const kindLabel = metrologyKindDefinition(standard.kind).label
   const calTone = calibrationTone(standard.daysUntilExpiry, standard.isExpired)
   const calLabel = calibrationLabel(
@@ -197,7 +184,11 @@ export function StandardDetailPage({ id }: { id: string }) {
                 <h1 className="text-balance text-2xl font-semibold tracking-tight">
                   {standard.name}
                 </h1>
-                <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                <StatusBadge
+                  tone={REFERENCE_STANDARD_STATUS.tone(standard.status)}
+                >
+                  {REFERENCE_STANDARD_STATUS.label(standard.status)}
+                </StatusBadge>
                 <Badge variant="outline">{kindLabel}</Badge>
               </div>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">

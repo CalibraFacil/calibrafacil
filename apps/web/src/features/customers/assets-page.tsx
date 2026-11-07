@@ -12,7 +12,8 @@ import {
   useCustomerAssetsData,
   useCustomerDetailData,
 } from '@/features/customers/queries'
-import type { CustomerAssetStatus } from '@/features/customers/types'
+import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Button } from '@calibra-facil/ui/button'
 import { Input } from '@calibra-facil/ui/input'
 import {
@@ -23,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from '@calibra-facil/ui/table'
-import { Badge } from '@calibra-facil/ui/badge'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Empty,
@@ -40,23 +40,6 @@ import {
   Toolbar,
 } from '@/features/customers/components/client-detail-ui'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
-
-const statusLabels: Record<CustomerAssetStatus, string> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  MAINTENANCE: 'Manutenção',
-  SCRAPPED: 'Descartado',
-}
-
-const statusVariants: Record<
-  CustomerAssetStatus,
-  'default' | 'secondary' | 'outline' | 'destructive'
-> = {
-  ACTIVE: 'default',
-  INACTIVE: 'secondary',
-  MAINTENANCE: 'outline',
-  SCRAPPED: 'destructive',
-}
 
 // The next calibration is a calendar date (a Postgres date): show its day.
 export function ClientEquipmentTab({ id }: { id: string }) {
@@ -195,9 +178,9 @@ export function ClientEquipmentTab({ id }: { id: string }) {
                         {asset.serialNumber}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={statusVariants[asset.status]}>
-                          {statusLabels[asset.status]}
-                        </Badge>
+                        <StatusBadge tone={ASSET_STATUS.tone(asset.status)}>
+                          {ASSET_STATUS.label(asset.status)}
+                        </StatusBadge>
                       </TableCell>
                       <TableCell>
                         {formatCalendarDate(asset.nextCalibrationDate, 'date')}

@@ -13,10 +13,12 @@ import {
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
+  CORRECTIVE_ACTION_STATUS,
+  NON_CONFORMANCE_STATUS,
+} from '@calibra-facil/schemas/machines'
+import {
   CAPA_CATEGORIES,
   CAPA_SEVERITIES,
-  CAPA_STATUSES,
-  NON_CONFORMANCE_STATUSES,
   NON_CONFORMANCE_TYPES,
   type CapaAuditLogData,
   type CapaDetail,
@@ -43,7 +45,7 @@ export function nonConformanceListInputFromUrl(
     page: pageFromUrl(url),
     search: url?.searchParams.get('query') ?? '',
     statusFilter: optionFromUrl(
-      NON_CONFORMANCE_STATUSES,
+      NON_CONFORMANCE_STATUS.states,
       url?.searchParams.get('status'),
     ),
     typeFilter: optionFromUrl(
@@ -58,7 +60,10 @@ export function capaListInputFromUrl(organizationId: string, url?: URL) {
     organizationId,
     page: pageFromUrl(url),
     search: url?.searchParams.get('query') ?? '',
-    statusFilter: optionFromUrl(CAPA_STATUSES, url?.searchParams.get('status')),
+    statusFilter: optionFromUrl(
+      CORRECTIVE_ACTION_STATUS.states,
+      url?.searchParams.get('status'),
+    ),
     severityFilter: optionFromUrl(
       CAPA_SEVERITIES,
       url?.searchParams.get('severity'),

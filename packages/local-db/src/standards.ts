@@ -1,14 +1,14 @@
 import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { standardDaysUntilExpiry } from "@calibra-facil/schemas";
+import {
+  REFERENCE_STANDARD_STATUS,
+  type ReferenceStandardStatus,
+} from "@calibra-facil/schemas/machines";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 import { toRecord } from "@calibra-facil/shared/record";
 
-type LocalStandardStatus =
-  | "ACTIVE"
-  | "INACTIVE"
-  | "OUT_OF_TOLERANCE"
-  | "SENT_FOR_CALIBRATION";
+type LocalStandardStatus = ReferenceStandardStatus;
 
 export type LocalStandardsListInput = {
   page: number;
@@ -372,16 +372,7 @@ function parseCertifiedValues(value: unknown): LocalCertifiedValue[] | null {
 }
 
 function parseStatus(status: string): LocalStandardStatus {
-  if (
-    status === "ACTIVE" ||
-    status === "INACTIVE" ||
-    status === "OUT_OF_TOLERANCE" ||
-    status === "SENT_FOR_CALIBRATION"
-  ) {
-    return status;
-  }
-
-  return "ACTIVE";
+  return REFERENCE_STANDARD_STATUS.parse(status) ?? "ACTIVE";
 }
 
 function safeParseRecord(value: string): Record<string, unknown> {

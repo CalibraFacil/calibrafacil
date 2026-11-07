@@ -1,6 +1,9 @@
 import { standardRouteId } from '@calibra-facil/shared/route-identifiers'
 import { type ColumnDef } from '@tanstack/react-table'
-import { REFERENCE_STANDARD_MACHINE } from '@calibra-facil/schemas/machines'
+import {
+  REFERENCE_STANDARD_MACHINE,
+  REFERENCE_STANDARD_STATUS,
+} from '@calibra-facil/schemas/machines'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -14,6 +17,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Button } from '@calibra-facil/ui/button'
 import {
   DropdownMenu,
@@ -51,21 +55,6 @@ function getCalibrationBadge(daysUntilExpiry: number, isExpired: boolean) {
       label: 'Válido',
       className: 'border-green-500 text-green-600',
     }
-  }
-}
-
-function getStatusBadge(status: StandardStatus) {
-  switch (status) {
-    case 'ACTIVE':
-      return { variant: 'default' as const, label: 'Ativo' }
-    case 'INACTIVE':
-      return { variant: 'secondary' as const, label: 'Inativo' }
-    case 'OUT_OF_TOLERANCE':
-      return { variant: 'destructive' as const, label: 'Fora de Tolerância' }
-    case 'SENT_FOR_CALIBRATION':
-      return { variant: 'outline' as const, label: 'Em Calibração' }
-    default:
-      return { variant: 'secondary' as const, label: status }
   }
 }
 
@@ -175,8 +164,12 @@ export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const statusBadge = getStatusBadge(row.original.status)
-      return <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+      const status = row.original.status
+      return (
+        <StatusBadge tone={REFERENCE_STANDARD_STATUS.tone(status)}>
+          {REFERENCE_STANDARD_STATUS.label(status)}
+        </StatusBadge>
+      )
     },
   },
   {

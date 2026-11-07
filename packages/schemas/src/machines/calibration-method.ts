@@ -11,6 +11,7 @@
 //                       the same name is archived
 //   return_to_draft   POST /:id/return-to-draft, with a reason
 //   archive           POST /:id/archive
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine } from "../state-machine";
 
 export const METHOD_STATUSES = [
@@ -21,6 +22,14 @@ export const METHOD_STATUSES = [
   "ARCHIVED",
 ] as const;
 export type MethodStatus = (typeof METHOD_STATUSES)[number];
+
+export const METHOD_STATUS = defineStatusVocabulary(METHOD_STATUSES, {
+  DRAFT: { label: "Rascunho", tone: "neutral" },
+  PENDING_APPROVAL: { label: "Em aprovação", tone: "warning" },
+  TECHNICAL_REVIEWED: { label: "Revisão técnica", tone: "info" },
+  PUBLISHED: { label: "Publicado", tone: "ok" },
+  ARCHIVED: { label: "Arquivado", tone: "neutral" },
+});
 
 export const METHOD_MACHINE = defineStateMachine({
   name: "calibration method",

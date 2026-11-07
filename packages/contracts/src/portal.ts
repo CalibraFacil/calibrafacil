@@ -1,3 +1,4 @@
+import { CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 import { z } from "zod";
 
 /**
@@ -8,13 +9,7 @@ import { z } from "zod";
 
 const nullableString = z.string().nullable();
 
-const portalRequestStatusSchema = z.enum([
-  "PENDING",
-  "UNDER_REVIEW",
-  "APPROVED",
-  "REJECTED",
-  "CONVERTED",
-]);
+const portalRequestStatusSchema = z.enum(CALIBRATION_REQUEST_STATUSES);
 
 const portalOverviewServiceOrderSchema = z.object({
   id: z.number(),

@@ -1,3 +1,10 @@
+import {
+  CALIBRATION_REQUEST_STATUSES,
+  NOTIFICATION_STATUSES,
+  OOT_NOTIFICATION_STATUSES,
+  VISIT_RESCHEDULE_REQUEST_STATUSES,
+  VISIT_STATUSES,
+} from "@calibra-facil/schemas/machines";
 import { z } from "zod";
 
 import { nullableNumber, nullableString, paginationSchema } from "./common";
@@ -20,7 +27,7 @@ const portalNotificationItemSchema = z.object({
   id: z.number(),
   type: z.string(),
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
-  status: z.enum(["UNREAD", "READ", "ARCHIVED"]),
+  status: z.enum(NOTIFICATION_STATUSES),
   title: z.string(),
   message: z.string(),
   actionUrl: nullableString,
@@ -78,7 +85,7 @@ const portalOotNotificationSchema = z.object({
   ncNumber: z.string(),
   certificateNumber: nullableString,
   affectedScope: nullableString,
-  status: z.enum(["PENDING", "GENERATED", "SENT", "ACKNOWLEDGED"]),
+  status: z.enum(OOT_NOTIFICATION_STATUSES),
   sentAt: nullableString,
   acknowledgedAt: nullableString,
   acknowledgedVia: z.enum(["email_link", "portal_link", "manual"]).nullable(),
@@ -109,13 +116,7 @@ export type PortalOotAcknowledgeResponse = z.infer<
 // Visits
 // ---------------------------------------------------------------------------
 
-const visitStatusSchema = z.enum([
-  "PROPOSED",
-  "CONFIRMED",
-  "IN_PROGRESS",
-  "COMPLETED",
-  "CANCELLED",
-]);
+const visitStatusSchema = z.enum(VISIT_STATUSES);
 
 const portalAddressSchema = z.object({
   cep: z.string().optional(),
@@ -129,7 +130,7 @@ const portalAddressSchema = z.object({
 
 const rescheduleRequestSchema = z.object({
   id: z.number(),
-  status: z.enum(["PENDING", "ACCEPTED", "DECLINED", "SUPERSEDED"]),
+  status: z.enum(VISIT_RESCHEDULE_REQUEST_STATUSES),
   reason: nullableString,
   preferredWindows: z.array(
     z.object({
@@ -188,13 +189,7 @@ export type PortalVisitRescheduleResponse = z.infer<
 // Calibration requests
 // ---------------------------------------------------------------------------
 
-const portalRequestStatusValueSchema = z.enum([
-  "PENDING",
-  "UNDER_REVIEW",
-  "APPROVED",
-  "REJECTED",
-  "CONVERTED",
-]);
+const portalRequestStatusValueSchema = z.enum(CALIBRATION_REQUEST_STATUSES);
 
 const portalRequestListItemSchema = z.object({
   id: z.number(),

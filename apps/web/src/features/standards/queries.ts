@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query'
 import type { MassCompositionProfileWriteInput } from '@calibra-facil/client-runtime'
 
+import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
@@ -16,7 +17,6 @@ import {
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
-  STANDARD_STATUSES,
   type ImpactedCertificatesData,
   type SendStandardRecallRequest,
   type SendStandardRecallResult,
@@ -32,7 +32,10 @@ import {
 export const STANDARDS_LIST_LIMIT = 20
 
 function statusFromUrl(url?: URL): StandardStatus | '' {
-  return optionFromUrl(STANDARD_STATUSES, url?.searchParams.get('status'))
+  return optionFromUrl(
+    REFERENCE_STANDARD_STATUS.states,
+    url?.searchParams.get('status'),
+  )
 }
 
 export function standardsListQueryInputFromUrl(

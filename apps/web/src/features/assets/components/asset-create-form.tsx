@@ -3,6 +3,7 @@ import { isWeighingScaleAssetType } from '@calibra-facil/shared/mass-units'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
+import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
 import { AnimatePresence, motion } from 'motion/react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -33,7 +34,6 @@ import {
 } from '@/features/assets/queries'
 import {
   baseMeasurementUnitOptions,
-  isAssetFormStatus,
   DEFAULT_REGULATED_FORM_FIELDS,
   isAssetSpecificationErrorField,
   listMissingAssetRequirements,
@@ -87,13 +87,6 @@ import { cn } from '@/lib/utils'
 export type CreatedAsset = Awaited<
   ReturnType<typeof calibraApi.assets.create>
 > & { assetTypeName: string }
-
-const statusLabels: Record<AssetFormData['status'], string> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  MAINTENANCE: 'Em Manutenção',
-  SCRAPPED: 'Descartado',
-}
 
 const PANEL_CLASS = 'p-4 sm:p-5'
 
@@ -741,20 +734,20 @@ export function AssetCreateForm({
                   <Select
                     value={formData.status}
                     onValueChange={(value) => {
-                      if (isAssetFormStatus(value)) {
-                        updateField('status', value)
-                      }
+                      const status = ASSET_STATUS.parse(value)
+                      if (status) updateField('status', status)
                     }}
                     disabled={isSaving}
                   >
                     <SelectTrigger id="status">
-                      <span>{statusLabels[formData.status]}</span>
+                      <span>{ASSET_STATUS.label(formData.status)}</span>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ACTIVE">Ativo</SelectItem>
-                      <SelectItem value="INACTIVE">Inativo</SelectItem>
-                      <SelectItem value="MAINTENANCE">Em Manutenção</SelectItem>
-                      <SelectItem value="SCRAPPED">Descartado</SelectItem>
+                      {ASSET_STATUS.options.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>

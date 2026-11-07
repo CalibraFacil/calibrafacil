@@ -2,10 +2,11 @@ import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers"
 import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import type { MetrologyRegime } from "@calibra-facil/schemas";
+import type { AssetStatus } from "@calibra-facil/schemas/machines";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
-type LocalAssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
+type LocalAssetStatus = AssetStatus;
 
 export type LocalAssetsListInput = {
   page: number;

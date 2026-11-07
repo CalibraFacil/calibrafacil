@@ -12,7 +12,6 @@ import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-  type SignalTone,
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@calibra-facil/ui/button";
@@ -37,24 +36,15 @@ import { Textarea } from "@calibra-facil/ui/textarea";
 import {
   formatPortalVisitAddress,
   isVisitActionable,
-  PORTAL_VISIT_STATUS_LABELS,
   PREFERRED_PERIOD_LABELS,
   useConfirmVisitPresence,
   usePortalVisits,
   useRequestVisitReschedule,
   type PortalVisit,
   type PortalVisitReschedulePeriod,
-  type PortalVisitStatus,
 } from "./queries";
 import { formatCalendarDate } from "@calibra-facil/shared/format";
-
-const VISIT_TONE: Record<PortalVisitStatus, SignalTone> = {
-  PROPOSED: "warning",
-  CONFIRMED: "info",
-  IN_PROGRESS: "info",
-  COMPLETED: "ok",
-  CANCELLED: "neutral",
-};
+import { VISIT_STATUS } from "@calibra-facil/schemas/machines";
 
 function scheduledLabel(scheduledAt: string | null): string {
   if (!scheduledAt) return "Data a confirmar";
@@ -362,8 +352,8 @@ function VisitRow({ visit }: { visit: PortalVisit }) {
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <AcknowledgementPill visit={visit} />
-        <StatusPill tone={VISIT_TONE[visit.status]} size="sm">
-          {PORTAL_VISIT_STATUS_LABELS[visit.status]}
+        <StatusPill tone={VISIT_STATUS.tone(visit.status)} size="sm">
+          {VISIT_STATUS.label(visit.status)}
         </StatusPill>
       </div>
     </>

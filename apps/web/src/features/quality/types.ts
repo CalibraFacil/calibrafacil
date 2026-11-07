@@ -1,8 +1,7 @@
-export const NON_CONFORMANCE_STATUSES = [
-  'open',
-  'under_review',
-  'resolved',
-] as const
+import type {
+  CorrectiveActionStatus,
+  NonConformanceStatus,
+} from '@calibra-facil/schemas/machines'
 
 export const NON_CONFORMANCE_TYPES = [
   'work',
@@ -11,7 +10,7 @@ export const NON_CONFORMANCE_TYPES = [
   'out_of_tolerance',
 ] as const
 
-export type NonConformanceStatus = (typeof NON_CONFORMANCE_STATUSES)[number]
+export type { NonConformanceStatus }
 export type NonConformanceType = (typeof NON_CONFORMANCE_TYPES)[number]
 export type NonConformanceDisposition =
   | 'rework'
@@ -115,14 +114,6 @@ export type NewNonConformanceJobsData = {
   }>
 }
 
-export const CAPA_STATUSES = [
-  'OPEN',
-  'INVESTIGATION',
-  'IMPLEMENTATION',
-  'VERIFICATION',
-  'CLOSED',
-] as const
-
 export const CAPA_SEVERITIES = ['minor', 'major', 'critical'] as const
 
 export const CAPA_CATEGORIES = [
@@ -134,7 +125,7 @@ export const CAPA_CATEGORIES = [
   'other',
 ] as const
 
-export type CapaStatus = (typeof CAPA_STATUSES)[number]
+type CapaStatus = CorrectiveActionStatus
 export type CapaSeverity = (typeof CAPA_SEVERITIES)[number]
 export type CapaCategory = (typeof CAPA_CATEGORIES)[number]
 

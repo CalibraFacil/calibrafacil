@@ -3,7 +3,6 @@ import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { MoreHorizontalIcon, ViewIcon } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'
 import {
   DropdownMenu,
@@ -12,51 +11,9 @@ import {
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import type {
-  CompetenceRow,
-  CompetenceStatus,
-} from '@/features/personnel/types'
+import type { CompetenceRow } from '@/features/personnel/types'
+import { CompetenceStatusBadge } from '@/features/personnel/components/status-badges'
 import { formatInstant } from '@calibra-facil/shared/format'
-
-const statusConfig: Record<
-  CompetenceStatus,
-  {
-    label: string
-    variant: 'default' | 'secondary' | 'destructive' | 'outline'
-    className?: string
-  }
-> = {
-  REQUESTED: {
-    label: 'Solicitada',
-    variant: 'outline',
-    className: 'border-blue-500 text-blue-600',
-  },
-  TRAINING_ASSIGNED: {
-    label: 'Treinamento Atribuído',
-    variant: 'outline',
-    className: 'border-amber-500 text-amber-600',
-  },
-  IN_TRAINING: {
-    label: 'Em Treinamento',
-    variant: 'outline',
-    className: 'border-yellow-500 text-yellow-600',
-  },
-  PENDING_EVALUATION: {
-    label: 'Aguardando Avaliação',
-    variant: 'outline',
-    className: 'border-purple-500 text-purple-600',
-  },
-  ACTIVE: { label: 'Ativa', variant: 'default' },
-  SUSPENDED: { label: 'Suspensa', variant: 'destructive' },
-  EXPIRED: { label: 'Expirada', variant: 'destructive' },
-  CANCELLED: { label: 'Cancelada', variant: 'secondary' },
-}
-
-export function getStatusBadge(status: CompetenceStatus) {
-  return (
-    statusConfig[status] ?? { label: status, variant: 'secondary' as const }
-  )
-}
 
 export const competenceColumns: ColumnDef<CompetenceRow>[] = [
   {
@@ -123,12 +80,7 @@ export const competenceColumns: ColumnDef<CompetenceRow>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const badge = getStatusBadge(row.original.status)
-      return (
-        <Badge variant={badge.variant} className={badge.className}>
-          {badge.label}
-        </Badge>
-      )
+      return <CompetenceStatusBadge status={row.original.status} />
     },
   },
   {

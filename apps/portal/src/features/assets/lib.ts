@@ -1,12 +1,3 @@
-import type { AssetStatus } from "./types";
-
-export const statusLabels: Record<AssetStatus, string> = {
-  ACTIVE: "Ativo",
-  INACTIVE: "Inativo",
-  MAINTENANCE: "Manutenção",
-  SCRAPPED: "Descartado",
-};
-
 export function formatSpecificationValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "-";
   if (Array.isArray(value))
