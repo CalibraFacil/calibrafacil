@@ -1,3 +1,4 @@
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { z } from "zod";
 
 // The lifecycle of an ISSUED certificate (ISO/IEC 17025 §7.8.8 amendments, §7.10
@@ -27,8 +28,22 @@ const CERTIFICATE_LIFECYCLE_STATUSES = [
   "SUPERSEDED",
   "WITHDRAWN",
 ] as const;
-type CertificateLifecycleStatus =
+export type CertificateLifecycleStatus =
   (typeof CERTIFICATE_LIFECYCLE_STATUSES)[number];
+
+/**
+ * What a certificate's lifecycle reads like on every surface. A certificate is "Vigente" while
+ * nothing replaced or withdrew it; "Substituído" is the lifecycle axis (an amendment was issued),
+ * not the job's own SUPERSEDED status.
+ */
+export const CERTIFICATE_LIFECYCLE_STATUS = defineStatusVocabulary(
+  CERTIFICATE_LIFECYCLE_STATUSES,
+  {
+    ISSUED: { label: "Vigente", tone: "ok" },
+    SUPERSEDED: { label: "Substituído", tone: "warning" },
+    WITHDRAWN: { label: "Retirado", tone: "critical" },
+  },
+);
 
 /** The fields of a stored status event the derivation reads. */
 export type CertificateStatusEventLike = {

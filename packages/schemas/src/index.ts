@@ -26,6 +26,7 @@ export * from "./standard-validity";
 export * from "./standards-judgement";
 export * from "./job-transitions";
 export * from "./certificate-lifecycle";
+export * from "./sync-status";
 export * from "./self-serve-signup";
 export * from "./organization-lifecycle";
 export * from "./organization-profile";

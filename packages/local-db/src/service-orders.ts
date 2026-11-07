@@ -3,26 +3,15 @@ import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
+import {
+  SERVICE_ORDER_STATUS,
+  type ServiceOrderStatus,
+} from "@calibra-facil/shared/service-orders";
 import { toRecord } from "@calibra-facil/shared/record";
 
 type JsonRecord = Record<string, unknown>;
 
-export type LocalServiceOrderStatus =
-  | "opened"
-  | "awaiting_tech_evaluation"
-  | "under_evaluation"
-  | "awaiting_quote_approval"
-  | "quote_approved"
-  | "quote_rejected"
-  | "repair_in_progress"
-  | "awaiting_calibration"
-  | "calibration_in_progress"
-  | "awaiting_final_review"
-  | "ready_for_pickup"
-  | "delivered"
-  | "closed"
-  | "canceled"
-  | "warranty_return";
+export type LocalServiceOrderStatus = ServiceOrderStatus;
 
 type LocalServiceOrderPriority = "normal" | "urgent" | "contract" | "warranty";
 
@@ -153,24 +142,6 @@ export type SaveLocalServiceOrderExecutionNotesInput = {
   calibrationRequiredAfterRepair?: boolean;
   result?: LocalServiceOrderExecutionResult;
   items?: LocalServiceOrderPricedItemInput[];
-};
-
-const SERVICE_ORDER_STATUS_LABELS: Record<LocalServiceOrderStatus, string> = {
-  opened: "Aberta",
-  awaiting_tech_evaluation: "Aguardando avaliacao",
-  under_evaluation: "Em avaliacao",
-  awaiting_quote_approval: "Aguardando aprovacao",
-  quote_approved: "Orcamento aprovado",
-  quote_rejected: "Orcamento recusado",
-  repair_in_progress: "Reparo em andamento",
-  awaiting_calibration: "Aguardando calibracao",
-  calibration_in_progress: "Calibracao em andamento",
-  awaiting_final_review: "Aguardando revisao final",
-  ready_for_pickup: "Pronta para retirada",
-  delivered: "Entregue",
-  closed: "Fechada",
-  canceled: "Cancelada",
-  warranty_return: "Retorno em garantia",
 };
 
 export function createLocalServiceOrderIntake(
@@ -521,7 +492,7 @@ LIMIT @limit OFFSET @offset
       assetName: row.asset_name,
       assetSerialNumber: row.asset_serial_number,
       status: row.status,
-      statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
+      statusLabel: SERVICE_ORDER_STATUS.label(row.status),
       priority: row.priority,
       responsibleTechnicianName: null,
       openedAt: row.opened_at,
@@ -567,7 +538,7 @@ export function getLocalServiceOrderDetail(
     assetName: row.asset_name ?? "",
     assetSerialNumber: row.asset_serial_number,
     status: row.status,
-    statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
+    statusLabel: SERVICE_ORDER_STATUS.label(row.status),
     priority: row.priority,
     intakeType: row.intake_type,
     responsibleTechnicianId: row.responsible_technician_id,

@@ -7,6 +7,11 @@ import {
   defineStateMachine,
   type StateMachine,
 } from "@calibra-facil/schemas/state-machine";
+import {
+  ATTACHMENT_UPLOAD_STATUSES,
+  OUTBOX_STATUSES,
+  SYNC_CONFLICT_STATUSES,
+} from "@calibra-facil/schemas/sync-status";
 
 // outbox.status: one local change on its way to the cloud.
 //   create   appendOutboxEvent: pending
@@ -18,15 +23,6 @@ import {
 //              keeping the local change
 //   discard  an audited give-up: a dead event, a held dependent, or a conflict
 //              discarded by the user (the trace stays in domain_events)
-const OUTBOX_STATUSES = [
-  "pending",
-  "failed",
-  "synced",
-  "dead",
-  "conflict",
-  "discarded",
-] as const;
-
 export const OUTBOX_MACHINE = defineStateMachine({
   name: "outbox event",
   states: OUTBOX_STATUSES,
@@ -65,12 +61,6 @@ export const OUTBOX_MACHINE = defineStateMachine({
 //              regulated record)
 // `ignored` is history only: older builds wrote it and marked the change synced
 // although the cloud never received it; no code writes it now.
-const SYNC_CONFLICT_STATUSES = [
-  "open",
-  "resolved",
-  "discarded_by_user",
-] as const;
-
 const SYNC_CONFLICT_MACHINE = defineStateMachine({
   name: "sync conflict",
   states: SYNC_CONFLICT_STATUSES,
@@ -88,13 +78,6 @@ const SYNC_CONFLICT_MACHINE = defineStateMachine({
 //   link    the cloud linked it to its record (synced)
 //   retry   back to pending for another upload (also a dead one, by the user)
 //   kill    the upload or its event was refused for good
-const ATTACHMENT_UPLOAD_STATUSES = [
-  "pending",
-  "uploaded",
-  "synced",
-  "dead",
-] as const;
-
 const ATTACHMENT_UPLOAD_MACHINE = defineStateMachine({
   name: "attachment upload",
   states: ATTACHMENT_UPLOAD_STATUSES,

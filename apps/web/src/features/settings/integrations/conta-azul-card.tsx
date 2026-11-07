@@ -15,7 +15,11 @@ import {
   RefreshDotIcon,
 } from '@hugeicons/core-free-icons'
 
-import type { ContaAzulConnectionConfig } from '@calibra-facil/shared'
+import {
+  INTEGRATION_STATUS,
+  type ContaAzulConnectionConfig,
+} from '@calibra-facil/shared'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { calibraApi } from '@/utils/api'
 import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
 import { Badge } from '@calibra-facil/ui/badge'
@@ -44,7 +48,6 @@ import {
   formatIntegrationDateTime,
   getSharedIntegrationWarnings,
   integrationReadinessBadgeVariant,
-  integrationStatusBadgeMeta,
 } from '@/features/settings/integrations-model'
 import { contaAzulAppQueryOptions } from '@/features/settings/queries'
 import type {
@@ -340,7 +343,6 @@ function ContaAzulPanel({
     native.disconnect.isPending
   const disabled = isBusy
 
-  const statusBadge = integrationStatusBadgeMeta(integration)
   const readiness = integration.overview.readiness.readinessStatus
   const sharedWarnings = getSharedIntegrationWarnings(integration)
   const capabilityChips = getContaAzulCapabilityChips(
@@ -390,7 +392,9 @@ function ContaAzulPanel({
                 <LiveDot active />
                 Conectada
               </span>
-              <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+              <StatusBadge tone={INTEGRATION_STATUS.tone(integration.status)}>
+                {INTEGRATION_STATUS.label(integration.status)}
+              </StatusBadge>
               <Badge variant={integrationReadinessBadgeVariant(readiness)}>
                 {readiness === 'READY'
                   ? 'Pronta'

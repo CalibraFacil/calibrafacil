@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  CERTIFICATE_LIFECYCLE_STATUS,
   PublicServiceOrderAccessViewSchema,
   RedeemServiceOrderAccessCodeResponseSchema,
 } from "@calibra-facil/schemas";
@@ -38,7 +39,7 @@ export const verificationResponseSchema = z.object({
   valid: z.boolean(),
   // The certificate lifecycle (ISO/IEC 17025 §7.8.8, §7.10): ISSUED, SUPERSEDED
   // once an amendment was issued, WITHDRAWN (`withdrawnAt` then says when).
-  certificateStatus: z.enum(["ISSUED", "SUPERSEDED", "WITHDRAWN"]),
+  certificateStatus: z.enum(CERTIFICATE_LIFECYCLE_STATUS.states),
   withdrawnAt: nullableString,
   jobId: z.string(),
   status: z.string(),

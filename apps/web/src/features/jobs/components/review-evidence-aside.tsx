@@ -2,14 +2,9 @@ import { formatCalendarDate } from '@calibra-facil/shared/format'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert02Icon } from '@hugeicons/core-free-icons'
 import { Badge } from '@calibra-facil/ui/badge'
-import {
-  getFinancialStatusLabel,
-  type FinancialStatus,
-} from '@calibra-facil/shared'
-import {
-  getFinancialVariant,
-  REVIEW_SURFACE_CLASS,
-} from '@/features/jobs/detail-model'
+import type { FinancialStatus } from '@calibra-facil/shared'
+import { FinancialStatusBadge } from './financial-status-badge'
+import { REVIEW_SURFACE_CLASS } from '@/features/jobs/detail-model'
 import {
   renderAcceptanceBadge,
   type JobReviewModel,
@@ -19,12 +14,10 @@ import type { JobDetailData } from '../job-detail-types'
 export function ReviewEvidenceAside({
   job,
   review,
-  financialStatus,
   normalizedFinancialStatus,
 }: {
   job: JobDetailData
   review: JobReviewModel
-  financialStatus: string
   normalizedFinancialStatus: FinancialStatus
 }) {
   const { quickAlertItems, reviewHasData, reviewHasResults, reviewStandards } =
@@ -88,9 +81,7 @@ export function ReviewEvidenceAside({
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Financeiro</span>
-            <Badge variant={getFinancialVariant(financialStatus)}>
-              {getFinancialStatusLabel(normalizedFinancialStatus)}
-            </Badge>
+            <FinancialStatusBadge status={normalizedFinancialStatus} />
           </div>
         </div>
       </section>

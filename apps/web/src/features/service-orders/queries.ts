@@ -1,6 +1,10 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import type { MaterialsListData } from '@calibra-facil/client-runtime'
+import {
+  SERVICE_ORDER_STATUS,
+  type ServiceOrderStatus,
+} from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
@@ -12,18 +16,19 @@ import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type NewServiceOrderAssetsData,
   type NewServiceOrderCustomersData,
-  SERVICE_ORDER_STATUSES,
   type ServiceOrderDetail,
   type ServiceOrderFinancialStatusResponse,
   type ServiceOrdersListData,
   type ServiceOrdersListQueryInput,
-  type ServiceOrderStatus,
 } from './types'
 
 export const SERVICE_ORDERS_LIST_LIMIT = 20
 
 function statusFromUrl(url?: URL): ServiceOrderStatus | '' {
-  return optionFromUrl(SERVICE_ORDER_STATUSES, url?.searchParams.get('status'))
+  return optionFromUrl(
+    SERVICE_ORDER_STATUS.states,
+    url?.searchParams.get('status'),
+  )
 }
 
 export function serviceOrdersListQueryInputFromUrl(

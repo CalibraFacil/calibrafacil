@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+  ServiceOrderStatusRow,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,7 +12,6 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export interface ServiceStartedEmailProps {
@@ -37,7 +40,9 @@ export function ServiceStartedEmail({
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="info">Serviço iniciado</Badge>
+        <ServiceOrderStatusBadge status="repair_in_progress">
+          Serviço iniciado
+        </ServiceOrderStatusBadge>
         <Title>Serviço em andamento</Title>
         <Paragraph>
           Olá, {customerName}! {labName} iniciou a execução do serviço na sua
@@ -47,7 +52,7 @@ export function ServiceStartedEmail({
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Serviço iniciado" />
+          <ServiceOrderStatusRow status="repair_in_progress" />
         </DetailBox>
 
         <Paragraph>

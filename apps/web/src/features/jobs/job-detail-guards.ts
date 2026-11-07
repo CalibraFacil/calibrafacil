@@ -1,6 +1,6 @@
 import { JOB_STATUS } from '@calibra-facil/schemas'
 import { toRecord } from '@calibra-facil/shared/record'
-import { type FinancialStatus } from '@calibra-facil/shared'
+import { FINANCIAL_STATUS, type FinancialStatus } from '@calibra-facil/shared'
 import {
   type ApprovedJobRecordData,
   type JobStatus,
@@ -34,15 +34,5 @@ export function toJobStatus(value: unknown): JobStatus {
 }
 
 export function toFinancialStatus(value: unknown): FinancialStatus {
-  switch (value) {
-    case 'DRAFT':
-    case 'ISSUED':
-    case 'PAID':
-    case 'OVERDUE':
-    case 'VOID':
-    case 'UNBILLED':
-      return value
-    default:
-      return 'UNBILLED'
-  }
+  return FINANCIAL_STATUS.parse(value) ?? 'UNBILLED'
 }

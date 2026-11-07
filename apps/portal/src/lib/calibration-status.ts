@@ -10,26 +10,6 @@ import { dateOnlyDaysBetween } from "./date-only";
  * way, so the logic lives here and nowhere else.
  */
 
-/**
- * The pill vocabulary. Status badges (StatusPill, tables, rows, heroes) speak
- * `StatusTone`; the tile/panel layer (SignalTile, Panel) speaks `SignalTone`.
- * `statusToneToSignal` is the one-way bridge between the two — no status logic
- * is reinvented, every surface still derives from this module + status-labels.
- */
-export type StatusTone = "success" | "warning" | "danger" | "info" | "muted";
-
-const SIGNAL_BY_STATUS_TONE: Record<StatusTone, SignalTone> = {
-  success: "ok",
-  danger: "critical",
-  warning: "warning",
-  info: "info",
-  muted: "neutral",
-};
-
-export function statusToneToSignal(tone: StatusTone): SignalTone {
-  return SIGNAL_BY_STATUS_TONE[tone];
-}
-
 export type CalibrationStatus =
   | "OVERDUE"
   | "DUE_SOON"

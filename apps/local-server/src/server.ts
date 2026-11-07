@@ -94,6 +94,8 @@ import { executeLocalCompiledMethod } from "./execution";
 import { resolveLocalStoragePath } from "./local-storage";
 import { registerPrinterRoutes } from "./printing/routes";
 import { isRecord, toRecord } from "@calibra-facil/shared/record";
+import { SERVICE_ORDER_STATUS } from "@calibra-facil/shared/service-orders";
+import { SYNC_CONFLICT_STATUS } from "@calibra-facil/schemas/sync-status";
 
 export type LocalServerInstance = {
   app: ReturnType<typeof createLocalServer>;
@@ -450,7 +452,8 @@ export function createLocalServerRuntime(
     return c.json(
       localSyncConflictsResponseSchema.parse(
         listSyncConflicts(database, {
-          status: parseConflictStatus(c.req.query("status")),
+          status:
+            SYNC_CONFLICT_STATUS.parse(c.req.query("status")) ?? undefined,
           limit: Number(c.req.query("limit") ?? "50"),
         }),
       ),
@@ -804,7 +807,7 @@ export function createLocalServerRuntime(
         page: Number(c.req.query("page") ?? "1"),
         limit: Number(c.req.query("limit") ?? "20"),
         query: c.req.query("query") || undefined,
-        status: parseServiceOrderStatus(c.req.query("status")),
+        status: SERVICE_ORDER_STATUS.parse(c.req.query("status")) ?? undefined,
       }),
     });
   });
@@ -1221,40 +1224,8 @@ function parseAssetStatus(status: string | undefined) {
   return ASSET_STATUS.parse(status) ?? undefined;
 }
 
-function parseServiceOrderStatus(status: string | undefined) {
-  if (
-    status === "opened" ||
-    status === "awaiting_tech_evaluation" ||
-    status === "under_evaluation" ||
-    status === "awaiting_quote_approval" ||
-    status === "quote_approved" ||
-    status === "quote_rejected" ||
-    status === "repair_in_progress" ||
-    status === "awaiting_calibration" ||
-    status === "calibration_in_progress" ||
-    status === "awaiting_final_review" ||
-    status === "ready_for_pickup" ||
-    status === "delivered" ||
-    status === "closed" ||
-    status === "canceled" ||
-    status === "warranty_return"
-  ) {
-    return status;
-  }
-
-  return undefined;
-}
-
 function parseStandardStatus(status: string | undefined) {
   return REFERENCE_STANDARD_STATUS.parse(status) ?? undefined;
-}
-
-function parseConflictStatus(status: string | undefined) {
-  if (status === "open" || status === "resolved" || status === "ignored") {
-    return status;
-  }
-
-  return undefined;
 }
 
 function parseNumber(value: string | undefined) {

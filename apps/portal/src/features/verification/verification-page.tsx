@@ -35,6 +35,10 @@ import {
   type VerificationData,
 } from "./queries";
 import { formatInstant } from "@calibra-facil/shared/format";
+import {
+  CERTIFICATE_LIFECYCLE_STATUS,
+  type CertificateLifecycleStatus,
+} from "@calibra-facil/schemas";
 
 type IconType = Parameters<typeof HugeiconsIcon>[0]["icon"];
 
@@ -96,16 +100,16 @@ function StatusHero({ data }: { data: VerificationData }) {
   // amendment is still in progress is simply valid.
   const withdrawn = data.certificateStatus === "WITHDRAWN";
   const superseded = data.isSuperseded;
-  const tone: SignalTone = withdrawn
-    ? "critical"
+  const lifecycle: CertificateLifecycleStatus = withdrawn
+    ? "WITHDRAWN"
     : superseded
-      ? "warning"
-      : "ok";
-  const title = withdrawn
-    ? "Certificado retirado"
-    : superseded
-      ? "Certificado substituído"
-      : "Certificado autêntico";
+      ? "SUPERSEDED"
+      : "ISSUED";
+  const tone: SignalTone = CERTIFICATE_LIFECYCLE_STATUS.tone(lifecycle);
+  const title =
+    lifecycle === "ISSUED"
+      ? "Certificado autêntico"
+      : `Certificado ${CERTIFICATE_LIFECYCLE_STATUS.label(lifecycle).toLowerCase()}`;
   const icon = withdrawn || superseded ? Alert02Icon : CheckmarkCircle02Icon;
 
   return (

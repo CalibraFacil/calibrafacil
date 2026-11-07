@@ -1,3 +1,4 @@
+import { CERTIFICATE_LIFECYCLE_STATUS } from "@calibra-facil/schemas";
 import { z } from "zod";
 
 import { nullableNumber, nullableString, paginationSchema } from "./common";
@@ -10,11 +11,9 @@ import { nullableNumber, nullableString, paginationSchema } from "./common";
 
 const jsonRecordSchema = z.record(z.string(), z.unknown());
 const releaseStatusSchema = z.enum(["RELEASED", "PAYMENT_PENDING"]);
-const certificateLifecycleStatusSchema = z.enum([
-  "ISSUED",
-  "SUPERSEDED",
-  "WITHDRAWN",
-]);
+const certificateLifecycleStatusSchema = z.enum(
+  CERTIFICATE_LIFECYCLE_STATUS.states,
+);
 
 /** One row of GET /api/portal/certificates. */
 export const portalCertificateListItemSchema = z.object({

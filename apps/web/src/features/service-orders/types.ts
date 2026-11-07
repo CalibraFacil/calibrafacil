@@ -1,25 +1,9 @@
 import type { ServiceOrdersListData as ClientRuntimeServiceOrdersListData } from '@calibra-facil/client-runtime'
-import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
-
-export const SERVICE_ORDER_STATUSES = [
-  'opened',
-  'awaiting_tech_evaluation',
-  'under_evaluation',
-  'awaiting_quote_approval',
-  'quote_approved',
-  'quote_rejected',
-  'repair_in_progress',
-  'awaiting_calibration',
-  'calibration_in_progress',
-  'awaiting_final_review',
-  'ready_for_pickup',
-  'delivered',
-  'closed',
-  'canceled',
-  'warranty_return',
-] as const
-
-export type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUSES)[number]
+import type {
+  ServiceOrderFinancialStatus,
+  ServiceOrderQuoteStatus,
+  ServiceOrderStatus,
+} from '@calibra-facil/shared'
 
 export type ServiceOrderListItem = Omit<
   ClientRuntimeServiceOrdersListData['data'][number],
@@ -88,7 +72,7 @@ export type ServiceOrderQuoteItem = {
 
 type ServiceOrderQuote = {
   id: number
-  status: string
+  status: ServiceOrderQuoteStatus
   totalCents: number
   version: number
   validUntil?: string | null

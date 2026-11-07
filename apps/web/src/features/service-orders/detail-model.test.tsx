@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { SERVICE_ORDER_EVENT_TYPES } from '@calibra-facil/shared'
-import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
+import type {
+  ServiceOrderFinancialStatus,
+  ServiceOrderQuoteStatus,
+} from '@calibra-facil/shared'
 import type { ServiceOrderDetail } from './types'
 import {
   buildServiceOrderDetailFormKey,
@@ -813,7 +816,10 @@ describe('service order stage affordances', () => {
   })
 
   it('turns a decided quote into a revisable record', () => {
-    for (const status of ['approved', 'rejected']) {
+    for (const status of [
+      'approved',
+      'rejected',
+    ] satisfies ServiceOrderQuoteStatus[]) {
       const affordances = buildServiceOrderStageAffordances(
         base({
           evaluations: [evaluation()],

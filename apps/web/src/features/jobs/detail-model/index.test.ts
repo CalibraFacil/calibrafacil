@@ -27,7 +27,6 @@ const SURFACE = [
   'formatExpandedUncertainty',
   'formatReviewValue',
   'getApprovedReviewMeasurementFields',
-  'getFinancialVariant',
   'jobCloudCommandTarget',
   'numberFromUnknown',
   'numericValues',

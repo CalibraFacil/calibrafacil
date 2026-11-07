@@ -17,7 +17,6 @@ import {
 
 import { Button } from '@calibra-facil/ui/button'
 import { Input } from '@calibra-facil/ui/input'
-import { Badge } from '@calibra-facil/ui/badge'
 import { SyncStateBadge } from '@/components/sync-state-badge'
 import {
   Empty,
@@ -48,76 +47,10 @@ import {
   SERVICE_ORDERS_LIST_LIMIT,
   useServiceOrdersListData,
 } from '@/features/service-orders/queries'
-import {
-  SERVICE_ORDER_STATUSES,
-  type ServiceOrderListItem,
-  type ServiceOrderStatus,
-} from '@/features/service-orders/types'
+import type { ServiceOrderListItem } from '@/features/service-orders/types'
+import { ServiceOrderStatusBadge } from '@/features/service-orders/components/service-order-status-badge'
+import { SERVICE_ORDER_STATUS } from '@calibra-facil/shared'
 import { formatInstant, formatMoneyBRL } from '@calibra-facil/shared/format'
-const statusLabels: Record<ServiceOrderStatus, string> = {
-  opened: 'Aberta',
-  awaiting_tech_evaluation: 'Aguardando avaliação',
-  under_evaluation: 'Em avaliação',
-  awaiting_quote_approval: 'Aguardando orçamento',
-  quote_approved: 'Orçamento aprovado',
-  quote_rejected: 'Orçamento recusado',
-  repair_in_progress: 'Em reparo',
-  awaiting_calibration: 'Aguardando calibração',
-  calibration_in_progress: 'Calibração em andamento',
-  awaiting_final_review: 'Aguardando revisão',
-  ready_for_pickup: 'Aguardando retirada',
-  delivered: 'Entregue',
-  closed: 'Encerrada',
-  canceled: 'Cancelada',
-  warranty_return: 'Retorno em garantia',
-}
-
-const statusVariants: Record<
-  ServiceOrderStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  opened: 'secondary',
-  awaiting_tech_evaluation: 'outline',
-  under_evaluation: 'default',
-  awaiting_quote_approval: 'outline',
-  quote_approved: 'default',
-  quote_rejected: 'destructive',
-  repair_in_progress: 'default',
-  awaiting_calibration: 'outline',
-  calibration_in_progress: 'default',
-  awaiting_final_review: 'outline',
-  ready_for_pickup: 'default',
-  delivered: 'secondary',
-  closed: 'secondary',
-  canceled: 'destructive',
-  warranty_return: 'outline',
-}
-
-function parseServiceOrderStatus(
-  value: string | null,
-): ServiceOrderStatus | '' {
-  switch (value) {
-    case 'opened':
-    case 'awaiting_tech_evaluation':
-    case 'under_evaluation':
-    case 'awaiting_quote_approval':
-    case 'quote_approved':
-    case 'quote_rejected':
-    case 'repair_in_progress':
-    case 'awaiting_calibration':
-    case 'calibration_in_progress':
-    case 'awaiting_final_review':
-    case 'ready_for_pickup':
-    case 'delivered':
-    case 'closed':
-    case 'canceled':
-    case 'warranty_return':
-      return value
-    default:
-      return ''
-  }
-}
-
 function serviceOrderPath(order: ServiceOrderListItem) {
   // Must match the link the prewarm is for. Built from the numeric id it
   // warmed `by-public-id/<serial>`, which 404s — silently, so every hover
@@ -214,12 +147,10 @@ const serviceOrderColumns: ColumnDef<ServiceOrderListItem>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = parseServiceOrderStatus(row.original.status) || 'opened'
+      const status = SERVICE_ORDER_STATUS.parse(row.original.status) ?? 'opened'
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={statusVariants[status] ?? 'secondary'}>
-            {row.original.statusLabel}
-          </Badge>
+          <ServiceOrderStatusBadge status={status} />
           <SyncStateBadge syncState={row.original.syncState} />
         </div>
       )
@@ -265,7 +196,7 @@ export function ServiceOrdersPage() {
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...SERVICE_ORDER_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...SERVICE_ORDER_STATUS.states, '']).withDefault(''),
   )
 
   const { data, isLoading, error } = useServiceOrdersListData({
@@ -324,17 +255,21 @@ export function ServiceOrdersPage() {
           <Select
             value={statusFilter}
             onValueChange={(value) => {
-              setStatusFilter(parseServiceOrderStatus(value))
+              setStatusFilter(SERVICE_ORDER_STATUS.parse(value) ?? '')
               setPage(1)
             }}
           >
             <SelectTrigger aria-label="Filtrar por status" className="w-56">
-              <span>{statusFilter ? statusLabels[statusFilter] : 'Todos'}</span>
+              <span>
+                {statusFilter
+                  ? SERVICE_ORDER_STATUS.label(statusFilter)
+                  : 'Todos'}
+              </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">Todos</SelectItem>
-              {Object.entries(statusLabels).map(([status, label]) => (
-                <SelectItem key={status} value={status}>
+              {SERVICE_ORDER_STATUS.options.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>
               ))}

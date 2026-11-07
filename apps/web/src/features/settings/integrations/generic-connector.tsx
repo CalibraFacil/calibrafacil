@@ -11,6 +11,8 @@ import {
 import { calibraApi } from '@/utils/api'
 import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
+import { INTEGRATION_STATUS } from '@calibra-facil/shared'
 import { Button } from '@calibra-facil/ui/button'
 import { Card, CardContent } from '@calibra-facil/ui/card'
 import { Checkbox } from '@calibra-facil/ui/checkbox'
@@ -43,7 +45,6 @@ import {
   getIntegrationVisibleTargets,
   integrationFormatterOptions,
   integrationReadinessBadgeVariant,
-  integrationStatusBadgeMeta,
   removeIntegrationMappingRule,
   updateIntegrationMappingRule,
   validateIntegrationBaseUrl,
@@ -221,7 +222,6 @@ export function GenericConnectorCard({
     },
   })
 
-  const statusBadge = integrationStatusBadgeMeta(integration)
   const readiness = integration.overview.readiness.readinessStatus
   const dependencyWarnings = integration.overview.readiness.dependencyWarnings
 
@@ -236,7 +236,9 @@ export function GenericConnectorCard({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+            <StatusBadge tone={INTEGRATION_STATUS.tone(integration.status)}>
+              {INTEGRATION_STATUS.label(integration.status)}
+            </StatusBadge>
             <Badge variant={integrationReadinessBadgeVariant(readiness)}>
               {readiness === 'READY'
                 ? 'Pronta'

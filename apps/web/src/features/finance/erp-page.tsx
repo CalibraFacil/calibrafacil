@@ -9,6 +9,7 @@ import {
   ExportStatusBadge,
 } from '@/components/finance-status-badges'
 import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
+import { BILLING_DOCUMENT_EXPORT_STATUS } from '@calibra-facil/shared'
 import { Money, exportStatusToneOf } from '@/features/finance/finance-display'
 import {
   Panel,
@@ -35,11 +36,7 @@ const EXPORT_FACETS: FacetConfig[] = [
   {
     columnId: 'exportStatus',
     title: 'Exportação',
-    options: [
-      { value: 'NOT_EXPORTED', label: 'Não exportado' },
-      { value: 'EXPORTED', label: 'Exportado' },
-      { value: 'FAILED', label: 'Falhou' },
-    ],
+    options: BILLING_DOCUMENT_EXPORT_STATUS.options,
   },
 ]
 

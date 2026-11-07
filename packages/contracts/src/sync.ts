@@ -1,3 +1,4 @@
+import { RECORDED_SYNC_CONFLICT_STATUSES } from "@calibra-facil/schemas/sync-status";
 import { z } from "zod";
 
 export const syncEventSchema = z.object({
@@ -221,12 +222,7 @@ export const syncAttachmentDownloadResponseSchema = z.object({
  *   change `synced` although the cloud never received it. Rows with this status are
  *   kept as history and never written by this build.
  */
-const localSyncConflictStatusSchema = z.enum([
-  "open",
-  "resolved",
-  "discarded_by_user",
-  "ignored",
-]);
+const localSyncConflictStatusSchema = z.enum(RECORDED_SYNC_CONFLICT_STATUSES);
 
 export const localSyncConflictSchema = z.object({
   id: z.string(),

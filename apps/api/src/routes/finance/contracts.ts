@@ -10,7 +10,7 @@ import {
   commercialAgreementUnitScope,
   customer,
 } from "@calibra-facil/db/schema";
-import { type CommercialAgreementStatus } from "@calibra-facil/shared";
+import { COMMERCIAL_AGREEMENT_STATUSES } from "@calibra-facil/shared";
 import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
@@ -24,13 +24,6 @@ import {
   unitsBelongToOrganization,
 } from "../../lib/tenant-refs";
 import { orgDb } from "../../lib/org-db";
-
-const COMMERCIAL_AGREEMENT_STATUSES = [
-  "DRAFT",
-  "ACTIVE",
-  "EXPIRED",
-  "CANCELED",
-] as const satisfies readonly CommercialAgreementStatus[];
 
 const AgreementServiceTermSchema = z.object({
   id: z.number().int().optional(),

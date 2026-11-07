@@ -15,6 +15,7 @@
     "./mass-units": "./src/mass-units.ts",
     "./public-urls": "./src/public-urls.ts",
     "./status-vocabulary": "./src/status-vocabulary.ts",
+    "./service-orders": "./src/service-orders.ts",
     "./record": "./src/record.ts",
     "./route-identifiers": "./src/route-identifiers.ts",
     "./text": "./src/text.ts",

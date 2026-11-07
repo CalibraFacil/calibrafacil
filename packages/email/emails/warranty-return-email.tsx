@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+  ServiceOrderStatusRow,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,7 +12,6 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export interface WarrantyReturnEmailProps {
@@ -37,7 +40,9 @@ export function WarrantyReturnEmail({
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="warning">Retorno em garantia</Badge>
+        <ServiceOrderStatusBadge status="warranty_return">
+          Retorno em garantia
+        </ServiceOrderStatusBadge>
         <Title>Ordem de serviço em retorno de garantia</Title>
         <Paragraph>
           Olá, {customerName}! Informamos que a ordem de serviço{" "}
@@ -47,7 +52,7 @@ export function WarrantyReturnEmail({
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Retorno em garantia" />
+          <ServiceOrderStatusRow status="warranty_return" />
         </DetailBox>
 
         <Paragraph>

@@ -10,17 +10,11 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
-import {
-  getFinancialStatusLabel,
-  type FinancialStatus,
-} from '@calibra-facil/shared'
+import type { FinancialStatus } from '@calibra-facil/shared'
+import { FinancialStatusBadge } from '@/features/jobs/components/financial-status-badge'
 import { CertificateProgressButton } from '@/features/jobs/components/certificate-progress-button'
 import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
-import {
-  getFinancialVariant,
-  type JobStatus,
-  type JobVerdict,
-} from '@/features/jobs/detail-model'
+import { type JobStatus, type JobVerdict } from '@/features/jobs/detail-model'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintOverlay,
@@ -130,9 +124,7 @@ export function JobVerdictBand({
                   Fora de tolerância (como encontrado)
                 </Badge>
               )}
-            <Badge variant={getFinancialVariant(normalizedFinancialStatus)}>
-              {getFinancialStatusLabel(normalizedFinancialStatus)}
-            </Badge>
+            <FinancialStatusBadge status={normalizedFinancialStatus} />
           </div>
         </div>
 

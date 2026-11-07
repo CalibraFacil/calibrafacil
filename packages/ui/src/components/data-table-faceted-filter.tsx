@@ -28,7 +28,7 @@ export function DataTableFacetedFilter<TData, TValue>({
 }: {
   column?: Column<TData, TValue>;
   title: string;
-  options: FacetOption[];
+  options: readonly FacetOption[];
 }) {
   const selected = new Set(readSelected(column?.getFilterValue()));
   const facetCounts = column?.getFacetedUniqueValues();

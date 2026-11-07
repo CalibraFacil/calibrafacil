@@ -15,6 +15,8 @@ import { Badge } from "@calibra-facil/ui/badge";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
+import { CertificateLifecyclePill } from "@/components/certificate-lifecycle-pill";
+import type { CertificateLifecycleStatus } from "@calibra-facil/schemas";
 import { Card, CardContent } from "@calibra-facil/ui/card";
 import {
   Empty,
@@ -76,7 +78,7 @@ type Certificate = {
   isAmendment: boolean;
   amendmentNumber: number | null;
   /** Lifecycle of the issued certificate (ISO 17025 §7.10): WITHDRAWN = do not rely on it. */
-  certificateStatus: "ISSUED" | "SUPERSEDED" | "WITHDRAWN";
+  certificateStatus: CertificateLifecycleStatus;
 };
 
 type CertificatesResponse = {
@@ -222,15 +224,15 @@ const columns: ColumnDef<Certificate>[] = [
     // verification page.
     cell: ({ row }) =>
       row.original.certificateStatus === "WITHDRAWN" ? (
-        <StatusPill tone="critical">Retirado</StatusPill>
+        <CertificateLifecyclePill status="WITHDRAWN" />
       ) : row.original.isSuperseded ? (
-        <StatusPill tone="warning">Substituído</StatusPill>
+        <CertificateLifecyclePill status="SUPERSEDED" />
       ) : row.original.isAmendment ? (
         <StatusPill tone="info">
           Retificação nº {row.original.amendmentNumber ?? 1}
         </StatusPill>
       ) : (
-        <StatusPill tone="ok">Aprovado</StatusPill>
+        <CertificateLifecyclePill status="ISSUED" />
       ),
   },
   {

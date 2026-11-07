@@ -1,6 +1,8 @@
 import { OOT_NOTIFICATION_STATUSES } from "@calibra-facil/schemas/machines";
+import { FINANCIAL_STATUSES } from "@calibra-facil/shared";
 import { z } from "zod";
 import {
+  CERTIFICATE_LIFECYCLE_STATUS,
   JobStatusSchema,
   MeasurementUnitSchema,
   NonConformanceStatusSchema,
@@ -66,14 +68,7 @@ const nullableNumber = z.number().nullable();
 const jobStatusSchema = JobStatusSchema;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 
-const financialStatusSchema = z.enum([
-  "UNBILLED",
-  "DRAFT",
-  "ISSUED",
-  "PAID",
-  "OVERDUE",
-  "VOID",
-]);
+const financialStatusSchema = z.enum(FINANCIAL_STATUSES);
 
 /** Fields `loadJobFinancialContexts` spreads onto a job (absent => omitted). */
 const jobFinancialContextShape = {
@@ -680,11 +675,9 @@ const jobAllowedActionsSchema = z.object({
 });
 export type JobAllowedActions = z.infer<typeof jobAllowedActionsSchema>;
 
-const certificateLifecycleStatusSchema = z.enum([
-  "ISSUED",
-  "SUPERSEDED",
-  "WITHDRAWN",
-]);
+const certificateLifecycleStatusSchema = z.enum(
+  CERTIFICATE_LIFECYCLE_STATUS.states,
+);
 
 const jobCertificateLifecycleSchema = z.object({
   status: certificateLifecycleStatusSchema,

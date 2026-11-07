@@ -1,68 +1,27 @@
-import { Badge } from '@calibra-facil/ui/badge'
 import {
-  getBillingDocumentStatusLabel,
-  getCommercialAgreementStatusLabel,
-  type BillingDocumentStatus,
-  type CommercialAgreementStatus,
+  BILLING_DOCUMENT_EXPORT_STATUS,
+  BILLING_DOCUMENT_STATUS,
+  COMMERCIAL_AGREEMENT_STATUS,
 } from '@calibra-facil/shared'
+import type { StatusVocabulary } from '@calibra-facil/shared/status-vocabulary'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
+/** The pill for a status the API hands back as a loose string; an unknown value shows raw and neutral. */
+function VocabularyStatusBadge<S extends string>({
+  vocabulary,
+  status,
+}: {
+  vocabulary: StatusVocabulary<S>
+  status: string | null | undefined
+}) {
+  if (!status) return null
+  const known = vocabulary.parse(status)
 
-const billingDocumentVariants: Record<string, BadgeVariant> = {
-  DRAFT: 'secondary',
-  ISSUED: 'default',
-  PAID: 'outline',
-  OVERDUE: 'destructive',
-  VOID: 'outline',
-}
-
-const agreementVariants: Record<string, BadgeVariant> = {
-  DRAFT: 'secondary',
-  ACTIVE: 'default',
-  EXPIRED: 'outline',
-  CANCELED: 'destructive',
-}
-
-const exportStatusMeta: Record<
-  string,
-  {
-    label: string
-    variant: BadgeVariant
-  }
-> = {
-  NOT_EXPORTED: { label: 'Não exportado', variant: 'secondary' },
-  PENDING: { label: 'Pendente', variant: 'default' },
-  EXPORTED: { label: 'Exportado', variant: 'outline' },
-  FAILED: { label: 'Falhou', variant: 'destructive' },
-}
-
-function parseBillingDocumentStatus(
-  status: string,
-): BillingDocumentStatus | null {
-  switch (status) {
-    case 'DRAFT':
-    case 'ISSUED':
-    case 'PAID':
-    case 'OVERDUE':
-    case 'VOID':
-      return status
-    default:
-      return null
-  }
-}
-
-function parseCommercialAgreementStatus(
-  status: string,
-): CommercialAgreementStatus | null {
-  switch (status) {
-    case 'DRAFT':
-    case 'ACTIVE':
-    case 'EXPIRED':
-    case 'CANCELED':
-      return status
-    default:
-      return null
-  }
+  return (
+    <StatusBadge tone={known ? vocabulary.tone(known) : 'neutral'}>
+      {known ? vocabulary.label(known) : status}
+    </StatusBadge>
+  )
 }
 
 export function BillingDocumentStatusBadge({
@@ -70,13 +29,11 @@ export function BillingDocumentStatusBadge({
 }: {
   status: string | null | undefined
 }) {
-  if (!status) return null
-  const parsedStatus = parseBillingDocumentStatus(status)
-
   return (
-    <Badge variant={billingDocumentVariants[status] ?? 'secondary'}>
-      {parsedStatus ? getBillingDocumentStatusLabel(parsedStatus) : status}
-    </Badge>
+    <VocabularyStatusBadge
+      vocabulary={BILLING_DOCUMENT_STATUS}
+      status={status}
+    />
   )
 }
 
@@ -85,13 +42,11 @@ export function CommercialAgreementStatusBadge({
 }: {
   status: string | null | undefined
 }) {
-  if (!status) return null
-  const parsedStatus = parseCommercialAgreementStatus(status)
-
   return (
-    <Badge variant={agreementVariants[status] ?? 'secondary'}>
-      {parsedStatus ? getCommercialAgreementStatusLabel(parsedStatus) : status}
-    </Badge>
+    <VocabularyStatusBadge
+      vocabulary={COMMERCIAL_AGREEMENT_STATUS}
+      status={status}
+    />
   )
 }
 
@@ -100,12 +55,10 @@ export function ExportStatusBadge({
 }: {
   status: string | null | undefined
 }) {
-  if (!status) return null
-
-  const meta = exportStatusMeta[status] ?? {
-    label: status,
-    variant: 'secondary' as const,
-  }
-
-  return <Badge variant={meta.variant}>{meta.label}</Badge>
+  return (
+    <VocabularyStatusBadge
+      vocabulary={BILLING_DOCUMENT_EXPORT_STATUS}
+      status={status}
+    />
+  )
 }
