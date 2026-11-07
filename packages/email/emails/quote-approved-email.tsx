@@ -3,6 +3,7 @@
 import { ServiceOrderEmailLayout } from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
+  emailBrandName,
   EmailCard,
   Title,
   Paragraph,
@@ -39,7 +40,7 @@ export function QuoteApprovedEmail({
   customerName,
   totalApprovedCents,
 }: QuoteApprovedEmailProps) {
-  const labName = brand?.name ?? "CalibraFácil";
+  const labName = emailBrandName(brand);
   const totalBrl = formatMoneyBRL(totalApprovedCents);
   const previewText = `Orçamento ${serviceOrderNumber} aprovado — Total: ${totalBrl}`;
 

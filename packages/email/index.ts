@@ -33,24 +33,31 @@ export { QuoteEmail, type QuoteEmailItem } from "./emails/quote-email";
 export { QuoteApprovedEmail } from "./emails/quote-approved-email";
 export { QuoteRejectedEmail } from "./emails/quote-rejected-email";
 
-// Service-order status-transition email templates (mini-spec E2)
-export { ServiceStartedEmail } from "./emails/service-started-email";
+// Service-order status-transition emails (mini-spec E2/F/G): one template,
+// the words per status in its table.
 export {
+  ServiceOrderStatusEmail,
+  SERVICE_ORDER_EMAIL_STATUSES,
+  sendsServiceOrderStatusEmail,
+  serviceOrderStatusEmailRequirement,
+  serviceOrderStatusEmailSubject,
+  type ServiceOrderEmailStatus,
+  type ServiceOrderStatusEmailProps,
+} from "./emails/service-order-status-email";
+// Per-status names the outbox drain still imports (see the file's header).
+export {
+  AwaitingEvaluationEmail,
+  FinalReviewEmail,
+  ReadyForPickupEmail,
   ServiceInProgressEmail,
+  ServiceOrderCanceledEmail,
+  ServiceOrderClosedEmail,
+  ServiceOrderDeliveredEmail,
+  ServiceStartedEmail,
+  UnderEvaluationEmail,
+  WarrantyReturnEmail,
   type ServiceInProgressStage,
-} from "./emails/service-in-progress-email";
-export { AwaitingEvaluationEmail } from "./emails/awaiting-evaluation-email";
-export { UnderEvaluationEmail } from "./emails/under-evaluation-email";
-
-// Service-order conclusão/entrega email templates (mini-spec F)
-export { ReadyForPickupEmail } from "./emails/ready-for-pickup-email";
-export { ServiceOrderDeliveredEmail } from "./emails/service-order-delivered-email";
-export { ServiceOrderClosedEmail } from "./emails/service-order-closed-email";
-export { FinalReviewEmail } from "./emails/final-review-email";
-
-// Service-order cancelamento/garantia email templates (mini-spec G)
-export { ServiceOrderCanceledEmail } from "./emails/service-order-canceled-email";
-export { WarrantyReturnEmail } from "./emails/warranty-return-email";
+} from "./emails/service-order-status-email-aliases";
 
 // On-site visit (calibração in loco) email templates (mini-spec 2)
 export { VisitNotificationEmail } from "./emails/visit-notification-email";
