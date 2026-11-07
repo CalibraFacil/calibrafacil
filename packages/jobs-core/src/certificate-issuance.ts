@@ -456,7 +456,7 @@ export async function recordCertificateIssued(
 
 /**
  * The original of an amendment becomes SUPERSEDED, in the transaction that
- * issues the replacement (roadmap 2 B3): compare-and-set APPROVED -> SUPERSEDED
+ * issues the replacement: compare-and-set APPROVED -> SUPERSEDED
  * under the original's row lock, its `supersede` audit row and its SUPERSEDED
  * status event. Until this runs the original stays APPROVED and valid, so a
  * cancelled or rejected amendment, or a render that failed, leaves it untouched.

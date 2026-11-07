@@ -3,7 +3,7 @@
  * `CertificateJobData`, for jobs approved before the frozen `certificate_input`
  * existed (migration 0120). Jobs approved since are rendered from the frozen
  * document and never reach this module: the approval command reads the same
- * data once, at approval (`@calibra-facil/db/certificate-input`), and both go
+ * data once, at approval (`@calibra-facil/jobs-core/certificate-input`), and both go
  * through the same pure assembly, `assembleCertificateJobData`.
  *
  * Originally:

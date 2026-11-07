@@ -49,7 +49,7 @@ import {
   freezeCertificateInput,
   lockJobForApproval,
   readCertificateImages,
-} from "@calibra-facil/db/certificate-input";
+} from "@calibra-facil/jobs-core/certificate-input";
 import { readCertificateImage } from "../../lib/certificate-input-images";
 import {
   findServiceOrdersForCalibrationJob,

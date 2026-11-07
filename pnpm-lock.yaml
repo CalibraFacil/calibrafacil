@@ -807,6 +807,19 @@ importers:
         specifier: ^4.1.12
         version: 4.1.12(@types/node@24.13.0)(@vitest/coverage-v8@4.1.12)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.6(@types/node@24.13.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/accreditation-seal:
+    dependencies:
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../shared
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.16
+        version: 19.2.16
+
   packages/auth:
     dependencies:
       '@better-auth/passkey':
@@ -952,9 +965,6 @@ importers:
 
   packages/db:
     dependencies:
-      '@calibra-facil/certificate-data':
-        specifier: workspace:^
-        version: link:../certificate-data
       '@calibra-facil/config':
         specifier: workspace:^
         version: link:../config
@@ -1004,6 +1014,9 @@ importers:
 
   packages/documents:
     dependencies:
+      '@calibra-facil/accreditation-seal':
+        specifier: workspace:^
+        version: link:../accreditation-seal
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../shared
@@ -1486,9 +1499,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.5.0
         version: 1.5.0(@date-fns/tz@1.5.0)(@types/react@19.2.16)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@calibra-facil/documents':
+      '@calibra-facil/accreditation-seal':
         specifier: workspace:^
-        version: link:../documents
+        version: link:../accreditation-seal
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../shared

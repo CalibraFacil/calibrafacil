@@ -1,10 +1,8 @@
 /**
- * Validation of a signing credential (P12) at upload (roadmap 2 B4a, REQ-B4A-3).
- *
- * Before this, only the expiry was checked: a certificate that is not valid yet,
- * that may not sign, or whose chain does not reach an ICP-Brasil root was stored
- * and only failed at the first certificate issuance. Every rejection carries a
- * stable `code` and a pt-BR message the route returns with a 422.
+ * Validation of a signing credential (P12) at upload: a certificate that is not
+ * valid yet, that may not sign, has expired, or whose chain does not reach an
+ * ICP-Brasil root is refused then, not at the first certificate issuance. Every
+ * rejection carries a stable `code` and a pt-BR message the route returns with a 422.
  *
  * The trust store is the bundled ICP-Brasil set (`trust-store/`, the ITI AC-Raiz
  * bundle). `SIGNING_TRUST_STORE_FILE` points at a PEM bundle that REPLACES it:

@@ -10,7 +10,7 @@ import {
 import {
   freezeCertificateInput,
   prefetchCertificateImages,
-} from "@calibra-facil/db/certificate-input";
+} from "@calibra-facil/jobs-core/certificate-input";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
   authorizedSignatory,

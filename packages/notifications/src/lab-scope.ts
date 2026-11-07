@@ -16,7 +16,7 @@ import type { PortalDigestFrequency } from "@calibra-facil/shared";
 import { and, eq, inArray } from "drizzle-orm";
 
 /**
- * Where a notification statement runs (row-level security, P2-18h).
+ * Where a notification statement runs (row-level security).
  *
  * A dispatcher starts from the id of an entity the caller just operated on
  * (already authorised and scoped there) or from an explicit laboratory. Every

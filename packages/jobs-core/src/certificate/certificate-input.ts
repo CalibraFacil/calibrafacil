@@ -11,7 +11,7 @@ import {
 } from "@calibra-facil/certificate-data";
 import { getLogoKeyFromUrl } from "@calibra-facil/shared/storage-keys";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import type { db } from "./db";
+import type { db } from "@calibra-facil/db";
 import {
   asset,
   authorizedSignatory,
@@ -26,7 +26,7 @@ import {
   serviceOrder,
   serviceOrderCertificateLink,
   user,
-} from "./schema";
+} from "@calibra-facil/db/schema";
 
 /**
  * Reads an image object (the lab logo, the approver's drawn signature) by its

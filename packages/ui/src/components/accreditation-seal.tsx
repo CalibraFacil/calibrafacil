@@ -1,9 +1,9 @@
-import { AccreditationSealSvg } from "@calibra-facil/documents";
+import { AccreditationSealSvg } from "@calibra-facil/accreditation-seal";
 
 /**
  * RBC/CGCRE accreditation seal as shown on accredited certificates, in the lab
  * app and the client portal. At rest it is pixel-identical to the seal printed
- * on the issued PDF (`AccreditationSealSvg` in `@calibra-facil/documents` is the
+ * on the issued PDF (`AccreditationSealSvg` in `@calibra-facil/accreditation-seal` is the
  * one artwork); hovering adds a web-only specular sweep, styled by
  * `styles/accreditation-seal.css`, which `tokens.css` imports (the tilt there
  * matches the `rotate(18 ...)` of the sheen layer the SVG draws).

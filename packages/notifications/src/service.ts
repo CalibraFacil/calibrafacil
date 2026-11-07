@@ -1,4 +1,4 @@
-// Notification dispatch is scoped per organization (row-level security, P2-18h).
+// Notification dispatch is scoped per organization (row-level security).
 // A dispatcher starts from the id of the entity the caller just operated on
 // (already authorised and scoped there) or from an explicit laboratory; the
 // one statement that learns the laboratory of an id runs on the system path
@@ -286,7 +286,6 @@ export async function sendNotification(
     emailBrand,
   } = options;
 
-  // Get user preferences
   const { preferences, emailEnabled } =
     await getUserPreferences(recipientUserId);
   const typePrefs = preferences[type] ?? { inApp: true, email: true };
@@ -295,7 +294,6 @@ export async function sendNotification(
   let notificationId: number | null = null;
   let emailSent = false;
 
-  // Create in-app notification if enabled
   if (typePrefs.inApp) {
     // The row belongs to the RECIPIENT's organization (the laboratory for its
     // staff, the CLIENT organization for a portal user).
@@ -323,7 +321,6 @@ export async function sendNotification(
     }
   }
 
-  // Send email if enabled
   if (typePrefs.email && emailEnabled) {
     const emailResult = await sendNotificationEmail({
       recipientUserId,
@@ -339,7 +336,6 @@ export async function sendNotification(
       channelsSent.push("EMAIL");
       emailSent = true;
 
-      // Update notification record with email channel
       if (notificationId) {
         const createdId = notificationId;
         await inOrg(organizationId, async (o) => {
@@ -876,7 +872,6 @@ async function sendNotificationEmail(options: {
     return false;
   }
 
-  // Get user email
   const [userData] = await db
     .select({ email: user.email, name: user.name })
     .from(user)
@@ -1771,7 +1766,6 @@ export async function notifyJobSubmittedForReview(
   const job = await getJobDetails(jobId);
   if (!job) return;
 
-  // Get submitter name
   const [submitter] = await db
     .select({ name: user.name })
     .from(user)
@@ -1780,13 +1774,11 @@ export async function notifyJobSubmittedForReview(
 
   const submitterName = submitter?.name ?? "Um tecnico";
 
-  // Get admins and owners
   const recipients = await getRecipientsByRole(job.organizationId, [
     "admin",
     "owner",
   ]);
 
-  // Send to each recipient (except the submitter)
   for (const recipientId of recipients) {
     if (recipientId === submittedByUserId) continue;
 
@@ -1825,7 +1817,6 @@ export async function notifyJobApproved(
   const job = await getJobDetails(jobId);
   if (!job) return;
 
-  // Get approver name
   const [approver] = await db
     .select({ name: user.name })
     .from(user)
@@ -1875,7 +1866,6 @@ export async function notifyJobRejected(
   const job = await getJobDetails(jobId);
   if (!job) return;
 
-  // Get rejector name
   const [rejector] = await db
     .select({ name: user.name })
     .from(user)
@@ -1935,7 +1925,6 @@ export async function notifyJobAssigned(
     if (!notifySelfActions) return;
   }
 
-  // Get assigner name
   const [assigner] = await db
     .select({ name: user.name })
     .from(user)
@@ -1979,7 +1968,6 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
   const job = await getJobDetails(jobId);
   if (!job) return;
 
-  // Get the customer's organization ID and name
   const [customerData] = await inOrg(job.organizationId, (o) =>
     o
       .select({
@@ -1993,10 +1981,8 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
 
   if (!customerData?.authOrganizationId) return;
 
-  // Get asset details
   const assetData = await getAssetDetails(job.organizationId, job.assetId);
 
-  // Get all portal users in the customer organization
   const portalUsers = await inOrg(customerData.authOrganizationId, (o) =>
     o
       .select({ userId: member.userId })
@@ -2007,7 +1993,6 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
   const portalUrl = `${getPortalBaseUrl()}/certificates`;
   const emailBrand = await getLabEmailBrand(job.organizationId);
 
-  // Send email notifications to all portal users
   for (const portalUser of portalUsers) {
     await sendNotification({
       recipientUserId: portalUser.userId,
@@ -2190,7 +2175,6 @@ export async function notifyCertificateAmended(
   const amendedJob = await getJobDetails(amendedJobId);
   if (!originalJob || !amendedJob) return;
 
-  // Get the customer's organization ID and name
   const [customerData] = await inOrg(originalJob.organizationId, (o) =>
     o
       .select({
@@ -2204,13 +2188,11 @@ export async function notifyCertificateAmended(
 
   if (!customerData?.authOrganizationId) return;
 
-  // Get asset details
   const assetData = await getAssetDetails(
     originalJob.organizationId,
     originalJob.assetId,
   );
 
-  // Get all portal users in the customer organization
   const portalUsers = await inOrg(customerData.authOrganizationId, (o) =>
     o
       .select({ userId: member.userId })
@@ -2227,7 +2209,6 @@ export async function notifyCertificateAmended(
   });
   const emailBrand = await getLabEmailBrand(originalJob.organizationId);
 
-  // Send notifications to all portal users
   for (const portalUser of portalUsers) {
     await sendNotification({
       recipientUserId: portalUser.userId,
@@ -2312,7 +2293,6 @@ export async function notifyAssetDueForRecalibration(
   assetId: number,
   organizationId: string,
 ): Promise<void> {
-  // Get asset details with customer info
   const [assetData] = await inOrg(organizationId, (o) =>
     o
       .select({
@@ -2329,7 +2309,6 @@ export async function notifyAssetDueForRecalibration(
 
   if (!assetData?.nextCalibrationDate) return;
 
-  // Get customer name
   const [customerData] = await inOrg(organizationId, (o) =>
     o
       .select({ name: customer.name })
@@ -2419,7 +2398,6 @@ export async function notifyAssetDueForLegalVerification(
   const regulationReference =
     typeof regulationRefValue === "string" ? regulationRefValue : null;
 
-  // Get customer name
   const [customerData] = await inOrg(organizationId, (o) =>
     o
       .select({ name: customer.name })
@@ -2483,7 +2461,6 @@ export async function notifyStandardExpiring(
   standardId: number,
   organizationId: string,
 ): Promise<void> {
-  // Get reference standard details
   const [standardData] = await inOrg(organizationId, (o) =>
     o
       .select({
@@ -2745,7 +2722,7 @@ const AUDIT_CHAIN_BREAK_LABEL: Record<string, string> = {
 
 /**
  * Alert a lab's admins/owners that the verification of the audit-trail hash chain
- * found a break (roadmap 2 B1): a record of the calibration audit trail was
+ * found a break: a record of the calibration audit trail was
  * edited, removed or inserted outside the application (ISO/IEC 17025 8.4 control of
  * records). Nothing is repaired automatically; the evidence is preserved as found.
  */
@@ -2934,7 +2911,6 @@ export async function notifyAccreditedScopeLineExpiring(
  * Called by a scheduled job that checks calibrationJob.dueDate
  */
 export async function notifyJobOverdue(jobId: number): Promise<void> {
-  // Get job details with extended info
   const laboratoryId = await findJobLaboratory(jobId);
   if (!laboratoryId) return;
 
@@ -3017,7 +2993,6 @@ export async function notifyNCCreated(
   organizationId: string,
   createdByUserId: string,
 ): Promise<void> {
-  // Get creator name
   const [creator] = await db
     .select({ name: user.name })
     .from(user)
@@ -3115,7 +3090,6 @@ export async function notifyNCEscalatedToCapa(
   organizationId: string,
   escalatedByUserId: string,
 ): Promise<void> {
-  // Get escalator name
   const [escalator] = await db
     .select({ name: user.name })
     .from(user)

@@ -119,7 +119,7 @@ identificado pela norma em cima e pela codificação `CAL` embaixo.
 do item A.5 — ou seja, **prazo até Jul/2027**.
 
 Segundo ponto: **A.6.2 exige Arial**, e
-`packages/documents/src/AccreditationSeal.tsx:30` declara
+`packages/accreditation-seal/src/index.tsx` declara
 `"Carlito, Calibri, Inter, Arial, sans-serif"` — Arial é a quarta opção. No Chromium do Gotenberg
 o Carlito quase certamente existe (vem com o LibreOffice) e venceria. Deveria ser
 `Arial, "Liberation Sans", Helvetica, sans-serif`.

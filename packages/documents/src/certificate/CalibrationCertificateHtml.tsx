@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import { formatAccreditationNumber } from "@calibra-facil/shared/accreditation";
 
-import { AccreditationSealSvg } from "../AccreditationSeal.js";
+import { AccreditationSealSvg } from "@calibra-facil/accreditation-seal";
 import { CERTIFICATE_PAGE_STYLES } from "./certificate-styles.js";
 import type {
   CalibrationCertificateData,
