@@ -257,7 +257,7 @@ export const SYNC_OPERATIONS = {
     ordering: "create",
     permission: { equipment: ["create"] },
     onlineRoute: "POST /api/assets",
-    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    minProtocolVersion: SYNC_MIN_PROTOCOL_VERSION,
     uploadsFile: false,
   },
   save_local_execution: {
@@ -266,7 +266,7 @@ export const SYNC_OPERATIONS = {
     ordering: "follow",
     permission: { calibration: ["execute"] },
     onlineRoute: "POST /api/jobs/:id/execute",
-    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    minProtocolVersion: SYNC_MIN_PROTOCOL_VERSION,
     uploadsFile: false,
   },
   submit_local_execution: {
@@ -275,7 +275,7 @@ export const SYNC_OPERATIONS = {
     ordering: "follow",
     permission: { calibration: ["submit"] },
     onlineRoute: "POST /api/jobs/:id/submit",
-    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    minProtocolVersion: SYNC_MIN_PROTOCOL_VERSION,
     uploadsFile: false,
   },
   create_local_service_order_intake: {
@@ -284,7 +284,7 @@ export const SYNC_OPERATIONS = {
     ordering: "create",
     permission: { service_order: ["create"] },
     onlineRoute: "POST /api/service-orders",
-    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    minProtocolVersion: SYNC_MIN_PROTOCOL_VERSION,
     uploadsFile: false,
   },
   create_local_attachment: {
