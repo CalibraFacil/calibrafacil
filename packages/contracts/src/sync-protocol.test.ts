@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DESKTOP_UPDATE_REQUIRED_CODE,
-  LEGACY_SYNC_PROTOCOL_VERSION,
   SYNC_COMMAND_OPERATIONS,
   RETIRED_SYNC_OPERATIONS,
   SYNC_CREATE_OPERATIONS,
@@ -263,8 +262,7 @@ describe("push request header (REQ-SP-1)", () => {
   it("REQ-SP-1: a request without either is a build that predates versioning and stays valid", () => {
     const parsed = syncPushRequestSchema.safeParse({ ...header, events: [] });
     expect(parsed.success).toBe(true);
-    expect(LEGACY_SYNC_PROTOCOL_VERSION).toBe(1);
-    expect(SYNC_PROTOCOL_VERSION).toBeGreaterThan(LEGACY_SYNC_PROTOCOL_VERSION);
+    expect(parsed.success && parsed.data.protocolVersion).toBeUndefined();
   });
 
   it("REQ-SP-2: the cloud's first read does not look inside events, so one bad event cannot fail the batch", () => {

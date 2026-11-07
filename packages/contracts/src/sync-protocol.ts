@@ -5,18 +5,15 @@ import { syncEventSchema } from "./sync";
  * The desktop-to-cloud push protocol: what a desktop may send to
  * `POST /api/sync/push`, and how the cloud tells it to update.
  *
- * Before this file the wire format was `operation: string, payload: unknown`:
- * the producer (packages/local-db, apps/local-server) and the consumer
- * (apps/api) agreed by convention only, and a drift between them showed up as
- * a rejected regulated record in production. Now one discriminated union,
- * keyed by `operation`, with one Zod schema per member, is the contract both
- * sides compile against.
+ * One discriminated union, keyed by `operation`, with one Zod schema per member, is the
+ * contract the producer (packages/local-db, apps/local-server) and the consumer
+ * (apps/api) both compile against.
  *
  * Versioning:
  * - `SYNC_PROTOCOL_VERSION` is the version this build speaks. A push request
  *   carries it (`protocolVersion`) with the desktop app version
  *   (`desktopVersion`). A request without `protocolVersion` comes from a build
- *   that predates versioning: protocol 1, which the cloud still accepts.
+ *   that predates versioning: the cloud refuses it as "update required".
  * - Every member below is an operation a desktop build of today writes. The operations
  *   older builds wrote (customers, instrument edits, job drafts, non-conformances, quote,
  *   delivery and execution-notes documents, certificate drafts and PDFs) were retired in
@@ -42,9 +39,6 @@ export const SYNC_PROTOCOL_VERSION = 4;
 
 /** The first protocol whose desktops upload attachment bytes before pushing the event. */
 export const SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION = 4;
-
-/** The protocol of a request that states no `protocolVersion`. */
-export const LEGACY_SYNC_PROTOCOL_VERSION = 1;
 
 /**
  * The oldest protocol the cloud still serves: the commit-ordered pull and the paged
@@ -469,8 +463,8 @@ const pushRequestHeaderShape = {
   clientBatchId: z.string(),
   baseCursor: z.string().nullable(),
   /**
-   * The protocol the desktop speaks. Absent in builds that predate
-   * versioning: read as `LEGACY_SYNC_PROTOCOL_VERSION`.
+   * The protocol the desktop speaks. Absent in builds that predate versioning,
+   * which the cloud refuses as "update required".
    */
   protocolVersion: z.number().int().positive().optional(),
   /** The desktop app version (`app.getVersion()`), compared with the cloud's minimum. */

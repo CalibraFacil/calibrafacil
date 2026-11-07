@@ -12,10 +12,9 @@ import { createLocalSyncRuntime } from "./sync";
 
 /**
  * Q13 retired these commands from offline mode, but a desktop upgraded from an
- * earlier build can still hold their events in the outbox. The sync push must
- * keep draining them: accepted rows are adopted exactly as before, refused ones
- * leave the queue through the dead-event path, and in neither case may they
- * starve the field-capture and intake events queued behind them.
+ * earlier build can still hold their events in the outbox. The cloud refuses them
+ * (Q69); they must leave the queue through the dead-event path without starving
+ * the field-capture and intake events queued behind them.
  */
 const tempDirectories: string[] = [];
 
@@ -339,95 +338,6 @@ function outboxStatuses(database: LocalDatabase) {
 }
 
 describe("legacy outbox events from before Q13 still drain", () => {
-  it("adopts the cloud's answer for every retired command when the push is accepted", async () => {
-    const dbPath = createTempDatabasePath();
-    const database = openLocalDatabase({ filePath: dbPath });
-    seedTenant(database);
-    seedLegacyRows(database);
-    const legacy = queueLegacyCommands(database);
-    // Work the narrowed offline mode still produces, queued behind them.
-    const current = queueEvent(database, {
-      kind: "asset",
-      aggregateId: "asset:current",
-      operation: "create_local_asset",
-    });
-
-    const cloud = mockCloud((event) => {
-      switch (event.operation) {
-        case "create_local_non_conformance":
-          return {
-            accepted: true,
-            remoteEntityId: 901,
-            remoteEntity: { ncNumber: "NC-2026-0001" },
-          };
-        case "create_local_service_order_quote_draft":
-          return { accepted: true, remoteEntityId: 902 };
-        case "create_local_service_order_delivery_document_draft":
-          return {
-            accepted: true,
-            remoteEntityId: 903,
-            remoteEntity: { issuedAt: "2026-02-02T09:00:00.000Z" },
-          };
-        case "create_local_job_draft":
-          return {
-            accepted: true,
-            remoteEntityId: 904,
-            remoteEntity: { jobId: "CAL-2026-0007" },
-          };
-        case "create_local_customer":
-          return { accepted: true, remoteEntityId: 905 };
-        default:
-          return { accepted: true };
-      }
-    });
-    const runtime = createLocalSyncRuntime(createConfig(dbPath), database, {
-      fetch: cloud.fetchImpl,
-    });
-
-    const status = await runtime.runPushSync();
-
-    // One push carried all of it, legacy first.
-    expect(cloud.pushes).toHaveLength(1);
-    expect(cloud.pushes[0]?.map((event) => event.eventId)).toEqual([
-      ...legacy.map((event) => event.eventId),
-      current.eventId,
-    ]);
-    expect(status).toMatchObject({ pendingOutboxCount: 0, deadOutboxCount: 0 });
-    expect(
-      Object.values(outboxStatuses(database)).every(
-        (row) => row.status === "synced",
-      ),
-    ).toBe(true);
-
-    // The accepted rows were adopted, not left as local orphans.
-    const adopted = database
-      .prepare(
-        `
-SELECT
-  (SELECT remote_id || ':' || nc_number || ':' || sync_state
-     FROM non_conformances WHERE id = 'nc:legacy') AS nc,
-  (SELECT remote_id || ':' || sync_state
-     FROM service_order_quotes WHERE id = 'quote:legacy') AS quote,
-  (SELECT remote_id || ':' || issued_at || ':' || sync_state
-     FROM service_order_delivery_documents WHERE id = 'document:legacy') AS document,
-  (SELECT remote_id || ':' || job_id || ':' || sync_state
-     FROM calibration_jobs WHERE id = 'job:legacy') AS job,
-  (SELECT remote_id || ':' || sync_state
-     FROM customers WHERE id = 'customer:legacy') AS customer
-`,
-      )
-      .get();
-    expect(adopted).toEqual({
-      nc: "901:NC-2026-0001:synced",
-      quote: "902:synced",
-      document: "903:2026-02-02T09:00:00.000Z:synced",
-      job: "904:CAL-2026-0007:synced",
-      customer: "905:synced",
-    });
-
-    database.close();
-  });
-
   it("parks refused retired commands as dead events without starving newer work", async () => {
     const dbPath = createTempDatabasePath();
     const database = openLocalDatabase({ filePath: dbPath });

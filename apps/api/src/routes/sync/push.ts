@@ -1,6 +1,5 @@
 import { createRouter } from "../../server/router";
 import {
-  LEGACY_SYNC_PROTOCOL_VERSION,
   SYNC_MIN_PROTOCOL_VERSION,
   SYNC_PROTOCOL_VERSION,
   buildSyncProtocolUnsupportedResponse,
@@ -83,9 +82,11 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
 
     // A push from a protocol newer than this cloud speaks cannot be read
     // safely; its events stay queued on the desktop until the cloud catches up.
-    const protocolVersion =
-      body.protocolVersion ?? LEGACY_SYNC_PROTOCOL_VERSION;
-    if (protocolVersion > SYNC_PROTOCOL_VERSION) {
+    const protocolVersion = body.protocolVersion;
+    if (
+      protocolVersion !== undefined &&
+      protocolVersion > SYNC_PROTOCOL_VERSION
+    ) {
       return c.json(buildSyncProtocolUnsupportedResponse(protocolVersion), 400);
     }
 
@@ -101,7 +102,11 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
       minimumVersion: minimumDesktopVersion(),
       desktopVersion: body.desktopVersion,
     });
-    if (!versionGate.ok || protocolVersion < SYNC_MIN_PROTOCOL_VERSION) {
+    if (
+      !versionGate.ok ||
+      protocolVersion === undefined ||
+      protocolVersion < SYNC_MIN_PROTOCOL_VERSION
+    ) {
       return c.json(updateRequiredBody(body.desktopVersion ?? null), 426);
     }
 
