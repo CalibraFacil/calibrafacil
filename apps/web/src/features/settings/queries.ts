@@ -19,7 +19,6 @@ import type {
   SettingsEmailDomainData,
   SettingsPortalDomainData,
   SettingsSigningCertificatesData,
-  SettingsSignatureData,
   SettingsSsoData,
   IntegrationRunItemsResponse,
   SyncPreviewResponse,
@@ -90,8 +89,7 @@ export function signingCertificatesQueryOptions(unitId: number | null) {
 export function mySignatureQueryOptions() {
   return queryOptions({
     queryKey: ['my-signature'],
-    queryFn: () =>
-      trustedApiResult<SettingsSignatureData>(calibraApi.signatures.getMine()),
+    queryFn: () => calibraApi.signatures.getMine(),
   })
 }
 

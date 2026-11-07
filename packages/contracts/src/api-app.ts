@@ -44,12 +44,6 @@ type HandListedRoutePath =
   | "/api/onboarding/checklist"
   | "/api/organization/profile"
   | "/api/organization/soft-delete"
-  | "/api/calibration-requests"
-  | "/api/calibration-requests/:id"
-  | "/api/calibration-requests/:id/approve"
-  | "/api/calibration-requests/:id/convert"
-  | "/api/calibration-requests/:id/reject"
-  | "/api/calibration-requests/:id/review"
   | "/api/capa"
   | "/api/capa/:id"
   | "/api/capa/:id/audit-log"
@@ -234,7 +228,6 @@ type HandListedRoutePath =
   | "/api/services/:id"
   | "/api/services/:id/audit-log"
   | "/api/sessions/revoke"
-  | "/api/signatures/my-signature"
   | "/api/spc/charts"
   | "/api/spc/charts/:id"
   | "/api/spc/charts/:id/escalate"
@@ -269,17 +262,7 @@ type HandListedRoutePath =
   | "/api/units/admin/members/:memberId/assignments"
   | "/api/units/admin/members/:memberId/role"
   | "/api/units/admin/units"
-  | "/api/units/admin/units/:id"
-  | "/api/visits"
-  | "/api/visits/:id"
-  | "/api/visits/:id/assign"
-  | "/api/visits/:id/cancel"
-  | "/api/visits/:id/complete"
-  | "/api/visits/:id/confirm"
-  | "/api/visits/:id/jobs"
-  | "/api/visits/:id/jobs/:jobId"
-  | "/api/visits/:id/reschedule-requests/:requestId/accept"
-  | "/api/visits/:id/reschedule-requests/:requestId/decline";
+  | "/api/units/admin/units/:id";
 
 // The converted domains list their paths in their endpoint definitions
 // (`endpoints/`); the hand list above shrinks as domains are converted and
