@@ -1,3 +1,9 @@
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  ListNotificationsQuerySchema,
+  MarkNotificationsReadSchema,
+  UpdateNotificationPreferencesSchema,
+} from "@calibra-facil/schemas";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
@@ -6,18 +12,12 @@ import {
   type NotificationPreferenceMap,
 } from "@calibra-facil/db/schema";
 import {
-  ListNotificationsQuerySchema,
-  MarkNotificationsReadSchema,
-  UpdateNotificationPreferencesSchema,
-} from "@calibra-facil/schemas";
-import {
   withLabPermission,
   requireLabProtected,
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, desc, count, inArray, sql } from "drizzle-orm";
 
-import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
 import { orgDb } from "../lib/org-db";
 
 /**
@@ -238,7 +238,7 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
     // Return default preferences if user hasn't set any
     if (!prefs) {
       return c.json({
-        preferences: DEFAULT_PREFERENCES,
+        preferences: DEFAULT_NOTIFICATION_PREFERENCES,
         emailEnabled: true,
         notifySelfActions: false,
         digestFrequency: "NONE",
@@ -324,7 +324,8 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
             .insert(notificationPreference)
             .values({
               userId: session.user.id,
-              preferences: input.preferences ?? DEFAULT_PREFERENCES,
+              preferences:
+                input.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES,
               emailEnabled: input.emailEnabled ?? true,
               notifySelfActions: input.notifySelfActions ?? false,
               digestFrequency: input.digestFrequency ?? "NONE",

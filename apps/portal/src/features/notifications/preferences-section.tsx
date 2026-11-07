@@ -1,3 +1,4 @@
+import { PortalNotificationType } from "@calibra-facil/schemas";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 
@@ -5,11 +6,7 @@ import { cn } from "@/lib/utils";
 import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import { Skeleton } from "@calibra-facil/ui/skeleton";
 import { Switch } from "@calibra-facil/ui/switch";
-import {
-  PREFERENCE_GROUPS,
-  getNotificationTypeMeta,
-  type PortalNotificationType,
-} from "./lib";
+import { PREFERENCE_GROUPS, getNotificationTypeMeta } from "./lib";
 import {
   useNotificationPreferences,
   useUpdateNotificationPreferences,

@@ -27,6 +27,7 @@
     "@calibra-facil/db": "workspace:*",
     "@calibra-facil/email": "workspace:*",
     "@calibra-facil/email-sender": "workspace:*",
+    "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:*",
     "@react-email/render": "^2.0.8",
     "drizzle-orm": "^0.45.2",

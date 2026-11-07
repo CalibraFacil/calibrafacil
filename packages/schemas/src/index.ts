@@ -1,3 +1,7 @@
+import {
+  NOTIFICATION_TYPES,
+  PORTAL_NOTIFICATION_TYPES,
+} from "./notification-types";
 import { z } from "zod";
 import { VISIT_STATUSES } from "./machines/visits";
 import { NOTIFICATION_STATUSES } from "./machines/tenancy";
@@ -15,6 +19,7 @@ import { CALIBRATION_REQUEST_STATUSES } from "./machines/calibration-request";
 import { JobStatusSchema } from "./job-status";
 import { ReferenceStandardKindSchema } from "./reference-standard-kind";
 export * from "./background-jobs";
+export * from "./notification-types";
 export * from "./calibration-record";
 export * from "./execution-performed-at";
 export * from "./standard-validity";
@@ -2065,41 +2070,7 @@ export const ListJobsQuerySchema = z.object({
 // NOTIFICATION SCHEMAS - In-App & Email Notifications (ISO 17025 Compliance)
 // =============================================================================
 
-/**
- * Notification type enum
- */
-const NotificationTypeSchema = z.enum([
-  "JOB_SUBMITTED_FOR_REVIEW",
-  "JOB_APPROVED",
-  "JOB_REJECTED",
-  "JOB_ASSIGNED",
-  "CERTIFICATE_READY",
-  "CERTIFICATE_AMENDED", // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
-  "ASSET_DUE_FOR_RECALIBRATION",
-  "STANDARD_EXPIRING",
-  "STANDARD_EXPIRED",
-  "JOB_OVERDUE",
-  "NC_CREATED", // ISO 17025 Clause 8.7 - New non-conformance registered
-  "NC_ESCALATED_TO_CAPA", // ISO 17025 Clause 8.7 - NC escalated to CAPA
-  "OOT_NOTIFICATION_ACKNOWLEDGED", // ISO 17025 Clause 7.10 - Customer acknowledged an OOT notification
-  "COMPETENCE_EXPIRING", // ISO 17025 Clause 6.2.3
-  "COMPETENCE_EXPIRED", // ISO 17025 Clause 6.2.3
-  "COMPETENCE_REQUESTED", // ISO 17025 Clause 6.2.3
-  "COMPETENCE_APPROVED", // ISO 17025 Clause 6.2.3
-  "CALIBRATION_REQUEST_SUBMITTED",
-  "CALIBRATION_REQUEST_UNDER_REVIEW",
-  "CALIBRATION_REQUEST_APPROVED",
-  "CALIBRATION_REQUEST_REJECTED",
-  "CALIBRATION_REQUEST_CONVERTED",
-  "VISIT_SCHEDULED", // On-site visit proposed/assigned to a technician
-  "VISIT_CONFIRMED", // On-site visit confirmed (date + technician) for the customer
-  "VISIT_RESCHEDULED", // On-site visit date changed
-  "VISIT_CANCELLED", // On-site visit cancelled
-  "VISIT_REMINDER", // On-site visit coming up soon
-  "VISIT_CUSTOMER_CONFIRMED", // Lab-bound (#739): portal customer confirmed attendance
-  "VISIT_RESCHEDULE_REQUESTED", // Lab-bound (#739): portal customer asked to reschedule
-  "VISIT_RESCHEDULE_DECLINED", // Customer-bound (#739): lab declined the reschedule request
-]);
+const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 
 /**
  * Notification status values
@@ -2163,30 +2134,6 @@ export const UpdateNotificationPreferencesSchema = z.object({
   notifySelfActions: z.boolean().optional(),
   digestFrequency: DigestFrequencySchema.optional(),
 });
-
-/**
- * Customer-facing notification types: the only types the portal notification
- * center lists and whose channel preferences a portal user may edit.
- * Deliberately a subset of the full type union — lab-internal types (jobs,
- * standards, competence, payments, customer success) must never be listed or
- * toggled from a portal session. Keep in sync with the dispatchers in
- * packages/notifications/src/service.ts that address portal recipients.
- */
-export const PORTAL_NOTIFICATION_TYPES = [
-  "CERTIFICATE_READY",
-  "CERTIFICATE_AMENDED",
-  "AUDIT_PACK_READY",
-  "CALIBRATION_REQUEST_UNDER_REVIEW",
-  "CALIBRATION_REQUEST_APPROVED",
-  "CALIBRATION_REQUEST_REJECTED",
-  "CALIBRATION_REQUEST_CONVERTED",
-  "VISIT_CONFIRMED",
-  "VISIT_RESCHEDULED",
-  "VISIT_CANCELLED",
-  "VISIT_REMINDER",
-  "VISIT_RESCHEDULE_DECLINED",
-  "ASSET_FOUND_OUT_OF_TOLERANCE",
-] as const;
 
 const PORTAL_NOTIFICATION_TYPE_SET: ReadonlySet<string> = new Set(
   PORTAL_NOTIFICATION_TYPES,

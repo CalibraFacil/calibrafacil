@@ -26,6 +26,7 @@
  *                    connection and writes each run and event under that
  *                    laboratory.
  */
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "@calibra-facil/schemas";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createRoleDatabase } from "@calibra-facil/db/role-connection";
@@ -42,7 +43,6 @@ import {
   serviceOrderEmailOutbox,
   user,
 } from "@calibra-facil/db/schema";
-import { DEFAULT_PREFERENCES } from "./notification-defaults";
 
 const appRole = vi.hoisted(() => {
   const state: { current: { db: object } | null } = { current: null };
@@ -135,7 +135,7 @@ async function seedPortalUser(
   if (options.digest) {
     await db.insert(notificationPreference).values({
       userId,
-      preferences: DEFAULT_PREFERENCES,
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
       emailEnabled: true,
       digestFrequency: "DAILY",
     });

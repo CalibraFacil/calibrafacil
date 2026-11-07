@@ -1,3 +1,12 @@
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  ListAssetsQuerySchema,
+  SetCalibrationIntervalSchema,
+  FleetAnalyticsQuerySchema,
+  RecordOotImpactAssessmentSchema,
+  PORTAL_NOTIFICATION_TYPES,
+  PortalUpdateNotificationPreferencesSchema,
+} from "@calibra-facil/schemas";
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -53,7 +62,6 @@ import type {
 } from "@calibra-facil/contracts";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
-import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
 import {
   eq,
@@ -81,14 +89,6 @@ import {
   ASSET_OOT_EVENT_MACHINE,
   OOT_NOTIFICATION_MACHINE,
 } from "@calibra-facil/schemas/machines";
-import {
-  ListAssetsQuerySchema,
-  SetCalibrationIntervalSchema,
-  FleetAnalyticsQuerySchema,
-  RecordOotImpactAssessmentSchema,
-  PORTAL_NOTIFICATION_TYPES,
-  PortalUpdateNotificationPreferencesSchema,
-} from "@calibra-facil/schemas";
 import {
   LAB_TODAY_SQL,
   addCalendarDays,
@@ -1914,7 +1914,7 @@ export const portalRouter = new Hono<{
             // spread preserves every other stored key — a dual-role user's
             // lab-side preferences survive portal edits untouched.
             const mergedPreferences = {
-              ...(existing?.preferences ?? DEFAULT_PREFERENCES),
+              ...(existing?.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES),
               ...input.preferences,
             };
             const merged = {

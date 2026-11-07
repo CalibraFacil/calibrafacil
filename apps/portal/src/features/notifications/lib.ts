@@ -1,4 +1,8 @@
 import {
+  PORTAL_NOTIFICATION_TYPES,
+  type PortalNotificationType,
+} from "@calibra-facil/schemas";
+import {
   Alert02Icon,
   Calendar03Icon,
   CancelCircleIcon,
@@ -16,29 +20,9 @@ import type { SignalTone } from "@calibra-facil/ui/status-tone";
  * The general in-app notification center (issue #741) — distinct from the
  * §7.10 out-of-tolerance acknowledgment feed in features/out-of-tolerance.
  *
- * The type list mirrors the API's customer-facing whitelist
- * (PORTAL_NOTIFICATION_TYPES in @calibra-facil/schemas): only these types are
- * ever listed for a portal session, and only their channel preferences are
- * editable here.
+ * Only PORTAL_NOTIFICATION_TYPES (@calibra-facil/schemas) are ever listed for a
+ * portal session, and only their channel preferences are editable here.
  */
-
-export const PORTAL_NOTIFICATION_TYPES = [
-  "CERTIFICATE_READY",
-  "CERTIFICATE_AMENDED",
-  "AUDIT_PACK_READY",
-  "CALIBRATION_REQUEST_UNDER_REVIEW",
-  "CALIBRATION_REQUEST_APPROVED",
-  "CALIBRATION_REQUEST_REJECTED",
-  "CALIBRATION_REQUEST_CONVERTED",
-  "VISIT_CONFIRMED",
-  "VISIT_RESCHEDULED",
-  "VISIT_CANCELLED",
-  "VISIT_REMINDER",
-  "VISIT_RESCHEDULE_DECLINED",
-  "ASSET_FOUND_OUT_OF_TOLERANCE",
-] as const;
-
-export type PortalNotificationType = (typeof PORTAL_NOTIFICATION_TYPES)[number];
 
 type NotificationTypeMeta = {
   icon: IconSvgElement;

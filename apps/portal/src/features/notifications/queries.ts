@@ -1,3 +1,4 @@
+import { PortalNotificationType } from "@calibra-facil/schemas";
 import {
   useInfiniteQuery,
   useMutation,
@@ -14,7 +15,6 @@ import {
 
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
-import type { PortalNotificationType } from "./lib";
 
 /**
  * General in-app notification center (issue #741). Shapes mirror

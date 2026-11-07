@@ -1,7 +1,7 @@
+import { PORTAL_NOTIFICATION_TYPES } from "@calibra-facil/schemas";
 import { describe, expect, it } from "vitest";
 
 import {
-  PORTAL_NOTIFICATION_TYPES,
   PREFERENCE_GROUPS,
   formatBadgeCount,
   getNotificationTypeMeta,
