@@ -124,7 +124,7 @@ describe("audit pack worker as calibra_app (P2-18j)", () => {
     const { env, puts } = recordingEnv(envAsApplicationRole());
     for (const cert of [lab.certA, lab.certB]) {
       await env.CERTIFICATES_BUCKET.put(cert.certificateR2Key, FAKE_PDF_BYTES, {
-        httpMetadata: { contentType: "application/pdf" },
+        contentType: "application/pdf",
       });
     }
     puts.clear();

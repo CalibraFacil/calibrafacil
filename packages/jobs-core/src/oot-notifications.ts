@@ -224,7 +224,7 @@ export async function processOotNotification(
       year: (toDateOrNull(row.approved_at) ?? new Date()).getUTCFullYear(),
     });
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
 
     // Record the artifact: `generate` in OOT_NOTIFICATION_MACHINE

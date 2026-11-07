@@ -1,6 +1,6 @@
 import { readDatabaseConfig } from "@calibra-facil/config";
 
-// Conditionally load dotenv in Node.js environments (not needed in CF Workers)
+// dotenv outside production (the API and worker also load their own env files)
 if (
   typeof process !== "undefined" &&
   readDatabaseConfig().nodeEnv !== "production"
@@ -8,17 +8,12 @@ if (
   try {
     await import("dotenv/config");
   } catch {
-    // dotenv not available, likely running in CF Workers
+    // dotenv not installed: the environment is already set
   }
 }
 
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
-import {
-  drizzle as drizzleNeon,
-  type NeonDatabase,
-} from "drizzle-orm/neon-serverless";
 import postgres from "postgres";
-import { Pool } from "@neondatabase/serverless";
 import * as schema from "./schema.js";
 import {
   createTransactionScopeRunner,
@@ -30,9 +25,7 @@ export {
   isInTransactionScope,
 } from "./transaction-scope.js";
 
-type Database =
-  | NeonDatabase<typeof schema>
-  | ReturnType<typeof drizzlePostgres<typeof schema>>;
+type Database = ReturnType<typeof drizzlePostgres<typeof schema>>;
 
 /**
  * Test-only statement observer. Off by default: with no observer installed the
@@ -68,13 +61,8 @@ let cachedDatabase: CachedDatabase | null = null;
 // it never evicts the application pool and the other way round.
 let cachedSystemDatabase: CachedDatabase | null = null;
 
-/** Both drivers keep their client on `$client` (postgres.js `Sql`, Neon `Pool`): each can `end()`. */
 async function closeDatabase(database: Database): Promise<void> {
-  const client: unknown = Reflect.get(database, "$client");
-  if (client && typeof client === "object" && "end" in client) {
-    const end: unknown = client.end;
-    if (typeof end === "function") await Reflect.apply(end, client, []);
-  }
+  await database.$client.end();
 }
 
 /**
@@ -92,18 +80,7 @@ export async function closeDatabases(): Promise<void> {
   );
 }
 
-function isCloudflareWorkersRuntime() {
-  return (
-    typeof navigator !== "undefined" &&
-    navigator.userAgent === "Cloudflare-Workers"
-  );
-}
-
 function cacheDatabase(key: string, createDatabase: () => Database): Database {
-  if (isCloudflareWorkersRuntime()) {
-    return createDatabase();
-  }
-
   if (cachedDatabase?.key === key) {
     return cachedDatabase.database;
   }
@@ -117,10 +94,6 @@ function cacheSystemDatabase(
   key: string,
   createDatabase: () => Database,
 ): Database {
-  if (isCloudflareWorkersRuntime()) {
-    return createDatabase();
-  }
-
   if (cachedSystemDatabase?.key === key) {
     return cachedSystemDatabase.database;
   }
@@ -165,18 +138,7 @@ function createPostgresJsDatabase(
   return drizzlePostgres(sql, { schema, logger: observingLogger });
 }
 
-function createNeonServerlessDatabase(connectionString: string) {
-  const pool = new Pool({ connectionString });
-  return drizzleNeon(pool, { schema });
-}
-
-/**
- * Creates a fresh database connection.
- *
- * Uses different drivers based on environment:
- * - DATABASE_URL in Bun/Node: Uses postgres.js with a cached connection pool
- * - DATABASE_URL in Cloudflare: Uses Neon serverless driver as a Workers-safe fallback
- */
+/** The application pool (`DATABASE_URL`): postgres.js, one cached pool per configuration. */
 export function getDb(): Database {
   queryObserver?.onAccess?.();
   const config = readDatabaseConfig();
@@ -192,19 +154,15 @@ export function getDb(): Database {
       "getDb() was called inside a transaction scope: that is a second database connection. Do the work before the scope opens or in afterTransactionCommit.",
     );
   }
-  const isCloudflare = isCloudflareWorkersRuntime();
-
   const databaseUrl = config.url;
   if (databaseUrl) {
     return cacheDatabase(
       `database:${databaseUrl}:${config.poolMax}:${config.statementTimeoutMs}:${config.idleInTransactionTimeoutMs}`,
-      () => {
-        if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
-        return createPostgresJsDatabase(databaseUrl, config.poolMax, {
+      () =>
+        createPostgresJsDatabase(databaseUrl, config.poolMax, {
           statementTimeoutMs: config.statementTimeoutMs,
           idleInTransactionTimeoutMs: config.idleInTransactionTimeoutMs,
-        });
-      },
+        }),
     );
   }
 
@@ -237,11 +195,9 @@ export function getSystemDb(): Database {
   // the observer sees exactly one access per call on either branch.
   if (!ownerUrl) return getDb();
   queryObserver?.onAccess?.();
-  const isCloudflare = isCloudflareWorkersRuntime();
-  return cacheSystemDatabase(`owner:${ownerUrl}:${config.poolMax}`, () => {
-    if (isCloudflare) return createNeonServerlessDatabase(ownerUrl);
-    return createPostgresJsDatabase(ownerUrl, config.poolMax);
-  });
+  return cacheSystemDatabase(`owner:${ownerUrl}:${config.poolMax}`, () =>
+    createPostgresJsDatabase(ownerUrl, config.poolMax),
+  );
 }
 
 /** `getSystemDb()` as a stable import, like `db` for the application pool. */

@@ -68,6 +68,7 @@ import {
   buildGenericConnectionConfig,
   createSyncRun,
   decryptIntegrationSecret,
+  dispatchContaAzulSync,
   encryptIntegrationSecret,
   failIntegrationSyncRun,
   failSyncRunAsBlocked,
@@ -628,7 +629,7 @@ export async function dispatchSyncRun(params: {
 
   if (record?.integration.provider === "conta_azul") {
     try {
-      await enqueueBackgroundJob({
+      await dispatchContaAzulSync({
         type: "INTEGRATION_SYNC",
         provider: "conta_azul",
         integrationId: params.integrationId,

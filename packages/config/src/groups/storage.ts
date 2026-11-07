@@ -76,7 +76,7 @@ export const renderingGroup = defineGroup({
     gotenbergToken: text({
       env: "GOTENBERG_TOKEN",
       description:
-        "Shared-secret header, only when your Gotenberg sits behind the token gate in services/gotenberg.",
+        "Shared-secret header (X-Gotenberg-Token), only when your Gotenberg sits behind a gate that requires it; the stock image does not.",
       secret: true,
     }),
   },

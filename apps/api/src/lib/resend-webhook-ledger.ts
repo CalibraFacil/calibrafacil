@@ -9,9 +9,8 @@ import { emailWebhookEvent } from "@calibra-facil/db/schema";
  *
  * Insert-first by svix id: a redelivery hits the UNIQUE constraint and returns
  * no row, so the caller skips the side effect (delivery is at-least-once).
- * `db` is a Proxy over a union of the neon + postgres-js drivers, so a typed
- * `.returning({...})` collapses to the 0-arg overload (TS2554): the 0-arg form
- * is used, only the row count matters for the dedup decision.
+ * Only the row count matters for the dedup decision, so `.returning()` takes
+ * no column list.
  */
 export async function recordResendWebhookEvent(params: {
   svixId: string;

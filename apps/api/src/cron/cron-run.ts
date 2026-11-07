@@ -27,9 +27,9 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Erro desconhecido no cron";
 }
 
-// Drizzle's db.execute returns a PG QueryResult — rows is on `.rows` for the
-// neon driver and the result is array-like for postgres.js. Handle both without
-// `as` assertions (banned by oxlint).
+// Drizzle's db.execute on postgres.js returns the rows as an array-like list;
+// a `{ rows }` object is read too (the shape the unit specs stub). No `as`
+// assertions (banned by oxlint).
 function rowsLength(result: unknown): number {
   const rows: unknown = Reflect.get(Object(result), "rows") ?? result;
   return Array.isArray(rows) ? rows.length : 0;

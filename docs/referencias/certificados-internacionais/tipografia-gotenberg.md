@@ -45,5 +45,5 @@ curl -sS -X POST "$GOTENBERG_URL/forms/chromium/convert/html" \
 pdffonts probe.pdf
 ```
 
-Vale repetir se a imagem do `services/gotenberg` mudar — o Dockerfile hoje segue
-`gotenberg/gotenberg:8` sem pin de patch, então o conjunto de fontes pode mudar sem aviso.
+Vale repetir se a imagem do Gotenberg mudar (a tag fixada no `docker-compose.yml`),
+porque o conjunto de fontes pode mudar com a versão.

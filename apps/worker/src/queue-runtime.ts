@@ -100,14 +100,14 @@ function createR2Bucket(storage: StorageSettings, bucket: string) {
     async put(
       key: string,
       body: Buffer | Uint8Array | ArrayBuffer,
-      options?: { httpMetadata?: { contentType?: string } },
+      options?: { contentType?: string },
     ) {
       await client.send(
         new PutObjectCommand({
           Bucket: bucket,
           Key: key,
           Body: body instanceof ArrayBuffer ? new Uint8Array(body) : body,
-          ContentType: options?.httpMetadata?.contentType,
+          ContentType: options?.contentType,
         }),
       );
     },

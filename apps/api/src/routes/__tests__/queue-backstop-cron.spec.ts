@@ -32,6 +32,7 @@ vi.mock("../../lib/runtime-env", () => ({
 }));
 
 vi.mock("../../modules/integrations", () => ({
+  dispatchContaAzulSync: vi.fn(),
   processScheduledContaAzulIntegrationSyncs:
     mocks.processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls: mocks.processScheduledContaAzulPolls,

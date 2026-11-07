@@ -37,16 +37,14 @@ export function createFakeBucket(): ObjectBucket {
           new Uint8Array(out).set(buf);
           return out;
         },
-        httpMetadata: entry.contentType
-          ? { contentType: entry.contentType }
-          : undefined,
+        contentType: entry.contentType,
       };
     },
     async put(key, body, options) {
       const bytes = body instanceof Uint8Array ? body : new Uint8Array(body);
       store.set(key, {
         body: bytes,
-        contentType: options?.httpMetadata?.contentType,
+        contentType: options?.contentType,
       });
     },
   };

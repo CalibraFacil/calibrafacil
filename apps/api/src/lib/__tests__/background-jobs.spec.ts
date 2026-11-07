@@ -4,7 +4,6 @@ import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 const mocks = vi.hoisted(() => ({
   enqueueQueueJob: vi.fn(),
   processBackgroundJob: vi.fn(),
-  runIntegrationSync: vi.fn(),
 }));
 
 vi.mock("@calibra-facil/db/queue", async (importOriginal) => ({
@@ -15,10 +14,6 @@ vi.mock("@calibra-facil/db/queue", async (importOriginal) => ({
 // The in-process runners load these lazily.
 vi.mock("@calibra-facil/jobs-core", () => ({
   processBackgroundJob: mocks.processBackgroundJob,
-}));
-
-vi.mock("../../modules/integrations", () => ({
-  runIntegrationSync: mocks.runIntegrationSync,
 }));
 
 vi.mock("../runtime-env", () => ({
@@ -60,7 +55,6 @@ describe("enqueueBackgroundJob — database queue mode", () => {
     process.env.BACKGROUND_JOBS_MODE = "queue";
     mocks.enqueueQueueJob.mockResolvedValue(42);
     mocks.processBackgroundJob.mockResolvedValue(undefined);
-    mocks.runIntegrationSync.mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
@@ -97,7 +91,7 @@ describe("enqueueBackgroundJob — database queue mode", () => {
     );
   });
 
-  it("runs Conta Azul syncs in this process, where their client lives", async () => {
+  it("refuses a Conta Azul sync: it runs through dispatchContaAzulSync", async () => {
     const message: BackgroundJobMessage = {
       type: "INTEGRATION_SYNC",
       provider: "conta_azul",
@@ -109,15 +103,10 @@ describe("enqueueBackgroundJob — database queue mode", () => {
       trigger: "manual",
     };
 
-    const result = await enqueueBackgroundJob(message);
-
-    expect(result.messageId).toMatch(/^local-/);
-    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-    await vi.waitFor(() =>
-      expect(mocks.runIntegrationSync).toHaveBeenCalledWith(
-        expect.objectContaining({ integrationId: "integration-1" }),
-      ),
+    await expect(enqueueBackgroundJob(message)).rejects.toThrow(
+      "dispatchContaAzulSync",
     );
+    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
   });
 });
 

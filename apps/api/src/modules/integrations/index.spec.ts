@@ -18,6 +18,7 @@ const CALLER_SURFACE = [
   "createIntegrationPayloadFingerprint",
   "createSyncRun",
   "decryptIntegrationSecret",
+  "dispatchContaAzulSync",
   "encryptIntegrationSecret",
   "failIntegrationSyncRun",
   "failSyncRunAsBlocked",

@@ -397,7 +397,7 @@ export async function processJob(
       brand: job.asset.manufacturer,
     });
     await bucketBinding(env, pdf.bucket).put(pdf.key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      contentType: "application/pdf",
     });
 
     const renderPolicy = {
