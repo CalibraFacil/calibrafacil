@@ -206,7 +206,6 @@ export const API_ERROR_CODES = [
   "agreement_not_found",
   "agreement_terms_required",
   "agreement_reference_invalid",
-  "service_order_not_found",
   "invalid_limit",
   "release_not_calculated",
   "release_reason_required",
