@@ -19,7 +19,7 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 // fast tier cannot: customer isolation enforced by the handler's
 // `inArray(asset.customerId, customerIds)` WHERE clause.
 
-// The portal resolves the host lab from the request Origin (getPortalLabScope).
+// The portal resolves the host lab from the request Origin (resolvePortalLabScope).
 // A default/local host yields labScope=null with blocked=false, which is the
 // clean path: scope is then resolved purely from customer.authOrganizationId.
 const LOCAL_ORIGIN = { origin: "http://localhost" };

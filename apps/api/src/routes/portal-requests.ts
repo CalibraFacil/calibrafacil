@@ -1,3 +1,4 @@
+import { requirePortalLabScope } from "../lib/portal-lab-scope";
 import { Hono } from "hono";
 import type {
   PortalRequestBatchResponse,
@@ -38,26 +39,6 @@ import { orgDb } from "../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { clientIp } from "../lib/client-ip";
 
-function getPortalHostOrigin(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  return c.req.header("origin") ?? c.req.header("referer") ?? null;
-}
-
-async function getPortalLabScope(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  const origin = getPortalHostOrigin(c);
-  if (!origin) return null;
-
-  try {
-    const url = new URL(origin);
-    return resolveLabOrganizationIdByPortalHostname(url.hostname);
-  } catch {
-    return null;
-  }
-}
-
 async function getRequestItems(o: OrgDb, requestIds: number[]) {
   if (requestIds.length === 0) return [];
 
@@ -97,7 +78,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("query", ListCalibrationRequestsQuerySchema),
     async (c) => {
       const member = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
       const { page, limit, status, query } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
@@ -194,7 +175,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     requirePermission({ request: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
       const id = parseInt(c.req.param("id"), 10);
 
       if (isNaN(id)) {
@@ -280,7 +261,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
       const input = c.req.valid("json");
       const ipAddress = clientIp(c);
 
@@ -484,7 +465,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const portalLabScope = await getPortalLabScope(c);
+      const portalLabScope = await requirePortalLabScope(c);
       const input = c.req.valid("json");
       const ipAddress = clientIp(c);
 
