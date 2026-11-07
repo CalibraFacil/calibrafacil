@@ -56,11 +56,8 @@ import { calibrationRequestsRouter as bareCalibrationRequestsRouter } from "./ca
 import { customerGroupsRouter as bareCustomerGroupsRouter } from "./customer-groups";
 import { customersRouter as bareCustomersRouter } from "./customers";
 import { materialsRouter as bareMaterialsRouter } from "./materials";
-import { servicesRouter } from "./services";
 import { unitsRouter as bareUnitsRouter } from "./units";
-import { materialsRouter } from "./materials";
 import { servicesRouter as bareServicesRouter } from "./services";
-import { unitsRouter } from "./units";
 import { visitJobsRouter as bareVisitJobsRouter } from "./visits";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
