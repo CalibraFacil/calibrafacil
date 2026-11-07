@@ -111,7 +111,7 @@ const customerCreatedSchema = customerSchema.extend({
 });
 
 /** A user of the customer's portal (a member of its CLIENT organization). */
-const portalMemberSchema = z.object({
+export const portalMemberSchema = z.object({
   id: z.string(),
   userId: z.string(),
   role: z.string(),
@@ -122,7 +122,7 @@ const portalMemberSchema = z.object({
 });
 export type CustomerPortalMember = z.infer<typeof portalMemberSchema>;
 
-const portalInvitationSchema = z.object({
+export const portalInvitationSchema = z.object({
   id: z.string(),
   email: z.string(),
   role: nullableString,

@@ -34,22 +34,12 @@ type HandListedRoutePath =
   | "/api/api-keys"
   | "/api/api-keys/:id/revoke"
   | "/api/api-keys/:id/rotate"
-  | "/api/asset-types"
   | "/api/onboarding/checklist"
   | "/api/organization/profile"
   | "/api/organization/soft-delete"
   | "/api/authorized-signatories"
   | "/api/authorized-signatories/:id"
   | "/api/authorized-signatories/:id/revoke"
-  | "/api/customer-groups"
-  | "/api/customer-groups/:id"
-  | "/api/customer-groups/:id/branches"
-  | "/api/customer-groups/:id/branches/:customerId"
-  | "/api/customer-groups/:id/members"
-  | "/api/customer-groups/:id/members/:memberId"
-  | "/api/customer-groups/:id/invitations"
-  | "/api/customer-groups/:id/invitations/:invId"
-  | "/api/customer-groups/:id/invitations/:invId/resend"
   | "/api/email-domains"
   | "/api/email-domains/activate"
   | "/api/email-domains/verify"
@@ -145,14 +135,7 @@ type HandListedRoutePath =
   | "/api/public/service-order-access/:token/reject-quote"
   | "/api/public/service-order-access/redeem-code"
   | "/api/service-orders/pending-calibration"
-  | "/api/sessions/revoke"
-  | "/api/units"
-  | "/api/units/admin/activity"
-  | "/api/units/admin/members"
-  | "/api/units/admin/members/:memberId/assignments"
-  | "/api/units/admin/members/:memberId/role"
-  | "/api/units/admin/units"
-  | "/api/units/admin/units/:id";
+  | "/api/sessions/revoke";
 
 // The converted domains list their paths in their endpoint definitions
 // (`endpoints/`); the hand list above shrinks as domains are converted and

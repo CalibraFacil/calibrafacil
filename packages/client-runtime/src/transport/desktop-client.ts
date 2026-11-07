@@ -1,12 +1,14 @@
 import { slugify } from "@calibra-facil/shared/text";
 import {
   assetEndpoints,
+  assetTypeEndpoints,
   customerEndpoints,
   ENDPOINT_GROUPS,
   methodEndpoints,
   standardEndpoints,
   type EndpointDef,
   type EndpointGroups,
+  type UnitsContext,
 } from "@calibra-facil/contracts";
 import type {
   JobDetail,
@@ -14,11 +16,9 @@ import type {
   SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import type {
-  AssetTypesListData,
   CalibraApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
-  DashboardUnitsResponse,
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
   FinanceAccessResponse,
@@ -49,6 +49,7 @@ import {
   endpointClient,
 } from "./endpoint-client";
 import { createServiceOrdersApi } from "../modules/service-orders";
+import { emptyGovernanceResponse } from "../modules/units";
 import { readApiError } from "./response";
 import { apiRouteParam } from "./url";
 import {
@@ -186,6 +187,11 @@ export function createDesktopApiClient(
     desktopTransport,
     options,
   );
+  const localAssetTypes = endpointClient(
+    assetTypeEndpoints,
+    desktopTransport,
+    options,
+  );
   let localSessionCache: {
     expiresAt: number;
     promise: Promise<LocalSessionSnapshotResponse>;
@@ -231,27 +237,27 @@ export function createDesktopApiClient(
   return {
     dashboard: desktopEndpointStubs("dashboard"),
     units: {
-      ...desktopCloudOnlyStubs("units", { action: "Governança de unidades" }),
+      ...desktopEndpointStubs("units"),
+      // The reads degrade to what the local session knows (or to nothing);
+      // managing units and assignments is online-only.
       async getDashboardUnits() {
         const session = await getLocalSessionSnapshot();
         return buildDesktopUnitsResponse(session.data);
       },
-      async listAdminUnits<TResponse = unknown>() {
-        return assumeDesktopPayload<TResponse>(emptyGovernanceResponse());
+      async listAdminUnits() {
+        return emptyGovernanceResponse();
       },
-      async listAdminMembers<TResponse = unknown>() {
-        return assumeDesktopPayload<TResponse>(emptyGovernanceResponse());
+      async listAdminMembers() {
+        return emptyGovernanceResponse();
       },
-      async listAdminActivity<TResponse = unknown>() {
-        return assumeDesktopPayload<TResponse>(emptyGovernanceResponse());
+      async listAdminActivity() {
+        return emptyGovernanceResponse();
       },
     },
     customerGroups: {
       // Customer groups are a cloud-only lab feature; desktop/offline can't
       // provision CLIENT orgs. Reads degrade to empty, writes are unsupported.
-      ...desktopCloudOnlyStubs("customerGroups", {
-        action: "Grupos de clientes",
-      }),
+      ...desktopEndpointStubs("customerGroups"),
       async list() {
         return { data: [] };
       },
@@ -403,23 +409,9 @@ export function createDesktopApiClient(
       create: localAssets.create,
       get: localAssets.get,
     },
-    assetTypes: {
-      async list() {
-        const response = await fetchImpl(
-          new URL("/api/asset-types", options.baseUrl),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar tipos de instrumento");
-        }
-
-        return readDesktopJson<AssetTypesListData>(response);
-      },
-    },
+    // Read-through from the local mirror: the local server answers the
+    // definition's own response schema (`apps/local-server/src/contract.test.ts`).
+    assetTypes: { list: localAssetTypes.list },
     environmentalLimits: {
       ...desktopEndpointStubs("environmentalLimits"),
       // The limits of the active unit come from the session snapshot, not
@@ -1085,24 +1077,9 @@ function isDesktopOfflineError(error: unknown) {
   );
 }
 
-function emptyGovernanceResponse() {
-  return {
-    data: [],
-    viewer: {
-      isGlobalManager: false,
-      canManageOrganizationUnits: false,
-      canManageAssignments: false,
-      canManageGlobalRoles: false,
-      canViewGovernance: false,
-      canAccessConsolidatedView: false,
-      managedUnitIds: [],
-    },
-  };
-}
-
 function buildDesktopUnitsResponse(
   session: LocalSessionSnapshotResponse["data"],
-): DashboardUnitsResponse | null {
+): UnitsContext | null {
   if (!session) return null;
 
   const activeUnitId = session.permissions.activeUnitId;

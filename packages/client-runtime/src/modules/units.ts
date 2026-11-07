@@ -1,90 +1,83 @@
-import type { DashboardUnitsResponse, UnitsApi } from "../types";
 import {
-  readMutationResponse,
-  readOptionalForbiddenResponse,
-} from "../transport/response";
+  unitEndpoints,
+  type OrganizationGovernanceActivityData,
+  type OrganizationGovernanceMembersData,
+  type OrganizationUnitsData,
+  type ResponseValidationOptions,
+  type UnitsContext,
+} from "@calibra-facil/contracts";
 
-export function createUnitsApi(rawCloudClient: any): UnitsApi {
+import { CalibraApiError } from "../transport/errors";
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+type ReadMethod =
+  | "getDashboardUnits"
+  | "listAdminUnits"
+  | "listAdminMembers"
+  | "listAdminActivity";
+
+/**
+ * The units client is its endpoint group (`unitEndpoints` in
+ * `@calibra-facil/contracts`) plus the one client-side rule: the four reads
+ * answer a member without governance access (403) with an empty result, so a
+ * screen renders its "no access" state instead of failing.
+ */
+export type UnitsApi = Omit<
+  EndpointClient<typeof unitEndpoints>,
+  ReadMethod
+> & {
+  /** The unit context of the session; null when the member may not read it (403). */
+  getDashboardUnits(): Promise<UnitsContext | null>;
+  listAdminUnits(): Promise<OrganizationUnitsData>;
+  listAdminMembers(): Promise<OrganizationGovernanceMembersData>;
+  listAdminActivity(): Promise<OrganizationGovernanceActivityData>;
+};
+
+export function createUnitsApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): UnitsApi {
+  const client = endpointClient(unitEndpoints, transport, options);
+
   return {
-    async getDashboardUnits() {
-      return readOptionalForbiddenResponse<DashboardUnitsResponse | null>(
-        await rawCloudClient.api.units.$get(),
-        null,
-        "Falha ao carregar unidades",
-      );
-    },
-    async listAdminUnits<TResponse = unknown>() {
-      return readOptionalForbiddenResponse<TResponse>(
-        await rawCloudClient.api.units.admin.units.$get(),
+    ...client,
+    getDashboardUnits: () =>
+      orWhenForbidden(() => client.getDashboardUnits(), null),
+    listAdminUnits: () =>
+      orWhenForbidden(() => client.listAdminUnits(), emptyGovernanceResponse()),
+    listAdminMembers: () =>
+      orWhenForbidden(
+        () => client.listAdminMembers(),
         emptyGovernanceResponse(),
-        "Falha ao carregar unidades",
-      );
-    },
-    async listAdminMembers<TResponse = unknown>() {
-      return readOptionalForbiddenResponse<TResponse>(
-        await rawCloudClient.api.units.admin.members.$get(),
+      ),
+    listAdminActivity: () =>
+      orWhenForbidden(
+        () => client.listAdminActivity(),
         emptyGovernanceResponse(),
-        "Falha ao carregar governança por unidade",
-      );
-    },
-    async listAdminActivity<TResponse = unknown>() {
-      return readOptionalForbiddenResponse<TResponse>(
-        await rawCloudClient.api.units.admin.activity.$get(),
-        emptyGovernanceResponse(),
-        "Falha ao carregar atividade de governança",
-      );
-    },
-    async createAdminUnit<TResponse = unknown>(name: string) {
-      return readMutationResponse<TResponse>(
-        await rawCloudClient.api.units.admin.units.$post({ json: { name } }),
-        "Erro ao criar unidade",
-      );
-    },
-    async updateAdminUnit<TResponse = unknown>(
-      unitId: number,
-      payload: { name?: string; status?: "ACTIVE" | "ARCHIVED" },
-    ) {
-      return readMutationResponse<TResponse>(
-        await rawCloudClient.api.units.admin.units[":id"].$patch({
-          param: { id: String(unitId) },
-          json: payload,
-        }),
-        "Erro ao atualizar unidade",
-      );
-    },
-    async updateMemberAssignments<TResponse = unknown>(
-      memberId: string,
-      assignments: Array<{
-        unitId: number;
-        role: "member" | "technician" | "unit_admin";
-      }>,
-    ) {
-      return readMutationResponse<TResponse>(
-        await rawCloudClient.api.units.admin.members[
-          ":memberId"
-        ].assignments.$put({
-          param: { memberId },
-          json: { assignments },
-        }),
-        "Erro ao atualizar atribuições",
-      );
-    },
-    async updateMemberRole<TResponse = unknown>(
-      memberId: string,
-      role: string,
-    ) {
-      return readMutationResponse<TResponse>(
-        await rawCloudClient.api.units.admin.members[":memberId"].role.$patch({
-          param: { memberId },
-          json: { role },
-        }),
-        "Erro ao atualizar papel global",
-      );
-    },
+      ),
   };
 }
 
-function emptyGovernanceResponse() {
+async function orWhenForbidden<TResult, TFallback>(
+  call: () => Promise<TResult>,
+  fallback: TFallback,
+): Promise<TResult | TFallback> {
+  try {
+    return await call();
+  } catch (error) {
+    if (error instanceof CalibraApiError && error.status === 403) {
+      return fallback;
+    }
+    throw error;
+  }
+}
+
+/** What a governance read answers a member who may not see it: nothing, and no capabilities. */
+export function emptyGovernanceResponse() {
   return {
     data: [],
     viewer: {

@@ -6,6 +6,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 
+import type { PortalManageableMemberRole } from '@calibra-facil/auth/access'
 import { calibraApi } from '@/utils/api'
 import { ensureRouteQueries } from '@/lib/route-data'
 import type {
@@ -13,7 +14,6 @@ import type {
   CustomerGroupDetailData,
   CustomerGroupsListData,
 } from '@calibra-facil/client-runtime'
-import type { PortalInvitation, PortalMember } from '@/features/customers/types'
 
 function customerGroupsListQueryOptions(organizationId: string) {
   return queryOptions({
@@ -39,7 +39,7 @@ function customerGroupDetailQueryOptions(groupId: number) {
   return queryOptions({
     queryKey: ['customer-group', groupId],
     queryFn: (): Promise<CustomerGroupDetailData> =>
-      calibraApi.customerGroups.get(groupId),
+      calibraApi.customerGroups.get({ params: { id: groupId } }),
   })
 }
 
@@ -59,7 +59,8 @@ export function useCustomerGroupDetailData(groupId: number) {
 function customerGroupMembersQueryOptions(groupId: number) {
   return queryOptions({
     queryKey: ['customer-group-members', groupId],
-    queryFn: () => calibraApi.customerGroups.listMembers<PortalMember>(groupId),
+    queryFn: () =>
+      calibraApi.customerGroups.listMembers({ params: { id: groupId } }),
   })
 }
 
@@ -67,7 +68,7 @@ function customerGroupInvitationsQueryOptions(groupId: number) {
   return queryOptions({
     queryKey: ['customer-group-invitations', groupId],
     queryFn: () =>
-      calibraApi.customerGroups.listInvitations<PortalInvitation>(groupId),
+      calibraApi.customerGroups.listInvitations({ params: { id: groupId } }),
   })
 }
 
@@ -94,7 +95,7 @@ export function useCreateCustomerGroupMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateCustomerGroupInput) =>
-      calibraApi.customerGroups.create(input),
+      calibraApi.customerGroups.create({ body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['customer-groups'] })
     },
@@ -114,7 +115,10 @@ export function useAssignBranchMutation(groupId: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (customerId: number) =>
-      calibraApi.customerGroups.addBranch(groupId, customerId),
+      calibraApi.customerGroups.addBranch({
+        params: { id: groupId },
+        body: { customerId },
+      }),
     onSuccess: () => invalidateGroupAndCustomerCaches(queryClient),
   })
 }
@@ -123,16 +127,24 @@ export function useRemoveBranchMutation(groupId: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (customerId: number) =>
-      calibraApi.customerGroups.removeBranch(groupId, customerId),
+      calibraApi.customerGroups.removeBranch({
+        params: { id: groupId, customerId },
+      }),
     onSuccess: () => invalidateGroupAndCustomerCaches(queryClient),
   })
 }
 
-export function useInviteGroupManagerMutation(groupId: number, role: string) {
+export function useInviteGroupManagerMutation(
+  groupId: number,
+  role: PortalManageableMemberRole,
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (email: string) =>
-      calibraApi.customerGroups.createInvitation(groupId, { email, role }),
+      calibraApi.customerGroups.createInvitation({
+        params: { id: groupId },
+        body: { email, role },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['customer-group-invitations', groupId],
@@ -145,7 +157,9 @@ export function useResendGroupInvitationMutation(groupId: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (invitationId: string) =>
-      calibraApi.customerGroups.resendInvitation(groupId, invitationId),
+      calibraApi.customerGroups.resendInvitation({
+        params: { id: groupId, invId: invitationId },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['customer-group-invitations', groupId],
@@ -158,7 +172,9 @@ export function useCancelGroupInvitationMutation(groupId: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (invitationId: string) =>
-      calibraApi.customerGroups.cancelInvitation(groupId, invitationId),
+      calibraApi.customerGroups.cancelInvitation({
+        params: { id: groupId, invId: invitationId },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['customer-group-invitations', groupId],
@@ -171,7 +187,9 @@ export function useRemoveGroupMemberMutation(groupId: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (memberId: string) =>
-      calibraApi.customerGroups.removeMember(groupId, memberId),
+      calibraApi.customerGroups.removeMember({
+        params: { id: groupId, memberId },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['customer-group-members', groupId],

@@ -14,6 +14,12 @@ import {
   buildServiceOrderDetail,
 } from "@calibra-facil/contracts/service-orders-fixtures";
 import { buildStandard } from "@calibra-facil/contracts/standards-fixtures";
+import {
+  buildOrganizationGovernanceActivityData,
+  buildOrganizationGovernanceMembersData,
+  buildOrganizationUnit,
+  buildOrganizationUnitsData,
+} from "@calibra-facil/contracts/units-fixtures";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -1940,30 +1946,33 @@ describe("unit governance runtime adapter", () => {
       const url = String(input);
 
       if (url.endsWith("/admin/units") && init?.method === "POST") {
-        return Response.json({ id: 10, name: "Central" }, { status: 201 });
+        return Response.json(
+          buildOrganizationUnit({ id: 11, name: "Central" }),
+          {
+            status: 201,
+          },
+        );
       }
 
       if (url.endsWith("/admin/units/10")) {
-        return Response.json({ id: 10, name: "Central atualizada" });
+        return Response.json(
+          buildOrganizationUnit({ id: 10, name: "Central atualizada" }),
+        );
       }
 
-      if (url.endsWith("/assignments")) {
-        return Response.json({ success: true });
-      }
-
-      if (url.endsWith("/role")) {
+      if (url.endsWith("/assignments") || url.endsWith("/role")) {
         return Response.json({ success: true });
       }
 
       if (url.endsWith("/admin/members")) {
-        return Response.json({ data: [], viewer: { canViewGovernance: true } });
+        return Response.json(buildOrganizationGovernanceMembersData());
       }
 
       if (url.endsWith("/admin/activity")) {
-        return Response.json({ data: [], viewer: { canViewGovernance: true } });
+        return Response.json(buildOrganizationGovernanceActivityData());
       }
 
-      return Response.json({ data: [], viewer: { canViewGovernance: true } });
+      return Response.json(buildOrganizationUnitsData());
     };
     const client = createCloudApiClient({
       baseUrl: "https://api.example.test",
@@ -1971,27 +1980,34 @@ describe("unit governance runtime adapter", () => {
     });
 
     await expect(client.units.listAdminUnits()).resolves.toMatchObject({
-      data: [],
+      data: [{ name: "Matriz" }],
     });
     await expect(client.units.listAdminMembers()).resolves.toMatchObject({
-      data: [],
+      data: [{ id: "member-1" }],
     });
     await expect(client.units.listAdminActivity()).resolves.toMatchObject({
-      data: [],
+      data: [{ action: "unit.created" }],
     });
     await expect(
-      client.units.createAdminUnit("Central"),
-    ).resolves.toMatchObject({ id: 10 });
+      client.units.createAdminUnit({ body: { name: "Central" } }),
+    ).resolves.toMatchObject({ id: 11 });
     await expect(
-      client.units.updateAdminUnit(10, { name: "Central atualizada" }),
+      client.units.updateAdminUnit({
+        params: { id: 10 },
+        body: { name: "Central atualizada" },
+      }),
     ).resolves.toMatchObject({ name: "Central atualizada" });
     await expect(
-      client.units.updateMemberAssignments("member-1", [
-        { unitId: 10, role: "technician" },
-      ]),
+      client.units.updateMemberAssignments({
+        params: { memberId: "member-1" },
+        body: { assignments: [{ unitId: 10, role: "technician" }] },
+      }),
     ).resolves.toEqual({ success: true });
     await expect(
-      client.units.updateMemberRole("member-1", "admin"),
+      client.units.updateMemberRole({
+        params: { memberId: "member-1" },
+        body: { role: "admin" },
+      }),
     ).resolves.toEqual({ success: true });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
@@ -2017,9 +2033,9 @@ describe("unit governance runtime adapter", () => {
       data: [],
       viewer: { canViewGovernance: false },
     });
-    await expect(client.units.createAdminUnit("Central")).rejects.toThrow(
-      "Governança de unidades requer a API web/nuvem",
-    );
+    await expect(
+      client.units.createAdminUnit({ body: { name: "Central" } }),
+    ).rejects.toThrow("Governança de unidades requer a API web/nuvem");
   });
 });
 

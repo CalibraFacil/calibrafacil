@@ -15,7 +15,7 @@ import type { z } from "zod";
 import {
   methodEndpoints,
   assetEndpoints,
-  assetTypesResponseSchema,
+  assetTypeEndpoints,
   customerDetailSchema,
   customersListResponseSchema,
   serviceOrderEndpoints,
@@ -125,7 +125,7 @@ describe("reference-data endpoints: real responses honor the contract schemas (P
 
     const list = await parsedBody(
       await assetTypesRouter.request("/"),
-      assetTypesResponseSchema,
+      assetTypeEndpoints.list.response,
     );
     expect(list.data.map((type) => type.slug)).toEqual([
       "balanca-ref-contract",

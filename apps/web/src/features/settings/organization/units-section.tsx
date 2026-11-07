@@ -107,7 +107,7 @@ export function OrganizationUnitsSection({
 
   const createUnitMutation = useMutation({
     mutationFn: async (name: string) => {
-      return calibraApi.units.createAdminUnit<OrganizationUnit>(name)
+      return calibraApi.units.createAdminUnit({ body: { name } })
     },
     onSuccess: async () => {
       setNewUnitName('')
@@ -131,7 +131,10 @@ export function OrganizationUnitsSection({
       unitId: number
       payload: { name?: string; status?: 'ACTIVE' | 'ARCHIVED' }
     }) => {
-      return calibraApi.units.updateAdminUnit<OrganizationUnit>(unitId, payload)
+      return calibraApi.units.updateAdminUnit({
+        params: { id: unitId },
+        body: payload,
+      })
     },
     onSuccess: async () => {
       setEditingUnitId(null)
@@ -157,7 +160,10 @@ export function OrganizationUnitsSection({
       memberId: string
       assignments: Array<{ unitId: number; role: UnitAssignmentRole }>
     }) => {
-      return calibraApi.units.updateMemberAssignments(memberId, assignments)
+      return calibraApi.units.updateMemberAssignments({
+        params: { memberId },
+        body: { assignments },
+      })
     },
     onSuccess: async () => {
       setSavingAssignmentsFor(null)

@@ -18,7 +18,7 @@ import {
   methodEndpoints,
   assetEndpoints,
   standardEndpoints,
-  assetTypesResponseSchema,
+  assetTypeEndpoints,
   customerEndpoints,
   effectiveEnvironmentalLimitsResponseSchema,
   jobDetailSchema,
@@ -560,7 +560,8 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
     );
     const assetTypes = await parsedBody(
       await app.request("/api/asset-types"),
-      assetTypesResponseSchema,
+      // The offline asset-type read answers the endpoint definition's own response schema.
+      assetTypeEndpoints.list.response,
     );
     // The mirror keeps the cloud's slug (it used to answer with its own row id).
     expect(assetTypes.data.map((type) => type.slug)).toEqual(["balanca"]);

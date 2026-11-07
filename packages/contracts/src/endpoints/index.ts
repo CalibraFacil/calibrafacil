@@ -1,11 +1,13 @@
 import { accreditedScopeEndpoints } from "./accredited-scope";
 import { publicInvitationEndpoints } from "./public-invitations";
 import { publicSignupEndpoints } from "./public-signup";
+import { assetTypeEndpoints } from "./asset-types";
 import { assetEndpoints } from "./assets";
 import { calibrationRequestEndpoints } from "./calibration-requests";
 import { capaEndpoints } from "./capa";
 import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { competenceEndpoints } from "./competences";
+import { customerGroupEndpoints } from "./customer-groups";
 import { customerEndpoints } from "./customers";
 import { dashboardEndpoints } from "./dashboard";
 import { entityLabelEndpoints } from "./entity-labels";
@@ -26,6 +28,7 @@ import { spcEndpoints } from "./spc";
 import { ssoEndpoints } from "./sso";
 import { standardEndpoints } from "./standards";
 import { trainingRecordEndpoints } from "./training-records";
+import { unitEndpoints } from "./units";
 import { visitEndpoints } from "./visits";
 
 export * from "./define";
@@ -35,6 +38,8 @@ export * from "./signing-certificates";
 export * from "./sso";
 export * from "./portal-domains";
 export * from "./assets";
+export * from "./asset-types";
+export * from "./customer-groups";
 export * from "./customers";
 export * from "./capa";
 export * from "./non-conformances";
@@ -57,6 +62,7 @@ export * from "./calibration-requests";
 export * from "./accredited-scope";
 export * from "./environmental-limits";
 export * from "./materials";
+export * from "./units";
 
 /**
  * Every converted domain, keyed by its `CalibraApi` namespace. This is the one
@@ -65,6 +71,8 @@ export * from "./materials";
  */
 export const ENDPOINT_GROUPS = {
   assets: assetEndpoints,
+  assetTypes: assetTypeEndpoints,
+  customerGroups: customerGroupEndpoints,
   customers: customerEndpoints,
   methods: methodEndpoints,
   nonConformances: nonConformanceEndpoints,
@@ -92,6 +100,7 @@ export const ENDPOINT_GROUPS = {
   signingCertificates: signingCertificateEndpoints,
   publicSignup: publicSignupEndpoints,
   publicInvitations: publicInvitationEndpoints,
+  units: unitEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

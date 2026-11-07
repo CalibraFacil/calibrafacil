@@ -110,7 +110,10 @@ export function OrganizationMembersSection({
       memberId: string
       role: GlobalMemberRole
     }) => {
-      return calibraApi.units.updateMemberRole(memberId, role)
+      return calibraApi.units.updateMemberRole({
+        params: { memberId },
+        body: { role },
+      })
     },
     onSuccess: async () => {
       await Promise.all(

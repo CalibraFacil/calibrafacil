@@ -1,13 +1,18 @@
-import type { AssetTypesApi, AssetTypesListData } from "../types";
-import { readJsonResponse } from "../transport/response";
+import { assetTypeEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
 
-export function createAssetTypesApi(rawCloudClient: any): AssetTypesApi {
-  return {
-    async list() {
-      return readJsonResponse<AssetTypesListData>(
-        await rawCloudClient.api["asset-types"].$get({ query: {} }),
-        "Falha ao carregar tipos de instrumento",
-      );
-    },
-  };
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The asset-type catalog client is its endpoint group (`assetTypeEndpoints` in `@calibra-facil/contracts`). */
+export type AssetTypesApi = EndpointClient<typeof assetTypeEndpoints>;
+
+export function createAssetTypesApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): AssetTypesApi {
+  return endpointClient(assetTypeEndpoints, transport, options);
 }

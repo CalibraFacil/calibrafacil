@@ -6,11 +6,8 @@ import { calibraApi } from '@/utils/api'
 import type {
   ApiKeysData,
   SettingsAccreditedScopeData,
-  OrganizationGovernanceActivityData,
-  OrganizationGovernanceMembersData,
   OrganizationInvitation,
   OrganizationMember,
-  OrganizationUnitsData,
   SettingsEnvironmentalLimitsData,
   SettingsIntegrationsData,
   ContaAzulAppSummary,
@@ -20,7 +17,6 @@ import type {
   IntegrationRunItemsResponse,
   SyncPreviewResponse,
   SyncTarget,
-  UnitContextResponse,
 } from './types'
 import type { IntegrationMappingsConfig } from '@calibra-facil/shared'
 
@@ -231,7 +227,7 @@ export function previewIntegrationSync({
 export function organizationUnitsQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['organization-units', organizationId],
-    queryFn: () => calibraApi.units.listAdminUnits<OrganizationUnitsData>(),
+    queryFn: () => calibraApi.units.listAdminUnits(),
   })
 }
 
@@ -243,7 +239,7 @@ export function dashboardUnitsQueryOptions(organizationId: string) {
       if (!response) {
         throw new Error('Falha ao carregar contexto da unidade')
       }
-      return trustedApiValue<UnitContextResponse>(response)
+      return response
     },
   })
 }
@@ -253,8 +249,7 @@ export function organizationGovernanceMembersQueryOptions(
 ) {
   return queryOptions({
     queryKey: ['organization-governance-members', organizationId],
-    queryFn: () =>
-      calibraApi.units.listAdminMembers<OrganizationGovernanceMembersData>(),
+    queryFn: () => calibraApi.units.listAdminMembers(),
   })
 }
 
@@ -263,8 +258,7 @@ export function organizationGovernanceActivityQueryOptions(
 ) {
   return queryOptions({
     queryKey: ['organization-governance-activity', organizationId],
-    queryFn: () =>
-      calibraApi.units.listAdminActivity<OrganizationGovernanceActivityData>(),
+    queryFn: () => calibraApi.units.listAdminActivity(),
   })
 }
 

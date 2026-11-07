@@ -26,7 +26,6 @@ export {
 } from "./response-validation";
 export * from "./portal";
 export * from "./common";
-export * from "./reference-data";
 export * from "./endpoints";
 export * from "./portal-fleet";
 export * from "./portal-certificates";

@@ -95,7 +95,12 @@ beforeEach(() => {
 describe("POST /customer-groups", () => {
   it("provisions a CLIENT org and inserts the group", async () => {
     dbQueue.push([
-      { id: 5, name: "Rede X", authOrganizationId: "group-org-1" },
+      {
+        id: 5,
+        name: "Rede X",
+        authOrganizationId: "group-org-1",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
     ]); // insert..returning
 
     const res = await app.request("/", {
@@ -111,7 +116,12 @@ describe("POST /customer-groups", () => {
 
   it("invites the unified manager when an email is given", async () => {
     dbQueue.push([
-      { id: 5, name: "Rede X", authOrganizationId: "group-org-1" },
+      {
+        id: 5,
+        name: "Rede X",
+        authOrganizationId: "group-org-1",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
     ]);
 
     const res = await app.request("/", {

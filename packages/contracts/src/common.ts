@@ -9,6 +9,9 @@ import { z } from "zod";
 export const nullableString = z.string().nullable();
 export const nullableNumber = z.number().nullable();
 
+/** An opaque JSON object (a column the schema does not type). */
+export const jsonRecordSchema = z.record(z.string(), z.unknown());
+
 /** The `{ page, limit, total, totalPages }` block of every paginated list. */
 export const paginationSchema = z.object({
   page: z.number(),

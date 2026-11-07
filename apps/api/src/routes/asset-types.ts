@@ -1,10 +1,9 @@
 import { createRouter } from "../server/router";
-import type { AssetTypesResponse, ServerShape } from "@calibra-facil/contracts";
-import { zValidator } from "@hono/zod-validator";
-import { ListAssetTypesQuerySchema } from "@calibra-facil/schemas";
+import { assetTypeEndpoints } from "@calibra-facil/contracts";
 import { withPermission, type AuthVariables } from "../middleware/permission";
 import { findAssetTypeById, listAssetTypes } from "../lib/asset-types";
 import { invalid, notFound } from "../lib/domain-errors";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 
 /**
@@ -19,29 +18,26 @@ import { orgDb } from "../lib/org-db";
  * The reads live in `lib/asset-types.ts`: the catalog has no tenant column and
  * no row-level-security policy, so there is no laboratory to bind them to.
  */
-export const assetTypesRouter = createRouter<{ Variables: AuthVariables }>()
-  // =========================================================================
-  // GET / - List all asset types (for dropdown/selection)
-  // =========================================================================
-  .get(
-    "/",
-    ...withPermission({ equipment: ["read"] }),
-    zValidator("query", ListAssetTypesQuerySchema),
-    async (c) => {
-      const { query } = c.req.valid("query");
+const PREFIX = "/api/asset-types";
 
-      const types = await listAssetTypes(query);
+export const assetTypesRouter = createRouter<{ Variables: AuthVariables }>();
 
-      return c.json({
-        data: types,
-      } satisfies ServerShape<AssetTypesResponse>);
-    },
-  )
+// GET / - List all asset types (for dropdown/selection)
+mount(
+  assetTypesRouter,
+  PREFIX,
+  assetTypeEndpoints.list,
+  withPermission({ equipment: ["read"] }),
+  async (_c, { query }) => ({ data: await listAssetTypes(query.query) }),
+);
 
-  // =========================================================================
-  // GET /:id - Get a single asset type by ID
-  // =========================================================================
-  .get("/:id", ...withPermission({ equipment: ["read"] }), async (c) => {
+// GET /:id - Get a single asset type by ID. Not client-facing (nothing in the
+// frontends calls it), so it stays a plain route outside the endpoint
+// definitions.
+assetTypesRouter.get(
+  "/:id",
+  ...withPermission({ equipment: ["read"] }),
+  async (c) => {
     const id = parseInt(c.req.param("id"), 10);
 
     if (isNaN(id)) {
@@ -57,4 +53,5 @@ export const assetTypesRouter = createRouter<{ Variables: AuthVariables }>()
     }
 
     return c.json(foundType);
-  });
+  },
+);
