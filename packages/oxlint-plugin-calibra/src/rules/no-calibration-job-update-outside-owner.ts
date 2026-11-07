@@ -1,5 +1,6 @@
 import {
   createRatchet,
+  staleBaselineVisitor,
   isTestFile,
   normalizedFilename,
   type Baseline,
@@ -30,7 +31,7 @@ const OWNER_PATTERN =
 // Test helpers that are not *.spec.ts (apps/api/test/integration/...).
 const TEST_DIRECTORY_PATTERN = /(^|\/)apps\/[^/]+\/test\//;
 
-const LEGACY_BASELINE: Baseline = new Map<string, number>([
+export const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/cli/seed-demo/jobs.ts", 1],
   ["apps/api/src/cli/seed-demo/timeline.ts", 1],
 ]);
@@ -80,6 +81,11 @@ const rule: RuleModule = {
 
     const ratchet = createRatchet(LEGACY_BASELINE, filename);
     return {
+      "Program:exit": staleBaselineVisitor(
+        context,
+        ratchet,
+        "no-calibration-job-update-outside-owner LEGACY_BASELINE",
+      ),
       CallExpression(node: unknown) {
         if (!isCalibrationJobUpdate(node)) return;
         if (!ratchet.exceeds()) return;

@@ -1,5 +1,7 @@
 import { describe, it, vi } from "vitest";
+import { LEGACY_BASELINE } from "../src/rules/no-process-env.ts";
 import { expectClean, expectViolation } from "./harness.ts";
+import { ratchetSuite } from "./ratchet.ts";
 
 const RULE = "no-process-env";
 
@@ -52,20 +54,19 @@ describe("calibra/no-process-env (real oxlint)", () => {
     });
   });
 
+  it("REQ-CFG-5: allows scripts folders (build, bench and database tooling)", async () => {
+    await expectClean(RULE, {
+      "scripts/dev-runner.mjs": "export const a = process.env.A;\n",
+      "apps/web/scripts/check-bundle-size.mjs":
+        "export const a = process.env.A;\n",
+      "packages/db/scripts/bootstrap.mjs": "export const a = process.env.A;\n",
+    });
+  });
+
   it("REQ-CFG-5: does not flag unrelated env members", async () => {
     await expectClean(RULE, {
       "apps/web/src/runtime.ts":
         "export const mode = import.meta.env.MODE;\nexport const e = { env: 1 }.env;\nexport const f = other.env;\ndeclare const other: { env: number };\n",
-    });
-  });
-
-  it("REQ-CFG-5: grandfathers the exact legacy count and fails above it", async () => {
-    // apps/api/src/routes/sso.ts is baselined at 4.
-    const four =
-      "export const a = [process.env.A, process.env.B, process.env.C, process.env.D];\n";
-    await expectClean(RULE, { "apps/api/src/routes/sso.ts": four });
-    await expectViolation(RULE, {
-      "apps/api/src/routes/sso.ts": `${four}export const e = process.env.E;\n`,
     });
   });
 
@@ -74,4 +75,14 @@ describe("calibra/no-process-env (real oxlint)", () => {
       "apps/api/src/routes/new-route.ts": "export const a = process.env.A;\n",
     });
   });
+});
+
+ratchetSuite({
+  rule: RULE,
+  baseline: LEGACY_BASELINE,
+  source: (count) =>
+    Array.from(
+      { length: count },
+      (_, i) => `export const v${i} = process.env.V${i};\n`,
+    ).join(""),
 });

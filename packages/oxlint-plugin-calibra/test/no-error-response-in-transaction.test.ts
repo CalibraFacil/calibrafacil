@@ -31,22 +31,4 @@ describe("calibra/no-error-response-in-transaction (real oxlint)", () => {
         "export const h = async (c: any, db: any) => {\n  try {\n    return await db.transaction(async (tx: any) => {\n      if (!tx) throw new Error('x');\n      return c.json({ ok: true });\n    });\n  } catch {\n    return c.json({ error: 'x' }, 500);\n  }\n};\n",
     });
   });
-
-  it("REQ-D4-2: grandfathers the exact legacy count and fails above it", async () => {
-    // The committed baseline is empty, so the ratchet is exercised with a
-    // baseline INJECTED through the rule options (the repo config never sets it).
-    const options = { baseline: { "apps/api/src/routes/legacy.ts": 1 } };
-    const one =
-      "export const h = (c: any, db: any) => db.transaction(async () => c.json({ error: 'x' }, 404));\n";
-    await expectClean(RULE, { "apps/api/src/routes/legacy.ts": one }, options);
-    await expectViolation(
-      RULE,
-      {
-        "apps/api/src/routes/legacy.ts":
-          one +
-          "export const g = (c: any, db: any) => db.transaction(async () => c.json({ error: 'y' }, 404));\n",
-      },
-      options,
-    );
-  });
 });

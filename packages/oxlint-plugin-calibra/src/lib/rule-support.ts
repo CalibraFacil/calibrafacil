@@ -102,40 +102,10 @@ export function baselineFor(baseline: Baseline, filename: string): number {
 }
 
 /**
- * The baseline in force: the committed one, or `{ baseline: { "<path suffix>":
- * <count> } }` from the rule options. The option exists for a rule's own tests
- * (they inject entries so the exact-count / +1 branches stay covered however far
- * the committed baseline has shrunk); the repo config never sets it.
+ * Per-file occurrence counter honoring the baseline allowance, and the other half
+ * of the ratchet: an entry that allows more than the file has is stale (a
+ * migrated site whose entry stayed would keep allowing new ones).
  */
-export function baselineInForce(
-  context: RuleContext,
-  committed: Baseline,
-): Baseline {
-  const options = toRecord(context.options?.[0]);
-  const injected = toRecord(options?.baseline);
-  if (!injected) return committed;
-  const entries: Array<[string, number]> = [];
-  for (const [file, count] of Object.entries(injected)) {
-    if (typeof count === "number") entries.push([file, count]);
-  }
-  return new Map(entries);
-}
-
-/** The rule `meta.schema` that accepts the injectable `baseline` option. */
-export const BASELINE_OPTION_SCHEMA = [
-  {
-    type: "object",
-    properties: {
-      baseline: {
-        type: "object",
-        additionalProperties: { type: "number" },
-      },
-    },
-    additionalProperties: false,
-  },
-];
-
-/** Per-file occurrence counter honoring the baseline allowance. */
 export function createRatchet(baseline: Baseline, filename: string) {
   const allowed = baselineFor(baseline, filename);
   let seen = 0;
@@ -145,6 +115,26 @@ export function createRatchet(baseline: Baseline, filename: string) {
       seen += 1;
       return seen > allowed;
     },
+    /**
+     * Call once the whole file was visited (`Program:exit`): the message to report
+     * when the file's baseline entry allows more occurrences than remain, else null.
+     */
+    staleMessage(baselineName: string): string | null {
+      if (seen >= allowed) return null;
+      return `The ${baselineName} entry for this file allows ${allowed} occurrence${allowed === 1 ? "" : "s"} but only ${seen} remain: lower it to ${seen} (delete it when 0) in packages/oxlint-plugin-calibra, so it cannot allow a new one.`;
+    },
+  };
+}
+
+/** The `Program:exit` visitor that reports a stale baseline entry of the file. */
+export function staleBaselineVisitor(
+  context: RuleContext,
+  ratchet: ReturnType<typeof createRatchet>,
+  baselineName: string,
+): (program: unknown) => void {
+  return (program) => {
+    const message = ratchet.staleMessage(baselineName);
+    if (message) context.report({ node: program, message });
   };
 }
 

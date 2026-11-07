@@ -100,18 +100,4 @@ describe("calibra/no-raw-locale-formatting (real oxlint)", () => {
     });
     expect(output).toContain("@calibra-facil/shared/format");
   });
-
-  it("REQ-FMT-3: grandfathers only the counted legacy occurrence (net-new fails)", async () => {
-    await expectClean(RULE, {
-      "apps/api/src/routes/signing.ts":
-        'export const f = (d: Date) => d.toLocaleDateString("pt-BR");\n',
-    });
-    await expectViolation(RULE, {
-      "apps/api/src/routes/signing.ts": [
-        'export const f = (d: Date) => d.toLocaleDateString("pt-BR");',
-        'export const g = (d: Date) => d.toLocaleDateString("pt-BR");',
-        "",
-      ].join("\n"),
-    });
-  });
 });
