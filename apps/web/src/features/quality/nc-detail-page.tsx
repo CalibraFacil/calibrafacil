@@ -97,12 +97,15 @@ export function NCDetailPage({ id }: { id: string }) {
   // Disposition mutation
   const dispositionMutation = useMutation({
     mutationFn: async (data: { disposition: string; justification?: string }) =>
-      calibraApi.nonConformances.setDisposition(id, {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- Form submit validates disposition from fixed UI choices.
-        ...(data as {
-          disposition: 'rework' | 'scrap' | 'use_as_is' | 'concession'
-          justification?: string
-        }),
+      calibraApi.nonConformances.setDisposition({
+        params: { id },
+        body: {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- Form submit validates disposition from fixed UI choices.
+          ...(data as {
+            disposition: 'rework' | 'scrap' | 'use_as_is' | 'concession'
+            justification?: string
+          }),
+        },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
@@ -117,7 +120,7 @@ export function NCDetailPage({ id }: { id: string }) {
   // Resolve mutation
   const resolveMutation = useMutation({
     mutationFn: async (data: { correctionTaken: string }) => {
-      return calibraApi.nonConformances.resolve(id, data)
+      return calibraApi.nonConformances.resolve({ params: { id }, body: data })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
@@ -132,7 +135,10 @@ export function NCDetailPage({ id }: { id: string }) {
   // §7.10 acknowledgement mutation
   const ootAckMutation = useMutation({
     mutationFn: async (data: { note: string }) =>
-      calibraApi.nonConformances.registerOotAcknowledgement(id, data),
+      calibraApi.nonConformances.registerOotAcknowledgement({
+        params: { id },
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['non-conformance-oot-notification', id],
@@ -158,7 +164,11 @@ export function NCDetailPage({ id }: { id: string }) {
     mutationFn: async (data: {
       rootCauseAnalysis?: string
       actionPlan?: string
-    }) => calibraApi.nonConformances.escalateToCapa(id, data),
+    }) =>
+      calibraApi.nonConformances.escalateToCapa({
+        params: { id },
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
       queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })

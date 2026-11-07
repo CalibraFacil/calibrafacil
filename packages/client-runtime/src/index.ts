@@ -673,10 +673,10 @@ export function createCloudApiClient(
     publicInvitations: createPublicInvitationsApi(rawCloudClient),
     publicSignup: createPublicSignupApi(rawCloudClient),
     labSetup: createLabSetupApi(rawCloudClient),
-    nonConformances: createNonConformancesApi(rawCloudClient),
-    capas: createCapasApi(rawCloudClient),
+    nonConformances: createNonConformancesApi(endpointTransport, options),
+    capas: createCapasApi(endpointTransport, options),
     proficiencyTests: createProficiencyTestsApi(endpointTransport, options),
-    spc: createSpcApi(rawCloudClient),
+    spc: createSpcApi(endpointTransport, options),
     competences: createCompetencesApi(endpointTransport, options),
     trainingRecords: createTrainingRecordsApi(endpointTransport, options),
     calibrationRequests: createCalibrationRequestsApi(

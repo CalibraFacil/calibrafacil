@@ -11,6 +11,8 @@
     "./jobs-fixtures": "./src/jobs.fixtures.ts",
     "./standards-fixtures": "./src/standards.fixtures.ts",
     "./customers-fixtures": "./src/endpoints/customers.fixtures.ts",
+    "./non-conformances-fixtures": "./src/endpoints/non-conformances.fixtures.ts",
+    "./capa-fixtures": "./src/endpoints/capa.fixtures.ts",
     "./dashboard-fixtures": "./src/endpoints/dashboard.fixtures.ts",
     "./competences-fixtures": "./src/endpoints/competences.fixtures.ts",
     "./training-records-fixtures": "./src/endpoints/training-records.fixtures.ts",

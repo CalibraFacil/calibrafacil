@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import type { OotImpactAssessmentData } from '@calibra-facil/client-runtime'
+import type { OotImpactAssessmentData } from '@/features/quality/types'
 import type { SaveOotImpactAssessmentInput } from '@calibra-facil/schemas/quality'
 
 import { calibraApi } from '@/utils/api'
@@ -199,7 +199,10 @@ function ImpactAssessmentForm({
 
   const saveMutation = useMutation({
     mutationFn: (input: SaveOotImpactAssessmentInput) =>
-      calibraApi.nonConformances.saveImpactAssessment(ncId, input),
+      calibraApi.nonConformances.saveImpactAssessment({
+        params: { id: ncId },
+        body: input,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['non-conformance-impact-assessment', ncId],
@@ -433,7 +436,8 @@ function SignAssessmentSection({
   const [signDialogOpen, setSignDialogOpen] = useState(false)
 
   const signMutation = useMutation({
-    mutationFn: () => calibraApi.nonConformances.signImpactAssessment(ncId),
+    mutationFn: () =>
+      calibraApi.nonConformances.signImpactAssessment({ params: { id: ncId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['non-conformance-impact-assessment', ncId],

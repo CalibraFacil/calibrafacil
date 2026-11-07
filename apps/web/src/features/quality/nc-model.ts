@@ -1,8 +1,7 @@
-import type { OotNotificationData } from '@calibra-facil/client-runtime'
-
 import { NON_CONFORMANCE_MACHINE } from '@calibra-facil/schemas/machines'
 import type {
   NonConformanceDisposition,
+  OotNotificationData,
   NonConformanceStatus,
 } from '@/features/quality/types'
 

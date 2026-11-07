@@ -1,9 +1,12 @@
 import { calibrationRequestEndpoints } from "./calibration-requests";
 import { certificateNumberingEndpoints } from "./certificate-numbering";
+import { capaEndpoints } from "./capa";
 import { customerEndpoints } from "./customers";
 import { dashboardEndpoints } from "./dashboard";
 import { competenceEndpoints } from "./competences";
+import { nonConformanceEndpoints } from "./non-conformances";
 import { proficiencyTestEndpoints } from "./proficiency-tests";
+import { spcEndpoints } from "./spc";
 import { trainingRecordEndpoints } from "./training-records";
 import type { EndpointGroup, EndpointPaths } from "./define";
 import { reportEndpoints } from "./reports";
@@ -12,6 +15,9 @@ import { visitEndpoints } from "./visits";
 
 export * from "./define";
 export * from "./customers";
+export * from "./capa";
+export * from "./non-conformances";
+export * from "./spc";
 export * from "./dashboard";
 export * from "./reports";
 export * from "./certificate-numbering";
@@ -29,6 +35,9 @@ export * from "./calibration-requests";
  */
 export const ENDPOINT_GROUPS = {
   customers: customerEndpoints,
+  nonConformances: nonConformanceEndpoints,
+  capas: capaEndpoints,
+  spc: spcEndpoints,
   dashboard: dashboardEndpoints,
   reports: reportEndpoints,
   certificateNumbering: certificateNumberingEndpoints,
