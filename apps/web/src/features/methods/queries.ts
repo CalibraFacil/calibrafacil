@@ -7,7 +7,7 @@ import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import { METHOD_STATUS } from '@calibra-facil/schemas/machines'
@@ -105,50 +105,24 @@ async function getMethodsIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadMethodsIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getMethodsIndexEssentialQueries(url),
-  )
-}
+const methodsIndexRouteData = routeData((url?: URL) =>
+  getMethodsIndexEssentialQueries(url),
+)
+export const loadMethodsIndexData = methodsIndexRouteData.load
+export const prewarmMethodsIndex = methodsIndexRouteData.prewarm
 
-export async function prewarmMethodsIndex(queryClient: QueryClient, url?: URL) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getMethodsIndexEssentialQueries(url),
-  )
-}
+const methodDetailRouteData = routeData((id: string) => [
+  methodDetailQueryOptions(id),
+  methodAuditLogQueryOptions(id),
+])
+export const loadMethodDetailData = methodDetailRouteData.load
+export const prewarmMethodDetail = methodDetailRouteData.prewarm
 
-export async function loadMethodDetailData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    methodDetailQueryOptions(id),
-    methodAuditLogQueryOptions(id),
-  ])
-}
-
-export async function prewarmMethodDetail(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    methodDetailQueryOptions(id),
-    methodAuditLogQueryOptions(id),
-  ])
-}
-
-export async function loadMethodEditData(queryClient: QueryClient, id: string) {
-  await ensureRouteQueries(queryClient, [methodEditQueryOptions(id)])
-}
-
-export async function prewarmMethodEdit(queryClient: QueryClient, id: string) {
-  await prewarmRouteQueries(queryClient, [methodEditQueryOptions(id)])
-}
+const methodEditRouteData = routeData((id: string) => [
+  methodEditQueryOptions(id),
+])
+export const loadMethodEditData = methodEditRouteData.load
+export const prewarmMethodEdit = methodEditRouteData.prewarm
 
 export function useMethodsListData({
   activeOrganizationId,

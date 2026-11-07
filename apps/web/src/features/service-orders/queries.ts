@@ -1,4 +1,4 @@
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import type { MaterialsListData } from '@calibra-facil/client-runtime'
 import {
@@ -8,9 +8,8 @@ import {
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
-  ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
@@ -209,51 +208,23 @@ async function getServiceOrdersIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadServiceOrdersIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getServiceOrdersIndexEssentialQueries(url),
-  )
-}
+const serviceOrdersIndexRouteData = routeData((url?: URL) =>
+  getServiceOrdersIndexEssentialQueries(url),
+)
+export const loadServiceOrdersIndexData = serviceOrdersIndexRouteData.load
+export const prewarmServiceOrdersIndex = serviceOrdersIndexRouteData.prewarm
 
-export async function prewarmServiceOrdersIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getServiceOrdersIndexEssentialQueries(url),
-  )
-}
+const serviceOrderDetailRouteData = routeData((id: string) => [
+  serviceOrderDetailQueryOptions(id),
+])
+export const loadServiceOrderDetailData = serviceOrderDetailRouteData.load
+export const prewarmServiceOrderDetail = serviceOrderDetailRouteData.prewarm
 
-export async function loadServiceOrderDetailData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [serviceOrderDetailQueryOptions(id)])
-}
-
-export async function prewarmServiceOrderDetail(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [serviceOrderDetailQueryOptions(id)])
-}
-
-export async function loadNewServiceOrderData(queryClient: QueryClient) {
-  await ensureRouteQueries(queryClient, [
-    newServiceOrderCustomersQueryOptions(''),
-  ])
-}
-
-export async function prewarmNewServiceOrder(queryClient: QueryClient) {
-  await prewarmRouteQueries(queryClient, [
-    newServiceOrderCustomersQueryOptions(''),
-  ])
-}
+const newServiceOrderRouteData = routeData(() => [
+  newServiceOrderCustomersQueryOptions(''),
+])
+export const loadNewServiceOrderData = newServiceOrderRouteData.load
+export const prewarmNewServiceOrder = newServiceOrderRouteData.prewarm
 
 export function useServiceOrdersListData({
   activeOrganizationId,

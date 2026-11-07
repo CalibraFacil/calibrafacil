@@ -2,11 +2,14 @@ import type { JobStatus } from '@calibra-facil/schemas'
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
+import { operation } from '@calibra-facil/client-runtime'
+import { useAvailability } from '@/runtime/use-operation-availability'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { pageFromUrl } from '@/lib/url-search'
 import type {
@@ -17,8 +20,6 @@ import type {
   CustomersListQueryInput,
 } from './types'
 import { customerKeys } from '@/features/customers/keys'
-import { assetKeys } from '@/features/assets/keys'
-import { jobKeys } from '@/features/jobs/keys'
 
 export const CUSTOMERS_LIST_LIMIT = 20
 
@@ -48,6 +49,18 @@ export function customersListQueryOptions(input: CustomersListQueryInput) {
     placeholderData: keepPreviousDataInScope(
       customerKeys.listScope(input.organizationId),
     ),
+  })
+}
+
+/** The customer picker of the job and asset forms: the first 50 matches of a search. */
+export function customerPickerQueryOptions(search = '') {
+  return queryOptions({
+    queryKey: customerKeys.pickerSearch(search),
+    queryFn: (): Promise<CustomersListData> =>
+      calibraApi.customers.list({
+        query: { page: 1, limit: 50, query: search || undefined },
+      }),
+    staleTime: 30_000,
   })
 }
 
@@ -98,7 +111,7 @@ export function customerAssetsQueryOptions({
   search: string
 }) {
   return queryOptions({
-    queryKey: assetKeys.customerList({
+    queryKey: customerKeys.assetsPage({
       customerId: customerId,
       page: page,
       limit: limit,
@@ -119,7 +132,7 @@ export function customerAssetsQueryOptions({
       })
     },
     placeholderData: keepPreviousDataInScope(
-      assetKeys.customerListScope(customerId),
+      customerKeys.assetsPageScope(customerId),
     ),
   })
 }
@@ -138,7 +151,7 @@ export function customerJobsQueryOptions({
   statusFilter: JobStatus | ''
 }) {
   return queryOptions({
-    queryKey: jobKeys.forCustomer({
+    queryKey: customerKeys.jobsPage({
       customerId: customerId,
       page: page,
       search: search,
@@ -163,7 +176,7 @@ export function customerJobsQueryOptions({
       })
     },
     placeholderData: keepPreviousDataInScope(
-      jobKeys.forCustomerScope(customerId),
+      customerKeys.jobsPageScope(customerId),
     ),
   })
 }
@@ -204,39 +217,17 @@ async function getCustomersIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadCustomersIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getCustomersIndexEssentialQueries(url),
-  )
-}
+const customersIndexRouteData = routeData((url?: URL) =>
+  getCustomersIndexEssentialQueries(url),
+)
+export const loadCustomersIndexData = customersIndexRouteData.load
+export const prewarmCustomersIndex = customersIndexRouteData.prewarm
 
-export async function prewarmCustomersIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getCustomersIndexEssentialQueries(url),
-  )
-}
-
-export async function loadCustomerDetailData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [customerDetailQueryOptions(id)])
-}
-
-export async function prewarmCustomerDetail(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [customerDetailQueryOptions(id)])
-}
+const customerDetailRouteData = routeData((id: string) => [
+  customerDetailQueryOptions(id),
+])
+export const loadCustomerDetailData = customerDetailRouteData.load
+export const prewarmCustomerDetail = customerDetailRouteData.prewarm
 
 export async function prewarmCustomerAssets(
   queryClient: QueryClient,
@@ -259,25 +250,19 @@ export async function prewarmCustomerAssets(
   ])
 }
 
-export async function prewarmCustomerCompliance(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    customerDetailQueryOptions(id),
-    customerAuditLogQueryOptions(id),
-  ])
-}
+const customerComplianceRouteData = routeData((id: string) => [
+  customerDetailQueryOptions(id),
+  customerAuditLogQueryOptions(id),
+])
+export const loadCustomerComplianceData = customerComplianceRouteData.load
+export const prewarmCustomerCompliance = customerComplianceRouteData.prewarm
 
-export async function prewarmCustomerUsers(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    customerMembersQueryOptions(id),
-    customerInvitationsQueryOptions(id),
-  ])
-}
+const customerUsersRouteData = routeData((id: string) => [
+  customerMembersQueryOptions(id),
+  customerInvitationsQueryOptions(id),
+])
+export const loadCustomerUsersData = customerUsersRouteData.load
+export const prewarmCustomerUsers = customerUsersRouteData.prewarm
 
 export async function loadCustomerOverviewData(
   queryClient: QueryClient,
@@ -342,26 +327,6 @@ export async function loadCustomerCalibrationsData(
   ])
 }
 
-export async function loadCustomerComplianceData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    customerDetailQueryOptions(id),
-    customerAuditLogQueryOptions(id),
-  ])
-}
-
-export async function loadCustomerUsersData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    customerMembersQueryOptions(id),
-    customerInvitationsQueryOptions(id),
-  ])
-}
-
 export function useCustomersListData({
   activeOrganizationId,
   enabled,
@@ -405,17 +370,21 @@ export function useCustomerDetailData(id: string) {
   return useQuery(customerDetailQueryOptions(id))
 }
 
-export function useCustomerFinancialTimelineData({
-  enabled,
-  id,
-}: {
-  enabled: boolean
-  id: string
-}) {
-  return useQuery({
+// Finance is a cloud module: the timeline is read, and its block is shown, only
+// while this call can run.
+const FINANCIAL_TIMELINE_OPERATIONS = [
+  operation('finance', 'getCustomerTimeline'),
+] as const
+
+/** A customer's financial timeline, with whether finance is available here (the query's gate, and what the screen shows). */
+export function useCustomerFinancialTimelineData({ id }: { id: string }) {
+  const available = useAvailability(FINANCIAL_TIMELINE_OPERATIONS)
+  const query = useQuery({
     ...customerFinancialTimelineQueryOptions(id),
-    enabled,
+    enabled: available,
   })
+
+  return { query, available }
 }
 
 export function useCustomerAssetsData({

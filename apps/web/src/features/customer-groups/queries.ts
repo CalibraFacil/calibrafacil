@@ -8,6 +8,8 @@ import {
 
 import type { PortalManageableMemberRole } from '@calibra-facil/auth/access'
 import { calibraApi } from '@/utils/api'
+import { operation } from '@calibra-facil/client-runtime'
+import { useAvailability } from '@/runtime/use-operation-availability'
 import { ensureRouteQueries } from '@/lib/route-data'
 import type {
   CreateCustomerGroupInput,
@@ -25,14 +27,28 @@ function customerGroupsListQueryOptions(organizationId: string) {
   })
 }
 
+// Customer groups are a cloud module: the list runs, and the field that edits a
+// customer's group is shown, only while this call can run.
+const CUSTOMER_GROUPS_OPERATIONS = [
+  operation('customerGroups', 'list'),
+] as const
+
+/**
+ * The customer groups of the organization, with whether the module is available
+ * here: `available` is the query's own gate and what a screen reads to show or
+ * hide the group field, so no caller restates the operation.
+ */
 export function useCustomerGroupsList(
   activeOrganizationId: string | null,
   enabled = true,
 ) {
-  return useQuery({
+  const available = useAvailability(CUSTOMER_GROUPS_OPERATIONS)
+  const query = useQuery({
     ...customerGroupsListQueryOptions(activeOrganizationId ?? 'no-org'),
-    enabled: Boolean(activeOrganizationId) && enabled,
+    enabled: Boolean(activeOrganizationId) && enabled && available,
   })
+
+  return { query, available }
 }
 
 // Detail keyed on groupId only so route loaders can prefetch without the

@@ -1,12 +1,11 @@
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { COMPETENCE_STATUS } from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
-  ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { type CompetencesListQueryInput, type CompetenceStatus } from './types'
 import { competenceKeys, trainingRecordKeys } from '@/features/personnel/keys'
@@ -100,67 +99,30 @@ async function getPersonnelIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadPersonnelIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getPersonnelIndexEssentialQueries(url),
-  )
-}
+const personnelIndexRouteData = routeData((url?: URL) =>
+  getPersonnelIndexEssentialQueries(url),
+)
+export const loadPersonnelIndexData = personnelIndexRouteData.load
+export const prewarmPersonnelIndex = personnelIndexRouteData.prewarm
 
-export async function prewarmPersonnelIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getPersonnelIndexEssentialQueries(url),
-  )
-}
+const competenceDetailRouteData = routeData((id: string) => [
+  competenceDetailQueryOptions(id),
+])
+export const loadCompetenceDetailData = competenceDetailRouteData.load
+export const prewarmCompetenceDetail = competenceDetailRouteData.prewarm
 
-export async function loadCompetenceDetailData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [competenceDetailQueryOptions(id)])
-}
+const competenceAuditRouteData = routeData((id: string) => [
+  competenceDetailQueryOptions(id),
+  competenceAuditLogQueryOptions(id),
+])
+export const loadCompetenceAuditData = competenceAuditRouteData.load
+export const prewarmCompetenceAudit = competenceAuditRouteData.prewarm
 
-export async function prewarmCompetenceDetail(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [competenceDetailQueryOptions(id)])
-}
-
-export async function loadCompetenceAuditData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    competenceDetailQueryOptions(id),
-    competenceAuditLogQueryOptions(id),
-  ])
-}
-
-export async function prewarmCompetenceAudit(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    competenceDetailQueryOptions(id),
-    competenceAuditLogQueryOptions(id),
-  ])
-}
-
-export async function loadNewCompetenceData(queryClient: QueryClient) {
-  await ensureRouteQueries(queryClient, [newCompetenceMatrixQueryOptions()])
-}
-
-export async function prewarmNewCompetence(queryClient: QueryClient) {
-  await prewarmRouteQueries(queryClient, [newCompetenceMatrixQueryOptions()])
-}
+const newCompetenceRouteData = routeData(() => [
+  newCompetenceMatrixQueryOptions(),
+])
+export const loadNewCompetenceData = newCompetenceRouteData.load
+export const prewarmNewCompetence = newCompetenceRouteData.prewarm
 
 export function useCompetencesListData({
   activeOrganizationId,

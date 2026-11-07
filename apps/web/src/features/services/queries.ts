@@ -7,6 +7,7 @@ import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
@@ -129,45 +130,18 @@ async function getServicesIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadServicesIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getServicesIndexEssentialQueries(url),
-  )
-}
+const servicesIndexRouteData = routeData((url?: URL) =>
+  getServicesIndexEssentialQueries(url),
+)
+export const loadServicesIndexData = servicesIndexRouteData.load
+export const prewarmServicesIndex = servicesIndexRouteData.prewarm
 
-export async function prewarmServicesIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getServicesIndexEssentialQueries(url),
-  )
-}
-
-export async function loadServiceDetailData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    serviceDetailQueryOptions(id),
-    serviceAuditLogQueryOptions(id),
-  ])
-}
-
-export async function prewarmServiceDetail(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    serviceDetailQueryOptions(id),
-    serviceAuditLogQueryOptions(id),
-  ])
-}
+const serviceDetailRouteData = routeData((id: string) => [
+  serviceDetailQueryOptions(id),
+  serviceAuditLogQueryOptions(id),
+])
+export const loadServiceDetailData = serviceDetailRouteData.load
+export const prewarmServiceDetail = serviceDetailRouteData.prewarm
 
 export async function loadServiceFormOptions(queryClient: QueryClient) {
   await ensureRouteQueries(queryClient, [
@@ -176,31 +150,19 @@ export async function loadServiceFormOptions(queryClient: QueryClient) {
   ])
 }
 
-export async function loadServiceEditData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    serviceDetailQueryOptions(id),
-    publishedMethodsQueryOptions(),
-    serviceAssetTypesQueryOptions(),
-    serviceAuditLogQueryOptions(id),
-  ])
-}
+const serviceEditRouteData = routeData((id: string) => [
+  serviceDetailQueryOptions(id),
+  publishedMethodsQueryOptions(),
+  serviceAssetTypesQueryOptions(),
+  serviceAuditLogQueryOptions(id),
+])
+export const loadServiceEditData = serviceEditRouteData.load
+export const prewarmServiceEdit = serviceEditRouteData.prewarm
 
 export async function prewarmNewService(queryClient: QueryClient) {
   await prewarmRouteQueries(queryClient, [
     publishedMethodsQueryOptions(),
     serviceAssetTypesQueryOptions(),
-  ])
-}
-
-export async function prewarmServiceEdit(queryClient: QueryClient, id: string) {
-  await prewarmRouteQueries(queryClient, [
-    serviceDetailQueryOptions(id),
-    publishedMethodsQueryOptions(),
-    serviceAssetTypesQueryOptions(),
-    serviceAuditLogQueryOptions(id),
   ])
 }
 

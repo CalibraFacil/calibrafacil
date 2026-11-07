@@ -1,7 +1,11 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
-import { ensureRouteQueries, prewarmRouteQueries } from '@/lib/route-data'
+import {
+  ensureRouteQueries,
+  prewarmRouteQueries,
+  routeData,
+} from '@/lib/route-data'
 import type {
   FinanceBillingMode,
   FinanceContractCustomerOptionsData,
@@ -128,31 +132,17 @@ export function financeContractServiceOptionsQueryOptions() {
   })
 }
 
-export async function loadFinanceOverviewData(queryClient: QueryClient) {
-  await ensureRouteQueries(queryClient, [financeOverviewQueryOptions()])
-}
+const financeOverviewRouteData = routeData(() => [
+  financeOverviewQueryOptions(),
+])
+export const loadFinanceOverviewData = financeOverviewRouteData.load
+export const prewarmFinanceOverview = financeOverviewRouteData.prewarm
 
-export async function prewarmFinanceOverview(queryClient: QueryClient) {
-  await prewarmRouteQueries(queryClient, [financeOverviewQueryOptions()])
-}
-
-export async function loadFinanceDocumentsData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(queryClient, [
-    financeDocumentsQueryOptions(financeSearchInputFromUrl(url)),
-  ])
-}
-
-export async function prewarmFinanceDocuments(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(queryClient, [
-    financeDocumentsQueryOptions(financeSearchInputFromUrl(url)),
-  ])
-}
+const financeDocumentsRouteData = routeData((url?: URL) => [
+  financeDocumentsQueryOptions(financeSearchInputFromUrl(url)),
+])
+export const loadFinanceDocumentsData = financeDocumentsRouteData.load
+export const prewarmFinanceDocuments = financeDocumentsRouteData.prewarm
 
 export async function prewarmFinanceDocumentDetail(
   queryClient: QueryClient,
@@ -163,23 +153,11 @@ export async function prewarmFinanceDocumentDetail(
   ])
 }
 
-export async function loadFinanceContractsData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(queryClient, [
-    financeContractsQueryOptions(financeSearchInputFromUrl(url)),
-  ])
-}
-
-export async function prewarmFinanceContracts(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(queryClient, [
-    financeContractsQueryOptions(financeSearchInputFromUrl(url)),
-  ])
-}
+const financeContractsRouteData = routeData((url?: URL) => [
+  financeContractsQueryOptions(financeSearchInputFromUrl(url)),
+])
+export const loadFinanceContractsData = financeContractsRouteData.load
+export const prewarmFinanceContracts = financeContractsRouteData.prewarm
 
 export async function prewarmFinanceContractDetail(
   queryClient: QueryClient,
@@ -190,21 +168,15 @@ export async function prewarmFinanceContractDetail(
   ])
 }
 
-export async function loadFinanceReceiptsData(queryClient: QueryClient) {
-  await ensureRouteQueries(queryClient, [financeReceiptsQueryOptions()])
-}
+const financeReceiptsRouteData = routeData(() => [
+  financeReceiptsQueryOptions(),
+])
+export const loadFinanceReceiptsData = financeReceiptsRouteData.load
+export const prewarmFinanceReceipts = financeReceiptsRouteData.prewarm
 
-export async function prewarmFinanceReceipts(queryClient: QueryClient) {
-  await prewarmRouteQueries(queryClient, [financeReceiptsQueryOptions()])
-}
-
-export async function loadFinanceErpData(queryClient: QueryClient) {
-  await ensureRouteQueries(queryClient, [financeErpQueryOptions()])
-}
-
-export async function prewarmFinanceErp(queryClient: QueryClient) {
-  await prewarmRouteQueries(queryClient, [financeErpQueryOptions()])
-}
+const financeErpRouteData = routeData(() => [financeErpQueryOptions()])
+export const loadFinanceErpData = financeErpRouteData.load
+export const prewarmFinanceErp = financeErpRouteData.prewarm
 
 export async function loadFinanceBillingReadinessData(
   queryClient: QueryClient,
