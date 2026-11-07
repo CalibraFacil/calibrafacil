@@ -286,12 +286,6 @@ export function createCloudApiClient(
           }): Promise<Response>;
         };
       };
-      signatures: {
-        "my-signature": {
-          $get(): Promise<Response>;
-          $delete(): Promise<Response>;
-        };
-      };
       signing: {
         certificates: {
           $get(): Promise<Response>;
@@ -656,7 +650,7 @@ export function createCloudApiClient(
     portalDomains: createPortalDomainsApi(rawCloudClient),
     emailDomains: createEmailDomainsApi(rawCloudClient),
     notifications: createNotificationsApi(rawCloudClient),
-    signatures: createSignaturesApi(rawCloudClient, options),
+    signatures: createSignaturesApi(endpointTransport, options),
     profileMedia: createProfileMediaApi(options),
     organizationMedia: createOrganizationMediaApi(options),
     signingCertificates: createSigningCertificatesApi(rawCloudClient),
@@ -685,8 +679,11 @@ export function createCloudApiClient(
     spc: createSpcApi(rawCloudClient),
     competences: createCompetencesApi(endpointTransport, options),
     trainingRecords: createTrainingRecordsApi(endpointTransport, options),
-    calibrationRequests: createCalibrationRequestsApi(rawCloudClient),
-    visits: createVisitsApi(rawCloudClient),
+    calibrationRequests: createCalibrationRequestsApi(
+      endpointTransport,
+      options,
+    ),
+    visits: createVisitsApi(endpointTransport, options),
   };
 }
 
