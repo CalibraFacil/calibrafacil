@@ -11,6 +11,7 @@ import {
 } from "../../lib/tenant-refs";
 import { getNumber } from "./helpers";
 import { createNonConformanceRecord } from "../../lib/non-conformances";
+import { withOrg } from "../../lib/org-context";
 import { ensureOotNotificationForNc } from "../../lib/oot-notifications";
 import { createInitialServiceOrderRecords } from "../../lib/service-order-workflow";
 import {
@@ -255,16 +256,24 @@ export async function applyCreateLocalNonConformance(
     }
   }
 
-  const created = await createNonConformanceRecord({
-    organizationId: input.memberData.organizationId,
-    actorUserId,
-    type: values.type,
-    description: values.description,
-    detectedAt,
-    jobId: values.jobId ?? null,
-    triggerSource: "manual",
-    auditChanges: { initial: values, source: "desktop_sync" },
-  });
+  // Inside the sync's transaction scope `withOrg` is a savepoint, and the NC
+  // notification waits for that transaction's commit.
+  const created = await withOrg(
+    input.memberData.organizationId,
+    { userId: actorUserId, ipAddress: null },
+    (ctx) =>
+      createNonConformanceRecord(
+        {
+          type: values.type,
+          description: values.description,
+          detectedAt,
+          jobId: values.jobId ?? null,
+          triggerSource: "manual",
+          auditChanges: { initial: values, source: "desktop_sync" },
+        },
+        ctx,
+      ),
+  );
 
   await ensureOotNotificationForNc({
     nc: created,

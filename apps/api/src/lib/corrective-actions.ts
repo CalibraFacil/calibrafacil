@@ -1,5 +1,4 @@
-import { db } from "@calibra-facil/db";
-import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   correctiveAction,
   correctiveActionAuditLog,
@@ -9,8 +8,9 @@ import {
   type CorrectiveActionType,
   type RootCauseAnalysisMethod,
 } from "@calibra-facil/db/schema";
-import { and, desc, eq, ilike } from "drizzle-orm";
-import { isUniqueViolation } from "./db-errors";
+import { and, eq } from "drizzle-orm";
+import { invalid, notFound } from "./domain-errors";
+import { insertWithSequentialNumber } from "./sequential-number";
 
 /**
  * Shared CAPA creator (ISO 17025 §8.7). Single code path for the cloud route
@@ -18,33 +18,6 @@ import { isUniqueViolation } from "./db-errors";
  * (unsatisfactory proficiency test, out-of-control SPC chart — issue #60), so
  * every entry point produces the same CAPA number sequence and audit-log entry.
  */
-
-const MAX_SEQ_RETRIES = 3;
-
-async function generateCapaNumber(
-  organizationId: string,
-  executor: Pick<OrgExecutor, "select"> = db,
-): Promise<string> {
-  const year = new Date().getFullYear();
-  const [lastCapa] = await executor
-    .select({ capaNumber: correctiveAction.capaNumber })
-    .from(correctiveAction)
-    .where(
-      and(
-        eq(correctiveAction.organizationId, organizationId),
-        ilike(correctiveAction.capaNumber, `CAPA-${year}-%`),
-      ),
-    )
-    .orderBy(desc(correctiveAction.capaNumber))
-    .limit(1);
-
-  let nextSeq = 1;
-  if (lastCapa) {
-    const parts = lastCapa.capaNumber.split("-");
-    nextSeq = parseInt(parts[2] ?? "0", 10) + 1;
-  }
-  return `CAPA-${year}-${String(nextSeq).padStart(4, "0")}`;
-}
 
 export type CreateCorrectiveActionRecordParams = {
   organizationId: string;
@@ -74,67 +47,46 @@ export type CreateCorrectiveActionRecordParams = {
  * be completed. Notifications stay with the callers — the plain CAPA create
  * route intentionally dispatches none.
  *
- * `executor` is the org-bound transaction the record is written in
- * (`orgDb(org).transaction((tx) => ...)`): the number, the CAPA and its audit
- * entry then run under the organization the caller named for row-level
- * security and commit with the caller's other writes. Each insert attempt is a
- * savepoint of it, because a unique violation on the sequential number aborts a
- * Postgres transaction and the retry would fail with it unless only that
- * attempt is rolled back. Without it the record is written through the plain
- * `db`, as before.
+ * `o` is the org-bound transaction the record is written in: the number, the
+ * CAPA and its audit entry run under the organization the caller named for
+ * row-level security and commit with the caller's other writes.
  */
 export async function createCorrectiveActionRecord(
   params: CreateCorrectiveActionRecordParams,
-  executor?: OrgDb,
+  o: OrgDb,
 ): Promise<typeof correctiveAction.$inferSelect> {
-  const writer: Pick<OrgExecutor, "select" | "insert"> = executor ?? db;
-  const insertCapa = (
-    target: Pick<OrgExecutor, "insert">,
-    capaNumber: string,
-  ) =>
-    target
-      .insert(correctiveAction)
-      .values({
-        capaNumber,
-        organizationId: params.organizationId,
-        source: params.source,
-        sourceReference: params.sourceReference ?? null,
-        title: params.title,
-        description: params.description,
-        detectionDate: params.detectionDate ?? null,
-        type: params.type ?? "corrective",
-        severity: params.severity ?? "minor",
-        category: params.category ?? "procedure",
-        rootCauseAnalysis: params.rootCauseAnalysis ?? null,
-        rootCauseAnalysisMethod: params.rootCauseAnalysisMethod ?? null,
-        actionPlan: params.actionPlan ?? null,
-        preventiveMeasures: params.preventiveMeasures ?? null,
-        responsibleId: params.responsibleId ?? null,
-        dueDate: params.dueDate ?? null,
-        status: "OPEN",
-        createdBy: params.actorUserId,
-      })
-      .returning();
+  const newCapa = await insertWithSequentialNumber(o, {
+    table: correctiveAction,
+    organizationColumn: correctiveAction.organizationId,
+    numberColumn: correctiveAction.capaNumber,
+    prefix: "CAPA",
+    insert: (tx, capaNumber) =>
+      tx
+        .insert(correctiveAction)
+        .values({
+          capaNumber,
+          organizationId: params.organizationId,
+          source: params.source,
+          sourceReference: params.sourceReference ?? null,
+          title: params.title,
+          description: params.description,
+          detectionDate: params.detectionDate ?? null,
+          type: params.type ?? "corrective",
+          severity: params.severity ?? "minor",
+          category: params.category ?? "procedure",
+          rootCauseAnalysis: params.rootCauseAnalysis ?? null,
+          rootCauseAnalysisMethod: params.rootCauseAnalysisMethod ?? null,
+          actionPlan: params.actionPlan ?? null,
+          preventiveMeasures: params.preventiveMeasures ?? null,
+          responsibleId: params.responsibleId ?? null,
+          dueDate: params.dueDate ?? null,
+          status: "OPEN",
+          createdBy: params.actorUserId,
+        })
+        .returning(),
+  });
 
-  let newCapa: typeof correctiveAction.$inferSelect | null = null;
-  for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
-    const capaNumber = await generateCapaNumber(params.organizationId, writer);
-    try {
-      const [inserted] = executor
-        ? await executor.transaction((tx) => insertCapa(tx, capaNumber))
-        : await insertCapa(db, capaNumber);
-      newCapa = inserted ?? null;
-      break;
-    } catch (err) {
-      if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1) throw err;
-    }
-  }
-
-  if (!newCapa) {
-    throw new Error("Falha ao criar CAPA");
-  }
-
-  await writer.insert(correctiveActionAuditLog).values({
+  await o.insert(correctiveActionAuditLog).values({
     organizationId: params.organizationId,
     capaId: newCapa.id,
     action: "create",
@@ -149,4 +101,28 @@ export async function createCorrectiveActionRecord(
   });
 
   return newCapa;
+}
+
+/**
+ * The laboratory's CAPA a route parameter names. Throws 400 for an unreadable
+ * id and 404 when no CAPA of this laboratory matches.
+ */
+export async function requireLabCapa(
+  o: OrgDb,
+  routeId: string,
+): Promise<typeof correctiveAction.$inferSelect> {
+  const id = parseInt(routeId, 10);
+  if (Number.isNaN(id)) throw invalid("invalid_request", "ID invalido");
+  const [found] = await o
+    .select()
+    .from(correctiveAction)
+    .where(
+      and(
+        eq(correctiveAction.id, id),
+        eq(correctiveAction.organizationId, o.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!found) throw notFound("capa_not_found", "CAPA nao encontrada");
+  return found;
 }

@@ -130,6 +130,9 @@ export const API_ERROR_CODES = [
   "method_asset_type_mismatch",
   "template_not_found",
   "template_acknowledgements_missing",
+  // Quality records (non-conformances, CAPA).
+  "non_conformance_not_found",
+  "capa_not_found",
 
   // Service requests.
   "request_not_found",
@@ -165,6 +168,10 @@ export const API_ERROR_CODES = [
   // Shipped with the method routes' dimensional gate (DOM-10); the editor and
   // the integration specs branch on it.
   "DIMENSIONAL_ERROR",
+  // The out-of-tolerance (§7.10) notification and impact-assessment routes.
+  "ALREADY_ACKNOWLEDGED",
+  "ASSESSMENT_SIGNED",
+  "CONCLUSION_REQUIRED",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

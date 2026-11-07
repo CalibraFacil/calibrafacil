@@ -37,6 +37,12 @@ import { withErrorHandling } from "../../test/integration/with-error-handling";
 const spcRouter = withErrorHandling(bareSpcRouter);
 
 const proficiencyTestsRouter = withErrorHandling(bareProficiencyTestsRouter);
+import { capaRouter as bareCapaRouter } from "./capa";
+import { nonConformancesRouter as bareNonConformancesRouter } from "./non-conformances";
+import { proficiencyTestsRouter } from "./proficiency-tests";
+import { spcRouter } from "./spc";
+const nonConformancesRouter = withErrorHandling(bareNonConformancesRouter);
+const capaRouter = withErrorHandling(bareCapaRouter);
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
