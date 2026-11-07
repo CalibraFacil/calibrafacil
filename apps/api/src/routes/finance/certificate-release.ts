@@ -4,7 +4,6 @@ import {
   type CertificateReleasePolicy,
 } from "@calibra-facil/contracts";
 import { mount } from "../../lib/endpoint-mount";
-import { requirePositiveRouteId } from "./ids";
 import { and, eq } from "drizzle-orm";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
@@ -179,7 +178,7 @@ mount(
   withLabPermission({ financial: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const calibrationJobId = requirePositiveRouteId(params.calibrationJobId);
+    const { calibrationJobId } = params;
 
     // Not read-only for the record: the release is recomputed (and its audit
     // row written) in this transaction, so it is a write on the one door.
@@ -233,7 +232,7 @@ mount(
   withLabPermission({ financial: ["export"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const calibrationJobId = requirePositiveRouteId(params.calibrationJobId);
+    const { calibrationJobId } = params;
     const { reason } = body;
 
     const dto = await withOrg(
@@ -441,7 +440,7 @@ mount(
   withLabPermission({ financial: ["contract_update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requirePositiveRouteId(params.id);
+    const { id } = params;
 
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
       const [existing] = await ctx.o

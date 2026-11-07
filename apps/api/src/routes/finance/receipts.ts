@@ -85,11 +85,7 @@ mount(
   withLabPermission({ financial: ["receipt_record"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const installmentId = Number.parseInt(params.id, 10);
-
-    if (!Number.isInteger(installmentId)) {
-      throw invalid("invalid_request", "ID invalido");
-    }
+    const installmentId = params.id;
 
     const receivedAt = input.receivedAt
       ? new Date(input.receivedAt)

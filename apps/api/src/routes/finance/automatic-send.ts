@@ -1,7 +1,6 @@
 import { createRouter } from "../../server/router";
 import { financeEndpoints } from "@calibra-facil/contracts";
 import { mount } from "../../lib/endpoint-mount";
-import { requirePositiveRouteId } from "./ids";
 import { and, eq } from "drizzle-orm";
 import { conflict, invalid, notFound } from "../../lib/domain-errors";
 import { withOrg } from "../../lib/org-context";
@@ -173,7 +172,7 @@ mount(
   withLabPermission({ financial: ["contract_update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requirePositiveRouteId(params.id);
+    const { id } = params;
 
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
       const [existing] = await ctx.o

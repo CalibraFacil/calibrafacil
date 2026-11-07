@@ -14,13 +14,6 @@ import { and, desc, eq } from "drizzle-orm";
 import { forbidden, invalid, notFound } from "./domain-errors";
 import type { AuthVariables } from "../middleware/permission";
 
-/** The numeric id of a billing-document route parameter; throws 400 when unreadable. */
-export function requireDocumentRouteId(routeId: string): number {
-  const id = Number.parseInt(routeId, 10);
-  if (!Number.isInteger(id)) throw invalid("invalid_request", "ID invalido");
-  return id;
-}
-
 export async function getDocumentById(
   o: OrgDb,
   organizationId: string,

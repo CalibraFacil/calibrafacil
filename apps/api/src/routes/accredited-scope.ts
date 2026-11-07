@@ -358,13 +358,9 @@ mount(
   labMiddleware,
   async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
+    const { id } = params;
     requireUnitOperationalSettingsManager(memberData);
     const unit = resolveAccessibleUnitContext(memberData);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
 
     await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
       const [deleted] = await ctx.o

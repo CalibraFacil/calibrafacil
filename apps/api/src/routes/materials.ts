@@ -35,19 +35,6 @@ import { requestActor } from "../middleware/request-actor";
  * - PUT /:id: service:update (admin, owner - LAB only)
  * - DELETE /:id: service:delete (admin, owner - LAB only) - soft delete
  */
-function parseMaterialId(raw: string): number | null {
-  if (!/^\d+$/.test(raw)) return null;
-  const id = Number.parseInt(raw, 10);
-  return Number.isSafeInteger(id) && id > 0 ? id : null;
-}
-
-/** The route's material id, or a 400. */
-function requireMaterialId(raw: string): number {
-  const id = parseMaterialId(raw);
-  if (id === null) throw invalid("invalid_request", "ID inválido");
-  return id;
-}
-
 /** A material the caller's units can see, or a 404. */
 async function requireLabMaterial(
   id: number,
@@ -169,7 +156,7 @@ mount(
   withLabPermission({ service: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireMaterialId(params.id);
+    const { id } = params;
 
     return await orgDb(member.organizationId).transaction((o) =>
       requireLabMaterial(id, member, o),
@@ -244,7 +231,7 @@ mount(
   withLabPermission({ service: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireMaterialId(params.id);
+    const { id } = params;
 
     const existing = await orgDb(member.organizationId).transaction((o) =>
       requireLabMaterial(id, member, o),
@@ -310,7 +297,7 @@ mount(
   withLabPermission({ service: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireMaterialId(params.id);
+    const { id } = params;
 
     await orgDb(member.organizationId).transaction((o) =>
       requireLabMaterial(id, member, o),
@@ -348,7 +335,7 @@ mount(
   withLabPermission({ service: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireMaterialId(params.id);
+    const { id } = params;
 
     const updated = await withOrg(
       member.organizationId,

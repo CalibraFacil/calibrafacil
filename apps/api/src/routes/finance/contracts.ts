@@ -206,13 +206,6 @@ async function requireLabAgreement(
   return agreement;
 }
 
-/** The numeric id of a contract route parameter; throws 400 when unreadable. */
-function requireAgreementRouteId(routeId: string): number {
-  const id = Number.parseInt(routeId, 10);
-  if (!Number.isInteger(id)) throw invalid("invalid_request", "ID invalido");
-  return id;
-}
-
 /** The laboratory's customer a contract names; throws 404 when it is not theirs. */
 async function requireOwnedCustomer(
   o: OrgDb,
@@ -371,7 +364,7 @@ mount(
   withLabPermission({ financial: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireAgreementRouteId(params.id);
+    const { id } = params;
 
     const agreement = await orgDb(member.organizationId).transaction((o) =>
       requireLabAgreement(o, member.organizationId, id),
@@ -380,6 +373,13 @@ mount(
     return { data: agreement };
   },
 );
+/** The numeric id of a contract route parameter; throws 400 when unreadable (the plain update route). */
+function requireAgreementRouteId(routeId: string): number {
+  const id = Number.parseInt(routeId, 10);
+  if (!Number.isInteger(id)) throw invalid("invalid_request", "ID invalido");
+  return id;
+}
+
 // A plain route: nothing in the frontends calls the contract update.
 financeContractsRouter.put(
   "/:id",
@@ -502,7 +502,7 @@ mount(
   withLabPermission({ financial: ["contract_update"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireAgreementRouteId(params.id);
+    const { id } = params;
 
     const agreement = await withOrg(
       member.organizationId,
@@ -562,7 +562,7 @@ mount(
   withLabPermission({ financial: ["contract_update"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireAgreementRouteId(params.id);
+    const { id } = params;
 
     const canceled = await withOrg(
       member.organizationId,

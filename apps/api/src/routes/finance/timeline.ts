@@ -33,10 +33,7 @@ mount(
   withLabPermission({ financial: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const serviceOrderId = parseStrictPositiveInt(params.serviceOrderId);
-    if (!serviceOrderId) {
-      throw invalid("invalid_request", "ID da ordem de serviço inválido");
-    }
+    const { serviceOrderId } = params;
 
     const data = await orgDb(member.organizationId).transaction((o) =>
       buildServiceOrderFinancialStatus({

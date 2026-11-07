@@ -3,7 +3,7 @@ import { z } from "zod";
 import { EnvironmentalLimitsSchema } from "@calibra-facil/schemas";
 
 import { nullableNumber, nullableString, unitContextSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * The unit's environmental limits (`/api/environmental-limits/*`). Response
@@ -112,6 +112,7 @@ export const environmentalLimitEndpoints = {
   delete: endpoint({
     method: "delete",
     path: "/api/environmental-limits/:id",
+    params: z.object({ id: routeId }),
     response: deleteEnvironmentalLimitResponseSchema,
     failure: "Falha ao remover",
     policy: "cloud-only",
