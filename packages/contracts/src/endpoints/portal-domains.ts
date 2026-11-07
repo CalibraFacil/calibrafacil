@@ -6,7 +6,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The laboratory's custom portal domain (admin and owner only). Response
  * schemas are wire schemas written from what
- * `apps/api/src/routes/portal-domains.ts` returns. Cloud-only: the desktop
+ * `apps/api/src/domains/org/routes/portal-domains.ts` returns. Cloud-only: the desktop
  * shows a fixed "not configured" answer (`desktop-client.ts`).
  */
 

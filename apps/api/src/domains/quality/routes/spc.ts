@@ -20,7 +20,7 @@ import {
 import { createCorrectiveActionRecord } from "../corrective-actions";
 import { calibrationJobBelongsToOrganization } from "../../../lib/tenant-refs";
 import { buildUnitScopeCondition } from "../../../lib/units";
-import { resolveAccessibleUnitContext } from "../../../lib/unit-operational-settings";
+import { resolveAccessibleUnitContext } from "../../org";
 import { eq, and, asc, desc, count } from "drizzle-orm";
 import { SPC_MACHINE } from "@calibra-facil/schemas/machines";
 import { invalid, notFound } from "../../../lib/domain-errors";

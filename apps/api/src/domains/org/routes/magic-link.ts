@@ -1,0 +1,81 @@
+import { createRouter } from "../../../server/router";
+import { createHash } from "node:crypto";
+import {
+  findLiveVerificationValue,
+  findUserByExactEmail,
+  findUserPrimaryOrganization,
+} from "../../../lib/identity";
+
+/**
+ * Magic-link preview — NO AUTH (gated by possession of a valid magic-link token).
+ *
+ * Powers the sign-in confirmation page (`/entrar` in apps/web): given a
+ * magic-link token, return the target user's display info WITHOUT consuming the
+ * token (a plain SELECT — never a delete). Better Auth's `/magic-link/verify`
+ * GET is single-use, so an email scanner/prefetcher that fetches the raw link
+ * burns the token before the user clicks. Pointing the email at a confirmation
+ * page that only verifies on a real click makes sign-in prefetch-proof.
+ *
+ * Best-effort: any miss returns `{ found: false }` and the page falls back to a
+ * generic confirmation. The actual sign-in never depends on this endpoint.
+ */
+export const magicLinkRouter = createRouter().get("/preview", async (c) => {
+  const token = c.req.query("token");
+  if (!token || token.length < 16) {
+    return c.json({ found: false });
+  }
+
+  // Which surface's org to resolve: lab dashboard (LAB) or client portal.
+  const organizationType =
+    c.req.query("surface") === "portal" ? "CLIENT" : "LAB";
+
+  // Better Auth (>= 1.7) stores a magic-link token under the identifier
+  // `magic-link:` + base64url(SHA-256(token)) (storeToken "hashed", its
+  // `defaultKeyHasher`). Build the same identifier to look the row up.
+  const hashedToken = createHash("sha256").update(token).digest("base64url");
+
+  const value = await findLiveVerificationValue(`magic-link:${hashedToken}`);
+  if (value === null) {
+    return c.json({ found: false });
+  }
+
+  const email = parseTokenEmail(value);
+  if (!email) {
+    return c.json({ found: false });
+  }
+
+  const account = await findUserByExactEmail(email);
+  if (!account) {
+    return c.json({ found: false });
+  }
+
+  // The user's primary organization for this surface (oldest membership),
+  // matching the active-org default applied at session creation.
+  const org = await findUserPrimaryOrganization(account.id, organizationType);
+
+  return c.json({
+    found: true,
+    name: account.name,
+    email: account.email,
+    image: account.image,
+    organizationName: org?.name ?? null,
+    organizationLogo: org?.logo ?? null,
+  });
+});
+
+function parseTokenEmail(value: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "email" in parsed &&
+      typeof parsed.email === "string"
+    ) {
+      return parsed.email;
+    }
+  } catch {
+    // value isn't the JSON payload we expect — treat as a miss.
+  }
+  return null;
+}

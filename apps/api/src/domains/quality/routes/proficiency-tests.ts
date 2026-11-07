@@ -26,7 +26,7 @@ import {
   type AuthVariables,
 } from "../../../middleware/permission";
 import { createCorrectiveActionRecord } from "../corrective-actions";
-import { resolveAccessibleUnitContext } from "../../../lib/unit-operational-settings";
+import { resolveAccessibleUnitContext } from "../../org";
 import { eq, and, or, ilike, desc, asc, count } from "drizzle-orm";
 import { PT_OVERALL_MACHINE } from "@calibra-facil/schemas/machines";
 import { notFound } from "../../../lib/domain-errors";

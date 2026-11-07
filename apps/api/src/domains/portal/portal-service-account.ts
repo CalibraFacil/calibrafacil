@@ -20,7 +20,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { and, eq, lt, ne, or, SQL } from "drizzle-orm";
-import { getPortalBaseUrlForClientOrganization } from "../../lib/portal-domains";
+import { getPortalBaseUrlForClientOrganization } from "../org";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 import { orgDb } from "../../lib/org-db";
 import { PortalServiceAccountError } from "../../lib/portal-service-account-error";

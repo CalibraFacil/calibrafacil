@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   runStaleJobBackstop: vi.fn(),
 }));
 
-vi.mock("../../lib/auth-maintenance", () => ({
+vi.mock("../../domains/org/auth-maintenance", () => ({
   cleanupExpiredAuthRecords: mocks.cleanupExpiredAuthRecords,
 }));
 

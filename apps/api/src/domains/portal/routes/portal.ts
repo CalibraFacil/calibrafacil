@@ -341,7 +341,7 @@ import {
   deriveNextCalibrationDate,
   buildIntervalInsight,
 } from "../../assets";
-import { resolveLabOrganizationIdByPortalHostname } from "../../../lib/portal-domains";
+import { resolveLabOrganizationIdByPortalHostname } from "../../org";
 import {
   applyPortalCertificateReleaseGate,
   loadPortalReleaseStatuses,

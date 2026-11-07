@@ -7,7 +7,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The laboratory profile: CNPJ, accreditation claim, address, contacts and the
  * technical manager. Written only here (admin or owner). The response schema
- * is the wire body of `apps/api/src/routes/organization-profile.ts`.
+ * is the wire body of `apps/api/src/domains/org/routes/organization-profile.ts`.
  * Cloud-only.
  */
 

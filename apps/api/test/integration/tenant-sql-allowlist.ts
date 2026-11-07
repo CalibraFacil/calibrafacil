@@ -56,7 +56,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "auth-session",
-    file: "apps/api/src/lib/public-signup-store.ts",
+    file: "apps/api/src/domains/org/public-signup-store.ts",
     tables: ["member"],
     kinds: ["select"],
     reason:
@@ -95,7 +95,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/records-purge.ts",
+    file: "apps/api/src/domains/org/records-purge.ts",
     tables: ["customer"],
     kinds: ["delete"],
     sql: /delete from organization o where o\.id = \$1 and o\.type = '[^']*' and not exists \( select 1 from customer c where c\.auth_organization_id = o\.id\)/,
@@ -104,7 +104,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/reencrypt-signing-credentials.ts",
+    file: "apps/api/src/domains/org/reencrypt-signing-credentials.ts",
     tables: ["organization_signing_certificate"],
     kinds: ["select"],
     reason:
@@ -195,7 +195,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/services/lab-provisioning.ts",
+    file: "apps/api/src/domains/org/lab-provisioning.ts",
     tables: ["member"],
     kinds: ["select"],
     sql: /from "member" where "member"\."user_id" = \$1 limit/,
@@ -348,7 +348,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "portal-cross-org",
-    file: "apps/api/src/lib/portal-domains.ts",
+    file: "apps/api/src/domains/org/portal-domains.ts",
     tables: ["organization_custom_domain"],
     kinds: ["select"],
     reason:
@@ -356,7 +356,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "portal-cross-org",
-    file: "apps/api/src/lib/portal-domains.ts",
+    file: "apps/api/src/domains/org/portal-domains.ts",
     tables: ["customer"],
     kinds: ["select"],
     reason:
@@ -433,7 +433,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "other",
-    file: "apps/api/src/lib/email-domains.ts",
+    file: "apps/api/src/domains/org/email-domains.ts",
     tables: ["organization_email_domain"],
     kinds: ["select"],
     reason:

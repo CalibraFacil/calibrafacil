@@ -29,7 +29,7 @@ import {
   requirePortalProtected,
   type AuthVariables,
 } from "../../../middleware/permission";
-import { resolveLabOrganizationIdByPortalHostname } from "../../../lib/portal-domains";
+import { resolveLabOrganizationIdByPortalHostname } from "../../org";
 import { resolvePortalNotificationOrgIds } from "../portal-customer-scope";
 import { orgSetDb } from "../../../lib/org-db";
 import { withOrg } from "../../../lib/org-context";

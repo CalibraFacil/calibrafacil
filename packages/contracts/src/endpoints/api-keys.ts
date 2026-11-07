@@ -7,7 +7,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The laboratory's public-API keys (admin and owner only). Response schemas are
- * wire schemas written from what `apps/api/src/routes/api-keys.ts` returns.
+ * wire schemas written from what `apps/api/src/domains/org/routes/api-keys.ts` returns.
  * Cloud-only.
  */
 

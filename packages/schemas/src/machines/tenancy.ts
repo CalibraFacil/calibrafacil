@@ -13,7 +13,7 @@ function everyMove<S extends string, C extends string>(
 
 // organization.status: a laboratory's tenancy.
 //   create   sign-up / the operator CLI: ACTIVE
-//   suspend  the soft delete (apps/api/src/lib/records-retention.ts, decision
+//   suspend  the soft delete (apps/api/src/domains/org/records-retention.ts, decision
 //              Q16); a CHECK keeps a deleted lab SUSPENDED
 // There is no reactivation in the product; an operator's audited repair is the
 // way back. `OFFBOARDING` was declared once and never written: not a state.
@@ -72,7 +72,7 @@ export const INVITATION_STATUS = defineStatusVocabulary(INVITATION_STATUSES, {
 
 // organization_email_domain.status: the lab's sending domain, as the provider
 // (Resend) reports it, plus `failed` when the provider no longer knows it.
-//   create         apps/api/src/lib/email-domain-lifecycle.ts (provider status)
+//   create         apps/api/src/domains/org/email-domain-lifecycle.ts (provider status)
 //   sync_provider  routes/email-domains.ts verify and the health cron
 //                    (packages/jobs-core email-domain-health.ts): any to any
 // Sending does not read this column (it reads verifiedAt / isActive / keyStatus).

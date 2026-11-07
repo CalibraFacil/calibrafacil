@@ -63,6 +63,8 @@ import {
 import {
   createLabAccountSetupToken,
   validateLabAccountSetupToken,
+  hasActiveLabMembership,
+  hasPendingLabInvitation,
 } from "@calibra-facil/auth/lab-access";
 import {
   createLabAuth,
@@ -81,27 +83,23 @@ import {
   sessionRowFor,
   signInWithMagicLink,
 } from "../../test/integration/identity-fixtures";
-import { cleanupExpiredAuthRecords } from "./auth-maintenance";
+import { cleanupExpiredAuthRecords } from "../domains/org/auth-maintenance";
 import { purgeSyncChangeLog } from "../domains/sync/sync-change-log-purge";
-import { invitationsRouter } from "../routes/invitations";
-import { labSetupRouter } from "../routes/lab-setup";
+import { invitationsRouter } from "../domains/org/routes/invitations";
+import { labSetupRouter } from "../domains/org/routes/lab-setup";
 import {
   cleanupFailedLabProvisioning,
   createLabOrganizationWithUniqueSlug,
   ensureLabProvisioningUser,
   provisionLabAccount,
-} from "../services/lab-provisioning";
-import {
-  hasActiveLabMembership,
-  hasPendingLabInvitation,
-} from "@calibra-facil/auth/lab-access";
+} from "../domains/org/lab-provisioning";
 import {
   completeSignupReservation,
   hasLabMembership,
   releaseSignupSlot,
   reserveSignupSlot,
-} from "./public-signup-store";
-import { getActivationChecklist } from "../services/activation-checklist";
+} from "../domains/org/public-signup-store";
+import { getActivationChecklist } from "../domains/org/activation-checklist";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // This file runs the REAL Better Auth lab instance: the harness's fake

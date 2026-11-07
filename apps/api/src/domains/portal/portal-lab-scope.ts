@@ -1,6 +1,6 @@
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 import { forbidden } from "../../lib/domain-errors";
-import { resolveLabOrganizationIdByPortalHostname } from "../../lib/portal-domains";
+import { resolveLabOrganizationIdByPortalHostname } from "../org";
 
 function portalHostOrigin(c: {
   req: { header: (name: string) => string | undefined };

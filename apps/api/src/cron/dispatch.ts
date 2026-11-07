@@ -7,7 +7,7 @@ import {
   processScheduledContaAzulPolls,
 } from "../modules/integrations";
 import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
-import { cleanupExpiredAuthRecords } from "../lib/auth-maintenance";
+import { cleanupExpiredAuthRecords, runRecordsPurge } from "../domains/org";
 import {
   drainOotEmailOutbox,
   runCertificateDriftCheck,
@@ -18,7 +18,6 @@ import { runStaleJobBackstop } from "../lib/stale-job-backstop";
 import { createWorkerRuntimeEnv } from "../lib/runtime-env";
 import { runCron } from "./cron-run";
 import { CRON_SCHEDULE, isCronJobName, type CronJobName } from "./schedule";
-import { runRecordsPurge } from "../lib/records-purge";
 import { runAuditChainVerification } from "../lib/audit-chain";
 import { purgeSyncChangeLog } from "../domains/sync";
 import {

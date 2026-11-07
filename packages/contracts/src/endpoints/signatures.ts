@@ -5,7 +5,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The member's own visual signature (a PNG stamped on the certificates they
  * approve). Response schemas are wire schemas written from what
- * `apps/api/src/routes/signatures.ts` returns.
+ * `apps/api/src/domains/org/routes/signatures.ts` returns.
  *
  * Not client-facing, so not defined here: `GET /member/:memberId` (certificate
  * generation reads it server-side).

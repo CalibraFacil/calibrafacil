@@ -42,7 +42,7 @@ vi.mock("@calibra-facil/db", () => {
   return { db: builder, systemDb: builder };
 });
 
-vi.mock("../../../../lib/portal-domains", () => ({
+vi.mock("../../../org/portal-domains", () => ({
   resolveLabOrganizationIdByPortalHostname: vi.fn(async () => null),
 }));
 

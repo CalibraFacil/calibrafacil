@@ -23,7 +23,7 @@ import { isPlatformEmailConfigured } from "@calibra-facil/email-sender";
 import { z } from "zod";
 
 import { ensurePortalServiceUser } from "../domains/portal";
-import { provisionLabAccount } from "../services/lab-provisioning";
+import { provisionLabAccount } from "../domains/org";
 
 const USAGE = `Usage: create-lab --name <laboratory name> --email <administrator e-mail>
                   [--owner <administrator name>] [--cnpj <CNPJ>] [--no-email]`;

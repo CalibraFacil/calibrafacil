@@ -7,7 +7,7 @@ import { endpoint, type EndpointGroup } from "./define";
  * Public, unauthenticated self-serve sign-up of a laboratory. Called before
  * any session exists, so it carries no identity: the API answers that a claim
  * e-mail is on its way. The response schema is the wire body of
- * `apps/api/src/routes/public-signup.ts`. Cloud-only.
+ * `apps/api/src/domains/org/routes/public-signup.ts`. Cloud-only.
  */
 
 /**

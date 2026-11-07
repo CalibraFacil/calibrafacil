@@ -6,7 +6,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The public side of a laboratory invitation: the not-yet-signed-up invitee
  * reads it and asks for the access-setup link. Unauthenticated. Response
- * schemas are the wire bodies of `apps/api/src/routes/invitations.ts`.
+ * schemas are the wire bodies of `apps/api/src/domains/org/routes/invitations.ts`.
  * Cloud-only.
  */
 

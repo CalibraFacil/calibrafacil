@@ -19,8 +19,7 @@
  */
 import { readSigningConfig } from "@calibra-facil/config";
 
-import { reencryptSigningCredentials } from "../lib/reencrypt-signing-credentials";
-import { runReencryptCli } from "../lib/reencrypt-signing-credentials-cli";
+import { reencryptSigningCredentials, runReencryptCli } from "../domains/org";
 
 runReencryptCli(process.argv.slice(2), {
   readSigning: readSigningConfig,

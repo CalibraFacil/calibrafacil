@@ -16,7 +16,7 @@ vi.mock("../../domains/jobs/certificates/certificate-drift", () => ({
   runCertificateDriftCheck: mocks.runCertificateDriftCheck,
 }));
 
-vi.mock("../../lib/auth-maintenance", () => ({
+vi.mock("../../domains/org/auth-maintenance", () => ({
   cleanupExpiredAuthRecords: mocks.cleanupExpiredAuthRecords,
 }));
 

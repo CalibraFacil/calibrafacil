@@ -7,7 +7,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The laboratory's sending e-mail domain (admin and owner only). Response
  * schemas are wire schemas written from what
- * `apps/api/src/routes/email-domains.ts` returns. Cloud-only: the desktop shows
+ * `apps/api/src/domains/org/routes/email-domains.ts` returns. Cloud-only: the desktop shows
  * a fixed "not configured" answer (`desktop-client.ts`).
  */
 

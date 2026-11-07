@@ -6,7 +6,7 @@ import { endpoint, noContent, type EndpointGroup } from "./define";
 /**
  * Single sign-on: the laboratory's OIDC provider (owner and admin) and the
  * sign-in start. Response schemas are wire schemas written from what
- * `apps/api/src/routes/sso.ts` returns. Cloud-only: the desktop shows a fixed
+ * `apps/api/src/domains/org/routes/sso.ts` returns. Cloud-only: the desktop shows a fixed
  * "no provider" answer (`desktop-client.ts`).
  */
 

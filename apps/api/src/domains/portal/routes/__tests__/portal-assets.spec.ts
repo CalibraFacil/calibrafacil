@@ -43,7 +43,7 @@ vi.mock("@calibra-facil/db", () => {
   return { db: builder, systemDb: builder };
 });
 
-vi.mock("../../../../lib/portal-domains", () => ({
+vi.mock("../../../org/portal-domains", () => ({
   resolveLabOrganizationIdByPortalHostname: vi.fn(async () => null),
 }));
 
@@ -82,7 +82,7 @@ vi.mock("../../../../middleware/permission", () => {
 });
 
 const { resolveLabOrganizationIdByPortalHostname } =
-  await import("../../../../lib/portal-domains");
+  await import("../../../org/portal-domains");
 const { portalRouter } = await import("../portal");
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
