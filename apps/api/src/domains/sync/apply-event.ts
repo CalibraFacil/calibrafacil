@@ -1,4 +1,4 @@
-import { jobCreationClientErrors } from "../../lib/jobs";
+import { jobCreationClientErrors } from "../jobs";
 import {
   type ApplyDesktopSyncEventInput,
   type ApplyDesktopSyncEventResult,

@@ -7,7 +7,7 @@
  * margin key, so this unlocks the ILAC-G24 / NCSL RP-1 interval analysis for
  * past cycles instead of waiting years for ≥3 new ones per asset.
  *
- * The verdict logic MIRRORS apps/api/src/lib/as-found-reliability-verdict.ts
+ * The verdict logic MIRRORS apps/api/src/domains/jobs/as-found-reliability-verdict.ts
  * exactly: read ONLY `margem_conformidade_antes` (never the as-left `_apos`
  * key), flatten nested point arrays, tolerate comma decimals; zero points →
  * UNKNOWN. Keep the two in lock-step.

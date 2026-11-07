@@ -14,7 +14,7 @@ import {
 // (packages/schemas/src/job-transitions.ts). Its writes belong to one owner so
 // the table, the compare-and-set and the audit row stay together:
 //
-//   - apps/api/src/modules/jobs/   (approve-job and the job modules)
+//   - apps/api/src/domains/jobs/commands/   (approve-job and the job commands)
 //   - packages/db/src/queue-render-recovery.ts   (the render backstop)
 //
 // Everywhere else, `.update(calibrationJob)` is a new, unreviewed writer.
@@ -26,7 +26,7 @@ import {
 // on the Drizzle call can see; it reads the same transition table instead.
 
 const OWNER_PATTERN =
-  /(^|\/)(apps\/api\/src\/modules\/jobs\/|packages\/db\/src\/queue-render-recovery\.ts$)/;
+  /(^|\/)(apps\/api\/src\/domains\/jobs\/commands\/|packages\/db\/src\/queue-render-recovery\.ts$)/;
 
 // Test helpers that are not *.spec.ts (apps/api/test/integration/...).
 const TEST_DIRECTORY_PATTERN = /(^|\/)apps\/[^/]+\/test\//;
@@ -37,7 +37,7 @@ export const LEGACY_BASELINE: Baseline = new Map<string, number>([
 ]);
 
 const MESSAGE =
-  "calibration_job is written only from apps/api/src/modules/jobs/ (or packages/db/src/queue-render-recovery.ts), so the transition table, the compare-and-set and the audit row stay together. Move this write into the jobs module and take its allowed statuses from packages/schemas/src/job-transitions.ts.";
+  "calibration_job is written only from apps/api/src/domains/jobs/commands/ (or packages/db/src/queue-render-recovery.ts), so the transition table, the compare-and-set and the audit row stay together. Move this write into a jobs command and take its allowed statuses from packages/schemas/src/job-transitions.ts.";
 
 /** `calibrationJob` or `<anything>.calibrationJob`. */
 function isCalibrationJobTable(node: unknown): boolean {

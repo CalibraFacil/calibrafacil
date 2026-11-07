@@ -30,7 +30,7 @@ location pre-frozen to the customer site. Two polish items remain:
   `getScopedVisit` pattern (`eq(organizationId)` + `buildUnitScopeCondition(unitId, member)`).
   Never touch a row outside the caller's scope.
 - **Reuse, never reinvent, job creation/location freezing.** Adding an instrument
-  goes through `createCalibrationJob` (`apps/api/src/lib/jobs.ts`) with `visitId` +
+  goes through `createCalibrationJob` (`apps/api/src/domains/jobs/jobs.ts`) with `visitId` +
   `onsiteLocation` derived from the visit's `address` via the same
   `formatOnsiteAddressText` helper used at convert time
   (`apps/api/src/domains/visits/routes/calibration-requests.ts`). `createCalibrationJob` already

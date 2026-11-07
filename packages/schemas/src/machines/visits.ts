@@ -9,7 +9,7 @@
 //                 date / technician (it used to rewind IN_PROGRESS to CONFIRMED)
 //   edit        routes/visits.ts reschedule, assign, the reschedule-request
 //                 accept: any open visit, status unchanged
-//   start       apps/api/src/lib/visits.ts `syncVisitStatusFromJobs`: a job of
+//   start       apps/api/src/domains/jobs/visit-status-sync.ts `syncVisitStatusFromJobs`: a job of
 //                 the visit left DRAFT
 //   settle      the same: every job settled with at least one certificate
 //   complete    routes/visits.ts POST /:id/complete (a confirmed or started trip)

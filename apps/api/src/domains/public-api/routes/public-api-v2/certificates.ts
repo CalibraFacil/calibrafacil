@@ -14,10 +14,7 @@ import { requireApiScope } from "../../../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
 import { orgDb } from "../../../../lib/org-db";
-import {
-  loadCertificateLifecycles,
-  withdrawalOf,
-} from "../../../../lib/certificate-lifecycle";
+import { loadCertificateLifecycles, withdrawalOf } from "../../../jobs";
 
 export const certificateRoutes = createRouter<PublicApiV2Env>()
   .get(

@@ -12,7 +12,7 @@ function daysAgo(days: number) {
   return new Date(NOW.getTime() - days * DAY_MS).toISOString();
 }
 
-// The rules are the cloud's POST /jobs/:id/submit (apps/api/src/routes/jobs.ts):
+// The rules are the cloud's POST /jobs/:id/submit (apps/api/src/domains/jobs/routes/jobs.ts):
 // the date must parse, must not be in the future, and a reason is required once
 // it is more than 7 whole days in the past.
 describe("resolveExecutionPerformedAt", () => {

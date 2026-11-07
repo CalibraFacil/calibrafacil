@@ -1,7 +1,7 @@
 # Mini-spec: visit-status roll-forward coverage
 
-Target: `apps/api/src/lib/visits.ts` (`syncVisitStatusFromJobs`)
-Test file: `apps/api/src/lib/__tests__/visits.spec.ts` (Vitest — `.spec.ts`)
+Target: `apps/api/src/domains/jobs/visit-status-sync.ts` (`syncVisitStatusFromJobs`)
+Test file: `apps/api/src/domains/jobs/__tests__/visit-status-sync.spec.ts` (Vitest — `.spec.ts`)
 
 ## Context
 

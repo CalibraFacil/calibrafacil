@@ -43,8 +43,8 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
 
   it("REQ-TR-4: allows the jobs module and the render-recovery owner", async () => {
     await expectClean(RULE, {
-      "apps/api/src/modules/jobs/approve-job.ts": updates(2),
-      "apps/api/src/modules/jobs/nested/deeper.ts": UPDATE,
+      "apps/api/src/domains/jobs/commands/approve-job.ts": updates(2),
+      "apps/api/src/domains/jobs/commands/nested/deeper.ts": UPDATE,
       "packages/db/src/queue-render-recovery.ts": UPDATE,
     });
   });
@@ -71,7 +71,7 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
 
   it("REQ-LC-2: the cloud jobs routes, the public API and the visits routes no longer write the job themselves (reject, cancel, assign, edit and amend moved into the jobs module)", async () => {
     for (const file of [
-      "apps/api/src/routes/jobs.ts",
+      "apps/api/src/domains/jobs/routes/jobs.ts",
       "apps/api/src/routes/public-api-v2.ts",
       "apps/api/src/domains/visits/routes/visits.ts",
     ]) {
@@ -79,18 +79,18 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
       await expectViolation(RULE, { [file]: UPDATE });
     }
     await expectClean(RULE, {
-      "apps/api/src/modules/jobs/reject-job.ts": UPDATE,
-      "apps/api/src/modules/jobs/cancel-job.ts": UPDATE,
-      "apps/api/src/modules/jobs/assign-job.ts": UPDATE,
-      "apps/api/src/modules/jobs/edit-job.ts": UPDATE,
-      "apps/api/src/modules/jobs/amend-job.ts": UPDATE,
+      "apps/api/src/domains/jobs/commands/reject-job.ts": UPDATE,
+      "apps/api/src/domains/jobs/commands/cancel-job.ts": UPDATE,
+      "apps/api/src/domains/jobs/commands/assign-job.ts": UPDATE,
+      "apps/api/src/domains/jobs/commands/edit-job.ts": UPDATE,
+      "apps/api/src/domains/jobs/commands/amend-job.ts": UPDATE,
     });
   }, 60_000);
 
   it("REQ-SUB-4: the desktop sync apply no longer writes the job itself (its grandfathered write moved into the submit/execute command)", async () => {
     await expectViolation(RULE, { "apps/api/src/routes/sync.ts": UPDATE });
     await expectClean(RULE, {
-      "apps/api/src/modules/jobs/submit-job.ts": UPDATE,
+      "apps/api/src/domains/jobs/commands/submit-job.ts": UPDATE,
     });
   });
 });

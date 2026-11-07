@@ -151,7 +151,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "public-token",
-    file: "apps/api/src/lib/oot-acknowledgement.ts",
+    file: "apps/api/src/domains/jobs/oot/oot-acknowledgement.ts",
     tables: ["oot_notification", "non_conformance"],
     kinds: ["select"],
     reason:
@@ -204,7 +204,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/certificate-drift.ts",
+    file: "apps/api/src/domains/jobs/certificates/certificate-drift.ts",
     tables: ["issued_certificate_snapshot"],
     kinds: ["select"],
     reason:
@@ -255,7 +255,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/approval-effects-reconciler.ts",
+    file: "apps/api/src/domains/jobs/approval-effects-reconciler.ts",
     tables: ["calibration_job", "asset_oot_event"],
     kinds: ["select"],
     sql: /from "calibration_job" where .*not exists \(select 1 from "asset_oot_event"/,
@@ -264,7 +264,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/approval-effects-reconciler.ts",
+    file: "apps/api/src/domains/jobs/approval-effects-reconciler.ts",
     tables: ["calibration_job", "asset"],
     kinds: ["select"],
     sql: /from "calibration_job" inner join "asset"/,
@@ -273,7 +273,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/approval-effects-reconciler.ts",
+    file: "apps/api/src/domains/jobs/approval-effects-reconciler.ts",
     tables: ["asset_oot_event", "calibration_job", "asset_oot_audit_log"],
     kinds: ["select"],
     sql: /from "asset_oot_event" inner join "calibration_job"/,
@@ -282,7 +282,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/oot-email-drain.ts",
+    file: "apps/api/src/domains/jobs/oot/oot-email-drain.ts",
     tables: ["oot_email_outbox"],
     kinds: ["select"],
     sql: /from "oot_email_outbox" where/,
@@ -378,7 +378,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   // -------------------------------------------------------------------------
   {
     category: "ownership-checked-in-code",
-    file: "apps/api/src/lib/jobs.ts",
+    file: "apps/api/src/domains/jobs/jobs.ts",
     tables: ["asset", "customer", "job_commercial_snapshot"],
     kinds: ["select"],
     reason:

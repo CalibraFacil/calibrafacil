@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   runCertificateDriftCheck: vi.fn(),
 }));
 
-vi.mock("../../lib/certificate-drift", () => ({
+vi.mock("../../domains/jobs/certificates/certificate-drift", () => ({
   runCertificateDriftCheck: mocks.runCertificateDriftCheck,
 }));
 

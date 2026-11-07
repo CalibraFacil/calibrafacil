@@ -12,7 +12,7 @@ describe("calibra/no-job-audit-insert-outside-owner (real oxlint)", () => {
       "apps/api/src/modules/jobs/new-command.ts": DRIZZLE_INSERT,
     });
     await expectViolation(RULE, {
-      "apps/api/src/routes/jobs.ts": DRIZZLE_INSERT,
+      "apps/api/src/domains/jobs/routes/jobs.ts": DRIZZLE_INSERT,
     });
     await expectViolation(RULE, { "apps/worker/src/index.ts": DRIZZLE_INSERT });
   }, 60_000);

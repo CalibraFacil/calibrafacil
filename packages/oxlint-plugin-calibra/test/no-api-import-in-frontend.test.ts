@@ -53,7 +53,7 @@ describe("calibra/no-api-import-in-frontend (real oxlint)", () => {
 
   it("does not apply outside the frontend apps (the api may import itself)", async () => {
     await expectClean(RULE, {
-      "apps/api/src/routes/jobs.ts":
+      "apps/api/src/domains/jobs/routes/jobs.ts":
         'import { app } from "@calibra-facil/api";\nexport const a = app;\n',
       "packages/client-runtime/src/transport/cloud.ts":
         'import type { AppType } from "@calibra-facil/contracts";\nexport type T = AppType;\n',

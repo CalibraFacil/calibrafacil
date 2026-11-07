@@ -7,7 +7,7 @@ import { issuedCertificateStatusEvent } from "./schema.js";
 
 // appendCertificateStatusEvent is the only writer of issued_certificate_status_event
 // (roadmap 2 B3). The table itself (append-only trigger, CHECKs, grants) is proved
-// against a real Postgres in apps/api/src/modules/jobs/certificate-lifecycle.int.spec.ts;
+// against a real Postgres in apps/api/src/domains/jobs/commands/certificate-lifecycle.int.spec.ts;
 // this is the writer's own contract.
 
 type Row = typeof issuedCertificateStatusEvent.$inferInsert;

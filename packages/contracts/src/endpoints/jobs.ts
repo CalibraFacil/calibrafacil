@@ -29,7 +29,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The laboratory's calibration jobs. The response schemas are the wire schemas
- * of `../jobs.ts` (written from what `apps/api/src/routes/jobs.ts` returns; the
+ * of `../jobs.ts` (written from what `apps/api/src/domains/jobs/routes/jobs.ts` returns; the
  * desktop local-server answers the reads and the execution saves with them, see
  * `apps/local-server/src/contract.test.ts`).
  *

@@ -15,7 +15,7 @@ import {
   frozenAccreditationNumberColumn,
   frozenSealColumn,
   frozenSealJoin,
-} from "../../lib/frozen-seal";
+} from "../jobs";
 import { orgDb } from "../../lib/org-db";
 
 /**

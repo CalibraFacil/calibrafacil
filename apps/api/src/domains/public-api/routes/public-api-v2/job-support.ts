@@ -2,10 +2,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ClientIpContext } from "../../../../lib/client-ip";
 import { buildPublicApiError, getPublicApiRequestIp } from "../../public-api";
 import { type ApiKeyAuthVariables } from "../../../../middleware/api-key-auth";
-import {
-  type JobExecutionActor,
-  type JobExecutionResult,
-} from "../../../../modules/jobs/submit-job";
+import { type JobExecutionActor, type JobExecutionResult } from "../../../jobs";
 
 /**
  * Body of the 409 returned when a job write's compare-and-set matched no row:

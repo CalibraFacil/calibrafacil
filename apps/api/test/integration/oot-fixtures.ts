@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import {
   recordAssetOotEvent,
   type AssetOotEventInput,
-} from "../../src/lib/asset-oot-events";
+} from "../../src/domains/jobs/oot/asset-oot-events";
 import { orgDb } from "../../src/lib/org-db";
 
 /**

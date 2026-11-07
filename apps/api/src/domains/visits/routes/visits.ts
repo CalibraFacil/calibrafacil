@@ -45,13 +45,13 @@ import {
   notifyVisitRescheduled,
   notifyVisitScheduled,
 } from "@calibra-facil/notifications";
-import { cancelJob } from "../../../modules/jobs/cancel-job";
 import {
+  cancelJob,
   createCalibrationJob,
   jobCreationClientErrors,
-} from "../../../lib/jobs";
+  jobStatusConflict,
+} from "../../jobs";
 import { formatOnsiteAddressText } from "../onsite-address";
-import { jobStatusConflict } from "../../../modules/jobs/job-status-transitions";
 import {
   assertAssetBelongsToVisitCustomer,
   assertGuard,

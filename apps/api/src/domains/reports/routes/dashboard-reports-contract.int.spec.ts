@@ -24,7 +24,7 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
-import { certificateNumberingRouter } from "../../../routes/certificate-numbering";
+import { certificateNumberingRouter } from "../../jobs/routes/certificate-numbering";
 import { dashboardRouter } from "./dashboard";
 import { reportsRouter } from "./reports";
 import { insertJobs } from "../../../../test/integration/job-fixtures";
