@@ -14,6 +14,7 @@ import {
   getApiBaseUrl,
   readPortalJsonResult,
 } from "@/lib/api-fetch";
+import { portalPublicKeys } from "@/lib/portal-keys";
 
 type MagicLinkPreview = MagicLinkPreviewResponse;
 
@@ -64,7 +65,7 @@ export function MagicLinkPage({
   const [entering, setEntering] = useState(false);
 
   const previewQuery = useQuery({
-    queryKey: ["portal-magic-link-preview", token],
+    queryKey: portalPublicKeys.magicLinkPreview(token),
     queryFn: () => fetchPreview(token ?? ""),
     enabled: Boolean(token),
     staleTime: Number.POSITIVE_INFINITY,

@@ -9,7 +9,7 @@ import {
 
 import { portalOotAssessmentResponseSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import { Button } from "@calibra-facil/ui/button";
 import { Checkbox } from "@calibra-facil/ui/checkbox";
 import { Input } from "@calibra-facil/ui/input";
@@ -92,7 +92,7 @@ export function OotAssessmentPanel({ assetId }: { assetId: number }) {
 
 function OotAssessmentForm({ event }: { event: OotEvent }) {
   const queryClient = useQueryClient();
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const [decision, setDecision] = useState<OotDecision | "">("");
   const [rationale, setRationale] = useState("");
   const [periodStart, setPeriodStart] = useState(
@@ -130,7 +130,7 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
     },
     onSuccess: () => {
       toast.success("Avaliação registrada");
-      queryClient.invalidateQueries({ queryKey: key("portal-oot-events") });
+      queryClient.invalidateQueries({ queryKey: keys.ootEvents });
     },
     onError: (error: Error) => {
       toast.error(error.message);

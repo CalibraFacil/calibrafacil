@@ -21,7 +21,7 @@ import {
 } from "@calibra-facil/schemas/machines";
 import { portalRequestDetailSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import {
   formatCalendarDate,
   formatInstant,
@@ -70,9 +70,9 @@ type RequestDetail = {
 };
 
 export function RequestDetailPage({ id }: { id: string }) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const { data, isLoading, error } = useQuery({
-    queryKey: key("portal-request-detail", id),
+    queryKey: keys.requestDetail(id),
     queryFn: async (): Promise<RequestDetail> => {
       return fetchPortalJson(
         `/api/portal/requests/${id}`,

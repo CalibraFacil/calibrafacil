@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { portalBrandingResponseSchema } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
+import { portalPublicKeys } from "@/lib/portal-keys";
 
 export interface PortalBranding {
   name: string | null;
@@ -31,7 +32,7 @@ async function fetchBranding(): Promise<PortalBranding> {
 
 export function brandingQueryOptions() {
   return queryOptions({
-    queryKey: ["portal-branding"],
+    queryKey: portalPublicKeys.branding,
     queryFn: fetchBranding,
     // Branding is fixed per host for the session; no need to refetch.
     staleTime: Infinity,

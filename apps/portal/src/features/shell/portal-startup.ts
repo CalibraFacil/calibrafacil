@@ -7,6 +7,7 @@ import { portalOrganizationsResponseSchema } from "@calibra-facil/contracts";
 import { fetchPortalJson } from "@/lib/api-fetch";
 import { PORTAL_ORG_KEY } from "@calibra-facil/shared/client-storage-keys";
 import { isRecord } from "@calibra-facil/shared/record";
+import { portalPublicKeys } from "@/lib/portal-keys";
 
 /**
  * Authenticated portal startup.
@@ -28,8 +29,6 @@ export type PortalOrganization = {
   kind: "unit" | "group";
 };
 
-const PORTAL_ORGANIZATIONS_KEY = ["portal-organizations"] as const;
-
 /**
  * CLIENT organizations where the user holds an external portal role. This is
  * a user-level list, so (like branding) its key is deliberately not scoped to
@@ -37,7 +36,7 @@ const PORTAL_ORGANIZATIONS_KEY = ["portal-organizations"] as const;
  */
 export function portalOrganizationsQueryOptions() {
   return queryOptions({
-    queryKey: PORTAL_ORGANIZATIONS_KEY,
+    queryKey: portalPublicKeys.organizations,
     queryFn: (): Promise<Array<PortalOrganization>> =>
       fetchPortalJson(
         "/api/portal/organizations",

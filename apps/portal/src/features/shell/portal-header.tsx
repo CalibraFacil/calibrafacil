@@ -19,7 +19,7 @@ import { CommandMenu } from "@/features/shell/command-menu";
 import { NotificationBell } from "@/features/notifications/notification-bell";
 import { useMountEffect } from "@calibra-facil/ui/use-mount-effect";
 import { shortcutLabel } from "@/lib/platform";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 
 // Breadcrumbs are built from the URL path (not route matches) so a crumb's
 // parent always appears even when a section has no layout route.tsx — e.g.
@@ -64,9 +64,9 @@ export function PortalHeader() {
   // name comes from the page's own query cache: same key, skipToken — the
   // header never fetches, it only mirrors what the page already loaded.
   const assetParam = /^\/assets\/([^/]+)/.exec(pathname)?.[1] ?? null;
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const assetCrumbQuery = useQuery<{ name?: string }>({
-    queryKey: key("portal-asset", assetParam ?? "__none__"),
+    queryKey: keys.asset(assetParam ?? "__none__"),
     queryFn: skipToken,
   });
   const assetName = assetParam ? assetCrumbQuery.data?.name : undefined;

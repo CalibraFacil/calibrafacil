@@ -30,7 +30,7 @@ import {
   portalDownloadLinkResponseSchema,
 } from "@calibra-facil/contracts";
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 
 type AuditPackStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 
@@ -63,16 +63,14 @@ type AuditPackRequest = {
   include: AuditPack["include"];
 };
 
-const AUDIT_PACKS_SCOPE = "portal-audit-packs";
-
 function isInFlight(pack: AuditPack): boolean {
   return pack.status === "PENDING" || pack.status === "PROCESSING";
 }
 
 function useAuditPacks() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key(AUDIT_PACKS_SCOPE),
+    queryKey: keys.auditPacks,
     queryFn: (): Promise<AuditPacksResponse> =>
       fetchPortalJson(
         "/api/portal/audit-packs",
@@ -169,7 +167,7 @@ function AuditPackDownloadButton({ pack }: { pack: AuditPack }) {
 
 function AuditPackDialog() {
   const queryClient = useQueryClient();
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const unitsQuery = usePortalUnits();
   const units = unitsQuery.data?.units ?? [];
   const showUnitFilter = units.length > 1;
@@ -201,7 +199,7 @@ function AuditPackDialog() {
       toast.success(
         "Pacote em preparação. Você receberá um e-mail quando estiver pronto.",
       );
-      await queryClient.invalidateQueries({ queryKey: key(AUDIT_PACKS_SCOPE) });
+      await queryClient.invalidateQueries({ queryKey: keys.auditPacks });
     },
     onError: (error) => {
       toast.error(

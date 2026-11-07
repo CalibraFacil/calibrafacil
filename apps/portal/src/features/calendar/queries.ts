@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { portalCalendarResponseSchema } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 
 export type CalendarDueAsset = {
   id: number;
@@ -35,9 +35,9 @@ async function fetchCalendar(
 
 /** Instruments coming due inside [from, to] (inclusive, YYYY-MM-DD). */
 export function useCalendarDues(from: string, to: string, unitId?: number) {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key("portal-calendar", from, to, unitId ?? null),
+    queryKey: keys.calendar(from, to, unitId),
     queryFn: () => fetchCalendar(from, to, unitId),
     staleTime: 60_000,
   });

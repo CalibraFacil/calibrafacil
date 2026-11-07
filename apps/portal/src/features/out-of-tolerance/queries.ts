@@ -7,7 +7,7 @@ import {
 import type { OotNotificationStatus } from "@calibra-facil/schemas/machines";
 
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 
 /**
  * ISO/IEC 17025 §7.10 out-of-tolerance notifications: the lab informed this
@@ -43,12 +43,10 @@ export type OotNotificationsResponse = {
   };
 };
 
-const OOT_NOTIFICATIONS_SCOPE = "portal-oot-notifications";
-
 export function useOotNotifications() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key(OOT_NOTIFICATIONS_SCOPE),
+    queryKey: keys.ootNotifications,
     queryFn: (): Promise<OotNotificationsResponse> =>
       fetchPortalJson(
         "/api/portal/oot-notifications",
@@ -61,7 +59,7 @@ export function useOotNotifications() {
 
 /** POST acknowledge (idempotent). `id` is the opaque token from the list. */
 export function useAcknowledgeOotNotification() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -78,7 +76,7 @@ export function useAcknowledgeOotNotification() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: key(OOT_NOTIFICATIONS_SCOPE),
+        queryKey: keys.ootNotifications,
       });
     },
   });

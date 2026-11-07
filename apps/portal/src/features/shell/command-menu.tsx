@@ -21,7 +21,7 @@ import {
 import type { IconSvgElement } from "@hugeicons/react";
 
 import { cn } from "@calibra-facil/ui/utils";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import { fetchPortalJson } from "@/lib/api-fetch";
 import { getCalibrationStatus } from "@/lib/calibration-status";
 import { Dialog, DialogContent } from "@calibra-facil/ui/dialog";
@@ -86,16 +86,16 @@ export function CommandMenu({
   const term = query.trim();
   const isSearching = term.length >= 2;
 
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const { data: assets = [] } = useQuery({
-    queryKey: key("cmd-assets", term),
+    queryKey: keys.commandAssets(term),
     enabled: open && isSearching,
     queryFn: () => searchAssets(term),
     staleTime: 30_000,
   });
 
   const { data: certificates = [] } = useQuery({
-    queryKey: key("cmd-certificates", term),
+    queryKey: keys.commandCertificates(term),
     enabled: open && isSearching,
     queryFn: () => searchCertificates(term),
     staleTime: 30_000,

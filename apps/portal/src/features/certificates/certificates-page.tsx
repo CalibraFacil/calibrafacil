@@ -37,7 +37,7 @@ import {
 } from "@calibra-facil/contracts";
 import { fetchPortalJson } from "@/lib/api-fetch";
 import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
 import { formatInstant } from "@calibra-facil/shared/format";
 
@@ -236,18 +236,17 @@ export function CertificatesPage({ assetId }: { assetId?: number }) {
   const dateTo = toDateParam(dateRange?.to);
   const hasFilters = Boolean(search || dateFrom || dateTo || assetId);
 
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: key(
-      "portal-certificates",
+    queryKey: keys.certificatesPage({
       page,
       limit,
       search,
       dateFrom,
       dateTo,
-      assetId ?? null,
-    ),
+      assetId,
+    }),
     queryFn: async (): Promise<CertificatesResponse> => {
       const params = new URLSearchParams({
         page: String(page),
@@ -276,7 +275,7 @@ export function CertificatesPage({ assetId }: { assetId?: number }) {
         { errorMessage: "Falha ao carregar certificados" },
       );
     },
-    placeholderData: keepPreviousDataInScope(key("portal-certificates")),
+    placeholderData: keepPreviousDataInScope(keys.certificates),
   });
 
   const handleRowClick = (certificate: Certificate) => {

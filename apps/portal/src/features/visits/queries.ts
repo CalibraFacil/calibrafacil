@@ -12,7 +12,7 @@ import type {
   VisitStatus,
 } from "@calibra-facil/schemas/machines";
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { usePortalKeys } from "@/lib/portal-keys";
 
 type PortalVisitStatus = VisitStatus;
 
@@ -57,8 +57,6 @@ type PortalVisitsResponse = {
   data: Array<PortalVisit>;
 };
 
-const PORTAL_VISITS_SCOPE = "portal-visits";
-
 function fetchVisits(): Promise<PortalVisitsResponse> {
   return fetchPortalJson("/api/portal/visits", portalVisitsResponseSchema, {
     errorMessage: "Falha ao carregar as visitas",
@@ -67,19 +65,19 @@ function fetchVisits(): Promise<PortalVisitsResponse> {
 
 /** On-site visits scheduled for the customer (excludes cancelled). */
 export function usePortalVisits() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   return useQuery({
-    queryKey: key(PORTAL_VISITS_SCOPE),
+    queryKey: keys.visits,
     queryFn: fetchVisits,
     staleTime: 60_000,
   });
 }
 
 function useInvalidateVisits() {
-  const key = usePortalQueryKey();
+  const keys = usePortalKeys();
   const queryClient = useQueryClient();
   return async () => {
-    await queryClient.invalidateQueries({ queryKey: key(PORTAL_VISITS_SCOPE) });
+    await queryClient.invalidateQueries({ queryKey: keys.visits });
   };
 }
 
