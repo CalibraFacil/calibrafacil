@@ -1,7 +1,7 @@
 # Desktop push: per-operation permissions and the attachment upload leg (sync protocol 4)
 
-Roadmap 2 A2 (architecture review P0-2 and P0-5). Code: `apps/api/src/modules/sync/{operation-permissions,attachment-uploads,apply-attachment}.ts`,
-`apps/api/src/routes/sync/{push,attachments}.ts`, `packages/contracts/src/{sync-attachments,outbox-rejections,sync-protocol}.ts`,
+Roadmap 2 A2 (architecture review P0-2 and P0-5). Code: `apps/api/src/domains/sync/{operation-permissions,attachment-uploads,apply-attachment}.ts`,
+`apps/api/src/domains/sync/routes/{push,attachments}.ts`, `packages/contracts/src/{sync-attachments,outbox-rejections,sync-protocol}.ts`,
 `apps/local-server/src/attachment-upload.ts`, `packages/local-db/src/{attachments,outbox}.ts` and migration `0024_attachment_upload_leg`.
 Operators: `DEPLOYMENT.md`, _Desktop push permissions and offline attachments_.
 

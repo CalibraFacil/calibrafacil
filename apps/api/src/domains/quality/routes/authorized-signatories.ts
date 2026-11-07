@@ -24,7 +24,7 @@ import {
  *
  * Manages the roster of personnel authorized to APPROVE / sign off calibration
  * certificates, optionally scoped per asset type. Enforcement lives in the job
- * approval handler (see lib/signatory.ts). Distinct from personnel competence,
+ * approval handler (see domains/quality/signatory.ts). Distinct from personnel competence,
  * which authorizes who may EXECUTE a calibration.
  *
  * Granting/revoking reuses the competence-approve authority (a quality-manager

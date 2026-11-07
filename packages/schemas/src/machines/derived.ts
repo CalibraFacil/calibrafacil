@@ -14,7 +14,7 @@ function moves<S extends string, C extends string>(
 }
 
 // proficiency_test.overall_status (ISO/IEC 17025 §7.7.2 inter-laboratory
-// comparison): `overallStatusFromResults` in routes/proficiency-tests.ts.
+// comparison): `overallStatusFromResults` in domains/quality/routes/proficiency-tests.ts.
 //   create          POST / : pending (no results yet)
 //   record_results  POST /:id/results: the worst point verdict; recording again
 //                     replaces the results and re-derives
@@ -47,8 +47,8 @@ export const PT_OVERALL_MACHINE = defineStateMachine({
 
 // control_chart.status (§7.7.1 monitoring): `evaluateChart` in
 // packages/interval-analysis (Western Electric rules over the readings).
-//   create     routes/spc.ts POST /
-//   recompute  routes/spc.ts (readings added or removed, limits edited,
+//   create     domains/quality/routes/spc.ts POST /
+//   recompute  domains/quality/routes/spc.ts (readings added or removed, limits edited,
 //                recalculate) and the nightly sweep (packages/jobs-core
 //                spc-recompute.ts): any status to any status
 export const SPC_STATUSES = [

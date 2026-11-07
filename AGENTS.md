@@ -91,7 +91,7 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 
 - Preserve tenant, organization, and unit scoping in every query. Route handlers query through the
   org-bound handle `orgDb(organizationId)` (`apps/api/src/lib/org-db.ts`), which adds the
-  organization predicate itself; the raw `db` is a lint error in `apps/api/src/routes` beyond the
+  organization predicate itself; the raw `db` is a lint error in `apps/api/src/domains/*/routes` beyond the
   grandfathered per-file counts (`docs/architecture/org-bound-db.md`). The application connects as
   the role `calibra_app` (`DATABASE_URL`), which Postgres row-level security binds
   (`DATABASE_RLS_MODE=enforced`, the default); only the named `systemDb` path uses the table owner

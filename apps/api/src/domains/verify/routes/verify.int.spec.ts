@@ -29,7 +29,7 @@ import { isRecord } from "@calibra-facil/shared/record";
 // public data, and nothing else; unknown/invalid token → not-found with no
 // leak". The cut-line is correctness + no-leak, not RBAC.
 //
-// The contract (from src/routes/verify.ts):
+// The contract (from domains/verify/routes/verify.ts):
 //   - lookup key:  eq(calibrationJob.verificationToken, token)
 //                  AND status IN ("APPROVED","SUPERSEDED")    (only releasable)
 //   - GET /:token            → 200 { valid:true, jobId, status, lab, customer,

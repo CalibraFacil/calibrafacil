@@ -7,7 +7,7 @@ import {
 import { defineStateMachine } from "../state-machine";
 
 // organization_integration.status: whether the integration may run.
-//   create          routes/integrations.ts (connect, OAuth callback): ACTIVE
+//   create          domains/finance/routes/integrations.ts (connect, OAuth callback): ACTIVE
 //   reconnect       the OAuth reconnect: any status back to ACTIVE
 //   recover         a token refresh or a validation that succeeds again
 //   require_action  a refresh/validation/export that needs the lab (expired

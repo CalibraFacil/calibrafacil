@@ -18,7 +18,7 @@ import { orgDb } from "../../../lib/org-db";
  * the catalog is curated centrally: it is seeded by
  * `packages/db/src/seed-asset-types.ts` and is read-only through the API.
  *
- * The reads live in `lib/asset-types.ts`: the catalog has no tenant column and
+ * The reads live in `domains/assets/asset-types.ts`: the catalog has no tenant column and
  * no row-level-security policy, so there is no laboratory to bind them to.
  */
 const PREFIX = "/api/asset-types";

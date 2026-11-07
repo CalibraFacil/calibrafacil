@@ -10,7 +10,7 @@ import { orgDb } from "../../../lib/org-db";
 
 /**
  * Lookups of the PUBLIC out-of-tolerance acknowledgement route
- * (routes/oot-ack.ts, no session; ISO/IEC 17025 §7.10). The unguessable
+ * (domains/jobs/routes/oot-ack.ts, no session; ISO/IEC 17025 §7.10). The unguessable
  * ack-token in the e-mailed link IS the credential, and it yields the
  * laboratory that sent the notification, so the lookup by token cannot be
  * bound to an organization yet: it runs on the SYSTEM path (`systemDb`, the

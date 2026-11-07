@@ -53,7 +53,7 @@ function forbiddenOrganization(
   });
 }
 
-/** The roles that may create an API key (routes/api-keys.ts), and so use one. */
+/** The roles that may create an API key (domains/org/routes/api-keys.ts), and so use one. */
 const KEY_CREATOR_ROLES = new Set(["owner", "admin"]);
 
 const LAST_USED_REFRESH_MS = 5 * 60 * 1000;

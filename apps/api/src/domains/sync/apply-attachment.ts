@@ -26,7 +26,7 @@ import { buildSyncAttachmentObjectKey } from "./helpers";
  * cloud acknowledged it whether or not the bytes ever arrived, and the desktop
  * marked the attachment synced. It is now recorded only when the blob it names was
  * uploaded and verified through the attachment endpoints
- * (modules/sync/attachment-uploads.ts), and the acknowledgement carries the object
+ * (domains/sync/attachment-uploads.ts), and the acknowledgement carries the object
  * key, which the desktop stores as the attachment's `remote_key`.
  */
 

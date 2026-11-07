@@ -1,7 +1,7 @@
 # The desktop change log (sync protocol 3)
 
 Roadmap P2-4b. Replaced the `updatedAt` pull cursor and the unpaginated bootstrap of sync protocols 1
-and 2 (retired, Q69). Code: `apps/api/src/modules/sync/{change-log,bootstrap-pages,entity-sources}.ts`,
+and 2 (retired, Q69). Code: `apps/api/src/domains/sync/{change-log,bootstrap-pages,entity-sources}.ts`,
 `packages/db/drizzle/0122_sync_change_log.sql`, `packages/contracts/src/sync-change-seq.ts`; on the
 desktop `packages/local-db/src/{sync,skipped-rows}.ts` and `apps/local-server/src/sync.ts`.
 

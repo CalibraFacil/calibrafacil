@@ -1,6 +1,6 @@
 /**
  * Helpers for the lab-owned email sending domain routes (issue #584).
- * Mirrors lib/portal-domains.ts, but verification is Resend's verdict (DKIM/
+ * Mirrors domains/org/portal-domains.ts, but verification is Resend's verdict (DKIM/
  * SPF records generated and checked by the lab's own Resend account) rather
  * than a self-issued TXT token.
  */

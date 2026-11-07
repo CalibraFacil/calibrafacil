@@ -16,7 +16,7 @@ export const bootstrapRoutes = createRouter<SyncRouterEnv>().post(
     const session = c.get("session");
     const memberData = getMemberData(c);
 
-    // The paged bootstrap (modules/sync/bootstrap-pages.ts). A request that does not
+    // The paged bootstrap (domains/sync/bootstrap-pages.ts). A request that does not
     // state protocol 3 or later in its body comes from a build that cannot read it (the
     // one unpaged response of protocols 1 and 2 is gone): it is told to update.
     const requestBody: unknown = await c.req.json().catch(() => null);

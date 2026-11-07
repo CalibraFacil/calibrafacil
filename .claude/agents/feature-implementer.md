@@ -38,7 +38,7 @@ not push, do not open a PR, do not merge. Leave the worktree for a human/verifie
 2. **Write the failing test(s) first.** For each REQ ID, add a `*.spec.ts` that
    asserts the measurable response and **fails today**. Run it and confirm RED:
    `pnpm --dir <pkg> test:run <path>.spec.ts -t "REQ-..."`.
-   (e.g. `pnpm --dir apps/api test:run src/routes/foo.spec.ts -t "REQ-CAL-001"`.)
+   (e.g. `pnpm --dir apps/api test:run src/domains/jobs/routes/foo.spec.ts -t "REQ-CAL-001"`.)
    - **Rendered artifacts must be tested against REAL output, not a mock.** When a
      criterion says an email / PDF / template / document _contains_ or _renders_
      specific fields or values, render the real component to output (e.g.

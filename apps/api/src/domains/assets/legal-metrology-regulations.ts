@@ -3,7 +3,7 @@ import { legalMetrologyRegulation } from "@calibra-facil/db/schema";
 
 /**
  * Reads of the GLOBAL legal-metrology regulation catalog
- * (routes/legal-metrology-regulations.ts). `legal_metrology_regulation` has no
+ * (domains/assets/routes/legal-metrology-regulations.ts). `legal_metrology_regulation` has no
  * organization column and no row-level-security policy (tenancy.ts): the same
  * Portarias apply to every laboratory, so any connection role may read it and
  * the statement stays on the plain `db` handle, in a lib.

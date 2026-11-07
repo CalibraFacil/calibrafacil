@@ -10,7 +10,7 @@ import {
   type UnknownRecord,
 } from "../lib/rule-support.ts";
 
-// Domain failures in apps/api/src/routes must be thrown as DomainErrors
+// Domain failures in apps/api/src/domains/<d>/routes must be thrown as DomainErrors
 // (apps/api/src/lib/domain-errors.ts) so every client gets a stable `code`,
 // instead of hand-built `c.json({ error: "<texto>" }, status)` bodies.
 // Convention: docs/architecture/api-client-contract.md.
@@ -20,8 +20,7 @@ import {
 // a file may never gain one, and a migrated site should lower its file's
 // count in the same change. An unlisted file must have zero.
 
-const ROUTES_PATTERN =
-  /(^|\/)apps\/api\/src\/(routes|domains\/[^/]+\/routes)\//;
+const ROUTES_PATTERN = /(^|\/)apps\/api\/src\/domains\/[^/]+\/routes\//;
 
 export const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/domains/customers/routes/customers.ts", 1],

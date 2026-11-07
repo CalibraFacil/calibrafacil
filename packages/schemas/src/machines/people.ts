@@ -4,7 +4,7 @@ import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary"
 import { defineStateMachine } from "../state-machine";
 
 // personnel_competence.status: a technician's qualification for an asset type.
-//   create             routes/competences.ts POST /
+//   create             domains/quality/routes/competences.ts POST /
 //   assign_training    POST /:id/assign-training (also after a failed evaluation)
 //   start_training     POST /:id/start-training
 //   complete_training  POST /:id/complete-training
@@ -84,7 +84,7 @@ export const COMPETENCE_MACHINE = defineStateMachine({
 });
 
 // training_record.status: a training event a person attends.
-//   create    routes/training-records.ts POST /
+//   create    domains/quality/routes/training-records.ts POST /
 //   set_status  PUT /:id (the form's status picker: any status)
 //   complete  POST /:id/complete (from any status; repeating it is a no-op)
 export const TRAINING_STATUSES = [
@@ -125,8 +125,8 @@ export const TRAINING_MACHINE = defineStateMachine({
 });
 
 // authorized_signatory.status: who may approve (sign) certificates (§6.2.6).
-//   create  routes/authorized-signatories.ts POST / (a grant)
-//   revoke  routes/authorized-signatories.ts POST /:id/revoke, and the
+//   create  domains/quality/routes/authorized-signatories.ts POST / (a grant)
+//   revoke  domains/quality/routes/authorized-signatories.ts POST /:id/revoke, and the
 //             account deletion of the signatory (packages/auth)
 // SUSPENDED and EXPIRED were declared once but never written: the expiry of a
 // grant is its `expiresAt`, read at approval time. They are not states.

@@ -32,8 +32,8 @@ export const ORGANIZATION_MACHINE = defineStateMachine({
 });
 
 // organization_unit.status: a laboratory's unit (site).
-//   create   apps/api/src/lib/units.ts (the default unit), routes/units.ts POST
-//   archive / reactivate   routes/units.ts PATCH (never the default unit)
+//   create   apps/api/src/lib/units.ts (the default unit), domains/org/routes/units.ts POST
+//   archive / reactivate   domains/org/routes/units.ts PATCH (never the default unit)
 export const ORGANIZATION_UNIT_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
 export type OrganizationUnitStatus =
   (typeof ORGANIZATION_UNIT_STATUSES)[number];
@@ -73,7 +73,7 @@ export const INVITATION_STATUS = defineStatusVocabulary(INVITATION_STATUSES, {
 // organization_email_domain.status: the lab's sending domain, as the provider
 // (Resend) reports it, plus `failed` when the provider no longer knows it.
 //   create         apps/api/src/domains/org/email-domain-lifecycle.ts (provider status)
-//   sync_provider  routes/email-domains.ts verify and the health cron
+//   sync_provider  domains/org/routes/email-domains.ts verify and the health cron
 //                    (packages/jobs-core email-domain-health.ts): any to any
 // Sending does not read this column (it reads verifiedAt / isActive / keyStatus).
 const EMAIL_DOMAIN_STATUSES = [
@@ -131,8 +131,8 @@ export const EMAIL_DOMAIN_KEY_MACHINE = defineStateMachine({
 
 // notification.status: an in-app notification.
 //   create   packages/notifications service.ts
-//   read     routes/notifications.ts, routes/portal-notifications.ts (CAS on UNREAD)
-//   archive  routes/notifications.ts (read or not)
+//   read     domains/notifications/routes/notifications.ts, domains/portal/routes/portal-notifications.ts (CAS on UNREAD)
+//   archive  domains/notifications/routes/notifications.ts (read or not)
 export const NOTIFICATION_STATUSES = ["UNREAD", "READ", "ARCHIVED"] as const;
 export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];
 

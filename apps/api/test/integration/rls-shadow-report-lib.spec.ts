@@ -252,11 +252,8 @@ describe("buildSpecRows and summarizeGroups", () => {
 
 describe("layerOf and normalizeTestName", () => {
   it("names the layer of a module", () => {
-    expect(layerOf("apps/api/src/routes/example.ts")).toBe("routes");
     expect(layerOf("apps/api/src/lib/units.ts")).toBe("lib");
-    expect(layerOf("apps/api/src/modules/jobs/service.ts")).toBe(
-      "modules/jobs",
-    );
+    expect(layerOf("apps/api/src/middleware/permission.ts")).toBe("middleware");
     expect(layerOf("apps/api/src/domains/jobs/routes/jobs.ts")).toBe(
       "domains/jobs",
     );

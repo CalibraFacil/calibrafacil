@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GET } from "../../cron/dispatch";
+import { GET } from "../dispatch";
 
 const mocks = vi.hoisted(() => ({
   cleanupExpiredAuthRecords: vi.fn(),

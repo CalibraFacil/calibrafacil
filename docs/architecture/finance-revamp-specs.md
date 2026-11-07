@@ -395,7 +395,7 @@ A dual-tab finance automation hub at /dashboard/finance/automation that surfaces
 7. **Regulatory audit trail**: These policies are operational rules, not formal configuration change logs. If a client requests "who changed the release policy on 2024-05-15", there's no audit table beyond system_reconciliation logs. Mitigation: Document that policy changes are audited via certificate_release.lastEvaluatedAt + appliedPolicyId snapshots (indirect audit). Explicit audit table deferred to Wave 4+.
 
 **Server asks:**
-None. Backend is fully implemented (certificate-release.ts + automatic-send.ts in apps/api/src/routes/finance/). Client-runtime methods exist. No schema/enum changes needed. This is a pure UI implementation wave.
+None. Backend is fully implemented (certificate-release.ts + automatic-send.ts in apps/api/src/domains/finance/routes/). Client-runtime methods exist. No schema/enum changes needed. This is a pure UI implementation wave.
 
 ### /dashboard/finance/analytics (Wave 3 hub)
 

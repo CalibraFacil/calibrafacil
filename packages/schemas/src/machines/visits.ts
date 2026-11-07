@@ -4,16 +4,16 @@
 // by the lab and, for its progress, by its jobs:
 //   create      apps/api/src/domains/visits/routes/calibration-requests.ts (request → visit:
 //                 CONFIRMED when the lab scheduled it, else PROPOSED)
-//   confirm     routes/visits.ts POST /:id/confirm: a proposed visit is
+//   confirm     domains/visits/routes/visits.ts POST /:id/confirm: a proposed visit is
 //                 confirmed; on a confirmed or started visit it only updates the
 //                 date / technician (it never rewinds IN_PROGRESS to CONFIRMED)
-//   edit        routes/visits.ts reschedule, assign, the reschedule-request
+//   edit        domains/visits/routes/visits.ts reschedule, assign, the reschedule-request
 //                 accept: any open visit, status unchanged
 //   start       apps/api/src/domains/jobs/visit-status-sync.ts `syncVisitStatusFromJobs`: a job of
 //                 the visit left DRAFT
 //   settle      the same: every job settled with at least one certificate
-//   complete    routes/visits.ts POST /:id/complete (a confirmed or started trip)
-//   cancel      routes/visits.ts POST /:id/cancel
+//   complete    domains/visits/routes/visits.ts POST /:id/complete (a confirmed or started trip)
+//   cancel      domains/visits/routes/visits.ts POST /:id/cancel
 import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine } from "../state-machine";
 
@@ -85,9 +85,9 @@ export function isVisitTerminal(status: string): boolean {
 // visit (partial unique index); the lab accepts or declines it, and a lab-driven
 // date change, a cancellation or a completion supersedes it.
 //   create     apps/api/src/domains/portal/routes/portal-visits.ts
-//   accept     routes/visits.ts POST /:id/reschedule-requests/:requestId/accept
+//   accept     domains/visits/routes/visits.ts POST /:id/reschedule-requests/:requestId/accept
 //   decline    the same, /decline
-//   supersede  routes/visits.ts `supersedePendingRescheduleRequests`
+//   supersede  domains/visits/routes/visits.ts `supersedePendingRescheduleRequests`
 export const VISIT_RESCHEDULE_REQUEST_STATUSES = [
   "PENDING",
   "ACCEPTED",

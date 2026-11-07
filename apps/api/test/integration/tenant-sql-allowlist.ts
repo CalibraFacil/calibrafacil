@@ -147,7 +147,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     ],
     kinds: ["select"],
     reason:
-      "Public certificate verification (routes/verify.ts, on the system path): looked up by verification_token, which names the laboratory; the amendment links that follow are bound to it (orgDb). Exposes only that certificate.",
+      "Public certificate verification (domains/verify/routes/verify.ts, on the system path): looked up by verification_token, which names the laboratory; the amendment links that follow are bound to it (orgDb). Exposes only that certificate.",
   },
   {
     category: "public-token",
@@ -155,7 +155,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["oot_notification", "non_conformance"],
     kinds: ["select"],
     reason:
-      "Public out-of-tolerance acknowledgement link (routes/oot-ack.ts, on the system path): looked up by the unguessable ack_token from the e-mailed link, which names the laboratory; the stamp that follows runs in orgDb(laboratory).transaction. Exposes only that notification's NC number and laboratory name.",
+      "Public out-of-tolerance acknowledgement link (domains/jobs/routes/oot-ack.ts, on the system path): looked up by the unguessable ack_token from the e-mailed link, which names the laboratory; the stamp that follows runs in orgDb(laboratory).transaction. Exposes only that notification's NC number and laboratory name.",
   },
   {
     category: "public-token",
@@ -390,7 +390,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["asset", "customer", "job_commercial_snapshot"],
     kinds: ["select"],
     reason:
-      "withOrg hands its raw, organization-named transaction (ctx.tx) to createCalibrationJob (request->job conversion, visit POST /:id/jobs): see the lib/jobs.ts entry. Every other statement of those handlers goes through the org-bound handle (ctx.o), which carries the predicate.",
+      "withOrg hands its raw, organization-named transaction (ctx.tx) to createCalibrationJob (request->job conversion, visit POST /:id/jobs): see the domains/jobs/jobs.ts entry. Every other statement of those handlers goes through the org-bound handle (ctx.o), which carries the predicate.",
   },
   {
     category: "ownership-checked-in-code",
@@ -404,7 +404,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     ],
     kinds: ["select"],
     reason:
-      "Request->job conversion runs createCalibrationJob (see lib/jobs.ts entry); the item/asset listing is keyed by request ids a scoped read returned.",
+      "Request->job conversion runs createCalibrationJob (see domains/jobs/jobs.ts entry); the item/asset listing is keyed by request ids a scoped read returned.",
   },
   // -------------------------------------------------------------------------
   // unit-scoped

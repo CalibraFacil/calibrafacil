@@ -182,7 +182,7 @@ every domain failure carries a stable `code`.
   code when the response body has a known one. Branch on `error.code`, not on
   `error.message`.
 - **Guard:** the `calibra/no-json-error-body-in-routes` oxlint rule flags
-  `c.json({ error ... })` in `apps/api/src/routes`. Existing sites are
+  `c.json({ error ... })` in `apps/api/src/domains/*/routes`. Existing sites are
   grandfathered as exact per-file counts in the rule's `LEGACY_BASELINE`; a file
   can never gain one. When you migrate a site, lower that file's count in the
   same change.

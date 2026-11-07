@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GET } from "../../cron/dispatch";
+import { GET } from "../dispatch";
 
 // Unit tier for the REL-03 `queue-backstop` cron handler. Same fail-closed auth
 // contract as every other cron (503 without a CRON_SECRET in production, 401 on a

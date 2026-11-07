@@ -7,7 +7,7 @@ import {
 import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 
 /**
- * Persistence of the public self-serve sign-up (routes/public-signup.ts).
+ * Persistence of the public self-serve sign-up (domains/org/routes/public-signup.ts).
  *
  * Almost all of it is the GLOBAL `platform_event_log` (the reservation of a
  * domain's daily slot IS an audit row, written before any organization exists),

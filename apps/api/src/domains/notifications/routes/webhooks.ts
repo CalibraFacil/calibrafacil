@@ -71,7 +71,7 @@ export const webhooksRouter = createRouter().post("/resend", async (c) => {
     return c.json({ received: true }, 200);
   }
 
-  // Idempotency: insert-first by svix-id (lib/resend-webhook-ledger.ts). A
+  // Idempotency: insert-first by svix-id (domains/notifications/resend-webhook-ledger.ts). A
   // redelivery skips the suppression side effect (delivery is at-least-once).
   const { firstDelivery } = await recordResendWebhookEvent({
     svixId,

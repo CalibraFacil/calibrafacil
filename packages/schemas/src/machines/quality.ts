@@ -6,14 +6,14 @@ import { defineStateMachine } from "../state-machine";
 // corrective_action.status
 //   create     apps/api/src/domains/quality/corrective-actions.ts (manual, NC escalation,
 //                SPC escalation, an unsatisfactory PT round)
-//   edit       routes/capa.ts PUT /:id: any open CAPA, status kept
+//   edit       domains/quality/routes/capa.ts PUT /:id: any open CAPA, status kept
 //   investigate  the same PUT, when a root cause is recorded on an OPEN CAPA
-//   implement  routes/capa.ts POST /:id/implement (repeatable while implementing)
-//   verify     routes/capa.ts POST /:id/verify: the effectiveness check, by an
+//   implement  domains/quality/routes/capa.ts POST /:id/implement (repeatable while implementing)
+//   verify     domains/quality/routes/capa.ts POST /:id/verify: the effectiveness check, by an
 //                independent verifier. Effective → VERIFICATION; not
 //                effective → back to IMPLEMENTATION (the previous implementation
 //                stays in the audit log)
-//   close      routes/capa.ts POST /:id/close
+//   close      domains/quality/routes/capa.ts POST /:id/close
 export const CORRECTIVE_ACTION_STATUSES = [
   "OPEN",
   "INVESTIGATION",
@@ -61,9 +61,9 @@ export const CORRECTIVE_ACTION_MACHINE = defineStateMachine({
 // non_conformance.status (lower-case values, as stored)
 //   create        apps/api/src/domains/quality/non-conformances.ts (manual, OOT flag,
 //                   as-found verdict, standard recall)
-//   set_disposition  routes/non-conformances.ts POST /:id/disposition
+//   set_disposition  domains/quality/routes/non-conformances.ts POST /:id/disposition
 //                   (repeatable until resolved)
-//   resolve       routes/non-conformances.ts POST /:id/resolve: needs a
+//   resolve       domains/quality/routes/non-conformances.ts POST /:id/resolve: needs a
 //                   disposition
 export const NON_CONFORMANCE_STATUSES = [
   "open",
@@ -99,7 +99,7 @@ export const NON_CONFORMANCE_MACHINE = defineStateMachine({
 //   create  apps/api/src/domains/jobs/oot/oot-notifications.ts `ensureStandardRecall` (a
 //             draft per standard; a new OOT after a SENT recall starts a fresh
 //             campaign)
-//   send    routes/standards.ts POST /:id/recall/send: the approval and the
+//   send    domains/standards/routes/standards.ts POST /:id/recall/send: the approval and the
 //             reviewed window are stamped, then the notifications are created
 const STANDARD_RECALL_STATUSES = ["DRAFT", "SENT"] as const;
 export type StandardRecallStatus = (typeof STANDARD_RECALL_STATUSES)[number];
@@ -127,9 +127,9 @@ export const STANDARD_RECALL_MACHINE = defineStateMachine({
 //   generate     packages/jobs-core/src/oot-notifications.ts: the letter PDF
 //                  (re-rendering keeps the status it reached)
 //   send         apps/api/src/domains/jobs/oot/oot-email-drain.ts: e-mailed
-//   acknowledge  the e-mailed link (lib/oot-acknowledgement.ts), the portal
-//                  (routes/portal.ts) and a manual registration
-//                  (routes/non-conformances.ts); first acknowledgement wins,
+//   acknowledge  the e-mailed link (domains/jobs/oot/oot-acknowledgement.ts), the portal
+//                  (domains/portal/routes/portal.ts) and a manual registration
+//                  (domains/quality/routes/non-conformances.ts); first acknowledgement wins,
 //                  from any state before it
 export const OOT_NOTIFICATION_STATUSES = [
   "PENDING",
@@ -170,7 +170,7 @@ export const OOT_NOTIFICATION_MACHINE = defineStateMachine({
 // asset_oot_event.status: a customer's instrument found out of tolerance as
 // found; the customer records its impact assessment in the portal.
 //   create  apps/api/src/domains/jobs/oot/asset-oot-events.ts (non-conforming as-found)
-//   assess  routes/portal.ts POST /fleet/oot-events/:id/assessment (one per event)
+//   assess  domains/portal/routes/portal.ts POST /fleet/oot-events/:id/assessment (one per event)
 export const ASSET_OOT_EVENT_STATUSES = ["OPEN", "ASSESSED"] as const;
 export type AssetOotEventStatus = (typeof ASSET_OOT_EVENT_STATUSES)[number];
 

@@ -5,7 +5,7 @@
 // undefined — the real SQLSTATE (`23505` for unique_violation) lives on
 // `error.cause`. Unwrap recursively so both the bare `PostgresError` and the
 // wrapped `DrizzleQueryError` are recognized. Mirrors the pattern already used
-// in routes/materials.ts and services/commercial/reconcile-webhook.ts.
+// in domains/catalog/routes/materials.ts and services/commercial/reconcile-webhook.ts.
 
 /** Walk `error` (and its `.cause` chain) for a string `code` property. */
 export function extractPgErrorCode(error: unknown): string | undefined {

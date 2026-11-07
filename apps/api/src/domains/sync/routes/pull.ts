@@ -18,7 +18,7 @@ export const pullRoutes = createRouter<SyncRouterEnv>()
     const limit = parseSyncPullLimit(c.req.query("limit"));
     const memberData = getMemberData(c);
 
-    // The commit-ordered change log (modules/sync/change-log.ts). A pull that does not
+    // The commit-ordered change log (domains/sync/change-log.ts). A pull that does not
     // state protocol 3 or later comes from a build that cannot read it (the `updatedAt`
     // pull of protocols 1 and 2 is gone): it is told to update.
     const requestedProtocol = Number.parseInt(
