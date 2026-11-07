@@ -1,15 +1,9 @@
 import { z } from "zod";
-import {
-  AssetStatusSchema,
-  MeasurementUnitSchema,
-  MetrologyRegimeSchema,
-} from "@calibra-facil/schemas";
-
 import { nullableNumber, nullableString, paginationSchema } from "./common";
 
 /**
  * Response contracts for the reference data a technician reads and captures in
- * the field: assets, asset types and calibration methods (customers live in `endpoints/customers.ts`). Wire
+ * the field: asset types and calibration methods (customers live in `endpoints/customers.ts`). Wire
  * schemas (see `jobs.ts` for the rules). The cloud API and the desktop
  * local-server (offline mirror) both serve these shapes; the API contract
  * specs and the local-server contract tests parse the real responses with the
@@ -40,57 +34,6 @@ export const assetTypesResponseSchema = z.object({
   data: z.array(assetTypeSchema),
 });
 export type AssetTypesResponse = z.infer<typeof assetTypesResponseSchema>;
-
-// ---------------------------------------------------------------------------
-// Assets
-// ---------------------------------------------------------------------------
-
-/** The stored asset: what POST /api/assets (201) answers with. */
-export const assetRecordSchema = z.object({
-  id: z.number(),
-  customerId: z.number(),
-  assetTypeId: z.number(),
-  name: z.string(),
-  manufacturer: nullableString,
-  model: nullableString,
-  serialNumber: z.string(),
-  tag: z.string(),
-  status: AssetStatusSchema,
-  baseMeasurementUnit: MeasurementUnitSchema.nullable(),
-  specifications: jsonRecordSchema.nullable(),
-  lastCalibrationDate: nullableString,
-  nextCalibrationDate: nullableString,
-  comments: nullableString,
-  metrologyRegime: MetrologyRegimeSchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-export type AssetRecord = z.infer<typeof assetRecordSchema>;
-
-/** An asset with its customer and type joined in, as the list and the detail show it. */
-const assetSchema = assetRecordSchema.extend({
-  customerName: z.string(),
-  customerTaxId: nullableString,
-  assetTypeName: z.string(),
-  assetTypeSlug: nullableString,
-  assetTypeDefinition: z.array(jsonRecordSchema).nullable(),
-});
-
-/** GET /api/assets */
-export const assetsListResponseSchema = z.object({
-  data: z.array(assetSchema),
-  pagination: paginationSchema,
-});
-export type AssetsListResponse = z.infer<typeof assetsListResponseSchema>;
-
-/** GET /api/assets/:id */
-export const assetDetailSchema = assetSchema.extend({
-  installedAt: nullableString,
-  /** The regulation-fixed verification periodicity (legal metrology), opaque here. */
-  regulatedInterval: jsonRecordSchema.nullable(),
-  nextLegalVerificationDate: nullableString,
-});
-export type AssetDetail = z.infer<typeof assetDetailSchema>;
 
 // ---------------------------------------------------------------------------
 // Methods

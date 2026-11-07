@@ -1,4 +1,8 @@
 import {
+  buildAssetDetail,
+  buildAssetRecord,
+} from "@calibra-facil/contracts/assets-fixtures";
+import {
   buildCustomerDetail,
   buildCustomerRecord,
   buildCustomersListResponse,
@@ -2827,6 +2831,10 @@ describe("desktop hybrid runtime adapter", () => {
         throw new Error(`Unexpected cloud request: ${url.toString()}`);
       }
 
+      if (url.pathname === "/api/assets") {
+        return Response.json(buildAssetRecord(), { status: 201 });
+      }
+
       return Response.json({ ok: true, data: { id: "local-1" } });
     };
     const client = createDesktopHybridApiClient({
@@ -2842,13 +2850,15 @@ describe("desktop hybrid runtime adapter", () => {
     });
 
     await client.assets.create({
-      customerId: 1,
-      assetTypeId: 2,
-      name: "Ativo local",
-      tag: "TAG-1",
-      serialNumber: "SN-1",
-      manufacturer: "Fabricante",
-      model: "Modelo",
+      body: {
+        customerId: 1,
+        assetTypeId: 2,
+        name: "Ativo local",
+        tag: "TAG-1",
+        serialNumber: "SN-1",
+        manufacturer: "Fabricante",
+        model: "Modelo",
+      },
     });
     await client.jobs.saveExecution(
       "job-1",
@@ -2909,6 +2919,9 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/dashboard/stats") {
         return Response.json(buildDashboardStats());
       }
+      if (url.pathname === "/api/assets/1") {
+        return Response.json(buildAssetRecord());
+      }
 
       return Response.json({ ok: true, data: { id: "cloud-1" } });
     };
@@ -2936,7 +2949,10 @@ describe("desktop hybrid runtime adapter", () => {
       params: { id: 1 },
       body: { name: "Cliente atualizado" },
     });
-    await client.assets.update(1, { name: "Ativo atualizado" });
+    await client.assets.update({
+      params: { id: 1 },
+      body: { name: "Ativo atualizado" },
+    });
     await client.serviceOrders.createQuote("service-order-1", { items: [] });
     await client.serviceOrders.saveExecution("service-order-1", {
       technicalNotes: "Execução",
@@ -3019,7 +3035,7 @@ describe("desktop hybrid runtime adapter", () => {
     });
 
     await client.customers.list({ query: { page: 1, limit: 20 } });
-    await client.assets.list({ page: 1, limit: 20 });
+    await client.assets.list({ query: { page: 1, limit: 20 } });
     await client.assetTypes.list();
     await client.methods.list({ page: 1, limit: 20 });
     await client.standards.list({ page: 1, limit: 20 });
@@ -3098,6 +3114,9 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/customers/1") {
         return Response.json(buildCustomerDetail());
       }
+      if (url.pathname === "/api/assets/1") {
+        return Response.json(buildAssetDetail());
+      }
 
       return Response.json({
         id: url.pathname.split("/").at(-1),
@@ -3121,8 +3140,8 @@ describe("desktop hybrid runtime adapter", () => {
 
     await client.customers.list({ query: { page: 1, limit: 20 } });
     await client.customers.get({ params: { id: 1 } });
-    await client.assets.list({ page: 1, limit: 20 });
-    await client.assets.get(1);
+    await client.assets.list({ query: { page: 1, limit: 20 } });
+    await client.assets.get({ params: { id: 1 } });
     await client.assetTypes.list();
     await client.methods.list({ page: 1, limit: 20 });
     await client.methods.get(1);

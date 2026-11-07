@@ -15,10 +15,8 @@ import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  assetDetailSchema,
-  assetRecordSchema,
+  assetEndpoints,
   assetTypesResponseSchema,
-  assetsListResponseSchema,
   customerEndpoints,
   effectiveEnvironmentalLimitsResponseSchema,
   jobDetailSchema,
@@ -589,26 +587,26 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
         tag: "TAG-FIELD",
         status: "ACTIVE",
       }),
-      assetRecordSchema,
+      assetEndpoints.create.response,
       201,
     );
     expect(created.tag).toBe("TAG-FIELD");
 
     const list = await parsedBody(
       await app.request("/api/assets?page=1&limit=20"),
-      assetsListResponseSchema,
+      assetEndpoints.list.response,
     );
     expect(list.data.map((asset) => asset.tag).sort()).toEqual(
       ["TAG-FIELD", "TAG-001"].sort(),
     );
     const detail = await parsedBody(
       await app.request("/api/assets/789"),
-      assetDetailSchema,
+      assetEndpoints.get.response,
     );
     expect(detail.assetTypeSlug).toBe("balanca");
     await parsedBody(
       await app.request(`/api/assets/${created.id}`),
-      assetDetailSchema,
+      assetEndpoints.get.response,
     );
     database.close();
   });

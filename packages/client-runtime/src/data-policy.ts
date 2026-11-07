@@ -215,13 +215,7 @@ export const calibraApiPolicyRegistry = {
     cancelInvitation: "cloud-only",
     removeMember: "cloud-only",
   },
-  assets: {
-    list: "local-first-read-through-sync",
-    create: "local-command-sync",
-    get: "local-first-read-through-sync",
-    update: "cloud-only",
-    auditLog: "cloud-only",
-  },
+  assets: endpointPolicies(ENDPOINT_GROUPS.assets),
   assetTypes: {
     list: "local-first-read-through-sync",
   },

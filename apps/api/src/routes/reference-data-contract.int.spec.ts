@@ -13,10 +13,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
-  assetDetailSchema,
-  assetRecordSchema,
+  assetEndpoints,
   assetTypesResponseSchema,
-  assetsListResponseSchema,
   customerDetailSchema,
   customersListResponseSchema,
   methodDetailSchema,
@@ -157,14 +155,14 @@ describe("reference-data endpoints: real responses honor the contract schemas (P
           status: "ACTIVE",
         }),
       }),
-      assetRecordSchema,
+      assetEndpoints.create.response,
       201,
     );
     expect(created.tag).toBe("TAG-NEW");
 
     const list = await parsedBody(
       await assetsRouter.request("/?page=1&limit=20"),
-      assetsListResponseSchema,
+      assetEndpoints.list.response,
     );
     expect(list.data.map((item) => item.tag).sort()).toEqual([
       "TAG-NEW",
@@ -172,7 +170,7 @@ describe("reference-data endpoints: real responses honor the contract schemas (P
     ]);
     const detail = await parsedBody(
       await assetsRouter.request(`/${lab.assetId}`),
-      assetDetailSchema,
+      assetEndpoints.get.response,
     );
     expect(detail.assetTypeSlug).toBe("balanca-ref-contract");
   });

@@ -225,6 +225,8 @@ type NewServiceOrderAsset = {
   model: string | null
   assetTypeName: string | null
   status: string
+  /** Legal metrology gates the repair-mark (lacre) fields of the order. */
+  metrologyRegime?: 'INDUSTRIAL' | 'LEGAL' | 'UNKNOWN'
 }
 
 export type NewServiceOrderAssetsData = {

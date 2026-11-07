@@ -251,7 +251,8 @@ export function AssetCreateForm({
   )
 
   const createMutation = useMutation({
-    mutationFn: (data: CreateAssetInput) => calibraApi.assets.create(data),
+    mutationFn: (data: CreateAssetInput) =>
+      calibraApi.assets.create({ body: data }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
       onSaved({ ...created, assetTypeName: selectedAssetType?.name ?? '' })

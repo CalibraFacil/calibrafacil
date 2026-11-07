@@ -9,6 +9,7 @@ import {
   type RegulatedInterval,
   type UpdateAssetInput,
 } from '@calibra-facil/schemas'
+import { isRecord } from '@calibra-facil/shared/record'
 import {
   dominantKindForAssetType,
   MEASUREMENT_UNITS,
@@ -331,17 +332,53 @@ function regulatedFieldFor(
  * Reverse of buildRegulatedIntervalFromForm: derive the flat lab-form fields from a stored
  * asset's regime + regulated interval, to pre-fill the edit form.
  */
+/** The regulated interval of a stored asset, as the edit form reads it. */
+export type StoredRegulatedInterval = {
+  kind: RegulatedInterval['kind']
+  valueMonths?: number
+  anchor?: string
+  technology?: string
+  regulationReference: string
+  operationalizedByDelegate: boolean
+  note?: string
+}
+
+/**
+ * Reads the untyped `regulatedInterval` column of an asset the way the edit
+ * form needs it; anything that is not an interval (null, an unknown kind, a
+ * missing reference) is no interval.
+ */
+export function readStoredRegulatedInterval(
+  value: unknown,
+): StoredRegulatedInterval | null {
+  if (!isRecord(value)) return null
+  const { kind, regulationReference, operationalizedByDelegate } = value
+  if (
+    typeof kind !== 'string' ||
+    !isRegulatedKind(kind) ||
+    typeof regulationReference !== 'string' ||
+    typeof operationalizedByDelegate !== 'boolean'
+  ) {
+    return null
+  }
+  return {
+    kind,
+    regulationReference,
+    operationalizedByDelegate,
+    ...(typeof value.valueMonths === 'number'
+      ? { valueMonths: value.valueMonths }
+      : {}),
+    ...(typeof value.anchor === 'string' ? { anchor: value.anchor } : {}),
+    ...(typeof value.technology === 'string'
+      ? { technology: value.technology }
+      : {}),
+    ...(typeof value.note === 'string' ? { note: value.note } : {}),
+  }
+}
+
 export function regulatedFormFieldsFromAsset(asset: {
   metrologyRegime?: 'INDUSTRIAL' | 'LEGAL' | 'UNKNOWN'
-  regulatedInterval?: {
-    kind: RegulatedInterval['kind']
-    valueMonths?: number
-    anchor?: string
-    technology?: string
-    regulationReference: string
-    operationalizedByDelegate: boolean
-    note?: string
-  } | null
+  regulatedInterval?: StoredRegulatedInterval | null
 }): MetrologyRegimeFormValues {
   const metrologyRegime: MetrologyRegime = asset.metrologyRegime ?? 'INDUSTRIAL'
   const r = asset.regulatedInterval

@@ -1,5 +1,6 @@
 import { slugify } from "@calibra-facil/shared/text";
 import {
+  assetEndpoints,
   customerEndpoints,
   ENDPOINT_GROUPS,
   type EndpointDef,
@@ -11,10 +12,7 @@ import type {
   SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import type {
-  AssetDetailData,
   AssetTypesListData,
-  AssetRecord,
-  AssetsListData,
   CalibraApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
@@ -174,6 +172,11 @@ export function createDesktopApiClient(
   options: CreateDesktopApiClientOptions,
 ): CalibraApi {
   const fetchImpl = options.fetch ?? fetch;
+  const localAssets = endpointClient(
+    assetEndpoints,
+    createDesktopEndpointTransport(options),
+    options,
+  );
   const localCustomers = endpointClient(
     customerEndpoints,
     createDesktopEndpointTransport(options),
@@ -390,72 +393,13 @@ export function createDesktopApiClient(
       get: localCustomers.get,
     },
     assets: {
-      ...desktopCloudOnlyStubs("assets", { action: "Edição de ativos" }),
-      async list(input) {
-        const url = new URL("/api/assets", options.baseUrl);
-        url.searchParams.set("page", String(input.page));
-        url.searchParams.set("limit", String(input.limit));
-
-        if (input.customerId) {
-          url.searchParams.set("customerId", String(input.customerId));
-        }
-
-        if (input.status) {
-          url.searchParams.set("status", input.status);
-        }
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar ativos");
-        }
-
-        return readDesktopJson<AssetsListData>(response);
-      },
-      async create(input) {
-        const response = await fetchImpl(
-          new URL("/api/assets", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao criar ativo"));
-        }
-
-        return readDesktopJson<AssetRecord>(response);
-      },
-      async get<TAsset = AssetDetailData>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/assets/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar ativo");
-        }
-
-        return readDesktopJson<TAsset>(response);
-      },
+      ...desktopEndpointStubs("assets"),
+      // Read-through from the local mirror, and the offline intake stub: the
+      // local server answers the definitions' own response schemas
+      // (`apps/local-server/src/contract.test.ts`).
+      list: localAssets.list,
+      create: localAssets.create,
+      get: localAssets.get,
     },
     assetTypes: {
       async list() {

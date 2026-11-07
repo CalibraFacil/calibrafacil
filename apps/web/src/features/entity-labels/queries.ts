@@ -5,11 +5,6 @@ import { calibraApi } from '@/utils/api'
 
 const LABEL_STALE_TIME = 5 * 60 * 1000
 
-type EntityLabelData = {
-  name?: string | null
-  jobId?: string | null
-}
-
 type LabelHookInput = {
   enabled: boolean
   id: string
@@ -35,7 +30,7 @@ export function assetLabelQueryOptions(id: string) {
     queryKey: ['assets', id, 'label'],
     queryFn: async () => {
       try {
-        const asset = await calibraApi.assets.get<EntityLabelData>(id)
+        const asset = await calibraApi.assets.get({ params: { id } })
         return asset.name ?? null
       } catch {
         return null

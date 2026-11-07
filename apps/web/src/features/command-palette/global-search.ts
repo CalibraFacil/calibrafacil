@@ -59,9 +59,11 @@ export function commandSearchAssetsQueryOptions(query: string) {
     queryFn: async () => {
       if (query.length < SEARCH_MIN_LENGTH) return []
       const result = await calibraApi.assets.list({
-        page: 1,
-        limit: SEARCH_RESULT_LIMIT,
-        query,
+        query: {
+          page: 1,
+          limit: SEARCH_RESULT_LIMIT,
+          query,
+        },
       })
 
       return result.data.map((asset) => ({
