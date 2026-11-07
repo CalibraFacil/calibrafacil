@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type ReactElement, type ReactNode } from "react";
 import {
   cleanup,
   fireEvent,
@@ -47,6 +47,35 @@ vi.mock("@calibra-facil/auth/client", () => ({
     }),
   },
 }));
+
+// The menu primitive (Base UI: floating-ui positioning, portal, focus
+// management) is not what these tests are about, and in jsdom it is the most
+// expensive part of the first test: its style and selector queries run on the
+// jsdom CSS machinery, ~300 ms on a quiet machine and several seconds on a CI
+// runner running every package's tests at once, which is what repeatedly pushed
+// this file past the 5 s test timeout. A stand-in that renders the items inline
+// keeps what is under test: choosing an item runs the switcher's handler.
+vi.mock("@calibra-facil/ui/dropdown-menu", () => {
+  type Props = { children?: ReactNode; render?: ReactElement };
+  const Passthrough = ({ children }: Props) => <>{children}</>;
+  return {
+    DropdownMenu: Passthrough,
+    DropdownMenuContent: Passthrough,
+    DropdownMenuGroup: Passthrough,
+    DropdownMenuLabel: Passthrough,
+    DropdownMenuSeparator: () => null,
+    DropdownMenuShortcut: ({ children }: Props) => <span>{children}</span>,
+    DropdownMenuTrigger: ({ render }: Props) => render ?? null,
+    DropdownMenuItem: ({
+      children,
+      onClick,
+    }: Props & { onClick?: () => void }) => (
+      <button type="button" data-menu-item onClick={onClick}>
+        {children}
+      </button>
+    ),
+  };
+});
 
 vi.mock("@/lib/runtime-env", () => ({
   getWebAppUrl: () => "http://localhost:5173",
@@ -139,9 +168,10 @@ describe("PortalOrgSwitcher cache isolation", () => {
     vi.unstubAllGlobals();
   });
 
+  // The items are always rendered (see the menu stand-in above); a
+  // `button` selector tells the menu item from the trigger's label.
   async function switchTo(name: string) {
-    fireEvent.click(screen.getByRole("button", { name: /Cliente A/ }));
-    fireEvent.click(await screen.findByText(name));
+    fireEvent.click(await screen.findByText(name, { selector: "button" }));
   }
 
   function renderHarness() {
