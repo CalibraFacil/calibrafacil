@@ -5,6 +5,29 @@ Every release of Calibra Fácil, newest first. Entries are written by
 [Conventional Commits](https://www.conventionalcommits.org/) merged to `main`; see
 [`DEPLOYMENT.md`](./DEPLOYMENT.md#updating) before updating an instance.
 
+## [0.5.0](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.3...v0.5.0) (2026-11-07)
+
+
+### Features
+
+* **contracts:** endpoint definitions validate path params ([#241](https://github.com/CalibraFacil/calibrafacil/issues/241)) ([1c08cba](https://github.com/CalibraFacil/calibrafacil/commit/1c08cba79085a082ad3b4c128c25bc201790f193))
+* every lifecycle is an explicit state machine, enforced in Postgres ([#189](https://github.com/CalibraFacil/calibrafacil/issues/189)) ([430d2f1](https://github.com/CalibraFacil/calibrafacil/commit/430d2f1efc7515de41c63d5ce46fb32fd81267cb))
+* **lint:** calibra/no-literal-query-keys; settings and integrations on key factories (F9) ([#264](https://github.com/CalibraFacil/calibrafacil/issues/264)) ([b6024ff](https://github.com/CalibraFacil/calibrafacil/commit/b6024ffc1441fd1a14de3261684ff4ae82f24a78))
+
+
+### Bug fixes
+
+* **contracts:** list service_order_not_found once in API_ERROR_CODES ([#217](https://github.com/CalibraFacil/calibrafacil/issues/217)) ([7a899e5](https://github.com/CalibraFacil/calibrafacil/commit/7a899e5611ba5b8595d6c42b8bdb5bd7acc62d3b))
+* **contracts:** main does not compile: the push-operation table still named LEGACY_SYNC_PROTOCOL_VERSION ([#276](https://github.com/CalibraFacil/calibrafacil/issues/276)) ([5c94646](https://github.com/CalibraFacil/calibrafacil/commit/5c9464673fd6803796ada4a1c9294384a72262c8))
+* **contracts:** restore signatures, visits and calibration-requests endpoint definitions ([#234](https://github.com/CalibraFacil/calibrafacil/issues/234)) ([9ec2e2b](https://github.com/CalibraFacil/calibrafacil/commit/9ec2e2ba14ae9cd3905904061b42b0be757cd6ce))
+* **nc:** the manual 7.10 acknowledgement no longer returns the public ack token ([#242](https://github.com/CalibraFacil/calibrafacil/issues/242)) ([8a4603f](https://github.com/CalibraFacil/calibrafacil/commit/8a4603f9438577fd65de1a3e7b58f7ba4d3ee33e))
+* **portal:** one portal-host scope; an unknown host no longer sees every laboratory ([#200](https://github.com/CalibraFacil/calibrafacil/issues/200)) ([8688fb7](https://github.com/CalibraFacil/calibrafacil/commit/8688fb714c7c5b1bfdf19734a1c5e510a8b3d882))
+* **schemas,contracts,auth:** drop the priority leaked into the notification types; one canonical spelling for twin error codes; calibration role matrix derived from the job machine ([#267](https://github.com/CalibraFacil/calibrafacil/issues/267)) ([b5e100b](https://github.com/CalibraFacil/calibrafacil/commit/b5e100b95ca2b44b5563dec1eda72dbb58fbb332))
+* **schemas:** one query flag that reads "false" as false ([#238](https://github.com/CalibraFacil/calibrafacil/issues/238)) ([11dd6a8](https://github.com/CalibraFacil/calibrafacil/commit/11dd6a86ed8fb29fcc9c350452c553f4bd7799d8))
+* **web,portal,shared:** redirect allow-list, lab handoff, one decimal parser, label errors, unknown statuses ([#268](https://github.com/CalibraFacil/calibrafacil/issues/268)) ([0d62941](https://github.com/CalibraFacil/calibrafacil/commit/0d62941774a1b33afd10fe3a1bc321af1852cb2a))
+* **web,portal:** refresh the lists after creating an NC/CAPA and after a portal quote decision ([#266](https://github.com/CalibraFacil/calibrafacil/issues/266)) ([07f50d6](https://github.com/CalibraFacil/calibrafacil/commit/07f50d610651a89355962dab6d19ec92ce635d3c))
+* **web:** read the signed-in user's own role, not the first member's ([#203](https://github.com/CalibraFacil/calibrafacil/issues/203)) ([7fa0d80](https://github.com/CalibraFacil/calibrafacil/commit/7fa0d80e479720d53923ee561c0ed7b9f962b89e))
+
 ## [0.4.3](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.2...v0.4.3) (2026-11-04)
 
 
