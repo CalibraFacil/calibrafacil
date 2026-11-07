@@ -10,7 +10,7 @@ import type {
   PortalDriftSeriesResponse,
   PortalFleetAnalyticsResponse,
   PortalOotEvent,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 
 export type FleetAnalytics = PortalFleetAnalyticsResponse;
 export type FleetAnalyticsBucket = FleetAnalytics["period"]["bucket"];

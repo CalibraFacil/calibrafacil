@@ -1,7 +1,7 @@
 import type {
   PortalAssetDetail,
   PortalIntervalInsight,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 
 /** The instrument detail the API sends (contract type). */
 export type AssetDetail = PortalAssetDetail;

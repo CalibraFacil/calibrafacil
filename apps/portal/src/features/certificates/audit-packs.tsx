@@ -23,7 +23,7 @@ import { Spinner } from "@calibra-facil/ui/spinner";
 import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { usePortalUnits } from "@/features/fleet/queries";
-import type { PortalAuditPack } from "@calibra-facil/contracts";
+import type { PortalAuditPack } from "@calibra-facil/contracts/portal-client";
 import { useAuditPacks, useRequestAuditPack } from "./queries";
 import { portalApi } from "@/lib/portal-api";
 

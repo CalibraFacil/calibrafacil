@@ -9,7 +9,7 @@ import {
   PortalListAssetsQuerySchema,
   type PortalFleetAsset,
   type PortalFleetAssetsResponse,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 
 export type FleetAsset = PortalFleetAsset;
 

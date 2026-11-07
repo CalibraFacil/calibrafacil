@@ -8,7 +8,7 @@ import {
   type EndpointGroup,
   type EndpointResponse,
   PORTAL_ENDPOINT_GROUPS,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 
 import { fetchPortalJson, getApiBaseUrl, jsonInit } from "./api-fetch";
 

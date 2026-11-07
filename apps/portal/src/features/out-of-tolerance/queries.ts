@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { PortalOotNotificationsResponse } from "@calibra-facil/contracts";
+import type { PortalOotNotificationsResponse } from "@calibra-facil/contracts/portal-client";
 
 import { usePortalKeys } from "@/lib/portal-keys";
 import { portalApi } from "@/lib/portal-api";

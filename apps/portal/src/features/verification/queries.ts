@@ -8,7 +8,7 @@ import {
   type SignatureVerificationResponse,
   type VerificationMatchResponse,
   type VerificationResponse,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 
 import { fetchPortalResponse, readPortalJsonResult } from "@/lib/api-fetch";
 import { portalPublicKeys } from "@/lib/portal-keys";

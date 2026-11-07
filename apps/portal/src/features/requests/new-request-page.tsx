@@ -24,7 +24,7 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getCalibrationStatus } from "@/lib/calibration-status";
-import type { PortalFleetAsset } from "@calibra-facil/contracts";
+import type { PortalFleetAsset } from "@calibra-facil/contracts/portal-client";
 import { fetchExternalJson } from "@/lib/api-fetch";
 import { cn } from "@calibra-facil/ui/utils";
 import {

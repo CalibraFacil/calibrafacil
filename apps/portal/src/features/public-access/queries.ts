@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   publicServiceOrderAccessResponseSchema,
   publicServiceOrderRedeemResponseSchema,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 import type { PublicServiceOrderAccessView } from "@calibra-facil/schemas";
 
 import {

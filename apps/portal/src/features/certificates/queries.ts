@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { PortalCertificateDetail } from "@calibra-facil/contracts";
+import type { PortalCertificateDetail } from "@calibra-facil/contracts/portal-client";
 import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
 
 import { usePortalKeys } from "@/lib/portal-keys";

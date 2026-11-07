@@ -50,7 +50,7 @@ import { AccreditationSeal } from "@calibra-facil/ui/accreditation-seal";
 import { StatusPill } from "@/components/status-pill";
 import { CertificateLifecyclePill } from "@/components/certificate-lifecycle-pill";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
-import type { PortalCertificateDetail } from "@calibra-facil/contracts";
+import type { PortalCertificateDetail } from "@calibra-facil/contracts/portal-client";
 import {
   useSignatureVerdict,
   type SignatureVerdictOverall,

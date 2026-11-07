@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   PortalRequestBatchResponse,
   PortalRequestsResponse,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
 import type { CalibrationRequestStatus } from "@calibra-facil/schemas/machines";
 
