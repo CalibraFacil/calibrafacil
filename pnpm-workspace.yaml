@@ -267,85 +267,8 @@ allowBuilds:
 # A version must be three days old before pnpm resolves it: the
 # same cooldown as Dependabot (.github/dependabot.yml), long enough for most
 # compromised releases to be caught and pulled. A security fix that cannot wait
-# goes in minimumReleaseAgeExclude below, pinned exactly, with the advisory.
+# goes in minimumReleaseAgeExclude below, pinned exactly, with the advisory,
+# and comes out once it is three days old.
 minimumReleaseAge: 4320
 
-minimumReleaseAgeExclude:
-  # GHSA-965c-763c-88jm (critical): better-auth <1.7.7 lets an OAuth state be
-  # used as a magic link to sign in as another user. 1.7.13 and its siblings;
-  # drop these once they are three days old.
-  - better-auth@1.7.13
-  - "@better-auth/core@1.7.13"
-  - "@better-auth/drizzle-adapter@1.7.13"
-  - "@better-auth/kysely-adapter@1.7.13"
-  - "@better-auth/memory-adapter@1.7.13"
-  - "@better-auth/mongo-adapter@1.7.13"
-  - "@better-auth/passkey@1.7.13"
-  - "@better-auth/prisma-adapter@1.7.13"
-  - "@better-auth/sso@1.7.13"
-  - "@better-auth/telemetry@1.7.13"
-  # usb 2.19.1 builds with C++17, which node-addon-api 8.8+ needs; 2.17 broke
-  # the Electron packaging. Reviewed: same install script and dependencies.
-  - usb@2.19.1
-  - "@vitest/coverage-v8@4.1.8"
-  - "@vitest/expect@4.1.8"
-  - "@vitest/mocker@4.1.8"
-  - "@vitest/pretty-format@4.1.8"
-  - "@vitest/runner@4.1.8"
-  - "@vitest/snapshot@4.1.8"
-  - "@vitest/spy@4.1.8"
-  - "@vitest/utils@4.1.8"
-  - vitest@4.1.8
-  - '@types/node@24.13.0'
-  - '@tiptap/core@3.27.2'
-  - '@tiptap/extension-blockquote@3.27.2'
-  - '@tiptap/extension-bold@3.27.2'
-  - '@tiptap/extension-bullet-list@3.27.2'
-  - '@tiptap/extension-code-block@3.27.2'
-  - '@tiptap/extension-code@3.27.2'
-  - '@tiptap/extension-document@3.27.2'
-  - '@tiptap/extension-dropcursor@3.27.2'
-  - '@tiptap/extension-gapcursor@3.27.2'
-  - '@tiptap/extension-hard-break@3.27.2'
-  - '@tiptap/extension-heading@3.27.2'
-  - '@tiptap/extension-horizontal-rule@3.27.2'
-  - '@tiptap/extension-italic@3.27.2'
-  - '@tiptap/extension-link@3.27.2'
-  - '@tiptap/extension-list-item@3.27.2'
-  - '@tiptap/extension-list-keymap@3.27.2'
-  - '@tiptap/extension-list@3.27.2'
-  - '@tiptap/extension-ordered-list@3.27.2'
-  - '@tiptap/extension-paragraph@3.27.2'
-  - '@tiptap/extension-strike@3.27.2'
-  - '@tiptap/extension-table@3.27.2'
-  - '@tiptap/extension-text-align@3.27.2'
-  - '@tiptap/extension-text@3.27.2'
-  - '@tiptap/extension-underline@3.27.2'
-  - '@tiptap/extensions@3.27.2'
-  - '@tiptap/pm@3.27.2'
-  - '@tiptap/starter-kit@3.27.2'
-  - '@tiptap/static-renderer@3.27.2'
-  - '@tiptap/extension-bubble-menu@3.27.2'
-  - '@tiptap/extension-floating-menu@3.27.2'
-  - '@tiptap/react@3.27.2'
-  - '@typescript/typescript-aix-ppc64@7.0.2'
-  - '@typescript/typescript-darwin-arm64@7.0.2'
-  - '@typescript/typescript-darwin-x64@7.0.2'
-  - '@typescript/typescript-freebsd-arm64@7.0.2'
-  - '@typescript/typescript-freebsd-x64@7.0.2'
-  - '@typescript/typescript-linux-arm64@7.0.2'
-  - '@typescript/typescript-linux-arm@7.0.2'
-  - '@typescript/typescript-linux-loong64@7.0.2'
-  - '@typescript/typescript-linux-mips64el@7.0.2'
-  - '@typescript/typescript-linux-ppc64@7.0.2'
-  - '@typescript/typescript-linux-riscv64@7.0.2'
-  - '@typescript/typescript-linux-s390x@7.0.2'
-  - '@typescript/typescript-linux-x64@7.0.2'
-  - '@typescript/typescript-netbsd-arm64@7.0.2'
-  - '@typescript/typescript-netbsd-x64@7.0.2'
-  - '@typescript/typescript-openbsd-arm64@7.0.2'
-  - '@typescript/typescript-openbsd-x64@7.0.2'
-  - '@typescript/typescript-sunos-x64@7.0.2'
-  - '@typescript/typescript-win32-arm64@7.0.2'
-  - '@typescript/typescript-win32-x64@7.0.2'
-  - typescript@7.0.2
+minimumReleaseAgeExclude: []
