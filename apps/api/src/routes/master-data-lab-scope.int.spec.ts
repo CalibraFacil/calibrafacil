@@ -51,7 +51,7 @@ import { truncateAll } from "../../test/integration/db";
 import { organizationOf } from "../../test/integration/organization-of";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
-import { assetsRouter } from "./assets";
+import { assetsRouter } from "../domains/assets/routes/assets";
 import { calibrationRequestsRouter } from "../domains/visits/routes/calibration-requests";
 import { customerGroupsRouter } from "../domains/customers/routes/customer-groups";
 import { customersRouter } from "../domains/customers/routes/customers";

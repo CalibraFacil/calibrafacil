@@ -44,7 +44,7 @@ inline errors and the two assertions. Purely additive; no behavior change to the
 | Mini-spec         | Layer (real path)                                                                                                                  | Risk | Mode                   |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---- | ---------------------- |
 | Inline FieldError | `apps/web/.../metrology-regime-fields.tsx` (+ `errors` prop) + create/edit forms pass-through + `metrology-regime-fields.test.tsx` | low  | loopable-with-verifier |
-| REQ-MLR-012 int   | `apps/api/src/routes/assets.int.spec.ts` (LEGAL + bad regulatedInterval → 400, no row)                                             | med  | loopable-with-verifier |
+| REQ-MLR-012 int   | `apps/api/src/domains/assets/routes/assets.int.spec.ts` (LEGAL + bad regulatedInterval → 400, no row)                              | med  | loopable-with-verifier |
 | REQ-MLR-042 int   | `apps/api/src/domains/portal/routes/portal-asset-interval.int.spec.ts` (portal interval write leaves Track 2 untouched)            | med  | loopable-with-verifier |
 
 **Pairing note:** all loopable-with-verifier. REQ-POLISH-002/003 are HIGH RISK assertions of

@@ -411,7 +411,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   // -------------------------------------------------------------------------
   {
     category: "unit-scoped",
-    file: "apps/api/src/routes/assets.ts",
+    file: "apps/api/src/domains/assets/routes/assets.ts",
     tables: ["asset", "customer"],
     kinds: ["select"],
     sql: /"asset"\."unit_id" (?:=|in) /,
@@ -426,7 +426,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   // -------------------------------------------------------------------------
   {
     category: "pk-after-scoped-read",
-    file: "apps/api/src/lib/asset-calibration-advance.ts",
+    file: "apps/api/src/domains/assets/asset-calibration-advance.ts",
     tables: ["asset"],
     reason:
       "assetId comes from the job being approved/published, which the caller has already loaded and authorized.",
@@ -449,7 +449,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "pk-after-scoped-read",
-    file: "apps/api/src/routes/proficiency-tests.ts",
+    file: "apps/api/src/domains/quality/routes/proficiency-tests.ts",
     tables: ["pt_plan_item"],
     kinds: ["update"],
     reason:
@@ -457,7 +457,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "pk-after-scoped-read",
-    file: "apps/api/src/routes/spc.ts",
+    file: "apps/api/src/domains/quality/routes/spc.ts",
     tables: ["control_chart"],
     kinds: ["update"],
     reason:

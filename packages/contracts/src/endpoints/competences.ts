@@ -15,7 +15,7 @@ import { trainingRecordRowSchema } from "./training-records";
 /**
  * Personnel competences (ISO/IEC 17025 6.2.3): the request, training,
  * evaluation, renewal and suspension workflow. Response schemas are wire
- * schemas written from what `apps/api/src/routes/competences.ts` returns.
+ * schemas written from what `apps/api/src/domains/quality/routes/competences.ts` returns.
  *
  * Not client-facing, so not defined here: `GET /:id/label` (command palette)
  * and `PUT /:id` (nothing calls it).

@@ -142,7 +142,7 @@ describe("REQ-SYNC-RBAC-5: the unit role is the one of the event's unit", () => 
 // to endpoint definitions, `mount(router, prefix, <group>.<name>, withLabPermission({...}), ...)` (the guard may lead an array of middleware: `[...withLabPermission({...}), zValidator("param", ...)]`).
 const ROUTE_FILES: Record<string, string> = {
   "/api/jobs": "../jobs/routes/jobs.ts",
-  "/api/assets": "../../routes/assets.ts",
+  "/api/assets": "../assets/routes/assets.ts",
   "/api/service-orders": "../service-orders/routes/service-orders.ts",
 };
 

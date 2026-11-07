@@ -43,7 +43,7 @@ import { seedOrg, type SeededOrg } from "../../test/integration/seed";
 import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
 import { signingRouter } from "./signing";
 import { organizationProfileRouter } from "./organization-profile";
-import { accreditedScopeRouter } from "./accredited-scope";
+import { accreditedScopeRouter } from "../domains/quality/routes/accredited-scope";
 
 const MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
 const PASSWORD = "s3nha-do-p12-B4A";

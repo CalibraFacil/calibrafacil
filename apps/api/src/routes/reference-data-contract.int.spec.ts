@@ -23,8 +23,8 @@ import {
 import { db } from "@calibra-facil/db";
 import { asset, assetType, calibrationMethod } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import { assetTypesRouter } from "./asset-types";
-import { assetsRouter } from "./assets";
+import { assetTypesRouter } from "../domains/assets/routes/asset-types";
+import { assetsRouter } from "../domains/assets/routes/assets";
 import { customersRouter } from "../domains/customers/routes/customers";
 import { methodsRouter } from "../domains/methods/routes/methods";
 import { serviceOrdersRouter } from "../domains/service-orders/routes/service-orders";

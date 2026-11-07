@@ -1,0 +1,453 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { accreditedScopeRouter } from "./accredited-scope";
+import { db } from "@calibra-facil/db";
+import {
+  accreditedScopeLine,
+  accreditedScopeLineAuditLog,
+  organization,
+} from "@calibra-facil/db/schema";
+import { eq, and } from "drizzle-orm";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { grantUnitAdmin, seedOrg } from "../../../../test/integration/seed";
+
+// Real-DB + real-RBAC integration tests for the accredited-scope router
+// (#427 — ISO/IEC 17025 §7.6/§7.8.3 CMC guard, Phase 0). Only the better-auth
+// session is mocked (test/integration/setup.ts); requireLabProtected +
+// requireOrgType("LAB") + requireUnitOperationalSettingsManager all run for
+// real against the seeded Postgres.
+//
+// Access model mirrors environmental-limits: reads and writes both require a
+// unit operational-settings manager (owner/admin or unit_admin).
+//
+// Proven properties:
+//  REQ-CMC-001  GET / returns ONLY the authed org's scope lines (tenant isolation)
+//  REQ-CMC-002  PUT as member -> 403; PUT as admin -> 200 + persists + audit row
+//  REQ-CMC-003  Unauthenticated -> 401
+//  REQ-CMC-004  Grandeza/unit mismatch -> 400 (registry coherence)
+//  REQ-CMC-005  DELETE removes the line and leaves an audit row (soft reference)
+
+const JSON_HEADERS = { "content-type": "application/json" };
+
+const validLine = {
+  quantityKind: "mass",
+  rangeMin: 0,
+  rangeMax: 500,
+  rangeUnit: "g",
+  cmcType: "fixed",
+  cmcA: 0.01,
+  cmcUnit: "g",
+};
+
+async function seedScopeLine(params: {
+  organizationId: string;
+  unitId: number;
+  cmcA?: number;
+  updatedBy: string;
+}): Promise<number> {
+  const [row] = await db
+    .insert(accreditedScopeLine)
+    .values({
+      organizationId: params.organizationId,
+      unitId: params.unitId,
+      quantityKind: "mass",
+      rangeMin: 0,
+      rangeMax: 500,
+      rangeUnit: "g",
+      cmcType: "fixed",
+      cmcA: params.cmcA ?? 0.01,
+      cmcUnit: "g",
+      updatedBy: params.updatedBy,
+    })
+    .returning({ id: accreditedScopeLine.id });
+
+  if (!row) throw new Error("seedScopeLine: insert failed");
+  return row.id;
+}
+
+describe("accreditedScopeRouter — real DB + real middleware", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  // REQ-CMC-001 --------------------------------------------------------------
+  it("REQ-CMC-001: GET / returns only the authenticated org's lines (tenant isolation)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+
+    await seedScopeLine({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      cmcA: 0.01,
+      updatedBy: orgA.userId,
+    });
+    // Cross-org leak row deliberately on ORG-A's unit id, so organizationId is
+    // the sole discriminator (same rationale as the environmental spec).
+    await seedScopeLine({
+      organizationId: orgB.orgId,
+      unitId: orgA.unitId,
+      cmcA: 99.9,
+      updatedBy: orgB.userId,
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.lines)).toBe(true);
+    expect(body.lines).toHaveLength(1);
+    const cmcAs = body.lines.map((l: { cmcA: number }) => l.cmcA);
+    expect(cmcAs).toContain(0.01);
+    expect(cmcAs).not.toContain(99.9);
+  });
+
+  // REQ-CMC-002 --------------------------------------------------------------
+  it("REQ-CMC-002: PUT / as role=member -> 403 and persists nothing", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify(validLine),
+    });
+
+    expect(res.status).toBe(403);
+    const rows = await db
+      .select()
+      .from(accreditedScopeLine)
+      .where(eq(accreditedScopeLine.organizationId, org.orgId));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("REQ-CMC-002: PUT / as role=admin -> 200, persists and writes the audit row", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify(validLine),
+    });
+
+    expect(res.status).toBe(200);
+    const created = await res.json();
+    expect(created.data.organizationId).toBe(org.orgId);
+    expect(created.data.unitId).toBe(org.unitId);
+    expect(created.data.coverageFactor).toBe(2);
+
+    const rows = await db
+      .select()
+      .from(accreditedScopeLine)
+      .where(
+        and(
+          eq(accreditedScopeLine.organizationId, org.orgId),
+          eq(accreditedScopeLine.unitId, org.unitId),
+        ),
+      );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.cmcA).toBe(0.01);
+    expect(rows[0]?.updatedBy).toBe(org.userId);
+
+    // §8.4 audit trail: the create is recorded.
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(eq(accreditedScopeLineAuditLog.organizationId, org.orgId));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.action).toBe("create");
+    expect(audit[0]?.performedBy).toBe(org.userId);
+  });
+
+  it("REQ-CMC-002: PUT / with id updates the line and records a field-level diff", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const lineId = await seedScopeLine({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      cmcA: 0.01,
+      updatedBy: org.userId,
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ ...validLine, id: lineId, cmcA: 0.02 }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select()
+      .from(accreditedScopeLine)
+      .where(eq(accreditedScopeLine.id, lineId));
+    expect(row?.cmcA).toBe(0.02);
+
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(eq(accreditedScopeLineAuditLog.scopeLineId, lineId));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.action).toBe("update");
+    expect(audit[0]?.changes).toMatchObject({
+      cmcA: { old: 0.01, new: 0.02 },
+    });
+  });
+
+  // REQ-CMC-003 --------------------------------------------------------------
+  it("REQ-CMC-003: unauthenticated GET and PUT -> 401", async () => {
+    logout();
+    const getRes = await accreditedScopeRouter.request("/", {
+      headers: JSON_HEADERS,
+    });
+    expect(getRes.status).toBe(401);
+
+    const putRes = await accreditedScopeRouter.request("/", {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(validLine),
+    });
+    expect(putRes.status).toBe(401);
+  });
+
+  // REQ-CMC-004 --------------------------------------------------------------
+  it("REQ-CMC-004: PUT / with a unit that mismatches the grandeza -> 400", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ ...validLine, rangeUnit: "°C" }),
+    });
+
+    expect(res.status).toBe(400);
+    const rows = await db
+      .select()
+      .from(accreditedScopeLine)
+      .where(eq(accreditedScopeLine.organizationId, org.orgId));
+    expect(rows).toHaveLength(0);
+  });
+
+  // REQ-CMC-005 --------------------------------------------------------------
+  it("REQ-CMC-005: DELETE /:id removes the line and leaves the audit row", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const lineId = await seedScopeLine({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      updatedBy: org.userId,
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request(`/${lineId}`, {
+      method: "DELETE",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+
+    expect(res.status).toBe(200);
+    const rows = await db
+      .select()
+      .from(accreditedScopeLine)
+      .where(eq(accreditedScopeLine.id, lineId));
+    expect(rows).toHaveLength(0);
+
+    // Soft reference: the audit row survives the deletion.
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(eq(accreditedScopeLineAuditLog.scopeLineId, lineId));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.action).toBe("delete");
+  });
+
+  // REQ-CMC-006 --------------------------------------------------------------
+  // PUT /enforcement flips organization.scopeEnforcementMode for EVERY unit, so
+  // it needs the org-level settings:update permission (owner/admin), not the
+  // unit-scoped manager gate that a single-unit unit_admin passes.
+  async function readMode(orgId: string) {
+    const [row] = await db
+      .select({ mode: organization.scopeEnforcementMode })
+      .from(organization)
+      .where(eq(organization.id, orgId));
+    return row?.mode;
+  }
+
+  it.each(["admin", "owner"] as const)(
+    "REQ-CMC-006: PUT /enforcement as role=%s -> 200, persists and writes the audit row",
+    async (role) => {
+      const org = await seedOrg({ orgId: "org-a", role });
+      await db
+        .update(organization)
+        .set({ scopeEnforcementMode: "warn" })
+        .where(eq(organization.id, org.orgId));
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await accreditedScopeRouter.request("/enforcement", {
+        method: "PUT",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ mode: "enforce" }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await readMode(org.orgId)).toBe("enforce");
+      const audit = await db
+        .select()
+        .from(accreditedScopeLineAuditLog)
+        .where(
+          and(
+            eq(accreditedScopeLineAuditLog.organizationId, org.orgId),
+            eq(accreditedScopeLineAuditLog.action, "enforcement_mode_change"),
+          ),
+        );
+      expect(audit).toHaveLength(1);
+      expect(audit[0]?.performedBy).toBe(org.userId);
+    },
+  );
+
+  // Q45 — a lab that never chose a mode is enforced while accredited.
+  async function seedUnsetLab(accreditationActive: boolean) {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    await db
+      .update(organization)
+      .set({ scopeEnforcementMode: null, accreditationActive })
+      .where(eq(organization.id, org.orgId));
+    return org;
+  }
+
+  async function getScope(org: {
+    userId: string;
+    orgId: string;
+    unitId: number;
+  }) {
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+    expect(res.status).toBe(200);
+    return res.json();
+  }
+
+  it("REQ-ENF-004: GET / reports the EFFECTIVE default: enforce for an accredited lab that never chose", async () => {
+    const org = await seedUnsetLab(true);
+
+    const body = await getScope(org);
+
+    expect(body.enforcementMode).toBe("enforce");
+    expect(body.enforcementModeIsDefault).toBe(true);
+  });
+
+  it("REQ-ENF-004: GET / reports warn for a lab that never chose and is not accredited", async () => {
+    const org = await seedUnsetLab(false);
+
+    const body = await getScope(org);
+
+    expect(body.enforcementMode).toBe("warn");
+    expect(body.enforcementModeIsDefault).toBe(true);
+  });
+
+  it("REQ-ENF-005: an explicit mode is reported as chosen, whatever the accreditation", async () => {
+    const org = await seedUnsetLab(true);
+    await db
+      .update(organization)
+      .set({ scopeEnforcementMode: "warn" })
+      .where(eq(organization.id, org.orgId));
+
+    const body = await getScope(org);
+
+    expect(body.enforcementMode).toBe("warn");
+    expect(body.enforcementModeIsDefault).toBe(false);
+  });
+
+  it("REQ-ENF-006: relaxing the default to 'warn' is audited as enforce -> warn (by whom, and that it was the default) and sticks", async () => {
+    const org = await seedUnsetLab(true);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/enforcement", {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ mode: "warn" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await readMode(org.orgId)).toBe("warn");
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(
+        and(
+          eq(accreditedScopeLineAuditLog.organizationId, org.orgId),
+          eq(accreditedScopeLineAuditLog.action, "enforcement_mode_change"),
+        ),
+      );
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.performedBy).toBe(org.userId);
+    expect(audit[0]?.changes).toEqual({
+      scopeEnforcementMode: { old: "enforce", new: "warn" },
+      wasDefault: true,
+    });
+    expect((await getScope(org)).enforcementModeIsDefault).toBe(false);
+  });
+
+  it("REQ-ENF-006: choosing 'enforce' on an unset accredited lab records the choice (it was already enforced)", async () => {
+    const org = await seedUnsetLab(true);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/enforcement", {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ mode: "enforce" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await readMode(org.orgId)).toBe("enforce");
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(eq(accreditedScopeLineAuditLog.organizationId, org.orgId));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.changes).toEqual({
+      scopeEnforcementMode: { old: "enforce", new: "enforce" },
+      wasDefault: true,
+    });
+  });
+
+  it("REQ-CMC-006: PUT /enforcement as a single-unit unit_admin -> 403 and the org mode is unchanged", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "technician" });
+    await grantUnitAdmin(org);
+    await db
+      .update(organization)
+      .set({ scopeEnforcementMode: "enforce" })
+      .where(eq(organization.id, org.orgId));
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/enforcement", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ mode: "warn" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(await readMode(org.orgId)).toBe("enforce");
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(eq(accreditedScopeLineAuditLog.organizationId, org.orgId));
+    expect(audit).toHaveLength(0);
+  });
+
+  it("REQ-CMC-006: unit_admin keeps unit-scoped access (PUT / scope line still 200)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "technician" });
+    await grantUnitAdmin(org);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify(validLine),
+    });
+
+    expect(res.status).toBe(200);
+  });
+});

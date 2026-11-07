@@ -84,9 +84,9 @@ vi.mock("../../../lib/storage", async (importOriginal) => {
 
 // The CMC classification has its own specs; here it is neutral, so an accredited
 // laboratory is not stopped by the scope guard and only the gates under test decide.
-vi.mock("../../../lib/scope-compliance", async (importOriginal) => {
+vi.mock("../../quality/scope-compliance", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../../lib/scope-compliance")>();
+    await importOriginal<typeof import("../../quality/scope-compliance")>();
   return {
     ...actual,
     classifyJobScopeCompliance: vi.fn(async () => ({

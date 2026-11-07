@@ -16,7 +16,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
  * Proficiency testing (ISO/IEC 17025 7.7.2): the PT register (rounds scored per
  * ISO 13528) and the risk-based participation plan (NIT-DICLA-026 9.4).
  * Response schemas are wire schemas written from what
- * `apps/api/src/routes/proficiency-tests.ts` returns.
+ * `apps/api/src/domains/quality/routes/proficiency-tests.ts` returns.
  */
 
 // ---------------------------------------------------------------------------

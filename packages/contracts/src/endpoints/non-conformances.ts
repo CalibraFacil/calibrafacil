@@ -23,7 +23,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
  * Non-conforming work (ISO/IEC 17025 8.7) and its 7.10 out-of-tolerance
  * follow-up: disposition, resolution, escalation to a CAPA, the customer
  * notification and the impact assessment. Response schemas are wire schemas
- * written from what `apps/api/src/routes/non-conformances.ts` returns.
+ * written from what `apps/api/src/domains/quality/routes/non-conformances.ts` returns.
  * `GET /:id/label` (command palette) is not client-facing, so it is not defined
  * here and stays a plain route.
  */

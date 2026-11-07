@@ -55,7 +55,7 @@ vi.mock("../../portal-certificate-release-gate", () => ({
   loadPortalReleaseStatuses: vi.fn(),
 }));
 
-vi.mock("../../../../lib/asset-measurement", () => ({
+vi.mock("../../../assets/asset-measurement", () => ({
   denormalizeAssetSpecificationsForResponse: vi.fn(
     ({ specifications }: { specifications: unknown }) => specifications,
   ),

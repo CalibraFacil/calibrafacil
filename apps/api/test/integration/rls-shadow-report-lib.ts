@@ -71,7 +71,7 @@ export function sourceModuleFromStack(
 }
 
 /**
- * `apps/api/src/routes/assets.ts` -> `routes`; `apps/api/src/modules/jobs/x.ts` ->
+ * `apps/api/src/domains/assets/routes/assets.ts` -> `routes`; `apps/api/src/modules/jobs/x.ts` ->
  * `modules/jobs`; anything outside apps/api/src keeps its package directory.
  */
 export function layerOf(module: string): string {

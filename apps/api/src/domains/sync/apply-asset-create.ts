@@ -6,12 +6,12 @@ import {
   customer,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { resolveAssetRegimeWrite } from "../../lib/asset-regime";
-import { deriveRegulatedNextDate } from "../../lib/regulated-interval";
 import {
+  resolveAssetRegimeWrite,
+  deriveRegulatedNextDate,
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
-} from "../../lib/asset-measurement";
+} from "../assets";
 import {
   type ApplyDesktopSyncEventInput,
   type ApplyDesktopSyncEventResult,

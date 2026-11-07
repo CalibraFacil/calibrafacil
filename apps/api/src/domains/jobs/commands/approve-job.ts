@@ -23,7 +23,8 @@ import { buildAsFoundReliabilityVerdict } from "../as-found-reliability-verdict"
 import {
   classifyJobScopeCompliance,
   isAdverseScopeCompliance,
-} from "../../../lib/scope-compliance";
+  checkApproverIsAuthorizedSignatory,
+} from "../../quality";
 import type { ScopeComplianceResult } from "@calibra-facil/shared";
 import {
   recordAssetOotEvent,
@@ -33,8 +34,7 @@ import {
   advanceAssetCalibrationDates,
   revertAssetCalibrationAdvance,
   type AssetCalibrationAdvanceApplied,
-} from "../../../lib/asset-calibration-advance";
-import { checkApproverIsAuthorizedSignatory } from "../../../lib/signatory";
+} from "../../assets";
 import {
   laboratoryIsAccredited,
   selfApprovalBlocked,

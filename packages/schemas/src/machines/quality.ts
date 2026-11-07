@@ -4,7 +4,7 @@ import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary"
 import { defineStateMachine } from "../state-machine";
 
 // corrective_action.status
-//   create     apps/api/src/lib/corrective-actions.ts (manual, NC escalation,
+//   create     apps/api/src/domains/quality/corrective-actions.ts (manual, NC escalation,
 //                SPC escalation, an unsatisfactory PT round)
 //   edit       routes/capa.ts PUT /:id: any open CAPA, status kept
 //   investigate  the same PUT, when a root cause is recorded on an OPEN CAPA
@@ -59,7 +59,7 @@ export const CORRECTIVE_ACTION_MACHINE = defineStateMachine({
 });
 
 // non_conformance.status (lower-case values, as stored)
-//   create        apps/api/src/lib/non-conformances.ts (manual, OOT flag,
+//   create        apps/api/src/domains/quality/non-conformances.ts (manual, OOT flag,
 //                   as-found verdict, standard recall)
 //   set_disposition  routes/non-conformances.ts POST /:id/disposition
 //                   (repeatable until resolved)

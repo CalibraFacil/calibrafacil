@@ -335,18 +335,18 @@ import {
   extractKeyFromUrl,
   type R2Env,
 } from "../../../lib/storage";
-import { denormalizeAssetSpecificationsForResponse } from "../../../lib/asset-measurement";
+import {
+  denormalizeAssetSpecificationsForResponse,
+  decidePortalIntervalWrite,
+  deriveNextCalibrationDate,
+  buildIntervalInsight,
+} from "../../assets";
 import { resolveLabOrganizationIdByPortalHostname } from "../../../lib/portal-domains";
 import {
   applyPortalCertificateReleaseGate,
   loadPortalReleaseStatuses,
 } from "../portal-certificate-release-gate";
 import { buildPortalCertificateVerdict } from "../portal-certificate-verdict";
-import {
-  decidePortalIntervalWrite,
-  deriveNextCalibrationDate,
-} from "../../../lib/portal-asset-interval";
-import { buildIntervalInsight } from "../../../lib/interval-insight";
 import {
   buildAssetDriftSeries,
   buildFleetReliabilitySummary,

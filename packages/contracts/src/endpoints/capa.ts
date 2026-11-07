@@ -14,7 +14,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * Corrective and preventive actions (CAPA, ISO/IEC 17025 8.7 and 8.9). Response
- * schemas are wire schemas written from what `apps/api/src/routes/capa.ts`
+ * schemas are wire schemas written from what `apps/api/src/domains/quality/routes/capa.ts`
  * returns. `GET /:id/label` (command palette) is not client-facing, so it is not
  * defined here and stays a plain route.
  */

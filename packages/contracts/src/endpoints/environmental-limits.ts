@@ -8,7 +8,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 /**
  * The unit's environmental limits (`/api/environmental-limits/*`). Response
  * schemas are wire schemas written from what
- * `apps/api/src/routes/environmental-limits.ts` returns (see `jobs.ts` for the
+ * `apps/api/src/domains/quality/routes/environmental-limits.ts` returns (see `jobs.ts` for the
  * rules). The desktop local-server answers `GET /effective/:assetTypeId` from
  * the offline mirror with the same shape, so `source` uses one vocabulary on
  * both.
