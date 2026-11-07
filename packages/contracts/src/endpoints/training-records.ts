@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   CreateTrainingRecordSchema,
   ListTrainingRecordsQuerySchema,
+  TrainingTypeSchema,
 } from "@calibra-facil/schemas";
 import { TRAINING_STATUSES } from "@calibra-facil/schemas/machines";
 
@@ -21,12 +22,7 @@ import { endpoint, type EndpointGroup } from "./define";
 // Schemas
 // ---------------------------------------------------------------------------
 
-const trainingTypeSchema = z.enum([
-  "internal",
-  "external",
-  "ojt",
-  "proficiency_test",
-]);
+const trainingTypeSchema = TrainingTypeSchema;
 export type TrainingType = z.infer<typeof trainingTypeSchema>;
 
 const trainingStatusSchema = z.enum(TRAINING_STATUSES);

@@ -1,4 +1,25 @@
 import {
+  CERTIFICATE_SECTION_DISPLAYS,
+  ECCENTRICITY_INDICATOR_VARIANTS,
+  ENVIRONMENT_FIELDS,
+  FORMULA_REPORTING_GROUPS,
+  FORMULA_REPORTING_ROLES,
+  MASS_COMPOSITION_OPTION_SOURCES,
+  MASS_COMPOSITION_QUANTITY_MODES,
+  MASS_COMPOSITION_UNCERTAINTY_MODES,
+  MASS_UNITS,
+  METHOD_COLUMN_PHASES,
+  METHOD_INPUT_FIELD_SOURCES,
+  METHOD_INPUT_FIELD_TYPES,
+  METHOD_TABLE_COLUMN_ROLES,
+  METHOD_TABLE_COLUMN_TYPES,
+  METHOD_VALIDATION_OPERATORS,
+  METHOD_VALIDATION_SEVERITIES,
+  STANDARD_CHANNEL_PROPERTIES,
+  TABLE_STATISTICS,
+  UNCERTAINTY_DISTRIBUTIONS,
+} from "@calibra-facil/shared";
+import {
   NOTIFICATION_TYPES,
   PORTAL_NOTIFICATION_TYPES,
 } from "./notification-types";
@@ -6,6 +27,7 @@ import {
   CALIBRATION_LOCATION_TYPES,
   CALIBRATION_PHASE_MODES,
 } from "@calibra-facil/shared/calibration-record";
+import type { Address } from "@calibra-facil/shared/address";
 import { z } from "zod";
 import { queryFlag } from "./query-flag";
 import { VISIT_STATUSES } from "./machines/visits";
@@ -52,9 +74,10 @@ export * from "./units";
 // =============================================================================
 
 /**
- * Address schema for customer addresses (Brazilian format)
+ * Address schema for customer addresses (Brazilian format). The wire shape of
+ * `Address` in `@calibra-facil/shared`, which owns the type.
  */
-const AddressSchema = z.object({
+export const AddressSchema = z.object({
   cep: z.string().optional(),
   number: z.string().optional(),
   street: z.string().optional(),
@@ -62,7 +85,7 @@ const AddressSchema = z.object({
   neighbourhood: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
-});
+}) satisfies z.ZodType<Address>;
 
 /**
  * Schema for creating a new customer
@@ -127,7 +150,7 @@ export const CreatePortalInvitationSchema = z.object({
 /**
  * Qualification status values for ISO 17025 compliance
  */
-const QualificationStatusSchema = z.enum([
+export const QualificationStatusSchema = z.enum([
   "pending",
   "qualified",
   "suspended",
@@ -172,7 +195,7 @@ export const AuditLogQuerySchema = z.object({
 // CERTIFICATE NUMBERING SCHEMAS
 // =============================================================================
 
-const CertificateSequenceResetScopeSchema = z.enum([
+export const CertificateSequenceResetScopeSchema = z.enum([
   "never",
   "year",
   "month",
@@ -493,6 +516,13 @@ export const CalibrationRequestStatusSchema = z.enum(
   CALIBRATION_REQUEST_STATUSES,
 );
 
+/** How the customer gets the assets to the lab ("onsite" = calibration at the customer's site). */
+export const CalibrationRequestDeliveryMethodSchema = z.enum([
+  "dropoff",
+  "carrier",
+  "onsite",
+]);
+
 export const CreateCalibrationRequestSchema = z.object({
   assetIds: z
     .array(z.coerce.number().min(1, "Ativo inválido"))
@@ -512,7 +542,7 @@ export const CreateCalibrationRequestSchema = z.object({
   // How the customer gets the assets to the lab. "onsite" = calibração in loco
   // (a technician travels to the customer). Carrier-only and onsite-only fields
   // below are gated server-side by deliveryMethod (see portal-requests.ts).
-  deliveryMethod: z.enum(["dropoff", "carrier", "onsite"]).default("dropoff"),
+  deliveryMethod: CalibrationRequestDeliveryMethodSchema.default("dropoff"),
   invoiceRemittanceNumber: z.string().trim().max(60).optional().nullable(),
   invoiceRemittanceKey: z
     .string()
@@ -673,7 +703,7 @@ export const ListVisitsQuerySchema = z.object({
 
 // #739: portal two-way visit scheduling ------------------------------------
 
-const VisitReschedulePreferredPeriodSchema = z.enum([
+export const VisitReschedulePreferredPeriodSchema = z.enum([
   "MORNING",
   "AFTERNOON",
   "ANY",
@@ -731,14 +761,11 @@ const MethodStatusSchema = z.enum(METHOD_STATUSES);
 /**
  * Table column definition for table-type inputs
  */
-const MethodTableColumnRoleSchema = z.enum([
-  "standard_value",
-  "mass_standard_composition",
-]);
+const MethodTableColumnRoleSchema = z.enum(METHOD_TABLE_COLUMN_ROLES);
 
 const MassCompositionConfigSchema = z.object({
-  targetUnit: z.enum(["mg", "g", "kg"]).optional(),
-  optionSource: z.enum(["certified_values", "composition_profiles"]).optional(),
+  targetUnit: z.enum(MASS_UNITS).optional(),
+  optionSource: z.enum(MASS_COMPOSITION_OPTION_SOURCES).optional(),
   targetColumns: z
     .object({
       certifiedValue: z.string().optional(),
@@ -749,10 +776,8 @@ const MassCompositionConfigSchema = z.object({
       buoyancy: z.string().optional(),
     })
     .optional(),
-  uncertaintyMode: z.enum(["expanded_rss", "expanded_arithmetic"]).optional(),
-  quantityMode: z
-    .enum(["linear_per_item_then_rss", "profile_linear"])
-    .optional(),
+  uncertaintyMode: z.enum(MASS_COMPOSITION_UNCERTAINTY_MODES).optional(),
+  quantityMode: z.enum(MASS_COMPOSITION_QUANTITY_MODES).optional(),
 });
 
 /**
@@ -782,24 +807,23 @@ const MethodTableColumnSchema = z.object({
       "Chave deve começar com letra e conter apenas letras, números e underscore",
     ),
   label: z.string().min(1, "Rótulo é obrigatório"),
-  type: z.enum(["text", "number"]),
+  type: z.enum(METHOD_TABLE_COLUMN_TYPES),
   unit: z.string().optional(),
   role: MethodTableColumnRoleSchema.optional(),
   // Semantic role used to pick absolute vs. delta unit conversion for affine
   // kinds (temperature). Kept a permissive string for forward/import
   // compatibility; classified by DELTA_QUANTITY_KINDS in @calibra-facil/shared.
   quantityKind: z.string().optional(),
-  phase: z.enum(["before", "after", "always"]).optional(),
+  phase: z.enum(METHOD_COLUMN_PHASES).optional(),
   massComposition: MassCompositionConfigSchema.optional(),
   standardValue: StandardValueConfigSchema.optional(),
 });
 
-const MethodInputSourceSchema = z.enum(["manual", "asset_spec"]);
+const MethodInputSourceSchema = z.enum(METHOD_INPUT_FIELD_SOURCES);
 
-const EccentricityIndicatorVariantSchema = z.enum([
-  "circular_platform",
-  "road_scale",
-]);
+const EccentricityIndicatorVariantSchema = z.enum(
+  ECCENTRICITY_INDICATOR_VARIANTS,
+);
 
 const EccentricityIndicatorConfigSchema = z.object({
   enabled: z.boolean().optional().default(true),
@@ -837,7 +861,7 @@ export const MethodInputFieldSchema = z
         "Chave deve começar com letra e conter apenas letras, números e underscore",
       ),
     label: z.string().min(1, "Rótulo é obrigatório"),
-    type: z.enum(["text", "number", "select", "table"]),
+    type: z.enum(METHOD_INPUT_FIELD_TYPES),
     unit: z.string().optional(),
     // Semantic role used to pick absolute vs. delta unit conversion for affine
     // kinds (temperature). Permissive string; classified by DELTA_QUANTITY_KINDS.
@@ -909,20 +933,8 @@ export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
  */
 const MethodFormulaReportingSchema = z.object({
   includeInCertificate: z.boolean().optional(),
-  role: z
-    .enum([
-      "primary_result",
-      "expanded_uncertainty",
-      "coverage_factor",
-      "conformity_margin",
-      "conformity_verdict",
-      "uncertainty_component",
-      "auxiliary",
-    ])
-    .optional(),
-  group: z
-    .enum(["calibration_result", "uncertainty_budget", "raw_calculation"])
-    .optional(),
+  role: z.enum(FORMULA_REPORTING_ROLES).optional(),
+  group: z.enum(FORMULA_REPORTING_GROUPS).optional(),
 });
 
 export const MethodFormulaSchema = z.object({
@@ -990,14 +1002,7 @@ export type MethodMeasurementModel = z.infer<
 /**
  * Validation rule for pass/fail criteria
  */
-const MethodValidationOperatorSchema = z.enum([
-  "<",
-  "<=",
-  ">",
-  ">=",
-  "==",
-  "!=",
-]);
+const MethodValidationOperatorSchema = z.enum(METHOD_VALIDATION_OPERATORS);
 type MethodValidationOperator = z.infer<typeof MethodValidationOperatorSchema>;
 
 const StructuredMethodValidationSchema = z.object({
@@ -1005,7 +1010,7 @@ const StructuredMethodValidationSchema = z.object({
   operator: MethodValidationOperatorSchema,
   rightExpression: z.string().min(1, "Expressão direita é obrigatória"),
   message: z.string().min(1, "Mensagem é obrigatória"),
-  severity: z.enum(["error", "warning"]),
+  severity: z.enum(METHOD_VALIDATION_SEVERITIES),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -1015,7 +1020,7 @@ const LegacyMethodValidationSchema = z
   .object({
     expression: z.string().min(1, "Expressão é obrigatória"),
     message: z.string().min(1, "Mensagem é obrigatória"),
-    severity: z.enum(["error", "warning"]),
+    severity: z.enum(METHOD_VALIDATION_SEVERITIES),
     metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .transform((validation) =>
@@ -1065,7 +1070,7 @@ const MethodVariableBindingSchema = z.discriminatedUnion("source", [
     source: z.literal("table_statistic"),
     fieldKey: z.string().min(1, "Tabela é obrigatória"),
     columnKey: z.string().min(1, "Coluna é obrigatória"),
-    statistic: z.enum(["mean", "sample_stddev", "count", "min", "max"]),
+    statistic: z.enum(TABLE_STATISTICS),
   }),
   z.object({
     key: z
@@ -1077,7 +1082,7 @@ const MethodVariableBindingSchema = z.discriminatedUnion("source", [
       ),
     label: z.string().optional(),
     source: z.literal("environment"),
-    field: z.enum(["temperature", "humidity", "pressure"]),
+    field: z.enum(ENVIRONMENT_FIELDS),
   }),
   z.object({
     key: z
@@ -1104,13 +1109,7 @@ const MethodVariableBindingSchema = z.discriminatedUnion("source", [
     source: z.literal("standard_channel"),
     standardId: z.number().int().positive().optional(),
     channelKey: z.string().min(1, "Canal do padrão é obrigatório"),
-    property: z.enum([
-      "value",
-      "correction",
-      "uncertainty",
-      "coverageFactor",
-      "drift",
-    ]),
+    property: z.enum(STANDARD_CHANNEL_PROPERTIES),
   }),
 ]);
 export type MethodVariableBinding = z.infer<typeof MethodVariableBindingSchema>;
@@ -1169,7 +1168,7 @@ function parseMethodValidationOperator(
 const MethodTypeBComponentSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   value: z.number().positive("Valor deve ser positivo"),
-  distribution: z.enum(["normal", "rectangular", "triangular", "u-shaped"]),
+  distribution: z.enum(UNCERTAINTY_DISTRIBUTIONS),
   coverageFactor: z.number().positive().optional(),
   divisor: z.number().positive().optional(),
   degreesOfFreedom: z.number().positive().optional().default(50),
@@ -1205,9 +1204,9 @@ const MethodCertificateContentSectionSchema = z.discriminatedUnion("kind", [
 export const MethodCertificateContentSchema = z.object({
   procedureCode: z.string().trim().optional(),
   referenceStandards: z.array(z.string().trim()).default([]),
-  certifiedValuesDisplay: z.enum(["full", "hidden"]).optional(),
-  massCompositionDisplay: z.enum(["full", "hidden"]).optional(),
-  uncertaintyBudgetDisplay: z.enum(["full", "hidden"]).optional(),
+  certifiedValuesDisplay: z.enum(CERTIFICATE_SECTION_DISPLAYS).optional(),
+  massCompositionDisplay: z.enum(CERTIFICATE_SECTION_DISPLAYS).optional(),
+  uncertaintyBudgetDisplay: z.enum(CERTIFICATE_SECTION_DISPLAYS).optional(),
   decisionRuleStatement: z.string().max(2000).optional(),
   /**
    * The decision rule the method's conformity is judged by (ISO/IEC 17025
@@ -1967,6 +1966,9 @@ export const QuantityKindSchema = z.enum([
  * CMC(x) = cmcA + cmcB·|x| with x in rangeUnit and the result in cmcUnit;
  * "fixed" ignores cmcB. Upsert payload: `id` present = update.
  */
+/** An accredited-scope CMC is either one value or a linear function of the measured value. */
+export const CmcTypeSchema = z.enum(["fixed", "linear"]);
+
 export const AccreditedScopeLineSchema = z
   .object({
     id: z.number().optional(),
@@ -1974,7 +1976,7 @@ export const AccreditedScopeLineSchema = z
     rangeMin: z.number(),
     rangeMax: z.number(),
     rangeUnit: MeasurementUnitSchema,
-    cmcType: z.enum(["fixed", "linear"]).default("fixed"),
+    cmcType: CmcTypeSchema.default("fixed"),
     cmcA: z.number().nonnegative("CMC deve ser positiva"),
     cmcB: z.number().nonnegative().nullable().optional(),
     cmcUnit: MeasurementUnitSchema,
@@ -2072,7 +2074,7 @@ const NotificationStatusSchema = z.enum(NOTIFICATION_STATUSES);
 /**
  * Notification priority levels
  */
-const NotificationPrioritySchema = z.enum(["HIGH", "MEDIUM", "LOW"]);
+export const NotificationPrioritySchema = z.enum(["HIGH", "MEDIUM", "LOW"]);
 
 /**
  * Schema for listing notifications with pagination and filters
@@ -2115,7 +2117,7 @@ const NotificationPreferencesMapSchema = z.record(
 /**
  * Digest frequency options
  */
-const DigestFrequencySchema = z.enum(["NONE", "DAILY", "WEEKLY"]);
+export const DigestFrequencySchema = z.enum(["NONE", "DAILY", "WEEKLY"]);
 
 /**
  * Schema for updating notification preferences
@@ -2178,7 +2180,7 @@ export const NonConformanceTypeSchema = z.enum([
 /**
  * NC disposition values
  */
-const NonConformanceDispositionSchema = z.enum([
+export const NonConformanceDispositionSchema = z.enum([
   "rework",
   "scrap",
   "use_as_is",
@@ -2429,7 +2431,7 @@ const CompetenceStatusSchema = z.enum(COMPETENCE_STATUSES);
 /**
  * Training type values
  */
-const TrainingTypeSchema = z.enum([
+export const TrainingTypeSchema = z.enum([
   "internal",
   "external",
   "ojt",

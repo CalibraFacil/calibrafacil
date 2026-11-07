@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseCidr } from "@calibra-facil/shared/ip-range";
+import { PUBLIC_API_SCOPES } from "@calibra-facil/shared";
 
 import { nullableString } from "../common";
 import { endpoint, type EndpointGroup } from "./define";
@@ -9,22 +10,6 @@ import { endpoint, type EndpointGroup } from "./define";
  * wire schemas written from what `apps/api/src/routes/api-keys.ts` returns.
  * Cloud-only.
  */
-
-export const API_KEY_SCOPES = [
-  "customers:read",
-  "customers:write",
-  "assets:read",
-  "assets:write",
-  "requests:read",
-  "requests:write",
-  "jobs:read",
-  "jobs:write",
-  "services:read",
-  "units:read",
-  "reports:read",
-  "certificates:read",
-  "webhooks:manage",
-] as const;
 
 /** A key lives a year unless the laboratory asks for less (at most two years). */
 export const DEFAULT_API_KEY_LIFETIME_DAYS = 365;
@@ -39,7 +24,7 @@ const allowedIpSchema = z
 
 export const CreateApiKeySchema = z.object({
   name: z.string().trim().min(3).max(80),
-  scopes: z.array(z.enum(API_KEY_SCOPES)).min(1).max(12).optional(),
+  scopes: z.array(z.enum(PUBLIC_API_SCOPES)).min(1).max(12).optional(),
   expiresInDays: z
     .number()
     .int()

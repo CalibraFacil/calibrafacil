@@ -3,6 +3,7 @@ import {
   ListNotificationsQuerySchema,
   MarkNotificationsReadSchema,
   UpdateNotificationPreferencesSchema,
+  DigestFrequencySchema,
 } from "@calibra-facil/schemas";
 
 import { nullableString, paginationSchema } from "../common";
@@ -64,7 +65,7 @@ export const notificationPreferencesResponseSchema = z.object({
   preferences: z.partialRecord(z.string(), notificationChannelsSchema),
   emailEnabled: z.boolean(),
   notifySelfActions: z.boolean(),
-  digestFrequency: z.enum(["NONE", "DAILY", "WEEKLY"]),
+  digestFrequency: DigestFrequencySchema,
 });
 export type NotificationPreferencesResponse = z.infer<
   typeof notificationPreferencesResponseSchema

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EMAIL_DOMAIN_KEY_STATUSES } from "@calibra-facil/schemas/machines";
 
 import { nullableString } from "../common";
 import { endpoint, type EndpointGroup } from "./define";
@@ -16,7 +17,7 @@ export const CreateEmailDomainSchema = z.object({
   fromLocalPart: z.string().trim().min(1).max(64),
 });
 
-const emailDomainKeyStatusSchema = z.enum(["ok", "invalid", "rate_limited"]);
+const emailDomainKeyStatusSchema = z.enum(EMAIL_DOMAIN_KEY_STATUSES);
 
 const emailDomainRecordSchema = z.object({
   id: z.string(),

@@ -48,11 +48,17 @@ export const UpdateUnitSchema = z.object({
   calibratingBody: CalibratingBodySchema.optional(),
 });
 
+export const UnitAssignmentRoleSchema = z.enum([
+  "member",
+  "technician",
+  "unit_admin",
+]);
+
 export const UpdateAssignmentsSchema = z.object({
   assignments: z.array(
     z.object({
       unitId: z.coerce.number().int().positive(),
-      role: z.enum(["member", "technician", "unit_admin"]),
+      role: UnitAssignmentRoleSchema,
     }),
   ),
 });

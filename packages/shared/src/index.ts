@@ -15,6 +15,7 @@ export * from "./units/registry";
 export * from "./units/convert";
 export * from "./mass-units";
 export * from "./service-orders";
+export * from "./method-model";
 export * from "./format";
 export * from "./money";
 export * from "./format-specifications";

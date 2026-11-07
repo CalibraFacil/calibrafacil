@@ -6,6 +6,13 @@ import {
   VISIT_STATUSES,
 } from "@calibra-facil/schemas/machines";
 import { z } from "zod";
+import {
+  CalibrationRequestDeliveryMethodSchema,
+  DigestFrequencySchema,
+  NotificationPrioritySchema,
+  VisitReschedulePreferredPeriodSchema,
+  AddressSchema,
+} from "@calibra-facil/schemas";
 
 import { nullableNumber, nullableString, paginationSchema } from "./common";
 import { serviceOrderStatusSchema } from "./endpoints/service-orders";
@@ -26,7 +33,7 @@ const jsonRecordSchema = z.record(z.string(), z.unknown());
 const portalNotificationItemSchema = z.object({
   id: z.number(),
   type: z.string(),
-  priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
+  priority: NotificationPrioritySchema,
   status: z.enum(NOTIFICATION_STATUSES),
   title: z.string(),
   message: z.string(),
@@ -67,7 +74,7 @@ const notificationChannelsSchema = z.object({
 
 /** GET and PUT /api/portal/notification-preferences. */
 export const portalNotificationPreferencesResponseSchema = z.object({
-  digestFrequency: z.enum(["NONE", "DAILY", "WEEKLY"]),
+  digestFrequency: DigestFrequencySchema,
   emailEnabled: z.boolean(),
   preferences: z.record(z.string(), notificationChannelsSchema),
 });
@@ -118,16 +125,6 @@ export type PortalOotAcknowledgeResponse = z.infer<
 
 const visitStatusSchema = z.enum(VISIT_STATUSES);
 
-const portalAddressSchema = z.object({
-  cep: z.string().optional(),
-  number: z.string().optional(),
-  street: z.string().optional(),
-  complement: z.string().optional(),
-  neighbourhood: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-});
-
 const rescheduleRequestSchema = z.object({
   id: z.number(),
   status: z.enum(VISIT_RESCHEDULE_REQUEST_STATUSES),
@@ -135,7 +132,7 @@ const rescheduleRequestSchema = z.object({
   preferredWindows: z.array(
     z.object({
       date: z.string(),
-      period: z.enum(["MORNING", "AFTERNOON", "ANY"]),
+      period: VisitReschedulePreferredPeriodSchema,
       note: z.string().optional(),
     }),
   ),
@@ -149,7 +146,7 @@ export const portalVisitSchema = z.object({
   status: visitStatusSchema,
   scheduledAt: nullableString,
   scheduledEndAt: nullableString,
-  address: portalAddressSchema.nullable(),
+  address: AddressSchema.nullable(),
   customerName: z.string(),
   technicianName: nullableString,
   sourceRequestId: nullableNumber,
@@ -219,12 +216,12 @@ export const portalRequestDetailSchema = z.object({
   status: portalRequestStatusValueSchema,
   observations: nullableString,
   requestedDueDate: nullableString,
-  deliveryMethod: z.enum(["dropoff", "carrier", "onsite"]),
+  deliveryMethod: CalibrationRequestDeliveryMethodSchema,
   invoiceRemittanceNumber: nullableString,
   invoiceRemittanceKey: nullableString,
   invoiceRemittanceIssuedAt: nullableString,
   carrierName: nullableString,
-  onsiteAddress: portalAddressSchema.nullable(),
+  onsiteAddress: AddressSchema.nullable(),
   preferredVisitDate: nullableString,
   visit: z
     .object({

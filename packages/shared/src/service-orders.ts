@@ -47,7 +47,7 @@ export const SERVICE_ORDER_STATUS = defineStatusVocabulary(
   },
 );
 
-const SERVICE_ORDER_PRIORITIES = [
+export const SERVICE_ORDER_PRIORITIES = [
   "normal",
   "urgent",
   "contract",
@@ -55,7 +55,7 @@ const SERVICE_ORDER_PRIORITIES = [
 ] as const;
 export type ServiceOrderPriority = (typeof SERVICE_ORDER_PRIORITIES)[number];
 
-const SERVICE_ORDER_INTAKE_TYPES = [
+export const SERVICE_ORDER_INTAKE_TYPES = [
   "counter",
   "carrier",
   "third_party",
@@ -65,7 +65,7 @@ const SERVICE_ORDER_INTAKE_TYPES = [
 export type ServiceOrderIntakeType =
   (typeof SERVICE_ORDER_INTAKE_TYPES)[number];
 
-const SERVICE_ORDER_DELIVERY_METHODS = [
+export const SERVICE_ORDER_DELIVERY_METHODS = [
   "pickup_at_lab",
   "ship_to_client",
   "third_party_pickup",
@@ -73,7 +73,7 @@ const SERVICE_ORDER_DELIVERY_METHODS = [
 export type ServiceOrderDeliveryMethod =
   (typeof SERVICE_ORDER_DELIVERY_METHODS)[number];
 
-const SERVICE_ORDER_CLOSING_REASONS = [
+export const SERVICE_ORDER_CLOSING_REASONS = [
   "completed_repaired",
   "completed_calibrated",
   "completed_repaired_and_calibrated",
@@ -86,7 +86,7 @@ const SERVICE_ORDER_CLOSING_REASONS = [
 export type ServiceOrderClosingReason =
   (typeof SERVICE_ORDER_CLOSING_REASONS)[number];
 
-const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
+export const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
   "repair",
   "calibration_only",
   "return_without_repair",
@@ -118,7 +118,7 @@ export const SERVICE_ORDER_QUOTE_STATUS = defineStatusVocabulary(
   },
 );
 
-const SERVICE_ORDER_ITEM_TYPES = [
+export const SERVICE_ORDER_ITEM_TYPES = [
   "service",
   "part",
   "external_service",
@@ -129,7 +129,7 @@ const SERVICE_ORDER_ITEM_TYPES = [
 ] as const;
 export type ServiceOrderItemType = (typeof SERVICE_ORDER_ITEM_TYPES)[number];
 
-const SERVICE_ORDER_EXECUTION_RESULTS = [
+export const SERVICE_ORDER_EXECUTION_RESULTS = [
   "repaired",
   "not_repaired",
   "condemned",
@@ -183,7 +183,7 @@ export const SERVICE_ORDER_EVENT_TYPES = [
 ] as const;
 export type ServiceOrderEventType = (typeof SERVICE_ORDER_EVENT_TYPES)[number];
 
-const SERVICE_ORDER_MANUAL_APPROVAL_EVIDENCE_TYPES = [
+export const SERVICE_ORDER_MANUAL_APPROVAL_EVIDENCE_TYPES = [
   "phone",
   "whatsapp",
   "email",

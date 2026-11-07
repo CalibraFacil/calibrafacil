@@ -1,3 +1,4 @@
+import { AssetOotImpactDecisionSchema } from "@calibra-facil/schemas";
 import { ASSET_OOT_EVENT_STATUSES } from "@calibra-facil/schemas/machines";
 import { z } from "zod";
 
@@ -100,11 +101,7 @@ export type PortalDriftSeriesResponse = z.infer<
   typeof portalDriftSeriesResponseSchema
 >;
 
-const ootDecisionSchema = z.enum([
-  "NO_IMPACT",
-  "IMPACT_CONTAINED",
-  "IMPACT_ESCALATED",
-]);
+const ootDecisionSchema = AssetOotImpactDecisionSchema;
 
 export const portalOotEventSchema = z.object({
   id: z.number(),

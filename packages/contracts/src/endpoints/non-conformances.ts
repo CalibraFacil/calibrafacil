@@ -9,6 +9,9 @@ import {
   ResolveNonConformanceSchema,
   SaveOotImpactAssessmentSchema,
   SetDispositionSchema,
+  NonConformanceDispositionSchema,
+  OotImpactConclusionSchema,
+  OotImpactItemDispositionSchema,
 } from "@calibra-facil/schemas";
 import { OOT_NOTIFICATION_STATUSES } from "@calibra-facil/schemas/machines";
 
@@ -29,12 +32,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 // Schemas
 // ---------------------------------------------------------------------------
 
-const ncDispositionSchema = z.enum([
-  "rework",
-  "scrap",
-  "use_as_is",
-  "concession",
-]);
+const ncDispositionSchema = NonConformanceDispositionSchema;
 export type NonConformanceDisposition = z.infer<typeof ncDispositionSchema>;
 
 /** The stored `non_conformance` row (what the transitions answer and the detail spreads). */
@@ -153,11 +151,7 @@ const ootNotificationSchema = z.object({
 });
 export type OotNotification = z.infer<typeof ootNotificationSchema>;
 
-const impactConclusionSchema = z.enum([
-  "no_significant_impact",
-  "impact_confirmed",
-  "inconclusive",
-]);
+const impactConclusionSchema = OotImpactConclusionSchema;
 
 /** The guided 7.10 impact-assessment record, one per out-of-tolerance NC. */
 const ootImpactAssessmentSchema = z.object({
@@ -174,12 +168,7 @@ const ootImpactAssessmentSchema = z.object({
     .array(
       z.object({
         description: z.string(),
-        disposition: z.enum([
-          "no_impact",
-          "recheck",
-          "notify_downstream",
-          "other",
-        ]),
+        disposition: OotImpactItemDispositionSchema,
         note: nullableString.optional(),
       }),
     )

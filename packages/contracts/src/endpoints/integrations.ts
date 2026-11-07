@@ -5,12 +5,15 @@ import {
   CONTA_AZUL_API_BASE_URL,
   CONTA_AZUL_SYNC_DOMAINS,
   INTEGRATION_PROVIDER_CAPABILITY_FLAGS,
+  INTEGRATION_RUN_MODES,
+  INTEGRATION_SCHEDULE_FREQUENCIES,
   INTEGRATION_STATUSES,
   INTEGRATION_SYNC_ITEM_STATUSES,
   INTEGRATION_SYNC_STATUSES,
+  INTEGRATION_SYNC_TARGETS,
+  INTEGRATION_SYNC_TRIGGERS,
   normalizeIntegrationBaseUrl,
   type IntegrationObjectLinkTarget,
-  type IntegrationSyncTarget,
 } from "@calibra-facil/shared";
 
 import { nullableNumber, nullableString } from "../common";
@@ -37,16 +40,7 @@ import { endpoint, type EndpointGroup } from "./define";
 // Vocabularies
 // ---------------------------------------------------------------------------
 
-const SYNC_TARGETS = [
-  "catalog_item",
-  "contract",
-  "customer",
-  "supplier",
-  "transporter",
-  "service_order",
-  "billing_document",
-  "payable",
-] as const satisfies readonly IntegrationSyncTarget[];
+const SYNC_TARGETS = INTEGRATION_SYNC_TARGETS;
 const syncTargetSchema = z.enum(SYNC_TARGETS);
 
 const OBJECT_LINK_TARGETS = [
@@ -73,9 +67,9 @@ const objectLinkTargetSchema = z.enum(OBJECT_LINK_TARGETS);
 
 const integrationStatusSchema = z.enum(INTEGRATION_STATUSES);
 const syncStatusSchema = z.enum(INTEGRATION_SYNC_STATUSES);
-const syncTriggerSchema = z.enum(["manual", "event", "scheduled", "retry"]);
-const runModeSchema = z.enum(["disabled", "manual_only", "scheduled"]);
-const scheduleFrequencySchema = z.enum(["daily", "weekly"]);
+const syncTriggerSchema = z.enum(INTEGRATION_SYNC_TRIGGERS);
+const runModeSchema = z.enum(INTEGRATION_RUN_MODES);
+const scheduleFrequencySchema = z.enum(INTEGRATION_SCHEDULE_FREQUENCIES);
 const syncItemStatusSchema = z.enum(INTEGRATION_SYNC_ITEM_STATUSES);
 
 const contaAzulCatalogKeySchema = z.enum([

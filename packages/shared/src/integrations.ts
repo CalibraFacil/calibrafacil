@@ -169,7 +169,7 @@ export type IntegrationObjectLinkTarget =
   | "supplier"
   | "transporter";
 
-const INTEGRATION_SYNC_TARGETS = [
+export const INTEGRATION_SYNC_TARGETS = [
   "catalog_item",
   "contract",
   "customer",
@@ -180,11 +180,24 @@ const INTEGRATION_SYNC_TARGETS = [
   "payable",
 ] as const satisfies readonly IntegrationSyncTarget[];
 
-export type IntegrationSyncTrigger = "manual" | "event" | "scheduled" | "retry";
+export const INTEGRATION_SYNC_TRIGGERS = [
+  "manual",
+  "event",
+  "scheduled",
+  "retry",
+] as const;
+export type IntegrationSyncTrigger = (typeof INTEGRATION_SYNC_TRIGGERS)[number];
 
-export type IntegrationRunMode = "disabled" | "manual_only" | "scheduled";
+export const INTEGRATION_RUN_MODES = [
+  "disabled",
+  "manual_only",
+  "scheduled",
+] as const;
+export type IntegrationRunMode = (typeof INTEGRATION_RUN_MODES)[number];
 
-export type IntegrationScheduleFrequency = "daily" | "weekly";
+export const INTEGRATION_SCHEDULE_FREQUENCIES = ["daily", "weekly"] as const;
+export type IntegrationScheduleFrequency =
+  (typeof INTEGRATION_SCHEDULE_FREQUENCIES)[number];
 
 export type IntegrationScheduleStatus =
   | "disabled"

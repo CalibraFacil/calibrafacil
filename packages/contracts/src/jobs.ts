@@ -3,6 +3,26 @@ import {
   CALIBRATION_LOCATION_TYPES,
   CALIBRATION_PHASE_MODES,
   FINANCIAL_STATUSES,
+  ACCEPTANCE_CRITERION_SEVERITIES,
+  CERTIFICATE_SECTION_DISPLAYS,
+  ECCENTRICITY_INDICATOR_VARIANTS,
+  ENVIRONMENT_FIELDS,
+  FORMULA_REPORTING_GROUPS,
+  FORMULA_REPORTING_ROLES,
+  MASS_COMPOSITION_OPTION_SOURCES,
+  MASS_COMPOSITION_QUANTITY_MODES,
+  MASS_COMPOSITION_UNCERTAINTY_MODES,
+  MASS_UNITS,
+  METHOD_COLUMN_PHASES,
+  METHOD_INPUT_FIELD_SOURCES,
+  METHOD_INPUT_FIELD_TYPES,
+  METHOD_TABLE_COLUMN_ROLES,
+  METHOD_TABLE_COLUMN_TYPES,
+  METHOD_VALIDATION_OPERATORS,
+  METHOD_VALIDATION_SEVERITIES,
+  STANDARD_CHANNEL_PROPERTIES,
+  TABLE_STATISTICS,
+  UNCERTAINTY_DISTRIBUTIONS,
 } from "@calibra-facil/shared";
 import { z } from "zod";
 import {
@@ -13,6 +33,7 @@ import {
   NonConformanceTypeSchema,
   ReferenceStandardKindSchema,
   UncertaintyDistributionSchema,
+  AddressSchema,
 } from "@calibra-facil/schemas";
 
 /**
@@ -87,22 +108,20 @@ const jobFinancialContextShape = {
 // Frozen evidence snapshots (ISO/IEC 17025: reproducible exactly as performed)
 // ---------------------------------------------------------------------------
 
-const massUnitSchema = z.enum(["mg", "g", "kg"]);
+const massUnitSchema = z.enum(MASS_UNITS);
 
 const methodTableColumnSchema = z.object({
   key: z.string(),
   label: z.string(),
-  type: z.enum(["text", "number"]),
+  type: z.enum(METHOD_TABLE_COLUMN_TYPES),
   unit: z.string().optional(),
-  role: z.enum(["standard_value", "mass_standard_composition"]).optional(),
+  role: z.enum(METHOD_TABLE_COLUMN_ROLES).optional(),
   quantityKind: z.string().optional(),
-  phase: z.enum(["before", "after", "always"]).optional(),
+  phase: z.enum(METHOD_COLUMN_PHASES).optional(),
   massComposition: z
     .object({
       targetUnit: massUnitSchema.optional(),
-      optionSource: z
-        .enum(["certified_values", "composition_profiles"])
-        .optional(),
+      optionSource: z.enum(MASS_COMPOSITION_OPTION_SOURCES).optional(),
       targetColumns: z
         .object({
           certifiedValue: z.string().optional(),
@@ -113,12 +132,8 @@ const methodTableColumnSchema = z.object({
           buoyancy: z.string().optional(),
         })
         .optional(),
-      uncertaintyMode: z
-        .enum(["expanded_rss", "expanded_arithmetic"])
-        .optional(),
-      quantityMode: z
-        .enum(["linear_per_item_then_rss", "profile_linear"])
-        .optional(),
+      uncertaintyMode: z.enum(MASS_COMPOSITION_UNCERTAINTY_MODES).optional(),
+      quantityMode: z.enum(MASS_COMPOSITION_QUANTITY_MODES).optional(),
     })
     .optional(),
   standardValue: z
@@ -139,14 +154,14 @@ const methodTableColumnSchema = z.object({
 const methodInputFieldSchema = z.object({
   key: z.string(),
   label: z.string(),
-  type: z.enum(["text", "number", "select", "table"]),
+  type: z.enum(METHOD_INPUT_FIELD_TYPES),
   unit: z.string().optional(),
   quantityKind: z.string().optional(),
   required: z.boolean().optional(),
   options: z.array(z.string()).optional(),
   defaultValue: z.union([z.string(), z.number()]).optional(),
   columns: z.array(methodTableColumnSchema).optional(),
-  source: z.enum(["manual", "asset_spec"]).optional(),
+  source: z.enum(METHOD_INPUT_FIELD_SOURCES).optional(),
   assetSpecKey: z.string().optional(),
   allowOverride: z.boolean().optional(),
   phaseBlockKey: z.string().optional(),
@@ -154,7 +169,7 @@ const methodInputFieldSchema = z.object({
   eccentricityIndicator: z
     .object({
       enabled: z.boolean().optional(),
-      variant: z.enum(["circular_platform", "road_scale"]).optional(),
+      variant: z.enum(ECCENTRICITY_INDICATOR_VARIANTS).optional(),
     })
     .optional(),
   weighingRangeResolver: z
@@ -190,7 +205,7 @@ const methodVariableBindingSchema = z.discriminatedUnion("source", [
     source: z.literal("table_statistic"),
     fieldKey: z.string(),
     columnKey: z.string(),
-    statistic: z.enum(["mean", "sample_stddev", "count", "min", "max"]),
+    statistic: z.enum(TABLE_STATISTICS),
   }),
   z.object({
     key: z.string(),
@@ -203,7 +218,7 @@ const methodVariableBindingSchema = z.discriminatedUnion("source", [
     key: z.string(),
     label: z.string().optional(),
     source: z.literal("environment"),
-    field: z.enum(["temperature", "humidity", "pressure"]),
+    field: z.enum(ENVIRONMENT_FIELDS),
   }),
   z.object({
     key: z.string(),
@@ -218,13 +233,7 @@ const methodVariableBindingSchema = z.discriminatedUnion("source", [
     source: z.literal("standard_channel"),
     standardId: z.number().optional(),
     channelKey: z.string(),
-    property: z.enum([
-      "value",
-      "correction",
-      "uncertainty",
-      "coverageFactor",
-      "drift",
-    ]),
+    property: z.enum(STANDARD_CHANNEL_PROPERTIES),
   }),
 ]);
 
@@ -235,20 +244,8 @@ const formulaScopeSchema = z.discriminatedUnion("kind", [
 
 const formulaReportingSchema = z.object({
   includeInCertificate: z.boolean().optional(),
-  role: z
-    .enum([
-      "primary_result",
-      "expanded_uncertainty",
-      "coverage_factor",
-      "conformity_margin",
-      "conformity_verdict",
-      "uncertainty_component",
-      "auxiliary",
-    ])
-    .optional(),
-  group: z
-    .enum(["calibration_result", "uncertainty_budget", "raw_calculation"])
-    .optional(),
+  role: z.enum(FORMULA_REPORTING_ROLES).optional(),
+  group: z.enum(FORMULA_REPORTING_GROUPS).optional(),
 });
 
 const methodFormulaSchema = z.object({
@@ -298,7 +295,7 @@ export const compiledMethodSnapshotSchema = z.object({
         key: z.string(),
         label: z.string().optional(),
         expression: z.string(),
-        severity: z.enum(["info", "warning", "blocking"]),
+        severity: z.enum(ACCEPTANCE_CRITERION_SEVERITIES),
         message: z.string(),
         normalizedFormula: z.string().optional(),
         criterionFingerprint: z.string().optional(),
@@ -314,17 +311,17 @@ export type CompiledMethodSnapshot = z.infer<
 
 const methodValidationSchema = z.object({
   leftExpression: z.string(),
-  operator: z.enum(["<", "<=", ">", ">=", "==", "!="]),
+  operator: z.enum(METHOD_VALIDATION_OPERATORS),
   rightExpression: z.string(),
   message: z.string(),
-  severity: z.enum(["error", "warning"]),
+  severity: z.enum(METHOD_VALIDATION_SEVERITIES),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const methodTypeBComponentSchema = z.object({
   name: z.string(),
   value: z.number(),
-  distribution: z.enum(["normal", "rectangular", "triangular", "u-shaped"]),
+  distribution: z.enum(UNCERTAINTY_DISTRIBUTIONS),
   coverageFactor: z.number().optional(),
   divisor: z.number().optional(),
   degreesOfFreedom: z.number().optional(),
@@ -333,9 +330,9 @@ const methodTypeBComponentSchema = z.object({
 const methodCertificateContentSchema = z.object({
   procedureCode: z.string().optional(),
   referenceStandards: z.array(z.string()).optional(),
-  certifiedValuesDisplay: z.enum(["full", "hidden"]).optional(),
-  massCompositionDisplay: z.enum(["full", "hidden"]).optional(),
-  uncertaintyBudgetDisplay: z.enum(["full", "hidden"]).optional(),
+  certifiedValuesDisplay: z.enum(CERTIFICATE_SECTION_DISPLAYS).optional(),
+  massCompositionDisplay: z.enum(CERTIFICATE_SECTION_DISPLAYS).optional(),
+  uncertaintyBudgetDisplay: z.enum(CERTIFICATE_SECTION_DISPLAYS).optional(),
   decisionRuleStatement: z.string().optional(),
   sections: z
     .array(
@@ -747,17 +744,7 @@ export const jobDetailSchema = z.object({
   customerId: z.number(),
   customerName: nullableString,
   customerTaxId: nullableString,
-  customerAddress: z
-    .object({
-      cep: z.string().optional(),
-      number: z.string().optional(),
-      street: z.string().optional(),
-      complement: z.string().optional(),
-      neighbourhood: z.string().optional(),
-      city: z.string().optional(),
-      state: z.string().optional(),
-    })
-    .nullable(),
+  customerAddress: AddressSchema.nullable(),
   labName: nullableString,
   labStreet: nullableString,
   labNumber: nullableString,

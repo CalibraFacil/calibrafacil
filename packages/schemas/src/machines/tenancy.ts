@@ -34,7 +34,7 @@ export const ORGANIZATION_MACHINE = defineStateMachine({
 // organization_unit.status: a laboratory's unit (site).
 //   create   apps/api/src/lib/units.ts (the default unit), routes/units.ts POST
 //   archive / reactivate   routes/units.ts PATCH (never the default unit)
-const ORGANIZATION_UNIT_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
+export const ORGANIZATION_UNIT_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
 export type OrganizationUnitStatus =
   (typeof ORGANIZATION_UNIT_STATUSES)[number];
 
@@ -106,7 +106,11 @@ export const EMAIL_DOMAIN_MACHINE = defineStateMachine({
 //   key_failure   packages/lab-email-domain (a send the provider refused for the
 //                   key: invalid or rate_limited), the health cron, verify
 //   key_ok        a successful health check or verify
-const EMAIL_DOMAIN_KEY_STATUSES = ["ok", "invalid", "rate_limited"] as const;
+export const EMAIL_DOMAIN_KEY_STATUSES = [
+  "ok",
+  "invalid",
+  "rate_limited",
+] as const;
 export type OrganizationEmailDomainKeyStatus =
   (typeof EMAIL_DOMAIN_KEY_STATUSES)[number];
 

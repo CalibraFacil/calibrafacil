@@ -1,8 +1,8 @@
 import { z } from "zod";
 import {
+  INTEGRATION_SYNC_TARGETS,
+  INTEGRATION_SYNC_TRIGGERS,
   PUBLIC_API_WEBHOOK_MAX_ATTEMPTS,
-  type IntegrationSyncTarget,
-  type IntegrationSyncTrigger,
 } from "@calibra-facil/shared";
 
 // The one job contract for background work: every message that travels through
@@ -22,23 +22,9 @@ import {
 // process (its client lives in the API's integrations module), so it is never a
 // queue row and has its own schema, `ContaAzulSyncMessageSchema`, below.
 
-const IntegrationSyncTargetSchema = z.enum([
-  "catalog_item",
-  "contract",
-  "customer",
-  "supplier",
-  "transporter",
-  "service_order",
-  "billing_document",
-  "payable",
-]) satisfies z.ZodType<IntegrationSyncTarget>;
+const IntegrationSyncTargetSchema = z.enum(INTEGRATION_SYNC_TARGETS);
 
-const IntegrationSyncTriggerSchema = z.enum([
-  "manual",
-  "event",
-  "scheduled",
-  "retry",
-]) satisfies z.ZodType<IntegrationSyncTrigger>;
+const IntegrationSyncTriggerSchema = z.enum(INTEGRATION_SYNC_TRIGGERS);
 
 const id = z.number();
 const userId = z.string();

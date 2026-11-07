@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { ORGANIZATION_UNIT_STATUSES } from "@calibra-facil/schemas/machines";
 import {
   CreateUnitSchema,
   UpdateAssignmentsSchema,
   UpdateMemberRoleSchema,
   UpdateUnitSchema,
+  UnitAssignmentRoleSchema,
 } from "@calibra-facil/schemas";
 
 import { nullableString } from "../common";
@@ -34,7 +36,7 @@ const governanceViewerSchema = z.object({
 });
 export type GovernanceViewer = z.infer<typeof governanceViewerSchema>;
 
-const unitAssignmentRoleSchema = z.enum(["member", "technician", "unit_admin"]);
+const unitAssignmentRoleSchema = UnitAssignmentRoleSchema;
 export type UnitAssignmentRole = z.infer<typeof unitAssignmentRoleSchema>;
 
 /** A unit the member can reach, with the member's role in it. */
@@ -72,7 +74,7 @@ const organizationUnitSchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
-  status: z.enum(["ACTIVE", "ARCHIVED"]),
+  status: z.enum(ORGANIZATION_UNIT_STATUSES),
   isDefault: z.boolean(),
   createdAt: z.string(),
   archivedAt: nullableString,

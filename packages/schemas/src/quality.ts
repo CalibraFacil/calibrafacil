@@ -88,7 +88,7 @@ export const SendStandardRecallSchema = z.object({
  * out-of-tolerance event's effect on the customer's measurements. Regulated
  * workflow → schema-first; the web form parses through this schema.
  */
-const OotImpactItemDispositionSchema = z.enum([
+export const OotImpactItemDispositionSchema = z.enum([
   "no_impact",
   "recheck",
   "notify_downstream",
@@ -105,7 +105,7 @@ const OotImpactAssessmentItemSchema = z.object({
   note: z.string().trim().max(1000).optional(),
 });
 
-const OotImpactConclusionSchema = z.enum([
+export const OotImpactConclusionSchema = z.enum([
   "no_significant_impact",
   "impact_confirmed",
   "inconclusive",
