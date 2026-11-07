@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { portalRouter } from "./portal";
+import { portalRouter as barePortalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
 import { asset, assetAuditLog, assetType } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -10,6 +10,9 @@ import {
   seedPortalCustomer,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRouter = withErrorHandling(barePortalRouter);
 
 // Real-DB + real-RBAC integration test for the customer-owned calibration interval
 // write endpoint (PUT /api/portal/assets/:id/interval). Spec:

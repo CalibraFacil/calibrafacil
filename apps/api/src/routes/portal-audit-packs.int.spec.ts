@@ -29,9 +29,12 @@ vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 
-import { portalRouter } from "./portal";
+import { portalRouter as barePortalRouter } from "./portal";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRouter = withErrorHandling(barePortalRouter);
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = {

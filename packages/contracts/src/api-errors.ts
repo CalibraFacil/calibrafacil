@@ -206,7 +206,6 @@ export const API_ERROR_CODES = [
   "agreement_not_found",
   "agreement_terms_required",
   "agreement_reference_invalid",
-  "service_order_not_found",
   "invalid_limit",
   "release_not_calculated",
   "release_reason_required",
@@ -242,6 +241,26 @@ export const API_ERROR_CODES = [
   // Webhooks.
   "webhook_not_found",
   "webhook_delivery_not_found",
+
+  // Client portal and public verification: audit packs, out-of-tolerance
+  // notices and events, the portal's own host and domain.
+  "portal_customer_not_linked",
+  "certificate_payment_pending",
+  "standard_certificate_not_available",
+  "audit_pack_not_found",
+  "audit_pack_not_ready",
+  "audit_pack_expired",
+  "audit_pack_too_large",
+  "audit_pack_empty",
+  "oot_notification_not_found",
+  "oot_event_not_found",
+  "oot_assessment_exists",
+  "portal_domain_not_configured",
+  "portal_domain_not_verified",
+  "portal_domain_txt_not_found",
+  "portal_domain_in_use",
+  "invalid_verification_token",
+  "certificate_integrity_record_missing",
 
   // LEGACY (upper-case): shipped before this registry existed and still
   // asserted by clients/tests of the job and visit routes. Kept verbatim so

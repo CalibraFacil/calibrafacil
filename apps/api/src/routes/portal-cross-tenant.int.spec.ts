@@ -36,10 +36,10 @@ import {
   serviceOrderQuote,
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
-import { portalRouter } from "./portal";
+import { portalRouter as barePortalRouter } from "./portal";
 import { portalRequestsRouter as barePortalRequestsRouter } from "./portal-requests";
 import { portalVisitsRouter as barePortalVisitsRouter } from "./portal-visits";
-import { portalNotificationsRouter } from "./portal-notifications";
+import { portalNotificationsRouter as barePortalNotificationsRouter } from "./portal-notifications";
 import { portalServiceOrdersRouter as portalServiceOrdersRouterBare } from "./service-orders";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
@@ -52,6 +52,11 @@ import {
   seedStandard,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+const portalRouter = withErrorHandling(barePortalRouter);
+const portalNotificationsRouter = withErrorHandling(
+  barePortalNotificationsRouter,
+);
 
 const portalRequestsRouter = withErrorHandling(barePortalRequestsRouter);
 const portalVisitsRouter = withErrorHandling(barePortalVisitsRouter);

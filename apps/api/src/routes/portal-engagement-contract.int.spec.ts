@@ -31,16 +31,21 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import { portalNotificationsRouter } from "./portal-notifications";
+import { portalNotificationsRouter as barePortalNotificationsRouter } from "./portal-notifications";
 import { portalRequestsRouter as barePortalRequestsRouter } from "./portal-requests";
 import { portalVisitsRouter as barePortalVisitsRouter } from "./portal-visits";
-import { portalRouter } from "./portal";
+import { portalRouter as barePortalRouter } from "./portal";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRouter = withErrorHandling(barePortalRouter);
+const portalNotificationsRouter = withErrorHandling(
+  barePortalNotificationsRouter,
+);
 
 const portalRequestsRouter = withErrorHandling(barePortalRequestsRouter);
 const portalVisitsRouter = withErrorHandling(barePortalVisitsRouter);

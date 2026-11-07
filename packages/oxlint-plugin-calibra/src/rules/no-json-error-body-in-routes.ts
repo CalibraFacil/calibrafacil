@@ -38,11 +38,7 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
 
   ["apps/api/src/routes/notifications.ts", 4],
   ["apps/api/src/routes/organization-media.ts", 9],
-  ["apps/api/src/routes/portal-domains.ts", 6],
-  ["apps/api/src/routes/portal-notifications.ts", 4],
-  ["apps/api/src/routes/portal.ts", 96],
   ["apps/api/src/routes/profile-media.ts", 7],
-  ["apps/api/src/routes/public-api.ts", 3],
   ["apps/api/src/routes/public-signup.ts", 8],
   ["apps/api/src/routes/reports.ts", 9],
 
@@ -52,7 +48,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/sso.ts", 11],
   ["apps/api/src/routes/sync/attachments.ts", 3],
 
-  ["apps/api/src/routes/verify.ts", 13],
   ["apps/api/src/routes/webhooks.ts", 3],
 ]);
 

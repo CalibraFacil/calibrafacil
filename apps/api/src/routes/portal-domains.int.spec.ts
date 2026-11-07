@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { portalDomainsRouter } from "./portal-domains";
+import { portalDomainsRouter as barePortalDomainsRouter } from "./portal-domains";
 import { db } from "@calibra-facil/db";
 import { organizationCustomDomain } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalDomainsRouter = withErrorHandling(barePortalDomainsRouter);
 
 // Real-DB + real-RBAC integration tests for portalDomainsRouter.
 //

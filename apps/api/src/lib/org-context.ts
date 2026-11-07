@@ -11,6 +11,7 @@ import {
 import {
   accreditedScopeLineAuditLog,
   assetAuditLog,
+  assetOotAuditLog,
   authorizedSignatoryAuditLog,
   calibrationRequestAuditLog,
   controlChartAuditLog,
@@ -109,6 +110,13 @@ const AUDIT_WRITERS = {
       ...common(ctx, entry),
       assetId: id,
       reason: entry.reason ?? null,
+    }),
+  // The customer's own record of an out-of-tolerance event (no `reason` column).
+  assetOotEvent: (ctx, id, entry) =>
+    ctx.o.insert(assetOotAuditLog).values({
+      ...common(ctx, entry),
+      eventId: id,
+      userAgent: ctx.actor.userAgent ?? null,
     }),
   method: (ctx, id, entry) =>
     ctx.o.insert(methodAuditLog).values({

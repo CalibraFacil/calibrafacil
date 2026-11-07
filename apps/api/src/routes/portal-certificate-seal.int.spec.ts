@@ -11,8 +11,11 @@ import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext, seedService } from "../../test/integration/seed";
-import { portalRouter } from "./portal";
+import { portalRouter as barePortalRouter } from "./portal";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRouter = withErrorHandling(barePortalRouter);
 
 // Q42: the accreditation seal (and the number printed with it) the portal shows for an
 // ISSUED certificate is the decision FROZEN at approval (certificate_input), never
