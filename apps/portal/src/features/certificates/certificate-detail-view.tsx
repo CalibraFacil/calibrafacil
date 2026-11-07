@@ -48,6 +48,7 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { AccreditationSeal } from "@/components/accreditation-seal";
 import { StatusPill } from "@/components/status-pill";
+import { CertificateLifecyclePill } from "@/components/certificate-lifecycle-pill";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import {
   portalDownloadLinkResponseSchema,
@@ -426,15 +427,11 @@ function AmendmentChainTimeline({
                       {member.jobId}
                     </Link>
                   )}
-                  {member.isCurrent ? (
-                    <StatusPill tone="ok" size="sm">
-                      Vigente
-                    </StatusPill>
-                  ) : (
-                    <StatusPill tone="neutral" size="sm" dot={false}>
-                      Substituído
-                    </StatusPill>
-                  )}
+                  <CertificateLifecyclePill
+                    status={member.isCurrent ? "ISSUED" : "SUPERSEDED"}
+                    size="sm"
+                    dot={member.isCurrent}
+                  />
                 </p>
                 <p className="text-muted-foreground mt-0.5 text-xs">
                   {member.amendmentNumber
@@ -610,9 +607,9 @@ export function CertificateDetailView({
                     {conformityLabel}
                   </StatusPill>
                   {certificate.certificateStatus === "WITHDRAWN" ? (
-                    <StatusPill tone="critical">Retirado</StatusPill>
+                    <CertificateLifecyclePill status="WITHDRAWN" />
                   ) : amendment?.isSuperseded ? (
-                    <StatusPill tone="warning">Substituído</StatusPill>
+                    <CertificateLifecyclePill status="SUPERSEDED" />
                   ) : amendment?.isAmendment ? (
                     <StatusPill tone="info">
                       Retificação nº {amendment.amendmentNumber ?? 1}

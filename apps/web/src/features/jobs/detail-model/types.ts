@@ -2,6 +2,8 @@ import type { JobAllowedActions } from '@calibra-facil/contracts'
 import { type MeasurementUnit } from '@calibra-facil/shared/units'
 import type { MethodInputType } from '@/components/method-runtime/types'
 
+import type { CertificateLifecycleStatus } from '@calibra-facil/schemas'
+
 export type { JobStatus } from '@calibra-facil/schemas'
 
 /**
@@ -107,7 +109,7 @@ export type ApprovedJobRecordData = {
    * WITHDRAWN. Absent for a job read from the desktop local server.
    */
   certificateLifecycle?: {
-    status: 'ISSUED' | 'SUPERSEDED' | 'WITHDRAWN'
+    status: CertificateLifecycleStatus
     changedAt: string | null
     reason: string | null
   } | null

@@ -1,13 +1,15 @@
-import type {
-  FinancialInstallmentStatus,
-  FinancialInstallmentsSummary,
-  ReceivableInstallmentStatus,
+import {
+  RECEIVABLE_INSTALLMENT_STATUS,
+  type FinancialInstallmentStatus,
+  type FinancialInstallmentsSummary,
+  type ReceivableInstallmentStatus,
 } from '@calibra-facil/shared'
 import {
   formatCalendarDate,
   formatMoneyBRL,
 } from '@calibra-facil/shared/format'
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import {
   Card,
   CardContent,
@@ -21,27 +23,6 @@ interface InstallmentsBlockProps {
   summary: FinancialInstallmentsSummary
   /** Max rows to render inline. Defaults to 12. */
   maxRows?: number
-}
-
-const INSTALLMENT_STATUS_LABEL: Record<ReceivableInstallmentStatus, string> = {
-  OPEN: 'Em aberto',
-  PAID: 'Paga',
-  OVERDUE: 'Em atraso',
-  VOID: 'Anulada',
-}
-
-function installmentToneClasses(status: ReceivableInstallmentStatus): string {
-  switch (status) {
-    case 'PAID':
-      return 'text-emerald-600 border-emerald-500/40 bg-emerald-50'
-    case 'OVERDUE':
-      return 'text-destructive border-destructive/40 bg-destructive/5'
-    case 'VOID':
-      return 'text-muted-foreground line-through opacity-70'
-    case 'OPEN':
-    default:
-      return 'text-muted-foreground'
-  }
 }
 
 function rowToneClasses(status: ReceivableInstallmentStatus): string {
@@ -123,12 +104,12 @@ export function InstallmentsBlock({
                 <span className="font-mono tabular-nums">
                   {formatMoneyBRL(row.amountCents)}
                 </span>
-                <Badge
-                  variant="outline"
-                  className={cn('shrink-0', installmentToneClasses(row.status))}
+                <StatusBadge
+                  tone={RECEIVABLE_INSTALLMENT_STATUS.tone(row.status)}
+                  className="shrink-0"
                 >
-                  {INSTALLMENT_STATUS_LABEL[row.status]}
-                </Badge>
+                  {RECEIVABLE_INSTALLMENT_STATUS.label(row.status)}
+                </StatusBadge>
               </li>
             )
           })}

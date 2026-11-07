@@ -1,45 +1,17 @@
 import type { SignalTone } from '@calibra-facil/shared/status-vocabulary'
-import type {
-  BillingDocumentExportStatus,
-  BillingDocumentStatus,
-  BillingReadinessStatus,
-  CommercialAgreementStatus,
-  ReceivableInstallmentStatus,
+import {
+  BILLING_DOCUMENT_EXPORT_STATUS,
+  BILLING_DOCUMENT_STATUS,
+  RECEIVABLE_INSTALLMENT_STATUS,
+  type BillingReadinessStatus,
 } from '@calibra-facil/shared'
 
 import { formatFinanceMoney } from '@/lib/finance-formatters'
 import { cn } from '@/lib/utils'
 
-// — Tone maps. Each is `satisfies Record<Union, SignalTone>` so that if a
+// — Tone map. The finance statuses with a vocabulary (document, installment, export,
+//   agreement) read it from `@calibra-facil/shared`; this one is `satisfies Record<Union, SignalTone>` so that if a
 //   shared status enum gains a member, tsgo fails here until we classify it. —
-
-const BILLING_DOCUMENT_TONE = {
-  DRAFT: 'neutral',
-  ISSUED: 'info',
-  PAID: 'ok',
-  OVERDUE: 'critical',
-  VOID: 'neutral',
-} satisfies Record<BillingDocumentStatus, SignalTone>
-
-const INSTALLMENT_TONE = {
-  OPEN: 'info',
-  PAID: 'ok',
-  OVERDUE: 'critical',
-  VOID: 'neutral',
-} satisfies Record<ReceivableInstallmentStatus, SignalTone>
-
-const EXPORT_STATUS_TONE = {
-  NOT_EXPORTED: 'neutral',
-  EXPORTED: 'ok',
-  FAILED: 'critical',
-} satisfies Record<BillingDocumentExportStatus, SignalTone>
-
-const AGREEMENT_TONE = {
-  DRAFT: 'neutral',
-  ACTIVE: 'ok',
-  EXPIRED: 'warning',
-  CANCELED: 'critical',
-} satisfies Record<CommercialAgreementStatus, SignalTone>
 
 const BILLING_READINESS_TONE = {
   READY: 'info',
@@ -47,26 +19,6 @@ const BILLING_READINESS_TONE = {
   BILLED: 'neutral',
   SENT: 'ok',
 } satisfies Record<BillingReadinessStatus, SignalTone>
-
-export function billingDocumentTone(status: BillingDocumentStatus): SignalTone {
-  return BILLING_DOCUMENT_TONE[status]
-}
-
-export function installmentTone(
-  status: ReceivableInstallmentStatus,
-): SignalTone {
-  return INSTALLMENT_TONE[status]
-}
-
-export function exportStatusTone(
-  status: BillingDocumentExportStatus,
-): SignalTone {
-  return EXPORT_STATUS_TONE[status]
-}
-
-export function agreementTone(status: CommercialAgreementStatus): SignalTone {
-  return AGREEMENT_TONE[status]
-}
 
 export function billingReadinessTone(
   status: BillingReadinessStatus,
@@ -78,57 +30,19 @@ export function billingReadinessTone(
 //   fields; these parse-then-map so callers stay free of `as` assertions and
 //   unknown values degrade gracefully to `neutral`. —
 
-function asBillingDocumentStatus(value: string): BillingDocumentStatus | null {
-  switch (value) {
-    case 'DRAFT':
-    case 'ISSUED':
-    case 'PAID':
-    case 'OVERDUE':
-    case 'VOID':
-      return value
-    default:
-      return null
-  }
-}
-
-function asInstallmentStatus(
-  value: string,
-): ReceivableInstallmentStatus | null {
-  switch (value) {
-    case 'OPEN':
-    case 'PAID':
-    case 'OVERDUE':
-    case 'VOID':
-      return value
-    default:
-      return null
-  }
-}
-
-function asExportStatus(value: string): BillingDocumentExportStatus | null {
-  switch (value) {
-    case 'NOT_EXPORTED':
-    case 'EXPORTED':
-    case 'FAILED':
-      return value
-    default:
-      return null
-  }
-}
-
 export function billingDocumentToneOf(status: string): SignalTone {
-  const parsed = asBillingDocumentStatus(status)
-  return parsed ? BILLING_DOCUMENT_TONE[parsed] : 'neutral'
+  const known = BILLING_DOCUMENT_STATUS.parse(status)
+  return known ? BILLING_DOCUMENT_STATUS.tone(known) : 'neutral'
 }
 
 export function installmentToneOf(status: string): SignalTone {
-  const parsed = asInstallmentStatus(status)
-  return parsed ? INSTALLMENT_TONE[parsed] : 'neutral'
+  const known = RECEIVABLE_INSTALLMENT_STATUS.parse(status)
+  return known ? RECEIVABLE_INSTALLMENT_STATUS.tone(known) : 'neutral'
 }
 
 export function exportStatusToneOf(status: string): SignalTone {
-  const parsed = asExportStatus(status)
-  return parsed ? EXPORT_STATUS_TONE[parsed] : 'neutral'
+  const known = BILLING_DOCUMENT_EXPORT_STATUS.parse(status)
+  return known ? BILLING_DOCUMENT_EXPORT_STATUS.tone(known) : 'neutral'
 }
 
 const MONEY_TONE_CLASS: Record<SignalTone, string> = {

@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+  ServiceOrderStatusRow,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,7 +12,6 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export interface ServiceOrderClosedEmailProps {
@@ -37,7 +40,9 @@ export function ServiceOrderClosedEmail({
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="info">OS encerrada</Badge>
+        <ServiceOrderStatusBadge status="closed">
+          OS encerrada
+        </ServiceOrderStatusBadge>
         <Title>Ordem de serviço encerrada</Title>
         <Paragraph>
           Olá, {customerName}! A ordem de serviço {serviceOrderNumber} foi
@@ -46,7 +51,7 @@ export function ServiceOrderClosedEmail({
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Encerrada" />
+          <ServiceOrderStatusRow status="closed" />
         </DetailBox>
 
         <Paragraph>

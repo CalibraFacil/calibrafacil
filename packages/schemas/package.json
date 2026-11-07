@@ -30,6 +30,10 @@
       "types": "./src/standards-judgement.fixtures.ts",
       "default": "./src/standards-judgement.fixtures.ts"
     },
+    "./sync-status": {
+      "types": "./src/sync-status.ts",
+      "default": "./src/sync-status.ts"
+    },
     "./state-machine": {
       "types": "./src/state-machine.ts",
       "default": "./src/state-machine.ts"

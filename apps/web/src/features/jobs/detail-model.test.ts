@@ -27,7 +27,6 @@ import {
   formatDateTime,
   formatExpandedUncertainty,
   formatReviewValue,
-  getFinancialVariant,
   numberFromUnknown,
   numericValues,
   reviewColumnDisplayLabel,
@@ -36,12 +35,10 @@ import {
 describe('job detail model', () => {
   it('keeps job status labels and badge variants in the feature layer', () => {})
 
-  it('formats dates and financial badge variants', () => {
+  it('formats dates', () => {
     expect(formatDate(null)).toBe('-')
     expect(formatDate('2026-05-20T10:30:00.000Z')).toContain('20/05/2026')
     expect(formatDateTime('2026-05-20T10:30:00.000Z')).toContain('20/05/2026')
-    expect(getFinancialVariant('OVERDUE')).toBe('destructive')
-    expect(getFinancialVariant('UNBILLED')).toBe('secondary')
   })
 
   it('formats review values and numeric coercions', () => {

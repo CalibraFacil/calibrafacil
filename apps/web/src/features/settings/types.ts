@@ -16,6 +16,9 @@ import type {
   IntegrationMappedPreviewSample,
   IntegrationReadinessSummary,
   IntegrationRemoteDocumentSummary,
+  IntegrationStatus,
+  IntegrationSyncItemStatus,
+  IntegrationSyncStatus,
   IntegrationTargetCoverageSummary,
   IntegrationTargetSyncSummary,
 } from '@calibra-facil/shared'
@@ -176,7 +179,7 @@ export type IntegrationRun = {
   id: string
   target: SyncTarget
   trigger: 'manual' | 'event' | 'scheduled' | 'retry'
-  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'PARTIAL'
+  status: IntegrationSyncStatus
   processedCount: number
   successCount: number
   errorCount: number
@@ -206,7 +209,7 @@ type IntegrationSyncItem = {
     | 'link'
     | 'validate'
     | 'delete'
-  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'DEAD_LETTER'
+  status: IntegrationSyncItemStatus
   attemptCount: number
   lastErrorCode: string | null
   lastErrorMessage: string | null
@@ -249,7 +252,7 @@ export type IntegrationSummary = {
   type: 'financial_erp'
   provider: 'generic_http' | 'conta_azul'
   name: string
-  status: 'ACTIVE' | 'DISABLED' | 'ACTION_REQUIRED'
+  status: IntegrationStatus
   lastValidatedAt: string | null
   lastValidationError: string | null
   createdAt: string

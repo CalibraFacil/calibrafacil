@@ -5,12 +5,13 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { useState } from 'react'
-import type {
-  CertificateReleasePolicyMode,
-  CertificateReleaseStatus,
+import {
+  CERTIFICATE_RELEASE_STATUS,
+  type CertificateReleasePolicyMode,
+  type CertificateReleaseStatus,
 } from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
-import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Button } from '@calibra-facil/ui/button'
 import {
   Dialog,
@@ -65,16 +66,6 @@ function useCertificateRelease(calibrationJobId: number, enabled = true) {
   })
 }
 
-export const CERTIFICATE_RELEASE_LABEL: Record<
-  CertificateReleaseStatus,
-  string
-> = {
-  RELEASED: 'Liberado',
-  HELD_FOR_BILLING: 'Retido para faturamento',
-  HELD_FOR_PAYMENT: 'Retido para pagamento',
-  RELEASED_BY_EXCEPTION: 'Liberado por exceção',
-}
-
 export function isHeldStatus(status: CertificateReleaseStatus) {
   return status === 'HELD_FOR_BILLING' || status === 'HELD_FOR_PAYMENT'
 }
@@ -86,27 +77,15 @@ interface CertificateReleaseBadgeProps {
 export function CertificateReleaseBadge({
   status,
 }: CertificateReleaseBadgeProps) {
-  const label = CERTIFICATE_RELEASE_LABEL[status]
-  const variant =
-    status === 'RELEASED' || status === 'RELEASED_BY_EXCEPTION'
-      ? 'default'
-      : 'outline'
-  const tone =
-    status === 'RELEASED'
-      ? 'bg-emerald-600 text-white'
-      : status === 'RELEASED_BY_EXCEPTION'
-        ? 'bg-amber-500 text-white'
-        : 'border-amber-500 bg-amber-50 text-amber-700'
-
   return (
-    <Badge
-      variant={variant}
-      className={`shrink-0 ${tone}`}
+    <StatusBadge
+      tone={CERTIFICATE_RELEASE_STATUS.tone(status)}
+      className="shrink-0"
       data-testid="certificate-release-badge"
       data-status={status}
     >
-      {label}
-    </Badge>
+      {CERTIFICATE_RELEASE_STATUS.label(status)}
+    </StatusBadge>
   )
 }
 

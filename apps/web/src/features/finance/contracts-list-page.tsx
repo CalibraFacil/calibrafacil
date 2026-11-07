@@ -3,10 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ColumnDef } from '@tanstack/react-table'
-import {
-  getCommercialAgreementStatusLabel,
-  type CommercialAgreementStatus,
-} from '@calibra-facil/shared'
+import { COMMERCIAL_AGREEMENT_STATUS } from '@calibra-facil/shared'
 
 import { CommercialAgreementStatusBadge } from '@/components/finance-status-badges'
 import { formatFinanceDate } from '@/lib/finance-formatters'
@@ -39,21 +36,11 @@ import {
 } from '@/features/finance/mutations'
 import type { ContractListItem } from '@/features/finance/types'
 
-const CONTRACT_STATUSES: CommercialAgreementStatus[] = [
-  'DRAFT',
-  'ACTIVE',
-  'EXPIRED',
-  'CANCELED',
-]
-
 const STATUS_FACETS: FacetConfig[] = [
   {
     columnId: 'status',
     title: 'Status',
-    options: CONTRACT_STATUSES.map((value) => ({
-      value,
-      label: getCommercialAgreementStatusLabel(value),
-    })),
+    options: COMMERCIAL_AGREEMENT_STATUS.options,
   },
 ]
 

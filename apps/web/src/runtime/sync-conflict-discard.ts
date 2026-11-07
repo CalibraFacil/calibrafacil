@@ -1,4 +1,5 @@
 import type { LocalSyncConflict } from '@calibra-facil/contracts'
+import { SYNC_CONFLICT_STATUS } from '@calibra-facil/schemas'
 
 /**
  * How the desktop presents what the user decides on a sync conflict.
@@ -8,16 +9,8 @@ import type { LocalSyncConflict } from '@calibra-facil/contracts'
  * decided, when and why, kept for audit, and never sent. The wording says what it does.
  */
 
-const STATUS_LABELS: Record<LocalSyncConflict['status'], string> = {
-  open: 'Aberto',
-  resolved: 'Mantida a alteração local',
-  discarded_by_user: 'Descartado pelo usuário',
-  // What older builds called the same decision.
-  ignored: 'Ignorado (versão anterior)',
-}
-
 export function conflictStatusLabel(status: LocalSyncConflict['status']) {
-  return STATUS_LABELS[status]
+  return SYNC_CONFLICT_STATUS.label(status)
 }
 
 export type ConflictDiscardPrompt = {

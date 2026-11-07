@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { Badge } from '@calibra-facil/ui/badge'
+import {
+  INTEGRATION_SYNC_ITEM_STATUS,
+  INTEGRATION_SYNC_STATUS,
+} from '@calibra-facil/shared'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Button } from '@calibra-facil/ui/button'
 import { ScrollArea } from '@calibra-facil/ui/scroll-area'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
@@ -227,29 +232,25 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 }
 
 function RunStatusBadge({ status }: { status: string }) {
-  const variant =
-    status === 'FAILED'
-      ? 'destructive'
-      : status === 'COMPLETED'
-        ? 'outline'
-        : 'secondary'
+  const known = INTEGRATION_SYNC_STATUS.parse(status)
   return (
-    <Badge variant={variant} className="font-normal">
-      {status}
-    </Badge>
+    <StatusBadge
+      tone={known ? INTEGRATION_SYNC_STATUS.tone(known) : 'neutral'}
+      className="font-normal"
+    >
+      {known ? INTEGRATION_SYNC_STATUS.label(known) : status}
+    </StatusBadge>
   )
 }
 
 function RunItemStatusBadge({ status }: { status: string }) {
-  const variant =
-    status === 'FAILED' || status === 'DEAD_LETTER'
-      ? 'destructive'
-      : status === 'SUCCEEDED'
-        ? 'outline'
-        : 'secondary'
+  const known = INTEGRATION_SYNC_ITEM_STATUS.parse(status)
   return (
-    <Badge variant={variant} className="font-normal">
-      {status}
-    </Badge>
+    <StatusBadge
+      tone={known ? INTEGRATION_SYNC_ITEM_STATUS.tone(known) : 'neutral'}
+      className="font-normal"
+    >
+      {known ? INTEGRATION_SYNC_ITEM_STATUS.label(known) : status}
+    </StatusBadge>
   )
 }

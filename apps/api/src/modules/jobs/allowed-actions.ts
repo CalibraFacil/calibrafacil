@@ -1,3 +1,4 @@
+import type { CertificateStatusEventLike } from "@calibra-facil/schemas/certificate-lifecycle";
 import { canTransition } from "@calibra-facil/schemas/job-transitions";
 import type { JobAction, JobActionVerdict } from "@calibra-facil/contracts";
 import {
@@ -33,12 +34,7 @@ export type AllowedActionsInput = {
   /** B5: the approver did the work and the laboratory does not allow it. */
   selfApprovalBlocked: boolean;
   /** B3: the issued certificate's lifecycle (null when none was issued). */
-  certificateStatus:
-    | "ISSUED"
-    | "SUPERSEDED"
-    | "WITHDRAWN"
-    | "REINSTATED"
-    | null;
+  certificateStatus: CertificateStatusEventLike["event"] | null;
   amendmentInProgress: boolean;
 };
 

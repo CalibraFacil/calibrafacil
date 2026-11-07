@@ -1,4 +1,5 @@
-import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
+import { SERVICE_ORDER_QUOTE_STATUS } from "@calibra-facil/shared/service-orders";
+import type { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
@@ -28,20 +29,6 @@ import { cn } from "@/lib/utils";
 import { usePublicServiceOrder, submitQuoteDecision } from "./queries";
 import type { QuoteDecision } from "./queries";
 import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";
-
-const QUOTE_STATUS_TONE: Record<string, SignalTone> = {
-  sent: "info",
-  approved: "ok",
-  rejected: "critical",
-  expired: "warning",
-};
-
-const QUOTE_STATUS_LABEL: Record<string, string> = {
-  sent: "Aguardando resposta",
-  approved: "Aprovado",
-  rejected: "Recusado",
-  expired: "Expirado",
-};
 
 /**
  * Public tokenized quote page (spec quote-approval-public-access, mini-spec E):
@@ -148,16 +135,17 @@ export function PublicQuotePage({ token }: { token: string }) {
   const specs = order.assetSnapshot?.displaySpecs ?? [];
   const canAnswer = quote?.status === "sent" && decision === null;
 
-  const quoteTone: SignalTone = decision
-    ? decision === "approved"
-      ? "ok"
-      : "critical"
-    : (QUOTE_STATUS_TONE[quote?.status ?? ""] ?? "neutral");
-  const quoteStatusLabel = decision
-    ? decision === "approved"
-      ? "Aprovado"
-      : "Recusado"
-    : (QUOTE_STATUS_LABEL[quote?.status ?? ""] ?? quote?.status ?? "—");
+  const quoteState =
+    decision ?? SERVICE_ORDER_QUOTE_STATUS.parse(quote?.status);
+  const quoteTone: SignalTone = quoteState
+    ? SERVICE_ORDER_QUOTE_STATUS.tone(quoteState)
+    : "neutral";
+  // The customer's question is "is it my turn?", so a sent quote reads as waiting for them.
+  const quoteStatusLabel = quoteState
+    ? quoteState === "sent"
+      ? "Aguardando resposta"
+      : SERVICE_ORDER_QUOTE_STATUS.label(quoteState)
+    : (quote?.status ?? "—");
 
   return (
     <PageShell>

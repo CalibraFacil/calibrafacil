@@ -19,7 +19,7 @@ import {
   serviceOrderTag,
   user,
 } from "@calibra-facil/db/schema";
-import { SERVICE_ORDER_STATUS_LABELS } from "@calibra-facil/shared";
+import { SERVICE_ORDER_STATUS } from "@calibra-facil/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
@@ -312,7 +312,7 @@ async function readServiceOrderDetail(
 
   return {
     ...order,
-    statusLabel: SERVICE_ORDER_STATUS_LABELS[order.status],
+    statusLabel: SERVICE_ORDER_STATUS.label(order.status),
     assetSnapshot: snapshot[0] ?? null,
     intakeDocuments,
     tags,

@@ -338,9 +338,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
       )}
     </ActionAvailabilityGate>
   ) : null
-  const financialStatus =
-    typeof job.financialStatus === 'string' ? job.financialStatus : 'UNBILLED'
-  const normalizedFinancialStatus = toFinancialStatus(financialStatus)
+  const normalizedFinancialStatus = toFinancialStatus(job.financialStatus)
   const normalizedJobStatus = toJobStatus(job.status)
 
   // APPROVED or SUPERSEDED status: Show immutable Quality Record view
@@ -419,7 +417,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
           <ReviewEvidenceAside
             job={job}
             review={reviewModel}
-            financialStatus={financialStatus}
             normalizedFinancialStatus={normalizedFinancialStatus}
           />
         </div>

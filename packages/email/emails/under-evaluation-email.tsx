@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+  ServiceOrderStatusRow,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,7 +12,6 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export interface UnderEvaluationEmailProps {
@@ -37,7 +40,9 @@ export function UnderEvaluationEmail({
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="info">Em avaliação técnica</Badge>
+        <ServiceOrderStatusBadge status="under_evaluation">
+          Em avaliação técnica
+        </ServiceOrderStatusBadge>
         <Title>Avaliação técnica em andamento</Title>
         <Paragraph>
           Olá, {customerName}! A equipe técnica de {labName} está realizando a
@@ -46,7 +51,7 @@ export function UnderEvaluationEmail({
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Em avaliação técnica" />
+          <ServiceOrderStatusRow status="under_evaluation" />
         </DetailBox>
 
         <Paragraph>

@@ -3,7 +3,10 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { CertificateReleaseStatus } from '@calibra-facil/shared'
+import {
+  CERTIFICATE_RELEASE_STATUS,
+  type CertificateReleaseStatus,
+} from '@calibra-facil/shared'
 
 vi.mock('@/utils/api', () => ({
   calibraApi: {
@@ -15,7 +18,6 @@ vi.mock('@/utils/api', () => ({
 }))
 
 import {
-  CERTIFICATE_RELEASE_LABEL,
   CertificateReleaseBadge,
   CertificateReleaseControl,
 } from './certificate-release'
@@ -39,7 +41,9 @@ describe('CertificateReleaseBadge', () => {
 
   it.each(statuses)('renders the pt-BR label for %s', (status) => {
     renderWithClient(<CertificateReleaseBadge status={status} />)
-    expect(screen.getByText(CERTIFICATE_RELEASE_LABEL[status])).toBeTruthy()
+    expect(
+      screen.getByText(CERTIFICATE_RELEASE_STATUS.label(status)),
+    ).toBeTruthy()
   })
 
   it('does not leak provider, ERP, or policy vocabulary in the DOM', () => {

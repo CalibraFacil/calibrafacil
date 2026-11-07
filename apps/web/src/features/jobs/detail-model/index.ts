@@ -16,7 +16,6 @@ export {
   formatDate,
   formatDateTime,
   formatReviewValue,
-  getFinancialVariant,
   reviewColumnDisplayLabel,
 } from './display'
 export {

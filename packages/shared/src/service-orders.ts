@@ -1,3 +1,5 @@
+import { defineStatusVocabulary } from "./status-vocabulary";
+
 export const SERVICE_ORDER_STATUSES = [
   "opened",
   "awaiting_tech_evaluation",
@@ -18,23 +20,32 @@ export const SERVICE_ORDER_STATUSES = [
 
 export type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUSES)[number];
 
-export const SERVICE_ORDER_STATUS_LABELS: Record<ServiceOrderStatus, string> = {
-  opened: "Aberta",
-  awaiting_tech_evaluation: "Aguardando avaliação do técnico",
-  under_evaluation: "Em avaliação técnica",
-  awaiting_quote_approval: "Aguardando aprovação do orçamento",
-  quote_approved: "Orçamento aprovado",
-  quote_rejected: "Orçamento recusado",
-  repair_in_progress: "Reparo sendo realizado",
-  awaiting_calibration: "Aguardando calibração",
-  calibration_in_progress: "Calibração em andamento",
-  awaiting_final_review: "Aguardando revisão final",
-  ready_for_pickup: "Aguardando retirada",
-  delivered: "Entregue ao cliente",
-  closed: "Encerrada",
-  canceled: "Cancelada",
-  warranty_return: "Retorno em garantia",
-};
+export const SERVICE_ORDER_STATUS = defineStatusVocabulary(
+  SERVICE_ORDER_STATUSES,
+  {
+    opened: { label: "Aberta", tone: "info" },
+    awaiting_tech_evaluation: {
+      label: "Aguardando avaliação do técnico",
+      tone: "info",
+    },
+    under_evaluation: { label: "Em avaliação técnica", tone: "info" },
+    awaiting_quote_approval: {
+      label: "Aguardando aprovação do orçamento",
+      tone: "warning",
+    },
+    quote_approved: { label: "Orçamento aprovado", tone: "ok" },
+    quote_rejected: { label: "Orçamento recusado", tone: "critical" },
+    repair_in_progress: { label: "Reparo em andamento", tone: "info" },
+    awaiting_calibration: { label: "Aguardando calibração", tone: "info" },
+    calibration_in_progress: { label: "Calibração em andamento", tone: "info" },
+    awaiting_final_review: { label: "Aguardando revisão final", tone: "info" },
+    ready_for_pickup: { label: "Pronta para retirada", tone: "ok" },
+    delivered: { label: "Entregue ao cliente", tone: "neutral" },
+    closed: { label: "Encerrada", tone: "neutral" },
+    canceled: { label: "Cancelada", tone: "critical" },
+    warranty_return: { label: "Retorno em garantia", tone: "warning" },
+  },
+);
 
 const SERVICE_ORDER_PRIORITIES = [
   "normal",
@@ -96,6 +107,16 @@ export const SERVICE_ORDER_QUOTE_STATUSES = [
 ] as const;
 export type ServiceOrderQuoteStatus =
   (typeof SERVICE_ORDER_QUOTE_STATUSES)[number];
+
+export const SERVICE_ORDER_QUOTE_STATUS = defineStatusVocabulary(
+  SERVICE_ORDER_QUOTE_STATUSES,
+  {
+    draft: { label: "Rascunho", tone: "neutral" },
+    sent: { label: "Enviado", tone: "info" },
+    approved: { label: "Aprovado", tone: "ok" },
+    rejected: { label: "Recusado", tone: "critical" },
+  },
+);
 
 const SERVICE_ORDER_ITEM_TYPES = [
   "service",

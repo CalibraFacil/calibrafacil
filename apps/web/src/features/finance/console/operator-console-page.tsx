@@ -2,7 +2,10 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { AlertCircleIcon, Invoice02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { getBillingDocumentStatusLabel } from '@calibra-facil/shared'
+import {
+  BILLING_DOCUMENT_EXPORT_STATUS,
+  BILLING_DOCUMENT_STATUS,
+} from '@calibra-facil/shared'
 
 import {
   BillingDocumentStatusBadge,
@@ -53,19 +56,12 @@ const RECENT_FACETS: FacetConfig[] = [
   {
     columnId: 'status',
     title: 'Status',
-    options: (['DRAFT', 'ISSUED', 'PAID', 'OVERDUE', 'VOID'] as const).map(
-      (value) => ({ value, label: getBillingDocumentStatusLabel(value) }),
-    ),
+    options: BILLING_DOCUMENT_STATUS.options,
   },
   {
     columnId: 'exportStatus',
     title: 'Exportação',
-    options: [
-      { value: 'NOT_EXPORTED', label: 'Não exportado' },
-      { value: 'PENDING', label: 'Pendente' },
-      { value: 'EXPORTED', label: 'Exportado' },
-      { value: 'FAILED', label: 'Falhou' },
-    ],
+    options: BILLING_DOCUMENT_EXPORT_STATUS.options,
   },
 ]
 

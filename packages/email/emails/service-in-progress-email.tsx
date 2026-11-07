@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import { SERVICE_ORDER_STATUS } from "@calibra-facil/shared/service-orders";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,17 +12,11 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export type ServiceInProgressStage =
   | "awaiting_calibration"
   | "calibration_in_progress";
-
-const STAGE_LABELS: Record<ServiceInProgressStage, string> = {
-  awaiting_calibration: "Aguardando calibração",
-  calibration_in_progress: "Calibração em andamento",
-};
 
 const STAGE_MESSAGES: Record<ServiceInProgressStage, string> = {
   awaiting_calibration:
@@ -55,14 +53,16 @@ export function ServiceInProgressEmail({
   stage,
 }: ServiceInProgressEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
-  const stageLabel = STAGE_LABELS[stage];
+  const stageLabel = SERVICE_ORDER_STATUS.label(stage);
   const stageMessage = STAGE_MESSAGES[stage];
   const previewText = `OS ${serviceOrderNumber} — ${stageLabel.toLowerCase()}.`;
 
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="info">Atualização do serviço</Badge>
+        <ServiceOrderStatusBadge status={stage}>
+          Atualização do serviço
+        </ServiceOrderStatusBadge>
         <Title>Atualização: {stageLabel}</Title>
         <Paragraph>
           Olá, {customerName}! {labName} tem uma atualização sobre a sua ordem

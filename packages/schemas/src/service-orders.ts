@@ -1,21 +1,5 @@
+import { SERVICE_ORDER_STATUSES } from "@calibra-facil/shared";
 import { z } from "zod";
-const SERVICE_ORDER_STATUSES = [
-  "opened",
-  "awaiting_tech_evaluation",
-  "under_evaluation",
-  "awaiting_quote_approval",
-  "quote_approved",
-  "quote_rejected",
-  "repair_in_progress",
-  "awaiting_calibration",
-  "calibration_in_progress",
-  "awaiting_final_review",
-  "ready_for_pickup",
-  "delivered",
-  "closed",
-  "canceled",
-  "warranty_return",
-] as const;
 const SERVICE_ORDER_PRIORITIES = [
   "normal",
   "urgent",

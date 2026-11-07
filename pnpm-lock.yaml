@@ -923,6 +923,9 @@ importers:
       "@calibra-facil/schemas":
         specifier: workspace:^
         version: link:../schemas
+      "@calibra-facil/shared":
+        specifier: workspace:^
+        version: link:../shared
       hono:
         specifier: ^4.13.7
         version: 4.13.13

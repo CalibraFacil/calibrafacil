@@ -30,7 +30,6 @@ import {
   integrationRunTriggerLabel,
   integrationScheduleStatusLabel,
   integrationScheduleStatusVariant,
-  integrationStatusBadgeMeta,
   removeIntegrationMappingRule,
   updateIntegrationMappingDrafts,
   updateIntegrationMappingRule,
@@ -130,22 +129,6 @@ describe('integrations-model', () => {
       total: 2,
       atRisk: 1,
       scheduledTargets: 1,
-    })
-  })
-
-  it('surfaces action-required integrations as reconnect states', () => {
-    const integration = createIntegrationSummary()
-
-    expect(integrationStatusBadgeMeta(integration)).toEqual({
-      label: 'Ativa',
-      variant: 'default',
-    })
-
-    integration.status = 'ACTION_REQUIRED'
-
-    expect(integrationStatusBadgeMeta(integration)).toEqual({
-      label: 'Reconectar',
-      variant: 'destructive',
     })
   })
 

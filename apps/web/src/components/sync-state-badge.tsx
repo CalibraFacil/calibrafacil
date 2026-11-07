@@ -1,32 +1,27 @@
-import { Badge } from '@calibra-facil/ui/badge'
+import { LOCAL_RECORD_SYNC_STATE } from '@calibra-facil/schemas'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 
 type SyncStateBadgeProps = {
   syncState?: string | null
 }
 
-const syncStateLabels: Record<string, string> = {
-  local: 'Pendente',
-  pending: 'Pendente',
-  failed: 'Falha sync',
-  conflict: 'Conflito',
-}
-
+/**
+ * What a local record's outbox state says: nothing once it is synced, otherwise the state's own
+ * label (a change the cloud refused reads "Recusada pela nuvem", not "Pendente"). A state this
+ * build does not know reads as pending.
+ */
 export function SyncStateBadge({ syncState }: SyncStateBadgeProps) {
   if (!syncState || syncState === 'synced') return null
 
-  const isDestructive = syncState === 'failed' || syncState === 'conflict'
+  const known = LOCAL_RECORD_SYNC_STATE.parse(syncState) ?? 'pending'
 
   return (
-    <Badge
-      variant={isDestructive ? 'destructive' : 'outline'}
-      className={
-        isDestructive
-          ? 'w-fit whitespace-nowrap'
-          : 'w-fit whitespace-nowrap border-amber-500 text-amber-700 dark:text-amber-300'
-      }
+    <StatusBadge
+      tone={LOCAL_RECORD_SYNC_STATE.tone(known)}
+      className="w-fit"
       title="Alteração local aguardando sincronização"
     >
-      {syncStateLabels[syncState] ?? 'Pendente'}
-    </Badge>
+      {LOCAL_RECORD_SYNC_STATE.label(known)}
+    </StatusBadge>
   )
 }

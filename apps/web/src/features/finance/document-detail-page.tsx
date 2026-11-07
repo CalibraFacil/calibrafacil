@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import type { ColumnDef } from '@tanstack/react-table'
 
-import { getReceivableInstallmentStatusLabel } from '@calibra-facil/shared'
+import { RECEIVABLE_INSTALLMENT_STATUS } from '@calibra-facil/shared'
 
 import { useFinanceAccess } from '@/hooks/use-finance-access'
 import {
@@ -49,18 +49,6 @@ import {
 } from '@/features/finance/mutations'
 import { DocumentTimeline } from '@/features/finance/document-timeline'
 import type { BillingDocumentDetails } from '@/features/finance/types'
-
-function installmentStatusLabel(value: string): string {
-  switch (value) {
-    case 'OPEN':
-    case 'PAID':
-    case 'OVERDUE':
-    case 'VOID':
-      return getReceivableInstallmentStatusLabel(value)
-    default:
-      return value
-  }
-}
 
 type DocumentItem = BillingDocumentDetails['items'][number]
 type DocumentInstallment = BillingDocumentDetails['installments'][number]
@@ -137,7 +125,12 @@ const installmentColumns: ColumnDef<DocumentInstallment, unknown>[] = [
     accessorKey: 'status',
     id: 'status',
     header: 'Status',
-    cell: ({ row }) => installmentStatusLabel(row.original.status),
+    cell: ({ row }) => {
+      const status = RECEIVABLE_INSTALLMENT_STATUS.parse(row.original.status)
+      return status
+        ? RECEIVABLE_INSTALLMENT_STATUS.label(status)
+        : row.original.status
+    },
   },
   {
     accessorKey: 'dueDate',

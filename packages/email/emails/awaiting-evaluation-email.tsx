@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+  ServiceOrderStatusRow,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,7 +12,6 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export interface AwaitingEvaluationEmailProps {
@@ -37,7 +40,9 @@ export function AwaitingEvaluationEmail({
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="warning">Aguardando avaliação</Badge>
+        <ServiceOrderStatusBadge status="awaiting_tech_evaluation">
+          Aguardando avaliação
+        </ServiceOrderStatusBadge>
         <Title>Equipamento aguarda avaliação técnica</Title>
         <Paragraph>
           Olá, {customerName}! Seu equipamento na ordem de serviço{" "}
@@ -47,7 +52,7 @@ export function AwaitingEvaluationEmail({
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Aguardando avaliação técnica" />
+          <ServiceOrderStatusRow status="awaiting_tech_evaluation" />
         </DetailBox>
 
         <Paragraph>

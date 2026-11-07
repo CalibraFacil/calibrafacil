@@ -28,6 +28,7 @@ import type { EventTimelineItem } from '@/components/event-timeline'
 import {
   isServiceOrderFinalStatus,
   SERVICE_ORDER_EVENT_TYPES,
+  SERVICE_ORDER_QUOTE_STATUS,
 } from '@calibra-facil/shared'
 import { SERVICE_ORDER_MACHINE } from '@calibra-facil/schemas/machines'
 import type {
@@ -64,16 +65,6 @@ export const ITEM_TYPE_LABELS: Record<ServiceOrderItemType, string> = {
   discount: 'Desconto',
   evaluation_fee: 'Taxa de avaliação',
   other: 'Outro',
-}
-
-export const QUOTE_STATUS_LABELS: Record<string, string> = {
-  draft: 'Rascunho',
-  sent: 'Enviado',
-  approved: 'Aprovado',
-  rejected: 'Recusado',
-  expired: 'Expirado',
-  canceled: 'Cancelado',
-  superseded: 'Substituído',
 }
 
 export const RECOMMENDED_ACTION_LABELS: Record<
@@ -167,9 +158,7 @@ export function buildServiceOrderWorkflowStages(
         'Registrada')
       : 'Pendente',
     quote: latestQuote
-      ? `v${latestQuote.version} · ${
-          QUOTE_STATUS_LABELS[latestQuote.status] ?? latestQuote.status
-        }`
+      ? `v${latestQuote.version} · ${SERVICE_ORDER_QUOTE_STATUS.label(latestQuote.status)}`
       : 'Sem orçamento',
     execution: execution
       ? execution.finishedAt

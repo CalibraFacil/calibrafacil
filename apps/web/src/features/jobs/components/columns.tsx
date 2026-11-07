@@ -20,29 +20,13 @@ import {
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { getFinancialStatusLabel } from '@calibra-facil/shared'
+import { FinancialStatusBadge } from './financial-status-badge'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 import type { Job } from '@/features/jobs/types'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 // A due date is a calendar date (a Postgres date): show the day it names.
-function getFinancialVariant(status: Job['financialStatus']) {
-  switch (status) {
-    case 'PAID':
-      return 'outline'
-    case 'OVERDUE':
-      return 'destructive'
-    case 'ISSUED':
-      return 'default'
-    case 'DRAFT':
-      return 'secondary'
-    case 'UNBILLED':
-    default:
-      return 'secondary'
-  }
-}
-
 function jobDetailPath(job: Job) {
   return `/dashboard/jobs/${encodeURIComponent(jobRouteId(job))}`
 }
@@ -188,9 +172,7 @@ export const jobsColumns: ColumnDef<Job>[] = [
 
       return (
         <div>
-          <Badge variant={getFinancialVariant(financialStatus)}>
-            {getFinancialStatusLabel(financialStatus)}
-          </Badge>
+          <FinancialStatusBadge status={financialStatus} />
           {row.original.invoiceDocumentNumber && (
             <span className="block text-xs text-muted-foreground mt-1">
               {row.original.invoiceDocumentNumber}

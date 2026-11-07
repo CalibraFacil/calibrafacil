@@ -11,7 +11,11 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { Button } from "@calibra-facil/ui/button";
-import { Badge } from "@calibra-facil/ui/badge";
+import { StatusBadge } from "@calibra-facil/ui/status-badge";
+import {
+  SERVICE_ORDER_STATUS,
+  type ServiceOrderStatus,
+} from "@calibra-facil/shared/service-orders";
 import { Card, CardContent } from "@calibra-facil/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { DataTable } from "@calibra-facil/ui/data-table";
@@ -41,23 +45,6 @@ export const Route = createFileRoute("/_authenticated/service-orders/")({
   component: ServiceOrdersPage,
 });
 
-type ServiceOrderStatus =
-  | "opened"
-  | "awaiting_tech_evaluation"
-  | "under_evaluation"
-  | "awaiting_quote_approval"
-  | "quote_approved"
-  | "quote_rejected"
-  | "repair_in_progress"
-  | "awaiting_calibration"
-  | "calibration_in_progress"
-  | "awaiting_final_review"
-  | "ready_for_pickup"
-  | "delivered"
-  | "closed"
-  | "canceled"
-  | "warranty_return";
-
 type PortalServiceOrder = {
   id: number;
   publicId: string;
@@ -79,70 +66,6 @@ type ServiceOrdersResponse = {
     totalPages: number;
   };
 };
-
-const statusLabels: Record<ServiceOrderStatus, string> = {
-  opened: "Aberta",
-  awaiting_tech_evaluation: "Aguardando avaliação",
-  under_evaluation: "Em avaliação",
-  awaiting_quote_approval: "Aguardando orçamento",
-  quote_approved: "Orçamento aprovado",
-  quote_rejected: "Orçamento recusado",
-  repair_in_progress: "Em reparo",
-  awaiting_calibration: "Aguardando calibração",
-  calibration_in_progress: "Calibração em andamento",
-  awaiting_final_review: "Aguardando revisão",
-  ready_for_pickup: "Aguardando retirada",
-  delivered: "Entregue",
-  closed: "Encerrada",
-  canceled: "Cancelada",
-  warranty_return: "Retorno em garantia",
-};
-
-const statusVariants: Record<
-  ServiceOrderStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  opened: "secondary",
-  awaiting_tech_evaluation: "outline",
-  under_evaluation: "default",
-  awaiting_quote_approval: "outline",
-  quote_approved: "default",
-  quote_rejected: "destructive",
-  repair_in_progress: "default",
-  awaiting_calibration: "outline",
-  calibration_in_progress: "default",
-  awaiting_final_review: "outline",
-  ready_for_pickup: "default",
-  delivered: "secondary",
-  closed: "secondary",
-  canceled: "destructive",
-  warranty_return: "outline",
-};
-
-function parseServiceOrderStatusFilter(
-  value: string | null,
-): ServiceOrderStatus | "" {
-  switch (value) {
-    case "opened":
-    case "awaiting_tech_evaluation":
-    case "under_evaluation":
-    case "awaiting_quote_approval":
-    case "quote_approved":
-    case "quote_rejected":
-    case "repair_in_progress":
-    case "awaiting_calibration":
-    case "calibration_in_progress":
-    case "awaiting_final_review":
-    case "ready_for_pickup":
-    case "delivered":
-    case "closed":
-    case "canceled":
-    case "warranty_return":
-      return value;
-    default:
-      return "";
-  }
-}
 
 // Module-level so the header/cell renderers are stable component types
 // instead of being re-created on every render of the page.
@@ -191,11 +114,9 @@ const columns: Array<ColumnDef<PortalServiceOrder>> = [
       <DataTableColumnHeader column={column} title="Status" />
     ),
     cell: ({ row }) => (
-      <Badge variant={statusVariants[row.original.status] ?? "secondary"}>
-        {row.original.statusLabel ||
-          statusLabels[row.original.status] ||
-          row.original.status}
-      </Badge>
+      <StatusBadge tone={SERVICE_ORDER_STATUS.tone(row.original.status)}>
+        {SERVICE_ORDER_STATUS.label(row.original.status)}
+      </StatusBadge>
     ),
   },
   {
@@ -274,7 +195,7 @@ function ServiceOrdersPage() {
               <Select
                 value={statusFilter || "all"}
                 onValueChange={(value) => {
-                  setStatusFilter(parseServiceOrderStatusFilter(value));
+                  setStatusFilter(SERVICE_ORDER_STATUS.parse(value) ?? "");
                   setPage(1);
                 }}
               >
@@ -283,13 +204,15 @@ function ServiceOrdersPage() {
                   className="w-full sm:w-56"
                 >
                   <span>
-                    {statusFilter ? statusLabels[statusFilter] : "Status"}
+                    {statusFilter
+                      ? SERVICE_ORDER_STATUS.label(statusFilter)
+                      : "Status"}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
-                  {Object.entries(statusLabels).map(([status, label]) => (
-                    <SelectItem key={status} value={status}>
+                  {SERVICE_ORDER_STATUS.options.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>
                       {label}
                     </SelectItem>
                   ))}

@@ -1,7 +1,54 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
 import type { ReactNode } from "react";
-import { EmailLayout, type EmailBrand } from "./components/email-layout";
+import {
+  SERVICE_ORDER_STATUS,
+  type ServiceOrderStatus,
+} from "@calibra-facil/shared/service-orders";
+import type { SignalTone } from "@calibra-facil/shared/status-vocabulary";
+import {
+  Badge,
+  DetailRow,
+  EmailLayout,
+  type EmailBrand,
+} from "./components/email-layout";
+
+const BADGE_VARIANT_BY_TONE = {
+  ok: "success",
+  critical: "error",
+  warning: "warning",
+  info: "info",
+  neutral: "info",
+} as const satisfies Record<
+  SignalTone,
+  "success" | "error" | "warning" | "info"
+>;
+
+/** The pill above the headline: the e-mail's own wording, painted by the status's tone. */
+export function ServiceOrderStatusBadge({
+  status,
+  children,
+}: {
+  status: ServiceOrderStatus;
+  children: ReactNode;
+}) {
+  return (
+    <Badge variant={BADGE_VARIANT_BY_TONE[SERVICE_ORDER_STATUS.tone(status)]}>
+      {children}
+    </Badge>
+  );
+}
+
+/** The "Status" row of the detail box: the label every other screen shows. */
+export function ServiceOrderStatusRow({
+  status,
+}: {
+  status: ServiceOrderStatus;
+}) {
+  return (
+    <DetailRow label="Status" value={SERVICE_ORDER_STATUS.label(status)} />
+  );
+}
 
 export interface ServiceOrderEmailLayoutProps {
   /** Text shown in the email client preview (pre-header). */

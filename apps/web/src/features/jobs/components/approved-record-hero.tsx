@@ -8,6 +8,11 @@ import {
   Calendar03Icon,
 } from '@hugeicons/core-free-icons'
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
+import {
+  CERTIFICATE_LIFECYCLE_STATUS,
+  type CertificateLifecycleStatus,
+} from '@calibra-facil/schemas'
 import {
   formatDate,
   type ApprovedJobRecordData,
@@ -42,6 +47,11 @@ export function ApprovedRecordHero({
   expandedUncertainty: string | null | undefined
 }) {
   const { methodSnapshot } = job
+  const lifecycle: CertificateLifecycleStatus = isWithdrawn
+    ? 'WITHDRAWN'
+    : isSuperseded
+      ? 'SUPERSEDED'
+      : 'ISSUED'
 
   return (
     <Panel className="relative overflow-hidden">
@@ -84,32 +94,13 @@ export function ApprovedRecordHero({
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-            <Badge
-              variant={
-                isWithdrawn
-                  ? 'destructive'
-                  : isSuperseded
-                    ? 'outline'
-                    : 'default'
-              }
-              className={cn(
-                isWithdrawn
-                  ? undefined
-                  : isSuperseded
-                    ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
-                    : 'bg-emerald-600 text-white',
-              )}
-            >
+            <StatusBadge tone={CERTIFICATE_LIFECYCLE_STATUS.tone(lifecycle)}>
               <HugeiconsIcon
                 icon={CheckmarkCircle02Icon}
                 className="mr-1 h-3 w-3"
               />
-              {isWithdrawn
-                ? 'Retirado'
-                : isSuperseded
-                  ? 'Retificado'
-                  : 'Aprovado'}
-            </Badge>
+              {CERTIFICATE_LIFECYCLE_STATUS.label(lifecycle)}
+            </StatusBadge>
             {isOutOfToleranceAsFound && (
               <Badge variant="destructive">
                 Fora de tolerância (como encontrado)

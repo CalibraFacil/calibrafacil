@@ -47,7 +47,6 @@ import {
   ITEM_TYPE_LABELS,
   materialToQuoteItemPatch,
   money,
-  QUOTE_STATUS_LABELS,
   quoteDraftItemFromApiItem,
   quoteItemLineTotal,
   quoteItemsTotal,
@@ -128,7 +127,14 @@ import {
   describeReconcileLag,
   reconcileAfterCloudCommand,
 } from '@/runtime/reconcile-cloud-command'
-import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
+import {
+  SERVICE_ORDER_QUOTE_STATUS,
+  type ServiceOrderFinancialStatus,
+} from '@calibra-facil/shared'
+import {
+  ServiceOrderQuoteStatusBadge,
+  ServiceOrderStatusBadge,
+} from './components/service-order-status-badge'
 import { InstallmentsBlock } from '@/features/finance/installments-block'
 import {
   shouldReturnToSyncConflicts,
@@ -1121,7 +1127,7 @@ function ServiceOrderDetailContent({
                 <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                   {order.serviceOrderNumber}
                 </h1>
-                <Badge>{order.statusLabel}</Badge>
+                <ServiceOrderStatusBadge status={order.status} />
                 {order.isExternalService ? (
                   <Badge variant="secondary">
                     Atendimento externo (in loco)
@@ -1229,9 +1235,7 @@ function ServiceOrderDetailContent({
                 <div className="mt-2 space-y-1 text-sm">
                   <p>
                     v{latestQuote.version} ·{' '}
-                    {QUOTE_STATUS_LABELS[latestQuote.status] ??
-                      latestQuote.status}{' '}
-                    ·{' '}
+                    {SERVICE_ORDER_QUOTE_STATUS.label(latestQuote.status)} ·{' '}
                     <span className="font-mono tabular-nums">
                       {money(latestQuote.totalCents)}
                     </span>
@@ -1569,10 +1573,7 @@ function ServiceOrderDetailContent({
                   <StageRecordStrip
                     summary={
                       latestQuote
-                        ? `Orçamento v${latestQuote.version} ${
-                            QUOTE_STATUS_LABELS[latestQuote.status] ??
-                            latestQuote.status
-                          } · ${money(latestQuote.totalCents)}`
+                        ? `Orçamento v${latestQuote.version} ${SERVICE_ORDER_QUOTE_STATUS.label(latestQuote.status)} · ${money(latestQuote.totalCents)}`
                         : 'Orçamento decidido.'
                     }
                     action={
@@ -1887,17 +1888,7 @@ function ServiceOrderDetailContent({
                           <p className="text-sm font-medium tabular-nums">
                             v{quote.version}
                           </p>
-                          <Badge
-                            variant={
-                              quote.status === 'approved'
-                                ? 'default'
-                                : quote.status === 'rejected'
-                                  ? 'destructive'
-                                  : 'secondary'
-                            }
-                          >
-                            {QUOTE_STATUS_LABELS[quote.status] ?? quote.status}
-                          </Badge>
+                          <ServiceOrderQuoteStatusBadge status={quote.status} />
                         </div>
                         <p className="text-base font-semibold tabular-nums">
                           {money(quote.totalCents)}

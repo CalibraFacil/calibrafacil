@@ -62,10 +62,11 @@ test.describe('certificate distribution', () => {
     await page.goto('/dashboard/jobs/CAL-0007')
 
     await expect(page.getByRole('heading', { name: 'CAL-0007' })).toBeVisible()
-    // The approval status badge in the record header; the history list below
-    // also contains an "Aprovado" entry, so match the badge itself.
+    // The certificate lifecycle badge in the record header ("Vigente" while
+    // nothing replaced or withdrew it); the history list below has its own
+    // "Aprovado" entry, so match the badge itself.
     await expect(
-      page.locator('[data-slot="badge"]', { hasText: /^Aprovado$/ }),
+      page.locator('[data-slot="badge"]', { hasText: /^Vigente$/ }),
     ).toBeVisible()
 
     const downloadButton = page.getByRole('button', {

@@ -145,18 +145,6 @@ export function buildIntegrationActiveSummaries(
   }
 }
 
-export function integrationStatusBadgeMeta(
-  integration: Pick<IntegrationSummary, 'status'>,
-) {
-  if (integration.status === 'ACTIVE') {
-    return { label: 'Ativa', variant: 'default' as const }
-  }
-  if (integration.status === 'ACTION_REQUIRED') {
-    return { label: 'Reconectar', variant: 'destructive' as const }
-  }
-  return { label: 'Desativada', variant: 'secondary' as const }
-}
-
 export const integrationFormatterOptions: Array<{
   value: IntegrationMappingFormatter
   label: string

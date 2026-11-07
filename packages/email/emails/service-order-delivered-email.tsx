@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+  ServiceOrderStatusRow,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,7 +12,6 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export interface ServiceOrderDeliveredEmailProps {
@@ -37,7 +40,9 @@ export function ServiceOrderDeliveredEmail({
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="success">Equipamento entregue</Badge>
+        <ServiceOrderStatusBadge status="delivered">
+          Equipamento entregue
+        </ServiceOrderStatusBadge>
         <Title>Confirmação de entrega</Title>
         <Paragraph>
           Olá, {customerName}! Confirmamos que o equipamento da ordem de serviço{" "}
@@ -47,7 +52,7 @@ export function ServiceOrderDeliveredEmail({
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Entregue" />
+          <ServiceOrderStatusRow status="delivered" />
         </DetailBox>
 
         <Paragraph>

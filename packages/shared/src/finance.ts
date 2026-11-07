@@ -1,4 +1,5 @@
 import { calendarDateKey, labCalendarDayKey } from "./calendar-date";
+import { defineStatusVocabulary, type SignalTone } from "./status-vocabulary";
 
 // The lifecycles of these statuses (which command moves a row where) are the
 // billing machines of @calibra-facil/schemas/machines.
@@ -10,6 +11,16 @@ export const COMMERCIAL_AGREEMENT_STATUSES = [
 ] as const;
 export type CommercialAgreementStatus =
   (typeof COMMERCIAL_AGREEMENT_STATUSES)[number];
+
+export const COMMERCIAL_AGREEMENT_STATUS = defineStatusVocabulary(
+  COMMERCIAL_AGREEMENT_STATUSES,
+  {
+    DRAFT: { label: "Rascunho", tone: "neutral" },
+    ACTIVE: { label: "Ativo", tone: "ok" },
+    EXPIRED: { label: "Expirado", tone: "warning" },
+    CANCELED: { label: "Cancelado", tone: "critical" },
+  },
+);
 
 export type JobCommercialSnapshotSource =
   | "AGREEMENT"
@@ -25,6 +36,23 @@ export const BILLING_DOCUMENT_STATUSES = [
 ] as const;
 export type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
 
+/** What a billing document's status reads like; the job's financial status shares it. */
+const BILLING_DOCUMENT_PRESENTATION = {
+  DRAFT: { label: "Rascunho", tone: "neutral" },
+  ISSUED: { label: "Emitido", tone: "info" },
+  PAID: { label: "Recebido", tone: "ok" },
+  OVERDUE: { label: "Vencido", tone: "critical" },
+  VOID: { label: "Anulado", tone: "neutral" },
+} as const satisfies Record<
+  BillingDocumentStatus,
+  { label: string; tone: SignalTone }
+>;
+
+export const BILLING_DOCUMENT_STATUS = defineStatusVocabulary(
+  BILLING_DOCUMENT_STATUSES,
+  BILLING_DOCUMENT_PRESENTATION,
+);
+
 // `PENDING` was declared once and never written: an export is attempted inline
 // and lands in EXPORTED or FAILED.
 export const BILLING_DOCUMENT_EXPORT_STATUSES = [
@@ -35,6 +63,15 @@ export const BILLING_DOCUMENT_EXPORT_STATUSES = [
 export type BillingDocumentExportStatus =
   (typeof BILLING_DOCUMENT_EXPORT_STATUSES)[number];
 
+export const BILLING_DOCUMENT_EXPORT_STATUS = defineStatusVocabulary(
+  BILLING_DOCUMENT_EXPORT_STATUSES,
+  {
+    NOT_EXPORTED: { label: "Não exportado", tone: "neutral" },
+    EXPORTED: { label: "Exportado", tone: "ok" },
+    FAILED: { label: "Falhou", tone: "critical" },
+  },
+);
+
 export const RECEIVABLE_INSTALLMENT_STATUSES = [
   "OPEN",
   "PAID",
@@ -43,6 +80,16 @@ export const RECEIVABLE_INSTALLMENT_STATUSES = [
 ] as const;
 export type ReceivableInstallmentStatus =
   (typeof RECEIVABLE_INSTALLMENT_STATUSES)[number];
+
+export const RECEIVABLE_INSTALLMENT_STATUS = defineStatusVocabulary(
+  RECEIVABLE_INSTALLMENT_STATUSES,
+  {
+    OPEN: { label: "Em aberto", tone: "info" },
+    PAID: { label: "Paga", tone: "ok" },
+    OVERDUE: { label: "Em atraso", tone: "critical" },
+    VOID: { label: "Anulada", tone: "neutral" },
+  },
+);
 
 // =============================================================================
 // CERTIFICATE RELEASE — Phase 2 slice 1. Separates technical certificate
@@ -71,6 +118,16 @@ export const CERTIFICATE_RELEASE_STATUSES = [
 ] as const;
 export type CertificateReleaseStatus =
   (typeof CERTIFICATE_RELEASE_STATUSES)[number];
+
+export const CERTIFICATE_RELEASE_STATUS = defineStatusVocabulary(
+  CERTIFICATE_RELEASE_STATUSES,
+  {
+    HELD_FOR_BILLING: { label: "Retido para faturamento", tone: "warning" },
+    HELD_FOR_PAYMENT: { label: "Retido para pagamento", tone: "warning" },
+    RELEASED: { label: "Liberado", tone: "ok" },
+    RELEASED_BY_EXCEPTION: { label: "Liberado por exceção", tone: "warning" },
+  },
+);
 
 /**
  * Release policy modes. The strategy's
@@ -151,13 +208,17 @@ export type FinancialPaymentMethod =
   | "CASH"
   | "OTHER";
 
-export type FinancialStatus =
-  | "UNBILLED"
-  | "DRAFT"
-  | "ISSUED"
-  | "PAID"
-  | "OVERDUE"
-  | "VOID";
+export const FINANCIAL_STATUSES = [
+  "UNBILLED",
+  ...BILLING_DOCUMENT_STATUSES,
+] as const;
+export type FinancialStatus = (typeof FINANCIAL_STATUSES)[number];
+
+/** A job's financial status: "not billed yet", then its billing document's status. */
+export const FINANCIAL_STATUS = defineStatusVocabulary(FINANCIAL_STATUSES, {
+  UNBILLED: { label: "Não faturado", tone: "neutral" },
+  ...BILLING_DOCUMENT_PRESENTATION,
+});
 
 // =============================================================================
 // BILLING READINESS — provider-neutral "ready for billing" / revenue-leakage
@@ -487,21 +548,6 @@ export interface FinancialContinuityStatusInput {
 
 export const FINANCIAL_FRESHNESS_STALE_AFTER_HOURS = 24;
 
-export function getReceivableInstallmentStatusLabel(
-  status: ReceivableInstallmentStatus,
-) {
-  switch (status) {
-    case "OPEN":
-      return "Aguardando pagamento";
-    case "PAID":
-      return "Pago";
-    case "OVERDUE":
-      return "Em atraso";
-    case "VOID":
-      return "Anulado";
-  }
-}
-
 export function getFinancialContinuityStatusLabel(
   status: FinancialContinuityStatus,
 ) {
@@ -730,51 +776,4 @@ export function resolveIssuedDueDate(
     return existingDueDate;
   }
   return calculateFinancialDueDate(issueDate, paymentTermDays);
-}
-
-export function getFinancialStatusLabel(status: FinancialStatus) {
-  switch (status) {
-    case "UNBILLED":
-      return "Não faturado";
-    case "DRAFT":
-      return "Rascunho";
-    case "ISSUED":
-      return "Emitido";
-    case "PAID":
-      return "Recebido";
-    case "OVERDUE":
-      return "Vencido";
-    case "VOID":
-      return "Anulado";
-  }
-}
-
-export function getBillingDocumentStatusLabel(status: BillingDocumentStatus) {
-  switch (status) {
-    case "DRAFT":
-      return "Rascunho";
-    case "ISSUED":
-      return "Emitido";
-    case "PAID":
-      return "Recebido";
-    case "OVERDUE":
-      return "Vencido";
-    case "VOID":
-      return "Anulado";
-  }
-}
-
-export function getCommercialAgreementStatusLabel(
-  status: CommercialAgreementStatus,
-) {
-  switch (status) {
-    case "DRAFT":
-      return "Rascunho";
-    case "ACTIVE":
-      return "Ativo";
-    case "EXPIRED":
-      return "Expirado";
-    case "CANCELED":
-      return "Cancelado";
-  }
 }

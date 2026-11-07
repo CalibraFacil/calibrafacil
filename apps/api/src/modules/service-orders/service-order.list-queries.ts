@@ -8,7 +8,10 @@ import {
   serviceOrderExecution,
   user,
 } from "@calibra-facil/db/schema";
-import { SERVICE_ORDER_STATUS_LABELS } from "@calibra-facil/shared";
+import {
+  SERVICE_ORDER_STATUS,
+  type ServiceOrderStatus,
+} from "@calibra-facil/shared";
 import {
   and,
   count,
@@ -186,7 +189,7 @@ export async function listServiceOrdersForLab(
   return {
     data: rows.map((row) => ({
       ...row,
-      statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
+      statusLabel: SERVICE_ORDER_STATUS.label(row.status),
     })),
     pagination: {
       page,
@@ -253,7 +256,7 @@ export async function listServiceOrdersPendingCalibrationAfterRepair(
   return {
     data: rows.map((row) => ({
       ...row,
-      statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
+      statusLabel: SERVICE_ORDER_STATUS.label(row.status),
     })),
     total: rows.length,
   };
@@ -294,7 +297,7 @@ export async function getServiceOrderSummaryReport(
       ),
   );
 
-  const byStatus = new Map<string, number>();
+  const byStatus = new Map<ServiceOrderStatus, number>();
   const byUnit = new Map<
     string,
     { unitId: number; unitName: string; total: number }
@@ -357,10 +360,7 @@ export async function getServiceOrderSummaryReport(
     total: rows.length,
     byStatus: Array.from(byStatus, ([status, total]) => ({
       status,
-      statusLabel:
-        Object.entries(SERVICE_ORDER_STATUS_LABELS).find(
-          ([statusKey]) => statusKey === status,
-        )?.[1] ?? status,
+      statusLabel: SERVICE_ORDER_STATUS.label(status),
       total,
     })),
     byUnit: Array.from(byUnit.values()),
@@ -441,7 +441,7 @@ export async function listServiceOrdersForPortalCustomer(
   return {
     data: pageRows.map((row) => ({
       ...row,
-      statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
+      statusLabel: SERVICE_ORDER_STATUS.label(row.status),
     })),
     pagination: {
       page: query.page,

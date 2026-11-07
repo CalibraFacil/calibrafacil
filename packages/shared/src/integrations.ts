@@ -1,5 +1,6 @@
 import { classifyParsedIp, parseIp } from "./net/ip-range";
 import { trimTrailingSlashes } from "./public-urls";
+import { defineStatusVocabulary } from "./status-vocabulary";
 
 export type IntegrationType = "financial_erp";
 
@@ -119,6 +120,12 @@ export const INTEGRATION_STATUSES = [
 ] as const;
 export type IntegrationStatus = (typeof INTEGRATION_STATUSES)[number];
 
+export const INTEGRATION_STATUS = defineStatusVocabulary(INTEGRATION_STATUSES, {
+  ACTIVE: { label: "Ativa", tone: "ok" },
+  DISABLED: { label: "Desativada", tone: "neutral" },
+  ACTION_REQUIRED: { label: "Reconexão necessária", tone: "warning" },
+});
+
 export type IntegrationSetupStatus =
   | "NOT_CONFIGURED"
   | "CONFIGURED"
@@ -197,6 +204,17 @@ export const INTEGRATION_SYNC_STATUSES = [
 ] as const;
 export type IntegrationSyncStatus = (typeof INTEGRATION_SYNC_STATUSES)[number];
 
+export const INTEGRATION_SYNC_STATUS = defineStatusVocabulary(
+  INTEGRATION_SYNC_STATUSES,
+  {
+    PENDING: { label: "Pendente", tone: "neutral" },
+    RUNNING: { label: "Em execução", tone: "info" },
+    COMPLETED: { label: "Concluída", tone: "ok" },
+    FAILED: { label: "Falhou", tone: "critical" },
+    PARTIAL: { label: "Parcial", tone: "warning" },
+  },
+);
+
 export type IntegrationSyncItemOperation =
   | "create"
   | "update"
@@ -217,6 +235,16 @@ export const INTEGRATION_SYNC_ITEM_STATUSES = [
 ] as const;
 export type IntegrationSyncItemStatus =
   (typeof INTEGRATION_SYNC_ITEM_STATUSES)[number];
+
+export const INTEGRATION_SYNC_ITEM_STATUS = defineStatusVocabulary(
+  INTEGRATION_SYNC_ITEM_STATUSES,
+  {
+    RUNNING: { label: "Em execução", tone: "info" },
+    SUCCEEDED: { label: "Concluído", tone: "ok" },
+    FAILED: { label: "Falhou", tone: "critical" },
+    DEAD_LETTER: { label: "Falha definitiva", tone: "critical" },
+  },
+);
 
 export type IntegrationEventLevel = "info" | "warning" | "error";
 

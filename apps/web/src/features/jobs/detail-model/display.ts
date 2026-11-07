@@ -57,22 +57,6 @@ export function formatDateTime(dateString: string | null | undefined): string {
   return formatInstant(dateString, 'date-time', { empty: '-' })
 }
 
-export function getFinancialVariant(status: string | null | undefined) {
-  switch (status) {
-    case 'PAID':
-      return 'outline'
-    case 'OVERDUE':
-      return 'destructive'
-    case 'ISSUED':
-      return 'default'
-    case 'DRAFT':
-      return 'secondary'
-    case 'UNBILLED':
-    default:
-      return 'secondary'
-  }
-}
-
 export function formatReviewValue(value: unknown, unit?: string): string {
   if (value === null || value === undefined || value === '') return '-'
   if (isMassCompositionValue(value)) return value.label

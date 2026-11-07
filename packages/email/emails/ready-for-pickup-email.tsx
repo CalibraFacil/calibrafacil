@@ -1,6 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { ServiceOrderEmailLayout } from "./service-order-email-layout";
+import {
+  ServiceOrderEmailLayout,
+  ServiceOrderStatusBadge,
+  ServiceOrderStatusRow,
+} from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
   EmailCard,
@@ -8,7 +12,6 @@ import {
   Paragraph,
   DetailBox,
   DetailRow,
-  Badge,
 } from "./components/email-layout";
 
 export interface ReadyForPickupEmailProps {
@@ -37,7 +40,9 @@ export function ReadyForPickupEmail({
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="success">Pronto para retirada</Badge>
+        <ServiceOrderStatusBadge status="ready_for_pickup">
+          Pronto para retirada
+        </ServiceOrderStatusBadge>
         <Title>Seu equipamento está pronto para retirada</Title>
         <Paragraph>
           Olá, {customerName}! O serviço da sua ordem de serviço{" "}
@@ -47,7 +52,7 @@ export function ReadyForPickupEmail({
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Pronto para retirada" />
+          <ServiceOrderStatusRow status="ready_for_pickup" />
         </DetailBox>
 
         <Paragraph>

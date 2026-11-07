@@ -51,7 +51,7 @@ declare module '@tanstack/react-table' {
 export type FacetConfig = {
   columnId: string
   title: string
-  options: FacetOption[]
+  options: readonly FacetOption[]
 }
 
 const EMPTY_FACETS: ReadonlyArray<FacetConfig> = []

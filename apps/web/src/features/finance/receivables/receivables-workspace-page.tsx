@@ -5,8 +5,9 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table'
 import {
   type FinancialPaymentMethod,
-  getBillingDocumentStatusLabel,
-  getReceivableInstallmentStatusLabel,
+  BILLING_DOCUMENT_EXPORT_STATUS,
+  BILLING_DOCUMENT_STATUS,
+  RECEIVABLE_INSTALLMENT_STATUS,
 } from '@calibra-facil/shared'
 
 import {
@@ -26,7 +27,7 @@ import {
   StaggerGroup,
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
-import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Button } from '@calibra-facil/ui/button'
 import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import {
@@ -115,19 +116,12 @@ const DOCUMENT_FACETS: FacetConfig[] = [
   {
     columnId: 'status',
     title: 'Status',
-    options: (['DRAFT', 'ISSUED', 'PAID', 'OVERDUE', 'VOID'] as const).map(
-      (value) => ({ value, label: getBillingDocumentStatusLabel(value) }),
-    ),
+    options: BILLING_DOCUMENT_STATUS.options,
   },
   {
     columnId: 'exportStatus',
     title: 'Exportação',
-    options: [
-      { value: 'NOT_EXPORTED', label: 'Não exportado' },
-      { value: 'PENDING', label: 'Pendente' },
-      { value: 'EXPORTED', label: 'Exportado' },
-      { value: 'FAILED', label: 'Falhou' },
-    ],
+    options: BILLING_DOCUMENT_EXPORT_STATUS.options,
   },
 ]
 
@@ -135,10 +129,7 @@ const INSTALLMENT_FACETS: FacetConfig[] = [
   {
     columnId: 'installmentStatus',
     title: 'Situação',
-    options: (['OPEN', 'OVERDUE', 'PAID', 'VOID'] as const).map((value) => ({
-      value,
-      label: getReceivableInstallmentStatusLabel(value),
-    })),
+    options: RECEIVABLE_INSTALLMENT_STATUS.options,
   },
 ]
 
@@ -217,16 +208,6 @@ const documentColumns: ColumnDef<BillingDocumentListItem, unknown>[] = [
   },
 ]
 
-const INSTALLMENT_BADGE_VARIANT: Record<
-  string,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  OPEN: 'default',
-  OVERDUE: 'destructive',
-  PAID: 'outline',
-  VOID: 'secondary',
-}
-
 function makeInstallmentColumns(
   onReceive: (row: ReceiptRow) => void,
 ): ColumnDef<ReceiptRow, unknown>[] {
@@ -253,18 +234,16 @@ function makeInstallmentColumns(
       header: 'Situação',
       filterFn: 'arrIncludesSome',
       meta: { label: 'Situação' },
-      cell: ({ row }) => (
-        <Badge
-          variant={
-            INSTALLMENT_BADGE_VARIANT[row.original.installmentStatus] ??
-            'secondary'
-          }
-        >
-          {getReceivableInstallmentStatusLabel(
-            parseInstallmentStatus(row.original.installmentStatus),
-          )}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const status =
+          RECEIVABLE_INSTALLMENT_STATUS.parse(row.original.installmentStatus) ??
+          'OPEN'
+        return (
+          <StatusBadge tone={RECEIVABLE_INSTALLMENT_STATUS.tone(status)}>
+            {RECEIVABLE_INSTALLMENT_STATUS.label(status)}
+          </StatusBadge>
+        )
+      },
     },
     {
       accessorKey: 'dueDate',
@@ -323,19 +302,6 @@ function makeInstallmentColumns(
       },
     },
   ]
-}
-
-function parseInstallmentStatus(
-  value: string,
-): 'OPEN' | 'PAID' | 'OVERDUE' | 'VOID' {
-  switch (value) {
-    case 'PAID':
-    case 'OVERDUE':
-    case 'VOID':
-      return value
-    default:
-      return 'OPEN'
-  }
 }
 
 export function FinanceReceivablesPage({
