@@ -78,9 +78,8 @@ const desktopDataPolicyUnavailableMessages = {
  * these entries (`apps/web/src/runtime/desktop-offline-routes.ts`).
  */
 export const calibraApiPolicyRegistry = {
-  dashboard: {
-    getStats: "cloud-only",
-  },
+  // Derived from the endpoint definitions (`policy`), not listed here.
+  dashboard: endpointPolicies(ENDPOINT_GROUPS.dashboard),
   units: {
     getDashboardUnits: "cloud-only",
     listAdminUnits: "cloud-only",
@@ -161,10 +160,7 @@ export const calibraApiPolicyRegistry = {
     getCapa: "cloud-only",
     getCompetence: "cloud-only",
   },
-  certificateNumbering: {
-    getProfile: "cloud-only",
-    updateProfile: "cloud-only",
-  },
+  certificateNumbering: endpointPolicies(ENDPOINT_GROUPS.certificateNumbering),
   portalDomains: {
     get: "cloud-only",
     create: "cloud-only",
@@ -360,11 +356,7 @@ export const calibraApiPolicyRegistry = {
     delete: "cloud-only",
     setEnforcementMode: "cloud-only",
   },
-  reports: {
-    getExecutiveOverview: "cloud-only",
-    getComparison: "cloud-only",
-    getTrend: "cloud-only",
-  },
+  reports: endpointPolicies(ENDPOINT_GROUPS.reports),
   publicSignup: {
     start: "cloud-only",
   },

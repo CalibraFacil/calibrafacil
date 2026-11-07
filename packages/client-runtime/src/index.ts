@@ -28,7 +28,6 @@ import type {
   StandardWriteInput,
   StartSsoInput,
   UpdateAssetInput,
-  UpdateCertificateNumberingProfileInput,
   UpdateMaterialInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
@@ -109,11 +108,6 @@ export function createCloudApiClient(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- the raw Hono client type is narrowed to the browser-supported route subset used by runtime modules.
   const rawCloudClient = createRawCloudClient(options) as unknown as {
     api: {
-      dashboard: {
-        stats: {
-          $get(): Promise<Response>;
-        };
-      };
       onboarding: {
         checklist: {
           $get(): Promise<Response>;
@@ -211,12 +205,6 @@ export function createCloudApiClient(
             $get(input: { param: { id: string } }): Promise<Response>;
           };
         };
-      };
-      "certificate-numbering": {
-        $get(): Promise<Response>;
-        $put(input: {
-          json: UpdateCertificateNumberingProfileInput;
-        }): Promise<Response>;
       };
       "portal-domains": {
         $get(): Promise<Response>;
@@ -652,7 +640,7 @@ export function createCloudApiClient(
   };
 
   return {
-    dashboard: createDashboardApi(rawCloudClient),
+    dashboard: createDashboardApi(endpointTransport, options),
     units: createUnitsApi(rawCloudClient),
     access: createAccessApi(rawCloudClient),
     onboarding: createOnboardingApi(rawCloudClient),
@@ -663,7 +651,10 @@ export function createCloudApiClient(
     organizationLifecycle: createOrganizationLifecycleApi(rawCloudClient),
     organizationProfile: createOrganizationProfileApi(rawCloudClient),
     entityLabels: createEntityLabelsApi(rawCloudClient),
-    certificateNumbering: createCertificateNumberingApi(rawCloudClient),
+    certificateNumbering: createCertificateNumberingApi(
+      endpointTransport,
+      options,
+    ),
     portalDomains: createPortalDomainsApi(rawCloudClient),
     emailDomains: createEmailDomainsApi(rawCloudClient),
     notifications: createNotificationsApi(rawCloudClient),
@@ -686,7 +677,7 @@ export function createCloudApiClient(
     serviceOrders: createServiceOrdersApi(rawCloudClient),
     sync: createCloudSyncApi(),
     attachments: createCloudAttachmentsApi(),
-    reports: createReportsApi(rawCloudClient),
+    reports: createReportsApi(endpointTransport, options),
     publicInvitations: createPublicInvitationsApi(rawCloudClient),
     publicSignup: createPublicSignupApi(rawCloudClient),
     labSetup: createLabSetupApi(rawCloudClient),

@@ -1,14 +1,13 @@
 import { createRouter } from "../server/router";
 import { slugify } from "@calibra-facil/shared/text";
 import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
-import { zValidator } from "@hono/zod-validator";
+import { certificateNumberingEndpoints } from "@calibra-facil/contracts";
 import {
   certificateNumberingAuditLog,
   certificateNumberingProfile,
   organization,
   type CertificateNumberingConfig,
 } from "@calibra-facil/db/schema";
-import { UpdateCertificateNumberingProfileSchema } from "@calibra-facil/schemas";
 import { and, desc, eq } from "drizzle-orm";
 import {
   requireLabProtected,
@@ -23,15 +22,24 @@ import {
   renderCertificateTemplate,
   validateCertificateNumberingConfig,
 } from "../lib/certificate-numbering";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { invalid } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 
+const PREFIX = "/api/certificate-numbering";
+
 export const certificateNumberingRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+}>();
+
+mount(
+  certificateNumberingRouter,
+  PREFIX,
+  certificateNumberingEndpoints.getProfile,
+  [...requireLabProtected, requireOrgType("LAB")],
+  async (c) => {
     const memberData = c.get("member");
 
     const { profile, org } = await orgDb(memberData.organizationId).transaction(
@@ -65,7 +73,7 @@ export const certificateNumberingRouter = createRouter<{
       new Date(),
     );
 
-    return c.json({
+    return {
       profile: profile
         ? {
             id: profile.id,
@@ -95,138 +103,142 @@ export const certificateNumberingRouter = createRouter<{
         "{seq}",
         "{number}",
       ],
-    });
-  })
+    };
+  },
+);
 
-  .put(
-    "/",
+mount(
+  certificateNumberingRouter,
+  PREFIX,
+  certificateNumberingEndpoints.updateProfile,
+  [
     ...requireLabProtected,
     requireOrgType("LAB"),
     // The profile is keyed on organizationId and numbers every unit's
     // certificates, so changing it is an organization-level settings write
     // (owner/admin) — not something a single-unit unit_admin may do.
     requirePermission({ settings: ["update"] }),
-    zValidator("json", UpdateCertificateNumberingProfileSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const session = c.get("session");
+  ],
+  async (c, { body: input }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
 
-      const input = c.req.valid("json");
-      let config;
-      try {
-        config = validateCertificateNumberingConfig(input.config);
-      } catch (error) {
-        throw invalid(
-          "invalid_request",
-          error instanceof Error
-            ? error.message
-            : "Configuracao de numeracao invalida",
-        );
-      }
-
-      const profile = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [existing] = await ctx.o
-            .select()
-            .from(certificateNumberingProfile)
-            .where(
-              eq(
-                certificateNumberingProfile.organizationId,
-                memberData.organizationId,
-              ),
-            )
-            .limit(1);
-
-          const [saved] = await ctx.o
-            .insert(certificateNumberingProfile)
-            .values({
-              organizationId: memberData.organizationId,
-              name: input.name,
-              config,
-              createdBy: session.user.id,
-              updatedBy: session.user.id,
-            })
-            .onConflictDoUpdate({
-              target: certificateNumberingProfile.organizationId,
-              set: {
-                name: input.name,
-                config,
-                updatedBy: session.user.id,
-                updatedAt: new Date(),
-              },
-            })
-            .returning();
-
-          if (!saved) throw new Error("Falha ao salvar perfil");
-
-          // Audit row commits atomically with the change (ISO 17025 §7.5/§8.4).
-          await ctx.o.insert(certificateNumberingAuditLog).values({
-            organizationId: memberData.organizationId,
-            profileId: saved.id,
-            action: existing ? "update" : "create",
-            changes: {
-              old: existing
-                ? {
-                    name: existing.name,
-                    config: existing.config,
-                  }
-                : null,
-              new: {
-                name: saved.name,
-                config: saved.config,
-              },
-            },
-            performedBy: ctx.actor.userId,
-            ipAddress: ctx.actor.ipAddress,
-          });
-
-          return saved;
-        },
+    let config;
+    try {
+      config = validateCertificateNumberingConfig(input.config);
+    } catch (error) {
+      throw invalid(
+        "invalid_request",
+        error instanceof Error
+          ? error.message
+          : "Configuracao de numeracao invalida",
       );
+    }
 
-      return c.json({
-        message: "Perfil de numeracao atualizado",
-        profile,
-      });
-    },
-  )
-
-  .get(
-    "/audit-log",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    async (c) => {
-      const memberData = c.get("member");
-      requireUnitOperationalSettingsManager(memberData);
-
-      const rows = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .select({
-            id: certificateNumberingAuditLog.id,
-            profileId: certificateNumberingAuditLog.profileId,
-            action: certificateNumberingAuditLog.action,
-            changes: certificateNumberingAuditLog.changes,
-            performedBy: certificateNumberingAuditLog.performedBy,
-            performedAt: certificateNumberingAuditLog.performedAt,
-          })
-          .from(certificateNumberingAuditLog)
+    const profile = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [existing] = await ctx.o
+          .select()
+          .from(certificateNumberingProfile)
           .where(
-            and(
-              eq(
-                certificateNumberingAuditLog.organizationId,
-                memberData.organizationId,
-              ),
+            eq(
+              certificateNumberingProfile.organizationId,
+              memberData.organizationId,
             ),
           )
-          .orderBy(desc(certificateNumberingAuditLog.performedAt))
-          .limit(50),
-      );
+          .limit(1);
 
-      return c.json({ data: rows });
-    },
-  );
+        const [saved] = await ctx.o
+          .insert(certificateNumberingProfile)
+          .values({
+            organizationId: memberData.organizationId,
+            name: input.name,
+            config,
+            createdBy: session.user.id,
+            updatedBy: session.user.id,
+          })
+          .onConflictDoUpdate({
+            target: certificateNumberingProfile.organizationId,
+            set: {
+              name: input.name,
+              config,
+              updatedBy: session.user.id,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+
+        if (!saved) throw new Error("Falha ao salvar perfil");
+
+        // Audit row commits atomically with the change (ISO 17025 §7.5/§8.4).
+        await ctx.o.insert(certificateNumberingAuditLog).values({
+          organizationId: memberData.organizationId,
+          profileId: saved.id,
+          action: existing ? "update" : "create",
+          changes: {
+            old: existing
+              ? {
+                  name: existing.name,
+                  config: existing.config,
+                }
+              : null,
+            new: {
+              name: saved.name,
+              config: saved.config,
+            },
+          },
+          performedBy: ctx.actor.userId,
+          ipAddress: ctx.actor.ipAddress,
+        });
+
+        return saved;
+      },
+    );
+
+    return {
+      message: "Perfil de numeracao atualizado",
+      profile,
+    };
+  },
+);
+
+// GET /audit-log: no SDK method calls it, so no endpoint definition.
+certificateNumberingRouter.get(
+  "/audit-log",
+  ...requireLabProtected,
+  requireOrgType("LAB"),
+  async (c) => {
+    const memberData = c.get("member");
+    requireUnitOperationalSettingsManager(memberData);
+
+    const rows = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({
+          id: certificateNumberingAuditLog.id,
+          profileId: certificateNumberingAuditLog.profileId,
+          action: certificateNumberingAuditLog.action,
+          changes: certificateNumberingAuditLog.changes,
+          performedBy: certificateNumberingAuditLog.performedBy,
+          performedAt: certificateNumberingAuditLog.performedAt,
+        })
+        .from(certificateNumberingAuditLog)
+        .where(
+          and(
+            eq(
+              certificateNumberingAuditLog.organizationId,
+              memberData.organizationId,
+            ),
+          ),
+        )
+        .orderBy(desc(certificateNumberingAuditLog.performedAt))
+        .limit(50),
+    );
+
+    return c.json({ data: rows });
+  },
+);
 
 function buildPreview(
   config: CertificateNumberingConfig,

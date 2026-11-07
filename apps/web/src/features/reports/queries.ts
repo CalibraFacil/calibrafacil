@@ -2,12 +2,7 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
-import type {
-  ComparisonResponse,
-  ExecutiveOverviewResponse,
-  ReportsQueryInput,
-  TrendResponse,
-} from './types'
+import type { ReportsQueryInput } from './types'
 
 const DEFAULT_REPORT_PERIOD = '30d'
 
@@ -39,9 +34,8 @@ export function executiveReportQueryOptions(input: ReportsQueryInput) {
       unitIdsKey(input.unitIds),
     ],
     queryFn: () =>
-      calibraApi.reports.getExecutiveOverview<ExecutiveOverviewResponse>({
-        period: input.period,
-        unitIds: input.unitIds,
+      calibraApi.reports.getExecutiveOverview({
+        query: { period: input.period, unitIds: input.unitIds },
       }),
   })
 }
@@ -56,9 +50,8 @@ export function comparisonReportQueryOptions(input: ReportsQueryInput) {
       unitIdsKey(input.unitIds),
     ],
     queryFn: () =>
-      calibraApi.reports.getComparison<ComparisonResponse>({
-        period: input.period,
-        unitIds: input.unitIds,
+      calibraApi.reports.getComparison({
+        query: { period: input.period, unitIds: input.unitIds },
       }),
   })
 }
@@ -73,9 +66,8 @@ export function trendReportQueryOptions(input: ReportsQueryInput) {
       unitIdsKey(input.unitIds),
     ],
     queryFn: () =>
-      calibraApi.reports.getTrend<TrendResponse>({
-        period: input.period,
-        unitIds: input.unitIds,
+      calibraApi.reports.getTrend({
+        query: { period: input.period, unitIds: input.unitIds },
       }),
   })
 }

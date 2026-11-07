@@ -127,7 +127,9 @@ function CertificateNumberingForm({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.certificateNumbering.updateProfile(buildPayload(form))
+      return calibraApi.certificateNumbering.updateProfile({
+        body: buildPayload(form),
+      })
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({

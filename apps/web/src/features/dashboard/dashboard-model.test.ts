@@ -1,3 +1,4 @@
+import { buildDashboardStats } from '@calibra-facil/contracts/dashboard-fixtures'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DashboardStats } from '@/features/dashboard/queries'
@@ -14,33 +15,7 @@ import {
   sumTrend,
 } from './dashboard-model'
 
-const emptyStats: DashboardStats = {
-  pendingCalibrations: 0,
-  approvedThisMonth: 0,
-  rejectedThisMonth: 0,
-  approvalRate: 100,
-  expiringStandards: 0,
-  overdueJobs: 0,
-  dueToday: 0,
-  dueNextSevenDays: 0,
-  statusBreakdown: [],
-  reviewQueue: [],
-  standardsWatchlist: [],
-  calibrationTrend: [],
-  recentJobs: [],
-  openNonConformances: 0,
-  nonConformancesAwaitingDisposition: 0,
-  capasOpen: 0,
-  capasOverdue: 0,
-  pendingCalibrationRequests: 0,
-  serviceOrdersInProgress: 0,
-  competencesExpiring: 0,
-  competencesPendingEvaluation: 0,
-  ptPlanOverdue: 0,
-  ptRoundsPending: 0,
-  spcChartsWithSignals: 0,
-  dueSoonJobs: [],
-}
+const emptyStats: DashboardStats = buildDashboardStats()
 
 const job = (
   id: number,

@@ -1,40 +1,18 @@
-import type { ReportsApi, ReportsQueryInput } from "../types";
-import { readJsonResponse } from "../transport/response";
+import { reportEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
 
-function reportQuery(input: ReportsQueryInput | undefined) {
-  return {
-    period: input?.period || undefined,
-    unitIds: input?.unitIds || undefined,
-  };
-}
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
 
-export function createReportsApi(rawCloudClient: any): ReportsApi {
-  return {
-    async getExecutiveOverview<TResponse = unknown>(input?: ReportsQueryInput) {
-      return readJsonResponse<TResponse>(
-        await rawCloudClient.api.reports.consolidated[
-          "executive-overview"
-        ].$get({
-          query: reportQuery(input),
-        }),
-        "Falha ao carregar visão executiva",
-      );
-    },
-    async getComparison<TResponse = unknown>(input?: ReportsQueryInput) {
-      return readJsonResponse<TResponse>(
-        await rawCloudClient.api.reports.consolidated.comparison.$get({
-          query: reportQuery(input),
-        }),
-        "Falha ao carregar comparativo consolidado",
-      );
-    },
-    async getTrend<TResponse = unknown>(input?: ReportsQueryInput) {
-      return readJsonResponse<TResponse>(
-        await rawCloudClient.api.reports.consolidated.trend.$get({
-          query: reportQuery(input),
-        }),
-        "Falha ao carregar tendência consolidada",
-      );
-    },
-  };
+/** The consolidated reports client is its endpoint group (`reportEndpoints` in `@calibra-facil/contracts`). */
+export type ReportsApi = EndpointClient<typeof reportEndpoints>;
+
+export function createReportsApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): ReportsApi {
+  return endpointClient(reportEndpoints, transport, options);
 }

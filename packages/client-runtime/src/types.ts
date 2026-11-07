@@ -21,13 +21,15 @@ import type {
   SoftDeleteOrganizationSchema,
   UpdateOrganizationProfileSchema,
   UpdateAssetSchema,
-  UpdateCertificateNumberingProfileSchema,
   UpdateCustomerSchema,
   UpdateMaterialSchema,
   UpdateNotificationPreferencesSchema,
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
+import type { CertificateNumberingApi } from "./modules/certificate-numbering";
 import type { CustomersApi } from "./modules/customers";
+import type { DashboardApi } from "./modules/dashboard";
+import type { ReportsApi } from "./modules/reports";
 
 export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
@@ -50,9 +52,6 @@ export type CreateNonConformanceInput = z.input<
 >;
 export type CreateServiceInput = z.input<typeof CreateServiceSchema>;
 export type UpdateAssetInput = z.input<typeof UpdateAssetSchema>;
-export type UpdateCertificateNumberingProfileInput = z.input<
-  typeof UpdateCertificateNumberingProfileSchema
->;
 export type UpdateCustomerInput = z.input<typeof UpdateCustomerSchema>;
 export type UpdateMaterialInput = z.input<typeof UpdateMaterialSchema>;
 export type UpdateNotificationPreferencesInput = z.input<
@@ -75,7 +74,12 @@ export type AssetAuditLogData<TRecord = unknown> = {
 
 import type {
   AssetRecord,
+  CertificateNumberingConfig,
+  CertificateNumberingProfileResponse,
   CnpjLookupResult,
+  DashboardJob,
+  DashboardStats,
+  UpdateCertificateNumberingProfileResponse,
   CustomerDetail,
   CustomersListResponse,
   DeleteEnvironmentalLimitResponse,
@@ -975,20 +979,9 @@ export interface AccreditedScopeApi {
   }>;
 }
 
-export type ReportsQueryInput = {
-  period?: string;
-  unitIds?: string;
-};
-
-export interface ReportsApi {
-  getExecutiveOverview<TResponse = unknown>(
-    input?: ReportsQueryInput,
-  ): Promise<TResponse>;
-  getComparison<TResponse = unknown>(
-    input?: ReportsQueryInput,
-  ): Promise<TResponse>;
-  getTrend<TResponse = unknown>(input?: ReportsQueryInput): Promise<TResponse>;
-}
+// REPORTS: the DTOs and the client are the endpoint definitions' own
+// (`endpoints/reports.ts`, `modules/reports.ts`).
+export type { ReportsApi };
 
 export interface PublicSignupApi {
   start<TInput = unknown>(input: TInput): Promise<SelfServeSignupResponse>;
@@ -1722,60 +1715,15 @@ export interface ServiceOrdersApi {
   getDeliveryDocumentPdf(id: string | number): Promise<ServiceOrderDocumentUrl>;
 }
 
+// =============================================================================
+// DASHBOARD: the DTOs are the contract schemas' types
+// (`@calibra-facil/contracts`, `endpoints/dashboard.ts`); the client itself is
+// generated from the endpoint definitions (`modules/dashboard.ts`).
+// =============================================================================
+
 export type DashboardJobStatus = JobStatus;
-
-export type DashboardJob = {
-  id: number;
-  jobId: string;
-  customerName: string | null;
-  assetName: string | null;
-  serviceName: string | null;
-  technicianName: string | null;
-  status: DashboardJobStatus;
-  dueDate: string | null;
-  isOverdue: boolean | null;
-  createdAt: string;
-};
-
-export type DashboardStats = {
-  pendingCalibrations: number;
-  approvedThisMonth: number;
-  rejectedThisMonth: number;
-  approvalRate: number;
-  expiringStandards: number;
-  overdueJobs: number;
-  dueToday: number;
-  dueNextSevenDays: number;
-  statusBreakdown: Array<{ status: DashboardJobStatus; count: number }>;
-  reviewQueue: DashboardJob[];
-  standardsWatchlist: Array<{
-    id: number;
-    name: string;
-    serialNumber: string;
-    certificateNumber: string;
-    nextCalibrationDate: string;
-    status: string;
-  }>;
-  calibrationTrend: Array<{ date: string; approved: number; rejected: number }>;
-  recentJobs: DashboardJob[];
-  // Cross-domain operational signals (org-scoped)
-  openNonConformances: number;
-  nonConformancesAwaitingDisposition: number;
-  capasOpen: number;
-  capasOverdue: number;
-  pendingCalibrationRequests: number;
-  serviceOrdersInProgress: number;
-  competencesExpiring: number;
-  competencesPendingEvaluation: number;
-  ptPlanOverdue: number;
-  ptRoundsPending: number;
-  spcChartsWithSignals: number;
-  dueSoonJobs: DashboardJob[];
-};
-
-export interface DashboardApi {
-  getStats<TStats = DashboardStats>(): Promise<TStats>;
-}
+export type { DashboardJob, DashboardStats };
+export type { DashboardApi };
 
 type DashboardUnitSummary = {
   id: number;
@@ -2153,58 +2101,17 @@ export interface EntityLabelsApi {
   getCompetence(id: string | number): Promise<string | null>;
 }
 
+// CERTIFICATE NUMBERING: the DTOs are the contract schemas' types
+// (`endpoints/certificate-numbering.ts`); the client is generated from the
+// endpoint definitions (`modules/certificate-numbering.ts`).
 export type CertificateNumberingResetScope =
-  | "never"
-  | "year"
-  | "month"
-  | "project";
-
-export type CertificateNumberingConfig = {
-  labCode: string;
-  projectCode?: string | null;
-  numberTemplate: string;
-  certificateNameTemplate: string;
-  sequence: {
-    resetScope: CertificateNumberingResetScope;
-    startAt: number;
-    increment: number;
-    padding: number;
-  };
+  CertificateNumberingConfig["sequence"]["resetScope"];
+export type {
+  CertificateNumberingApi,
+  CertificateNumberingConfig,
+  CertificateNumberingProfileResponse,
+  UpdateCertificateNumberingProfileResponse,
 };
-
-export type CertificateNumberingProfileResponse = {
-  profile: {
-    id: number | null;
-    name: string;
-    config: CertificateNumberingConfig;
-    createdAt: string | Date | null;
-    updatedAt: string | Date | null;
-  };
-  example: {
-    number: string;
-    name: string;
-    sequenceKey: string;
-  };
-  supportedTokens: string[];
-};
-
-export type UpdateCertificateNumberingProfileResponse = {
-  message: string;
-  profile: {
-    id: number;
-    name: string;
-    config: CertificateNumberingConfig;
-    createdAt?: string | Date | null;
-    updatedAt?: string | Date | null;
-  };
-};
-
-export interface CertificateNumberingApi {
-  getProfile(): Promise<CertificateNumberingProfileResponse>;
-  updateProfile(
-    input: UpdateCertificateNumberingProfileInput,
-  ): Promise<UpdateCertificateNumberingProfileResponse>;
-}
 
 type PortalDomainStatus =
   | "not_configured"
