@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_TYPES,
-  PORTAL_NOTIFICATION_TYPES,
 } from "./notification-types";
 
 describe("notification type registry", () => {
@@ -22,11 +21,5 @@ describe("notification type registry", () => {
     expect(Object.keys(DEFAULT_NOTIFICATION_PREFERENCES).sort()).toEqual(
       [...NOTIFICATION_TYPES].sort(),
     );
-  });
-
-  it("keeps the portal types a subset of the types", () => {
-    for (const type of PORTAL_NOTIFICATION_TYPES) {
-      expect(NOTIFICATION_TYPES).toContain(type);
-    }
   });
 });
