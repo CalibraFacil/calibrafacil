@@ -52,6 +52,7 @@ import {
   METHOD_DEVIATIONS_MAX_LENGTH,
   resolveExecutionPerformedAt,
   validateCalibrationRecordForSubmit,
+  JOB_STATUS,
 } from "@calibra-facil/schemas";
 import {
   localAttachmentSchema,
@@ -1209,21 +1210,7 @@ export function createLocalServerFromConfig(
 }
 
 function parseJobStatus(status: string | undefined) {
-  if (
-    status === "DRAFT" ||
-    status === "IN_PROGRESS" ||
-    status === "REVIEW" ||
-    status === "GENERATING_PDF" ||
-    status === "RENDER_FAILED" ||
-    status === "APPROVED" ||
-    status === "REJECTED" ||
-    status === "CANCELED" ||
-    status === "SUPERSEDED"
-  ) {
-    return status;
-  }
-
-  return undefined;
+  return JOB_STATUS.parse(status) ?? undefined;
 }
 
 function parseAssetStatus(status: string | undefined) {

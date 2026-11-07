@@ -1781,7 +1781,14 @@ export const ListReferenceStandardsQuerySchema = z.object({
  * Job status values for workflow tracking
  * - SUPERSEDED: Certificate was amended and replaced (ISO 17025 Clause 7.8.4.1)
  */
-export { JobStatusSchema, type JobStatus } from "./job-status";
+export {
+  CERTIFICATE_ISSUED_JOB_STATUSES,
+  IN_FLIGHT_JOB_STATUSES,
+  JOB_STATUS,
+  JobStatusSchema,
+  OPEN_JOB_STATUSES,
+  type JobStatus,
+} from "./job-status";
 
 /**
  * Schema for creating a new calibration job

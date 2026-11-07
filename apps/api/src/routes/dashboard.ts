@@ -1,3 +1,5 @@
+import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
+import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { Hono } from "hono";
 import { LAB_TIME_ZONE } from "@calibra-facil/documents";
 import { isCalendarDatePast } from "@calibra-facil/shared";
@@ -576,7 +578,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           isOverdue:
             job.dueDate &&
             isCalendarDatePast(job.dueDate, now) &&
-            ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
+            isOneOf(OPEN_JOB_STATUSES, job.status),
         });
 
         const reviewQueue = reviewQueueResult.map(withOverdueFlag);

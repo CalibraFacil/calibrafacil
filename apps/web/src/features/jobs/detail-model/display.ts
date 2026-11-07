@@ -1,34 +1,7 @@
 import { formatCalibrationValue } from '@calibra-facil/shared'
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import { formatInstant } from '@calibra-facil/shared/format'
-import { type JobStatus, type ReviewMethodColumn } from './types'
-
-export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
-  DRAFT: 'Rascunho',
-  IN_PROGRESS: 'Em Execução',
-  REVIEW: 'Em Revisão',
-  GENERATING_PDF: 'Gerando PDF',
-  RENDER_FAILED: 'Falha na emissão',
-  APPROVED: 'Aprovado',
-  REJECTED: 'Rejeitado',
-  CANCELED: 'Cancelado',
-  SUPERSEDED: 'Retificado',
-}
-
-export const JOB_STATUS_VARIANTS: Record<
-  JobStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  DRAFT: 'secondary',
-  IN_PROGRESS: 'default',
-  REVIEW: 'outline',
-  GENERATING_PDF: 'outline',
-  RENDER_FAILED: 'destructive',
-  APPROVED: 'default',
-  REJECTED: 'destructive',
-  CANCELED: 'secondary',
-  SUPERSEDED: 'outline',
-}
+import { type ReviewMethodColumn } from './types'
 
 export const PHASE_DISPLAY_LABELS: Record<'before' | 'after', string> = {
   before: 'Antes do ajuste',

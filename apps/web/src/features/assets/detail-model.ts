@@ -6,9 +6,9 @@
  * overdue / unscheduled / retired) that drives the instrument-panel hero. Keep
  * this logic here (tested) rather than in JSX, per the schema-first rule.
  */
+import { SignalTone } from '@calibra-facil/shared/status-vocabulary'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
-import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import { dateOnlyDaysBetween } from '@/lib/date-only'
 
 export type AssetCalibrationLevel =

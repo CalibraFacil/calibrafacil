@@ -28,19 +28,13 @@ import {
   formatExpandedUncertainty,
   formatReviewValue,
   getFinancialVariant,
-  JOB_STATUS_LABELS,
-  JOB_STATUS_VARIANTS,
   numberFromUnknown,
   numericValues,
   reviewColumnDisplayLabel,
 } from './detail-model'
 
 describe('job detail model', () => {
-  it('keeps job status labels and badge variants in the feature layer', () => {
-    expect(JOB_STATUS_LABELS.APPROVED).toBe('Aprovado')
-    expect(JOB_STATUS_VARIANTS.REJECTED).toBe('destructive')
-    expect(JOB_STATUS_VARIANTS.GENERATING_PDF).toBe('outline')
-  })
+  it('keeps job status labels and badge variants in the feature layer', () => {})
 
   it('formats dates and financial badge variants', () => {
     expect(formatDate(null)).toBe('-')

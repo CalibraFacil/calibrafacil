@@ -1,6 +1,7 @@
+import { SIGNAL_TONES } from "@calibra-facil/shared/status-vocabulary";
 import { describe, expect, it } from "vitest";
 
-import { SIGNAL_TONES, STATUS_TONE } from "./status-tone";
+import { STATUS_TONE } from "./status-tone";
 
 const RAW_PALETTE =
   /(?:^|[\s:[])(?:text|bg|border|ring|fill|stroke|from|via|to|outline|divide|shadow|decoration|accent|caret)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}/;

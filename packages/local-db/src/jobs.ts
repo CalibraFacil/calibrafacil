@@ -1,17 +1,12 @@
-import { isCalendarDatePast, labDaysUntil } from "@calibra-facil/schemas";
+import {
+  isCalendarDatePast,
+  labDaysUntil,
+  type JobStatus,
+} from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
-export type LocalJobStatus =
-  | "DRAFT"
-  | "IN_PROGRESS"
-  | "REVIEW"
-  | "GENERATING_PDF"
-  | "RENDER_FAILED"
-  | "APPROVED"
-  | "REJECTED"
-  | "CANCELED"
-  | "SUPERSEDED";
+export type LocalJobStatus = JobStatus;
 
 export type LocalJobsListInput = {
   page: number;

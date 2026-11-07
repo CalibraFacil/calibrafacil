@@ -1,3 +1,4 @@
+import type { JobStatus } from '@calibra-facil/schemas'
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
@@ -14,7 +15,6 @@ import type {
   CustomerAuditLogData,
   CustomerDetail,
   CustomerJobsData,
-  CustomerJobStatus,
   CustomerFinancialTimelineResponse,
   CustomersListData,
   CustomersListQueryInput,
@@ -132,7 +132,7 @@ export function customerJobsQueryOptions({
   page: number
   limit: number
   search: string
-  statusFilter: CustomerJobStatus | ''
+  statusFilter: JobStatus | ''
 }) {
   return queryOptions({
     queryKey: ['jobs', 'customer', customerId, page, search, statusFilter],
@@ -434,7 +434,7 @@ export function useCustomerJobsData({
   page: number
   limit: number
   search: string
-  statusFilter: CustomerJobStatus | ''
+  statusFilter: JobStatus | ''
 }) {
   return useQuery({
     ...customerJobsQueryOptions({

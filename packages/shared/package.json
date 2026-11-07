@@ -14,6 +14,7 @@
     "./cnpj": "./src/cnpj.ts",
     "./mass-units": "./src/mass-units.ts",
     "./public-urls": "./src/public-urls.ts",
+    "./status-vocabulary": "./src/status-vocabulary.ts",
     "./record": "./src/record.ts",
     "./route-identifiers": "./src/route-identifiers.ts",
     "./text": "./src/text.ts",

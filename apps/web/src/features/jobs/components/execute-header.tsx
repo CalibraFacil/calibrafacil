@@ -1,3 +1,5 @@
+import { JOB_STATUS } from '@calibra-facil/schemas'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { SentIcon } from '@hugeicons/core-free-icons'
 import { Button } from '@calibra-facil/ui/button'
@@ -5,7 +7,7 @@ import { Badge } from '@calibra-facil/ui/badge'
 import { SaveButton } from '@/components/ui/save-button'
 import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
 import type { MethodInputField } from '@/components/method-runtime/types'
-import { JOB_STATUS_LABELS, type JobData } from '@/features/jobs/execution'
+import type { JobData } from '@/features/jobs/execution'
 import type { buildAssetSpecSummaryItems } from '../execute-page-helpers'
 
 export function ExecuteHeader({
@@ -41,6 +43,8 @@ export function ExecuteHeader({
   onSave: () => Promise<unknown>
   onSubmit: () => void
 }) {
+  const jobStatus = JOB_STATUS.parse(job.status)
+
   return (
     <Panel className="relative overflow-hidden p-5 sm:p-6">
       <BlueprintOverlay />
@@ -51,7 +55,11 @@ export function ExecuteHeader({
               <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight text-foreground">
                 {job.jobId}
               </h1>
-              <Badge>{JOB_STATUS_LABELS[job.status]}</Badge>
+              <StatusBadge
+                tone={jobStatus ? JOB_STATUS.tone(jobStatus) : 'neutral'}
+              >
+                {jobStatus ? JOB_STATUS.label(jobStatus) : job.status}
+              </StatusBadge>
             </div>
           </div>
           <p className="max-w-3xl text-pretty text-sm text-muted-foreground">

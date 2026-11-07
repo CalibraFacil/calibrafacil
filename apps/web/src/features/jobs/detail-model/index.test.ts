@@ -6,8 +6,6 @@ import * as detailModel from './index'
 // callers imported before the split must still come out of the index, and
 // nothing else leaks. The type half is held by `check-types` on the importers.
 const SURFACE = [
-  'JOB_STATUS_LABELS',
-  'JOB_STATUS_VARIANTS',
   'PHASE_DISPLAY_LABELS',
   'PRIORITY_REVIEW_FIELD_KEYS',
   'PRIORITY_REVIEW_FORMULA_KEYS',

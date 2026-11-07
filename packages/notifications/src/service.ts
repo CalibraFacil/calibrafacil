@@ -8,7 +8,11 @@
 // belong to the CLIENT organization). No transaction is held across an e-mail
 // send. Global tables (user, organization, notification_preference) are read
 // on the plain handle.
-import { DEFAULT_NOTIFICATION_PREFERENCES } from "@calibra-facil/schemas";
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  OPEN_JOB_STATUSES,
+} from "@calibra-facil/schemas";
+import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { db } from "@calibra-facil/db";
 
 import {
@@ -2978,8 +2982,7 @@ export async function notifyJobOverdue(jobId: number): Promise<void> {
   if (!jobData?.dueDate) return;
 
   // Only notify for jobs that are still in progress
-  const activeStatuses = ["DRAFT", "IN_PROGRESS", "REVIEW"];
-  if (!activeStatuses.includes(jobData.status)) return;
+  if (!isOneOf(OPEN_JOB_STATUSES, jobData.status)) return;
 
   const daysOverdue = Math.abs(getDaysRemaining(jobData.dueDate));
   const dueDate = formatCalendarDate(jobData.dueDate);

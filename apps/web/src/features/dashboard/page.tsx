@@ -1,4 +1,6 @@
 import { standardRouteId } from '@calibra-facil/shared/route-identifiers'
+import { JOB_STATUS } from '@calibra-facil/schemas'
+import { STATUS_TONE } from '@calibra-facil/ui/status-tone'
 import { useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -43,7 +45,6 @@ import { jobRouteId } from '@/lib/route-identifiers'
 import {
   useDashboardIndexData,
   type DashboardJob,
-  type DashboardJobStatus,
   type DashboardStats,
 } from '@/features/dashboard/queries'
 import {
@@ -57,7 +58,6 @@ import {
   jobTitle,
   QUEUE_VIEWS,
   selectQueueJobs,
-  STATUS_LABEL,
   sumTrend,
   type HealthSignal,
   type HealthSignalKey,
@@ -85,18 +85,6 @@ const STAGE_BAR_TONE: Record<PipelineStage['status'], string> = {
   REVIEW: 'bg-primary',
   GENERATING_PDF: 'bg-emerald-500',
   RENDER_FAILED: 'bg-destructive',
-}
-
-const STATUS_DOT: Record<DashboardJobStatus, string> = {
-  DRAFT: 'bg-foreground/25',
-  IN_PROGRESS: 'bg-primary/60',
-  REVIEW: 'bg-primary',
-  GENERATING_PDF: 'bg-emerald-500',
-  RENDER_FAILED: 'bg-destructive',
-  APPROVED: 'bg-emerald-500',
-  REJECTED: 'bg-destructive',
-  CANCELED: 'bg-foreground/15',
-  SUPERSEDED: 'bg-foreground/15',
 }
 
 const HEALTH_ICON: Record<HealthSignalKey, IconType> = {
@@ -660,7 +648,7 @@ function QueueRow({
             'size-1.5 rounded-full',
             isOverdue && view !== 'recent'
               ? 'bg-destructive'
-              : STATUS_DOT[job.status],
+              : STATUS_TONE[JOB_STATUS.tone(job.status)].dot,
           )}
         />
         <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
@@ -677,12 +665,12 @@ function QueueRow({
         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
           {job.customerName ?? 'Cliente não informado'}
           {job.technicianName ? ` · ${job.technicianName}` : ''}
-          <span className="sm:hidden"> · {STATUS_LABEL[job.status]}</span>
+          <span className="sm:hidden"> · {JOB_STATUS.label(job.status)}</span>
         </span>
       </span>
       <span className="hidden sm:block">
         <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-          {STATUS_LABEL[job.status]}
+          {JOB_STATUS.label(job.status)}
         </span>
       </span>
       <span

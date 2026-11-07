@@ -1,3 +1,4 @@
+import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
@@ -12,7 +13,6 @@ import {
   StaggerGroup,
   StaggerItem,
 } from "@calibra-facil/ui/instrument-panel";
-import type { SignalTone } from "@calibra-facil/ui/status-tone";
 import { Button } from "@calibra-facil/ui/button";
 import {
   Dialog,

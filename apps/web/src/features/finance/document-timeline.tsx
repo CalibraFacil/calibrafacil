@@ -3,6 +3,7 @@
  * into one chronological event log (newest first) using the shared Timeline
  * primitive, so it reads like every other timeline in the app.
  */
+import { SignalTone } from '@calibra-facil/shared/status-vocabulary'
 import {
   Timeline,
   TimelineConnector,
@@ -16,7 +17,6 @@ import {
 } from '@/components/ui/timeline'
 import { formatFinanceDate } from '@/lib/finance-formatters'
 import { Money } from '@/features/finance/finance-display'
-import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import type { BillingDocumentDetails } from '@/features/finance/types'
 
 type TimelineEvent = {

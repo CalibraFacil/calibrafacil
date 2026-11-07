@@ -14,15 +14,6 @@ import {
 } from './types'
 import { resolvePointDisplayUnit } from './formulas'
 
-export const JOB_STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Rascunho',
-  IN_PROGRESS: 'Em Execução',
-  REVIEW: 'Em Revisão',
-  APPROVED: 'Aprovado',
-  REJECTED: 'Rejeitado',
-  CANCELED: 'Cancelado',
-}
-
 export function previewFormulaErrorMessage(result: FormulaResult): string {
   if (!result.error) return ''
 

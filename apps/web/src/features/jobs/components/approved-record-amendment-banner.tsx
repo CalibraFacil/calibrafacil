@@ -1,7 +1,8 @@
+import { SignalTone } from '@calibra-facil/shared/status-vocabulary'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert02Icon } from '@hugeicons/core-free-icons'
 import { Link } from '@tanstack/react-router'
-import { STATUS_TONE, type SignalTone } from '@calibra-facil/ui/status-tone'
+import { STATUS_TONE } from '@calibra-facil/ui/status-tone'
 import { formatInstant } from '@calibra-facil/shared/format'
 import { type ApprovedJobRecordData } from '@/features/jobs/detail-model'
 

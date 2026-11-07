@@ -1,4 +1,5 @@
 import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
+import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -42,6 +43,7 @@ import {
   notifyJobAssigned,
 } from "@calibra-facil/notifications";
 import {
+  OPEN_JOB_STATUSES,
   CreateJobSchema,
   UpdateJobSchema,
   ListJobsQuerySchema,
@@ -393,9 +395,7 @@ export const jobsRouter = new Hono<{
       // today is not overdue until the day is over).
       if (overdue) {
         conditions.push(lt(calibrationJob.dueDate, labToday()));
-        conditions.push(
-          inArray(calibrationJob.status, ["DRAFT", "IN_PROGRESS", "REVIEW"]),
-        );
+        conditions.push(inArray(calibrationJob.status, OPEN_JOB_STATUSES));
       }
 
       const whereCondition = and(...conditions);
@@ -460,7 +460,7 @@ export const jobsRouter = new Hono<{
         ...job,
         isOverdue: job.dueDate
           ? isCalendarDatePast(job.dueDate, now) &&
-            ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status)
+            isOneOf(OPEN_JOB_STATUSES, job.status)
           : null,
         daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
         // Extract method name from snapshot for display
@@ -769,7 +769,7 @@ export const jobsRouter = new Hono<{
       }),
       isOverdue: job.dueDate
         ? isCalendarDatePast(job.dueDate, now) &&
-          ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status)
+          isOneOf(OPEN_JOB_STATUSES, job.status)
         : null,
       daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
       ...financialContextMap.get(job.id),

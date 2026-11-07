@@ -1,3 +1,4 @@
+import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -21,7 +22,6 @@ import { Label } from "@calibra-facil/ui/label";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
-import type { SignalTone } from "@calibra-facil/ui/status-tone";
 import { usePortalUnits } from "@/features/fleet/queries";
 import {
   portalAuditPackRequestedResponseSchema,

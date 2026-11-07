@@ -1,3 +1,4 @@
+import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { z } from "zod";
@@ -35,8 +36,6 @@ const ReportQuerySchema = z.object({
   period: z.enum(["7d", "30d", "90d", "month"]).optional().default("30d"),
   unitIds: z.string().optional(),
 });
-
-const OPEN_JOB_STATUSES = ["DRAFT", "IN_PROGRESS", "REVIEW"] as const;
 
 type HealthStatus = "healthy" | "attention" | "critical";
 

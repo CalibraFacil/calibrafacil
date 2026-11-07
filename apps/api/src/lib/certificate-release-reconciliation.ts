@@ -1,3 +1,4 @@
+import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
 import {
   calibrationJob,
   serviceOrder,
@@ -39,7 +40,7 @@ export async function recomputeCertificateReleasesForBillingDocument(params: {
         and(
           eq(serviceOrder.organizationId, params.organizationId),
           eq(serviceOrder.billingDocumentId, params.billingDocumentId),
-          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+          inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
         ),
       ),
   );

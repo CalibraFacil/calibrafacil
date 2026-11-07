@@ -1,3 +1,4 @@
+import type { JobStatus } from '@calibra-facil/schemas'
 import type { CustomersListData as ClientRuntimeCustomersListData } from '@calibra-facil/client-runtime'
 import type { CustomerFinancialTimeline } from '@calibra-facil/shared'
 
@@ -104,21 +105,10 @@ export type CustomerAssetsData = {
   }
 }
 
-export type CustomerJobStatus =
-  | 'DRAFT'
-  | 'IN_PROGRESS'
-  | 'REVIEW'
-  | 'GENERATING_PDF'
-  | 'RENDER_FAILED'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'CANCELED'
-  | 'SUPERSEDED'
-
 export type CustomerJob = {
   id: number
   jobId: string
-  status: CustomerJobStatus
+  status: JobStatus
   performedAt?: string | null
   approvedAt?: string | null
   createdAt: string

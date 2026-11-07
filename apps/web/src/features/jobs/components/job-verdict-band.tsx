@@ -1,3 +1,5 @@
+import { JOB_STATUS } from '@calibra-facil/schemas'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -16,8 +18,6 @@ import { CertificateProgressButton } from '@/features/jobs/components/certificat
 import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
 import {
   getFinancialVariant,
-  JOB_STATUS_LABELS,
-  JOB_STATUS_VARIANTS,
   type JobStatus,
   type JobVerdict,
 } from '@/features/jobs/detail-model'
@@ -119,9 +119,9 @@ export function JobVerdictBand({
                   button, so the status badge is hidden while the PDF renders
                   instead of repeating an amber "Gerando PDF…" pill. */}
             {!isGeneratingPdf && (
-              <Badge variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}>
-                {JOB_STATUS_LABELS[normalizedJobStatus]}
-              </Badge>
+              <StatusBadge tone={JOB_STATUS.tone(normalizedJobStatus)}>
+                {JOB_STATUS.label(normalizedJobStatus)}
+              </StatusBadge>
             )}
             {job.isOverdue && <Badge variant="destructive">Atrasado</Badge>}
             {(job.status === 'APPROVED' || job.status === 'SUPERSEDED') &&

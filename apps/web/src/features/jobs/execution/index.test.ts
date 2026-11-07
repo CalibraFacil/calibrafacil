@@ -7,7 +7,6 @@ import * as execution from './index'
 // leaks. The type half is held by `check-types` on the importers.
 const SURFACE = [
   'DEFAULT_PHASE_MODE',
-  'JOB_STATUS_LABELS',
   'applyPastedReadings',
   'attachCompositionProfiles',
   'buildCalibrationLocationPayload',
@@ -59,10 +58,8 @@ describe('execution index', () => {
   it('REQ-SPLIT-2 keeps the constants and functions usable', () => {
     expect(execution.DEFAULT_PHASE_MODE).toBe('before_and_after')
     for (const [name, value] of Object.entries(execution)) {
-      if (name === 'DEFAULT_PHASE_MODE' || name === 'JOB_STATUS_LABELS')
-        continue
+      if (name === 'DEFAULT_PHASE_MODE') continue
       expect(typeof value, name).toBe('function')
     }
-    expect(execution.JOB_STATUS_LABELS).toBeTypeOf('object')
   })
 })

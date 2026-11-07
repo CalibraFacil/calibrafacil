@@ -1,3 +1,4 @@
+import type { SignalTone } from '@calibra-facil/shared/status-vocabulary'
 import type {
   BillingDocumentExportStatus,
   BillingDocumentStatus,
@@ -7,7 +8,6 @@ import type {
 } from '@calibra-facil/shared'
 
 import { formatFinanceMoney } from '@/lib/finance-formatters'
-import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import { cn } from '@/lib/utils'
 
 // — Tone maps. Each is `satisfies Record<Union, SignalTone>` so that if a
