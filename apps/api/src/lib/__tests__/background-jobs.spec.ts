@@ -90,24 +90,6 @@ describe("enqueueBackgroundJob — database queue mode", () => {
       ),
     );
   });
-
-  it("refuses a Conta Azul sync: it runs through dispatchContaAzulSync", async () => {
-    const message: BackgroundJobMessage = {
-      type: "INTEGRATION_SYNC",
-      provider: "conta_azul",
-      integrationId: "integration-1",
-      organizationId: "org-1",
-      runId: "run-1",
-      target: "customer",
-      limit: 50,
-      trigger: "manual",
-    };
-
-    await expect(enqueueBackgroundJob(message)).rejects.toThrow(
-      "dispatchContaAzulSync",
-    );
-    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-  });
 });
 
 describe("enqueueBackgroundJob — local mode", () => {

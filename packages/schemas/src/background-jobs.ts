@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   PUBLIC_API_WEBHOOK_MAX_ATTEMPTS,
-  type IntegrationProvider,
   type IntegrationSyncTarget,
   type IntegrationSyncTrigger,
 } from "@calibra-facil/shared";
@@ -18,14 +17,10 @@ import {
 // production must keep parsing): a certificate render may omit `type`, the
 // integration sync may omit `provider`, and the cron-only timers carry no
 // payload. Unknown keys are stripped on parse.
-
-// Same literals as the shared string unions: `satisfies` keeps the two in step
-// (a literal the union does not know about fails type-checking here; a member
-// missing from this list fails type-checking in the producers).
-const IntegrationProviderSchema = z.enum([
-  "generic_http",
-  "conta_azul",
-]) satisfies z.ZodType<IntegrationProvider>;
+//
+// A Conta Azul sync is deliberately NOT in this union: it runs in the API
+// process (its client lives in the API's integrations module), so it is never a
+// queue row and has its own schema, `ContaAzulSyncMessageSchema`, below.
 
 const IntegrationSyncTargetSchema = z.enum([
   "catalog_item",
@@ -127,9 +122,12 @@ const AssetOotNotificationJobMessageSchema = z.object({
   userId,
 });
 
+// The generic HTTP ERP sync. `provider` is either omitted (what every producer
+// writes) or `generic_http`; a payload naming `conta_azul` no longer parses (it
+// never was a queue row: the dead-letter reason says why).
 const IntegrationSyncJobMessageSchema = z.object({
   type: z.literal("INTEGRATION_SYNC"),
-  provider: IntegrationProviderSchema.optional(),
+  provider: z.literal("generic_http").optional(),
   integrationId: z.string(),
   organizationId: z.string(),
   runId: z.string(),
@@ -137,6 +135,24 @@ const IntegrationSyncJobMessageSchema = z.object({
   limit: z.number(),
   trigger: IntegrationSyncTriggerSchema,
 });
+
+/**
+ * One Conta Azul sync, started in the API process by `dispatchContaAzulSync`
+ * (apps/api, modules/integrations): from the integrations route and from the
+ * scheduled-sync cron. Not a `BackgroundJobMessage`: it never travels through
+ * `app_queue_job`, so sending one to `enqueueBackgroundJob` fails type-checking.
+ */
+export const ContaAzulSyncMessageSchema = z.object({
+  type: z.literal("CONTA_AZUL_SYNC"),
+  integrationId: z.string(),
+  organizationId: z.string(),
+  runId: z.string(),
+  target: IntegrationSyncTargetSchema,
+  limit: z.number(),
+  trigger: IntegrationSyncTriggerSchema,
+});
+
+export type ContaAzulSyncMessage = z.infer<typeof ContaAzulSyncMessageSchema>;
 
 /**
  * One delivery of a public-API webhook event to a subscriber. Everything the

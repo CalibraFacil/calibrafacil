@@ -4,7 +4,7 @@ import {
   type AssetSnapshot,
   type EnvironmentalLimitsSnapshot,
 } from "@calibra-facil/db/schema";
-import { type R2Env, type R2BucketLike } from "../../lib/storage";
+import { type R2Env } from "../../lib/storage";
 import { type CompiledMethod } from "@calibra-facil/method-definition";
 import { toRecord } from "@calibra-facil/shared/record";
 
@@ -16,26 +16,12 @@ export function decodeRouteIdentifier(identifier: string) {
   }
 }
 
-export function shouldUseLocalR2Download(env: R2Env): env is R2Env & {
-  CERTIFICATES_BUCKET: R2BucketLike;
-} {
-  return env.NODE_ENV === "development" && Boolean(env.CERTIFICATES_BUCKET);
-}
-
 export function stringFromUnknown(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
 export function r2EnvFromUnknown(value: unknown): R2Env {
   const env = toRecord(value);
-  const bucket = env.CERTIFICATES_BUCKET;
-  const bucketGet =
-    bucket && typeof bucket === "object" ? Reflect.get(bucket, "get") : null;
-  const mediaBucket = env.MEDIA_BUCKET;
-  const mediaBucketGet =
-    mediaBucket && typeof mediaBucket === "object"
-      ? Reflect.get(mediaBucket, "get")
-      : null;
 
   return {
     R2_ACCOUNT_ID: stringFromUnknown(env.R2_ACCOUNT_ID),
@@ -43,17 +29,6 @@ export function r2EnvFromUnknown(value: unknown): R2Env {
     R2_SECRET_ACCESS_KEY: stringFromUnknown(env.R2_SECRET_ACCESS_KEY),
     R2_BUCKET_NAME: stringFromUnknown(env.R2_BUCKET_NAME),
     R2_MEDIA_BUCKET_NAME: stringFromUnknown(env.R2_MEDIA_BUCKET_NAME),
-    CERTIFICATES_BUCKET:
-      bucket && typeof bucketGet === "function"
-        ? { get: (key) => bucketGet.call(bucket, key) }
-        : undefined,
-    MEDIA_BUCKET:
-      mediaBucket && typeof mediaBucketGet === "function"
-        ? { get: (key) => mediaBucketGet.call(mediaBucket, key) }
-        : undefined,
-    NODE_ENV:
-      typeof env.NODE_ENV === "string" ? env.NODE_ENV : process.env.NODE_ENV,
-    API_URL: typeof env.API_URL === "string" ? env.API_URL : undefined,
   };
 }
 
@@ -96,18 +71,6 @@ export function isCompiledMethod(value: unknown): value is CompiledMethod {
     Array.isArray(candidate.measurementModels) &&
     Array.isArray(candidate.acceptanceCriteria)
   );
-}
-
-export function buildLocalJobFileUrl(
-  requestUrl: string,
-  routeId: string,
-  type: "certificate" | "label",
-  apiUrl?: string,
-) {
-  const origin = apiUrl ? new URL(apiUrl).origin : new URL(requestUrl).origin;
-  const encodedRouteId = encodeURIComponent(routeId);
-  const suffix = type === "certificate" ? "file" : "label-file";
-  return `${origin}/api/jobs/${encodedRouteId}/${suffix}`;
 }
 
 /**

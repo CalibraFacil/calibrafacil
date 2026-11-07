@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BackgroundJobMessageSchema,
+  ContaAzulSyncMessageSchema,
   QueueMessageSchema,
   parseBackgroundJobMessage,
   parseQueueMessage,
@@ -95,17 +96,6 @@ const PRODUCER_FIXTURES = {
     target: "customer",
     limit: 50,
     trigger: "manual",
-  },
-  // apps/api/src/routes/integrations.ts + src/modules/integrations/ (Conta Azul)
-  "integration sync for conta_azul": {
-    type: "INTEGRATION_SYNC",
-    provider: "conta_azul",
-    integrationId: "int_1",
-    organizationId: "org_1",
-    runId: "run_1",
-    target: "billing_document",
-    limit: 50,
-    trigger: "scheduled",
   },
   // apps/api/src/routes/portal.ts
   "portal audit pack": { type: "AUDIT_PACK", exportId: 13, userId: "user_1" },
@@ -240,6 +230,38 @@ describe("background job union", () => {
     for (const value of bad) {
       expect(parseBackgroundJobMessage(value).ok).toBe(false);
     }
+  });
+
+  it("a Conta Azul sync is not a background job: it has its own message", () => {
+    const contaAzul = {
+      type: "CONTA_AZUL_SYNC",
+      integrationId: "int_1",
+      organizationId: "org_1",
+      runId: "run_1",
+      target: "billing_document",
+      limit: 50,
+      trigger: "scheduled",
+    };
+    expect(ContaAzulSyncMessageSchema.safeParse(contaAzul).success).toBe(true);
+    expect(parseBackgroundJobMessage(contaAzul).ok).toBe(false);
+    expect(parseQueueMessage(contaAzul).ok).toBe(false);
+  });
+
+  it("a queued INTEGRATION_SYNC naming conta_azul no longer parses (dead-lettered, never produced)", () => {
+    const row = {
+      type: "INTEGRATION_SYNC",
+      provider: "conta_azul",
+      integrationId: "int_1",
+      organizationId: "org_1",
+      runId: "run_1",
+      target: "customer",
+      limit: 50,
+      trigger: "manual",
+    };
+    expect(parseQueueMessage(row).ok).toBe(false);
+    expect(parseQueueMessage({ ...row, provider: "generic_http" }).ok).toBe(
+      true,
+    );
   });
 
   it("REQ-Q-4 the parsed message is the typed value handlers receive: unknown keys are stripped", () => {

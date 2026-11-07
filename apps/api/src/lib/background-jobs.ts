@@ -4,10 +4,7 @@ import {
   type BackgroundJobMessage,
 } from "@calibra-facil/schemas";
 import { createWorkerRuntimeEnv } from "./runtime-env";
-import {
-  getBackgroundJobsMode,
-  isContaAzulSyncMessage,
-} from "./background-job-routing";
+import { getBackgroundJobsMode } from "./background-job-routing";
 
 // Loaded on first use, not at import: the handlers of jobs-core (certificate
 // rendering, signing, ...) are only needed where a job runs in this process.
@@ -50,15 +47,6 @@ export async function enqueueBackgroundJob(input: BackgroundJobMessage) {
     );
   }
   const message = parsed.message;
-
-  // Conta Azul syncs run where the integrations module is, not through the
-  // dispatcher: this file stays free of the handlers (modules/integrations
-  // depends on lib/org-context, which depends on this file).
-  if (isContaAzulSyncMessage(message)) {
-    throw new Error(
-      "Conta Azul syncs run in the API process: use dispatchContaAzulSync (modules/integrations)",
-    );
-  }
 
   // A job that belongs to a change is staged with `ctx.emit` of `withOrg`, which
   // keeps it from leaving before the change is durable (also inside the desktop

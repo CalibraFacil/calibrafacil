@@ -353,8 +353,7 @@ describe("dispatchSyncRun", () => {
     });
 
     expect(mocks.dispatchContaAzulSync).toHaveBeenCalledWith({
-      type: "INTEGRATION_SYNC",
-      provider: "conta_azul",
+      type: "CONTA_AZUL_SYNC",
       integrationId: "int-1",
       organizationId: "org-1",
       runId: "run-1",
@@ -392,8 +391,7 @@ describe("dispatchSyncRun", () => {
       });
 
       expect(mocks.dispatchContaAzulSync).toHaveBeenCalledWith({
-        type: "INTEGRATION_SYNC",
-        provider: "conta_azul",
+        type: "CONTA_AZUL_SYNC",
         integrationId: "int-1",
         organizationId: "org-1",
         runId: `run-${target}`,

@@ -26,10 +26,6 @@ export interface R2Env {
   R2_BUCKET_NAME: string;
   /** Media bucket: branding/media (logos, signatures, avatars, template sources). */
   R2_MEDIA_BUCKET_NAME: string;
-  CERTIFICATES_BUCKET?: R2BucketLike;
-  MEDIA_BUCKET?: R2BucketLike;
-  NODE_ENV?: string;
-  API_URL?: string;
 }
 
 /** The raw settings the object store is configured from (env var names aside). */
@@ -128,17 +124,6 @@ export function attachmentDisposition(filename: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(
     filename,
   )}`;
-}
-
-interface R2ObjectBodyLike {
-  body: BodyInit | null;
-  httpMetadata?: {
-    contentType?: string;
-  };
-}
-
-export interface R2BucketLike {
-  get(key: string): Promise<R2ObjectBodyLike | null>;
 }
 
 type R2S3Client = S3Client & {

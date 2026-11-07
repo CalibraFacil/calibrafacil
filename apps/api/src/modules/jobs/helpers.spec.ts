@@ -8,14 +8,12 @@ import type {
 } from "@calibra-facil/db/schema";
 import {
   decodeRouteIdentifier,
-  shouldUseLocalR2Download,
   stringFromUnknown,
   r2EnvFromUnknown,
   isMethodInputField,
   methodInputFieldsFromSnapshot,
   methodSnapshotDisplay,
   isCompiledMethod,
-  buildLocalJobFileUrl,
   checkEnvironmentWithinLimits,
   hasSpecificationValue,
   findMissingRequiredAssetSpecs,
@@ -46,65 +44,6 @@ describe("decodeRouteIdentifier", () => {
   });
 });
 
-describe("shouldUseLocalR2Download", () => {
-  const bucket = { get: async () => null };
-
-  it("is true only in development with a certificates bucket bound", () => {
-    expect(
-      shouldUseLocalR2Download({
-        R2_ACCOUNT_ID: "",
-        R2_ACCESS_KEY_ID: "",
-        R2_SECRET_ACCESS_KEY: "",
-        R2_BUCKET_NAME: "",
-        R2_MEDIA_BUCKET_NAME: "",
-        NODE_ENV: "development",
-        CERTIFICATES_BUCKET: bucket,
-      }),
-    ).toBe(true);
-  });
-
-  it("is false when not in development", () => {
-    expect(
-      shouldUseLocalR2Download({
-        R2_ACCOUNT_ID: "",
-        R2_ACCESS_KEY_ID: "",
-        R2_SECRET_ACCESS_KEY: "",
-        R2_BUCKET_NAME: "",
-        R2_MEDIA_BUCKET_NAME: "",
-        NODE_ENV: "production",
-        CERTIFICATES_BUCKET: bucket,
-      }),
-    ).toBe(false);
-  });
-
-  it("is false in development without a certificates bucket", () => {
-    expect(
-      shouldUseLocalR2Download({
-        R2_ACCOUNT_ID: "",
-        R2_ACCESS_KEY_ID: "",
-        R2_SECRET_ACCESS_KEY: "",
-        R2_BUCKET_NAME: "",
-        R2_MEDIA_BUCKET_NAME: "",
-        NODE_ENV: "development",
-      }),
-    ).toBe(false);
-  });
-});
-
-describe("toRecord", () => {
-  it("returns the entries of a plain object", () => {
-    expect(toRecord({ a: 1, b: "x" })).toEqual({ a: 1, b: "x" });
-  });
-
-  it("returns {} for non-objects, null, and arrays", () => {
-    expect(toRecord(null)).toEqual({});
-    expect(toRecord(undefined)).toEqual({});
-    expect(toRecord("nope")).toEqual({});
-    expect(toRecord(42)).toEqual({});
-    expect(toRecord([1, 2, 3])).toEqual({});
-  });
-});
-
 describe("stringFromUnknown", () => {
   it("passes through strings", () => {
     expect(stringFromUnknown("hello")).toBe("hello");
@@ -126,8 +65,6 @@ describe("r2EnvFromUnknown", () => {
       R2_SECRET_ACCESS_KEY: "secret",
       R2_BUCKET_NAME: "docs",
       R2_MEDIA_BUCKET_NAME: "media",
-      NODE_ENV: "development",
-      API_URL: "https://api.example.com",
       R2_BUCKET_NAME_BOGUS: 5,
     });
 
@@ -136,35 +73,11 @@ describe("r2EnvFromUnknown", () => {
     expect(env.R2_SECRET_ACCESS_KEY).toBe("secret");
     expect(env.R2_BUCKET_NAME).toBe("docs");
     expect(env.R2_MEDIA_BUCKET_NAME).toBe("media");
-    expect(env.NODE_ENV).toBe("development");
-    expect(env.API_URL).toBe("https://api.example.com");
   });
 
   it("replaces non-string values with empty strings", () => {
     const env = r2EnvFromUnknown({ R2_ACCOUNT_ID: 9 });
     expect(env.R2_ACCOUNT_ID).toBe("");
-  });
-
-  it("wraps a bucket-like object so get() is forwarded", async () => {
-    const calls: string[] = [];
-    const env = r2EnvFromUnknown({
-      CERTIFICATES_BUCKET: {
-        get: (key: string) => {
-          calls.push(key);
-          return Promise.resolve(null);
-        },
-      },
-    });
-
-    expect(typeof env.CERTIFICATES_BUCKET?.get).toBe("function");
-    await env.CERTIFICATES_BUCKET?.get("some/key");
-    expect(calls).toEqual(["some/key"]);
-  });
-
-  it("leaves CERTIFICATES_BUCKET undefined when none is provided", () => {
-    const env = r2EnvFromUnknown({});
-    expect(env.CERTIFICATES_BUCKET).toBeUndefined();
-    expect(env.MEDIA_BUCKET).toBeUndefined();
   });
 });
 
@@ -250,39 +163,6 @@ describe("isCompiledMethod", () => {
   it("rejects when a required array field is not an array", () => {
     expect(isCompiledMethod({ ...valid, formulas: "nope" })).toBe(false);
     expect(isCompiledMethod(null)).toBe(false);
-  });
-});
-
-describe("buildLocalJobFileUrl", () => {
-  it("builds a certificate URL from the request origin", () => {
-    expect(
-      buildLocalJobFileUrl(
-        "https://api.example.com/api/jobs/123/file",
-        "CAL-2026-0001",
-        "certificate",
-      ),
-    ).toBe("https://api.example.com/api/jobs/CAL-2026-0001/file");
-  });
-
-  it("builds a label URL with the label-file suffix", () => {
-    expect(
-      buildLocalJobFileUrl(
-        "https://api.example.com/whatever",
-        "CAL-2026-0001",
-        "label",
-      ),
-    ).toBe("https://api.example.com/api/jobs/CAL-2026-0001/label-file");
-  });
-
-  it("prefers the apiUrl origin when provided and percent-encodes the routeId", () => {
-    expect(
-      buildLocalJobFileUrl(
-        "https://request.example.com/x",
-        "CAL/2026/0001",
-        "certificate",
-        "https://override.example.com/base",
-      ),
-    ).toBe("https://override.example.com/api/jobs/CAL%2F2026%2F0001/file");
   });
 });
 
