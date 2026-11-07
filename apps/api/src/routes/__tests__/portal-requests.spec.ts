@@ -47,7 +47,13 @@ vi.mock("@calibra-facil/db", () => {
   // (the organization setting is a statement that consumes no canned result).
   builder.transaction = async (run: (tx: unknown) => unknown) => run(builder);
   builder.execute = async () => [];
-  return { db: builder, systemDb: builder };
+  return {
+    db: builder,
+    systemDb: builder,
+    // `withOrg` defers its after-commit work only inside the sync's scope.
+    isInTransactionScope: () => false,
+    afterTransactionCommit: () => undefined,
+  };
 });
 
 vi.mock("../../lib/portal-domains", () => ({
@@ -77,7 +83,10 @@ vi.mock("../../middleware/permission", () => {
   };
 });
 
-const { portalRequestsRouter } = await import("../portal-requests");
+const { portalRequestsRouter: bareRouter } = await import("../portal-requests");
+const { withErrorHandling } =
+  await import("../../../test/integration/with-error-handling");
+const portalRequestsRouter = withErrorHandling(bareRouter);
 
 const JSON_HEADERS = {
   origin: "http://localhost",

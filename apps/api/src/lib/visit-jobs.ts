@@ -1,4 +1,6 @@
+import type { ApiErrorCode } from "@calibra-facil/contracts";
 import type { JobStatus } from "@calibra-facil/db/schema";
+import { DomainError } from "./domain-errors";
 
 type VisitLike = {
   status: string;
@@ -15,7 +17,12 @@ type JobLike = {
 };
 
 type GuardOk = { ok: true };
-type GuardError = { ok: false; status: 400 | 404 | 409; body: string };
+type GuardError = {
+  ok: false;
+  status: 400 | 404 | 409;
+  code: ApiErrorCode;
+  body: string;
+};
 type GuardResult = GuardOk | GuardError;
 
 /**
@@ -27,6 +34,7 @@ export function canAddJobToVisit(visit: VisitLike): GuardResult {
     return {
       ok: false,
       status: 409,
+      code: "visit_not_proposed",
       body: "Instrumentos so podem ser adicionados a visitas com status PROPOSED",
     };
   }
@@ -45,6 +53,7 @@ export function assertAssetBelongsToVisitCustomer(
     return {
       ok: false,
       status: 400,
+      code: "invalid_request",
       body: "Ativo nao pertence ao cliente da visita",
     };
   }
@@ -69,6 +78,7 @@ export function resolveVisitJobRemoval({
     return {
       ok: false,
       status: 409,
+      code: "visit_not_proposed",
       body: "Instrumentos so podem ser removidos de visitas com status PROPOSED",
     };
   }
@@ -78,6 +88,7 @@ export function resolveVisitJobRemoval({
     return {
       ok: false,
       status: 404,
+      code: "job_not_found",
       body: "Job nao encontrado nesta visita",
     };
   }
@@ -87,9 +98,21 @@ export function resolveVisitJobRemoval({
     return {
       ok: false,
       status: 409,
+      code: "job_not_cancelable",
       body: "Apenas jobs com status DRAFT podem ser removidos da visita",
     };
   }
 
   return { ok: true };
+}
+
+/** Throws a refused guard as the domain error `app.onError` renders. */
+export function assertGuard(guard: GuardResult): void {
+  if (!guard.ok) {
+    throw new DomainError({
+      code: guard.code,
+      status: guard.status,
+      message: guard.body,
+    });
+  }
 }

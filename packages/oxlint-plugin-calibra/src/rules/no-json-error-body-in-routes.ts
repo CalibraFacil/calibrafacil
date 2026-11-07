@@ -27,7 +27,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/asset-types.ts", 4],
   ["apps/api/src/routes/assets.ts", 34],
   ["apps/api/src/routes/authorized-signatories.ts", 3],
-  ["apps/api/src/routes/calibration-requests.ts", 11],
   ["apps/api/src/routes/capa.ts", 20],
   ["apps/api/src/routes/certificate-numbering.ts", 2],
   ["apps/api/src/routes/competences.ts", 34],
@@ -55,8 +54,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/organization-media.ts", 9],
   ["apps/api/src/routes/portal-domains.ts", 6],
   ["apps/api/src/routes/portal-notifications.ts", 4],
-  ["apps/api/src/routes/portal-requests.ts", 10],
-  ["apps/api/src/routes/portal-visits.ts", 11],
   ["apps/api/src/routes/portal.ts", 96],
   ["apps/api/src/routes/proficiency-tests.ts", 17],
   ["apps/api/src/routes/profile-media.ts", 7],
@@ -75,7 +72,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/training-records.ts", 12],
   ["apps/api/src/routes/units.ts", 18],
   ["apps/api/src/routes/verify.ts", 13],
-  ["apps/api/src/routes/visits.ts", 40],
   ["apps/api/src/routes/webhooks.ts", 3],
 ]);
 

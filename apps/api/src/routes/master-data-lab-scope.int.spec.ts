@@ -52,19 +52,23 @@ import { organizationOf } from "../../test/integration/organization-of";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { assetsRouter as bareAssetsRouter } from "./assets";
-import { calibrationRequestsRouter } from "./calibration-requests";
+import { calibrationRequestsRouter as bareCalibrationRequestsRouter } from "./calibration-requests";
 import { customerGroupsRouter as bareCustomerGroupsRouter } from "./customer-groups";
 import { customersRouter as bareCustomersRouter } from "./customers";
 import { materialsRouter } from "./materials";
 import { servicesRouter } from "./services";
 import { unitsRouter } from "./units";
-import { visitJobsRouter } from "./visits";
+import { visitJobsRouter as bareVisitJobsRouter } from "./visits";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
 
 const assetsRouter = withErrorHandling(bareAssetsRouter);
 const customerGroupsRouter = withErrorHandling(bareCustomerGroupsRouter);
 const customersRouter = withErrorHandling(bareCustomersRouter);
+const calibrationRequestsRouter = withErrorHandling(
+  bareCalibrationRequestsRouter,
+);
+const visitJobsRouter = withErrorHandling(bareVisitJobsRouter);
 
 // The request-state notifications read what the transaction wrote and send
 // e-mail; they are not under test here.
