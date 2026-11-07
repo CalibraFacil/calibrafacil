@@ -21,7 +21,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
-import { serviceOrdersRouter } from "./service-orders";
+import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { createCalibrationJob } from "../lib/jobs";
 import { db } from "@calibra-facil/db";
 import {
@@ -41,6 +42,10 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+// The routers behind the app's error handler, as in production: a route throws
+// a `DomainError` and `app.onError` renders it.
+const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyJobAssigned: vi.fn().mockResolvedValue(undefined),

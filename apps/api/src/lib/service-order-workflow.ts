@@ -35,8 +35,7 @@ import {
 } from "./service-order-numbering";
 import { calculateFinancialDueDate } from "@calibra-facil/shared";
 import { generateBillingDocumentNumber } from "./finance";
-import { orgDb } from "./org-db";
-import { orgTransactionWithExecutor } from "./org-transaction";
+import type { OrgContext } from "./org-context";
 
 /**
  * What the workflow helpers write through: an org-bound handle
@@ -48,18 +47,6 @@ export type ServiceOrderDbExecutor = Pick<
   OrgExecutor,
   "insert" | "select" | "update" | "delete"
 >;
-
-/**
- * Runs `run` on the caller's executor, or in an organization-bound transaction of
- * its own (naming the laboratory for row-level security) when it has none.
- */
-function withServiceOrderExecutor<R>(
-  organizationId: string,
-  executor: ServiceOrderDbExecutor | undefined,
-  run: (executor: ServiceOrderDbExecutor) => Promise<R>,
-): Promise<R> {
-  return executor ? run(executor) : orgDb(organizationId).transaction(run);
-}
 
 export type ServiceOrderEventInput = {
   actorId?: string | null;
@@ -298,21 +285,20 @@ export function calculatePricedItems<
   };
 }
 
+/**
+ * Appends the order's event-log row AND, when the event moves the order to a
+ * status that mails the customer, that status's e-mail outbox row (the
+ * transactional outbox: both commit or roll back with the caller's
+ * transaction, so no e-mail is orphaned; the worker sends it, mini-spec E2).
+ *
+ * The outbox row is a consequence of the event, not a separate write the caller
+ * asked for, so the return value says which one it staged: the event key of the
+ * status e-mail, or `null` when the event queued none.
+ */
 export async function recordServiceOrderEvent(
   event: ServiceOrderEventInput,
-  executor?: ServiceOrderDbExecutor,
-) {
-  // The event row and its e-mail outbox row commit together: standalone they
-  // share one transaction of their own.
-  await withServiceOrderExecutor(event.organizationId, executor, (tx) =>
-    insertServiceOrderEvent(tx, event),
-  );
-}
-
-async function insertServiceOrderEvent(
   executor: ServiceOrderDbExecutor,
-  event: ServiceOrderEventInput,
-) {
+): Promise<{ statusEmailEventKey: string | null }> {
   await executor.insert(serviceOrderEventLog).values({
     organizationId: event.organizationId,
     unitId: event.unitId,
@@ -327,10 +313,6 @@ async function insertServiceOrderEvent(
     userAgent: event.userAgent ?? null,
   });
 
-  // Transactional outbox: if this event represents a status change to a status
-  // that triggers a customer email, insert an outbox row using the SAME executor
-  // (so a transaction rollback also rolls back the outbox insert — no orphaned
-  // emails). The actual email is sent by the worker (mini-spec E2).
   const newStatus =
     event.newValue !== undefined &&
     event.newValue !== null &&
@@ -350,46 +332,39 @@ async function insertServiceOrderEvent(
       : null;
 
   // Only enqueue when the status is actually changing and lands on a trigger status.
-  if (newStatus !== null && newStatus !== oldStatus) {
-    const descriptor = getStatusEmailDescriptor(newStatus);
-    if (descriptor !== undefined) {
-      await executor
-        .insert(serviceOrderEmailOutbox)
-        .values({
-          organizationId: event.organizationId,
-          unitId: event.unitId ?? null,
-          serviceOrderId: event.serviceOrderId,
-          eventKey: descriptor.eventKey,
-          targetStatus: newStatus,
-          payload: {
-            status: newStatus,
-            serviceOrderId: event.serviceOrderId,
-            organizationId: event.organizationId,
-          } satisfies Record<string, unknown>,
-          attempts: 0,
-        })
-        .onConflictDoNothing({
-          target: [
-            serviceOrderEmailOutbox.serviceOrderId,
-            serviceOrderEmailOutbox.eventKey,
-          ],
-        });
-    }
+  if (newStatus === null || newStatus === oldStatus) {
+    return { statusEmailEventKey: null };
   }
+  const descriptor = getStatusEmailDescriptor(newStatus);
+  if (descriptor === undefined) return { statusEmailEventKey: null };
+
+  await executor
+    .insert(serviceOrderEmailOutbox)
+    .values({
+      organizationId: event.organizationId,
+      unitId: event.unitId ?? null,
+      serviceOrderId: event.serviceOrderId,
+      eventKey: descriptor.eventKey,
+      targetStatus: newStatus,
+      payload: {
+        status: newStatus,
+        serviceOrderId: event.serviceOrderId,
+        organizationId: event.organizationId,
+      } satisfies Record<string, unknown>,
+      attempts: 0,
+    })
+    .onConflictDoNothing({
+      target: [
+        serviceOrderEmailOutbox.serviceOrderId,
+        serviceOrderEmailOutbox.eventKey,
+      ],
+    });
+  return { statusEmailEventKey: descriptor.eventKey };
 }
 
 export async function getOrCreateServiceOrderSettings(
   organizationId: string,
-  executor?: ServiceOrderDbExecutor,
-) {
-  return withServiceOrderExecutor(organizationId, executor, (tx) =>
-    loadOrCreateServiceOrderSettings(tx, organizationId),
-  );
-}
-
-async function loadOrCreateServiceOrderSettings(
   executor: ServiceOrderDbExecutor,
-  organizationId: string,
 ) {
   const [existing] = await executor
     .select()
@@ -516,77 +491,73 @@ export async function createInitialServiceOrderRecords(
     ipAddress?: string | null;
     userAgent?: string | null;
   },
-  executor?: ServiceOrderDbExecutor,
+  tx: ServiceOrderDbExecutor,
 ) {
-  const run = async (tx: ServiceOrderDbExecutor) => {
-    const generatedAt = new Date();
-    const identity = await generateServiceOrderNumber(
-      {
-        organizationId: params.organizationId,
-        unitId: params.unitId,
-        generatedAt,
-      },
-      tx,
-    );
-    const snapshot = await buildServiceOrderAssetSnapshot(
-      {
-        assetId: params.assetId,
-        organizationId: params.organizationId,
-        observedIdentification:
-          params.assetSnapshot?.observedIdentification ?? null,
-        photos: params.assetSnapshot?.photos ?? [],
-      },
-      tx,
-    );
-
-    const [created] = await tx
-      .insert(serviceOrder)
-      .values({
-        ...params.values,
-        organizationId: params.organizationId,
-        unitId: params.unitId,
-        serviceOrderNumber: identity.number,
-        customerId: params.customerId,
-        assetId: params.assetId,
-        openedByUserId: params.userId,
-        status:
-          params.values.intakeType === "warranty_return"
-            ? "warranty_return"
-            : "awaiting_tech_evaluation",
-        openedAt: generatedAt,
-      })
-      .returning();
-
-    if (!created) throw new Error("Falha ao criar OS");
-
-    await tx.insert(serviceOrderAssetSnapshot).values({
+  const generatedAt = new Date();
+  const identity = await generateServiceOrderNumber(
+    {
       organizationId: params.organizationId,
+      unitId: params.unitId,
+      generatedAt,
+    },
+    tx,
+  );
+  const snapshot = await buildServiceOrderAssetSnapshot(
+    {
+      assetId: params.assetId,
+      organizationId: params.organizationId,
+      observedIdentification:
+        params.assetSnapshot?.observedIdentification ?? null,
+      photos: params.assetSnapshot?.photos ?? [],
+    },
+    tx,
+  );
+
+  const [created] = await tx
+    .insert(serviceOrder)
+    .values({
+      ...params.values,
+      organizationId: params.organizationId,
+      unitId: params.unitId,
+      serviceOrderNumber: identity.number,
+      customerId: params.customerId,
+      assetId: params.assetId,
+      openedByUserId: params.userId,
+      status:
+        params.values.intakeType === "warranty_return"
+          ? "warranty_return"
+          : "awaiting_tech_evaluation",
+      openedAt: generatedAt,
+    })
+    .returning();
+
+  if (!created) throw new Error("Falha ao criar OS");
+
+  await tx.insert(serviceOrderAssetSnapshot).values({
+    organizationId: params.organizationId,
+    serviceOrderId: created.id,
+    ...snapshot,
+  });
+
+  await recordServiceOrderEvent(
+    {
+      organizationId: params.organizationId,
+      unitId: params.unitId,
       serviceOrderId: created.id,
-      ...snapshot,
-    });
-
-    await recordServiceOrderEvent(
-      {
-        organizationId: params.organizationId,
-        unitId: params.unitId,
-        serviceOrderId: created.id,
-        actorType: "lab_user",
-        actorId: params.userId,
-        eventType: "service_order.created",
-        newValue: {
-          status: created.status,
-          serviceOrderNumber: identity.number,
-        },
-        ipAddress: params.ipAddress,
-        userAgent: params.userAgent,
+      actorType: "lab_user",
+      actorId: params.userId,
+      eventType: "service_order.created",
+      newValue: {
+        status: created.status,
+        serviceOrderNumber: identity.number,
       },
-      tx,
-    );
+      ipAddress: params.ipAddress,
+      userAgent: params.userAgent,
+    },
+    tx,
+  );
 
-    return created;
-  };
-
-  return withServiceOrderExecutor(params.organizationId, executor, run);
+  return created;
 }
 
 export async function createPublicServiceOrderAccessToken(params: {
@@ -600,8 +571,8 @@ export async function createPublicServiceOrderAccessToken(params: {
    * sibling tokens and service_order-scoped grants leave codeHash NULL.
    */
   withApprovalCode?: boolean;
-  /** The caller's org-bound executor; standalone it writes in its own transaction. */
-  executor?: ServiceOrderDbExecutor;
+  /** The caller's org-bound executor: the grant commits with the caller's change. */
+  executor: ServiceOrderDbExecutor;
 }) {
   const token = createServiceOrderPublicToken();
   const tokenHash = await hashServiceOrderToken(token);
@@ -611,17 +582,15 @@ export async function createPublicServiceOrderAccessToken(params: {
   const codeHash = code
     ? await hashServiceOrderApprovalCode(code, resolveApprovalCodePepper())
     : null;
-  await withServiceOrderExecutor(params.organizationId, params.executor, (tx) =>
-    tx.insert(serviceOrderPublicAccessToken).values({
-      organizationId: params.organizationId,
-      serviceOrderId: params.serviceOrderId,
-      quoteId: params.quoteId ?? null,
-      tokenHash,
-      codeHash,
-      scope: params.quoteId ? "quote" : "service_order",
-      expiresAt: params.expiresAt ?? null,
-    }),
-  );
+  await params.executor.insert(serviceOrderPublicAccessToken).values({
+    organizationId: params.organizationId,
+    serviceOrderId: params.serviceOrderId,
+    quoteId: params.quoteId ?? null,
+    tokenHash,
+    codeHash,
+    scope: params.quoteId ? "quote" : "service_order",
+    expiresAt: params.expiresAt ?? null,
+  });
   return { token, tokenHash, code };
 }
 
@@ -776,146 +745,144 @@ export async function replaceExecutionItems(
   return calculated;
 }
 
-export async function createBillingDocumentFromServiceOrder(params: {
-  actorUserId: string;
-  dueDate?: Date;
-  organizationId: string;
-  serviceOrderId: number;
-}) {
-  // One transaction that names the laboratory: `tx` is the org-bound handle, `rawTx`
-  // goes to the numbering helper, which takes an advisory lock with raw SQL.
-  return orgTransactionWithExecutor(
-    params.organizationId,
-    async (tx, rawTx) => {
-      const [order] = await tx
+/**
+ * The billing document of a closed order, written in the caller's transaction:
+ * `ctx.o` for the rows, `ctx.tx` for the numbering helper, which takes an
+ * advisory lock with raw SQL. The actor of the audit row is `ctx.actor`.
+ */
+export async function createBillingDocumentFromServiceOrder(
+  ctx: Pick<OrgContext, "org" | "actor" | "o" | "tx">,
+  params: {
+    dueDate?: Date;
+    serviceOrderId: number;
+  },
+) {
+  const tx = ctx.o;
+  const rawTx = ctx.tx;
+  const [order] = await tx
+    .select()
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, params.serviceOrderId),
+        eq(serviceOrder.organizationId, ctx.org),
+      ),
+    )
+    .limit(1);
+
+  if (!order) throw new Error("OS nao encontrada");
+  if (order.billingDocumentId) return order.billingDocumentId;
+
+  const [approvedQuote] = await tx
+    .select()
+    .from(serviceOrderQuote)
+    .where(
+      and(
+        eq(serviceOrderQuote.serviceOrderId, order.id),
+        eq(serviceOrderQuote.organizationId, order.organizationId),
+        eq(serviceOrderQuote.status, "approved"),
+      ),
+    )
+    .limit(1);
+
+  const quoteItems = approvedQuote
+    ? await tx
         .select()
-        .from(serviceOrder)
+        .from(serviceOrderQuoteItem)
         .where(
           and(
-            eq(serviceOrder.id, params.serviceOrderId),
-            eq(serviceOrder.organizationId, params.organizationId),
+            eq(serviceOrderQuoteItem.quoteId, approvedQuote.id),
+            eq(serviceOrderQuoteItem.organizationId, order.organizationId),
           ),
         )
-        .limit(1);
+    : [];
 
-      if (!order) throw new Error("OS nao encontrada");
-      if (order.billingDocumentId) return order.billingDocumentId;
+  const subtotalCents =
+    approvedQuote?.totalCents ??
+    (order.evaluationFeeApplied ? order.evaluationFeeCents : 0);
+  const dueDate =
+    params.dueDate ??
+    calculateFinancialDueDate(new Date(), DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS);
 
-      const [approvedQuote] = await tx
-        .select()
-        .from(serviceOrderQuote)
-        .where(
-          and(
-            eq(serviceOrderQuote.serviceOrderId, order.id),
-            eq(serviceOrderQuote.organizationId, order.organizationId),
-            eq(serviceOrderQuote.status, "approved"),
-          ),
-        )
-        .limit(1);
+  const [document] = await tx
+    .insert(billingDocument)
+    .values({
+      organizationId: order.organizationId,
+      customerId: order.customerId,
+      unitId: order.unitId,
+      dueDate,
+      currency: "BRL",
+      subtotalCents,
+      discountCents: 0,
+      totalCents: subtotalCents,
+      notes: `Documento financeiro gerado a partir da OS ${order.serviceOrderNumber}`,
+      createdBy: ctx.actor.userId,
+      updatedBy: ctx.actor.userId,
+    })
+    .returning();
 
-      const quoteItems = approvedQuote
-        ? await tx
-            .select()
-            .from(serviceOrderQuoteItem)
-            .where(
-              and(
-                eq(serviceOrderQuoteItem.quoteId, approvedQuote.id),
-                eq(serviceOrderQuoteItem.organizationId, order.organizationId),
-              ),
-            )
-        : [];
+  if (!document) throw new Error("Falha ao criar documento financeiro");
 
-      const subtotalCents =
-        approvedQuote?.totalCents ??
-        (order.evaluationFeeApplied ? order.evaluationFeeCents : 0);
-      const dueDate =
-        params.dueDate ??
-        calculateFinancialDueDate(
-          new Date(),
-          DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-        );
-
-      const [document] = await tx
-        .insert(billingDocument)
-        .values({
-          organizationId: order.organizationId,
-          customerId: order.customerId,
-          unitId: order.unitId,
-          dueDate,
-          currency: "BRL",
-          subtotalCents,
-          discountCents: 0,
-          totalCents: subtotalCents,
-          notes: `Documento financeiro gerado a partir da OS ${order.serviceOrderNumber}`,
-          createdBy: params.actorUserId,
-          updatedBy: params.actorUserId,
-        })
-        .returning();
-
-      if (!document) throw new Error("Falha ao criar documento financeiro");
-
-      const documentNumber = await generateBillingDocumentNumber(
-        order.organizationId,
-        rawTx,
-      );
-
-      await tx
-        .update(billingDocument)
-        .set({ documentNumber })
-        .where(eq(billingDocument.id, document.id));
-
-      const billingItems =
-        quoteItems.length > 0
-          ? quoteItems.map((item, index) => ({
-              organizationId: order.organizationId,
-              documentId: document.id,
-              serviceOrderId: order.id,
-              materialId: item.materialId ?? null,
-              description: item.description,
-              quantity: Math.max(Math.round(item.quantity), 1),
-              unitPriceCents: item.unitPriceCents,
-              totalCents: item.totalPriceCents,
-              sortOrder: index,
-            }))
-          : [
-              {
-                organizationId: order.organizationId,
-                documentId: document.id,
-                serviceOrderId: order.id,
-                description: `Taxa de avaliacao - ${order.serviceOrderNumber}`,
-                quantity: 1,
-                unitPriceCents: order.evaluationFeeCents,
-                totalCents: order.evaluationFeeCents,
-                sortOrder: 0,
-              },
-            ];
-
-      await tx.insert(billingDocumentItem).values(billingItems);
-      await tx.insert(receivableInstallment).values({
-        organizationId: order.organizationId,
-        documentId: document.id,
-        installmentNumber: 1,
-        dueDate,
-        amountCents: subtotalCents,
-        currency: "BRL",
-      });
-      await tx.insert(financialAuditLog).values({
-        organizationId: order.organizationId,
-        entityType: "document",
-        entityId: String(document.id),
-        action: "create_from_service_order",
-        changes: {
-          serviceOrderId: order.id,
-          serviceOrderNumber: order.serviceOrderNumber,
-        },
-        performedBy: params.actorUserId,
-      });
-      await tx
-        .update(serviceOrder)
-        .set({ billingDocumentId: document.id })
-        .where(eq(serviceOrder.id, order.id));
-
-      return document.id;
-    },
+  const documentNumber = await generateBillingDocumentNumber(
+    order.organizationId,
+    rawTx,
   );
+
+  await tx
+    .update(billingDocument)
+    .set({ documentNumber })
+    .where(eq(billingDocument.id, document.id));
+
+  const billingItems =
+    quoteItems.length > 0
+      ? quoteItems.map((item, index) => ({
+          organizationId: order.organizationId,
+          documentId: document.id,
+          serviceOrderId: order.id,
+          materialId: item.materialId ?? null,
+          description: item.description,
+          quantity: Math.max(Math.round(item.quantity), 1),
+          unitPriceCents: item.unitPriceCents,
+          totalCents: item.totalPriceCents,
+          sortOrder: index,
+        }))
+      : [
+          {
+            organizationId: order.organizationId,
+            documentId: document.id,
+            serviceOrderId: order.id,
+            description: `Taxa de avaliacao - ${order.serviceOrderNumber}`,
+            quantity: 1,
+            unitPriceCents: order.evaluationFeeCents,
+            totalCents: order.evaluationFeeCents,
+            sortOrder: 0,
+          },
+        ];
+
+  await tx.insert(billingDocumentItem).values(billingItems);
+  await tx.insert(receivableInstallment).values({
+    organizationId: order.organizationId,
+    documentId: document.id,
+    installmentNumber: 1,
+    dueDate,
+    amountCents: subtotalCents,
+    currency: "BRL",
+  });
+  await tx.insert(financialAuditLog).values({
+    organizationId: order.organizationId,
+    entityType: "document",
+    entityId: String(document.id),
+    action: "create_from_service_order",
+    changes: {
+      serviceOrderId: order.id,
+      serviceOrderNumber: order.serviceOrderNumber,
+    },
+    performedBy: ctx.actor.userId,
+  });
+  await tx
+    .update(serviceOrder)
+    .set({ billingDocumentId: document.id })
+    .where(eq(serviceOrder.id, order.id));
+
+  return document.id;
 }

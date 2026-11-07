@@ -9,6 +9,12 @@ import {
   canApproveServiceOrderQuote,
 } from "@calibra-facil/schemas/machines";
 import { and, eq } from "drizzle-orm";
+import {
+  conflict,
+  gone,
+  notFound,
+  tooManyRequests,
+} from "../../lib/domain-errors";
 import { orgDb } from "../../lib/org-db";
 import {
   APPROVAL_CODE_ALPHABET,
@@ -28,6 +34,10 @@ import {
   hashThrottleIp,
   recordFailedRedeemAttempt,
 } from "./public-code-throttle";
+import {
+  serviceOrderNotFound,
+  serviceOrderQuoteNotFound,
+} from "./service-order-errors";
 import { getQuoteForAction } from "./service-order.queries";
 import {
   getServiceOrderDetail,
@@ -40,16 +50,15 @@ type RequestMetadata = {
   userAgent?: string | null;
 };
 
-type PublicTokenResult<TData> =
-  | { status: "ok"; data: TData }
-  | { status: "not_found"; error: string }
-  | { status: "gone"; error: string }
-  | { status: "conflict"; error: string };
+/** One generic answer for every dead link (REQ-QPUB-005): no existence oracle. */
+function publicLinkInvalid() {
+  return notFound("public_link_invalid", "Link invalido ou expirado");
+}
 
 type PublicAccessRow = typeof serviceOrderPublicAccessToken.$inferSelect;
 
 /**
- * Discriminated lookup so the route can distinguish "this link answered its
+ * Discriminated lookup so the callers can distinguish "this link answered its
  * purpose" (REQ-QPUB-006 → 410) from every other dead-link case, which stays
  * a generic not-found (REQ-QPUB-005):
  * - "active": live grant.
@@ -103,11 +112,6 @@ async function getPublicServiceOrderAccessByToken(
   return { kind: "active", access };
 }
 
-type RedeemAccessCodeResult =
-  | { status: "ok"; data: { token: string; accessUrl: string } }
-  | { status: "not_found"; error: string }
-  | { status: "throttled"; error: string };
-
 /**
  * Redeem a human-typeable approval code for a tokenized access URL
  * (spec quote-approval-public-access, mini-spec B).
@@ -127,17 +131,17 @@ type RedeemAccessCodeResult =
 export async function redeemServiceOrderAccessCode(
   rawCode: string,
   metadata: RequestMetadata,
-): Promise<RedeemAccessCodeResult> {
+): Promise<{ token: string; accessUrl: string }> {
   const ipHash = await hashThrottleIp(metadata.ipAddress ?? null);
   const windowStartsAt = currentRedeemWindowStart(Date.now());
   const failures = await getFailedRedeemAttempts(ipHash, windowStartsAt);
   if (failures >= CODE_REDEEM_MAX_FAILURES) {
-    return { status: "throttled", error: "muitas_tentativas" };
+    throw tooManyRequests("public_code_throttled", "muitas_tentativas");
   }
 
-  async function miss(): Promise<RedeemAccessCodeResult> {
+  async function miss(): Promise<never> {
     await recordFailedRedeemAttempt(ipHash, windowStartsAt);
-    return { status: "not_found", error: "codigo_invalido" };
+    throw notFound("public_code_invalid", "codigo_invalido");
   }
 
   const normalized = normalizeApprovalCode(rawCode);
@@ -200,266 +204,243 @@ export async function redeemServiceOrderAccessCode(
 
   const portalAppUrl = portalBaseUrl();
   return {
-    status: "ok",
-    data: {
-      token: sibling.token,
-      accessUrl: `${portalAppUrl}/service-order-access/${sibling.token}`,
-    },
+    token: sibling.token,
+    accessUrl: `${portalAppUrl}/service-order-access/${sibling.token}`,
   };
 }
 
 export async function viewPublicServiceOrderAccess(
   token: string,
   metadata: RequestMetadata,
-): Promise<PublicTokenResult<unknown>> {
+) {
   const lookup = await getPublicServiceOrderAccessByToken(token);
   // REQ-QPUB-006: a decided grant answers 410 with a stable reason code and
   // no quote data — the page renders "orçamento já respondido" from it.
   if (lookup.kind === "decided") {
-    return { status: "gone", error: "orcamento_respondido" };
+    throw gone("public_link_answered", "orcamento_respondido");
   }
-  if (lookup.kind === "not_found") {
-    return { status: "not_found", error: "Link invalido ou expirado" };
-  }
+  if (lookup.kind === "not_found") throw publicLinkInvalid();
   const access = lookup.access;
 
-  return orgDb(access.organizationId).transaction(
-    async (o): Promise<PublicTokenResult<unknown>> => {
-      await o
-        .update(serviceOrderPublicAccessToken)
-        .set({ lastViewedAt: new Date() })
-        .where(eq(serviceOrderPublicAccessToken.id, access.id));
+  return orgDb(access.organizationId).transaction(async (o) => {
+    await o
+      .update(serviceOrderPublicAccessToken)
+      .set({ lastViewedAt: new Date() })
+      .where(eq(serviceOrderPublicAccessToken.id, access.id));
 
-      const detail = await getServiceOrderDetail(
-        access.serviceOrderId,
-        access.organizationId,
-        undefined,
-        o,
-      );
-      if (!detail) return { status: "not_found", error: "OS nao encontrada" };
+    const detail = await getServiceOrderDetail(
+      access.serviceOrderId,
+      access.organizationId,
+      undefined,
+      o,
+    );
+    if (!detail) throw serviceOrderNotFound();
 
-      await recordServiceOrderEvent(
-        {
-          organizationId: detail.organizationId,
-          unitId: detail.unitId,
-          serviceOrderId: detail.id,
-          actorType: "public_token",
-          actorId: String(access.id),
-          eventType: "service_order.public_link_viewed",
-          ipAddress: metadata.ipAddress ?? null,
-          userAgent: metadata.userAgent ?? null,
-        },
-        o,
-      );
+    await recordServiceOrderEvent(
+      {
+        organizationId: detail.organizationId,
+        unitId: detail.unitId,
+        serviceOrderId: detail.id,
+        actorType: "public_token",
+        actorId: String(access.id),
+        eventType: "service_order.public_link_viewed",
+        ipAddress: metadata.ipAddress ?? null,
+        userAgent: metadata.userAgent ?? null,
+      },
+      o,
+    );
 
-      const clientVisible = toClientVisibleServiceOrderDetail(detail);
+    const clientVisible = toClientVisibleServiceOrderDetail(detail);
 
-      // REQ-QPUB-030: a quote-scoped token shows ITS quote — the one the approve
-      // endpoint acts on — never a different (e.g. newer) version's pricing.
-      // Service_order-scoped grants (quoteId null) keep the full filtered list.
-      const data = access.quoteId
-        ? {
-            ...clientVisible,
-            quotes: clientVisible.quotes.filter(
-              (quote) => quote.id === access.quoteId,
-            ),
-          }
-        : clientVisible;
-
-      return { status: "ok", data };
-    },
-  );
+    // REQ-QPUB-030: a quote-scoped token shows ITS quote — the one the approve
+    // endpoint acts on — never a different (e.g. newer) version's pricing.
+    // Service_order-scoped grants (quoteId null) keep the full filtered list.
+    return access.quoteId
+      ? {
+          ...clientVisible,
+          quotes: clientVisible.quotes.filter(
+            (quote) => quote.id === access.quoteId,
+          ),
+        }
+      : clientVisible;
+  });
 }
 
 export async function approveQuoteWithPublicServiceOrderAccess(
   token: string,
   metadata: RequestMetadata,
-): Promise<PublicTokenResult<{ ok: true }>> {
+) {
   // REQ-QPUB-007 [HIGH RISK]: anything but a live grant is rejected before
   // any write — expired/revoked links can never mutate the quote.
   const lookup = await getPublicServiceOrderAccessByToken(token);
-  if (lookup.kind !== "active") {
-    return { status: "not_found", error: "Link invalido ou expirado" };
-  }
+  if (lookup.kind !== "active") throw publicLinkInvalid();
   const access = lookup.access;
   const quoteId = access.quoteId;
-  if (!quoteId) {
-    return { status: "not_found", error: "Link invalido ou expirado" };
-  }
+  if (!quoteId) throw publicLinkInvalid();
 
-  return orgDb(access.organizationId).transaction(
-    async (o): Promise<PublicTokenResult<{ ok: true }>> => {
-      // Both rows are locked (quote first, as every quote decision does) so the
-      // status checks below hold until the writes commit.
-      const quote = await getQuoteForAction(
-        access.serviceOrderId,
-        quoteId,
-        access.organizationId,
-        o,
-        { lock: true },
+  return orgDb(access.organizationId).transaction(async (o) => {
+    // Both rows are locked (quote first, as every quote decision does) so the
+    // status checks below hold until the writes commit.
+    const quote = await getQuoteForAction(
+      access.serviceOrderId,
+      quoteId,
+      access.organizationId,
+      o,
+      { lock: true },
+    );
+    const [order] = await o
+      .select()
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, access.serviceOrderId))
+      .limit(1)
+      .for("update");
+
+    if (!quote || !order || !canApproveServiceOrderQuote(quote.status)) {
+      throw conflict(
+        "service_order_quote_not_decidable",
+        "Orcamento nao pode ser aprovado",
       );
-      const [order] = await o
-        .select()
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, access.serviceOrderId))
-        .limit(1)
-        .for("update");
+    }
 
-      if (!quote || !order || !canApproveServiceOrderQuote(quote.status)) {
-        return {
-          status: "conflict",
-          error: "Orcamento nao pode ser aprovado",
-        };
-      }
-
-      await o
-        .update(serviceOrderQuote)
-        .set({ status: "approved", approvedAt: new Date() })
-        .where(
-          and(
-            eq(serviceOrderQuote.id, quote.id),
-            eq(serviceOrderQuote.organizationId, quote.organizationId),
-          ),
-        );
-      // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
-      await revokeActiveTokensForQuote(o, {
+    await o
+      .update(serviceOrderQuote)
+      .set({ status: "approved", approvedAt: new Date() })
+      .where(
+        and(
+          eq(serviceOrderQuote.id, quote.id),
+          eq(serviceOrderQuote.organizationId, quote.organizationId),
+        ),
+      );
+    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+    await revokeActiveTokensForQuote(o, {
+      organizationId: order.organizationId,
+      quoteId: quote.id,
+      reason: "decided",
+    });
+    await o
+      .update(serviceOrder)
+      .set({
+        // Same mid-job rule as the manual/portal paths: a customer approving a
+        // re-quote through the emailed public link must not rewind an OS whose
+        // instrument is already on the bench.
+        ...(SERVICE_ORDER_MACHINE.canTransition(order.status, "approve_quote")
+          ? {
+              status: SERVICE_ORDER_MACHINE.requireTargetOf(
+                order.status,
+                "approve_quote",
+              ),
+            }
+          : {}),
+        approvedAt: new Date(),
+        totalApprovedCents: quote.totalCents,
+      })
+      .where(eq(serviceOrder.id, order.id));
+    await recordServiceOrderEvent(
+      {
         organizationId: order.organizationId,
-        quoteId: quote.id,
-        reason: "decided",
-      });
-      await o
-        .update(serviceOrder)
-        .set({
-          // Same mid-job rule as the manual/portal paths: a customer approving a
-          // re-quote through the emailed public link must not rewind an OS whose
-          // instrument is already on the bench.
-          ...(SERVICE_ORDER_MACHINE.canTransition(order.status, "approve_quote")
-            ? {
-                status: SERVICE_ORDER_MACHINE.requireTargetOf(
-                  order.status,
-                  "approve_quote",
-                ),
-              }
-            : {}),
-          approvedAt: new Date(),
-          totalApprovedCents: quote.totalCents,
-        })
-        .where(eq(serviceOrder.id, order.id));
-      await recordServiceOrderEvent(
-        {
-          organizationId: order.organizationId,
-          unitId: order.unitId,
-          serviceOrderId: order.id,
-          actorType: "public_token",
-          actorId: String(access.id),
-          eventType: "service_order.quote_approved_by_client",
-          metadata: { quoteId: quote.id },
-          ipAddress: metadata.ipAddress ?? null,
-          userAgent: metadata.userAgent ?? null,
-        },
-        o,
-      );
+        unitId: order.unitId,
+        serviceOrderId: order.id,
+        actorType: "public_token",
+        actorId: String(access.id),
+        eventType: "service_order.quote_approved_by_client",
+        metadata: { quoteId: quote.id },
+        ipAddress: metadata.ipAddress ?? null,
+        userAgent: metadata.userAgent ?? null,
+      },
+      o,
+    );
 
-      return { status: "ok", data: { ok: true } };
-    },
-  );
+    return { ok: true as const };
+  });
 }
 
 export async function rejectQuoteWithPublicServiceOrderAccess(
   token: string,
   input: { rejectionReason?: string | null },
   metadata: RequestMetadata,
-): Promise<PublicTokenResult<{ ok: true }>> {
+) {
   // REQ-QPUB-007 [HIGH RISK]: anything but a live grant is rejected before
   // any write — expired/revoked links can never mutate the quote.
   const lookup = await getPublicServiceOrderAccessByToken(token);
-  if (lookup.kind !== "active") {
-    return { status: "not_found", error: "Link invalido ou expirado" };
-  }
+  if (lookup.kind !== "active") throw publicLinkInvalid();
   const access = lookup.access;
   const quoteId = access.quoteId;
-  if (!quoteId) {
-    return { status: "not_found", error: "Link invalido ou expirado" };
-  }
+  if (!quoteId) throw publicLinkInvalid();
 
-  return orgDb(access.organizationId).transaction(
-    async (o): Promise<PublicTokenResult<{ ok: true }>> => {
-      // Both rows are locked (quote first, as every quote decision does) so the
-      // status checks below hold until the writes commit.
-      const quote = await getQuoteForAction(
-        access.serviceOrderId,
-        quoteId,
-        access.organizationId,
-        o,
-        { lock: true },
+  return orgDb(access.organizationId).transaction(async (o) => {
+    // Both rows are locked (quote first, as every quote decision does) so the
+    // status checks below hold until the writes commit.
+    const quote = await getQuoteForAction(
+      access.serviceOrderId,
+      quoteId,
+      access.organizationId,
+      o,
+      { lock: true },
+    );
+    const [order] = await o
+      .select()
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, access.serviceOrderId))
+      .limit(1)
+      .for("update");
+
+    if (!quote || !order) throw serviceOrderQuoteNotFound();
+
+    if (!canApproveServiceOrderQuote(quote.status)) {
+      throw conflict(
+        "service_order_quote_not_decidable",
+        "Orcamento nao pode ser recusado",
       );
-      const [order] = await o
-        .select()
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, access.serviceOrderId))
-        .limit(1)
-        .for("update");
+    }
 
-      if (!quote || !order) {
-        return { status: "not_found", error: "Orcamento nao encontrado" };
-      }
-
-      if (!canApproveServiceOrderQuote(quote.status)) {
-        return {
-          status: "conflict",
-          error: "Orcamento nao pode ser recusado",
-        };
-      }
-
-      await o
-        .update(serviceOrderQuote)
-        .set({
-          status: "rejected",
-          rejectedAt: new Date(),
-          rejectionReason: input.rejectionReason ?? null,
-        })
-        .where(
-          and(
-            eq(serviceOrderQuote.id, quote.id),
-            eq(serviceOrderQuote.organizationId, quote.organizationId),
-          ),
-        );
-      // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
-      await revokeActiveTokensForQuote(o, {
+    await o
+      .update(serviceOrderQuote)
+      .set({
+        status: "rejected",
+        rejectedAt: new Date(),
+        rejectionReason: input.rejectionReason ?? null,
+      })
+      .where(
+        and(
+          eq(serviceOrderQuote.id, quote.id),
+          eq(serviceOrderQuote.organizationId, quote.organizationId),
+        ),
+      );
+    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+    await revokeActiveTokensForQuote(o, {
+      organizationId: order.organizationId,
+      quoteId: quote.id,
+      reason: "decided",
+    });
+    await o
+      .update(serviceOrder)
+      .set({
+        ...(SERVICE_ORDER_MACHINE.canTransition(order.status, "reject_quote")
+          ? {
+              status: SERVICE_ORDER_MACHINE.requireTargetOf(
+                order.status,
+                "reject_quote",
+              ),
+            }
+          : {}),
+        rejectedAt: new Date(),
+      })
+      .where(eq(serviceOrder.id, order.id));
+    await recordServiceOrderEvent(
+      {
         organizationId: order.organizationId,
-        quoteId: quote.id,
-        reason: "decided",
-      });
-      await o
-        .update(serviceOrder)
-        .set({
-          ...(SERVICE_ORDER_MACHINE.canTransition(order.status, "reject_quote")
-            ? {
-                status: SERVICE_ORDER_MACHINE.requireTargetOf(
-                  order.status,
-                  "reject_quote",
-                ),
-              }
-            : {}),
-          rejectedAt: new Date(),
-        })
-        .where(eq(serviceOrder.id, order.id));
-      await recordServiceOrderEvent(
-        {
-          organizationId: order.organizationId,
-          unitId: order.unitId,
-          serviceOrderId: order.id,
-          actorType: "public_token",
-          actorId: String(access.id),
-          eventType: "service_order.quote_rejected_by_client",
-          metadata: { quoteId: quote.id, reason: input.rejectionReason },
-          ipAddress: metadata.ipAddress ?? null,
-          userAgent: metadata.userAgent ?? null,
-        },
-        o,
-      );
+        unitId: order.unitId,
+        serviceOrderId: order.id,
+        actorType: "public_token",
+        actorId: String(access.id),
+        eventType: "service_order.quote_rejected_by_client",
+        metadata: { quoteId: quote.id, reason: input.rejectionReason },
+        ipAddress: metadata.ipAddress ?? null,
+        userAgent: metadata.userAgent ?? null,
+      },
+      o,
+    );
 
-      return { status: "ok", data: { ok: true } };
-    },
-  );
+    return { ok: true as const };
+  });
 }

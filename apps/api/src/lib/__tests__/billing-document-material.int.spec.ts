@@ -15,6 +15,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
+import { withOrg } from "../org-context";
 import { createBillingDocumentFromServiceOrder } from "../service-order-workflow";
 import { loadBillingDocumentExportPayload } from "../finance";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
@@ -189,11 +190,14 @@ describe("billing document material references (real DB)", () => {
   it("REQ-VENDA-001/002/003: threads materialId from quote to billing item to export payload", async () => {
     const ctx = await seedBillingContext("a");
 
-    const documentId = await createBillingDocumentFromServiceOrder({
-      actorUserId: ctx.org.userId,
-      organizationId: ctx.org.orgId,
-      serviceOrderId: ctx.orderId,
-    });
+    const documentId = await withOrg(
+      ctx.org.orgId,
+      { userId: ctx.org.userId, ipAddress: null },
+      (orgCtx) =>
+        createBillingDocumentFromServiceOrder(orgCtx, {
+          serviceOrderId: ctx.orderId,
+        }),
+    );
 
     const billingRows = await db
       .select({

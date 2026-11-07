@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
+import { orgDb } from "../lib/org-db";
+import { withOrg } from "../lib/org-context";
+import { getPortalCustomerForAuthOrganization } from "../modules/service-orders/service-order.list-queries";
 import {
-  publicServiceOrderAccessRouter,
-  serviceOrdersRouter,
+  publicServiceOrderAccessRouter as publicServiceOrderAccessRouterBare,
+  serviceOrdersRouter as serviceOrdersRouterBare,
 } from "./service-orders";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -29,6 +33,13 @@ import {
   rejectServiceOrderQuoteByPortalUser,
 } from "../modules/service-orders/service-order.quotes";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+// The routers behind the app's error handler, as in production: a route throws
+// a `DomainError` and `app.onError` renders it.
+const publicServiceOrderAccessRouter = withErrorHandling(
+  publicServiceOrderAccessRouterBare,
+);
+const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 // Public quote-access token lifecycle — spec quote-approval-public-access
 // (issue #785), mini-spec A. Real DB, real routers, no session mock for the
@@ -222,7 +233,9 @@ async function mintToken(params: {
   quoteId: number;
   expiresAt?: Date | null;
 }) {
-  return createPublicServiceOrderAccessToken(params);
+  return orgDb(params.organizationId).transaction((o) =>
+    createPublicServiceOrderAccessToken({ ...params, executor: o }),
+  );
 }
 
 async function tokenRows(quoteId: number) {
@@ -435,14 +448,19 @@ describe("public quote-access token lifecycle (real DB)", () => {
       quoteId: world.quoteId,
     });
 
-    const result = await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: world.serviceOrderId,
-      quoteId: world.quoteId,
-      authOrganizationId: "client-dec5",
-      actorUserId: world.org.userId,
-      metadata: {},
-    });
-    expect(result.status).toBe("ok");
+    const customer = await getPortalCustomerForAuthOrganization("client-dec5");
+    if (!customer) throw new Error("the portal customer was not seeded");
+    await withOrg(
+      customer.labOrganizationId,
+      { userId: world.org.userId, ipAddress: null },
+      (ctx) =>
+        approveServiceOrderQuoteByPortalUser(
+          ctx,
+          customer,
+          world.serviceOrderId,
+          world.quoteId,
+        ),
+    );
 
     const [row] = await tokenRows(world.quoteId);
     expect(row?.revokedReason).toBe("decided");
@@ -456,15 +474,20 @@ describe("public quote-access token lifecycle (real DB)", () => {
       quoteId: world.quoteId,
     });
 
-    const result = await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: world.serviceOrderId,
-      quoteId: world.quoteId,
-      authOrganizationId: "client-dec6",
-      actorUserId: world.org.userId,
-      values: { rejectionReason: "Não aprovado" },
-      metadata: {},
-    });
-    expect(result.status).toBe("ok");
+    const customer = await getPortalCustomerForAuthOrganization("client-dec6");
+    if (!customer) throw new Error("the portal customer was not seeded");
+    await withOrg(
+      customer.labOrganizationId,
+      { userId: world.org.userId, ipAddress: null },
+      (ctx) =>
+        rejectServiceOrderQuoteByPortalUser(
+          ctx,
+          customer,
+          world.serviceOrderId,
+          world.quoteId,
+          { rejectionReason: "Não aprovado" },
+        ),
+    );
 
     const [row] = await tokenRows(world.quoteId);
     expect(row?.revokedReason).toBe("decided");
@@ -527,7 +550,10 @@ describe("public quote-access token lifecycle (real DB)", () => {
     const res = await publicServiceOrderAccessRouter.request(`/${grant.token}`);
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body).toEqual({ error: "Link invalido ou expirado" });
+    expect(body).toEqual({
+      error: "Link invalido ou expirado",
+      code: "public_link_invalid",
+    });
     expect(JSON.stringify(body)).not.toContain("OS-exp404");
   });
 
@@ -550,7 +576,10 @@ describe("public quote-access token lifecycle (real DB)", () => {
     );
     expect(view.status).toBe(410);
     const body = await view.json();
-    expect(body).toEqual({ error: "orcamento_respondido" });
+    expect(body).toEqual({
+      error: "orcamento_respondido",
+      code: "public_link_answered",
+    });
     const text = JSON.stringify(body);
     expect(text).not.toContain("OS-gone1");
     expect(text).not.toContain("totalCents");

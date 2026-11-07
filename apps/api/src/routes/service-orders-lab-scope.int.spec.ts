@@ -59,8 +59,13 @@ import { organizationOf } from "../../test/integration/organization-of";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { getQuoteDocumentDownloadUrl } from "../modules/service-orders/service-order.documents";
-import { serviceOrdersRouter } from "./service-orders";
+import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+// The routers behind the app's error handler, as in production: a route throws
+// a `DomainError` and `app.onError` renders it.
+const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 // The document and quote-PDF jobs read what the request wrote and render PDFs;
 // they are not under test here (the enqueue itself is asserted).

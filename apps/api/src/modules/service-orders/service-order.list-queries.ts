@@ -24,7 +24,7 @@ import {
   lte,
   or,
 } from "drizzle-orm";
-import type { AuthVariables } from "../../middleware/permission";
+import type { ServiceOrderScope } from "./service-order-scope";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { orgDb } from "../../lib/org-db";
 
@@ -101,7 +101,7 @@ export async function resolvePortalServiceOrderIdByPublicId(
 }
 
 export async function listServiceOrdersForLab(
-  member: AuthVariables["member"],
+  member: ServiceOrderScope,
   query: ServiceOrdersListQuery,
 ) {
   const page = query.page;
@@ -213,7 +213,7 @@ export async function listServiceOrdersForLab(
  * OSs are ever returned.
  */
 export async function listServiceOrdersPendingCalibrationAfterRepair(
-  member: AuthVariables["member"],
+  member: ServiceOrderScope,
 ) {
   const rows = await orgDb(member.organizationId).transaction((o) =>
     o
@@ -262,9 +262,7 @@ export async function listServiceOrdersPendingCalibrationAfterRepair(
   };
 }
 
-export async function getServiceOrderSummaryReport(
-  member: AuthVariables["member"],
-) {
+export async function getServiceOrderSummaryReport(member: ServiceOrderScope) {
   const rows = await orgDb(member.organizationId).transaction((o) =>
     o
       .select({
