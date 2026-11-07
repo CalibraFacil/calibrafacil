@@ -70,7 +70,11 @@ export function assignJob(command: AssignJobCommand): Promise<AssignJobResult> {
   );
 }
 
-async function assignJobIn(
+/**
+ * The command inside the caller's transaction (`ctx.o` of a `withOrg`): the
+ * route runs it there so the notification waits for the commit.
+ */
+export async function assignJobIn(
   o: OrgDb,
   command: AssignJobCommand,
 ): Promise<AssignJobResult> {

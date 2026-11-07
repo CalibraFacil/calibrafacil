@@ -298,6 +298,20 @@ export const API_ERROR_CODES = [
   "CONCLUSION_REQUIRED",
   // Shipped with public self-serve sign-up and asserted by the sign-up page.
   "ALREADY_REGISTERED",
+  // The cloud approval route's refusals (`POST /jobs/:id/approve`), asserted by
+  // the web approval dialog and the approval specs. The public API v2 answers
+  // the same refusals with the snake_case codes above.
+  "APPROVAL_CONFLICT",
+  "APPROVAL_DISPATCH_FAILED",
+  "APPROVAL_ROLE_NOT_PERMITTED",
+  "APPROVAL_ROSTER_EMPTY",
+  "APPROVER_NOT_AUTHORIZED_SIGNATORY",
+  "SCOPE_VIOLATION",
+  "SELF_APPROVAL_BLOCKED",
+  // The out-of-tolerance flag (`POST /jobs/:id/flag-oot`).
+  "JOB_NOT_FOUND",
+  "JOB_NOT_APPROVED",
+  "OOT_ALREADY_FLAGGED",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

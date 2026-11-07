@@ -5,13 +5,8 @@ import {
   targetOf,
 } from "@calibra-facil/schemas/job-transitions";
 import { and, eq } from "drizzle-orm";
-import { enqueueBackgroundJob } from "../../lib/background-jobs";
-import {
-  dispatchStagedBackgroundJob,
-  stageBackgroundJob,
-} from "../../lib/background-job-outbox";
 import { invalid, type DomainError } from "../../lib/domain-errors";
-import { orgTransactionWithExecutor } from "../../lib/org-transaction";
+import { withOrg, type OrgContext } from "../../lib/org-context";
 import {
   jobActorAuditFields,
   loadScopedJob,
@@ -58,105 +53,89 @@ export type RetryRenderResult =
   /** The job left the status (or organization) it was judged in; nothing written. */
   | { status: "concurrent_update" };
 
-export async function retryRender(
+export function retryRender(
   command: RetryRenderCommand,
 ): Promise<RetryRenderResult> {
-  const { actor, organizationId } = command;
-
-  const outcome = await orgTransactionWithExecutor(
-    organizationId,
-    async (o, tx) => {
-      const existing = await loadScopedJob(
-        {
-          jobId: command.jobId,
-          organizationId,
-          unitScope: command.unitScope,
-        },
-        o,
-      );
-      if (!existing) return { status: "not_found" } as const;
-
-      if (targetOf(existing.status, "retry_render") === null) {
-        return {
-          status: "illegal_transition",
-          currentStatus: existing.status,
-          error: invalid(
-            "job_render_not_retryable",
-            `Nao e possivel reemitir o certificado de um job com status ${existing.status}. O job deve estar em RENDER_FAILED.`,
-          ),
-        } as const;
-      }
-
-      const renderingStatus = requireTargetOf(existing.status, "retry_render");
-      const now = new Date();
-      const [updated] = await o
-        .update(calibrationJob)
-        .set({
-          status: renderingStatus,
-          rejectedBy: null,
-          rejectedAt: null,
-          rejectionReason: null,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(calibrationJob.id, existing.id),
-            eq(calibrationJob.organizationId, organizationId),
-            eq(calibrationJob.status, existing.status),
-          ),
-        )
-        .returning();
-      if (!updated) return { status: "concurrent_update" } as const;
-
-      await appendJobEvent(o, {
-        action: "render_retried",
-        organizationId,
-        jobId: existing.id,
-        actor: { kind: "user", userId: actor.userId },
-        performedAt: now,
-        changes: {
-          ...jobActorAuditFields(actor),
-          status: { old: existing.status, new: renderingStatus },
-          previousError: existing.rejectionReason,
-        },
-        ipAddress: actor.ipAddress ?? null,
-      });
-
-      const staged = await stageBackgroundJob(tx, {
-        jobId: existing.id,
-        userId: actor.userId,
-      });
-      return {
-        status: "ok",
-        job: updated,
-        previousStatus: existing.status,
-        staged,
-      } as const;
+  return withOrg(
+    command.organizationId,
+    {
+      userId: command.actor.userId,
+      ipAddress: command.actor.ipAddress ?? null,
     },
+    (ctx) => retryRenderIn(ctx, command),
   );
+}
 
-  if (outcome.status !== "ok") return outcome;
+/**
+ * The command inside the caller's `withOrg` transaction. The render job is
+ * emitted through the context: its queue row commits with the status change
+ * (outbox), and without the database queue it is dispatched after the commit
+ * (a failure there is logged; the stuck-render sweep returns the job to
+ * RENDER_FAILED).
+ */
+export async function retryRenderIn(
+  ctx: OrgContext,
+  command: RetryRenderCommand,
+): Promise<RetryRenderResult> {
+  const { actor } = command;
+  const { o, org: organizationId } = ctx;
 
-  if (outcome.staged) {
-    await dispatchStagedBackgroundJob();
-  } else {
-    try {
-      await enqueueBackgroundJob({
-        jobId: outcome.job.id,
-        userId: actor.userId,
-      });
-    } catch (error) {
-      // In-process only: the stuck-render sweep returns the job to RENDER_FAILED.
-      console.error("[Jobs] Render retry dispatch failed", {
-        jobId: outcome.job.id,
-        error: error instanceof Error ? error.message : "unknown error",
-      });
-    }
+  const existing = await loadScopedJob(
+    {
+      jobId: command.jobId,
+      organizationId,
+      unitScope: command.unitScope,
+    },
+    o,
+  );
+  if (!existing) return { status: "not_found" };
+
+  if (targetOf(existing.status, "retry_render") === null) {
+    return {
+      status: "illegal_transition",
+      currentStatus: existing.status,
+      error: invalid(
+        "job_render_not_retryable",
+        `Nao e possivel reemitir o certificado de um job com status ${existing.status}. O job deve estar em RENDER_FAILED.`,
+      ),
+    };
   }
 
-  return {
-    status: "ok",
-    job: outcome.job,
-    previousStatus: outcome.previousStatus,
-  };
+  const renderingStatus = requireTargetOf(existing.status, "retry_render");
+  const now = new Date();
+  const [updated] = await o
+    .update(calibrationJob)
+    .set({
+      status: renderingStatus,
+      rejectedBy: null,
+      rejectedAt: null,
+      rejectionReason: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(calibrationJob.id, existing.id),
+        eq(calibrationJob.organizationId, organizationId),
+        eq(calibrationJob.status, existing.status),
+      ),
+    )
+    .returning();
+  if (!updated) return { status: "concurrent_update" };
+
+  await appendJobEvent(o, {
+    action: "render_retried",
+    organizationId,
+    jobId: existing.id,
+    actor: { kind: "user", userId: actor.userId },
+    performedAt: now,
+    changes: {
+      ...jobActorAuditFields(actor),
+      status: { old: existing.status, new: renderingStatus },
+      previousError: existing.rejectionReason,
+    },
+    ipAddress: actor.ipAddress ?? null,
+  });
+
+  await ctx.emit({ jobId: existing.id, userId: actor.userId });
+  return { status: "ok", job: updated, previousStatus: existing.status };
 }

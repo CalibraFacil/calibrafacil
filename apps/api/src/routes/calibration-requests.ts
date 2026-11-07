@@ -689,7 +689,6 @@ export const calibrationRequestsRouter = new Hono<{
                 sourceRequestId: request.id,
                 sourceRequestItemId: requestItem.id,
                 executor: ctx.tx,
-                notifyOnAssignment: false,
                 onsiteLocation,
                 visitId,
               });

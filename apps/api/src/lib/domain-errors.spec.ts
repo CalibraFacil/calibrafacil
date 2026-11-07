@@ -65,11 +65,21 @@ describe("DomainError (REQ-DE-1)", () => {
       [
         "ALREADY_ACKNOWLEDGED",
         "ALREADY_REGISTERED",
+        "APPROVAL_CONFLICT",
+        "APPROVAL_DISPATCH_FAILED",
+        "APPROVAL_ROLE_NOT_PERMITTED",
+        "APPROVAL_ROSTER_EMPTY",
+        "APPROVER_NOT_AUTHORIZED_SIGNATORY",
         "ASSESSMENT_SIGNED",
         "CONCLUSION_REQUIRED",
         "DIMENSIONAL_ERROR",
+        "JOB_NOT_APPROVED",
+        "JOB_NOT_FOUND",
         "JOB_STATUS_CONFLICT",
         "LAST_CALIBRATION_APPROVER",
+        "OOT_ALREADY_FLAGGED",
+        "SCOPE_VIOLATION",
+        "SELF_APPROVAL_BLOCKED",
       ].sort(),
     );
     expect(new Set(API_ERROR_CODES).size).toBe(API_ERROR_CODES.length);

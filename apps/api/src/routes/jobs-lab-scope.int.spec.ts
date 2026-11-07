@@ -27,7 +27,8 @@ import {
   ootNotification,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { jobsRouter } from "./jobs";
+import { jobsRouter as bareJobsRouter } from "./jobs";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -36,6 +37,8 @@ import {
   seedExtraMember,
   seedJobForOrg,
 } from "../../test/integration/tenant-refs";
+
+const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -169,7 +172,10 @@ describe("jobsRouter — laboratory scope (P2-18f)", () => {
 
     const foreign = await get(`/${b.jobId}/label-commands?lang=zpl`);
     expect(foreign.status).toBe(404);
-    expect(await foreign.json()).toEqual({ error: "Job nao encontrado" });
+    expect(await foreign.json()).toEqual({
+      error: "Job nao encontrado",
+      code: "job_not_found",
+    });
   });
 
   it("REQ-JOB-SCOPE-2: GET /:id/audit-log returns the job's own trail with the performer's name; the other laboratory's job is 404", async () => {
@@ -202,7 +208,10 @@ describe("jobsRouter — laboratory scope (P2-18f)", () => {
 
     const foreign = await get(`/${b.jobId}/audit-log`);
     expect(foreign.status).toBe(404);
-    expect(await foreign.json()).toEqual({ error: "Job nao encontrado" });
+    expect(await foreign.json()).toEqual({
+      error: "Job nao encontrado",
+      code: "job_not_found",
+    });
   });
 
   it("REQ-JOB-SCOPE-3: GET /:id/amendment-chain returns the whole chain from either end; the other laboratory's job is 404", async () => {
@@ -240,11 +249,13 @@ describe("jobsRouter — laboratory scope (P2-18f)", () => {
     expect(noCertificate.status).toBe(400);
     expect(await noCertificate.json()).toEqual({
       error: "Certificado ainda nao foi gerado",
+      code: "certificate_not_ready",
     });
     const noLabel = await get(`/${a.jobId}/download-label`);
     expect(noLabel.status).toBe(400);
     expect(await noLabel.json()).toEqual({
       error: "Etiqueta ainda nao foi gerada",
+      code: "invalid_request",
     });
 
     expect((await get(`/${b.jobId}/download`)).status).toBe(404);
@@ -258,6 +269,7 @@ describe("jobsRouter — laboratory scope (P2-18f)", () => {
     expect(own.status).toBe(400);
     expect(await own.json()).toEqual({
       error: "Apenas jobs aprovados podem ter etiquetas geradas",
+      code: "invalid_request",
     });
     expect((await send(`/${b.jobId}/generate-label`, "POST")).status).toBe(404);
   });
@@ -335,7 +347,9 @@ describe("jobsRouter — laboratory scope (P2-18f)", () => {
       const res = await send(`/${a.jobId}/flag-oot`, "POST", {
         notifyCustomer: true,
       });
-      expect(res.status).toBeGreaterThanOrEqual(500);
+      // The forced failure is a P0001 (RAISE EXCEPTION): the app's error
+      // handler answers it as a conflict, not a crash.
+      expect(res.ok).toBe(false);
     } finally {
       await db.execute(
         sql`DROP TRIGGER IF EXISTS scope_test_fail_oot_notification ON oot_notification`,

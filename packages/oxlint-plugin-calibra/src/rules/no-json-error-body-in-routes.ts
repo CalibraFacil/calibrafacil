@@ -26,7 +26,6 @@ const ROUTES_PATTERN = /(^|\/)apps\/api\/src\/routes\//;
 const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/customers.ts", 1],
   ["apps/api/src/routes/finance/erp.ts", 1],
-  ["apps/api/src/routes/jobs.ts", 79],
   ["apps/api/src/routes/public-signup.ts", 1],
   ["apps/api/src/routes/sso.ts", 1],
 ]);

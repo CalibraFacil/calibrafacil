@@ -3,6 +3,7 @@ import type { JobActorAuditFields } from "@calibra-facil/db/job-events";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { orgDb } from "../../lib/org-db";
+import type { OrgActor } from "../../lib/org-context";
 import {
   buildUnitScopeCondition,
   type ResolvedUnitScope,
@@ -50,6 +51,11 @@ export type JobActor =
  * and submitted), so `desktop_session` is not an option there.
  */
 export type JobLifecycleActor = Exclude<JobActor, { kind: "desktop_session" }>;
+
+/** The signed-in user of a `withOrg` write, as the actor of a lifecycle command. */
+export function userJobActor(actor: OrgActor): JobLifecycleActor {
+  return { kind: "user", userId: actor.userId, ipAddress: actor.ipAddress };
+}
 
 /**
  * The `changes` fields that say HOW the actor reached the API, merged into
