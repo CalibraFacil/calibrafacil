@@ -74,7 +74,7 @@ vi.mock("@calibra-facil/db", async () => {
 
 // Auth boundary: inject a LAB member with the perms the routes require, so the
 // handler logic (not the real auth/permission stack) is what's under test.
-vi.mock("../../middleware/permission", () => {
+vi.mock("../../../../middleware/permission", () => {
   const setActor = async (c: Context, next: Next) => {
     c.set("session", { user: { id: "user-1" } });
     c.set("member", {

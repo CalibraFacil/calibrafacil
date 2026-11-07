@@ -95,7 +95,7 @@ Mitigation:
 
 ### 7. Workflow and audit parity
 
-Methods enforce draft-only editing, review separation, publishing, archiving, new-version cloning, and audit logs in `apps/api/src/routes/methods.ts`.
+Methods enforce draft-only editing, review separation, publishing, archiving, new-version cloning, and audit logs in `apps/api/src/domains/methods/routes/methods.ts`.
 
 Risk:
 

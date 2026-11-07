@@ -19,13 +19,13 @@ import { standardEndpoints } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { massCompositionProfile } from "@calibra-facil/db/schema";
 import { standardsRouter } from "./standards";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg, seedStandard } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg, seedStandard } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/storage", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../lib/storage")>();
+vi.mock("../../../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/storage")>();
   return {
     ...actual,
     createR2Client: vi.fn(() => ({})),
@@ -36,7 +36,7 @@ vi.mock("../lib/storage", async (importOriginal) => {
   };
 });
 
-vi.mock("../lib/oot-notifications", () => ({
+vi.mock("../../../lib/oot-notifications", () => ({
   ensureStandardRecall: vi.fn().mockResolvedValue(undefined),
   createStandardRecallNotifications: vi.fn().mockResolvedValue(undefined),
 }));

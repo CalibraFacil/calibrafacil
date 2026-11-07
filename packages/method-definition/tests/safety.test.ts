@@ -3,7 +3,7 @@ import { assertSafeUnknown, fingerprintJson, parseMethodDraft } from "../src";
 
 /**
  * A draft shaped like the one the API builds in-process from a stored method
- * (`methodInputToDefinitionInput` in `apps/api/src/routes/methods.ts`): optional
+ * (`methodInputToDefinitionInput` in `apps/api/src/domains/methods/routes/methods.ts`): optional
  * fields are written as `field: cond ? value : undefined`, so the key exists and
  * holds `undefined` instead of being absent.
  */

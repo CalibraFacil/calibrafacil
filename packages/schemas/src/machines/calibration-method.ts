@@ -1,6 +1,6 @@
 // calibration_method.status as data: a method version's review and publication
 // (ISO/IEC 17025 §7.2.2: methods validated and authorized before use).
-//   create            apps/api/src/routes/methods.ts POST / , POST /import, and
+//   create            apps/api/src/domains/methods/routes/methods.ts POST / , POST /import, and
 //                       POST /:id/new-version (a new DRAFT row)
 //   edit              PUT /:id: only a draft is edited
 //   request_approval  POST /:id/request-approval: compiled, frozen for review

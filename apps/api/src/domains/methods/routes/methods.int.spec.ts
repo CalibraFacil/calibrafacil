@@ -56,10 +56,10 @@ import {
   type MethodFormula,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // No notifications or background-jobs imports in methods.ts — no mocks needed.

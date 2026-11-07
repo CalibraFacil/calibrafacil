@@ -14,7 +14,7 @@ import { endpoint, type EndpointGroup } from "./define";
  * The laboratory's calibration methods: the catalog, the builder's compile and
  * preview, the review/approval/publication workflow and the curated template
  * catalog. Response schemas are wire schemas written from what the handlers in
- * `apps/api/src/routes/methods.ts` return; the desktop local-server answers
+ * `apps/api/src/domains/methods/routes/methods.ts` return; the desktop local-server answers
  * `list` and `get` with the same ones (`apps/local-server/src/contract.test.ts`).
  * The method definition parts (fields, formulas, models, the compiled artifact)
  * are opaque here: the web narrows them with the method-definition schemas.

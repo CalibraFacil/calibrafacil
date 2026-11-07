@@ -3,7 +3,7 @@ import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identif
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { calibrationMethod } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { notFound } from "./domain-errors";
+import { notFound } from "../../lib/domain-errors";
 
 /**
  * The id of the laboratory's method a route parameter names (numeric id or

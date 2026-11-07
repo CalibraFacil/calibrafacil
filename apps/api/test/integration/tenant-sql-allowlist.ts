@@ -465,7 +465,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "pk-after-scoped-read",
-    file: "apps/api/src/routes/standards.ts",
+    file: "apps/api/src/domains/standards/routes/standards.ts",
     tables: ["reference_standard_certificate_document"],
     kinds: ["select"],
     reason: "Current certificates of the standard ids of the scoped list.",
