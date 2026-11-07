@@ -10,7 +10,7 @@ import {
 import { PT_OVERALL_STATUSES } from "@calibra-facil/schemas/machines";
 
 import { nullableNumber, nullableString, paginationSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * Proficiency testing (ISO/IEC 17025 7.7.2): the PT register (rounds scored per
@@ -179,6 +179,7 @@ export const proficiencyTestEndpoints = {
   get: endpoint({
     method: "get",
     path: "/api/proficiency-tests/:id",
+    params: z.object({ id: routeId }),
     response: ptDetailSchema,
     failure: "Ensaio de proficiência não encontrado",
     policy: "cloud-only",
@@ -187,6 +188,7 @@ export const proficiencyTestEndpoints = {
   auditLog: endpoint({
     method: "get",
     path: "/api/proficiency-tests/:id/audit-log",
+    params: z.object({ id: routeId }),
     response: z.object({ data: z.array(ptAuditEntrySchema) }),
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
@@ -205,6 +207,7 @@ export const proficiencyTestEndpoints = {
   update: endpoint({
     method: "put",
     path: "/api/proficiency-tests/:id",
+    params: z.object({ id: routeId }),
     body: UpdateProficiencyTestSchema,
     response: ptRowSchema,
     failure: "Erro ao atualizar ensaio de proficiência",
@@ -214,6 +217,7 @@ export const proficiencyTestEndpoints = {
   recordResults: endpoint({
     method: "post",
     path: "/api/proficiency-tests/:id/results",
+    params: z.object({ id: routeId }),
     body: RecordPtResultsSchema,
     response: ptRowSchema,
     failure: "Erro ao registrar resultados",
@@ -223,6 +227,7 @@ export const proficiencyTestEndpoints = {
   remove: endpoint({
     method: "delete",
     path: "/api/proficiency-tests/:id",
+    params: z.object({ id: routeId }),
     response: messageSchema,
     failure: "Erro ao remover ensaio",
     policy: "cloud-only",
@@ -249,6 +254,7 @@ export const proficiencyTestEndpoints = {
   updatePlanItem: endpoint({
     method: "put",
     path: "/api/proficiency-tests/plan/:id",
+    params: z.object({ id: routeId }),
     body: UpdatePtPlanItemSchema,
     response: ptPlanItemSchema,
     failure: "Erro ao atualizar item do plano",
@@ -258,6 +264,7 @@ export const proficiencyTestEndpoints = {
   removePlanItem: endpoint({
     method: "delete",
     path: "/api/proficiency-tests/plan/:id",
+    params: z.object({ id: routeId }),
     response: messageSchema,
     failure: "Erro ao remover item do plano",
     policy: "cloud-only",

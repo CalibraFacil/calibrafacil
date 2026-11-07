@@ -24,6 +24,7 @@ import {
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { mount } from "../lib/endpoint-mount";
+import { requireRouteId } from "../lib/route-id";
 import { orgDb } from "../lib/org-db";
 import {
   and,
@@ -261,7 +262,10 @@ nonConformancesRouter.get(
   ...withLabPermission({ non_conformance: ["read"] }),
   async (c) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      const nc = await requireLabNonConformance(o, c.req.param("id"));
+      const nc = await requireLabNonConformance(
+        o,
+        requireRouteId(c.req.param("id")),
+      );
       return c.json({ id: nc.id, label: nc.ncNumber });
     });
   },

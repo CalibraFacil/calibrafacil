@@ -10,7 +10,7 @@ import {
 import { SPC_STATUSES } from "@calibra-facil/schemas/machines";
 
 import { nullableNumber, nullableString, paginationSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * Statistical process control (ISO/IEC 17025 7.7.1): check-standard readings and
@@ -162,6 +162,7 @@ export const spcEndpoints = {
   getChart: endpoint({
     method: "get",
     path: "/api/spc/charts/:id",
+    params: z.object({ id: routeId }),
     response: spcChartDetailSchema,
     failure: "Carta de controle não encontrada",
     policy: "cloud-only",
@@ -180,6 +181,7 @@ export const spcEndpoints = {
   updateChart: endpoint({
     method: "put",
     path: "/api/spc/charts/:id",
+    params: z.object({ id: routeId }),
     body: UpdateControlChartSchema,
     response: spcChartRowSchema,
     failure: "Erro ao atualizar carta de controle",
@@ -189,6 +191,7 @@ export const spcEndpoints = {
   removeChart: endpoint({
     method: "delete",
     path: "/api/spc/charts/:id",
+    params: z.object({ id: routeId }),
     response: messageSchema,
     failure: "Erro ao remover carta de controle",
     policy: "cloud-only",
@@ -197,6 +200,7 @@ export const spcEndpoints = {
   recalculateChart: endpoint({
     method: "post",
     path: "/api/spc/charts/:id/recalculate",
+    params: z.object({ id: routeId }),
     response: spcChartRowSchema,
     failure: "Erro ao recalcular carta",
     policy: "cloud-only",
@@ -205,6 +209,7 @@ export const spcEndpoints = {
   escalateChart: endpoint({
     method: "post",
     path: "/api/spc/charts/:id/escalate",
+    params: z.object({ id: routeId }),
     body: EscalateControlChartSchema,
     response: z.object({
       message: z.string(),
@@ -240,6 +245,7 @@ export const spcEndpoints = {
   removeReading: endpoint({
     method: "delete",
     path: "/api/spc/readings/:id",
+    params: z.object({ id: routeId }),
     response: messageSchema,
     failure: "Erro ao remover leitura",
     policy: "cloud-only",

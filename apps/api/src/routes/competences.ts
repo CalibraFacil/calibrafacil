@@ -231,11 +231,7 @@ mount(
   withLabPermission({ competence: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     return await orgDb(memberData.organizationId).transaction(async (tx) => {
       const [comp] = await tx
@@ -480,11 +476,7 @@ mount(
   withLabPermission({ competence: ["update"] }),
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     const assigned = await withOrg(
       memberData.organizationId,
@@ -587,11 +579,7 @@ mount(
   withLabPermission({ competence: ["update"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     const result = await withOrg(
       memberData.organizationId,
@@ -660,11 +648,7 @@ mount(
   withLabPermission({ competence: ["update"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     const result = await withOrg(
       memberData.organizationId,
@@ -737,11 +721,7 @@ mount(
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
     const session = c.get("session");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     const updated = await withOrg(
       memberData.organizationId,
@@ -885,11 +865,7 @@ mount(
   withLabPermission({ competence: ["update"] }),
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     const result = await withOrg(
       memberData.organizationId,
@@ -958,11 +934,7 @@ mount(
   withLabPermission({ competence: ["update"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     const result = await withOrg(
       memberData.organizationId,
@@ -1028,11 +1000,7 @@ mount(
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
     const session = c.get("session");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     const result = await withOrg(
       memberData.organizationId,
@@ -1121,11 +1089,7 @@ mount(
   withLabPermission({ competence: ["delete"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
       await requireLabCompetence(id, memberData.organizationId, ctx.o);
@@ -1155,11 +1119,7 @@ mount(
   withLabPermission({ competence: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(params.id, 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     // Verify competence belongs to org
     return await orgDb(memberData.organizationId).transaction(async (tx) => {

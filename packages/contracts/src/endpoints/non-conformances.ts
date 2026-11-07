@@ -14,7 +14,7 @@ import { OOT_NOTIFICATION_STATUSES } from "@calibra-facil/schemas/machines";
 
 import { nullableNumber, nullableString, paginationSchema } from "../common";
 import { correctiveActionRowSchema } from "./capa";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * Non-conforming work (ISO/IEC 17025 8.7) and its 7.10 out-of-tolerance
@@ -221,6 +221,7 @@ export const nonConformanceEndpoints = {
   get: endpoint({
     method: "get",
     path: "/api/nc/:id",
+    params: z.object({ id: routeId }),
     response: ncDetailSchema,
     failure: "Falha ao carregar NC",
     policy: "cloud-only",
@@ -229,6 +230,7 @@ export const nonConformanceEndpoints = {
   auditLog: endpoint({
     method: "get",
     path: "/api/nc/:id/audit-log",
+    params: z.object({ id: routeId }),
     response: z.object({ data: z.array(ncAuditEntrySchema) }),
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
@@ -247,6 +249,7 @@ export const nonConformanceEndpoints = {
   setDisposition: endpoint({
     method: "put",
     path: "/api/nc/:id/disposition",
+    params: z.object({ id: routeId }),
     body: SetDispositionSchema,
     response: ncRowSchema,
     failure: "Erro ao definir disposição",
@@ -256,6 +259,7 @@ export const nonConformanceEndpoints = {
   resolve: endpoint({
     method: "post",
     path: "/api/nc/:id/resolve",
+    params: z.object({ id: routeId }),
     body: ResolveNonConformanceSchema,
     response: z.object({ message: z.string(), data: ncRowSchema }),
     failure: "Erro ao resolver",
@@ -265,6 +269,7 @@ export const nonConformanceEndpoints = {
   escalateToCapa: endpoint({
     method: "post",
     path: "/api/nc/:id/escalate-to-capa",
+    params: z.object({ id: routeId }),
     body: EscalateToCapaSchema,
     response: z.object({
       message: z.string(),
@@ -278,6 +283,7 @@ export const nonConformanceEndpoints = {
   getOotNotification: endpoint({
     method: "get",
     path: "/api/nc/:id/oot-notification",
+    params: z.object({ id: routeId }),
     response: z.object({ data: ootNotificationSchema.nullable() }),
     failure: "Falha ao carregar notificação 7.10",
     policy: "cloud-only",
@@ -286,6 +292,7 @@ export const nonConformanceEndpoints = {
   registerOotAcknowledgement: endpoint({
     method: "post",
     path: "/api/nc/:id/oot-ack",
+    params: z.object({ id: routeId }),
     body: RegisterOotAcknowledgementSchema,
     response: z.object({
       message: z.string(),
@@ -298,6 +305,7 @@ export const nonConformanceEndpoints = {
   getImpactAssessment: endpoint({
     method: "get",
     path: "/api/nc/:id/oot-impact-assessment",
+    params: z.object({ id: routeId }),
     response: z.object({ data: ootImpactAssessmentSchema.nullable() }),
     failure: "Falha ao carregar avaliação de impacto",
     policy: "cloud-only",
@@ -306,6 +314,7 @@ export const nonConformanceEndpoints = {
   saveImpactAssessment: endpoint({
     method: "put",
     path: "/api/nc/:id/oot-impact-assessment",
+    params: z.object({ id: routeId }),
     body: SaveOotImpactAssessmentSchema,
     response: z.object({
       message: z.string(),
@@ -318,6 +327,7 @@ export const nonConformanceEndpoints = {
   signImpactAssessment: endpoint({
     method: "post",
     path: "/api/nc/:id/oot-impact-assessment/sign",
+    params: z.object({ id: routeId }),
     response: z.object({
       message: z.string(),
       data: ootImpactAssessmentSchema,

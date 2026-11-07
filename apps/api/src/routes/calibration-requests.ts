@@ -46,7 +46,6 @@ import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
-import { requireRouteId } from "../lib/route-id";
 import { requireLockedLabRequest } from "../lib/calibration-request-access";
 import { conflict, invalid, notFound } from "../lib/domain-errors";
 
@@ -305,7 +304,7 @@ mount(
   withLabPermission({ request: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
 
     const request = await orgDb(member.organizationId).transaction((o) =>
       getRequestDetail(
@@ -331,7 +330,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const input = body;
 
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
@@ -404,7 +403,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const input = body;
 
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
@@ -474,7 +473,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const input = body;
 
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
@@ -552,7 +551,7 @@ mount(
   }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const input = body;
 
     const createdJobs = await withOrg(

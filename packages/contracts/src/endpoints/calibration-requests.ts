@@ -9,7 +9,7 @@ import {
 import { CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 
 import { nullableNumber, nullableString, paginationSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * The calibration requests customers submit through the portal and the lab
@@ -143,6 +143,7 @@ export const calibrationRequestEndpoints = {
   get: endpoint({
     method: "get",
     path: "/api/calibration-requests/:id",
+    params: z.object({ id: routeId }),
     response: calibrationRequestDetailSchema,
     failure: "Falha ao carregar solicitação",
     policy: "cloud-only",
@@ -151,6 +152,7 @@ export const calibrationRequestEndpoints = {
   review: endpoint({
     method: "post",
     path: "/api/calibration-requests/:id/review",
+    params: z.object({ id: routeId }),
     body: ReviewCalibrationRequestSchema,
     response: successSchema,
     failure: "Erro ao revisar",
@@ -160,6 +162,7 @@ export const calibrationRequestEndpoints = {
   approve: endpoint({
     method: "post",
     path: "/api/calibration-requests/:id/approve",
+    params: z.object({ id: routeId }),
     body: ApproveCalibrationRequestSchema,
     response: successSchema,
     failure: "Erro ao aprovar",
@@ -169,6 +172,7 @@ export const calibrationRequestEndpoints = {
   reject: endpoint({
     method: "post",
     path: "/api/calibration-requests/:id/reject",
+    params: z.object({ id: routeId }),
     body: RejectCalibrationRequestSchema,
     response: successSchema,
     failure: "Erro ao rejeitar",
@@ -178,6 +182,7 @@ export const calibrationRequestEndpoints = {
   convert: endpoint({
     method: "post",
     path: "/api/calibration-requests/:id/convert",
+    params: z.object({ id: routeId }),
     body: ConvertCalibrationRequestSchema,
     response: convertResponseSchema,
     failure: "Erro ao converter",

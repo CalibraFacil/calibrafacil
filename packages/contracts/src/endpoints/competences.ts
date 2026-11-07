@@ -9,7 +9,7 @@ import {
 import { COMPETENCE_STATUSES } from "@calibra-facil/schemas/machines";
 
 import { nullableString, paginationSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 import { trainingRecordRowSchema } from "./training-records";
 
 /**
@@ -149,6 +149,7 @@ export const competenceEndpoints = {
   get: endpoint({
     method: "get",
     path: "/api/competences/:id",
+    params: z.object({ id: routeId }),
     response: competenceDetailSchema,
     failure: "Falha ao carregar competência",
     policy: "cloud-only",
@@ -157,6 +158,7 @@ export const competenceEndpoints = {
   auditLog: endpoint({
     method: "get",
     path: "/api/competences/:id/audit-log",
+    params: z.object({ id: routeId }),
     response: z.array(competenceAuditEntrySchema),
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
@@ -175,6 +177,7 @@ export const competenceEndpoints = {
   startTraining: endpoint({
     method: "post",
     path: "/api/competences/:id/start-training",
+    params: z.object({ id: routeId }),
     response: competenceRowSchema,
     failure: "Erro na operação",
     policy: "cloud-only",
@@ -183,6 +186,7 @@ export const competenceEndpoints = {
   completeTraining: endpoint({
     method: "post",
     path: "/api/competences/:id/complete-training",
+    params: z.object({ id: routeId }),
     response: competenceRowSchema,
     failure: "Erro na operação",
     policy: "cloud-only",
@@ -191,6 +195,7 @@ export const competenceEndpoints = {
   suspend: endpoint({
     method: "post",
     path: "/api/competences/:id/suspend",
+    params: z.object({ id: routeId }),
     response: competenceRowSchema,
     failure: "Erro na operação",
     policy: "cloud-only",
@@ -199,6 +204,7 @@ export const competenceEndpoints = {
   evaluate: endpoint({
     method: "post",
     path: "/api/competences/:id/evaluate",
+    params: z.object({ id: routeId }),
     body: EvaluateCompetenceSchema,
     response: competenceRowSchema,
     failure: "Erro na avaliação",
@@ -208,6 +214,7 @@ export const competenceEndpoints = {
   renew: endpoint({
     method: "post",
     path: "/api/competences/:id/renew",
+    params: z.object({ id: routeId }),
     body: EvaluateCompetenceSchema,
     response: competenceRowSchema,
     failure: "Erro na renovação",
@@ -217,6 +224,7 @@ export const competenceEndpoints = {
   cancel: endpoint({
     method: "post",
     path: "/api/competences/:id/cancel",
+    params: z.object({ id: routeId }),
     body: CancelCompetenceSchema,
     response: competenceRowSchema,
     failure: "Erro ao cancelar competência",
@@ -226,6 +234,7 @@ export const competenceEndpoints = {
   delete: endpoint({
     method: "delete",
     path: "/api/competences/:id",
+    params: z.object({ id: routeId }),
     response: z.object({ message: z.string() }),
     failure: "Erro ao excluir competência",
     policy: "cloud-only",
@@ -234,6 +243,7 @@ export const competenceEndpoints = {
   assignTraining: endpoint({
     method: "post",
     path: "/api/competences/:id/assign-training",
+    params: z.object({ id: routeId }),
     body: AssignTrainingSchema,
     response: competenceRowSchema,
     failure: "Erro ao atribuir treinamento",

@@ -16,7 +16,7 @@ import {
 
 import { jobRowSchema } from "../jobs";
 import { nullableString, paginationSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * On-site (calibração in loco) visits. Response schemas are wire schemas
@@ -171,6 +171,7 @@ export const visitEndpoints = {
   get: endpoint({
     method: "get",
     path: "/api/visits/:id",
+    params: z.object({ id: routeId }),
     response: visitDetailSchema,
     failure: "Falha ao carregar visita",
     policy: "cloud-only",
@@ -179,6 +180,7 @@ export const visitEndpoints = {
   assign: endpoint({
     method: "post",
     path: "/api/visits/:id/assign",
+    params: z.object({ id: routeId }),
     body: AssignVisitTechnicianSchema,
     response: visitRowSchema,
     failure: "Erro ao atribuir técnico",
@@ -188,6 +190,7 @@ export const visitEndpoints = {
   confirm: endpoint({
     method: "post",
     path: "/api/visits/:id/confirm",
+    params: z.object({ id: routeId }),
     body: ConfirmVisitSchema,
     response: visitRowSchema,
     failure: "Erro ao confirmar visita",
@@ -197,6 +200,7 @@ export const visitEndpoints = {
   reschedule: endpoint({
     method: "patch",
     path: "/api/visits/:id",
+    params: z.object({ id: routeId }),
     body: RescheduleVisitSchema,
     response: visitRowSchema,
     failure: "Erro ao reagendar visita",
@@ -206,6 +210,7 @@ export const visitEndpoints = {
   cancel: endpoint({
     method: "post",
     path: "/api/visits/:id/cancel",
+    params: z.object({ id: routeId }),
     body: CancelVisitSchema,
     response: visitRowSchema,
     failure: "Erro ao cancelar visita",
@@ -215,6 +220,7 @@ export const visitEndpoints = {
   complete: endpoint({
     method: "post",
     path: "/api/visits/:id/complete",
+    params: z.object({ id: routeId }),
     response: visitRowSchema,
     failure: "Erro ao concluir visita",
     policy: "cloud-only",
@@ -223,6 +229,7 @@ export const visitEndpoints = {
   addJob: endpoint({
     method: "post",
     path: "/api/visits/:id/jobs",
+    params: z.object({ id: routeId }),
     body: AddVisitJobSchema,
     response: jobRowSchema,
     status: 201,
@@ -233,6 +240,7 @@ export const visitEndpoints = {
   removeJob: endpoint({
     method: "delete",
     path: "/api/visits/:id/jobs/:jobId",
+    params: z.object({ id: routeId, jobId: routeId }),
     response: jobRowSchema,
     failure: "Erro ao remover instrumento da visita",
     policy: "cloud-only",
@@ -241,6 +249,7 @@ export const visitEndpoints = {
   acceptRescheduleRequest: endpoint({
     method: "post",
     path: "/api/visits/:id/reschedule-requests/:requestId/accept",
+    params: z.object({ id: routeId, requestId: routeId }),
     body: AcceptVisitRescheduleRequestSchema,
     response: visitRowSchema,
     failure: "Erro ao aceitar o reagendamento",
@@ -251,6 +260,7 @@ export const visitEndpoints = {
   declineRescheduleRequest: endpoint({
     method: "post",
     path: "/api/visits/:id/reschedule-requests/:requestId/decline",
+    params: z.object({ id: routeId, requestId: routeId }),
     body: DeclineVisitRescheduleRequestSchema,
     response: z.array(visitRescheduleRequestRowSchema),
     failure: "Erro ao recusar o reagendamento",

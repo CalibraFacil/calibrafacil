@@ -10,7 +10,7 @@ import {
 import { CORRECTIVE_ACTION_STATUSES } from "@calibra-facil/schemas/machines";
 
 import { nullableString, paginationSchema } from "../common";
-import { endpoint, type EndpointGroup } from "./define";
+import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * Corrective and preventive actions (CAPA, ISO/IEC 17025 8.7 and 8.9). Response
@@ -173,6 +173,7 @@ export const capaEndpoints = {
   get: endpoint({
     method: "get",
     path: "/api/capa/:id",
+    params: z.object({ id: routeId }),
     response: capaDetailSchema,
     failure: "CAPA não encontrada",
     policy: "cloud-only",
@@ -181,6 +182,7 @@ export const capaEndpoints = {
   auditLog: endpoint({
     method: "get",
     path: "/api/capa/:id/audit-log",
+    params: z.object({ id: routeId }),
     response: z.object({ data: z.array(capaAuditEntrySchema) }),
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
@@ -199,6 +201,7 @@ export const capaEndpoints = {
   update: endpoint({
     method: "put",
     path: "/api/capa/:id",
+    params: z.object({ id: routeId }),
     body: UpdateCorrectiveActionSchema,
     response: correctiveActionRowSchema,
     failure: "Erro ao atualizar CAPA",
@@ -208,6 +211,7 @@ export const capaEndpoints = {
   implement: endpoint({
     method: "post",
     path: "/api/capa/:id/implement",
+    params: z.object({ id: routeId }),
     body: ImplementCorrectiveActionSchema,
     response: capaTransitionResponseSchema,
     failure: "Erro ao implementar",
@@ -217,6 +221,7 @@ export const capaEndpoints = {
   verify: endpoint({
     method: "post",
     path: "/api/capa/:id/verify",
+    params: z.object({ id: routeId }),
     body: VerifyCorrectiveActionSchema,
     response: capaTransitionResponseSchema,
     failure: "Erro ao verificar",
@@ -226,6 +231,7 @@ export const capaEndpoints = {
   close: endpoint({
     method: "post",
     path: "/api/capa/:id/close",
+    params: z.object({ id: routeId }),
     body: CloseCorrectiveActionSchema,
     response: capaTransitionResponseSchema,
     failure: "Erro ao fechar CAPA",

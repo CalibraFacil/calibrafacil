@@ -29,7 +29,7 @@ import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, or, ilike, desc, asc, count } from "drizzle-orm";
 import { PT_OVERALL_MACHINE } from "@calibra-facil/schemas/machines";
-import { invalid, notFound } from "../lib/domain-errors";
+import { notFound } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 
@@ -98,12 +98,6 @@ function addMonths(date: Date, months: number): Date {
   const next = new Date(date.getTime());
   next.setMonth(next.getMonth() + months);
   return next;
-}
-
-function requireId(raw: string): number {
-  const id = parseInt(raw, 10);
-  if (isNaN(id)) throw invalid("invalid_request", "ID inválido");
-  return id;
 }
 
 /** The laboratory's PT round, or a 404. */
@@ -391,7 +385,7 @@ mount(
   withLabPermission({ proficiency_test: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
 
     const updated = await withOrg(
       member.organizationId,
@@ -464,7 +458,7 @@ mount(
   withLabPermission({ proficiency_test: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
       const deleted = await ctx.o
         .delete(ptPlanItem)
@@ -496,7 +490,7 @@ mount(
   withLabPermission({ proficiency_test: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
 
     return await orgDb(member.organizationId).transaction(async (tx) => {
       const [round] = await tx
@@ -557,7 +551,7 @@ mount(
   withLabPermission({ proficiency_test: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
 
     // Tenant check before exposing the (FK-less) audit trail
     return await orgDb(member.organizationId).transaction(async (tx) => {
@@ -662,7 +656,7 @@ mount(
   withLabPermission({ proficiency_test: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
 
     const updated = await withOrg(
       member.organizationId,
@@ -753,7 +747,7 @@ mount(
   withLabPermission({ proficiency_test: ["record_results"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
 
     const updated = await withOrg(
       member.organizationId,
@@ -883,7 +877,7 @@ mount(
   withLabPermission({ proficiency_test: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
 
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
       const deleted = await ctx.o

@@ -6,7 +6,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { notifyNCCreated } from "@calibra-facil/notifications";
 import { and, eq } from "drizzle-orm";
-import { invalid, notFound } from "./domain-errors";
+import { notFound } from "./domain-errors";
 import type { OrgContext } from "./org-context";
 import { insertWithSequentialNumber } from "./sequential-number";
 
@@ -98,15 +98,13 @@ export async function createNonConformanceRecord(
 }
 
 /**
- * The laboratory's non-conformance a route parameter names. Throws 400 for an
- * unreadable id and 404 when no NC of this laboratory matches.
+ * The laboratory's non-conformance with this id. Throws 404 when no NC of this
+ * laboratory matches.
  */
 export async function requireLabNonConformance(
   o: OrgDb,
-  routeId: string,
+  id: number,
 ): Promise<typeof nonConformance.$inferSelect> {
-  const id = parseInt(routeId, 10);
-  if (Number.isNaN(id)) throw invalid("invalid_request", "ID invalido");
   const [found] = await o
     .select()
     .from(nonConformance)

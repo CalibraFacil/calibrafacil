@@ -36,7 +36,6 @@ import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
-import { requireRouteId } from "../lib/route-id";
 import { requireScopedVisit } from "../lib/visit-access";
 import { isAssignableTechnician } from "../lib/tenant-refs";
 import {
@@ -279,7 +278,7 @@ mount(
   withLabPermission({ request: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
 
     return await orgDb(member.organizationId).transaction(async (o) => {
       const [visit] = await o
@@ -369,7 +368,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const { technicianId } = body;
 
     const updated = await withOrg(
@@ -427,7 +426,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const input = body;
 
     const updated = await withOrg(
@@ -515,7 +514,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const input = body;
 
     const updated = await withOrg(
@@ -575,7 +574,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const { reason } = body;
 
     const updated = await withOrg(
@@ -628,7 +627,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
 
     const updated = await withOrg(
       member.organizationId,
@@ -685,7 +684,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
+    const id = params.id;
     const { assetId, serviceId } = body;
 
     // One organization-named transaction: the visit and asset guards, and
@@ -761,8 +760,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
-    const jobId = requireRouteId(params.jobId);
+    const { id, jobId } = params;
 
     const job = await withOrg(
       member.organizationId,
@@ -890,8 +888,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
-    const requestId = requireRouteId(params.requestId);
+    const { id, requestId } = params;
     const input = body;
 
     const updated = await withOrg(
@@ -995,8 +992,7 @@ mount(
   withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
-    const id = requireRouteId(params.id);
-    const requestId = requireRouteId(params.requestId);
+    const { id, requestId } = params;
     const input = body;
 
     const updated = await withOrg(
