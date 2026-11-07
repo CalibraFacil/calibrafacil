@@ -1,7 +1,7 @@
 import { issuedCertificateStatusEvent } from "./schema.js";
 
 // appendCertificateStatusEvent: the ONE writer of issued_certificate_status_event
-// (ISO/IEC 17025 §7.8.8 amendments, §7.10 nonconforming work; roadmap 2 B3).
+// (ISO/IEC 17025 §7.8.8 amendments, §7.10 nonconforming work).
 //
 // Like appendJobEvent, the caller passes the handle of the transaction that
 // makes the change the row records, so the event commits or rolls back with it:

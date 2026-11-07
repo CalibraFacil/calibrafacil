@@ -80,7 +80,7 @@ ALTER TABLE organization_email_domain
 -- `performed_at`, `approved_at`, ...), and the records purge erases an organization's
 -- evidence. `SET LOCAL calibra.allow_audit_rewrite = 'on'` lifts every immutability
 -- trigger below for the current transaction only (SET LOCAL reverts at
--- COMMIT/ROLLBACK), BUT ONLY FOR THE TABLE OWNER (migration 0130, roadmap 2 B1): the
+-- COMMIT/ROLLBACK), BUT ONLY FOR THE TABLE OWNER (migration 0130): the
 -- setting alone is not enough, calibra_session_is_owner() must also be true, so a
 -- calibra_app session that sets the GUC lifts nothing. The users are the owner
 -- connection only (DATABASE_OWNER_URL / systemDb): apps/api/src/cli/seed-demo, the
@@ -293,13 +293,13 @@ DROP TRIGGER IF EXISTS platform_event_log_append_only ON public.platform_event_l
 CREATE TRIGGER platform_event_log_append_only
   BEFORE UPDATE OR DELETE ON public.platform_event_log
   FOR EACH ROW EXECUTE FUNCTION calibra_append_only('signup_reservation');
--- Append-only trigger of the compliance audit log (migration 0133, roadmap 2 B4a). Its own
+-- Append-only trigger of the compliance audit log (migration 0133). Its own
 -- statement (not in the list above, which migration 0115 repeats verbatim).
 DROP TRIGGER IF EXISTS organization_compliance_audit_log_append_only ON public.organization_compliance_audit_log;
 CREATE TRIGGER organization_compliance_audit_log_append_only
   BEFORE UPDATE OR DELETE ON public.organization_compliance_audit_log
   FOR EACH ROW EXECUTE FUNCTION calibra_append_only();
--- Signing-credential custody (migration 0133, roadmap 2 B4a): the legacy format (1) has no
+-- Signing-credential custody (migration 0133): the legacy format (1) has no
 -- KEK id; the envelope format (2) always names the KEK its data keys are wrapped under.
 ALTER TABLE organization_signing_certificate DROP CONSTRAINT IF EXISTS organization_signing_certificate_custody_check;
 ALTER TABLE organization_signing_certificate
@@ -308,7 +308,7 @@ ALTER TABLE organization_signing_certificate
     (custody_format_version = 1 AND kek_id IS NULL)
     OR (custody_format_version = 2 AND kek_id IS NOT NULL)
   );
--- Records retention (migration 0117, decision Q16).
+-- Records retention (migration 0117).
 --
 -- A LAB organization is never hard-deleted by accident:
 --   * organization.retention_years is the retention period of the organization's
@@ -410,7 +410,7 @@ BEGIN
 END
 $$;
 
--- calibration_job status machine, enforced in Postgres (migration 0119, roadmap P2-6).
+-- calibration_job status machine, enforced in Postgres (migration 0119).
 -- The function is generated from packages/schemas/src/job-transitions.ts
 -- (`pnpm --filter @calibra-facil/db gen:job-transitions-sql`); the drift guard
 -- packages/db/src/job-transitions-sql.test.ts keeps it equal to the migration.
@@ -754,10 +754,10 @@ CREATE TRIGGER sync_change_log_mass_composition_profile_update
   FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*)
   EXECUTE FUNCTION calibra_sync_change_log('mass_composition_profile');
 -- END sync change log triggers
--- Row-level security of the tenant tables, SHADOW mode (migration 0123, roadmap P2-3).
--- Enabled, never FORCEd, policy TO calibra_app only: the table owner (every
--- deployment today) is exempt, so nothing changes until the API connects as a member
--- of calibra_app (DEPLOYMENT.md, "Row-level security"). The per-table block is
+-- Row-level security of the tenant tables (migration 0123).
+-- Enabled, never FORCEd, policy TO calibra_app only: the table owner is exempt,
+-- so only a connection as a member of calibra_app is bound (DEPLOYMENT.md,
+-- "Row-level security"). The per-table block is
 -- generated (`pnpm --filter @calibra-facil/db gen:rls-sql`); the drift guard
 -- packages/db/src/rls-sql.test.ts keeps it equal to the migration and to the
 -- tenancy classification.
@@ -1442,7 +1442,7 @@ CREATE POLICY tenant_isolation ON public."visit_reschedule_request" AS PERMISSIV
   WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
 -- END generated: calibra_rls_tenant_isolation
 
--- Hash chain of job_audit_log (migration 0131, roadmap 2 B1): tamper evidence, per organization.
+-- Hash chain of job_audit_log (migration 0131): tamper evidence, per organization.
 -- The columns and the unique index are in schema.ts; the functions and the trigger cannot be
 -- expressed there. Repeated verbatim from the migration between the BEGIN/END markers;
 -- packages/db/src/audit-chain-sql.test.ts fails when they differ.
@@ -1775,7 +1775,7 @@ CREATE TRIGGER issued_certificate_status_event_append_only
   BEFORE UPDATE OR DELETE ON public.issued_certificate_status_event
   FOR EACH ROW EXECUTE FUNCTION calibra_append_only();
 
--- The calibration history of the reference standards (migration 0138, roadmap 2 C3):
+-- The calibration history of the reference standards (migration 0138):
 -- append-only evidence, a valid interval, a known source.
 DROP TRIGGER IF EXISTS reference_standard_calibration_append_only ON public.reference_standard_calibration;
 CREATE TRIGGER reference_standard_calibration_append_only

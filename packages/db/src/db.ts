@@ -119,9 +119,9 @@ function createPostgresJsDatabase(
     fetch_types: false,
     connection: {
       // Naive `timestamp` columns and the date arithmetic in SQL are written for a
-      // UTC session (roadmap 2 C5); assertRlsStartup checks it took.
+      // UTC session; assertRlsStartup checks it took.
       TimeZone: "UTC",
-      // Roadmap 2 D4: a runaway statement or a transaction left open cannot hold
+      // A runaway statement or a transaction left open cannot hold
       // a connection of the (small) pool indefinitely. Per connection rather than
       // on the role, so no CREATEROLE is needed on a managed database.
       ...(timeouts.statementTimeoutMs
@@ -170,7 +170,7 @@ export function getDb(): Database {
 }
 
 /**
- * The SYSTEM path (P2-18): the connection of the table owner, for the statements
+ * The SYSTEM path: the connection of the table owner, for the statements
  * that are cross-organization by design and so cannot run under a policy that
  * names one organization per transaction (`calibra.organization_id`, migration
  * 0123): the lookup that LEARNS the laboratory of a request (portal host name,

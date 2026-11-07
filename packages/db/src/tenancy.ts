@@ -1,5 +1,5 @@
 /**
- * Tenancy of the data model (decision Q15: row-level security needs an
+ * Tenancy of the data model (row-level security needs an
  * organization on every tenant row).
  *
  * Every table of `schema.ts` is exactly one of:

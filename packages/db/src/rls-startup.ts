@@ -1,4 +1,4 @@
-// Start-up check of row-level security (roadmap P2-3, P2-18k; decisions Q15, Q31, Q40).
+// Start-up check of row-level security.
 //
 // Migration 0123 enables RLS on every tenant table (not FORCEd). A role that owns
 // the tables, a superuser and a BYPASSRLS role are exempt; any other role (a
@@ -14,7 +14,7 @@
 //     the owner, owns even one table, or is a member of the owner, so it can
 //     SET ROLE, would run with no second wall there and nobody would know);
 //     DATABASE_OWNER_URL must be set
-//     (Q40: otherwise the system path would run as the application role and
+//     (otherwise the system path would run as the application role and
 //     silently match nothing) and must NOT be a role the policies bind;
 //   - `shadow`, kept for diagnosis: the application connects as the owner and
 //     start-up REFUSES a role that RLS binds, so shadow mode can never silently
@@ -30,7 +30,7 @@ export type RlsMode = "shadow" | "enforced";
 export type RlsRoleFacts = {
   /** `current_user`. */
   role: string;
-  /** The session's `TimeZone` setting; must be UTC (roadmap 2 C5). */
+  /** The session's `TimeZone` setting; must be UTC. */
   timeZone: string;
   isSuperuser: boolean;
   bypassesRls: boolean;
@@ -93,7 +93,7 @@ function field(row: unknown, name: string): unknown {
 }
 
 /**
- * The session TimeZone must be UTC (roadmap 2 C5, review 3.2): the schema keeps
+ * The session TimeZone must be UTC: the schema keeps
  * regulated instants in naive `timestamp` columns and some SQL does date
  * arithmetic with now(), so another zone would shift them silently. The clients
  * set it on connect; this catches a pool or proxy that drops the startup
@@ -141,7 +141,7 @@ export function rlsStartupProblem(
 
 /**
  * The refusal message when `enforced` mode has no owner connection for the
- * system path, or null (Q40). Pure, so it needs no database.
+ * system path, or null. Pure, so it needs no database.
  */
 export function rlsOwnerUrlProblem(
   mode: RlsMode,

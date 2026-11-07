@@ -1,5 +1,5 @@
 // A second connection pool whose sessions run as another database role, for the
-// tests and the shadow report of row-level security (roadmap P2-3): the test
+// tests and the shadow report of row-level security: the test
 // superuser is exempt from every policy, so the policies are only exercised by a
 // session that has switched to `calibra_app`. Nothing in the application imports
 // this (it connects as calibra_app through DATABASE_URL, see
@@ -45,7 +45,7 @@ export function createRoleDatabase(
         onNotice(notice.message);
       }
     },
-    // Naive `timestamp` columns are written for a UTC session (roadmap 2 C5).
+    // Naive `timestamp` columns are written for a UTC session.
     connection: {
       TimeZone: "UTC",
       ...(role === null ? {} : { options: `-c role=${role}` }),

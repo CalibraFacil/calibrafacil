@@ -2,13 +2,11 @@
  * Finish the composition-profile catalog migration: strip the stale
  * `compositionProfiles` array out of every reference_standard.metrology_data.
  *
- * The #416 backfill moved profiles into the normalized `mass_composition_profile`
- * catalog and stripped them from `certified_values`, but it never touched the
- * other per-standard copy in `metrology_data.compositionProfiles`. Those copies
- * are now read by nothing (the composition builder reads the catalog; the detail
- * page, list badge and per-standard editor that used to read them were removed),
- * and they are STALE — their buoyancy is the pre-÷1000-fix value. This removes
- * them.
+ * The backfill into the normalized `mass_composition_profile` catalog stripped
+ * profiles from `certified_values`, but never touched the other per-standard copy
+ * in `metrology_data.compositionProfiles`. Nothing reads those copies (the
+ * composition builder reads the catalog), and they are STALE — their buoyancy is
+ * the pre-÷1000-fix value. This removes them.
  *
  * Safety: a standard's embedded profiles are only stripped if every one of them
  * is already covered by an ACTIVE catalog row for the same (org, class,

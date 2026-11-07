@@ -1,5 +1,5 @@
 /**
- * Retention of regulated records (decision Q16 in docs/auditoria-perguntas.md):
+ * Retention of regulated records:
  * technical records, certificates, audit logs and event logs are kept at least
  * 10 years, configurable per organization, never below 5 years
  * (`organization.retention_years`). Nothing is purged until an operator enables
@@ -68,7 +68,7 @@ export const EVIDENCE_CATEGORY_LABELS: Record<EvidenceCategory, string> = {
   finance: "Finance documents and agreements",
 };
 
-/** Default and floor of `organization.retention_years` (decision Q16). */
+/** Default and floor of `organization.retention_years`. */
 export const DEFAULT_RETENTION_YEARS = 10;
 export const MINIMUM_RETENTION_YEARS = 5;
 

@@ -296,15 +296,15 @@ export const organization = pgTable(
     accreditationActive: boolean("accreditation_active")
       .default(false)
       .notNull(),
-    // #647: vigência window. The seal only renders when the emission date
+    // Vigência window. The seal only renders when the emission date
     // falls inside [validFrom, validUntil]; null bounds impose no constraint.
     accreditationValidFrom: calendarDate("accreditation_valid_from"),
     accreditationValidUntil: calendarDate("accreditation_valid_until"),
-    // #427 Phase 1: accredited-scope (CMC) guard behavior. 'warn' keeps the
-    // Phase 0 classification-only behavior; 'enforce' blocks accredited
+    // Accredited-scope (CMC) guard behavior. 'warn' only classifies;
+    // 'enforce' blocks accredited
     // approval on scope violations unless a documented override downgrades
     // the issuance to non-accredited (seal suppressed). NULL = the lab never
-    // chose (Q45, migration 0128): the effective mode is
+    // chose: the effective mode is
     // `resolveScopeEnforcementMode` (enforce while accredited, else warn), so
     // an explicit choice is never overridden by the default.
     scopeEnforcementMode: text(
@@ -333,8 +333,7 @@ export const organization = pgTable(
     website: text("website"),
     technicalManagerName: text("technical_manager_name"),
     technicalManagerTitle: text("technical_manager_title"),
-    // Records retention (decision Q16, migration 0117, docs/architecture/
-    // records-retention.md). A LAB organization is never hard-deleted while it
+    // Records retention (docs/architecture/records-retention.md). A LAB organization is never hard-deleted while it
     // holds regulated records: it is soft-deleted (deleted_at, which also
     // suspends it so nobody signs in) and only the purge job may remove the row,
     // once the newest evidence is older than retention_years and no legal hold
@@ -440,8 +439,8 @@ export const certificateNumberingAuditLog = pgTable(
   "certificate_numbering_audit_log",
   {
     id: serial("id").primaryKey(),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     profileId: integer("profile_id").references(
       () => certificateNumberingProfile.id,
@@ -501,17 +500,17 @@ export const organizationUnit = pgTable(
       .notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
     /**
-     * #644 (CMP-01): when true, certificate emission REQUIRES an active signing
+     * When true, certificate emission REQUIRES an active signing
      * certificate — a missing cert fails the job (REJECTED) instead of emitting
      * unsigned. Signing FAILURES always fail regardless of this flag.
      */
     requireSignature: boolean("require_signature").default(false).notNull(),
     /**
-     * Q51 (migration 0129): the unit issues certificates UNSIGNED on purpose.
+     * The unit issues certificates UNSIGNED on purpose.
      * Non-null = the setting is on, and this is its mandatory justification.
      * Only an admin/owner sets it, never implicitly (an expired certificate does
      * not): without it a unit that has ever had a signing certificate fails
-     * closed when none is valid (P0-8). The change is audited in
+     * closed when none is valid. The change is audited in
      * `organization_event_log`; who/when are kept here.
      */
     unsignedIssuanceReason: text("unsigned_issuance_reason"),
@@ -521,7 +520,7 @@ export const organizationUnit = pgTable(
     ),
     unsignedIssuanceSetAt: timestamp("unsigned_issuance_set_at"),
     /**
-     * Roadmap 2 C2 (migration 0135): the unit as a distinct calibrating body
+     * The unit as a distinct calibrating body
      * (ISO/IEC 17025 §7.8.2.1(a)): its own legal name, CNPJ and address. A unit
      * that declares a CNPJ is a distinct establishment and its block is printed
      * on the certificates it issues; otherwise the organization's profile is
@@ -596,8 +595,8 @@ export const organizationEventLog = pgTable(
   "organization_event_log",
   {
     id: serial("id").primaryKey(),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
       onDelete: "set null",
@@ -647,7 +646,7 @@ export const syncAppliedEvent = pgTable(
     // The version of the aggregate (entity_type + entity_id) this event produced:
     // 1 for the first desktop event applied to it, then 2, 3... The aggregate's
     // current version is the largest one; a pushed event that expects another one
-    // is refused as a conflict (roadmap 2 E1). NULL on rows applied before it existed.
+    // is refused as a conflict. NULL on rows applied before it existed.
     aggregateVersion: integer("aggregate_version"),
   },
   (table) => [
@@ -875,13 +874,13 @@ export const organizationCustomDomain = pgTable(
   ],
 );
 
-/** BYOK now; "managed" is the future shared-platform-account mode (#584). */
+/** BYOK now; "managed" is the future shared-platform-account mode. */
 export type OrganizationEmailDomainMode = "byok" | "managed";
 
 /** Mirrors Resend's domain status vocabulary. */
 
 /**
- * Lab-owned email sending domain (issue #584). One per lab org. The lab brings
+ * Lab-owned email sending domain. One per lab org. The lab brings
  * its own Resend account (BYOK): the API key is stored AES-256-GCM encrypted
  * (EMAIL_DOMAIN_MASTER_KEY, never the signing key) and must never be returned
  * by any API response — only `resendApiKeyLast4` is exposed for masking.
@@ -942,7 +941,7 @@ export const organizationEmailDomain = pgTable(
  *
  * XLSX_LEGACY is the retired lab-authored workbook path; exactly one
  * historical row carries it and no new row ever will. FIXED_LAYOUT is the
- * system-designed React layout (#865 Phase 3). Reproducing an old certificate
+ * system-designed React layout. Reproducing an old certificate
  * means knowing which of the two made it.
  */
 export type IssuedCertificateRenderPipeline = "XLSX_LEGACY" | "FIXED_LAYOUT";
@@ -1011,7 +1010,7 @@ export const issuedCertificateSnapshot = pgTable(
       .notNull()
       .references(() => calibrationJob.id, { onDelete: "restrict" }),
     /**
-     * Historical pointer to the retired lab-authored template system (#865).
+     * Historical pointer to the retired lab-authored template system.
      * Nullable and FK-free since 0107: the ON DELETE RESTRICT foreign keys are
      * exactly what would block dropping those tables in 0108, but the integers
      * are kept so the provenance of an already-issued, signed certificate is
@@ -1085,7 +1084,7 @@ export const issuedCertificateSnapshot = pgTable(
 
 /**
  * The lifecycle of an issued certificate as an append-only event stream
- * (roadmap 2 B3; ISO/IEC 17025 §7.8.8, §7.10). Written by the issuance
+ * (ISO/IEC 17025 §7.8.8, §7.10). Written by the issuance
  * (ISSUED), by the amendment's issuance (SUPERSEDED, on the ORIGINAL, in the
  * same transaction that issues the replacement) and by the withdraw command
  * (WITHDRAWN / REINSTATED). Never updated or deleted: the trigger of migration
@@ -1231,7 +1230,7 @@ export const organizationApiKeyAuditLog = pgTable(
   "organization_api_key_audit_log",
   {
     id: serial("id").primaryKey(),
-    // CMP-07 (#692): soft references on purpose — NO FK. Append-only audit trail
+    // Soft references on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): a row must survive deletion of the api key OR organization
     // it documents, so the ids stay as plain values.
     apiKeyId: text("api_key_id").notNull(),
@@ -1565,7 +1564,7 @@ export const integrationObjectLink = pgTable(
     remoteVersion: integer("remote_version"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     lastSyncedAt: timestamp("last_synced_at"),
-    // Phase 2 slice 3: operator-acknowledged drift. When a drift state is
+    // Operator-acknowledged drift. When a drift state is
     // surfaced via the drift queue and the operator decides the local state
     // is correct (or that the remote will be reconciled separately), they
     // can acknowledge the link to remove it from the queue without
@@ -1774,8 +1773,8 @@ export const integrationEventLog = pgTable(
     id: serial("id").primaryKey(),
     // Soft reference (no FK): the trail outlives the integration and its runs.
     integrationId: text("integration_id").notNull(),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     runId: text("run_id"),
     level: text("level")
@@ -1955,7 +1954,7 @@ export const customerAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
+    // Soft reference on purpose — NO FK. The audit trail is
     // append-only (ISO/IEC 17025): the "delete" row must survive the deletion
     // of the customer it documents, so it keeps the id as a plain integer.
     customerId: serial("customer_id").notNull(),
@@ -2460,7 +2459,7 @@ export const asset = pgTable(
     // Denormalized LAB organization owner (== customer.labOrganizationId). Lets
     // tag uniqueness be enforced PER ORG — UNIQUE(lab_organization_id, tag) below
     // — instead of globally, so two labs may reuse the same tag without a
-    // cross-tenant collision or existence oracle (SEC-03 / #638). Every asset
+    // cross-tenant collision or existence oracle. Every asset
     // write derives this from the in-scope customer's lab org; a customer's lab
     // org never changes after creation, so the invariant holds. `onDelete:
     // "cascade"` mirrors customer.labOrganizationId.
@@ -2490,7 +2489,7 @@ export const asset = pgTable(
     comments: text("comments"), // Additional notes about the equipment
     // Calibration interval (periodicity) — OWNED BY THE CUSTOMER, never the lab
     // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). NULL = "aguardando
-    // definição do cliente" (the lab no longer attributes periodicity). When set,
+    // definição do cliente" (the lab does not attribute periodicity). When set,
     // `next_calibration_date` is derived = `last_calibration_date` + this many
     // months. `interval_rationale` is the required §7.5 technical record.
     calibrationIntervalMonths: integer("calibration_interval_months"),
@@ -2527,9 +2526,9 @@ export const asset = pgTable(
     index("asset_customer_id_idx").on(table.customerId),
     index("asset_type_id_idx").on(table.assetTypeId),
     index("asset_status_idx").on(table.status),
-    // Tag is unique PER LAB ORG, not globally (SEC-03 / #638). This composite
-    // replaces the former global `asset_tag_unique` constraint + `asset_tag_uidx`
-    // index (both dropped in migration 0082). Its leftmost column also serves as
+    // Tag is unique PER LAB ORG, not globally. This composite
+    // replaces the global `asset_tag_unique` constraint + `asset_tag_uidx`
+    // index (dropped in migration 0082). Its leftmost column also serves as
     // the lab-org lookup index, so no separate lab_organization_id index is kept.
     uniqueIndex("asset_lab_org_tag_uidx").on(
       table.labOrganizationId,
@@ -2563,7 +2562,7 @@ export const assetAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the "delete" row must survive the deletion of the asset it
     // documents (assets cascade when their customer is deleted), so it keeps the
     // id as a plain integer.
@@ -2623,7 +2622,7 @@ export const assetAuditLogRelations = relations(assetAuditLog, ({ one }) => ({
 }));
 
 // =============================================================================
-// LEGAL-METROLOGY REGULATION CATALOG (deferred #3 of #423)
+// LEGAL-METROLOGY REGULATION CATALOG
 // =============================================================================
 
 /**
@@ -2920,7 +2919,7 @@ export type MethodCertificateContent = {
   massCompositionDisplay?: "full" | "hidden";
   uncertaintyBudgetDisplay?: "full" | "hidden";
   decisionRuleStatement?: string;
-  /** ISO/IEC 17025 7.8.6 / ILAC-G8 (roadmap 2 C4); absent: undeclared (simple acceptance). */
+  /** ISO/IEC 17025 7.8.6 / ILAC-G8; absent: undeclared (simple acceptance). */
   decisionRuleKind?: "simple_acceptance" | "guarded_acceptance" | "non_binary";
   sections?: MethodCertificateContentSection[];
 };
@@ -3037,7 +3036,7 @@ export const methodAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
+    // Soft reference on purpose — NO FK. The audit trail is
     // append-only (ISO/IEC 17025 §7.2): the "delete" row must survive the
     // deletion of the method it documents, so it keeps the id as a plain integer.
     methodId: integer("method_id").notNull(),
@@ -3197,7 +3196,7 @@ export const serviceAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the service it documents.
     serviceId: integer("service_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'deactivate', 'reactivate'
@@ -3479,7 +3478,7 @@ export const referenceStandard = pgTable(
     certificateNumber: text("certificate_number").notNull(),
     calibratedBy: text("calibrated_by"), // Calibration lab name (traceability)
     /**
-     * Roadmap 2 C2 (migration 0135): the provider's accreditation number and
+     * The provider's accreditation number and
      * whether the accreditation body is an ILAC-MRA signatory (Cgcre/RBC in
      * Brazil). The certificate asserts SI traceability only when every standard
      * used records both, with a certificate valid on the calibration day.
@@ -3645,9 +3644,8 @@ export const referenceStandardCertificateDocument = pgTable(
  * Critical for ISO 17025 equipment management audits.
  */
 /**
- * The calibrations of a reference standard, one row per certificate (roadmap 2
- * C3, review 3.1 H): the values and the validity interval each certificate gave
- * the standard. A renewal appends a row instead of overwriting the standard, so
+ * The calibrations of a reference standard, one row per certificate: the values
+ * and the validity interval each certificate gave the standard. A renewal appends a row instead of overwriting the standard, so
  * work done on a given day is judged by, and can be traced to, the certificate
  * that was valid that day. The standard's own columns keep the current one.
  *
@@ -3709,7 +3707,7 @@ export const referenceStandardAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the reference standard.
     standardId: integer("standard_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'renew', 'status_change', 'delete'
@@ -3873,7 +3871,7 @@ export type StandardSnapshot = {
   kind?: ReferenceStandardKind;
   certificateNumber: string;
   calibratedBy?: string | null;
-  /** Roadmap 2 C2: absent on snapshots frozen before it (not verified). */
+  /** Absent on snapshots frozen before the provider was recorded (not verified). */
   calibrationProvider?: {
     accreditationNumber: string | null;
     mraRecognized: boolean;
@@ -3998,17 +3996,17 @@ export const calibrationJob = pgTable(
     >(),
     asFoundMargins: jsonb("as_found_margins").$type<number[]>(),
     // Accredited-scope (CMC) classification — ISO/IEC 17025 §7.6/§7.8.3,
-    // ILAC P14 (#427 Phase 0). Stamped at submit (technician warning) and
+    // ILAC P14. Stamped at submit (technician warning) and
     // re-stamped at approval (authoritative, frozen with the record) via
-    // shared/scope-compliance.ts. Null when the certificate is not accredited
-    // or the lab has no scope lines configured. Phase 0 never blocks.
+    // packages/shared/src/scope-compliance.ts. Null when the certificate is not accredited
+    // or the lab has no scope lines configured. The stamp itself never blocks.
     scopeComplianceStatus: text(
       "scope_compliance_status",
     ).$type<ScopeComplianceStatus>(),
     scopeComplianceFindings: jsonb("scope_compliance_findings").$type<
       ScopeComplianceFinding[]
     >(),
-    // #427 Phase 1: documented scope-violation override. Non-null means the
+    // Documented scope-violation override. Non-null means the
     // approver knowingly issued DESPITE an adverse classification under
     // enforce mode — and the certificate was downgraded to non-accredited
     // (shouldRenderAccreditationSeal suppresses the seal when this is set).
@@ -4039,15 +4037,14 @@ export const calibrationJob = pgTable(
     ).$type<CalibrationPhaseSnapshot>(),
     /**
      * Frozen record of what an APPROVED job was issued with. Regulated
-     * evidence, not a link: the `certificate_template_id` FK it used to sit
-     * beside was dropped in 0107 with the lab-authored template system (#865).
+     * evidence, not a link: the `certificate_template_id` FK that sat
+     * beside it was dropped in 0107 with the lab-authored template system.
      *
-     * Read-only history. Nothing resolves a template any more, and nothing
-     * fabricates a snapshot: the desktop-sync path in apps/api/src/routes/sync.ts
-     * used to write a placeholder {name: "Padrão do Sistema"} whenever an
-     * incoming job carried none, which put an invented template name into
-     * regulated evidence for a certificate no template produced. It now passes
-     * through what a pre-redesign desktop build sent, or null.
+     * Read-only history. Nothing resolves a template, and nothing fabricates a
+     * snapshot: the desktop-sync path passes through what a pre-redesign desktop
+     * build sent, or null, and never writes a placeholder template name, which
+     * would put an invented name into regulated evidence for a certificate no
+     * template produced.
      */
     certificateTemplateSnapshot: jsonb("certificate_template_snapshot").$type<
       Record<string, unknown>
@@ -4145,7 +4142,7 @@ export const calibrationJob = pgTable(
       signerCpfCnpj: string | null;
       pdfHash: string; // SHA-256 hash of signed PDF
       ltvEnabled: boolean;
-      // #646 (PAdES-T): RFC 3161 carimbo do tempo, when a TSA was configured.
+      // PAdES-T: RFC 3161 carimbo do tempo, when a TSA was configured.
       timestamped?: boolean;
       timestampIcpBrasilConformant?: boolean;
     }>(),
@@ -4163,10 +4160,10 @@ export const calibrationJob = pgTable(
       signerChainsToIcpRoot: boolean;
       certNotExpiredAtCheckDate: boolean;
       signaturePresent: boolean;
-      // #646 (PAdES-T): optional for verdicts that predate the column.
+      // PAdES-T: optional for verdicts that predate the column.
       timestampPresent?: boolean;
       timestamp?: { time: string | null; tsaCommonName: string | null } | null;
-      // #646 fase b: optional for verdicts computed before revocation checking.
+      // Optional for verdicts computed before revocation checking.
       revocationChecked?: boolean;
       certificateRevoked?: boolean | null;
       revocationTime?: string | null;
@@ -4247,7 +4244,7 @@ export const jobAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the calibration job.
     jobId: integer("job_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'submit', 'approve', 'reject', 'cancel', 'assign', 'execute'
@@ -4258,7 +4255,7 @@ export const jobAuditLog = pgTable(
     performedAt: timestamp("performed_at").defaultNow().notNull(),
     ipAddress: text("ip_address"),
     reason: text("reason"), // Required for rejections, cancellations, approvals
-    // Tamper evidence (migration 0131, roadmap 2 B1): a per-organization hash chain.
+    // Tamper evidence (migration 0131): a per-organization hash chain.
     // NEVER written by the application: the BEFORE INSERT trigger
     // `job_audit_log_hash_chain` assigns all three under a per-organization advisory
     // lock (a value an insert carries is overwritten). `chain_seq` counts 1, 2, 3...
@@ -4709,8 +4706,8 @@ export const financialAuditLog = pgTable(
   "financial_audit_log",
   {
     id: serial("id").primaryKey(),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     entityType: text("entity_type").$type<FinancialAuditEntityType>().notNull(),
     entityId: text("entity_id").notNull(),
@@ -4733,10 +4730,10 @@ export const financialAuditLog = pgTable(
 );
 
 // =============================================================================
-// CERTIFICATE RELEASE - Phase 2 slice 1. Separates technical approval
+// CERTIFICATE RELEASE. Separates technical approval
 // (calibrationJob.status === "APPROVED") from commercial release of the
 // certificate to the customer portal. Driven by a per-org / per-customer /
-// per-contract / per-service-category policy that evaluates the Phase 1
+// per-contract / per-service-category policy that evaluates the
 // payment continuity state. ERP payment status must never mutate
 // calibrationJob.status or issuedCertificateSnapshot.status.
 // =============================================================================
@@ -4823,7 +4820,7 @@ export const certificateRelease = pgTable(
   ],
 );
 
-// Phase 2 slice 4 - automatic send rules by milestone. Mirrors the
+// Automatic send rules by milestone. Mirrors the
 // certificate-release-policy shape: org default + per-customer /
 // per-agreement / per-service-name override scopes, priority + id
 // tie-break. Triggered by certificate-approval / SO-delivery /
@@ -4874,8 +4871,8 @@ export const automaticSendAuditLog = pgTable(
   "automatic_send_audit_log",
   {
     id: serial("id").primaryKey(),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     serviceOrderId: integer("service_order_id").references(
       () => serviceOrder.id,
@@ -4904,7 +4901,7 @@ export const automaticSendAuditLog = pgTable(
   ],
 );
 
-// Phase 2 slice 9 - batch / consolidated billing groups. Many service
+// Batch / consolidated billing groups. Many service
 // orders can share one billing document via this group; compatibility
 // rules live in apps/api/src/lib/billing-group.ts.
 
@@ -4980,9 +4977,8 @@ export const billingGroupServiceOrder = pgTable(
   ],
 );
 
-// Phase 2 slice 7 - normalized supplier / transporter records. Replaces
-// the free-text supplierName captured in slice 6's
-// service_order_outsourced_cost.
+// Normalized supplier / transporter records, referenced by
+// service_order_outsourced_cost instead of a free-text supplier name.
 
 export const supplier = pgTable(
   "supplier",
@@ -5007,7 +5003,7 @@ export const supplier = pgTable(
   ],
 );
 
-// Phase 2 slice 6 - outsourced calibration cost capture so margin per
+// Outsourced calibration cost capture so margin per
 // service order is visible. expected_cost_cents is set by the operator
 // before dispatch; actual_cost_cents + payable_link_id are populated
 // when the Conta Azul payable poll reconciles a matching payable.
@@ -5046,7 +5042,7 @@ export const certificateReleaseAuditLog = pgTable(
   "certificate_release_audit_log",
   {
     id: serial("id").primaryKey(),
-    // CMP-07 (#692): soft references on purpose — NO FK. Append-only audit trail
+    // Soft references on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): a row must survive deletion of the certificate release OR
     // organization it documents, so the ids stay as plain values.
     organizationId: text("organization_id").notNull(),
@@ -5680,8 +5676,8 @@ export const serviceOrderEventLog = pgTable(
   "service_order_event_log",
   {
     id: serial("id").primaryKey(),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     // Soft references (no FK): the event trail outlives the order and its unit.
     unitId: integer("unit_id").notNull(),
@@ -6208,7 +6204,7 @@ export const calibrationRequestAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the calibration request.
     requestId: integer("request_id").notNull(),
     action: text("action").notNull(),
@@ -6851,10 +6847,10 @@ export const environmentalLimitsRelations = relations(
 );
 
 // =============================================================================
-// ACCREDITED SCOPE (CMC) - ISO/IEC 17025 §7.6 / §7.8.3, ILAC P14 (#427)
+// ACCREDITED SCOPE (CMC) - ISO/IEC 17025 §7.6 / §7.8.3, ILAC P14
 // The lab's accredited scope: one line per grandeza × faixa × CMC, per unit
 // (Cgcre accredits each laboratory site with its own scope). Certificate
-// issuance is validated against these lines (see shared/scope-compliance.ts).
+// issuance is validated against these lines (see packages/shared/src/scope-compliance.ts).
 // =============================================================================
 
 export const accreditedScopeLine = pgTable(
@@ -6888,7 +6884,7 @@ export const accreditedScopeLine = pgTable(
     // Free-text service description, e.g. "Balanças classe II".
     description: text("description"),
     // Vigência window of this scope line; null bounds impose no constraint
-    // (mirrors organization-level accreditation vigência, #647).
+    // (mirrors organization-level accreditation vigência).
     validFrom: timestamp("valid_from"),
     validUntil: timestamp("valid_until"),
     // Audit
@@ -6931,8 +6927,8 @@ export const accreditedScopeLineAuditLog = pgTable(
     // Null for org-level scope events (e.g. enforcement-mode changes) that
     // are not tied to a single line.
     scopeLineId: integer("scope_line_id"),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'delete'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
@@ -7346,7 +7342,7 @@ export type PortalAuditPackParams = {
 };
 
 /**
- * A customer-facing export produced asynchronously by the worker (issue #738).
+ * A customer-facing export produced asynchronously by the worker.
  * Rows are listed in the portal by the requesting CLIENT org
  * (`authOrganizationId`), so every portal user of that branch/group sees and
  * can re-download the pack until `expiresAt`.
@@ -7409,7 +7405,7 @@ export const portalExportJob = pgTable(
  * Stores ICP-Brasil A1 certificates (PKCS#12) per organization.
  * Password is encrypted with AES-256-GCM using a master key from the environment (SIGNING_MASTER_KEY).
  * Enables PDF signing for calibration certificates (ICP-Brasil, MP 2.200-2 /
- * DOC-ICP-15.03 — the prior NIT-DICLA-083 citation was incorrect, see #646).
+ * DOC-ICP-15.03, not NIT-DICLA-083).
  */
 export const organizationSigningCertificate = pgTable(
   "organization_signing_certificate",
@@ -7445,7 +7441,7 @@ export const organizationSigningCertificate = pgTable(
     revokedAt: timestamp("revoked_at"),
     revokedBy: text("revoked_by").references(() => user.id),
     revokedReason: text("revoked_reason"),
-    // Key custody (roadmap 2 B4a). `kek_id` names the master key the credential's
+    // Key custody. `kek_id` names the master key the credential's
     // data keys are wrapped under (NULL for a legacy row); `custody_format_version`
     // is 1 for the legacy storage (P12 and password straight under the master key)
     // and 2 for the envelope (per-field data key wrapped by the KEK, AAD =
@@ -7468,8 +7464,8 @@ export const organizationSigningCertificate = pgTable(
   ],
 );
 
-// Append-only audit of the laboratory's compliance configuration (roadmap 2 B4a,
-// review 3.1, ISO/IEC 17025 8.4): signing-credential create / replace / delete,
+// Append-only audit of the laboratory's compliance configuration
+// (ISO/IEC 17025 8.4): signing-credential create / replace / delete,
 // the "emitir sem assinatura" switch, the signing policy, and the accreditation
 // profile (number, scope guard, seal settings). `changes` holds the before and
 // after values and never a secret (no P12, password or key material). The row is
@@ -7480,8 +7476,8 @@ export const organizationComplianceAuditLog = pgTable(
   "organization_compliance_audit_log",
   {
     id: serial("id").primaryKey(),
-    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
-    // #692 audit tables), so the row survives deletion of its organization.
+    // Evidence trail: a soft reference on purpose (no FK, like the other
+    // audit tables), so the row survives deletion of its organization.
     organizationId: text("organization_id").notNull(),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
       onDelete: "set null",
@@ -7590,7 +7586,7 @@ export const memberVisualSignatureRelations = relations(
 // CORRECTIVE ACTION (CAPA) - ISO 17025:2017 Clause 8.2 / 8.7 / 8.9
 // =============================================================================
 
-/** How the verifier of a CAPA relates to it (decision Q50). */
+/** How the verifier of a CAPA relates to it. */
 export type CapaVerificationIndependence =
   | "independent"
   | "waived_single_verifier";
@@ -7713,7 +7709,7 @@ export const correctiveAction = pgTable(
     verifiedBy: text("verified_by").references(() => user.id),
     verificationNotes: text("verification_notes"),
     effectivenessConfirmed: boolean("effectiveness_confirmed"),
-    // Independence of the verifier (decision Q50): "independent" when nobody tied
+    // Independence of the verifier: "independent" when nobody tied
     // to the CAPA verified it, "waived_single_verifier" when the laboratory had no
     // other eligible verifier and the sole one verified with a written
     // justification (recorded here and in the audit entry).
@@ -7751,7 +7747,7 @@ export const correctiveAction = pgTable(
     index("capa_severity_idx").on(table.severity),
     index("capa_category_idx").on(table.category),
     index("capa_source_idx").on(table.source),
-    // Numbers are per laboratory (migration 0124, decision Q33).
+    // Numbers are per laboratory (migration 0124).
     uniqueIndex("capa_org_number_uidx").on(
       table.organizationId,
       table.capaNumber,
@@ -7778,7 +7774,7 @@ export const correctiveActionAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the corrective action.
     capaId: integer("capa_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'investigate', 'implement', 'verify', 'close'
@@ -7815,8 +7811,8 @@ export type NonConformanceType =
 
 /**
  * What opened the NC. Distinguishes manually filed NCs from ones opened by the
- * as-found OOT verdict on a job (§7.10 customer notification, #426 Phase 0) and,
- * later, from a reference-standard recall (#426 Phase 1).
+ * as-found OOT verdict on a job (§7.10 customer notification) and
+ * from a reference-standard recall.
  */
 export type NonConformanceTriggerSource =
   | "manual"
@@ -7901,7 +7897,7 @@ export const nonConformance = pgTable(
     index("nc_type_idx").on(table.type),
     index("nc_detected_at_idx").on(table.detectedAt),
     index("nc_capa_id_idx").on(table.capaId),
-    // Numbers are per laboratory (migration 0124, decision Q33).
+    // Numbers are per laboratory (migration 0124).
     uniqueIndex("nc_org_number_uidx").on(table.organizationId, table.ncNumber),
   ],
 );
@@ -7925,7 +7921,7 @@ export const nonConformanceAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the non-conformance.
     ncId: integer("nc_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'disposition', 'resolve', 'escalate_to_capa'
@@ -8051,7 +8047,7 @@ export const nonConformanceAuditLogRelations = relations(
 );
 
 // =============================================================================
-// JOB ↔ REFERENCE STANDARD LINK - reverse traceability (#426 Phase 1)
+// JOB ↔ REFERENCE STANDARD LINK - reverse traceability
 // =============================================================================
 
 /**
@@ -8110,7 +8106,7 @@ export const jobStandardRelations = relations(jobStandard, ({ one }) => ({
 }));
 
 // =============================================================================
-// STANDARD RECALL - ISO 17025:2017 Clause 7.10 recall of work (#426 Phase 1)
+// STANDARD RECALL - ISO 17025:2017 Clause 7.10 recall of work
 // =============================================================================
 
 /**
@@ -8122,7 +8118,7 @@ export const jobStandardRelations = relations(jobStandard, ({ one }) => ({
  * One recall campaign for a reference standard found out-of-tolerance.
  * Created (with its NC) when the standard transitions to OUT_OF_TOLERANCE;
  * the batch send requires an admin/owner approver, recorded here (§7.10.1
- * defined responsibilities + the legal-sensitivity mitigation from #426).
+ * defined responsibilities + the legal-sensitivity mitigation).
  */
 export const standardRecall = pgTable(
   "standard_recall",
@@ -8143,7 +8139,7 @@ export const standardRecall = pgTable(
       .notNull(),
     // Reviewed notification window (defaults to the standard's last good
     // calibrationDate → now; both bounds editable — over-notification
-    // mitigation from #426).
+    // mitigation).
     fromDate: timestamp("from_date"),
     toDate: timestamp("to_date"),
     approvedBy: text("approved_by").references(() => user.id, {
@@ -8167,7 +8163,7 @@ export const standardRecall = pgTable(
 );
 
 // =============================================================================
-// OOT IMPACT ASSESSMENT - ISO 17025:2017 Clause 7.10.1 (#426 Phase 2)
+// OOT IMPACT ASSESSMENT - ISO 17025:2017 Clause 7.10.1
 // =============================================================================
 
 /** Outcome of the customer-impact evaluation of an OOT event. */
@@ -8267,7 +8263,7 @@ export const ootImpactAssessmentRelations = relations(
 );
 
 // =============================================================================
-// OUT-OF-TOLERANCE NOTIFICATION - ISO 17025:2017 Clause 7.10 (#426 Phase 0)
+// OUT-OF-TOLERANCE NOTIFICATION - ISO 17025:2017 Clause 7.10
 // =============================================================================
 
 /**
@@ -8277,7 +8273,7 @@ export const ootImpactAssessmentRelations = relations(
 
 /**
  * How the customer's acknowledgement was registered. `portal_link` is reserved
- * for the Phase 2 portal surface.
+ * for the portal's acknowledge action.
  */
 export type OotAcknowledgedVia = "email_link" | "portal_link" | "manual";
 
@@ -8301,8 +8297,8 @@ export const ootNotification = pgTable(
     jobId: integer("job_id")
       .notNull()
       .references(() => calibrationJob.id, { onDelete: "restrict" }),
-    // #426 Phase 1: set when this notification belongs to a standard-recall
-    // batch (one row per impacted certificate). Null for Phase 0 as-found
+    // Set when this notification belongs to a standard-recall
+    // batch (one row per impacted certificate). Null for as-found
     // notifications. Changes the letter/email copy to the recall variant.
     recallId: integer("recall_id").references(() => standardRecall.id, {
       onDelete: "set null",
@@ -8332,7 +8328,7 @@ export const ootNotification = pgTable(
     acknowledgedVia: text("acknowledged_via").$type<OotAcknowledgedVia>(),
     acknowledgedNote: text("acknowledged_note"),
     // Who triggered/approved sending the notification (§7.10.1 defined
-    // responsibilities; legal-sensitivity mitigation from #426).
+    // responsibilities; legal-sensitivity mitigation).
     approvedBy: text("approved_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -8349,7 +8345,7 @@ export const ootNotification = pgTable(
     index("oot_notification_status_idx").on(table.status),
     index("oot_notification_recall_id_idx").on(table.recallId),
     // Batch-send idempotency: one notification per certificate per recall
-    // (NULL recall_id — the Phase 0 as-found path — never collides).
+    // (NULL recall_id — the as-found path — never collides).
     unique("oot_notification_recall_job_uidx").on(table.recallId, table.jobId),
   ],
 );
@@ -8542,7 +8538,7 @@ export const personnelCompetence = pgTable(
     index("competence_asset_type_id_idx").on(table.assetTypeId),
     index("competence_status_idx").on(table.status),
     index("competence_expires_at_idx").on(table.expiresAt),
-    // CMP-07 rework (#692): true DDL is a PARTIAL unique index —
+    // True DDL is a PARTIAL unique index —
     // `UNIQUE (organization_id, user_id, asset_type_id) NULLS NOT DISTINCT
     // WHERE user_id IS NOT NULL` — so a tombstoned row (user_id NULL after a
     // user's beforeDelete hook) never collides with another tombstone, while
@@ -8635,7 +8631,7 @@ export const personnelCompetenceAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the competence record
     // (which itself cascades from user self-delete), so it keeps a plain integer.
     competenceId: integer("competence_id").notNull(),
@@ -8671,7 +8667,7 @@ export const trainingRecordAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the training record
     // (which itself cascades from user self-delete), so it keeps a plain integer.
     trainingRecordId: integer("training_record_id").notNull(),
@@ -8731,7 +8727,7 @@ export const authorizedSignatory = pgTable(
     }),
     scopeDescription: text("scope_description"),
     /**
-     * Roadmap 2 C1 (migration 0135): the title printed under the signature of
+     * The title printed under the signature of
      * the certificates this person approves under this authorization (e.g.
      * "Signatário Autorizado — Massa"). Frozen with the certificate input.
      */
@@ -8761,7 +8757,7 @@ export const authorizedSignatory = pgTable(
     index("authorized_signatory_asset_type_id_idx").on(table.assetTypeId),
     index("authorized_signatory_status_idx").on(table.status),
     index("authorized_signatory_expires_at_idx").on(table.expiresAt),
-    // CMP-07 rework (#692): same partial-unique-index rationale as
+    // Same partial-unique-index rationale as
     // personnel_competence above — see that comment for the full explanation
     // of why drizzle-orm/drizzle-kit cannot express `NULLS NOT DISTINCT` on a
     // partial `uniqueIndex()`. Real DDL: migration 0083 + packages/db/sql/schema-extras.sql.
@@ -8786,7 +8782,7 @@ export const authorizedSignatoryAuditLog = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "restrict",
     }),
-    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025 §6.2.6): the record of who was an authorized signatory must
     // survive deletion of the authorization row, so it keeps a plain integer.
     signatoryId: integer("signatory_id").notNull(),
@@ -8928,7 +8924,7 @@ export const cronRun = pgTable("cron_run", {
 
 // ============================================================================
 // Proficiency Testing & SPC — ISO/IEC 17025 §7.7 "Ensuring the validity of
-// results" (#60). PT register (7.7.2) + check-standard control charts (7.7.1).
+// results". PT register (7.7.2) + check-standard control charts (7.7.1).
 // ============================================================================
 
 /**
@@ -9400,7 +9396,7 @@ export const controlChartAuditLogRelations = relations(
 );
 
 // ============================================================================
-// Asset out-of-tolerance (OOT) events & customer impact assessments (#740).
+// Asset out-of-tolerance (OOT) events & customer impact assessments.
 // Track B: when a certificate is approved with asFoundConformity =
 // NON_CONFORMING, the owning customer gets an auditable "avaliar impacto"
 // workflow — ISO 9001:2015 §7.1.5.2 (validity of previous results) and

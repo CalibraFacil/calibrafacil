@@ -12,8 +12,8 @@ import type { DeadLetteredQueueJob } from "./queue.js";
 // Recovery for certificate renders that a hard crash (or a dropped queue message)
 // left in GENERATING_PDF with nothing left to move them.
 //
-// The worker marks a failed certificate job RENDER_FAILED itself (apps/worker/src/index.ts,
-// `setJobError`) when it is alive to do so. When it is not — the process was
+// The worker marks a failed certificate job RENDER_FAILED itself (`setJobError` in
+// packages/jobs-core) when it is alive to do so. When it is not — the process was
 // killed on the last attempt, or the job ran out of its
 // retries — the calibration_job would sit in GENERATING_PDF forever. These
 // helpers apply the SAME transition (GENERATING_PDF -> RENDER_FAILED, compare-and-set
