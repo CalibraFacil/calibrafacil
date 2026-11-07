@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  createCalculationEngine,
-  METHOD_ENGINE_OPTIONS,
-} from "@calibra-facil/math-engine";
+import { METHOD_ENGINE_OPTIONS } from "@calibra-facil/math-engine";
 import {
   compileMethodDraft,
   executeCompiledMethod,
+  createMethodExecutionEngine,
   type CalculationEngineLike,
   type MethodDraft,
 } from "../src";
@@ -24,10 +22,7 @@ import {
  */
 
 function realMethodEngine(): CalculationEngineLike {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- same adapter apps/api and apps/local-server use: math-engine exposes a narrower concrete type than the method-definition execution seam.
-  return createCalculationEngine(
-    METHOD_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
+  return createMethodExecutionEngine();
 }
 
 function budgetEntry(entry: unknown): {

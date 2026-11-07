@@ -1,6 +1,7 @@
 import {
   formatAccreditationNumber,
   isAccreditationSealEligible,
+  type CalibrationPhaseMode,
 } from "@calibra-facil/shared";
 import {
   convertMassValue,
@@ -358,7 +359,7 @@ export type CalibrationPhaseSnapshot = {
   blocks: Record<
     string,
     {
-      mode: "before_and_after" | "before_only" | "after_only" | "not_performed";
+      mode: CalibrationPhaseMode;
       reason?: string | null;
     }
   >;

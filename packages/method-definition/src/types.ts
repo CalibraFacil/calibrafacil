@@ -1,3 +1,9 @@
+import type { CalibrationPhaseMode } from "@calibra-facil/shared/calibration-record";
+import type {
+  InputQuantity,
+  MeasurementModelInput,
+} from "@calibra-facil/math-engine";
+
 export const METHOD_DEFINITION_CORE_VERSION = "0.1.0";
 export const METHOD_ENGINE_PACKAGE_NAME = "@calibra-facil/math-engine";
 
@@ -41,38 +47,14 @@ export type MeasurementModelResultLike = {
   normalizedAst: string;
 };
 
-export type InputQuantityLike = {
-  estimate?: NumericInput;
-  value?: NumericInput;
-  unit?: string;
-  standardUncertainty?: NumericInput;
-  degreesOfFreedom?: NumericInput | "Infinity";
-  distribution?: string;
-  sensitivityCoefficient?: NumericInput;
-  repeatedObservations?: readonly NumericInput[];
-  typeB?: Record<string, unknown>;
-  halfWidth?: NumericInput;
-  lowerLimit?: NumericInput;
-  upperLimit?: NumericInput;
-  expandedUncertainty?: NumericInput;
-  coverageFactor?: NumericInput;
-  metadata?: SafeMetadata;
-};
+/**
+ * What the method layer hands the engine for one quantity and for a whole
+ * measurement model: the engine's own input types, so a real engine is a
+ * `CalculationEngineLike` without an adapter cast.
+ */
+export type InputQuantityLike = InputQuantity;
 
-export type MeasurementModelInputLike = {
-  formula: string;
-  quantities: Readonly<Record<string, InputQuantityLike>>;
-  correlations?:
-    | readonly unknown[]
-    | Record<string, Record<string, NumericInput>>;
-  covariances?:
-    | readonly unknown[]
-    | Record<string, Record<string, NumericInput>>;
-  coverageProbability?: number;
-  coverageFactor?: NumericInput;
-  allowNonSmoothWithExplicitSensitivities?: boolean;
-  correlatedDegreesOfFreedom?: "generalized" | "diagonal";
-};
+export type MeasurementModelInputLike = MeasurementModelInput;
 
 export type CalculationEngineLike = {
   options?: object;
@@ -100,12 +82,6 @@ export type SafeMetadataValue = string | number | boolean | null;
 export type SafeMetadata = Record<string, SafeMetadataValue>;
 
 export type CalibrationPhase = "before" | "after";
-type CalibrationPhaseMode =
-  | "before_and_after"
-  | "before_only"
-  | "after_only"
-  | "not_performed";
-
 type CalibrationPhaseBlockSnapshot = {
   mode: CalibrationPhaseMode;
   reason?: string | null;

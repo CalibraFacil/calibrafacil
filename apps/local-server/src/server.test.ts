@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   compileMethodDraft,
   fingerprintJson,
+  createMethodExecutionEngine,
 } from "@calibra-facil/method-definition";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import {
@@ -14,7 +15,7 @@ import {
   upsertLocalJobProjection,
 } from "@calibra-facil/local-db";
 import { createLocalServer } from "./server";
-import { createMethodDefinitionEngine } from "./method-engine";
+
 import {
   answerAttachmentUpload,
   createAssetStub,
@@ -2373,7 +2374,7 @@ WHERE calibration_jobs.remote_id = @remoteId
 });
 
 function compileLocalTestMethod() {
-  const engine = createMethodDefinitionEngine();
+  const engine = createMethodExecutionEngine();
   const result = compileMethodDraft(
     {
       id: "mass_error",

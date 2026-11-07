@@ -1,40 +1,28 @@
 import {
-  createCalculationEngine,
+  METHOD_ENGINE_OPTIONS,
   normalizeEngineOptions,
-  type CalculationEngineOptions,
 } from "@calibra-facil/math-engine";
 import {
+  createMethodExecutionEngine,
   fingerprintJson,
   type CalculationEngineLike,
   type EngineMetadata,
 } from "@calibra-facil/method-definition";
 
 /**
- * Engine options used to compile every method template.
- *
- * These MUST stay stable — the resulting `optionsFingerprint` is folded into
- * every published method's fingerprint, so a drift here would change the
- * fingerprint of already-published methods. Seed scripts import
- * {@link TEMPLATE_ENGINE_OPTIONS} from here so there is a
- * single source of truth.
+ * Every method template is compiled with the engine that executes methods
+ * (`METHOD_ENGINE_OPTIONS`): the resulting `optionsFingerprint` is folded into
+ * every published method's fingerprint, so the compile and the runtime
+ * execution can never use different numeric contracts. Seed scripts get the
+ * engine and its metadata from here.
  */
-const TEMPLATE_ENGINE_OPTIONS: CalculationEngineOptions = {
-  numericMode: "decimal",
-  rejectUnusedInputs: true,
-  maxExponentMagnitude: 12,
-  maxSignificantDigits: 24,
-};
-
 export function createTemplateEngine(): CalculationEngineLike {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine has narrower input parameter types than method-definition's adapter interface, but the runtime method surface is compatible (same pattern as apps/api compileDraftWithEngine).
-  return createCalculationEngine(
-    TEMPLATE_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
+  return createMethodExecutionEngine(METHOD_ENGINE_OPTIONS);
 }
 
 /** Engine metadata (version + options fingerprint) for `compileMethodDraft`. */
 export function templateEngineMetadata(): EngineMetadata {
-  const normalized = normalizeEngineOptions(TEMPLATE_ENGINE_OPTIONS);
+  const normalized = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
   return {
     packageName: "@calibra-facil/math-engine",
     version: normalized.engineVersion,

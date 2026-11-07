@@ -1,6 +1,8 @@
 import { type DatePickerPreset } from '@calibra-facil/ui/date-picker'
 import {
+  CALIBRATION_LOCATION_TYPES,
   formatCalibrationValue,
+  isCalibrationPhaseMode,
   type AssetSpecificationFieldLike,
 } from '@calibra-facil/shared'
 import type {
@@ -65,28 +67,15 @@ export function toAssetSpecificationFieldDefinition(
 }
 
 export function toCalibrationPhaseMode(value: unknown): CalibrationPhaseMode {
-  switch (value) {
-    case 'before_only':
-    case 'after_only':
-    case 'not_performed':
-    case 'before_and_after':
-      return value
-    default:
-      return DEFAULT_PHASE_MODE
-  }
+  return isCalibrationPhaseMode(value) ? value : DEFAULT_PHASE_MODE
 }
 
 export function toCalibrationLocationType(
   value: unknown,
 ): CalibrationLocationType {
-  switch (value) {
-    case 'customer_site':
-    case 'lab':
-    case 'other':
-      return value
-    default:
-      return 'customer_site'
-  }
+  return (
+    CALIBRATION_LOCATION_TYPES.find((type) => type === value) ?? 'customer_site'
+  )
 }
 
 export function toStringValue(value: unknown) {

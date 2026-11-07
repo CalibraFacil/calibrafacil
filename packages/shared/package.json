@@ -11,6 +11,7 @@
     "./decision-rule": "./src/decision-rule.ts",
     "./calendar-date": "./src/calendar-date.ts",
     "./calibration-format": "./src/calibration-format.ts",
+    "./calibration-record": "./src/calibration-record.ts",
     "./cnpj": "./src/cnpj.ts",
     "./mass-units": "./src/mass-units.ts",
     "./public-urls": "./src/public-urls.ts",

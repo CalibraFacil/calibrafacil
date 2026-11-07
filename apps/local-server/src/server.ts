@@ -18,9 +18,6 @@ import {
   getLocalMethodDetail,
   getLocalServiceOrderDetail,
   getLocalStandardDetail,
-  buildLocalStandardsSnapshot,
-  resolveLocalDraftStandards,
-  localStandardsPerformedAt,
   listLocalAssetTypes,
   listLocalAssets,
   listLocalAttachments,
@@ -42,16 +39,12 @@ import {
   openLocalDatabase,
   requeueDeadOutboxEvent,
   resolveSyncConflict,
-  saveLocalJobExecution,
   SyncConflictReasonRequiredError,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
 import {
   CreateAssetSchema,
   CreateServiceOrderSchema,
-  METHOD_DEVIATIONS_MAX_LENGTH,
-  resolveExecutionPerformedAt,
-  validateCalibrationRecordForSubmit,
   JOB_STATUS,
 } from "@calibra-facil/schemas";
 import {
@@ -90,7 +83,8 @@ import {
   type LocalSyncScheduler,
   type LocalSyncSchedulerOptions,
 } from "./sync-scheduler";
-import { executeLocalCompiledMethod } from "./execution";
+import { executeLocalJob, submitLocalJob } from "./job-commands";
+import { getLocalRequestContext } from "./request-context";
 import { resolveLocalStoragePath } from "./local-storage";
 import { registerPrinterRoutes } from "./printing/routes";
 import { isRecord, toRecord } from "@calibra-facil/shared/record";
@@ -122,110 +116,6 @@ export type LocalServerRuntime = {
    */
   startScheduler(): void;
 };
-
-type CalibrationLocationInput = {
-  type: "customer_site" | "lab" | "other";
-  addressText: string;
-  notes?: string | null;
-};
-
-type CalibrationPhaseInput = {
-  blocks: Record<
-    string,
-    {
-      mode: "before_and_after" | "before_only" | "after_only" | "not_performed";
-      reason?: string | null;
-    }
-  >;
-};
-
-type LocalJobExecutionInput = {
-  data: Record<string, unknown>;
-  results: Record<string, unknown> | null;
-  selectedStandardIds?: number[];
-  environment?: {
-    temperature: number | null;
-    humidity: number | null;
-    pressure: number | null;
-  };
-  calibrationLocation?: CalibrationLocationInput;
-  calibrationPhases?: CalibrationPhaseInput;
-  /** ISO/IEC 17025 §7.8.2.1(n) — mirrors the cloud execute contract. */
-  methodDeviations?: string | null;
-  /** When the calibration was performed (ISO) and, if backdated, why. */
-  performedAt?: string;
-  backdateReason?: string;
-};
-
-function buildCalibrationLocationSnapshot(
-  input: CalibrationLocationInput | undefined,
-  existing: Record<string, unknown> | null | undefined,
-  actorUserId: string,
-): Record<string, unknown> | null | undefined {
-  if (!input) return existing ?? undefined;
-
-  return {
-    type: input.type,
-    addressText: input.addressText.trim(),
-    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
-    recordedAt: new Date().toISOString(),
-    recordedBy: actorUserId,
-  };
-}
-
-function buildCalibrationPhaseSnapshot(
-  input: CalibrationPhaseInput | undefined,
-  existing: Record<string, unknown> | null | undefined,
-  actorUserId: string,
-): Record<string, unknown> | null | undefined {
-  if (!input) return existing ?? undefined;
-
-  const blocks: Record<string, unknown> = {};
-  for (const [key, block] of Object.entries(input.blocks ?? {})) {
-    if (!key.trim()) continue;
-    if (!isCalibrationPhaseMode(block.mode)) continue;
-    blocks[key] = {
-      mode: block.mode,
-      ...(block.reason?.trim() ? { reason: block.reason.trim() } : {}),
-    };
-  }
-
-  return {
-    blocks,
-    recordedAt: new Date().toISOString(),
-    recordedBy: actorUserId,
-  };
-}
-
-function isCalibrationPhaseMode(mode: unknown) {
-  return (
-    mode === "before_and_after" ||
-    mode === "before_only" ||
-    mode === "after_only" ||
-    mode === "not_performed"
-  );
-}
-
-/**
- * The compiled method currently published locally for a job's frozen snapshot,
- * used only to re-point that snapshot when a desktop release moved the engine
- * under it (see `executeLocalCompiledMethod`). Resolved by the snapshot's own
- * method id and version, so a newer published version is never substituted.
- */
-function currentPublishedCompiledMethod(
-  database: LocalDatabase,
-  methodSnapshot: Record<string, unknown>,
-): unknown {
-  const methodId = methodSnapshot.methodId;
-  const methodVersion = methodSnapshot.methodVersion;
-  if (typeof methodId !== "number") return null;
-  const method = getLocalMethodDetail(database, String(methodId));
-  if (!method) return null;
-  if (typeof methodVersion === "number" && method.version !== methodVersion) {
-    return null;
-  }
-  return method.compiledMethod;
-}
 
 export function createLocalServer(
   config: LocalServerConfig,
@@ -608,177 +498,21 @@ export function createLocalServerRuntime(
   });
 
   app.post("/api/jobs/:id/execute", async (c) => {
-    const routeId = c.req.param("id");
-    const input = parseLocalJobExecutionInput(await c.req.json());
-    const current = getLocalJobDetail(database, routeId);
-
-    if (!current) {
-      return c.json({ error: "Job nao encontrado" }, 404);
-    }
-
-    const context = getLocalRequestContext(config, database);
-    const calibrationLocationSnapshot = buildCalibrationLocationSnapshot(
-      input.calibrationLocation,
-      recordOrNull(current.calibrationLocationSnapshot),
-      context.userId ?? "local",
+    const result = executeLocalJob(
+      { config, database },
+      c.req.param("id"),
+      await readJsonOrNull(c.req.raw),
     );
-    const calibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
-      input.calibrationPhases,
-      recordOrNull(current.calibrationPhaseSnapshot),
-      context.userId ?? "local",
-    );
-    try {
-      // The cloud's draft rule: a standard of the saved snapshot that went
-      // stale is kept (and reported in `warnings`); one the save adds is judged.
-      const { snapshot: standardsSnapshot, warnings } =
-        resolveLocalDraftStandards(database, {
-          selectedStandardIds: input.selectedStandardIds,
-          data: input.data,
-          // Judged on the day the work is recorded as performed (a draft keeps
-          // the date already saved).
-          performedAt: localStandardsPerformedAt(
-            input.performedAt,
-            current.performedAt,
-          ),
-          savedStandardsSnapshot: current.standardsSnapshot,
-        });
-      const jobMethodSnapshot = toRecord(current.methodSnapshot);
-      const results = executeLocalCompiledMethod({
-        methodSnapshot: jobMethodSnapshot,
-        currentCompiledMethod: currentPublishedCompiledMethod(
-          database,
-          jobMethodSnapshot,
-        ),
-        assetSnapshot: toRecord(current.assetSnapshot),
-        standardsSnapshot:
-          standardsSnapshot === undefined
-            ? current.standardsSnapshot
-            : standardsSnapshot,
-        data: input.data,
-        fallbackResults: input.results,
-        environmentalSnapshot: input.environment,
-        calibrationPhaseSnapshot,
-        requireSuccess: false,
-      });
-      const job = saveLocalJobExecution(database, {
-        routeId,
-        data: input.data,
-        results,
-        selectedStandardIds: input.selectedStandardIds,
-        environment: input.environment,
-        calibrationLocationSnapshot,
-        calibrationPhaseSnapshot,
-        methodDeviations: input.methodDeviations,
-        performedAt: input.performedAt,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json({
-        message: "Dados salvos com sucesso",
-        data: job,
-        warnings,
-      });
-    } catch (error) {
-      return c.json(
-        {
-          error: errorMessage(error),
-          diagnostics: getDiagnostics(error),
-        },
-        422,
-      );
-    }
+    return c.json(result.body, result.status);
   });
 
   app.post("/api/jobs/:id/submit", async (c) => {
-    const routeId = c.req.param("id");
-    const input = parseLocalJobExecutionInput(await c.req.json());
-    const current = getLocalJobDetail(database, routeId);
-
-    if (!current) {
-      return c.json({ error: "Job nao encontrado" }, 404);
-    }
-
-    const context = getLocalRequestContext(config, database);
-    const calibrationLocationSnapshot = buildCalibrationLocationSnapshot(
-      input.calibrationLocation,
-      recordOrNull(current.calibrationLocationSnapshot),
-      context.userId ?? "local",
+    const result = submitLocalJob(
+      { config, database },
+      c.req.param("id"),
+      await readJsonOrNull(c.req.raw),
     );
-    const calibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
-      input.calibrationPhases,
-      recordOrNull(current.calibrationPhaseSnapshot),
-      context.userId ?? "local",
-    );
-    // The cloud's rule, the same function the local database applies again.
-    const calibrationRecordError = validateCalibrationRecordForSubmit({
-      location: calibrationLocationSnapshot,
-      phases: calibrationPhaseSnapshot,
-    });
-    if (calibrationRecordError) {
-      return c.json({ error: calibrationRecordError }, 400);
-    }
-    // The cloud's rules for the performed date, answered the same way (400):
-    // not in the future, and a reason once it is more than 7 days back.
-    const performedAtError = resolveExecutionPerformedAt({
-      performedAt: input.performedAt,
-      backdateReason: input.backdateReason,
-    });
-    if (!performedAtError.ok) {
-      return c.json({ error: performedAtError.message }, 400);
-    }
-    try {
-      const standardsSnapshot = buildLocalStandardsSnapshot(
-        database,
-        input.selectedStandardIds,
-        input.data,
-        // Judged on the day the work is recorded as performed (the cloud rule).
-        localStandardsPerformedAt(input.performedAt, null),
-      );
-      const jobMethodSnapshot = toRecord(current.methodSnapshot);
-      const results = executeLocalCompiledMethod({
-        methodSnapshot: jobMethodSnapshot,
-        currentCompiledMethod: currentPublishedCompiledMethod(
-          database,
-          jobMethodSnapshot,
-        ),
-        assetSnapshot: toRecord(current.assetSnapshot),
-        standardsSnapshot:
-          standardsSnapshot === undefined
-            ? current.standardsSnapshot
-            : standardsSnapshot,
-        data: input.data,
-        fallbackResults: input.results,
-        environmentalSnapshot: input.environment,
-        calibrationPhaseSnapshot,
-        requireSuccess: true,
-      });
-      const job = saveLocalJobExecution(database, {
-        routeId,
-        data: input.data,
-        results,
-        selectedStandardIds: input.selectedStandardIds,
-        environment: input.environment,
-        calibrationLocationSnapshot,
-        calibrationPhaseSnapshot,
-        methodDeviations: input.methodDeviations,
-        performedAt: input.performedAt,
-        backdateReason: input.backdateReason,
-        requireResults: true,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json({ message: "Job submetido para revisao", data: job });
-    } catch (error) {
-      return c.json(
-        {
-          error: errorMessage(error),
-          diagnostics: getDiagnostics(error),
-        },
-        422,
-      );
-    }
+    return c.json(result.body, result.status);
   });
 
   app.get("/api/customers", (c) => {
@@ -1234,6 +968,15 @@ function parseNumber(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/** The JSON body, or null when there is none or it is not JSON (the schema then refuses it). */
+async function readJsonOrNull(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
 async function readJsonOrEmpty(request: Request) {
   const raw = await request.text();
   return raw ? JSON.parse(raw) : {};
@@ -1241,168 +984,6 @@ async function readJsonOrEmpty(request: Request) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Erro local";
-}
-
-function recordOrNull(value: unknown): Record<string, unknown> | null {
-  const record = toRecord(value);
-  return Object.keys(record).length > 0 ? record : null;
-}
-
-function parseLocalJobExecutionInput(value: unknown): LocalJobExecutionInput {
-  const input = toRecord(value);
-  return {
-    data: toRecord(input.data),
-    results: recordOrNull(input.results),
-    selectedStandardIds: numberArrayFromUnknown(input.selectedStandardIds),
-    environment: environmentFromUnknown(input.environment),
-    calibrationLocation: calibrationLocationFromUnknown(
-      input.calibrationLocation,
-    ),
-    calibrationPhases: calibrationPhasesFromUnknown(input.calibrationPhases),
-    // undefined (absent) must stay undefined so the store leaves the value
-    // alone; only an explicit null or a string is a change. The length cap is
-    // the cloud's (ExecuteJobSchema); enforcing it here too keeps a value that
-    // syncs up from being one the cloud API would have refused.
-    methodDeviations:
-      input.methodDeviations === undefined
-        ? undefined
-        : typeof input.methodDeviations === "string"
-          ? input.methodDeviations.slice(0, METHOD_DEVIATIONS_MAX_LENGTH)
-          : null,
-    performedAt:
-      typeof input.performedAt === "string" ? input.performedAt : undefined,
-    backdateReason:
-      typeof input.backdateReason === "string"
-        ? input.backdateReason
-        : undefined,
-  };
-}
-
-function calibrationLocationFromUnknown(
-  value: unknown,
-): CalibrationLocationInput | undefined {
-  const input = toRecord(value);
-  if (
-    input.type !== "customer_site" &&
-    input.type !== "lab" &&
-    input.type !== "other"
-  ) {
-    return undefined;
-  }
-
-  const addressText =
-    typeof input.addressText === "string" ? input.addressText : "";
-  return {
-    type: input.type,
-    addressText,
-    notes: nullableStringFromUnknown(input.notes),
-  };
-}
-
-function calibrationPhasesFromUnknown(
-  value: unknown,
-): CalibrationPhaseInput | undefined {
-  const input = toRecord(value);
-  const blocks = toRecord(input.blocks);
-  if (Object.keys(blocks).length === 0) {
-    return undefined;
-  }
-
-  const parsedBlocks: CalibrationPhaseInput["blocks"] = {};
-  for (const [key, block] of Object.entries(blocks)) {
-    const blockRecord = toRecord(block);
-    if (!isCalibrationPhaseMode(blockRecord.mode)) {
-      continue;
-    }
-
-    parsedBlocks[key] = {
-      mode: blockRecord.mode,
-      reason: nullableStringFromUnknown(blockRecord.reason),
-    };
-  }
-
-  return { blocks: parsedBlocks };
-}
-
-function environmentFromUnknown(
-  value: unknown,
-): LocalJobExecutionInput["environment"] {
-  const input = toRecord(value);
-  if (Object.keys(input).length === 0) {
-    return undefined;
-  }
-
-  return {
-    temperature: nullableNumberFromUnknown(input.temperature),
-    humidity: nullableNumberFromUnknown(input.humidity),
-    pressure: nullableNumberFromUnknown(input.pressure),
-  };
-}
-
-function numberArrayFromUnknown(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is number => Number.isInteger(item))
-    : undefined;
-}
-
-function nullableNumberFromUnknown(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function nullableStringFromUnknown(value: unknown) {
-  return typeof value === "string" ? value : null;
-}
-
-function getLocalRequestContext(
-  config: LocalServerConfig,
-  database: LocalDatabase,
-) {
-  const snapshot = tenantSnapshotFromUnknown(
-    database
-      .prepare(
-        `
-SELECT organization_id, active_unit_id, user_id
-FROM tenant_snapshot
-ORDER BY pulled_at DESC
-LIMIT 1
-`,
-      )
-      .get(),
-  );
-
-  return {
-    organizationId: config.organizationId ?? snapshot?.organization_id ?? null,
-    unitId: config.unitId ?? snapshot?.active_unit_id ?? null,
-    userId: config.userId ?? snapshot?.user_id ?? null,
-  };
-}
-
-function tenantSnapshotFromUnknown(value: unknown) {
-  const snapshot = toRecord(value);
-  const organizationId = snapshot.organization_id;
-  const activeUnitId = snapshot.active_unit_id;
-  const userId = snapshot.user_id;
-
-  if (typeof organizationId !== "string" || typeof userId !== "string") {
-    return undefined;
-  }
-
-  return {
-    organization_id: organizationId,
-    active_unit_id:
-      typeof activeUnitId === "number" && Number.isFinite(activeUnitId)
-        ? activeUnitId
-        : null,
-    user_id: userId,
-  };
-}
-
-function getDiagnostics(error: unknown) {
-  if (error && typeof error === "object" && "diagnostics" in error) {
-    return Reflect.get(error, "diagnostics");
-  }
-
-  return undefined;
 }
 
 function getFormString(

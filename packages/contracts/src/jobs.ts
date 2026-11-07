@@ -1,5 +1,9 @@
 import { OOT_NOTIFICATION_STATUSES } from "@calibra-facil/schemas/machines";
-import { FINANCIAL_STATUSES } from "@calibra-facil/shared";
+import {
+  CALIBRATION_LOCATION_TYPES,
+  CALIBRATION_PHASE_MODES,
+  FINANCIAL_STATUSES,
+} from "@calibra-facil/shared";
 import { z } from "zod";
 import {
   CERTIFICATE_LIFECYCLE_STATUS,
@@ -506,7 +510,7 @@ const jobEnvironmentalSnapshotSchema = z.object({
 });
 
 const jobCalibrationLocationSnapshotSchema = z.object({
-  type: z.enum(["customer_site", "lab", "other"]),
+  type: z.enum(CALIBRATION_LOCATION_TYPES),
   addressText: z.string(),
   notes: nullableString.optional(),
   recordedAt: isoTimestamp,
@@ -517,12 +521,7 @@ const jobCalibrationPhaseSnapshotSchema = z.object({
   blocks: z.record(
     z.string(),
     z.object({
-      mode: z.enum([
-        "before_and_after",
-        "before_only",
-        "after_only",
-        "not_performed",
-      ]),
+      mode: z.enum(CALIBRATION_PHASE_MODES),
       reason: nullableString.optional(),
     }),
   ),

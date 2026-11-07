@@ -1,10 +1,10 @@
 import {
-  executeCompiledMethod,
+  createMethodExecutionEngine,
   reconcileCompiledMethodEngine,
+  runOfficialExecution,
+  type CalibrationPhaseSnapshot,
   type CompiledMethod,
 } from "@calibra-facil/method-definition";
-import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
-import { createMethodDefinitionEngine } from "./method-engine";
 import { toRecord } from "@calibra-facil/shared/record";
 
 type ExecutionInput = {
@@ -15,7 +15,7 @@ type ExecutionInput = {
   data: Record<string, unknown>;
   fallbackResults?: Record<string, unknown> | null;
   requireSuccess?: boolean;
-  calibrationPhaseSnapshot?: Record<string, unknown> | null;
+  calibrationPhaseSnapshot?: CalibrationPhaseSnapshot | null;
   /**
    * The compiled method currently published for this method locally, when the
    * caller has it. A job freezes its own copy at creation, so after a desktop
@@ -33,7 +33,7 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
     return input.fallbackResults ?? null;
   }
 
-  const engine = createMethodDefinitionEngine();
+  const engine = createMethodExecutionEngine();
   const { compiledMethod } = reconcileCompiledMethodEngine({
     snapshot: snapshotCompiledMethod,
     current: isCompiledMethod(input.currentCompiledMethod)
@@ -42,18 +42,17 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
     engine,
   });
 
-  const execution = executeCompiledMethod(
-    compiledMethod,
-    {
-      inputs: buildExecutionInputs(input),
-      calibrationPhases:
-        input.calibrationPhaseSnapshot &&
-        isCalibrationPhaseSnapshot(input.calibrationPhaseSnapshot)
-          ? input.calibrationPhaseSnapshot
-          : undefined,
-    },
-    { engine },
-  );
+  // The execution core the cloud runs: same inputs assembly (asset
+  // specifications, environment, standards in grams), same result envelope.
+  const { execution, results } = runOfficialExecution(compiledMethod, {
+    data: input.data,
+    dataFields: input.methodSnapshot.dataFields,
+    assetSpecifications: input.assetSnapshot.specifications,
+    environmental: input.environmentalSnapshot,
+    standards: standardsOf(input.standardsSnapshot),
+    calibrationPhases: input.calibrationPhaseSnapshot,
+    engine,
+  });
 
   if (!execution.ok && input.requireSuccess) {
     const message =
@@ -65,84 +64,16 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
     throw error;
   }
 
-  return {
-    ...execution.outputs,
-    __compiledExecution: {
-      methodFingerprint: execution.methodFingerprint,
-      engineVersion: execution.engineVersion,
-      engineOptionsFingerprint: execution.engineOptionsFingerprint,
-      inputFingerprint: execution.inputFingerprint,
-      calculationFingerprint: execution.calculationFingerprint,
-      resultFingerprint: execution.resultFingerprint,
-      canonicalResultJson: execution.canonicalResultJson,
-      formulaResults: execution.formulaResults,
-      measurementModelResults: execution.measurementModelResults,
-      acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
-      diagnostics: execution.diagnostics,
-    },
-  };
+  return results;
 }
 
-function isCalibrationPhaseSnapshot(value: Record<string, unknown>): value is {
-  blocks: Record<
-    string,
-    {
-      mode: "before_and_after" | "before_only" | "after_only" | "not_performed";
-      reason?: string | null;
-    }
-  >;
-} {
-  return (
-    value.blocks !== null &&
-    typeof value.blocks === "object" &&
-    !Array.isArray(value.blocks)
-  );
-}
-
-function buildExecutionInputs(input: ExecutionInput) {
-  const values: Record<string, unknown> = { ...input.data };
-  const dataFields = Array.isArray(input.methodSnapshot.dataFields)
-    ? input.methodSnapshot.dataFields
-    : [];
-  const specifications =
-    input.assetSnapshot.specifications &&
-    typeof input.assetSnapshot.specifications === "object"
-      ? toRecord(input.assetSnapshot.specifications)
-      : {};
-
-  for (const field of dataFields) {
-    if (!field || typeof field !== "object") continue;
-    const record = toRecord(field);
-    if (
-      record.source === "asset_spec" &&
-      typeof record.key === "string" &&
-      typeof record.assetSpecKey === "string" &&
-      specifications[record.assetSpecKey] !== undefined
-    ) {
-      values[record.key] = specifications[record.assetSpecKey];
-    }
-  }
-
-  if (input.environmentalSnapshot) {
-    const environment = toRecord(input.environmentalSnapshot);
-    values.environment = {
-      temperature: environment.temperature,
-      humidity: environment.humidity,
-      pressure: environment.pressure,
-    };
-  }
-
-  if (input.standardsSnapshot !== undefined) {
-    // Normalize certified masses/uncertainties to grams exactly as the cloud does
-    // before official execution, so offline (desktop) results match what sync
-    // recomputes for non-gram labs (audit H4).
-    const snapshot = input.standardsSnapshot;
-    values.standards = Array.isArray(snapshot)
-      ? (normalizeStandardsForOfficialExecution(snapshot) ?? [])
-      : (snapshot ?? []);
-  }
-
-  return values;
+/**
+ * The frozen standards as the core reads them: the saved list, or none when
+ * the snapshot is absent; `undefined` (never frozen) stays undefined.
+ */
+function standardsOf(snapshot: unknown) {
+  if (snapshot === undefined) return undefined;
+  return Array.isArray(snapshot) ? snapshot : null;
 }
 
 function isCompiledMethod(value: unknown): value is CompiledMethod {

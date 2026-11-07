@@ -4,6 +4,10 @@ import type {
   CalibrationLocationSnapshot,
   CalibrationPhaseSnapshot,
 } from '@/features/jobs/execution'
+import {
+  CALIBRATION_LOCATION_TYPES,
+  CALIBRATION_PHASE_MODES,
+} from '@calibra-facil/shared/calibration-record'
 import { isRecord } from '@calibra-facil/shared/record'
 
 /**
@@ -51,12 +55,7 @@ export type ExecutionDraftScope = ExecutionDraftOwner & {
 
 type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
-const phaseModeSchema = z.enum([
-  'before_and_after',
-  'before_only',
-  'after_only',
-  'not_performed',
-])
+const phaseModeSchema = z.enum(CALIBRATION_PHASE_MODES)
 
 const executionFormValuesSchema = z.object({
   formData: z.record(z.string(), z.unknown()),
@@ -67,7 +66,7 @@ const executionFormValuesSchema = z.object({
     pressure: z.number().nullable(),
   }),
   calibrationLocation: z.object({
-    type: z.enum(['customer_site', 'lab', 'other']),
+    type: z.enum(CALIBRATION_LOCATION_TYPES),
     addressText: z.string(),
     notes: z.string().nullish(),
     recordedAt: z.string().optional(),

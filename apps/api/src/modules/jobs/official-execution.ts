@@ -6,17 +6,11 @@ import type {
   StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import {
-  executeCompiledMethod,
-  type CalculationEngineLike,
+  runOfficialExecution,
   type CompiledMethod,
   type CompiledMethodExecutionResult,
   type MethodDiagnostic,
 } from "@calibra-facil/method-definition";
-import {
-  createCalculationEngine,
-  METHOD_ENGINE_OPTIONS,
-} from "@calibra-facil/math-engine";
-import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import { isCompiledMethod } from "./helpers";
 
 /**
@@ -25,13 +19,6 @@ import { isCompiledMethod } from "./helpers";
  * for every caller (cloud routes, public API, desktop sync); no caller's own
  * `results` is ever stored.
  */
-
-export function createMethodExecutionEngine(): CalculationEngineLike {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine exposes a narrower concrete type than the method-definition execution adapter.
-  return createCalculationEngine(
-    METHOD_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
-}
 
 function executionDiagnostic(
   code: string,
@@ -159,39 +146,6 @@ function getCompiledMethodSnapshot(
   return { ok: true, compiledMethod };
 }
 
-function buildOfficialExecutionInputs(params: {
-  methodSnapshot: MethodSnapshot;
-  data: Record<string, unknown>;
-  assetSnapshot: AssetSnapshot;
-  standardsSnapshot: StandardSnapshot[] | null | undefined;
-  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
-}): Record<string, unknown> {
-  const inputs: Record<string, unknown> = { ...params.data };
-
-  for (const field of params.methodSnapshot.dataFields ?? []) {
-    if (field.source !== "asset_spec" || !field.assetSpecKey) continue;
-    const value = params.assetSnapshot.specifications?.[field.assetSpecKey];
-    if (value !== undefined) {
-      inputs[field.key] = value;
-    }
-  }
-
-  if (params.environmentalSnapshot) {
-    inputs.environment = {
-      temperature: params.environmentalSnapshot.temperature,
-      humidity: params.environmentalSnapshot.humidity,
-      pressure: params.environmentalSnapshot.pressure,
-    };
-  }
-
-  if (params.standardsSnapshot !== undefined) {
-    inputs.standards =
-      normalizeStandardsForOfficialExecution(params.standardsSnapshot) ?? [];
-  }
-
-  return inputs;
-}
-
 type OfficialExecutionOutcome =
   | {
       ok: true;
@@ -226,14 +180,14 @@ export function executeOfficialCompiledSnapshot(params: {
     return snapshot;
   }
 
-  const execution = executeCompiledMethod(
-    snapshot.compiledMethod,
-    {
-      inputs: buildOfficialExecutionInputs(params),
-      calibrationPhases: params.calibrationPhaseSnapshot ?? undefined,
-    },
-    { engine: createMethodExecutionEngine() },
-  );
+  const { execution, results } = runOfficialExecution(snapshot.compiledMethod, {
+    data: params.data,
+    dataFields: params.methodSnapshot.dataFields,
+    assetSpecifications: params.assetSnapshot.specifications,
+    environmental: params.environmentalSnapshot,
+    standards: params.standardsSnapshot,
+    calibrationPhases: params.calibrationPhaseSnapshot,
+  });
 
   if (!execution.ok && params.requireSuccess) {
     return {
@@ -246,24 +200,5 @@ export function executeOfficialCompiledSnapshot(params: {
     };
   }
 
-  return {
-    ok: true,
-    results: {
-      ...execution.outputs,
-      __compiledExecution: {
-        methodFingerprint: execution.methodFingerprint,
-        engineVersion: execution.engineVersion,
-        engineOptionsFingerprint: execution.engineOptionsFingerprint,
-        inputFingerprint: execution.inputFingerprint,
-        calculationFingerprint: execution.calculationFingerprint,
-        resultFingerprint: execution.resultFingerprint,
-        canonicalResultJson: execution.canonicalResultJson,
-        formulaResults: execution.formulaResults,
-        measurementModelResults: execution.measurementModelResults,
-        acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
-        diagnostics: execution.diagnostics,
-      },
-    },
-    execution,
-  };
+  return { ok: true, results, execution };
 }

@@ -2,6 +2,10 @@ import {
   NOTIFICATION_TYPES,
   PORTAL_NOTIFICATION_TYPES,
 } from "./notification-types";
+import {
+  CALIBRATION_LOCATION_TYPES,
+  CALIBRATION_PHASE_MODES,
+} from "@calibra-facil/shared/calibration-record";
 import { z } from "zod";
 import { VISIT_STATUSES } from "./machines/visits";
 import { NOTIFICATION_STATUSES } from "./machines/tenancy";
@@ -1843,7 +1847,7 @@ const EnvironmentalDataSchema = z.object({
 
 export type EnvironmentalDataInput = z.infer<typeof EnvironmentalDataSchema>;
 
-const CalibrationLocationTypeSchema = z.enum(["customer_site", "lab", "other"]);
+const CalibrationLocationTypeSchema = z.enum(CALIBRATION_LOCATION_TYPES);
 
 const CalibrationLocationInputSchema = z.object({
   type: CalibrationLocationTypeSchema,
@@ -1855,12 +1859,7 @@ export type CalibrationLocationInput = z.infer<
   typeof CalibrationLocationInputSchema
 >;
 
-const CalibrationPhaseModeSchema = z.enum([
-  "before_and_after",
-  "before_only",
-  "after_only",
-  "not_performed",
-]);
+const CalibrationPhaseModeSchema = z.enum(CALIBRATION_PHASE_MODES);
 
 const CalibrationPhaseInputSchema = z.object({
   blocks: z.record(
@@ -2055,6 +2054,9 @@ export const ExecuteJobSchema = z.object({
     .optional()
     .nullable(),
 });
+
+/** The body of POST /api/jobs/:id/execute as a client builds it. */
+export type ExecuteJobInput = z.input<typeof ExecuteJobSchema>;
 
 /**
  * Schema for listing jobs with pagination and filtering

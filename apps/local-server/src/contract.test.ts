@@ -52,11 +52,12 @@ import {
 import {
   compileMethodDraft,
   fingerprintJson,
+  createMethodExecutionEngine,
 } from "@calibra-facil/method-definition";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import { applySyncBootstrap, openLocalDatabase } from "@calibra-facil/local-db";
 import { createLocalServer } from "./server";
-import { createMethodDefinitionEngine } from "./method-engine";
+
 import type { LocalServerConfig } from "./bootstrap";
 
 const tempDirectories: string[] = [];
@@ -109,7 +110,7 @@ const JOB_DETAIL_GAPS = [
 ];
 
 function compiledMassErrorMethod() {
-  const engine = createMethodDefinitionEngine();
+  const engine = createMethodExecutionEngine();
   const result = compileMethodDraft(
     {
       id: "mass_error",

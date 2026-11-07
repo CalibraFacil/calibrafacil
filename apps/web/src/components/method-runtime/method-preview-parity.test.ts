@@ -129,8 +129,7 @@ function runWebExecution(): Record<string, FormulaScalar | FormulaScalar[]> {
 }
 
 function serverEngine(): CalculationEngineLike {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- same adapter apps/api and apps/local-server use: math-engine exposes a narrower concrete type than the method-definition execution seam.
-  return createMethodCalculationEngine() as unknown as CalculationEngineLike
+  return createMethodCalculationEngine()
 }
 
 function serverDraft(): MethodDraft {
