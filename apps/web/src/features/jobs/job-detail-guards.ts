@@ -1,9 +1,10 @@
+import { toRecord } from '@calibra-facil/shared/record'
 import { type FinancialStatus } from '@calibra-facil/shared'
 import {
   type ApprovedJobRecordData,
   type JobStatus,
 } from '@/features/jobs/detail-model'
-import { isNullableRecord, toRecord } from './record-guards'
+import { isNullableRecord } from './record-guards'
 
 export function isApprovedJobRecordData(
   value: unknown,

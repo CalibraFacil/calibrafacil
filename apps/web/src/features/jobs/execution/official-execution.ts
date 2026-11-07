@@ -3,6 +3,7 @@ import {
   type CompiledMethodSnapshot,
 } from '@calibra-facil/contracts'
 import { type OfficialCompiledExecution } from './types'
+import { toRecord } from '@calibra-facil/shared/record'
 
 /**
  * The compiled method frozen on a job, or null when the snapshot has none (or
@@ -14,14 +15,6 @@ export function readCompiledMethodSnapshot(
 ): CompiledMethodSnapshot | null {
   const parsed = compiledMethodSnapshotSchema.safeParse(value)
   return parsed.success ? parsed.data : null
-}
-
-export function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {}
-  }
-
-  return Object.fromEntries(Object.entries(value))
 }
 
 function toOfficialCompiledExecution(

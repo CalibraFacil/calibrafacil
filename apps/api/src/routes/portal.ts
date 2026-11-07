@@ -102,6 +102,7 @@ import {
   issuedSealOf,
 } from "../lib/frozen-seal";
 import { clientIp } from "../lib/client-ip";
+import { isRecord } from "@calibra-facil/shared/record";
 
 // Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
 // An instrument is "due soon" within this many days of its next calibration.
@@ -406,10 +407,6 @@ type PortalReferenceStandardSnapshot = {
   nextCalibrationDate: string | Date | null;
   certificateDocument?: PortalReferenceStandardDocument | null;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function getString(value: unknown): string | null {
   return typeof value === "string" ? value : null;

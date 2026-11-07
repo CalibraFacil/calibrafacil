@@ -37,6 +37,7 @@ import {
 import { formatInstant } from "@calibra-facil/shared/format";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getFinancialIntegrationState } from "./billing-readiness";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * What the builders read through: an org-bound transaction handle
@@ -98,10 +99,6 @@ function buildUnavailableStatusDescription(freshness: FinancialFreshness) {
   const lastSyncedAt = formatInstant(freshness.lastSyncedAt, "date-time");
 
   return `Status indisponível - última sincronização em ${lastSyncedAt}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function textValue(value: unknown) {

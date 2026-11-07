@@ -35,6 +35,7 @@ import {
 } from "./job-events.js";
 import { type Env } from "./runtime-types.js";
 import { withOrgDbClient } from "./pdf-render.js";
+import { toRecord } from "@calibra-facil/shared/record";
 
 /** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
 type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
@@ -50,15 +51,6 @@ type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
 // with the XLSX renderer only because issuance was the sole caller.
 // =============================================================================
 
-/** Narrows a jsonb column to a plain record without an `as` assertion. */
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 export function parseSignatureMetadata(
   value: unknown,
 ): SignatureMetadata | undefined {
@@ -73,7 +65,7 @@ export function parseSignatureMetadata(
     }
   }
 
-  const metadata = recordFromUnknown(value);
+  const metadata = toRecord(value);
   const signedAt = metadata.signedAt;
   const signerCertificateSerial = metadata.signerCertificateSerial;
   const signerName = metadata.signerName;

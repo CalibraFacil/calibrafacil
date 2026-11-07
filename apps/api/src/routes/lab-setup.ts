@@ -18,17 +18,10 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 import { recordPlatformEvent } from "../lib/identity";
 import { orgDb } from "../lib/org-db";
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
+import { toRecord } from "@calibra-facil/shared/record";
 
 function getEnvValue(c: { env?: unknown }, key: string) {
-  return recordFromUnknown(c.env)[key];
+  return toRecord(c.env)[key];
 }
 
 function resolveTrustedAppUrl(c: { env?: unknown }) {

@@ -9,6 +9,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { buildServiceOrderFinancialStatus } from "./financial-timeline";
 import { orgDb } from "./org-db";
 import type { buildUnitScopeCondition } from "./units";
+import { isRecord } from "@calibra-facil/shared/record";
 
 type PortalFinancialScope = Parameters<typeof buildUnitScopeCondition>[1];
 
@@ -62,10 +63,6 @@ type PortalFinancialDocumentRow =
 export type PortalFinancialDocumentHrefSigner = (
   r2Key: string,
 ) => Promise<string>;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function textValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;

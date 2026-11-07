@@ -49,6 +49,7 @@ import {
   normalizeLabAccessEmail,
   validateLabAccountSetupToken,
 } from "./lab-access";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export type BetterAuthPasskeyPortableTypes =
   | AuthenticationResponseJSON
@@ -542,14 +543,6 @@ function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
   const callbackURL = body?.callbackURL;
 
   return typeof callbackURL === "string" ? callbackURL : null;
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 function readInvitationIdFromCallbackUrl(

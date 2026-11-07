@@ -37,6 +37,7 @@ import { notifyAuditChainBroken } from "@calibra-facil/notifications";
 import { writeOrganizationAuditEvent } from "./audit";
 import { getExecuteRows } from "./db";
 import { orgDb } from "./org-db";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /** The tables that carry a chain (the SQL function `calibra_audit_chain_columns`). */
 const CHAINED_AUDIT_TABLES = ["job_audit_log"] as const;
@@ -109,10 +110,6 @@ const BREAK_KINDS: readonly AuditChainBreakKind[] = [
 
 function isBreakKind(value: unknown): value is AuditChainBreakKind {
   return BREAK_KINDS.some((kind) => kind === value);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function numberOrNull(value: unknown): number | null {

@@ -3,6 +3,8 @@ import {
   normalizedFilename,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 
 // job_audit_log is the ISO/IEC 17025 §7.5 / §8.4 record trail of a calibration
@@ -27,12 +29,6 @@ const RAW_INSERT_PATTERN =
 
 const MESSAGE =
   "job_audit_log rows are written only by appendJobEvent (packages/db/src/job-events.ts), so every action keeps its typed `changes` shape, its organizationId and its actor. Add or reuse a member of the JobEvent union and call appendJobEvent(tx, event) inside the transaction of the state change.";
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 /** `jobAuditLog` or `<anything>.jobAuditLog`. */
 function isJobAuditLogTable(node: unknown): boolean {

@@ -49,6 +49,7 @@ import {
 import { seedOrg } from "../../../test/integration/seed";
 import { jobsRouter } from "../../routes/jobs";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
+import { isRecord } from "@calibra-facil/shared/record";
 
 const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),
@@ -107,10 +108,6 @@ function dataUrl(bytes: Uint8Array, type: string) {
 
 function sha256Of(value: unknown) {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function field(value: unknown, key: string): unknown {

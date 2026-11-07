@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import {
   asset,
   assetAuditLog,
@@ -7,7 +8,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { resolveAssetRegimeWrite } from "../../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../../lib/regulated-interval";
-import { asRecord, getNullableString, getNumber } from "./helpers";
+import { getNullableString, getNumber } from "./helpers";
 import { createCalibrationJob } from "../../lib/jobs";
 import {
   normalizeAssetSpecificationsFromInput,
@@ -37,7 +38,7 @@ export async function applyCreateLocalJobDraft(
     return { ok: true, remoteEntityId: existingRemoteEntityId };
   }
 
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const assetId = getNumber(payload, "assetId");
   const serviceId = getNumber(payload, "serviceId");
   const unitId =
@@ -94,7 +95,7 @@ export async function applyCreateLocalAsset(
     return { ok: true, remoteEntityId: existingRemoteEntityId };
   }
 
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const parseResult = DesktopCreateAssetSchema.safeParse(payload);
   if (!parseResult.success) {
     return {

@@ -1,9 +1,10 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { type SyncCommand } from "@calibra-facil/contracts";
 import { CreateCustomerSchema } from "@calibra-facil/schemas";
 import { type MemberData } from "../../middleware/permission";
 import { type R2Env } from "../../lib/storage";
 import { prepareCreateLocalAttachment } from "./apply-attachment";
-import { asRecord } from "./helpers";
+
 import {
   desktopCustomerOrganizationMetadata,
   desktopCustomerSlug,
@@ -36,7 +37,7 @@ export async function prepareDesktopEventSideEffects(
   ) {
     return {};
   }
-  const parsed = CreateCustomerSchema.safeParse(asRecord(command.payload));
+  const parsed = CreateCustomerSchema.safeParse(toRecord(command.payload));
   // The apply refuses an invalid payload with its own code.
   if (!parsed.success) return {};
 

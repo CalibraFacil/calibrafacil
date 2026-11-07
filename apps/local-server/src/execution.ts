@@ -5,6 +5,7 @@ import {
 } from "@calibra-facil/method-definition";
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import { createMethodDefinitionEngine } from "./method-engine";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type ExecutionInput = {
   methodSnapshot: Record<string, unknown>;
@@ -152,12 +153,4 @@ function isCompiledMethod(value: unknown): value is CompiledMethod {
     !Array.isArray(value) &&
     record.status === "compiled"
   );
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }

@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { type SyncCommand } from "@calibra-facil/contracts";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { type MemberData } from "../../middleware/permission";
@@ -5,7 +6,6 @@ import {
   type AppliedEventResult,
   type RefusedEventResult,
 } from "./event-transaction";
-import { asRecord } from "./helpers";
 
 /**
  * What one push request remembers across its events. A desktop queues several
@@ -87,7 +87,7 @@ export type ApplyDesktopSyncEventResult =
  * refusal is traceable instead of anonymous.
  */
 export function rejectedEventId(rawEvent: unknown, index: number): string {
-  const record = asRecord(rawEvent);
+  const record = toRecord(rawEvent);
   return typeof record.eventId === "string" && record.eventId.length > 0
     ? record.eventId
     : `batch-index:${index}`;
@@ -105,7 +105,7 @@ export function noteAppliedJobVersion(
   ) {
     return;
   }
-  const entity = asRecord(remoteEntity);
+  const entity = toRecord(remoteEntity);
   const id = entity.id;
   const updatedAt = entity.updatedAt;
   if (typeof id !== "number" || typeof updatedAt !== "string") return;

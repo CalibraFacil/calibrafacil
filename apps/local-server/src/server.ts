@@ -88,6 +88,7 @@ import {
 import { executeLocalCompiledMethod } from "./execution";
 import { resolveLocalStoragePath } from "./local-storage";
 import { registerPrinterRoutes } from "./printing/routes";
+import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
 export type LocalServerInstance = {
   app: ReturnType<typeof createLocalServer>;
@@ -524,7 +525,7 @@ export function createLocalServerRuntime(
   });
 
   app.post("/api/local/sync/dead-events/:eventId/discard", async (c) => {
-    const body = recordFromUnknown(await readJsonOrEmpty(c.req.raw));
+    const body = toRecord(await readJsonOrEmpty(c.req.raw));
     const discarded = discardDeadOutboxEvent(database, c.req.param("eventId"), {
       discardedBy: getLocalRequestContext(config, database).userId,
       reason: typeof body.reason === "string" ? body.reason : null,
@@ -633,14 +634,14 @@ export function createLocalServerRuntime(
           ),
           savedStandardsSnapshot: current.standardsSnapshot,
         });
-      const jobMethodSnapshot = recordFromUnknown(current.methodSnapshot);
+      const jobMethodSnapshot = toRecord(current.methodSnapshot);
       const results = executeLocalCompiledMethod({
         methodSnapshot: jobMethodSnapshot,
         currentCompiledMethod: currentPublishedCompiledMethod(
           database,
           jobMethodSnapshot,
         ),
-        assetSnapshot: recordFromUnknown(current.assetSnapshot),
+        assetSnapshot: toRecord(current.assetSnapshot),
         standardsSnapshot:
           standardsSnapshot === undefined
             ? current.standardsSnapshot
@@ -726,14 +727,14 @@ export function createLocalServerRuntime(
         // Judged on the day the work is recorded as performed (the cloud rule).
         localStandardsPerformedAt(input.performedAt, null),
       );
-      const jobMethodSnapshot = recordFromUnknown(current.methodSnapshot);
+      const jobMethodSnapshot = toRecord(current.methodSnapshot);
       const results = executeLocalCompiledMethod({
         methodSnapshot: jobMethodSnapshot,
         currentCompiledMethod: currentPublishedCompiledMethod(
           database,
           jobMethodSnapshot,
         ),
-        assetSnapshot: recordFromUnknown(current.assetSnapshot),
+        assetSnapshot: toRecord(current.assetSnapshot),
         standardsSnapshot:
           standardsSnapshot === undefined
             ? current.standardsSnapshot
@@ -1289,10 +1290,6 @@ function parseNumber(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 async function readJsonOrEmpty(request: Request) {
   const raw = await request.text();
   return raw ? JSON.parse(raw) : {};
@@ -1302,23 +1299,15 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Erro local";
 }
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 function recordOrNull(value: unknown): Record<string, unknown> | null {
-  const record = recordFromUnknown(value);
+  const record = toRecord(value);
   return Object.keys(record).length > 0 ? record : null;
 }
 
 function parseLocalJobExecutionInput(value: unknown): LocalJobExecutionInput {
-  const input = recordFromUnknown(value);
+  const input = toRecord(value);
   return {
-    data: recordFromUnknown(input.data),
+    data: toRecord(input.data),
     results: recordOrNull(input.results),
     selectedStandardIds: numberArrayFromUnknown(input.selectedStandardIds),
     environment: environmentFromUnknown(input.environment),
@@ -1348,7 +1337,7 @@ function parseLocalJobExecutionInput(value: unknown): LocalJobExecutionInput {
 function calibrationLocationFromUnknown(
   value: unknown,
 ): CalibrationLocationInput | undefined {
-  const input = recordFromUnknown(value);
+  const input = toRecord(value);
   if (
     input.type !== "customer_site" &&
     input.type !== "lab" &&
@@ -1369,15 +1358,15 @@ function calibrationLocationFromUnknown(
 function calibrationPhasesFromUnknown(
   value: unknown,
 ): CalibrationPhaseInput | undefined {
-  const input = recordFromUnknown(value);
-  const blocks = recordFromUnknown(input.blocks);
+  const input = toRecord(value);
+  const blocks = toRecord(input.blocks);
   if (Object.keys(blocks).length === 0) {
     return undefined;
   }
 
   const parsedBlocks: CalibrationPhaseInput["blocks"] = {};
   for (const [key, block] of Object.entries(blocks)) {
-    const blockRecord = recordFromUnknown(block);
+    const blockRecord = toRecord(block);
     if (!isCalibrationPhaseMode(blockRecord.mode)) {
       continue;
     }
@@ -1394,7 +1383,7 @@ function calibrationPhasesFromUnknown(
 function environmentFromUnknown(
   value: unknown,
 ): LocalJobExecutionInput["environment"] {
-  const input = recordFromUnknown(value);
+  const input = toRecord(value);
   if (Object.keys(input).length === 0) {
     return undefined;
   }
@@ -1445,7 +1434,7 @@ LIMIT 1
 }
 
 function tenantSnapshotFromUnknown(value: unknown) {
-  const snapshot = recordFromUnknown(value);
+  const snapshot = toRecord(value);
   const organizationId = snapshot.organization_id;
   const activeUnitId = snapshot.active_unit_id;
   const userId = snapshot.user_id;

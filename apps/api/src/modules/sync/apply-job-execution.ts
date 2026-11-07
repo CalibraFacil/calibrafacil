@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { desktopEventCarriesCalibrationRecordRule } from "@calibra-facil/schemas";
 import {
   executeJob,
@@ -6,12 +7,7 @@ import {
   type JobExecutionCommand,
 } from "../jobs/submit-job";
 import { type RefusedEventResult } from "./event-transaction";
-import {
-  asRecord,
-  getNullableString,
-  getNumber,
-  getRecordOrNull,
-} from "./helpers";
+import { getNullableString, getNumber, getRecordOrNull } from "./helpers";
 import {
   type ApplyDesktopSyncEventInput,
   type ApplyDesktopSyncEventResult,
@@ -41,7 +37,7 @@ export async function applyLocalJobExecution(
   input: ApplyDesktopSyncEventInput,
   actorUserId: string,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,

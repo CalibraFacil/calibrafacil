@@ -70,6 +70,7 @@ import { applyJobTimeline } from "../cli/seed-demo/timeline";
 import { jobsRouter } from "./jobs";
 import { publicApiV2Router } from "./public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { isRecord } from "@calibra-facil/shared/record";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -86,10 +87,6 @@ vi.mock("@calibra-facil/notifications", () => ({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 type PgFailure = { code: string | null; message: string; hint: string | null };
 

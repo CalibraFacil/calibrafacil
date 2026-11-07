@@ -19,16 +19,13 @@ import {
   type DimensionalFieldInput,
   type DimensionalFormulaInput,
 } from "./check";
+import { isRecord } from "@calibra-facil/shared/record";
 
 export interface MethodDimensionalRecord {
   readonly dataFields?: unknown;
   readonly variableBindings?: unknown;
   readonly formulas?: unknown;
   readonly measurementModels?: unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function nonEmptyString(value: unknown): string | null {

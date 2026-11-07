@@ -58,6 +58,7 @@ import {
 import { resolveCustomerRouteId } from "../lib/customer-route-id";
 import { orgDb } from "../lib/org-db";
 import { clientIp } from "../lib/client-ip";
+import { toRecord } from "@calibra-facil/shared/record";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -84,14 +85,6 @@ function generateUniqueSlug(name: string): string {
   const baseSlug = slugify(name);
   const randomSuffix = Math.random().toString(36).substring(2, 8);
   return `${baseSlug}-${randomSuffix}`;
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 function getStringProperty(value: unknown, key: string) {

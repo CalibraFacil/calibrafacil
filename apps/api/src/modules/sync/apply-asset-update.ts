@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import {
   asset,
   assetAuditLog,
@@ -9,7 +10,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { resolveAssetRegimeWrite } from "../../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../../lib/portal-asset-interval";
-import { asRecord, getNumber } from "./helpers";
+import { getNumber } from "./helpers";
 import { normalizeAssetSpecificationsFromInput } from "../../lib/asset-measurement";
 import {
   type ApplyDesktopSyncEventInput,
@@ -28,7 +29,7 @@ export async function applyUpdateLocalAsset(
   input: ApplyDesktopSyncEventInput,
   actorUserId: string,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,

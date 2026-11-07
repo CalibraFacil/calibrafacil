@@ -6,6 +6,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { type R2Env, type R2BucketLike } from "../../lib/storage";
 import { type CompiledMethod } from "@calibra-facil/method-definition";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export function decodeRouteIdentifier(identifier: string) {
   try {
@@ -21,20 +22,12 @@ export function shouldUseLocalR2Download(env: R2Env): env is R2Env & {
   return env.NODE_ENV === "development" && Boolean(env.CERTIFICATES_BUCKET);
 }
 
-export function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 export function stringFromUnknown(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
 export function r2EnvFromUnknown(value: unknown): R2Env {
-  const env = recordFromUnknown(value);
+  const env = toRecord(value);
   const bucket = env.CERTIFICATES_BUCKET;
   const bucketGet =
     bucket && typeof bucket === "object" ? Reflect.get(bucket, "get") : null;
@@ -65,7 +58,7 @@ export function r2EnvFromUnknown(value: unknown): R2Env {
 }
 
 export function isMethodInputField(value: unknown): value is MethodInputField {
-  const field = recordFromUnknown(value);
+  const field = toRecord(value);
   return typeof field.key === "string" && typeof field.type === "string";
 }
 
@@ -78,7 +71,7 @@ export function methodInputFieldsFromSnapshot(
 }
 
 export function methodSnapshotDisplay(value: unknown) {
-  const snapshot = recordFromUnknown(value);
+  const snapshot = toRecord(value);
   return {
     methodName:
       typeof snapshot.methodName === "string" ? snapshot.methodName : undefined,
@@ -90,8 +83,8 @@ export function methodSnapshotDisplay(value: unknown) {
 }
 
 export function isCompiledMethod(value: unknown): value is CompiledMethod {
-  const candidate = recordFromUnknown(value);
-  const engine = recordFromUnknown(candidate.engine);
+  const candidate = toRecord(value);
+  const engine = toRecord(candidate.engine);
   return (
     candidate.status === "compiled" &&
     typeof candidate.methodFingerprint === "string" &&

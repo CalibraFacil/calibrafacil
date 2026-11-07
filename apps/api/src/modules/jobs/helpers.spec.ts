@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { describe, it, expect } from "vitest";
 import type {
   MethodSnapshot,
@@ -8,7 +9,6 @@ import type {
 import {
   decodeRouteIdentifier,
   shouldUseLocalR2Download,
-  recordFromUnknown,
   stringFromUnknown,
   r2EnvFromUnknown,
   isMethodInputField,
@@ -91,17 +91,17 @@ describe("shouldUseLocalR2Download", () => {
   });
 });
 
-describe("recordFromUnknown", () => {
+describe("toRecord", () => {
   it("returns the entries of a plain object", () => {
-    expect(recordFromUnknown({ a: 1, b: "x" })).toEqual({ a: 1, b: "x" });
+    expect(toRecord({ a: 1, b: "x" })).toEqual({ a: 1, b: "x" });
   });
 
   it("returns {} for non-objects, null, and arrays", () => {
-    expect(recordFromUnknown(null)).toEqual({});
-    expect(recordFromUnknown(undefined)).toEqual({});
-    expect(recordFromUnknown("nope")).toEqual({});
-    expect(recordFromUnknown(42)).toEqual({});
-    expect(recordFromUnknown([1, 2, 3])).toEqual({});
+    expect(toRecord(null)).toEqual({});
+    expect(toRecord(undefined)).toEqual({});
+    expect(toRecord("nope")).toEqual({});
+    expect(toRecord(42)).toEqual({});
+    expect(toRecord([1, 2, 3])).toEqual({});
   });
 });
 

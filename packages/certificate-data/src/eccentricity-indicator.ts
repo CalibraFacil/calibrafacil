@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 /**
  * The eccentricity-indicator diagram: a small SVG showing which platform
  * position the indicator sat on during the eccentricity test. Extracted from
@@ -169,7 +170,7 @@ function resolveCircularEccentricityLoadPositions(
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
 
-    const value = String(recordFromUnknown(row)[positionColumn.key] ?? "")
+    const value = String(toRecord(row)[positionColumn.key] ?? "")
       .trim()
       .toUpperCase();
     if (
@@ -281,12 +282,4 @@ function normalizeSearchText(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-}
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }

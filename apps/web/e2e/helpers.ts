@@ -3,6 +3,7 @@ import type {
   DesktopAuthFetchRequest,
   DesktopSecretName,
 } from '@calibra-facil/contracts'
+import { isRecord } from '@calibra-facil/shared/record'
 
 export type JsonRouteOptions = {
   status?: number
@@ -384,10 +385,6 @@ async function readJsonPayload(data: string | null) {
 
   const parsed = JSON.parse(data)
   return isRecord(parsed) ? parsed : {}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function labSession() {

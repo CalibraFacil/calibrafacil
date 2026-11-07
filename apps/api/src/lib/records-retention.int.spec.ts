@@ -80,14 +80,11 @@ import {
 } from "./records-purge";
 import { cleanupFailedLabProvisioning } from "../services/lab-provisioning";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { isRecord } from "@calibra-facil/shared/record";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 type PgFailure = { code: string | null; message: string };
 

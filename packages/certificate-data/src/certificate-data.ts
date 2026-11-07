@@ -23,6 +23,7 @@ import type {
   FrozenSignatory,
   FrozenTraceability,
 } from "./frozen-content.js";
+import { toRecord } from "@calibra-facil/shared/record";
 
 /**
  * The job snapshot a certificate is rendered from — every value that can land
@@ -506,7 +507,7 @@ function getFirstWeighingRangeSpec(
     return undefined;
   }
 
-  const firstRange = recordFromUnknown(ranges[0]);
+  const firstRange = toRecord(ranges[0]);
   return Object.keys(firstRange).length > 0 ? firstRange : undefined;
 }
 
@@ -543,7 +544,7 @@ function normalizeMethodDataDisplay(job: CertificateJobData) {
 
     if (value && typeof value === "object") {
       return Object.fromEntries(
-        Object.entries(recordFromUnknown(value)).map(([key, itemValue]) => [
+        Object.entries(toRecord(value)).map(([key, itemValue]) => [
           key,
           formatByPath(itemValue, path ? `${path}.${key}` : key),
         ]),
@@ -732,7 +733,7 @@ function normalizeMassCompositions(job: CertificateJobData) {
 
   for (const source of sources) {
     for (const [key, value] of Object.entries(source)) {
-      const composition = recordFromUnknown(value);
+      const composition = toRecord(value);
       if (composition.kind === "mass_standard_composition") {
         compositions.push({ key, ...composition });
       }
@@ -771,14 +772,6 @@ function formatLabAddress(job: CertificateJobData): string {
   ]
     .filter(Boolean)
     .join(" - ");
-}
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 /**

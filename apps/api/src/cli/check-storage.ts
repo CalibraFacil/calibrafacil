@@ -26,16 +26,13 @@ import {
   resolveBucketName,
   uploadToR2,
 } from "../lib/storage";
+import { isRecord } from "@calibra-facil/shared/record";
 
 const PROBE_BODY = "calibra-check-storage";
 
 function fail(message: string): never {
   console.error(`check-storage failed: ${message}`);
   process.exit(1);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {

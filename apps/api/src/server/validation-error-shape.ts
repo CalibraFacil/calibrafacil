@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import type { Env } from "./env";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * One error shape for a request that fails validation (roadmap 2 D2, review
@@ -69,8 +70,4 @@ function parseIssues(message: string): unknown[] | null {
   } catch {
     return null;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

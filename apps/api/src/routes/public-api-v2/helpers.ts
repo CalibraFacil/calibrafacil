@@ -1,4 +1,5 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { toRecord } from "@calibra-facil/shared/record";
 
 function slugify(text: string) {
   return text
@@ -12,14 +13,6 @@ function slugify(text: string) {
 
 export function generateUniqueSlug(name: string) {
   return `${slugify(name)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 function isContentfulStatus(status: number): status is ContentfulStatusCode {

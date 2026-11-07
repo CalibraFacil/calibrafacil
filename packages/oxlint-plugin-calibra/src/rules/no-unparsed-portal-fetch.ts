@@ -5,6 +5,8 @@ import {
   type Baseline,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 
 // The client portal reads every API answer through ONE module,
@@ -28,12 +30,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([]);
 
 const MESSAGE =
   "Do not call fetch() or read .json() directly in the portal. Use fetchPortalJson(path, schema, { errorMessage }) from @/lib/api-fetch (or fetchPortalResponse + readPortalJson / readPortalJsonResult when the HTTP status decides what to render) with a schema from @calibra-facil/contracts, so the response is validated.";
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 /** `fetch(...)` / `globalThis.fetch(...)` / `window.fetch(...)`. */
 function isFetchCall(callee: UnknownRecord | null): boolean {

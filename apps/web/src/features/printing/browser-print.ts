@@ -1,3 +1,4 @@
+import { toRecord } from '@calibra-facil/shared/record'
 /**
  * Zebra Browser Print integration — cloud-mode thermal printing.
  *
@@ -37,15 +38,8 @@ function agentBaseUrl(): string {
   return isHttps ? 'https://localhost:9101' : 'http://localhost:9100'
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {}
-  }
-  return Object.fromEntries(Object.entries(value))
-}
-
 function toDevice(value: unknown): BrowserPrintDevice | null {
-  const record = asRecord(value)
+  const record = toRecord(value)
   const name = typeof record.name === 'string' ? record.name : null
   const uid = typeof record.uid === 'string' ? record.uid : null
   if (!name || !uid) {
@@ -97,7 +91,7 @@ export async function listBrowserPrintDevices(): Promise<BrowserPrintDevice[]> {
     throw new Error('Não foi possível listar as impressoras do Browser Print')
   }
   const data: unknown = await response.json()
-  const printers = asRecord(data).printer
+  const printers = toRecord(data).printer
   if (!Array.isArray(printers)) {
     return []
   }

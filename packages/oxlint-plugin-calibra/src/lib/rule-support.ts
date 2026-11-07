@@ -26,9 +26,10 @@ export interface RuleModule {
   create(context: RuleContext): Record<string, RuleVisitor | undefined>;
 }
 
-type UnknownRecord = Record<string, unknown>;
+export type UnknownRecord = Record<string, unknown>;
 
-function toRecord(value: unknown): UnknownRecord | null {
+/** An AST node or node field as a plain record, or null. */
+export function toRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === "object" ? Object(value) : null;
 }
 

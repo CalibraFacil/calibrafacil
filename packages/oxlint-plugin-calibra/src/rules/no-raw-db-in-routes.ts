@@ -6,6 +6,8 @@ import {
   normalizedFilename,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 import { RAW_DB_BASELINE } from "../lib/raw-db-baseline.ts";
 
@@ -35,12 +37,6 @@ const DB_PACKAGE = "@calibra-facil/db";
 // repeat identifiers as tokens; `parent` would loop).
 const SKIPPED_KEYS = new Set(["parent", "tokens", "comments", "loc", "range"]);
 const MAX_DEPTH = 400;
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 // The raw handle is exported as `db` and, as a function, `getDb()`. The system
 // (owner) path is raw too: `systemDb` / `getSystemDb()`. A route reaches it only

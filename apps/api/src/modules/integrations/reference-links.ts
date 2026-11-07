@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import { integrationObjectLink } from "@calibra-facil/db/schema";
@@ -8,7 +9,7 @@ import {
   type ContaAzulReferenceDomain,
 } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
-import { toRecord } from "./utils";
+
 import { toIsoDate } from "./schedule-config";
 import { upsertLink } from "./sync-state";
 

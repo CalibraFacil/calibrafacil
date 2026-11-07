@@ -2,18 +2,6 @@ import { parseNumericValue } from '@calibra-facil/shared/units'
 import type { MethodTableColumn } from '@/components/method-runtime/types'
 import { parseClipboardMatrix } from '@/lib/clipboard-table'
 
-export function toRecordArray(
-  value: unknown[],
-): Array<Record<string, unknown>> {
-  return value.flatMap((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      return []
-    }
-
-    return [Object.fromEntries(Object.entries(item))]
-  })
-}
-
 export function isNumericString(value: string) {
   return /^-?\d*\.?\d+$/.test(value)
 }

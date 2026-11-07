@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { customer, customerAuditLog } from "@calibra-facil/db/schema";
 import {
   CreateCustomerSchema,
@@ -5,7 +6,7 @@ import {
   UpdateCustomerSchema,
 } from "@calibra-facil/schemas";
 import { and, eq } from "drizzle-orm";
-import { asRecord, getNumber } from "./helpers";
+import { getNumber } from "./helpers";
 import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
@@ -34,7 +35,7 @@ export async function applyCreateLocalCustomer(
     return { ok: true, remoteEntityId: existingRemoteEntityId };
   }
 
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const parseResult = CreateCustomerSchema.safeParse(payload);
   if (!parseResult.success) {
     return {
@@ -108,7 +109,7 @@ export async function applyUpdateLocalCustomer(
   input: ApplyDesktopSyncEventInput,
   actorUserId: string,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
@@ -244,7 +245,7 @@ export async function applyUpdateLocalCustomerCompliance(
   input: ApplyDesktopSyncEventInput,
   actorUserId: string,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,

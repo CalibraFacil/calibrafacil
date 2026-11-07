@@ -9,6 +9,7 @@ import type { LocalDatabase } from "./database";
 import { setSyncCursor } from "./outbox";
 import { resolveServiceOrdersForAggregates } from "./service-orders";
 import { recordSkippedRow } from "./skipped-rows";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -183,7 +184,7 @@ ON CONFLICT(scope) DO UPDATE SET
     }
 
     for (const item of bootstrap.assetTypes) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       database
         .prepare(
@@ -233,7 +234,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.customers) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       if (
         skipPendingRow(
@@ -309,7 +310,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.assets) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       if (skipPendingRow(database, pending, skipped, row, "asset", "asset", id))
         continue;
@@ -424,7 +425,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.services) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       database
         .prepare(
@@ -480,7 +481,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.publishedMethods) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       database
         .prepare(
@@ -551,7 +552,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.standards) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       database
         .prepare(
@@ -610,7 +611,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.massCompositionProfiles ?? []) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       database
         .prepare(
@@ -658,7 +659,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.environmentalLimits) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       database
         .prepare(
@@ -701,7 +702,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.jobs) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       if (
         skipPendingRow(
@@ -849,7 +850,7 @@ ON CONFLICT(id) DO UPDATE SET
     }
 
     for (const item of bootstrap.serviceOrders ?? []) {
-      const row = asRecord(item);
+      const row = toRecord(item);
       const id = requiredNumber(row, "id");
       if (
         skipPendingRow(
@@ -1133,10 +1134,10 @@ function applyCloudDeletions(
       // A soft-deleted row says when; a tombstone for a row that is gone or out of scope
       // has no payload date, so the event's own time stands in.
       deletedAt:
-        getDateString(asRecord(event.payload), "deletedAt") ?? event.occurredAt,
+        getDateString(toRecord(event.payload), "deletedAt") ?? event.occurredAt,
       // The deletion's own version: what a re-fetch has to bring back.
       version:
-        getDateString(asRecord(event.payload), "updatedAt") ?? event.occurredAt,
+        getDateString(toRecord(event.payload), "updatedAt") ?? event.occurredAt,
     });
   }
 
@@ -1411,14 +1412,6 @@ function eventsFor(
     .map((event) => event.payload);
 }
 
-function asRecord(value: unknown): JsonRecord {
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value));
-  }
-
-  return {};
-}
-
 function requiredNumber(row: JsonRecord, key: string) {
   const value = getNumber(row, key);
   if (value === null) {
@@ -1610,7 +1603,7 @@ export function applySyncBootstrapPage(
     );
     for (const [entityType, key] of BOOTSTRAP_PAGE_ARRAYS) {
       for (const item of page[key] ?? []) {
-        const id = getNumber(asRecord(item), "id");
+        const id = getNumber(toRecord(item), "id");
         if (id !== null) remember.run(entityType, id);
       }
     }

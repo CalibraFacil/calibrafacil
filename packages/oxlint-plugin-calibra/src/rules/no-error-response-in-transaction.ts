@@ -5,6 +5,8 @@ import {
   type Baseline,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 
 // An error response RETURNED from inside a transaction callback commits the
@@ -54,12 +56,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
 
 const MESSAGE =
   "Do not return an error response from inside a transaction callback: the return commits every write made before it. Throw a DomainError (apps/api/src/lib/domain-errors.ts) so the transaction rolls back.";
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 /** `<x>.json(…, status)` / `<x>.body(…, status)` with a literal status >= 400. */
 function isErrorResponseCall(call: UnknownRecord): boolean {

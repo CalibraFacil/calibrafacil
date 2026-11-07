@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@calibra-facil/contracts": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
     "better-sqlite3": "^12.11.1",
     "electron-updater": "^6.8.3",
     "serialport": "^13.0.0",

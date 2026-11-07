@@ -22,6 +22,7 @@ import type { LocalDatabase } from "./database";
 import { getLocalEffectiveEnvironmentalLimits } from "./environmental-limits";
 import { stableLocalNumericId } from "./ids";
 import type { LocalJobStatus } from "./jobs";
+import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -533,7 +534,7 @@ function parseSnapshotStandardIds(snapshotJson: string | null): number[] {
   if (!Array.isArray(parsed)) return [];
   const ids: number[] = [];
   for (const entry of parsed) {
-    if (!isJsonObject(entry)) continue;
+    if (!isRecord(entry)) continue;
     const id = getNumber(entry, "id");
     if (id !== null) ids.push(id);
   }
@@ -709,7 +710,7 @@ function savedStandardEntries(snapshot: unknown): Map<number, JsonRecord> {
   const entries = new Map<number, JsonRecord>();
   if (!Array.isArray(snapshot)) return entries;
   for (const entry of snapshot) {
-    if (!isJsonObject(entry)) continue;
+    if (!isRecord(entry)) continue;
     const id = getNumber(entry, "id");
     if (id !== null) entries.set(id, entry);
   }
@@ -808,10 +809,10 @@ export function resolveLocalDraftStandards(
           : "normal",
       drift: getNullableNumber(source, "drift"),
       certifiedValues,
-      metrologyData: isJsonObject(source.metrologyData)
+      metrologyData: isRecord(source.metrologyData)
         ? source.metrologyData
         : null,
-      certificateDocument: isJsonObject(source.certificateDocument)
+      certificateDocument: isRecord(source.certificateDocument)
         ? source.certificateDocument
         : null,
     };
@@ -828,14 +829,14 @@ function collectCompositionStandardIds(data: JsonRecord) {
       return;
     }
 
-    if (!isJsonObject(value)) return;
+    if (!isRecord(value)) return;
 
     if (
       value.kind === "mass_standard_composition" &&
       Array.isArray(value.items)
     ) {
       for (const item of value.items) {
-        if (!isJsonObject(item)) continue;
+        if (!isRecord(item)) continue;
         const standardIds = Array.isArray(item.standardIds)
           ? item.standardIds
           : [];
@@ -862,7 +863,7 @@ function parseSnapshotCertifiedValues(value: unknown): JsonRecord[] | null {
   const values: JsonRecord[] = [];
 
   for (const item of value) {
-    if (!isJsonObject(item)) continue;
+    if (!isRecord(item)) continue;
     if (
       typeof item.nominal !== "string" ||
       typeof item.value !== "number" ||
@@ -1091,18 +1092,6 @@ INSERT INTO outbox (
     });
 }
 
-function recordFromUnknown(value: unknown): JsonRecord {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
-function isJsonObject(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
@@ -1129,7 +1118,7 @@ function parseJson(value: string | null | undefined) {
 
 function parseJsonRecord(value: string | null | undefined) {
   const parsed = parseJson(value);
-  return recordFromUnknown(parsed);
+  return toRecord(parsed);
 }
 
 function parseJsonRecordOrNull(value: string | null | undefined) {

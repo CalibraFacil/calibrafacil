@@ -7,16 +7,13 @@ import {
   verifyResendSignature,
 } from "../lib/resend-webhook";
 import { recordResendWebhookEvent } from "../lib/resend-webhook-ledger";
+import { isRecord } from "@calibra-facil/shared/record";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
 // Logged once per process if Resend webhooks arrive while the secret is unset
 // (graceful degradation, mirroring the email-config warnings elsewhere).
 let resendWebhookSecretWarningLogged = false;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 export const webhooksRouter = new Hono().post("/resend", async (c) => {
   const contentLength = Number(c.req.header("content-length") ?? "0");

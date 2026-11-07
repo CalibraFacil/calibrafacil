@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { type SyncEvent } from "@calibra-facil/contracts";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
@@ -10,7 +11,7 @@ import { writeOrganizationAuditEvent } from "../../lib/audit";
 import { orgDb } from "../../lib/org-db";
 import { withOrgReader } from "../../lib/org-transaction";
 import { type MemberData } from "../../middleware/permission";
-import { asRecord, getNullableString } from "./helpers";
+import { getNullableString } from "./helpers";
 import { type ApplyDesktopSyncEventInput } from "./desktop-event-support";
 
 /**
@@ -49,7 +50,7 @@ export async function findDesktopSyncRemoteEntityId(
 
   if (!row) return null;
 
-  const remoteEntityId = asRecord(row.details).remoteEntityId;
+  const remoteEntityId = toRecord(row.details).remoteEntityId;
   return typeof remoteEntityId === "number" ||
     typeof remoteEntityId === "string"
     ? remoteEntityId
@@ -107,7 +108,7 @@ export async function findAppliedDesktopSyncEvent(
   );
 
   for (const row of rows) {
-    const details = asRecord(row.details);
+    const details = toRecord(row.details);
     if (details.eventId !== event.eventId) continue;
 
     const remoteEntityId = details.remoteEntityId;

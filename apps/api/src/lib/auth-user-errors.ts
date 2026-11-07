@@ -1,11 +1,4 @@
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
+import { toRecord } from "@calibra-facil/shared/record";
 /**
  * Flatten what an auth error actually says.
  *
@@ -16,9 +9,9 @@ function recordFromUnknown(value: unknown): Record<string, unknown> {
  * hard failure, so every caller reads through this instead.
  */
 export function authErrorSignals(error: unknown) {
-  const errorRecord = recordFromUnknown(error);
-  const body = recordFromUnknown(errorRecord.body);
-  const cause = recordFromUnknown(errorRecord.cause);
+  const errorRecord = toRecord(error);
+  const body = toRecord(errorRecord.body);
+  const cause = toRecord(errorRecord.cause);
   const statusCandidates = [
     errorRecord.status,
     errorRecord.statusCode,

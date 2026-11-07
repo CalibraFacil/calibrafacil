@@ -17,6 +17,7 @@ import {
 import { sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { isRecord } from "@calibra-facil/shared/record";
 
 // ---------------------------------------------------------------------------
 // Real-DB integration test for the PUBLIC certificate-verification router.
@@ -288,10 +289,6 @@ async function seedVerifiableCert(params: {
     labName,
     lab,
   };
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
 }
 
 describe("verifyRouter — real DB, public certificate verification", () => {

@@ -1,5 +1,6 @@
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export type LocalMethodsListInput = {
   page: number;
@@ -297,15 +298,7 @@ function safeParseUnknown(value: string): unknown {
 
 function safeParseRecord(value: string): Record<string, unknown> {
   const parsed = safeParseUnknown(value);
-  return recordFromUnknown(parsed);
-}
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
+  return toRecord(parsed);
 }
 
 function getArray(record: Record<string, unknown>, key: string): unknown[] {

@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { formatLabDayKey } from "@calibra-facil/documents";
 import {
   applyIntegrationMappings,
@@ -16,7 +17,6 @@ import {
   type IntegrationSyncTarget,
   type IntegrationTransporterPayload,
 } from "@calibra-facil/shared";
-import { toRecord } from "./utils";
 
 function getMappingValidationIssues(
   config: Pick<FinancialErpConnectionConfig, "mappings">,

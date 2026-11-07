@@ -1,3 +1,4 @@
+import { toRecord, toRecordArray } from '@calibra-facil/shared/record'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -5,7 +6,7 @@ import {
   toFinancialStatus,
   toJobStatus,
 } from './job-detail-guards'
-import { isNullableRecord, toRecord, toRecordArray } from './record-guards'
+import { isNullableRecord } from './record-guards'
 
 function approvedRecord(overrides: Record<string, unknown> = {}) {
   return {

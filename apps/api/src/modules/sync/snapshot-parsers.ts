@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import {
   type CalibrationPhaseSnapshot,
   type CalibrationLocationSnapshot,
@@ -8,7 +9,7 @@ import {
   StandardSnapshotSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
 } from "@calibra-facil/schemas";
-import { asRecord, isPositiveInteger, parseSnapshotDate } from "./helpers";
+import { isPositiveInteger, parseSnapshotDate } from "./helpers";
 
 export function collectCompositionStandardIds(data: Record<string, unknown>) {
   const ids = new Set<number>();
@@ -19,7 +20,7 @@ export function collectCompositionStandardIds(data: Record<string, unknown>) {
       return;
     }
 
-    const record = asRecord(value);
+    const record = toRecord(value);
     if (Object.keys(record).length === 0) return;
 
     if (
@@ -27,7 +28,7 @@ export function collectCompositionStandardIds(data: Record<string, unknown>) {
       Array.isArray(record.items)
     ) {
       for (const item of record.items) {
-        const compositionItem = asRecord(item);
+        const compositionItem = toRecord(item);
         const standardIds = Array.isArray(compositionItem.standardIds)
           ? compositionItem.standardIds
           : [];
@@ -134,7 +135,7 @@ export function getCalibrationPhaseSnapshotOrNull(
 function isEnvironmentalSnapshot(
   value: unknown,
 ): value is EnvironmentalSnapshot {
-  const row = asRecord(value);
+  const row = toRecord(value);
   return (
     ("temperature" in row || "humidity" in row || "pressure" in row) &&
     typeof row.recordedAt === "string" &&
@@ -145,7 +146,7 @@ function isEnvironmentalSnapshot(
 function isCalibrationLocationSnapshot(
   value: unknown,
 ): value is CalibrationLocationSnapshot {
-  const row = asRecord(value);
+  const row = toRecord(value);
   return (
     typeof row.type === "string" &&
     typeof row.addressText === "string" &&
@@ -157,7 +158,7 @@ function isCalibrationLocationSnapshot(
 function isCalibrationPhaseSnapshot(
   value: unknown,
 ): value is CalibrationPhaseSnapshot {
-  const row = asRecord(value);
+  const row = toRecord(value);
   return (
     typeof row.blocks === "object" &&
     row.blocks !== null &&

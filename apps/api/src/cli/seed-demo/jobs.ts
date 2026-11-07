@@ -1,3 +1,4 @@
+import { isRecord } from "@calibra-facil/shared/record";
 import { systemDb as ownerDb } from "@calibra-facil/db";
 import { calibrationJob, notification } from "@calibra-facil/db/schema";
 import { forceCompleteQueueJob } from "@calibra-facil/db/queue";
@@ -5,7 +6,7 @@ import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { createWorkerRuntimeEnv } from "../../lib/runtime-env";
-import { DEMO_ACTORS, LAB_ID, isRecord, numberField, stringField } from "./api";
+import { DEMO_ACTORS, LAB_ID, numberField, stringField } from "./api";
 import { createRng } from "./prng";
 import type { SeededAsset } from "./assets";
 import type { SeedContext } from "./context";

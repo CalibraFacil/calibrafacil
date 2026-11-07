@@ -11,6 +11,7 @@ import {
 } from "./schema.js";
 import { parseQueueMessage, type QueueMessage } from "@calibra-facil/schemas";
 import { PUBLIC_API_WEBHOOK_MAX_ATTEMPTS } from "@calibra-facil/shared";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export type { QueueMessage };
 
@@ -21,14 +22,6 @@ export type ClaimedQueueJob = {
   attempts: number;
   maxAttempts: number;
 };
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
 
 function getExecuteRows(result: unknown): unknown[] {
   if (Array.isArray(result)) return result;

@@ -5,10 +5,7 @@ import {
   processScheduledContaAzulPolls,
   runContaAzulScheduledPoll,
 } from "../../modules/integrations";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+import { isRecord } from "@calibra-facil/shared/record";
 
 const mocks = vi.hoisted(() => {
   const operations: Array<{

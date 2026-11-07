@@ -26,12 +26,9 @@ import { sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
+import { isRecord } from "@calibra-facil/shared/record";
 
 const STATUSES = JobStatusSchema.options;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 type PgFailure = { code: string | null; message: string };
 

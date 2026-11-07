@@ -19,14 +19,7 @@ import type {
   PreviewInputValue,
   RunMethodPreviewOptions,
 } from "./types";
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
+import { toRecord } from "@calibra-facil/shared/record";
 
 function previewInputValueFromUnknown(
   value: unknown,
@@ -46,7 +39,7 @@ function previewInputValueFromUnknown(
           (item): item is NumericInput =>
             typeof item === "string" || typeof item === "number",
         )
-      : value.map(recordFromUnknown);
+      : value.map(toRecord);
   }
 
   return undefined;
@@ -352,7 +345,7 @@ function evaluateTableRowFormula(
       }
     }
 
-    const record = recordFromUnknown(row);
+    const record = toRecord(row);
     for (const column of numericColumns) {
       const value = record[column.key];
       if (value === undefined || value === null || value === "") continue;
@@ -488,7 +481,7 @@ function evaluateTableRowMeasurementModel(
       }
     }
 
-    const record = recordFromUnknown(row);
+    const record = toRecord(row);
     for (const column of numericColumns) {
       const value = record[column.key];
       if (value === undefined || value === null || value === "") continue;
@@ -839,7 +832,7 @@ function buildPreviewContext(
           );
           continue;
         }
-        const record = recordFromUnknown(row);
+        const record = toRecord(row);
         for (const column of input.columns) {
           if (!isColumnPhaseActive(input, column.key, calibrationPhases)) {
             continue;
@@ -1014,7 +1007,7 @@ function tableColumnNumbers(
       continue;
     }
 
-    const cell = recordFromUnknown(row)[columnKey];
+    const cell = toRecord(row)[columnKey];
     if (cell === undefined || cell === null || cell === "") {
       diagnostics.push(
         errorDiagnostic(
@@ -1054,7 +1047,7 @@ function environmentValue(
   ) {
     return undefined;
   }
-  return toNumericInput(recordFromUnknown(environment)[field]);
+  return toNumericInput(toRecord(environment)[field]);
 }
 
 function standardValue(
@@ -1071,7 +1064,7 @@ function standardValue(
             item &&
             typeof item === "object" &&
             !Array.isArray(item) &&
-            recordFromUnknown(item).id === metadata.standardId,
+            toRecord(item).id === metadata.standardId,
         )
       : standards[0];
 
@@ -1079,7 +1072,7 @@ function standardValue(
     return undefined;
   }
 
-  const record = recordFromUnknown(standard);
+  const record = toRecord(standard);
   const valueKey =
     typeof metadata.valueKey === "string" ? metadata.valueKey : "";
   if (valueKey === "uncertainty") return toNumericInput(record.uncertainty);
@@ -1095,10 +1088,10 @@ function standardValue(
       item &&
       typeof item === "object" &&
       !Array.isArray(item) &&
-      String(recordFromUnknown(item).nominal).replace(/\s+/g, "") === valueKey,
+      String(toRecord(item).nominal).replace(/\s+/g, "") === valueKey,
   );
   if (certifiedValue && typeof certifiedValue === "object") {
-    return toNumericInput(recordFromUnknown(certifiedValue).value);
+    return toNumericInput(toRecord(certifiedValue).value);
   }
 
   const uncertaintyKey = valueKey.endsWith("_u") ? valueKey.slice(0, -2) : null;
@@ -1108,11 +1101,10 @@ function standardValue(
       item &&
       typeof item === "object" &&
       !Array.isArray(item) &&
-      String(recordFromUnknown(item).nominal).replace(/\s+/g, "") ===
-        uncertaintyKey,
+      String(toRecord(item).nominal).replace(/\s+/g, "") === uncertaintyKey,
   );
   return uncertaintyValue && typeof uncertaintyValue === "object"
-    ? toNumericInput(recordFromUnknown(uncertaintyValue).uncertainty)
+    ? toNumericInput(toRecord(uncertaintyValue).uncertainty)
     : undefined;
 }
 

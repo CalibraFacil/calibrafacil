@@ -26,6 +26,7 @@ import {
   convertUnitValue,
   parseNumericValue,
 } from "./convert";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export type SpecificationFieldLike = {
   key: string;
@@ -73,13 +74,6 @@ export type UnitConversionTrace = {
   normalizedUnit: string;
   reason: string;
 };
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return Object.fromEntries(Object.entries(value));
-}
 
 /**
  * The display unit a literal column/field value should be presented in: the
