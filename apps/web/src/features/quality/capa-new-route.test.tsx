@@ -95,6 +95,7 @@ vi.mock('@calibra-facil/ui/select', () => ({
 }))
 
 import { NewCAPAPage } from '@/features/quality/capa-new-page'
+import { capaKeys } from '@/features/quality/keys'
 
 describe('new CAPA route workflow', () => {
   beforeEach(() => {
@@ -108,7 +109,18 @@ describe('new CAPA route workflow', () => {
   })
 
   it('submits a schema-validated CAPA payload and navigates to the detail page', async () => {
-    renderRoute()
+    const queryClient = renderRoute()
+    const list = capaKeys.list({
+      organizationId: 'org-1',
+      page: 1,
+      search: '',
+      statusFilter: '',
+      severityFilter: '',
+      categoryFilter: '',
+    })
+    const summary = capaKeys.summary('org-1')
+    queryClient.setQueryData(list, { data: [] })
+    queryClient.setQueryData(summary, { open: 0 })
 
     fireEvent.change(
       screen.getByPlaceholderText('Título resumido da ação corretiva'),
@@ -164,6 +176,9 @@ describe('new CAPA route workflow', () => {
       to: '/dashboard/capa/$id',
       params: { id: '77' },
     })
+    // The list the user lands on next must not serve the pre-create cache.
+    expect(queryClient.getQueryState(list)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(summary)?.isInvalidated).toBe(true)
   })
 
   it('surfaces schema validation errors before calling the API', async () => {
@@ -221,4 +236,5 @@ function renderRoute() {
       <NewCAPAPage />
     </QueryClientProvider>,
   )
+  return queryClient
 }

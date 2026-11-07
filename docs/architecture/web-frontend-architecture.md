@@ -162,6 +162,16 @@ and organization deletion call `queryClient.clear()`. The portal, whose keys are
 built from `portalQueryKey(organizationId, ...)`, keeps the organization in the
 key as well.
 
+Known gap, left on purpose: a second tab of the lab app does not hear that
+another tab changed the session's organization or unit. The app has no
+cross-tab signal to hook the reset into (no `storage` or `BroadcastChannel`
+listener in `apps/web`, `refetchOnWindowFocus` is off for the session, and Better
+Auth's own `storage`-based broadcast carries `session` events for its session
+atom and is not connected to the query cache). The tab keeps the
+old organization's cached data until it refetches. Adding a `storage` listener on
+the stored dashboard organization/unit keys (written on every switch) and calling
+the same reset would close it; that is a new signal, so it is a product decision.
+
 ## Runtime Config and Dashboard Scope
 
 Web runtime constants and environment flag parsing live in
