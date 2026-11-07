@@ -1,3 +1,4 @@
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { syncRouter } from "./sync";
@@ -10,9 +11,11 @@ import {
   organization,
   organizationEventLog,
   referenceStandard,
+  referenceStandardCertificateDocument,
   syncAppliedEvent,
   user,
 } from "@calibra-facil/db/schema";
+import { syncBootstrapPageResponseSchema } from "@calibra-facil/contracts";
 import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -33,10 +36,9 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 //   REQ-SYNC-002  [HIGH RISK]  POST /push actor-scope — stray actorUserId rejected
 //   REQ-SYNC-003  [HIGH RISK]  POST /push RBAC — member=403, operator=200
 //   REQ-SYNC-004  [HIGH RISK]  POST /bootstrap tenant isolation — org B data absent from org A response
-//   REQ-SYNC-005  [HIGH RISK]  GET  /pull  tenant isolation — org B customer absent from org A pull
+//                              (the pull's isolation is REQ-18I-PULL-1 in sync-lab-scope.int.spec.ts)
 //   REQ-SYNC-006               POST /push + GET /pull unauthenticated → 401
-//   REQ-SYNC-PULL-001..004     GET  /pull cursor: nothing skipped across pages
-//   REQ-SYNC-PULL-005          GET  /pull soft-deleted asset/standard sent as delete events
+//                              (the pull cursor and tombstones are sync-change-seq.int.spec.ts)
 //   REQ-SYNC-PUSH-UNKNOWN-001  POST /push unknown op rejected, not acknowledged
 //   REQ-SYNC-PUSH-DEDUP-001    POST /push retried op id deduplicated
 //   REQ-SYNC-PUSH-DEDUP-002..006 concurrent / in-flight / abandoned / rejected / died-late claims
@@ -127,6 +129,7 @@ function buildPushBody(events: Record<string, unknown>[]): string {
     deviceId: "device-test-1",
     clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
     baseCursor: null,
+    ...CURRENT_DESKTOP_BUILD,
     events,
   });
 }
@@ -570,7 +573,7 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     const res = await syncRouter.request("/bootstrap", {
       method: "POST",
       headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
-      body: JSON.stringify({ deviceId: "device-boot-001" }),
+      body: JSON.stringify({ protocolVersion: 3 }),
     });
 
     expect(res.status).toBe(200);
@@ -596,181 +599,7 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     expect(parsed.organization.id).toBe(orgA.orgId);
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // REQ-SYNC-005: Pull tenant isolation — org B customer absent from org A pull
-  // loadCloudSyncEventsSince filters customers by labOrganizationId = memberData.organizationId.
-  // We seed a customer for each org with updatedAt in the past, then pull with
-  // cursor=1970-01-01 to fetch all records. Org B's customer must be absent.
-  // RED-able: removing the WHERE org filter in loadCloudSyncEventsSince would expose
-  // org B's customer in the events list.
-  // ───────────────────────────────────────────────────────────────────────────
-  it("REQ-SYNC-005: GET /pull returns only orgA's entities; orgB's customer entityId is absent", async () => {
-    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-
-    // Seed a customer for each org. The pull mechanism uses customer.updatedAt > cursor.
-    // We seed now, then pull from epoch so both would be returned without the org filter.
-    const orgACustomerId = await seedCustomerRow({
-      labOrgId: orgA.orgId,
-      clientOrgId: "client-a1",
-      name: "Alpha Pull Client",
-    });
-    const orgBCustomerId = await seedCustomerRow({
-      labOrgId: orgB.orgId,
-      clientOrgId: "client-b1",
-      name: "Beta Pull Client",
-    });
-
-    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-
-    // Pull from epoch so that all records (updatedAt > 1970-01-01) are included
-    const res = await syncRouter.request(
-      "/pull?cursor=1970-01-01T00%3A00%3A00.000Z",
-      {
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
-      },
-    );
-
-    expect(res.status).toBe(200);
-    const rawBody: unknown = await res.json();
-
-    // Parse the response with Zod to avoid `as` assertions (consistent-type-assertions rule)
-    const pullShape = z.object({
-      events: z.array(
-        z.object({
-          entityType: z.string(),
-          entityId: z.union([z.number(), z.string()]),
-          payload: z.object({ name: z.string().optional() }).passthrough(),
-        }),
-      ),
-    });
-    const body = pullShape.parse(rawBody);
-    const events = body.events;
-
-    // The customer events for org A must be present
-    const customerEvents = events.filter((e) => e.entityType === "customer");
-    const customerEntityIds = customerEvents.map((e) => Number(e.entityId));
-    expect(customerEntityIds).toContain(orgACustomerId);
-
-    // Org B's customer entityId must NOT appear anywhere in the events
-    expect(customerEntityIds).not.toContain(orgBCustomerId);
-
-    // Additional name-level check as a second layer
-    const customerNames = customerEvents
-      .map((e) => e.payload?.name)
-      .filter(Boolean);
-    expect(customerNames).toContain("Alpha Pull Client");
-    expect(customerNames).not.toContain("Beta Pull Client");
-  });
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Pull cursor (per-table windows merged into one stream)
-  // ───────────────────────────────────────────────────────────────────────────
-  const pullPageShape = z.object({
-    cursor: z.string().nullable(),
-    hasMore: z.boolean(),
-    events: z.array(
-      z.object({
-        entityType: z.string(),
-        entityId: z.union([z.number(), z.string()]),
-        occurredAt: z.string(),
-      }),
-    ),
-  });
-
-  async function pullPage(
-    org: { userId: string; orgId: string; unitId: number },
-    params: { limit: number; cursor?: string | null },
-  ) {
-    loginAs({ userId: org.userId, organizationId: org.orgId });
-    const query = new URLSearchParams({ limit: String(params.limit) });
-    if (params.cursor) query.set("cursor", params.cursor);
-    const res = await syncRouter.request(`/pull?${query.toString()}`, {
-      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-    });
-    expect(res.status).toBe(200);
-    return pullPageShape.parse(await res.json());
-  }
-
-  async function pullEverything(
-    org: { userId: string; orgId: string; unitId: number },
-    params: { limit: number; cursor?: string | null },
-  ) {
-    const pages: Array<z.infer<typeof pullPageShape>> = [];
-    let cursor = params.cursor ?? null;
-    for (let page = 0; page < 30; page += 1) {
-      const body = await pullPage(org, { limit: params.limit, cursor });
-      pages.push(body);
-      if (!body.hasMore) break;
-      cursor = body.cursor;
-    }
-    return pages;
-  }
-
-  async function seedCustomerAt(params: {
-    labOrgId: string;
-    name: string;
-    updatedAt: Date;
-  }) {
-    const clientOrgId = `client-${params.name}`;
-    await withStatusRepair((tx) =>
-      tx.insert(organization).values({
-        id: clientOrgId,
-        name: clientOrgId,
-        slug: clientOrgId,
-        type: "CLIENT",
-        status: "ACTIVE",
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      }),
-    );
-    const [row] = await db
-      .insert(customer)
-      .values({
-        name: params.name,
-        authOrganizationId: clientOrgId,
-        labOrganizationId: params.labOrgId,
-        updatedAt: params.updatedAt,
-      })
-      .returning({ id: customer.id });
-    if (!row) throw new Error("seedCustomerAt: insert failed");
-    return row.id;
-  }
-
-  it("REQ-SYNC-PULL-001: a table over its limit is not skipped when another table has newer rows", async () => {
-    const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    const customerIds: number[] = [];
-    for (let index = 0; index < 5; index += 1) {
-      customerIds.push(
-        await seedCustomerAt({
-          labOrgId: org.orgId,
-          name: `pending-${index}`,
-          updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, index)),
-        }),
-      );
-    }
-    // Newer than every customer: the old cursor jumped straight to this row.
-    await db.insert(assetType).values({
-      name: "Tipo Recente",
-      slug: "tipo-recente",
-      definition: [],
-      updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, 30)),
-    });
-
-    const pages = await pullEverything(org, { limit: 2 });
-    const events = pages.flatMap((page) => page.events);
-
-    const pulledCustomers = events
-      .filter((event) => event.entityType === "customer")
-      .map((event) => Number(event.entityId));
-    expect(pulledCustomers).toEqual(customerIds);
-    expect(
-      events.filter((event) => event.entityType === "asset_type"),
-    ).toHaveLength(1);
-    expect(pages.length).toBeGreaterThan(1);
-    expect(pages.at(-1)?.hasMore).toBe(false);
-  });
-
-  it("REQ-SYNC-PULL-005: a soft-deleted asset and standard reach the pull as delete events with their deletedAt, while bootstrap keeps excluding them", async () => {
+  it("REQ-SYNC-PULL-005: the bootstrap pages exclude a soft-deleted asset and standard (the pull sends them as tombstones: sync-change-seq.int.spec.ts)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
     const customerId = await seedCustomerRow({
       labOrgId: org.orgId,
@@ -783,22 +612,6 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
       .returning({ id: assetType.id });
     if (!type) throw new Error("assetType insert failed");
     const deletedAt = new Date(Date.UTC(2026, 0, 2, 12, 0, 0));
-    const [deletedAsset] = await withStatusRepair((tx) =>
-      tx
-        .insert(asset)
-        .values({
-          unitId: org.unitId,
-          customerId,
-          labOrganizationId: org.orgId,
-          assetTypeId: type.id,
-          name: "Apagado",
-          serialNumber: "SN-DEL",
-          tag: "TAG-DEL",
-          updatedAt: deletedAt,
-          deletedAt,
-        })
-        .returning({ id: asset.id }),
-    );
     const [liveAsset] = await withStatusRepair((tx) =>
       tx
         .insert(asset)
@@ -810,66 +623,43 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
           name: "Ativo",
           serialNumber: "SN-LIVE",
           tag: "TAG-LIVE",
-          updatedAt: new Date(Date.UTC(2026, 0, 2, 11, 0, 0)),
         })
         .returning({ id: asset.id }),
     );
-    const [deletedStandard] = await withStatusRepair((tx) =>
-      tx
-        .insert(referenceStandard)
-        .values({
-          unitId: org.unitId,
-          organizationId: org.orgId,
-          name: "Padrão apagado",
-          serialNumber: "STD-DEL",
-          certificateNumber: "CERT-DEL",
-          calibrationDate: new Date(Date.UTC(2025, 0, 1)),
-          nextCalibrationDate: new Date(Date.UTC(2027, 0, 1)),
-          createdBy: org.userId,
-          updatedAt: deletedAt,
-          deletedAt,
-        })
-        .returning({ id: referenceStandard.id }),
+    await withStatusRepair((tx) =>
+      tx.insert(asset).values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: org.orgId,
+        assetTypeId: type.id,
+        name: "Apagado",
+        serialNumber: "SN-DEL",
+        tag: "TAG-DEL",
+        deletedAt,
+      }),
     );
-    if (!deletedAsset || !liveAsset || !deletedStandard) {
-      throw new Error("seed failed");
-    }
+    await withStatusRepair((tx) =>
+      tx.insert(referenceStandard).values({
+        unitId: org.unitId,
+        organizationId: org.orgId,
+        name: "Padrão apagado",
+        serialNumber: "STD-DEL",
+        certificateNumber: "CERT-DEL",
+        calibrationDate: new Date(Date.UTC(2025, 0, 1)),
+        nextCalibrationDate: new Date(Date.UTC(2027, 0, 1)),
+        createdBy: org.userId,
+        deletedAt,
+      }),
+    );
+    if (!liveAsset) throw new Error("seed failed");
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
-    const res = await syncRouter.request("/pull?limit=100", {
-      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-    });
-    const body = z
-      .object({
-        events: z.array(
-          z.object({
-            entityType: z.string(),
-            entityId: z.union([z.number(), z.string()]),
-            operation: z.string(),
-            payload: z.record(z.string(), z.unknown()),
-          }),
-        ),
-      })
-      .parse(await res.json());
-    const find = (entityType: string, id: number) =>
-      body.events.find(
-        (event) =>
-          event.entityType === entityType && Number(event.entityId) === id,
-      );
-
-    expect(find("asset", deletedAsset.id)?.operation).toBe("delete");
-    expect(find("asset", deletedAsset.id)?.payload.deletedAt).toBe(
-      deletedAt.toISOString(),
-    );
-    expect(find("reference_standard", deletedStandard.id)?.operation).toBe(
-      "delete",
-    );
-    expect(find("asset", liveAsset.id)?.operation).toBe("upsert");
-
     const bootstrap = await syncRouter.request("/bootstrap", {
       method: "POST",
       headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ protocolVersion: 3 }),
     });
+    expect(bootstrap.status).toBe(200);
     const snapshot = z
       .object({
         assets: z.array(z.object({ id: z.number() })),
@@ -880,78 +670,80 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     expect(snapshot.standards).toEqual([]);
   });
 
-  it("REQ-SYNC-PULL-002: rows sharing one timestamp across a page boundary are neither lost nor repeated", async () => {
+  it("REQ-SYNC-BOOTSTRAP-STD: a bootstrap page carries a standard's certified values and its current certificate document", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    const sameInstant = new Date(Date.UTC(2026, 0, 1, 10, 0, 0, 123));
-    const customerIds: number[] = [];
-    for (let index = 0; index < 5; index += 1) {
-      customerIds.push(
-        await seedCustomerAt({
-          labOrgId: org.orgId,
-          name: `tie-${index}`,
-          updatedAt: sameInstant,
+    const [standard] = await withStatusRepair((tx) =>
+      tx
+        .insert(referenceStandard)
+        .values({
+          unitId: org.unitId,
+          organizationId: org.orgId,
+          name: "Mass set",
+          kind: "mass_set",
+          serialNumber: "STD-100",
+          certificateNumber: "CERT-100",
+          calibratedBy: "Trace Lab",
+          calibrationDate: new Date(Date.UTC(2026, 0, 1)),
+          nextCalibrationDate: new Date(Date.UTC(2027, 0, 1)),
+          uncertainty: 0.001,
+          createdBy: org.userId,
+          certifiedValues: [
+            {
+              nominal: "1 kg",
+              authentication: "A",
+              value: 1000,
+              uncertainty: 0.005,
+              unit: "g",
+              maxError: 0.01,
+              drift: 0.001,
+              buoyancy: 0.0002,
+              coverageFactor: 2,
+              compositionProfile: true,
+              profileKey: "1 kg stack",
+              profileClass: "M1",
+              profileQuantityAvailable: 1,
+            },
+          ],
+        })
+        .returning({ id: referenceStandard.id }),
+    );
+    if (!standard) throw new Error("standard insert failed");
+    await db.insert(referenceStandardCertificateDocument).values({
+      standardId: standard.id,
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      certificateNumber: "CERT-100",
+      calibrationDate: new Date(Date.UTC(2026, 0, 1)),
+      nextCalibrationDate: new Date(Date.UTC(2027, 0, 1)),
+      fileName: "cert-100.pdf",
+      contentType: "application/pdf",
+      fileSize: 1024,
+      sha256: "a".repeat(64),
+      r2Key: "standards/cert-100.pdf",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const response = await syncRouter.request("/bootstrap", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ protocolVersion: 3 }),
+    });
+    expect(response.status).toBe(200);
+    const page = syncBootstrapPageResponseSchema.parse(await response.json());
+    expect(page.standards).toEqual([
+      expect.objectContaining({
+        id: standard.id,
+        kind: "mass_set",
+        calibratedBy: "Trace Lab",
+        uncertainty: 0.001,
+        certifiedValues: [
+          expect.objectContaining({ nominal: "1 kg", value: 1000 }),
+        ],
+        certificateDocument: expect.objectContaining({
+          fileName: "cert-100.pdf",
         }),
-      );
-    }
-
-    const pages = await pullEverything(org, { limit: 2 });
-    const pulled = pages
-      .flatMap((page) => page.events)
-      .filter((event) => event.entityType === "customer")
-      .map((event) => Number(event.entityId));
-
-    expect(pulled).toEqual(customerIds);
-  });
-
-  it("REQ-SYNC-PULL-003: the cursor never moves backwards and strictly advances while hasMore", async () => {
-    const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    for (let index = 0; index < 4; index += 1) {
-      await seedCustomerAt({
-        labOrgId: org.orgId,
-        name: `advance-${index}`,
-        updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, 0)),
-      });
-    }
-
-    const pages = await pullEverything(org, { limit: 1 });
-    const cursors = pages
-      .filter((page) => page.hasMore)
-      .map((page) => page.cursor);
-
-    expect(cursors.length).toBeGreaterThan(1);
-    expect(new Set(cursors).size).toBe(cursors.length);
-  });
-
-  it("REQ-SYNC-PULL-004: a cursor in the old bare-ISO format (and the push cursors old desktops stored) is still accepted", async () => {
-    const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    const early = await seedCustomerAt({
-      labOrgId: org.orgId,
-      name: "legacy-early",
-      updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, 0)),
-    });
-    const late = await seedCustomerAt({
-      labOrgId: org.orgId,
-      name: "legacy-late",
-      updatedAt: new Date(Date.UTC(2026, 0, 1, 11, 0, 0)),
-    });
-
-    const fromIso = await pullPage(org, {
-      limit: 100,
-      cursor: "2026-01-01T10:30:00.000Z",
-    });
-    const customerIds = (page: typeof fromIso) =>
-      page.events
-        .filter((event) => event.entityType === "customer")
-        .map((event) => Number(event.entityId));
-    expect(customerIds(fromIso)).toEqual([late]);
-
-    // Desktops built before this change store the push cursor as the pull
-    // cursor; it is not a date, so the pull restarts from the epoch.
-    const fromPushCursor = await pullPage(org, {
-      limit: 100,
-      cursor: "cursor:batch-1:3",
-    });
-    expect(customerIds(fromPushCursor)).toEqual([early, late]);
+      }),
+    ]);
   });
 
   // ───────────────────────────────────────────────────────────────────────────

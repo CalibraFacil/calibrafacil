@@ -8,6 +8,7 @@
  * it expired; what matters is when the work was done.
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -178,6 +179,7 @@ async function pushSubmit(
       deviceId: "device-sv-1",
       clientBatchId: `batch-${options.eventId}`,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       events: [
         {
           eventId: options.eventId,

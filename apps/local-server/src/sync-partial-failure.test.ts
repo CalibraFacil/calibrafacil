@@ -128,6 +128,7 @@ function emptyPullResponse() {
 // the push reconciliation rather than a bootstrap failure.
 function bootstrapResponse() {
   return Response.json({
+    page: { nextToken: null, rowCount: 0 },
     serverTime: "2026-01-15T10:00:00.000Z",
     user: { id: "user-1", name: "User One", email: "user@example.com" },
     organization: { id: "org-1", type: "LAB" },

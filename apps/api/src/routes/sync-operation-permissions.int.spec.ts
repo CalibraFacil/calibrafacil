@@ -9,6 +9,7 @@
  *   REQ-SYNC-RBAC-4  an event the role may send is not refused for permission (it
  *                    applies, or fails on its own merits), and a batch carries both
  */
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -226,6 +227,7 @@ async function pushBatch(world: World, operations: readonly string[]) {
       deviceId: "device-rbac",
       clientBatchId: "batch-rbac",
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       events,
     }),
   });

@@ -14,6 +14,7 @@
  *   REQ-CAS-4  the happy path is unchanged
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -105,6 +106,7 @@ async function push(
       deviceId: "device-cas-1",
       clientBatchId: `batch-${eventId}`,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       events: [
         {
           eventId,

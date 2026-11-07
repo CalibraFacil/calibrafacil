@@ -26,8 +26,9 @@ import { syncEventSchema } from "./sync";
  *   this server does not support (`UNSUPPORTED_SYNC_OPERATION`).
  * - Protocol 3 adds the commit-ordered pull and the paged bootstrap
  *   (sync-change-seq.ts, docs/architecture/sync-change-seq.md). The push wire format
- *   is unchanged; protocols 1 and 2 keep the `updatedAt` pull until
- *   `SYNC_MIN_DESKTOP_VERSION` excludes them (DEPLOYMENT.md).
+ *   is unchanged. Protocols 1 and 2 (the `updatedAt` pull and the unpaged bootstrap)
+ *   are gone: the cloud answers a pull, a bootstrap or a push of a desktop below
+ *   `SYNC_DESKTOP_VERSION_FLOOR` with the "update required" refusal (HTTP 426).
  * - Protocol 4 adds the attachment upload leg (sync-attachments.ts): a desktop that
  *   speaks it uploads an attachment's bytes (init-upload, PUT, complete-upload)
  *   before pushing `create_local_attachment`, and the cloud refuses that event
@@ -43,6 +44,22 @@ export const SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION = 4;
 
 /** The protocol of a request that states no `protocolVersion`. */
 export const LEGACY_SYNC_PROTOCOL_VERSION = 1;
+
+/**
+ * The oldest protocol the cloud still serves: the commit-ordered pull and the paged
+ * bootstrap. A request of an older protocol (or one that states none) is answered
+ * `DESKTOP_UPDATE_REQUIRED`.
+ */
+export const SYNC_MIN_PROTOCOL_VERSION = 3;
+
+/**
+ * The oldest desktop build the cloud takes sync requests from, whatever
+ * `SYNC_MIN_DESKTOP_VERSION` says (that variable can only raise it). 0.3.0 is the
+ * first release that reports its own version, speaks protocol 3, stamps the
+ * calibration record on its execution events and no longer writes the retired
+ * operations (offline mode narrowed to field capture, intake and reference reads).
+ */
+export const SYNC_DESKTOP_VERSION_FLOOR = "0.3.0";
 
 // ---------------------------------------------------------------------------
 // Payloads. The cloud applies each one through the domain schemas of
@@ -742,6 +759,20 @@ function comparePrerelease(left: string, right: string): -1 | 0 | 1 {
   }
   if (a.length === b.length) return 0;
   return a.length < b.length ? -1 : 1;
+}
+
+/**
+ * The minimum the cloud enforces: the operator's `SYNC_MIN_DESKTOP_VERSION` when it is
+ * higher than `SYNC_DESKTOP_VERSION_FLOOR`, the floor otherwise.
+ */
+export function effectiveMinimumDesktopVersion(
+  configured: string | undefined,
+): string {
+  if (configured === undefined) return SYNC_DESKTOP_VERSION_FLOOR;
+  return (compareDesktopVersions(configured, SYNC_DESKTOP_VERSION_FLOOR) ??
+    -1) >= 0
+    ? configured
+    : SYNC_DESKTOP_VERSION_FLOOR;
 }
 
 export type DesktopVersionGate =

@@ -22,6 +22,7 @@
  *   REQ-SUB-5j  a sync event for a job outside the session's unit scope is out of reach
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../../test/integration/desktop-build";
 import { setJobStatus } from "../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -295,6 +296,7 @@ const sync: EntryPoint = {
         deviceId: "device-sub-1",
         clientBatchId: `batch-${eventId}`,
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           {
             eventId,
@@ -791,6 +793,7 @@ describe("desktop sync: a job outside the session's unit scope is out of reach (
         deviceId: "device-sub-2",
         clientBatchId: `batch-${operation}`,
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           {
             eventId: `evt-${operation}`,

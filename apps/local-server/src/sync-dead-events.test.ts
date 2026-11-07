@@ -11,6 +11,7 @@ import {
   type LocalDatabase,
 } from "@calibra-facil/local-db";
 import type { SyncStatusSnapshot } from "@calibra-facil/contracts";
+import { asBootstrapPage } from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";
 import { createLocalServer } from "./server";
 import { createLocalSyncRuntime, type LocalSyncRuntime } from "./sync";
@@ -149,7 +150,7 @@ function recordingCloud() {
       });
     }
     if (url === "https://api.example.test/api/sync/bootstrap") {
-      return Response.json(bootstrapBody);
+      return Response.json(asBootstrapPage(bootstrapBody));
     }
     if (url.startsWith("https://api.example.test/api/sync/pull")) {
       return Response.json({

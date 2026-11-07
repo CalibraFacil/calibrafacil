@@ -18,8 +18,8 @@
  *                   laboratory
  *   REQ-18I-PUSH-4  an event that fails mid-apply leaves nothing: no claim, no write, no
  *                   audit row and no change-log entry
- *   REQ-18I-PULL-1  a pull (protocol 3, even with another laboratory's cursor, and the
- *                   deprecated one) and every bootstrap carry only the laboratory's rows
+ *   REQ-18I-PULL-1  a pull (protocol 3, even with another laboratory's cursor)
+ *                   and every bootstrap carry only the laboratory's rows
  *   REQ-18I-LOG-1   the change-log triggers append entries of the writing laboratory when
  *                   the writer is `calibra_app`; a write of another laboratory's row is
  *                   refused and logs nothing; the global asset-type catalog is not
@@ -27,6 +27,7 @@
  *   REQ-18I-ATT-1   an attachment of another laboratory's partition is neither signed
  *                   nor completed
  */
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -150,6 +151,7 @@ async function push(lab: Lab, events: Record<string, unknown>[]) {
       deviceId: `device-${lab.orgId}`,
       clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       events,
     }),
   });
@@ -588,15 +590,17 @@ async function waitUntilServable() {
 async function pullAll(
   lab: Lab,
   cursor: string,
-  protocol: number | null = 3,
 ): Promise<{ events: Pull["events"]; cursor: string }> {
   await waitUntilServable();
   loginAs({ userId: lab.userId, organizationId: lab.orgId });
   const events: Pull["events"] = [];
   let next = cursor;
   for (let page = 0; page < 50; page += 1) {
-    const query = new URLSearchParams({ cursor: next, limit: "2" });
-    if (protocol !== null) query.set("protocolVersion", String(protocol));
+    const query = new URLSearchParams({
+      cursor: next,
+      limit: "2",
+      protocolVersion: "3",
+    });
     const response = await syncRouter.request(`/pull?${query.toString()}`, {
       headers: { ...JSON_HEADERS, "x-active-unit-id": String(lab.unitId) },
     });
@@ -687,18 +691,9 @@ describe("REQ-18I-PULL: a device reads only its own laboratory", () => {
     );
     expect(foreign.map((e) => e.entityId)).toEqual([aCustomer]);
     expect(JSON.stringify(withForeignCursor.events)).not.toContain("Cliente B");
-
-    // The deprecated updatedAt pull is scoped the same way.
-    const legacy = await pullAll(a, new Date(0).toISOString(), null);
-    const legacyCustomers = legacy.events.filter(
-      (e) => e.entityType === "customer",
-    );
-    expect(legacyCustomers.map((e) => e.entityId)).toContain(aCustomer);
-    expect(legacyCustomers.map((e) => e.entityId)).not.toContain(bCustomer);
-    expect(JSON.stringify(legacy.events)).not.toContain("Cliente B");
   });
 
-  it("REQ-18I-PULL-1 [HIGH RISK]: no bootstrap page, paged or legacy, contains a row of the other laboratory", async () => {
+  it("REQ-18I-PULL-1 [HIGH RISK]: no bootstrap page contains a row of the other laboratory", async () => {
     const { a, b } = await seedWorld();
     const extra = await seedCustomer({
       labOrganizationId: B,
@@ -722,27 +717,6 @@ describe("REQ-18I-PULL: a device reads only its own laboratory", () => {
     // Every row names its laboratory; the global asset-type catalog (a slug) is the
     // only place laboratory B's seed may show.
     expect(JSON.stringify(pages)).not.toContain(`"organizationId":"${B}"`);
-
-    // The one unpaginated response of protocols 1 and 2.
-    loginAs({ userId: a.userId, organizationId: a.orgId });
-    const response = await syncRouter.request("/bootstrap", {
-      method: "POST",
-      headers: { ...JSON_HEADERS, "x-active-unit-id": String(a.unitId) },
-    });
-    expect(response.status).toBe(200);
-    const legacy = z
-      .object({
-        customers: z.array(z.object({ id: z.number() })),
-        assets: z.array(z.object({ id: z.number() })),
-        jobs: z.array(z.object({ id: z.number() })),
-        services: z.array(z.object({ id: z.number() })),
-      })
-      .parse(await response.json());
-    expect(idsOf(legacy.assets)).toEqual([a.assetId]);
-    expect(idsOf(legacy.jobs)).toEqual([a.jobId]);
-    expect(idsOf(legacy.services)).toEqual([a.serviceId]);
-    expect(idsOf(legacy.customers)).not.toContain(b.customerId);
-    expect(idsOf(legacy.customers)).not.toContain(extra);
   });
 });
 

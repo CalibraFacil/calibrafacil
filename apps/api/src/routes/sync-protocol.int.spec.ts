@@ -13,6 +13,7 @@
  *             queue is untouched) and the legacy calibration-record exemption ends
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -25,6 +26,7 @@ import {
   syncAppliedEvent,
 } from "@calibra-facil/db/schema";
 import {
+  SYNC_DESKTOP_VERSION_FLOOR,
   classifyOutboxRejection,
   syncPushResponseSchema,
   syncUpdateRequiredResponseSchema,
@@ -169,8 +171,8 @@ function createAssetEvent(
 }
 
 type PushOptions = {
-  protocolVersion?: number;
-  desktopVersion?: string;
+  protocolVersion?: number | undefined;
+  desktopVersion?: string | undefined;
 };
 
 async function rawPush(
@@ -189,6 +191,7 @@ async function rawPush(
       deviceId: "device-sp",
       clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       ...options,
       events,
     }),
@@ -726,20 +729,89 @@ describe("REQ-SP-5: a job execution made against a stale base is a conflict", ()
 });
 
 describe("REQ-SP-6: the minimum desktop version", () => {
-  it("REQ-SP-6: with no minimum configured every desktop is accepted, versioned or not", async () => {
+  it("REQ-SP-6 [HIGH RISK] (Q69): with no minimum configured the built-in floor applies: a desktop below it, one that states no version and one of protocol 1 or 2 are answered 426; nothing is applied or claimed", async () => {
+    const world = await seedWorld();
+    const before = await jobRow(world.jobId);
+
+    const refused: Array<{ options: PushOptions; version: string | null }> = [
+      {
+        options: { protocolVersion: undefined, desktopVersion: undefined },
+        version: null,
+      },
+      {
+        options: { protocolVersion: 2, desktopVersion: "0.2.0" },
+        version: "0.2.0",
+      },
+      {
+        options: { protocolVersion: 3, desktopVersion: "0.2.9" },
+        version: "0.2.9",
+      },
+      {
+        // A build that reports a current version but speaks protocol 2 cannot exist; refused anyway.
+        options: {
+          protocolVersion: 2,
+          desktopVersion: SYNC_DESKTOP_VERSION_FLOOR,
+        },
+        version: SYNC_DESKTOP_VERSION_FLOOR,
+      },
+    ];
+    for (const [index, { options, version }] of refused.entries()) {
+      const res = await rawPush(
+        world,
+        [
+          createAssetEvent(
+            world,
+            `evt-sp6-floor-${index}`,
+            `SP6-FLOOR-${index}`,
+          ),
+          executionEvent(
+            world,
+            `evt-sp6-floor-job-${index}`,
+            "submit_local_execution",
+            {},
+          ),
+        ],
+        options,
+      );
+      expect(res.status).toBe(426);
+      const body = syncUpdateRequiredResponseSchema.parse(await res.json());
+      expect(body).toMatchObject({
+        code: "DESKTOP_UPDATE_REQUIRED",
+        minimumVersion: SYNC_DESKTOP_VERSION_FLOOR,
+        desktopVersion: version,
+      });
+      expect(await assetsByTag(`SP6-FLOOR-${index}`)).toEqual([]);
+      expect(await claimsFor(`evt-sp6-floor-${index}`)).toEqual([]);
+      expect(await claimsFor(`evt-sp6-floor-job-${index}`)).toEqual([]);
+    }
+    expect(await jobRow(world.jobId)).toEqual(before);
+  });
+
+  it("REQ-SP-6 (Q69): a desktop at the floor pushes normally", async () => {
     const world = await seedWorld();
 
-    const unversioned = await push(world, [
-      createAssetEvent(world, "evt-sp6-none-1", "SP6-NONE-1"),
-    ]);
-    const old = await push(
+    const atFloor = await push(
       world,
-      [createAssetEvent(world, "evt-sp6-none-2", "SP6-NONE-2")],
-      { protocolVersion: 2, desktopVersion: "0.0.1" },
+      [createAssetEvent(world, "evt-sp6-floor-ok", "SP6-FLOOR-OK")],
+      { protocolVersion: 3, desktopVersion: SYNC_DESKTOP_VERSION_FLOOR },
     );
 
-    expect(unversioned.accepted).toHaveLength(1);
-    expect(old.accepted).toHaveLength(1);
+    expect(atFloor.accepted).toHaveLength(1);
+  });
+
+  it("REQ-SP-6 (Q69): a configured minimum below the floor changes nothing", async () => {
+    vi.stubEnv("SYNC_MIN_DESKTOP_VERSION", "0.1.0");
+    const world = await seedWorld();
+
+    const res = await rawPush(
+      world,
+      [createAssetEvent(world, "evt-sp6-below", "SP6-BELOW")],
+      { protocolVersion: 3, desktopVersion: "0.2.0" },
+    );
+
+    expect(res.status).toBe(426);
+    const body = syncUpdateRequiredResponseSchema.parse(await res.json());
+    expect(body.minimumVersion).toBe(SYNC_DESKTOP_VERSION_FLOOR);
   });
 
   it("REQ-SP-6 [HIGH RISK]: with a minimum set, an older desktop is answered 426 with a typed update-required body; nothing is applied or claimed", async () => {
@@ -753,7 +825,7 @@ describe("REQ-SP-6: the minimum desktop version", () => {
         createAssetEvent(world, "evt-sp6-old-asset", "SP6-OLD"),
         executionEvent(world, "evt-sp6-old-job", "submit_local_execution", {}),
       ],
-      { protocolVersion: 2, desktopVersion: "1.3.9" },
+      { protocolVersion: 3, desktopVersion: "1.3.9" },
     );
 
     expect(res.status).toBe(426);
@@ -774,9 +846,11 @@ describe("REQ-SP-6: the minimum desktop version", () => {
     vi.stubEnv("SYNC_MIN_DESKTOP_VERSION", "1.4.0");
     const world = await seedWorld();
 
-    const res = await rawPush(world, [
-      createAssetEvent(world, "evt-sp6-unversioned", "SP6-UNV"),
-    ]);
+    const res = await rawPush(
+      world,
+      [createAssetEvent(world, "evt-sp6-unversioned", "SP6-UNV")],
+      { protocolVersion: undefined, desktopVersion: undefined },
+    );
 
     expect(res.status).toBe(426);
     const body = syncUpdateRequiredResponseSchema.parse(await res.json());
@@ -791,12 +865,12 @@ describe("REQ-SP-6: the minimum desktop version", () => {
     const atMinimum = await push(
       world,
       [createAssetEvent(world, "evt-sp6-at", "SP6-AT")],
-      { protocolVersion: 2, desktopVersion: "1.4.0" },
+      { protocolVersion: 3, desktopVersion: "1.4.0" },
     );
     const above = await push(
       world,
       [createAssetEvent(world, "evt-sp6-above", "SP6-ABOVE")],
-      { protocolVersion: 2, desktopVersion: "2.0.0" },
+      { protocolVersion: 3, desktopVersion: "2.0.0" },
     );
 
     expect(atMinimum.accepted).toHaveLength(1);
@@ -818,7 +892,7 @@ describe("REQ-SP-6: the minimum desktop version", () => {
           },
         }),
       ],
-      { protocolVersion: 2, desktopVersion: "1.4.0" },
+      { protocolVersion: 3, desktopVersion: "1.4.0" },
     );
 
     expect(body.accepted).toEqual([]);
@@ -856,7 +930,7 @@ describe("REQ-SP-6: the minimum desktop version", () => {
     const body = await push(
       world,
       [executionEvent(world, "evt-sp6-stamped", "submit_local_execution", {})],
-      { protocolVersion: 2, desktopVersion: "1.4.0" },
+      { protocolVersion: 3, desktopVersion: "1.4.0" },
     );
 
     expect(body.rejected).toEqual([]);

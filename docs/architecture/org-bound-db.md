@@ -344,8 +344,7 @@ added or removed without a migration.
     (`validateSyncActorScope`) read the audit log and `member` in a short `orgDb(lab).transaction`
     (`withOrgReader`). The client organization of a `create_local_customer` is still created by better-auth
     before the event (its own connection; see "Not done here").
-  - **Pull and bootstrap.** The protocol 3 pull page and each bootstrap page, and the deprecated protocol 1 and
-    2 pull and bootstrap, run in one `orgDb(lab).transaction` (READ COMMITTED: each statement still takes its
+  - **Pull and bootstrap.** The protocol 3 pull page and each bootstrap page run in one `orgDb(lab).transaction` (READ COMMITTED: each statement still takes its
     own snapshot, so the horizon of the pull and the `xmin` of the bootstrap are computed exactly as before; the
     read-only transaction has no id and is never the "oldest in flight"). A cursor is a position in the shared
     transaction order, not a key to a laboratory's rows: a laboratory's device presenting another laboratory's

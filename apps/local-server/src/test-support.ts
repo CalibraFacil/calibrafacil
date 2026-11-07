@@ -1,4 +1,17 @@
+import type { SyncBootstrapResponse } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "@calibra-facil/local-db";
+
+/**
+ * A cloud's answer to `POST /api/sync/bootstrap` that serves the whole snapshot in one page
+ * (the paged bootstrap of protocol 3 is the only one a desktop reads).
+ */
+export function asBootstrapPage(snapshot: SyncBootstrapResponse) {
+  return {
+    ...snapshot,
+    syncCursor: snapshot.syncCursor ?? "cursor-after-bootstrap",
+    page: { nextToken: null, rowCount: 0 },
+  };
+}
 
 /**
  * Reference data a technician already has on the device after the initial sync:

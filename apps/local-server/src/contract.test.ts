@@ -48,6 +48,7 @@ import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import { applySyncBootstrap, openLocalDatabase } from "@calibra-facil/local-db";
 import { createLocalServer } from "./server";
 
+import { asBootstrapPage } from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";
 
 const tempDirectories: string[] = [];
@@ -671,7 +672,9 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
           }
           // The cloud's bootstrap is a contract fixture too.
           return Response.json(
-            syncBootstrapResponseSchema.parse(cloudBootstrap()),
+            asBootstrapPage(
+              syncBootstrapResponseSchema.parse(cloudBootstrap()),
+            ),
           );
         },
       },

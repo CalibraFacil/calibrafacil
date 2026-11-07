@@ -1,3 +1,4 @@
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,7 +8,6 @@ import {
   syncAttachmentCompleteUploadResponseSchema,
   syncAttachmentDownloadResponseSchema,
   syncAttachmentInitUploadResponseSchema,
-  syncBootstrapResponseSchema,
   syncConflictResolutionResponseSchema,
   syncPushResponseSchema,
 } from "@calibra-facil/contracts";
@@ -333,206 +333,6 @@ describe("syncRouter", () => {
     vi.clearAllMocks();
   });
 
-  it("returns a bootstrap snapshot scoped to the authenticated member", async () => {
-    const response = await createApp().request("/api/sync/bootstrap", {
-      method: "POST",
-    });
-    const body = syncBootstrapResponseSchema.parse(await response.json());
-
-    expect(response.status).toBe(200);
-    expect(body.user).toEqual({
-      id: "user-1",
-      name: "Ada Lovelace",
-      email: "ada@example.test",
-    });
-    expect(body.organization).toEqual({
-      id: "org-1",
-      type: "laboratory",
-    });
-    expect(body.permissions).toMatchObject({
-      role: "admin",
-      activeUnitId: 10,
-      accessibleUnitIds: [10, 11],
-      canAccessAllUnits: false,
-    });
-    expect(body.featureFlags).toEqual({
-      offlineApprovals: false,
-      offlineCertificatePublication: false,
-    });
-    expect(body.publishedMethods).toEqual([]);
-    expect(mocks.db.select).toHaveBeenCalledTimes(10);
-  });
-
-  it("includes measurement models in synced published methods", async () => {
-    const measurementModels = [
-      {
-        key: "mass_uncertainty",
-        label: "Mass uncertainty",
-        measurand: "error",
-        expression: "error",
-        quantities: [
-          {
-            symbol: "error",
-            source: { kind: "formula", key: "error" },
-            uncertainty: {
-              kind: "direct_standard_uncertainty",
-              standardUncertainty: "0.01",
-            },
-          },
-        ],
-      },
-    ];
-    mocks.selectResults.push(
-      [
-        {
-          id: 1,
-          organizationId: "org-1",
-          assetTypeId: 10,
-          name: "Mass calibration",
-          version: 1,
-          dataFields: [],
-          variableBindings: [],
-          formulas: [],
-          measurementModels,
-          validations: [],
-          uncertaintyParams: [],
-          certificateContent: null,
-          methodFingerprint: "method-v1",
-          methodEngine: {
-            version: "engine-1",
-            optionsFingerprint: "options-1",
-          },
-          compiledMethod: {
-            methodFingerprint: "method-v1",
-            measurementModels,
-          },
-          publicationEvidence: null,
-          publishedAt: "2026-05-10T12:00:00.000Z",
-        },
-      ],
-      [],
-      [],
-      [],
-      [],
-      [],
-      [],
-      [],
-      [],
-    );
-
-    const response = await createApp().request("/api/sync/bootstrap", {
-      method: "POST",
-    });
-    const body = syncBootstrapResponseSchema.parse(await response.json());
-
-    expect(response.status).toBe(200);
-    expect(body.publishedMethods[0]).toMatchObject({
-      id: 1,
-      measurementModels,
-      compiledMethod: {
-        measurementModels,
-      },
-    });
-  });
-
-  it("includes full reference standard snapshots in desktop bootstrap", async () => {
-    const certifiedValues = [
-      {
-        nominal: "1 kg",
-        authentication: "A",
-        value: 1000,
-        uncertainty: 0.005,
-        unit: "g",
-        maxError: 0.01,
-        drift: 0.001,
-        buoyancy: 0.0002,
-        coverageFactor: 2,
-        compositionProfile: true,
-        profileKey: "1 kg stack",
-        profileClass: "M1",
-        profileQuantityAvailable: 1,
-      },
-    ];
-    mocks.selectResults.push(
-      [],
-      [],
-      [],
-      [],
-      [],
-      [
-        {
-          id: 100,
-          organizationId: "org-1",
-          unitId: 10,
-          name: "Mass set",
-          kind: "mass_set",
-          type: "Massa",
-          serialNumber: "STD-100",
-          manufacturer: "Mass Co",
-          model: "M1",
-          certificateNumber: "CERT-100",
-          calibratedBy: "Trace Lab",
-          calibrationDate: new Date("2026-01-01T00:00:00.000Z"),
-          nextCalibrationDate: new Date("2027-01-01T00:00:00.000Z"),
-          referenceValue: null,
-          uncertainty: 0.001,
-          uncertaintyUnit: "g",
-          coverageFactor: 2,
-          distribution: "normal",
-          drift: 0.0001,
-          certifiedValues,
-          metrologyData: {
-            version: 1,
-            channels: [],
-            massValues: [],
-            compositionProfiles: [],
-          },
-          status: "ACTIVE",
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-          updatedAt: new Date("2026-01-02T00:00:00.000Z"),
-        },
-      ],
-      [],
-      [],
-      [],
-      [
-        {
-          id: 12,
-          standardId: 100,
-          r2Key: "standards/cert-100.pdf",
-          fileName: "cert-100.pdf",
-          fileSize: 1024,
-          sha256:
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          uploadedAt: new Date("2026-01-02T00:00:00.000Z"),
-          certificateNumber: "CERT-100",
-          calibrationDate: new Date("2026-01-01T00:00:00.000Z"),
-          nextCalibrationDate: new Date("2027-01-01T00:00:00.000Z"),
-        },
-      ],
-    );
-
-    const response = await createApp().request("/api/sync/bootstrap", {
-      method: "POST",
-    });
-    const body = syncBootstrapResponseSchema.parse(await response.json());
-
-    expect(response.status).toBe(200);
-    expect(body.standards).toEqual([
-      expect.objectContaining({
-        id: 100,
-        kind: "mass_set",
-        calibratedBy: "Trace Lab",
-        uncertainty: 0.001,
-        certifiedValues,
-        certificateDocument: expect.objectContaining({
-          documentId: 12,
-          fileName: "cert-100.pdf",
-        }),
-      }),
-    ]);
-  });
-
   it("rejects pushed events outside the active organization or accessible units", async () => {
     const response = await createApp().request("/api/sync/push", {
       method: "POST",
@@ -541,6 +341,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-1",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-org-mismatch",
@@ -584,6 +385,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-unknown-op",
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-unknown-op",
@@ -617,6 +419,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-audit-only",
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-certificate-draft",
@@ -653,6 +456,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-duplicate",
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-duplicate",
@@ -707,6 +511,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-conflict",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-conflict",
@@ -788,6 +593,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-standards",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-standard-inactive",
@@ -861,6 +667,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-composition-standards",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-composition-missing-certified-values",
@@ -952,6 +759,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-invalid-standards",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-invalid-standard-snapshot",
@@ -1041,6 +849,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-method-fingerprint",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-method-fingerprint",
@@ -1151,6 +960,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-valid-execution",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-valid-execution",
@@ -1269,6 +1079,7 @@ describe("syncRouter", () => {
           deviceId: "desktop-1",
           clientBatchId: "batch-performed-at",
           baseCursor: null,
+          ...CURRENT_DESKTOP_BUILD,
           events: [
             syncEvent({
               eventId: "evt-performed-at",
@@ -1718,6 +1529,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-regime",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-regime",
@@ -1798,6 +1610,7 @@ describe("syncRouter", () => {
         deviceId: "desktop-1",
         clientBatchId: "batch-real-payload",
         baseCursor: "cursor-before",
+        ...CURRENT_DESKTOP_BUILD,
         events: [
           syncEvent({
             eventId: "evt-real-payload",

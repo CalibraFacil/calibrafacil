@@ -6,7 +6,7 @@ import {
   buildBootstrapPageResponse,
   wantsBootstrapPages,
 } from "../../modules/sync/bootstrap-pages";
-import { buildLegacyBootstrapResponse } from "../../modules/sync/legacy-bootstrap";
+import { updateRequiredBody } from "../../modules/sync/minimum-desktop-version";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
 export const bootstrapRoutes = createRouter<SyncRouterEnv>().post(
@@ -16,36 +16,27 @@ export const bootstrapRoutes = createRouter<SyncRouterEnv>().post(
     const session = c.get("session");
     const memberData = getMemberData(c);
 
-    // Protocol 3 states itself in the body and gets the paged bootstrap
-    // (modules/sync/bootstrap-pages.ts). A request without it (protocols 1 and 2) gets
-    // the one unpaginated response below, exactly as before.
+    // The paged bootstrap (modules/sync/bootstrap-pages.ts). A request that does not
+    // state protocol 3 or later in its body comes from a build that cannot read it (the
+    // one unpaged response of protocols 1 and 2 is gone): it is told to update.
     const requestBody: unknown = await c.req.json().catch(() => null);
-    if (wantsBootstrapPages(requestBody)) {
-      const request = syncBootstrapPageRequestSchema.safeParse(requestBody);
-      const page = request.success
-        ? await buildBootstrapPageResponse({
-            user: session.user,
-            member: memberData,
-            request: request.data,
-          })
-        : null;
-      if (!page) {
-        return domainErrorResponse(
-          c,
-          invalid("invalid_request", "Requisição de bootstrap inválida."),
-        );
-      }
-      return c.json(page);
+    if (!wantsBootstrapPages(requestBody)) {
+      return c.json(updateRequiredBody(null), 426);
     }
-
-    const response = await buildLegacyBootstrapResponse({
-      user: session.user,
-      member: memberData,
-    });
-
-    // DEPRECATED (protocols 1 and 2): one unpaginated response. Protocol 3 desktops use
-    // POST /bootstrap/page. Delete with the legacy pull (see GET /pull).
-    c.header("Deprecation", "true");
-    return c.json(response);
+    const request = syncBootstrapPageRequestSchema.safeParse(requestBody);
+    const page = request.success
+      ? await buildBootstrapPageResponse({
+          user: session.user,
+          member: memberData,
+          request: request.data,
+        })
+      : null;
+    if (!page) {
+      return domainErrorResponse(
+        c,
+        invalid("invalid_request", "Requisição de bootstrap inválida."),
+      );
+    }
+    return c.json(page);
   },
 );
