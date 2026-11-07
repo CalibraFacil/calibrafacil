@@ -3,9 +3,9 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
-  ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import { CALIBRATION_REQUEST_STATUS } from '@calibra-facil/schemas/machines'
@@ -145,25 +145,11 @@ async function getRequestsIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadRequestsIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getRequestsIndexEssentialQueries(url),
-  )
-}
-
-export async function prewarmRequestsIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getRequestsIndexEssentialQueries(url),
-  )
-}
+const requestsIndexRouteData = routeData((url?: URL) =>
+  getRequestsIndexEssentialQueries(url),
+)
+export const loadRequestsIndexData = requestsIndexRouteData.load
+export const prewarmRequestsIndex = requestsIndexRouteData.prewarm
 
 async function getRequestDetailEssentialQueries(id: string | number) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()

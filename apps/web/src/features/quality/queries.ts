@@ -2,9 +2,9 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
-  ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
@@ -196,25 +196,11 @@ async function getNonConformancesIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadNonConformancesIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getNonConformancesIndexEssentialQueries(url),
-  )
-}
-
-export async function prewarmNonConformancesIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getNonConformancesIndexEssentialQueries(url),
-  )
-}
+const nonConformancesIndexRouteData = routeData((url?: URL) =>
+  getNonConformancesIndexEssentialQueries(url),
+)
+export const loadNonConformancesIndexData = nonConformancesIndexRouteData.load
+export const prewarmNonConformancesIndex = nonConformancesIndexRouteData.prewarm
 
 export async function prewarmNewNonConformance(queryClient: QueryClient) {
   await prewarmRouteQueries(queryClient, [nonConformanceJobsQueryOptions()])
@@ -240,19 +226,11 @@ async function getCapasIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadCapasIndexData(queryClient: QueryClient, url?: URL) {
-  await ensureRouteQueries(
-    queryClient,
-    await getCapasIndexEssentialQueries(url),
-  )
-}
-
-export async function prewarmCapasIndex(queryClient: QueryClient, url?: URL) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getCapasIndexEssentialQueries(url),
-  )
-}
+const capasIndexRouteData = routeData((url?: URL) =>
+  getCapasIndexEssentialQueries(url),
+)
+export const loadCapasIndexData = capasIndexRouteData.load
+export const prewarmCapasIndex = capasIndexRouteData.prewarm
 
 export async function prewarmNewCapa(queryClient: QueryClient) {
   await prewarmRouteQueries(queryClient, [capaResponsibleMembersQueryOptions()])

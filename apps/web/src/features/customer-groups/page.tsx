@@ -42,10 +42,9 @@ export function CustomerGroupsPage() {
     useDashboardContextState()
   const [createOpen, setCreateOpen] = useState(false)
 
-  const { data, isLoading, error } = useCustomerGroupsList(
-    activeOrganizationId,
-    !isContextSwitching,
-  )
+  const {
+    query: { data, isLoading, error },
+  } = useCustomerGroupsList(activeOrganizationId, !isContextSwitching)
   const groups = data?.data ?? []
 
   const handleRowClick = (group: CustomerGroupRow) => {

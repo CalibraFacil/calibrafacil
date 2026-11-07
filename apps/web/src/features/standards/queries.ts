@@ -12,9 +12,8 @@ import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
-  ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
@@ -154,45 +153,18 @@ async function getStandardsIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadStandardsIndexData(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await ensureRouteQueries(
-    queryClient,
-    await getStandardsIndexEssentialQueries(url),
-  )
-}
+const standardsIndexRouteData = routeData((url?: URL) =>
+  getStandardsIndexEssentialQueries(url),
+)
+export const loadStandardsIndexData = standardsIndexRouteData.load
+export const prewarmStandardsIndex = standardsIndexRouteData.prewarm
 
-export async function prewarmStandardsIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getStandardsIndexEssentialQueries(url),
-  )
-}
-
-export async function loadStandardDetailData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    standardDetailQueryOptions(id),
-    standardAuditLogQueryOptions(id),
-  ])
-}
-
-export async function prewarmStandardDetail(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    standardDetailQueryOptions(id),
-    standardAuditLogQueryOptions(id),
-  ])
-}
+const standardDetailRouteData = routeData((id: string) => [
+  standardDetailQueryOptions(id),
+  standardAuditLogQueryOptions(id),
+])
+export const loadStandardDetailData = standardDetailRouteData.load
+export const prewarmStandardDetail = standardDetailRouteData.prewarm
 
 export function useStandardsListData({
   activeOrganizationId,

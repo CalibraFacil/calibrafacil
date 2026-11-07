@@ -40,22 +40,6 @@ export const assetKeys = {
   /** The customer's assets, unpaged (the new-job form). */
   forCustomer: (customerId: number | null | undefined) =>
     ['assets', 'customer', customerId] as const,
-  customerList: (input: {
-    customerId: number | null | undefined
-    page: number
-    limit: number
-    search: string
-  }) =>
-    [
-      'assets',
-      'customer',
-      input.customerId,
-      input.page,
-      input.limit,
-      input.search,
-    ] as const,
-  customerListScope: (customerId: number | null | undefined) =>
-    ['assets', 'customer', customerId] as const,
   serviceOrderOpen: (customerId: number | null | undefined, search: string) =>
     ['assets', 'service-order-open', customerId, search] as const,
 }

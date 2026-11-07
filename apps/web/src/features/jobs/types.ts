@@ -35,19 +35,6 @@ export type JobsListQueryInput = {
 
 export type JobTechniciansData = JobTechniciansResponse
 
-type NewJobCustomer = {
-  id: number
-  name: string
-  taxId?: string | null
-  compliance?: {
-    qualificationStatus?: string | null
-  } | null
-}
-
-export type NewJobCustomersData = {
-  data: Array<NewJobCustomer>
-}
-
 type NewJobAsset = {
   id: number
   name: string

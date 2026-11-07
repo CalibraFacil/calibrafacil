@@ -1,4 +1,4 @@
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 import type {
   DashboardJob,
   DashboardJobStatus,
@@ -6,9 +6,8 @@ import type {
 } from '@calibra-facil/client-runtime'
 
 import {
-  ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
 import { dashboardKeys } from '@/features/dashboard/keys'
@@ -31,19 +30,11 @@ async function getDashboardIndexEssentialQueries() {
   return [dashboardStatsQueryOptions(organizationId)]
 }
 
-export async function loadDashboardIndexData(queryClient: QueryClient) {
-  await ensureRouteQueries(
-    queryClient,
-    await getDashboardIndexEssentialQueries(),
-  )
-}
-
-export async function prewarmDashboardIndex(queryClient: QueryClient) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getDashboardIndexEssentialQueries(),
-  )
-}
+const dashboardIndexRouteData = routeData(() =>
+  getDashboardIndexEssentialQueries(),
+)
+export const loadDashboardIndexData = dashboardIndexRouteData.load
+export const prewarmDashboardIndex = dashboardIndexRouteData.prewarm
 
 export function useDashboardIndexData({
   activeOrganizationId,
