@@ -20,11 +20,14 @@ import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { calibrationMethod, methodAuditLog } from "@calibra-facil/db/schema";
 import { listTemplates } from "@calibra-facil/method-templates";
-import { methodsRouter } from "./methods";
+import { methodsRouter as bareMethodsRouter } from "./methods";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+const methodsRouter = withErrorHandling(bareMethodsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 

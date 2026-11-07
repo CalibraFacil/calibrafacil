@@ -92,7 +92,10 @@ vi.mock("../../middleware/permission", () => {
   };
 });
 
-const { methodsRouter } = await import("../methods");
+const { methodsRouter: bareMethodsRouter } = await import("../methods");
+const { withErrorHandling } =
+  await import("../../../test/integration/with-error-handling");
+const methodsRouter = withErrorHandling(bareMethodsRouter);
 const { listTemplates } = await import("@calibra-facil/method-templates");
 
 // A governance-complete template that carries action-severity [VERIFICAR] refs,

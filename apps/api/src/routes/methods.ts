@@ -1,5 +1,3 @@
-import { methodRouteId } from "@calibra-facil/shared/route-identifiers";
-import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { Hono } from "hono";
 import type {
   MethodDetail,
@@ -7,7 +5,6 @@ import type {
   ServerShape,
 } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
-import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { orgDb } from "../lib/org-db";
 import {
   calibrationMethod,
@@ -45,7 +42,15 @@ import {
   normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
 import { eq, and, ilike, or, count, desc, ne, inArray } from "drizzle-orm";
-import { conflict } from "../lib/domain-errors";
+import {
+  conflict,
+  invalid,
+  notFound,
+  unprocessable,
+} from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requireLabMethod, requireMethodRouteId } from "../lib/method-access";
+import { requestActor } from "../middleware/request-actor";
 import { METHOD_MACHINE, isMethodDraft } from "@calibra-facil/schemas/machines";
 import {
   withLabPermission,
@@ -53,7 +58,6 @@ import {
   requireRole,
 } from "../middleware/permission";
 import { alias } from "drizzle-orm/pg-core";
-import { clientIp } from "../lib/client-ip";
 import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
@@ -1014,14 +1018,29 @@ function dimensionalErrorPayload(
   };
 }
 
-function dimensionalGateError(shape: {
+function assertDimensionallyCoherent(shape: {
   dataFields?: unknown;
   variableBindings?: unknown;
   formulas?: unknown;
   measurementModels?: unknown;
-}): ReturnType<typeof dimensionalErrorPayload> | null {
+}): void {
   const diagnostics = checkMethodRecordDimensions(shape);
-  return diagnostics.length > 0 ? dimensionalErrorPayload(diagnostics) : null;
+  if (diagnostics.length === 0) return;
+  const payload = dimensionalErrorPayload(diagnostics);
+  throw unprocessable(payload.code, payload.error, {
+    legacyBody: { diagnostics: payload.diagnostics },
+  });
+}
+
+/** The 422 for a method draft the compiler refused (diagnostics ride along). */
+function methodCompileFailure(diagnostics: MethodDiagnostic[]) {
+  return unprocessable(
+    "method_compile_failed",
+    diagnosticsMessage(diagnostics),
+    {
+      legacyBody: { diagnostics },
+    },
+  );
 }
 
 /**
@@ -1143,42 +1162,6 @@ function resolvePublicationPreviewScenarios(
   );
 }
 
-async function resolveMethodRouteId(
-  identifier: string,
-  organizationId: string,
-  executor: Pick<OrgExecutor, "select">,
-): Promise<number | null> {
-  const numericRouteId = parseNumericRouteIdentifier(identifier);
-
-  if (numericRouteId) {
-    const [method] = await executor
-      .select({ id: calibrationMethod.id })
-      .from(calibrationMethod)
-      .where(
-        and(
-          eq(calibrationMethod.id, numericRouteId),
-          eq(calibrationMethod.organizationId, organizationId),
-        ),
-      )
-      .limit(1);
-
-    if (method) return method.id;
-  }
-
-  const methods = await executor
-    .select({
-      id: calibrationMethod.id,
-      name: calibrationMethod.name,
-      version: calibrationMethod.version,
-    })
-    .from(calibrationMethod)
-    .where(eq(calibrationMethod.organizationId, organizationId));
-
-  return (
-    methods.find((method) => methodRouteId(method) === identifier)?.id ?? null
-  );
-}
-
 export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List methods with filtering and pagination
@@ -1192,91 +1175,82 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       const { page, limit, status, assetTypeId, query, includeArchived } =
         c.req.valid("query");
       const offset = (page - 1) * limit;
+      // Build where conditions
+      const conditions = [
+        eq(calibrationMethod.organizationId, member.organizationId),
+      ];
 
-      try {
-        // Build where conditions
-        const conditions = [
-          eq(calibrationMethod.organizationId, member.organizationId),
-        ];
-
-        if (status) {
-          conditions.push(eq(calibrationMethod.status, status));
-        } else if (!includeArchived) {
-          conditions.push(ne(calibrationMethod.status, "ARCHIVED"));
-        }
-
-        if (assetTypeId) {
-          conditions.push(eq(calibrationMethod.assetTypeId, assetTypeId));
-        }
-
-        if (query) {
-          conditions.push(
-            or(
-              ilike(calibrationMethod.name, `%${query}%`),
-              ilike(calibrationMethod.description, `%${query}%`),
-            )!,
-          );
-        }
-
-        const whereCondition = and(...conditions);
-
-        // Get total count
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const [countResult] = await tx
-            .select({ total: count() })
-            .from(calibrationMethod)
-            .where(whereCondition);
-
-          const total = countResult?.total ?? 0;
-
-          // Get methods with related data
-          const methods = await tx
-            .select({
-              id: calibrationMethod.id,
-              name: calibrationMethod.name,
-              description: calibrationMethod.description,
-              version: calibrationMethod.version,
-              status: calibrationMethod.status,
-              assetTypeId: calibrationMethod.assetTypeId,
-              assetTypeName: assetType.name,
-              dataFields: calibrationMethod.dataFields,
-              variableBindings: calibrationMethod.variableBindings,
-              formulas: calibrationMethod.formulas,
-              measurementModels: calibrationMethod.measurementModels,
-              validations: calibrationMethod.validations,
-              certificateContent: calibrationMethod.certificateContent,
-              accreditedScope: calibrationMethod.accreditedScope,
-              methodFingerprint: calibrationMethod.methodFingerprint,
-              methodEngine: calibrationMethod.methodEngine,
-              methodCompiledAt: calibrationMethod.methodCompiledAt,
-              createdAt: calibrationMethod.createdAt,
-              publishedAt: calibrationMethod.publishedAt,
-              parentId: calibrationMethod.parentId,
-            })
-            .from(calibrationMethod)
-            .leftJoin(
-              assetType,
-              eq(calibrationMethod.assetTypeId, assetType.id),
-            )
-            .where(whereCondition)
-            .orderBy(desc(calibrationMethod.createdAt))
-            .limit(limit)
-            .offset(offset);
-
-          return c.json({
-            data: methods.map(normalizeMethodRecord),
-            pagination: {
-              page,
-              limit,
-              total,
-              totalPages: Math.ceil(total / limit),
-            },
-          } satisfies ServerShape<MethodsListResponse>);
-        });
-      } catch (error) {
-        console.error("Error listing methods:", error);
-        return c.json({ error: "Erro ao listar métodos" }, 500);
+      if (status) {
+        conditions.push(eq(calibrationMethod.status, status));
+      } else if (!includeArchived) {
+        conditions.push(ne(calibrationMethod.status, "ARCHIVED"));
       }
+
+      if (assetTypeId) {
+        conditions.push(eq(calibrationMethod.assetTypeId, assetTypeId));
+      }
+
+      if (query) {
+        conditions.push(
+          or(
+            ilike(calibrationMethod.name, `%${query}%`),
+            ilike(calibrationMethod.description, `%${query}%`),
+          )!,
+        );
+      }
+
+      const whereCondition = and(...conditions);
+
+      // Get total count
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [countResult] = await tx
+          .select({ total: count() })
+          .from(calibrationMethod)
+          .where(whereCondition);
+
+        const total = countResult?.total ?? 0;
+
+        // Get methods with related data
+        const methods = await tx
+          .select({
+            id: calibrationMethod.id,
+            name: calibrationMethod.name,
+            description: calibrationMethod.description,
+            version: calibrationMethod.version,
+            status: calibrationMethod.status,
+            assetTypeId: calibrationMethod.assetTypeId,
+            assetTypeName: assetType.name,
+            dataFields: calibrationMethod.dataFields,
+            variableBindings: calibrationMethod.variableBindings,
+            formulas: calibrationMethod.formulas,
+            measurementModels: calibrationMethod.measurementModels,
+            validations: calibrationMethod.validations,
+            certificateContent: calibrationMethod.certificateContent,
+            accreditedScope: calibrationMethod.accreditedScope,
+            methodFingerprint: calibrationMethod.methodFingerprint,
+            methodEngine: calibrationMethod.methodEngine,
+            methodCompiledAt: calibrationMethod.methodCompiledAt,
+            createdAt: calibrationMethod.createdAt,
+            publishedAt: calibrationMethod.publishedAt,
+            parentId: calibrationMethod.parentId,
+          })
+          .from(calibrationMethod)
+          .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
+          .where(whereCondition)
+          .orderBy(desc(calibrationMethod.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        return c.json({
+          data: methods.map(normalizeMethodRecord),
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        } satisfies ServerShape<MethodsListResponse>);
+      });
     },
   )
 
@@ -1284,115 +1258,101 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // POST /compile - Compile a Method Builder draft without persistence
   // =========================================================================
   .post("/compile", ...withLabPermission({ template: ["read"] }), async (c) => {
-    try {
-      const body = toRecord(await c.req.json().catch(() => ({})));
-      const draftResult = tryCoerceMethodDraft(
-        body.draft ?? body.method ?? body,
+    const body = toRecord(await c.req.json().catch(() => ({})));
+    const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+    if (!draftResult.ok) {
+      return c.json(
+        {
+          ok: false,
+          diagnostics: draftResult.diagnostics,
+          fingerprint: null,
+          normalizedFormulas: [],
+          compiledMethod: null,
+        },
+        422,
       );
-      if (!draftResult.ok) {
-        return c.json(
-          {
-            ok: false,
-            diagnostics: draftResult.diagnostics,
-            fingerprint: null,
-            normalizedFormulas: [],
-            compiledMethod: null,
-          },
-          422,
-        );
-      }
-      const result = compileDraftWithEngine(draftResult.draft);
-
-      const response = augmentCompileResponseWithDimensions(
-        methodCompileResponse(result),
-        draftResult.draft,
-      );
-      return c.json(response, response.ok ? 200 : 422);
-    } catch (error) {
-      console.error("Error compiling method draft:", error);
-      return c.json({ error: "Erro ao compilar rascunho do método" }, 500);
     }
+    const result = compileDraftWithEngine(draftResult.draft);
+
+    const response = augmentCompileResponseWithDimensions(
+      methodCompileResponse(result),
+      draftResult.draft,
+    );
+    return c.json(response, response.ok ? 200 : 422);
   })
 
   // =========================================================================
   // POST /preview - Compile and run an ad-hoc Method Builder preview
   // =========================================================================
   .post("/preview", ...withLabPermission({ template: ["read"] }), async (c) => {
-    try {
-      const body = toRecord(await c.req.json().catch(() => ({})));
-      const draftResult = tryCoerceMethodDraft(
-        body.draft ?? body.method ?? body,
+    const body = toRecord(await c.req.json().catch(() => ({})));
+    const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+    if (!draftResult.ok) {
+      return c.json(
+        {
+          ok: false,
+          diagnostics: draftResult.diagnostics,
+          fingerprint: null,
+          normalizedFormulas: [],
+          compiledMethod: null,
+        },
+        422,
       );
-      if (!draftResult.ok) {
-        return c.json(
-          {
-            ok: false,
-            diagnostics: draftResult.diagnostics,
-            fingerprint: null,
-            normalizedFormulas: [],
-            compiledMethod: null,
-          },
-          422,
-        );
-      }
-      const result = compileDraftWithEngine(draftResult.draft, {
-        previewScenarios: [
-          {
-            key: "adhoc_preview",
-            label: "Preview",
-            inputs:
-              objectRecord(body.sampleData) ?? objectRecord(body.inputs) ?? {},
-          },
-        ],
-        includePreviewScenariosInFingerprint: false,
-      });
-
-      if (!result.ok) {
-        return c.json(
-          augmentCompileResponseWithDimensions(
-            methodCompileResponse(result),
-            draftResult.draft,
-          ),
-          422,
-        );
-      }
-
-      const preview = result.previewResults[0];
-      const dimensional = dimensionalMethodDiagnostics(draftResult.draft);
-      return c.json({
-        ok: (preview?.passed ?? false) && dimensional.length === 0,
-        diagnostics: [
-          ...result.diagnostics,
-          ...(preview?.diagnostics ?? []),
-          ...dimensional,
-        ],
-        fingerprint: result.method.methodFingerprint,
-        previewResults: result.previewResults,
-        results: Object.fromEntries([
-          ...result.method.formulas.map((formula) => {
-            const formulaResult = preview?.formulaResults.find(
-              (item) => item.key === formula.key,
-            );
-            return [formula.key, formulaResult?.value ?? null] as const;
-          }),
-          ...result.method.measurementModels.map((model) => {
-            const modelResult = preview?.measurementModelResults.find(
-              (item) => item.key === model.key,
-            );
-            const resultRecord = toRecord(modelResult?.result);
-            const value = modelResult
-              ? Array.isArray(modelResult.result)
-                ? modelResult.result.map((item) => item.value)
-                : scalarResultValue(resultRecord.value)
-              : null;
-            return [model.key, value] as const;
-          }),
-        ]),
-      });
-    } catch (error) {
-      console.error("Error previewing method draft:", error);
-      return c.json({ error: "Erro ao executar preview do método" }, 500);
     }
+    const result = compileDraftWithEngine(draftResult.draft, {
+      previewScenarios: [
+        {
+          key: "adhoc_preview",
+          label: "Preview",
+          inputs:
+            objectRecord(body.sampleData) ?? objectRecord(body.inputs) ?? {},
+        },
+      ],
+      includePreviewScenariosInFingerprint: false,
+    });
+
+    if (!result.ok) {
+      return c.json(
+        augmentCompileResponseWithDimensions(
+          methodCompileResponse(result),
+          draftResult.draft,
+        ),
+        422,
+      );
+    }
+
+    const preview = result.previewResults[0];
+    const dimensional = dimensionalMethodDiagnostics(draftResult.draft);
+    return c.json({
+      ok: (preview?.passed ?? false) && dimensional.length === 0,
+      diagnostics: [
+        ...result.diagnostics,
+        ...(preview?.diagnostics ?? []),
+        ...dimensional,
+      ],
+      fingerprint: result.method.methodFingerprint,
+      previewResults: result.previewResults,
+      results: Object.fromEntries([
+        ...result.method.formulas.map((formula) => {
+          const formulaResult = preview?.formulaResults.find(
+            (item) => item.key === formula.key,
+          );
+          return [formula.key, formulaResult?.value ?? null] as const;
+        }),
+        ...result.method.measurementModels.map((model) => {
+          const modelResult = preview?.measurementModelResults.find(
+            (item) => item.key === model.key,
+          );
+          const resultRecord = toRecord(modelResult?.result);
+          const value = modelResult
+            ? Array.isArray(modelResult.result)
+              ? modelResult.result.map((item) => item.value)
+              : scalarResultValue(resultRecord.value)
+            : null;
+          return [model.key, value] as const;
+        }),
+      ]),
+    });
   })
 
   // =========================================================================
@@ -1486,15 +1446,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
+        const id = await requireMethodRouteId(
           c.req.param("id"),
           member.organizationId,
           tx,
         );
-
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
 
         const [method] = await tx
           .select({
@@ -1511,7 +1467,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           .limit(1);
 
         if (!method) {
-          return c.json({ error: "Método nao encontrado" }, 404);
+          throw notFound("method_not_found", "Método nao encontrado");
         }
 
         return c.json(method);
@@ -1524,82 +1480,73 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ template: ["read"] }), async (c) => {
     const member = c.get("member");
-    try {
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const id = await requireMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+        tx,
+      );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+      const [method] = await tx
+        .select({
+          id: calibrationMethod.id,
+          organizationId: calibrationMethod.organizationId,
+          name: calibrationMethod.name,
+          description: calibrationMethod.description,
+          version: calibrationMethod.version,
+          status: calibrationMethod.status,
+          assetTypeId: calibrationMethod.assetTypeId,
+          assetTypeName: assetType.name,
+          dataFields: calibrationMethod.dataFields,
+          variableBindings: calibrationMethod.variableBindings,
+          formulas: calibrationMethod.formulas,
+          measurementModels: calibrationMethod.measurementModels,
+          validations: calibrationMethod.validations,
+          uncertaintyParams: calibrationMethod.uncertaintyParams,
+          certificateContent: calibrationMethod.certificateContent,
+          accreditedScope: calibrationMethod.accreditedScope,
+          compiledMethod: calibrationMethod.compiledMethod,
+          methodFingerprint: calibrationMethod.methodFingerprint,
+          methodEngine: calibrationMethod.methodEngine,
+          methodCompiledAt: calibrationMethod.methodCompiledAt,
+          publicationEvidence: calibrationMethod.publicationEvidence,
+          parentId: calibrationMethod.parentId,
+          createdAt: calibrationMethod.createdAt,
+          createdByName: user.name,
+          technicalReviewedBy: calibrationMethod.technicalReviewedBy,
+          technicalReviewedByName: technicalReviewerUser.name,
+          publishedAt: calibrationMethod.publishedAt,
+          approvedBy: calibrationMethod.approvedBy,
+          approvedByName: approverUser.name,
+          archivedAt: calibrationMethod.archivedAt,
+        })
+        .from(calibrationMethod)
+        .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
+        .leftJoin(user, eq(calibrationMethod.createdBy, user.id))
+        .leftJoin(
+          technicalReviewerUser,
+          eq(calibrationMethod.technicalReviewedBy, technicalReviewerUser.id),
+        )
+        .leftJoin(
+          approverUser,
+          eq(calibrationMethod.approvedBy, approverUser.id),
+        )
+        .where(
+          and(
+            eq(calibrationMethod.id, id),
+            eq(calibrationMethod.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
 
-        const [method] = await tx
-          .select({
-            id: calibrationMethod.id,
-            organizationId: calibrationMethod.organizationId,
-            name: calibrationMethod.name,
-            description: calibrationMethod.description,
-            version: calibrationMethod.version,
-            status: calibrationMethod.status,
-            assetTypeId: calibrationMethod.assetTypeId,
-            assetTypeName: assetType.name,
-            dataFields: calibrationMethod.dataFields,
-            variableBindings: calibrationMethod.variableBindings,
-            formulas: calibrationMethod.formulas,
-            measurementModels: calibrationMethod.measurementModels,
-            validations: calibrationMethod.validations,
-            uncertaintyParams: calibrationMethod.uncertaintyParams,
-            certificateContent: calibrationMethod.certificateContent,
-            accreditedScope: calibrationMethod.accreditedScope,
-            compiledMethod: calibrationMethod.compiledMethod,
-            methodFingerprint: calibrationMethod.methodFingerprint,
-            methodEngine: calibrationMethod.methodEngine,
-            methodCompiledAt: calibrationMethod.methodCompiledAt,
-            publicationEvidence: calibrationMethod.publicationEvidence,
-            parentId: calibrationMethod.parentId,
-            createdAt: calibrationMethod.createdAt,
-            createdByName: user.name,
-            technicalReviewedBy: calibrationMethod.technicalReviewedBy,
-            technicalReviewedByName: technicalReviewerUser.name,
-            publishedAt: calibrationMethod.publishedAt,
-            approvedBy: calibrationMethod.approvedBy,
-            approvedByName: approverUser.name,
-            archivedAt: calibrationMethod.archivedAt,
-          })
-          .from(calibrationMethod)
-          .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
-          .leftJoin(user, eq(calibrationMethod.createdBy, user.id))
-          .leftJoin(
-            technicalReviewerUser,
-            eq(calibrationMethod.technicalReviewedBy, technicalReviewerUser.id),
-          )
-          .leftJoin(
-            approverUser,
-            eq(calibrationMethod.approvedBy, approverUser.id),
-          )
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+      if (!method) {
+        throw notFound("method_not_found", "Método nao encontrado");
+      }
 
-        if (!method) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
-
-        return c.json(
-          normalizeMethodRecord(method) satisfies ServerShape<MethodDetail>,
-        );
-      });
-    } catch (error) {
-      console.error("Error getting method:", error);
-      return c.json({ error: "Erro ao buscar método" }, 500);
-    }
+      return c.json(
+        normalizeMethodRecord(method) satisfies ServerShape<MethodDetail>,
+      );
+    });
   })
 
   // =========================================================================
@@ -1613,11 +1560,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
-
-      try {
-        // Check for duplicate name in same org (version 1)
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const [existing] = await tx
+      // Check for duplicate name in same org (version 1)
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [existing] = await ctx.o
             .select()
             .from(calibrationMethod)
             .where(
@@ -1630,18 +1578,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .limit(1);
 
           if (existing) {
-            return c.json({ error: "Ja existe um método com este nome" }, 400);
+            throw invalid(
+              "method_name_taken",
+              "Ja existe um método com este nome",
+            );
           }
 
           // DOM-10 dimensional gate: reject an incoherent field/formula set before
           // it is ever persisted (no method row escapes the check when written).
-          const dimensionalError = dimensionalGateError(input);
-          if (dimensionalError) {
-            return c.json(dimensionalError, 422);
-          }
+          assertDimensionallyCoherent(input);
 
           // Create method
-          const [newMethod] = await tx
+          const [newMethod] = await ctx.o
             .insert(calibrationMethod)
             .values({
               organizationId: member.organizationId,
@@ -1663,25 +1611,20 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .returning();
 
           if (!newMethod) {
-            return c.json({ error: "Erro ao criar método" }, 500);
+            throw new Error("Erro ao criar método");
           }
 
           // Audit log
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: newMethod.id,
+          await ctx.audit("method", newMethod.id, {
             action: "create",
+
             changes: { initial: input },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(newMethod, 201);
-        });
-      } catch (error) {
-        console.error("Error creating method:", error);
-        return c.json({ error: "Erro ao criar método" }, 500);
-      }
+          return newMethod;
+        },
+      );
+      return c.json(result, 201);
     },
   )
 
@@ -1698,47 +1641,45 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
+      const template = listTemplates().find(
+        (candidate) => candidate.key === input.templateKey,
+      );
+      if (!template) {
+        throw notFound("template_not_found", "Template não encontrado");
+      }
 
-      try {
-        const template = listTemplates().find(
-          (candidate) => candidate.key === input.templateKey,
+      // Informed-adoption gate (ISO/IEC 17025 §7.2.1.5): every action-severity
+      // [VERIFICAR] item that carries a ref must be explicitly acknowledged.
+      // (The three consent booleans are already enforced by FromTemplateSchema.)
+      const governance = template.governance;
+      const acknowledgements = input.acknowledgements;
+      const requiredActionRefs = (governance?.verificarItems ?? [])
+        .filter((item) => item.severity === "action")
+        .map((item) => item.ref)
+        .filter((ref): ref is string => typeof ref === "string");
+      const missingRefs = requiredActionRefs.filter(
+        (ref) => !acknowledgements.acceptedVerificarRefs.includes(ref),
+      );
+      if (missingRefs.length > 0) {
+        throw invalid(
+          "template_acknowledgements_missing",
+          "Reconhecimentos pendentes para itens [VERIFICAR] de ação do modelo",
+          { legacyBody: { missing: missingRefs } },
         );
-        if (!template) {
-          return c.json({ error: "Template não encontrado" }, 404);
-        }
+      }
 
-        // Informed-adoption gate (ISO/IEC 17025 §7.2.1.5): every action-severity
-        // [VERIFICAR] item that carries a ref must be explicitly acknowledged.
-        // (The three consent booleans are already enforced by FromTemplateSchema.)
-        const governance = template.governance;
-        const acknowledgements = input.acknowledgements;
-        const requiredActionRefs = (governance?.verificarItems ?? [])
-          .filter((item) => item.severity === "action")
-          .map((item) => item.ref)
-          .filter((ref): ref is string => typeof ref === "string");
-        const missingRefs = requiredActionRefs.filter(
-          (ref) => !acknowledgements.acceptedVerificarRefs.includes(ref),
-        );
-        if (missingRefs.length > 0) {
-          return c.json(
-            {
-              error:
-                "Reconhecimentos pendentes para itens [VERIFICAR] de ação do modelo",
-              missing: missingRefs,
-            },
-            400,
-          );
-        }
+      const def = template.productDefinition;
+      const name = input.name ?? def.name;
 
-        const def = template.productDefinition;
-        const name = input.name ?? def.name;
-
-        // Resolve the asset type: explicit override wins, else the template's
-        // slug -> asset_type.id, else null.
-        let assetTypeId: number | null = input.assetTypeId ?? null;
-        return await orgDb(member.organizationId).transaction(async (tx) => {
+      // Resolve the asset type: explicit override wins, else the template's
+      // slug -> asset_type.id, else null.
+      let assetTypeId: number | null = input.assetTypeId ?? null;
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
           if (assetTypeId === null && def.assetTypeSlug) {
-            const [matchedAssetType] = await tx
+            const [matchedAssetType] = await ctx.o
               .select({ id: assetType.id })
               .from(assetType)
               .where(eq(assetType.slug, def.assetTypeSlug))
@@ -1747,7 +1688,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           // Same uniqueness guard as POST /.
-          const [existing] = await tx
+          const [existing] = await ctx.o
             .select()
             .from(calibrationMethod)
             .where(
@@ -1760,17 +1701,17 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .limit(1);
 
           if (existing) {
-            return c.json({ error: "Ja existe um método com este nome" }, 400);
+            throw invalid(
+              "method_name_taken",
+              "Ja existe um método com este nome",
+            );
           }
 
           // DOM-10 dimensional gate on template instantiation: a curated template
           // must be dimensionally coherent before it becomes a DRAFT method.
-          const dimensionalError = dimensionalGateError(def);
-          if (dimensionalError) {
-            return c.json(dimensionalError, 422);
-          }
+          assertDimensionallyCoherent(def);
 
-          const [newMethod] = await tx
+          const [newMethod] = await ctx.o
             .insert(calibrationMethod)
             .values({
               organizationId: member.organizationId,
@@ -1794,12 +1735,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .returning();
 
           if (!newMethod) {
-            return c.json({ error: "Erro ao criar método" }, 500);
+            throw new Error("Erro ao criar método");
           }
 
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: newMethod.id,
+          await ctx.audit("method", newMethod.id, {
             action: "create",
             // Freeze the adoption evidence (ISO/IEC 17025 §7.2.1.5): the
             // acknowledgements + an immutable snapshot of the cited sources (with
@@ -1817,19 +1756,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
                   }
                 : null,
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(newMethod, 201);
-        });
-      } catch (error) {
-        console.error("Error creating method from template:", error);
-        return c.json(
-          { error: "Erro ao criar método a partir do modelo" },
-          500,
-        );
-      }
+          return newMethod;
+        },
+      );
+      return c.json(result, 201);
     },
   )
 
@@ -1842,48 +1774,30 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateMethodSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
+          const id = existing.id;
           const input = c.req.valid("json");
-
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          // Get existing method
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
 
           // Only DRAFT can be updated
           if (!METHOD_MACHINE.canTransition(existing.status, "edit")) {
-            return c.json(
-              { error: "Apenas métodos em rascunho podem ser editados" },
-              400,
+            throw invalid(
+              "method_not_editable",
+              "Apenas métodos em rascunho podem ser editados",
             );
           }
 
           // Check for name conflict if name is being changed
           // Check against all versions to prevent naming conflicts
           if (input.name && input.name !== existing.name) {
-            const [duplicate] = await tx
+            const [duplicate] = await ctx.o
               .select()
               .from(calibrationMethod)
               .where(
@@ -1896,9 +1810,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               .limit(1);
 
             if (duplicate) {
-              return c.json(
-                { error: "Ja existe um método com este nome" },
-                400,
+              throw invalid(
+                "method_name_taken",
+                "Ja existe um método com este nome",
               );
             }
           }
@@ -1983,13 +1897,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           if (Object.keys(updateData).length === 0) {
-            return c.json(existing);
+            return existing;
           }
 
           // DOM-10 dimensional gate on the EFFECTIVE post-update field/formula set
           // (incoming edits overlaid on the stored draft). Reject before persisting
           // so the row stays unchanged on a dimensional incoherence.
-          const dimensionalError = dimensionalGateError({
+          assertDimensionallyCoherent({
             dataFields: input.dataFields ?? existing.dataFields,
             variableBindings:
               input.variableBindings ?? existing.variableBindings,
@@ -1997,9 +1911,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             measurementModels:
               input.measurementModels ?? existing.measurementModels,
           });
-          if (dimensionalError) {
-            return c.json(dimensionalError, 422);
-          }
 
           updateData.compiledMethod = null;
           updateData.methodFingerprint = null;
@@ -2008,7 +1919,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.publicationEvidence = null;
 
           // Update method
-          const [updated] = await tx
+          const [updated] = await ctx.o
             .update(calibrationMethod)
             .set(updateData)
             .where(
@@ -2027,22 +1938,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          // Audit log
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: id,
-            action: "update",
-            changes,
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
-          });
+          await ctx.audit("method", id, { action: "update", changes });
 
-          return c.json(updated);
-        });
-      } catch (error) {
-        console.error("Error updating method:", error);
-        return c.json({ error: "Erro ao atualizar método" }, 500);
-      }
+          return updated;
+        },
+      );
+      return c.json(result, 200);
     },
   )
 
@@ -2055,47 +1956,31 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
-
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+          const id = existing.id;
 
           if (
             !METHOD_MACHINE.canTransition(existing.status, "request_approval")
           ) {
-            return c.json(
-              { error: "Apenas rascunhos podem ser enviados para aprovacao" },
-              400,
+            throw invalid(
+              "method_not_submittable",
+              "Apenas rascunhos podem ser enviados para aprovacao",
             );
           }
 
           // Validate method has required fields
           if (!existing.dataFields || existing.dataFields.length === 0) {
-            return c.json(
-              { error: "Método deve ter pelo menos um campo de entrada" },
-              400,
+            throw invalid(
+              "method_has_no_inputs",
+              "Método deve ter pelo menos um campo de entrada",
             );
           }
 
@@ -2112,36 +1997,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             },
           );
           if (!compileResult.ok) {
-            return c.json(
-              {
-                error: diagnosticsMessage(compileResult.diagnostics),
-                diagnostics: compileResult.diagnostics,
-              },
-              422,
-            );
+            throw methodCompileFailure(compileResult.diagnostics);
           }
           const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
             uncertaintyParams: existing.uncertaintyParams,
             compiledMethod: compileResult.method,
           });
           if (uncertaintyDiagnostics.length > 0) {
-            return c.json(
-              {
-                error: diagnosticsMessage(uncertaintyDiagnostics),
-                diagnostics: uncertaintyDiagnostics,
-              },
-              422,
-            );
+            throw methodCompileFailure(uncertaintyDiagnostics);
           }
           // DOM-10 dimensional gate on the publish-transition recompile (the engine
           // is dimension-blind by design, so this is the check that catches an
           // incoherent unit set on submit-for-approval).
-          const dimensionalError = dimensionalGateError(existing);
-          if (dimensionalError) {
-            return c.json(dimensionalError, 422);
-          }
+          assertDimensionallyCoherent(existing);
 
-          const [updated] = await tx
+          const [updated] = await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf(
@@ -2180,10 +2050,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: id,
+          await ctx.audit("method", id, {
             action: "request_approval",
+
             changes: {
               status: { old: "DRAFT", new: "PENDING_APPROVAL" },
               methodFingerprint: {
@@ -2191,16 +2060,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
                 new: compileResult.method.methodFingerprint,
               },
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(updated);
-        });
-      } catch (error) {
-        console.error("Error requesting method approval:", error);
-        return c.json({ error: "Erro ao solicitar aprovacao" }, 500);
-      }
+          return updated;
+        },
+      );
+      return c.json(result, 200);
     },
   )
 
@@ -2214,43 +2079,27 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
-
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+          const id = existing.id;
 
           if (
             !METHOD_MACHINE.canTransition(existing.status, "technical_review")
           ) {
-            return c.json(
-              { error: "Apenas métodos pendentes podem ser revisados" },
-              400,
+            throw invalid(
+              "method_not_reviewable",
+              "Apenas métodos pendentes podem ser revisados",
             );
           }
 
-          const [updated] = await tx
+          const [updated] = await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf(
@@ -2275,24 +2124,19 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: id,
+          await ctx.audit("method", id, {
             action: "technical_review",
+
             changes: {
               status: { old: "PENDING_APPROVAL", new: "TECHNICAL_REVIEWED" },
               technicalReviewedBy: { old: null, new: session.user.id },
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(updated);
-        });
-      } catch (error) {
-        console.error("Error technical reviewing method:", error);
-        return c.json({ error: "Erro ao revisar tecnicamente" }, 500);
-      }
+          return updated;
+        },
+      );
+      return c.json(result, 200);
     },
   )
 
@@ -2306,62 +2150,43 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
-
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+          const id = existing.id;
 
           if (!METHOD_MACHINE.canTransition(existing.status, "publish")) {
-            return c.json(
-              { error: "Apenas métodos revisados podem ser aprovados" },
-              400,
+            throw invalid(
+              "method_not_publishable",
+              "Apenas métodos revisados podem ser aprovados",
             );
           }
 
           if (!existing.technicalReviewedBy) {
-            return c.json(
-              { error: "Revisao tecnica obrigatoria antes da aprovacao" },
-              400,
+            throw invalid(
+              "method_review_required",
+              "Revisao tecnica obrigatoria antes da aprovacao",
             );
           }
 
           if (existing.technicalReviewedBy === session.user.id) {
-            return c.json(
-              {
-                error:
-                  "Revisao tecnica e aprovacao de qualidade devem ser feitas por usuarios diferentes",
-              },
-              400,
+            throw invalid(
+              "self_approval_blocked",
+              "Revisao tecnica e aprovacao de qualidade devem ser feitas por usuarios diferentes",
             );
           }
 
           // Validate method has required fields
           if (!existing.dataFields || existing.dataFields.length === 0) {
-            return c.json(
-              { error: "Método deve ter pelo menos um campo de entrada" },
-              400,
+            throw invalid(
+              "method_has_no_inputs",
+              "Método deve ter pelo menos um campo de entrada",
             );
           }
 
@@ -2381,33 +2206,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             includePreviewScenariosInFingerprint: false,
           });
           if (!compileResult.ok) {
-            return c.json(
-              {
-                error: diagnosticsMessage(compileResult.diagnostics),
-                diagnostics: compileResult.diagnostics,
-              },
-              422,
-            );
+            throw methodCompileFailure(compileResult.diagnostics);
           }
           const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
             uncertaintyParams: existing.uncertaintyParams,
             compiledMethod: compileResult.method,
           });
           if (uncertaintyDiagnostics.length > 0) {
-            return c.json(
-              {
-                error: diagnosticsMessage(uncertaintyDiagnostics),
-                diagnostics: uncertaintyDiagnostics,
-              },
-              422,
-            );
+            throw methodCompileFailure(uncertaintyDiagnostics);
           }
           // DOM-10 dimensional gate on the publish recompile — no method row
           // reaches PUBLISHED with a dimensional incoherence.
-          const dimensionalError = dimensionalGateError(existing);
-          if (dimensionalError) {
-            return c.json(dimensionalError, 422);
-          }
+          assertDimensionallyCoherent(existing);
           const publicationEvidence = buildPublicationEvidence({
             methodId: existing.id,
             version: existing.version,
@@ -2427,7 +2237,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           // Archive any previously published version with same name
-          await tx
+          await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf("PUBLISHED", "supersede"),
@@ -2445,7 +2255,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               ),
             );
 
-          const [published] = await tx
+          const [published] = await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf(
@@ -2477,10 +2287,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: id,
+          await ctx.audit("method", id, {
             action: "quality_approve",
+
             changes: {
               status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" },
               methodFingerprint: {
@@ -2488,16 +2297,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
                 new: compileResult.method.methodFingerprint,
               },
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(published);
-        });
-      } catch (error) {
-        console.error("Error quality approving method:", error);
-        return c.json({ error: "Erro ao aprovar qualidade" }, 500);
-      }
+          return published;
+        },
+      );
+      return c.json(result, 200);
     },
   )
 
@@ -2511,47 +2316,28 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", ReturnMethodToDraftSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
+          const id = existing.id;
           const { reason } = c.req.valid("json");
-
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
 
           if (
             !METHOD_MACHINE.canTransition(existing.status, "return_to_draft")
           ) {
-            return c.json(
-              {
-                error: "Apenas métodos em aprovacao podem retornar ao rascunho",
-              },
-              400,
+            throw invalid(
+              "method_not_returnable",
+              "Apenas métodos em aprovacao podem retornar ao rascunho",
             );
           }
 
-          const [updated] = await tx
+          const [updated] = await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf(
@@ -2584,22 +2370,17 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: id,
+          await ctx.audit("method", id, {
             action: "return_to_draft",
+
             changes: { status: { old: existing.status, new: "DRAFT" } },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
             reason,
           });
 
-          return c.json(updated);
-        });
-      } catch (error) {
-        console.error("Error returning method to draft:", error);
-        return c.json({ error: "Erro ao retornar para rascunho" }, 500);
-      }
+          return updated;
+        },
+      );
+      return c.json(result, 200);
     },
   )
 
@@ -2613,62 +2394,43 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
-
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+          const id = existing.id;
 
           if (!METHOD_MACHINE.canTransition(existing.status, "publish")) {
-            return c.json(
-              { error: "Apenas métodos revisados podem ser publicados" },
-              400,
+            throw invalid(
+              "method_not_publishable",
+              "Apenas métodos revisados podem ser publicados",
             );
           }
 
           if (!existing.technicalReviewedBy) {
-            return c.json(
-              { error: "Revisao tecnica obrigatoria antes da publicacao" },
-              400,
+            throw invalid(
+              "method_review_required",
+              "Revisao tecnica obrigatoria antes da publicacao",
             );
           }
 
           if (existing.technicalReviewedBy === session.user.id) {
-            return c.json(
-              {
-                error:
-                  "Revisao tecnica e publicacao devem ser feitas por usuarios diferentes",
-              },
-              400,
+            throw invalid(
+              "self_approval_blocked",
+              "Revisao tecnica e publicacao devem ser feitas por usuarios diferentes",
             );
           }
 
           // Validate method has required fields
           if (!existing.dataFields || existing.dataFields.length === 0) {
-            return c.json(
-              { error: "Método deve ter pelo menos um campo de entrada" },
-              400,
+            throw invalid(
+              "method_has_no_inputs",
+              "Método deve ter pelo menos um campo de entrada",
             );
           }
 
@@ -2688,33 +2450,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             includePreviewScenariosInFingerprint: false,
           });
           if (!compileResult.ok) {
-            return c.json(
-              {
-                error: diagnosticsMessage(compileResult.diagnostics),
-                diagnostics: compileResult.diagnostics,
-              },
-              422,
-            );
+            throw methodCompileFailure(compileResult.diagnostics);
           }
           const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
             uncertaintyParams: existing.uncertaintyParams,
             compiledMethod: compileResult.method,
           });
           if (uncertaintyDiagnostics.length > 0) {
-            return c.json(
-              {
-                error: diagnosticsMessage(uncertaintyDiagnostics),
-                diagnostics: uncertaintyDiagnostics,
-              },
-              422,
-            );
+            throw methodCompileFailure(uncertaintyDiagnostics);
           }
           // DOM-10 dimensional gate on the publish recompile — no method row
           // reaches PUBLISHED with a dimensional incoherence.
-          const dimensionalError = dimensionalGateError(existing);
-          if (dimensionalError) {
-            return c.json(dimensionalError, 422);
-          }
+          assertDimensionallyCoherent(existing);
           const publicationEvidence = buildPublicationEvidence({
             methodId: existing.id,
             version: existing.version,
@@ -2734,7 +2481,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           // Archive any previously published version with same name
-          await tx
+          await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf("PUBLISHED", "supersede"),
@@ -2753,7 +2500,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
 
           // Publish
-          const [published] = await tx
+          const [published] = await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf(
@@ -2786,10 +2533,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           // Audit log
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: id,
+          await ctx.audit("method", id, {
             action: "publish",
+
             changes: {
               status: { old: existing.status, new: "PUBLISHED" },
               methodFingerprint: {
@@ -2797,16 +2543,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
                 new: compileResult.method.methodFingerprint,
               },
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(published);
-        });
-      } catch (error) {
-        console.error("Error publishing method:", error);
-        return c.json({ error: "Erro ao publicar método" }, 500);
-      }
+          return published;
+        },
+      );
+      return c.json(result, 200);
     },
   )
 
@@ -2818,42 +2560,25 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["update"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
-
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+          const id = existing.id;
 
           if (!METHOD_MACHINE.canTransition(existing.status, "archive")) {
-            return c.json(
-              { error: "Apenas métodos publicados podem ser arquivados" },
-              400,
+            throw invalid(
+              "method_not_archivable",
+              "Apenas métodos publicados podem ser arquivados",
             );
           }
 
-          const [archived] = await tx
+          const [archived] = await ctx.o
             .update(calibrationMethod)
             .set({
               status: METHOD_MACHINE.requireTargetOf(
@@ -2879,21 +2604,16 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           // Audit log
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: id,
+          await ctx.audit("method", id, {
             action: "archive",
+
             changes: { status: { old: "PUBLISHED", new: "ARCHIVED" } },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(archived);
-        });
-      } catch (error) {
-        console.error("Error archiving method:", error);
-        return c.json({ error: "Erro ao arquivar método" }, 500);
-      }
+          return archived;
+        },
+      );
+      return c.json(result, 200);
     },
   )
 
@@ -2906,45 +2626,25 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabMethod(
             c.req.param("id"),
             member.organizationId,
-            tx,
+            ctx.o,
           );
 
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
-          const [existing] = await tx
-            .select()
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
-
           if (existing.status !== "PUBLISHED") {
-            return c.json(
-              {
-                error:
-                  "Novas versoes so podem ser criadas a partir de métodos publicados",
-              },
-              400,
+            throw invalid(
+              "method_not_versionable",
+              "Novas versoes so podem ser criadas a partir de métodos publicados",
             );
           }
 
           // Check if there's already a draft for this method
-          const [existingDraft] = await tx
+          const [existingDraft] = await ctx.o
             .select()
             .from(calibrationMethod)
             .where(
@@ -2957,18 +2657,15 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .limit(1);
 
           if (existingDraft) {
-            return c.json(
-              {
-                error:
-                  "Ja existe um rascunho para este método. Edite o rascunho existente ou exclua-o antes de criar uma nova versão.",
-                existingDraftId: existingDraft.id,
-              },
-              400,
+            throw invalid(
+              "method_draft_exists",
+              "Ja existe um rascunho para este método. Edite o rascunho existente ou exclua-o antes de criar uma nova versão.",
+              { legacyBody: { existingDraftId: existingDraft.id } },
             );
           }
 
           // Find the highest version number
-          const [maxVersion] = await tx
+          const [maxVersion] = await ctx.o
             .select({ maxVersion: calibrationMethod.version })
             .from(calibrationMethod)
             .where(
@@ -2983,7 +2680,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const newVersion = (maxVersion?.maxVersion || existing.version) + 1;
 
           // Clone the method
-          const [newMethod] = await tx
+          const [newMethod] = await ctx.o
             .insert(calibrationMethod)
             .values({
               organizationId: member.organizationId,
@@ -3008,29 +2705,24 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .returning();
 
           if (!newMethod) {
-            return c.json({ error: "Erro ao criar nova versão" }, 500);
+            throw new Error("Erro ao criar nova versão");
           }
 
           // Audit log
-          await tx.insert(methodAuditLog).values({
-            organizationId: member.organizationId,
-            methodId: newMethod.id,
+          await ctx.audit("method", newMethod.id, {
             action: "new_version",
+
             changes: {
               parentId: existing.id,
               parentVersion: existing.version,
               newVersion,
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
-          return c.json(normalizeMethodRecord(newMethod), 201);
-        });
-      } catch (error) {
-        console.error("Error creating new version:", error);
-        return c.json({ error: "Erro ao criar nova versão" }, 500);
-      }
+          return normalizeMethodRecord(newMethod);
+        },
+      );
+      return c.json(result, 201);
     },
   )
 
@@ -3038,65 +2730,42 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // DELETE /:id - Delete a DRAFT method only
   // =========================================================================
   .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
-    const session = c.get("session");
     const member = c.get("member");
-    try {
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
+    const result = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabMethod(
           c.req.param("id"),
           member.organizationId,
-          tx,
+          ctx.o,
         );
-
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
-
-        const [existing] = await tx
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+        const id = existing.id;
 
         if (!isMethodDraft(existing.status)) {
-          return c.json(
-            {
-              error:
-                "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
-            },
-            400,
+          throw invalid(
+            "method_not_deletable",
+            "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
           );
         }
 
         // CMP-06 (#649): record the deletion in the audit trail BEFORE deleting —
         // mirrors customers.ts. The method_id FK no longer cascades (soft
         // reference), so this row outlives the method it documents.
-        await tx.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
+        await ctx.audit("method", id, {
           action: "delete",
+
           changes: { method: { old: existing, new: null } },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
         });
 
-        await tx.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
+        await ctx.o
+          .delete(calibrationMethod)
+          .where(eq(calibrationMethod.id, id));
 
-        return c.json({ success: true });
-      });
-    } catch (error) {
-      console.error("Error deleting method:", error);
-      return c.json({ error: "Erro ao excluir método" }, 500);
-    }
+        return { success: true };
+      },
+    );
+    return c.json(result, 200);
   })
 
   // =========================================================================
@@ -3107,59 +2776,50 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
-            c.req.param("id"),
-            member.organizationId,
-            tx,
-          );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await requireMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+        // Get the method to find its name
+        const [method] = await tx
+          .select({ name: calibrationMethod.name })
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
 
-          // Get the method to find its name
-          const [method] = await tx
-            .select({ name: calibrationMethod.name })
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
+        if (!method) {
+          throw notFound("method_not_found", "Método nao encontrado");
+        }
 
-          if (!method) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+        // Get all versions with this name
+        const versions = await tx
+          .select({
+            id: calibrationMethod.id,
+            version: calibrationMethod.version,
+            status: calibrationMethod.status,
+            createdAt: calibrationMethod.createdAt,
+            publishedAt: calibrationMethod.publishedAt,
+            archivedAt: calibrationMethod.archivedAt,
+          })
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.organizationId, member.organizationId),
+              eq(calibrationMethod.name, method.name),
+            ),
+          )
+          .orderBy(desc(calibrationMethod.version));
 
-          // Get all versions with this name
-          const versions = await tx
-            .select({
-              id: calibrationMethod.id,
-              version: calibrationMethod.version,
-              status: calibrationMethod.status,
-              createdAt: calibrationMethod.createdAt,
-              publishedAt: calibrationMethod.publishedAt,
-              archivedAt: calibrationMethod.archivedAt,
-            })
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.organizationId, member.organizationId),
-                eq(calibrationMethod.name, method.name),
-              ),
-            )
-            .orderBy(desc(calibrationMethod.version));
-
-          return c.json({ data: versions });
-        });
-      } catch (error) {
-        console.error("Error getting versions:", error);
-        return c.json({ error: "Erro ao buscar versoes" }, 500);
-      }
+        return c.json({ data: versions });
+      });
     },
   )
 
@@ -3171,53 +2831,44 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const id = await resolveMethodRouteId(
-            c.req.param("id"),
-            member.organizationId,
-            tx,
-          );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await requireMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-          if (id === null) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+        // Verify method belongs to org
+        const [method] = await tx
+          .select({ id: calibrationMethod.id })
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
 
-          // Verify method belongs to org
-          const [method] = await tx
-            .select({ id: calibrationMethod.id })
-            .from(calibrationMethod)
-            .where(
-              and(
-                eq(calibrationMethod.id, id),
-                eq(calibrationMethod.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
+        if (!method) {
+          throw notFound("method_not_found", "Método nao encontrado");
+        }
 
-          if (!method) {
-            return c.json({ error: "Método nao encontrado" }, 404);
-          }
+        const logs = await tx
+          .select({
+            id: methodAuditLog.id,
+            action: methodAuditLog.action,
+            changes: methodAuditLog.changes,
+            performedAt: methodAuditLog.performedAt,
+            performedByName: user.name,
+            reason: methodAuditLog.reason,
+          })
+          .from(methodAuditLog)
+          .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
+          .where(eq(methodAuditLog.methodId, id))
+          .orderBy(desc(methodAuditLog.performedAt));
 
-          const logs = await tx
-            .select({
-              id: methodAuditLog.id,
-              action: methodAuditLog.action,
-              changes: methodAuditLog.changes,
-              performedAt: methodAuditLog.performedAt,
-              performedByName: user.name,
-              reason: methodAuditLog.reason,
-            })
-            .from(methodAuditLog)
-            .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
-            .where(eq(methodAuditLog.methodId, id))
-            .orderBy(desc(methodAuditLog.performedAt));
-
-          return c.json({ data: logs });
-        });
-      } catch (error) {
-        console.error("Error getting audit log:", error);
-        return c.json({ error: "Erro ao buscar historico" }, 500);
-      }
+        return c.json({ data: logs });
+      });
     },
   );

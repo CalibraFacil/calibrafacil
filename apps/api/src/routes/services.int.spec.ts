@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { servicesRouter } from "./services";
+import { servicesRouter as bareServicesRouter } from "./services";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { db } from "@calibra-facil/db";
 import { serviceAuditLog } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedService } from "../../test/integration/seed";
+
+const servicesRouter = withErrorHandling(bareServicesRouter);
 
 // Real-DB + real-RBAC integration test. Only the better-auth session is mocked
 // (see test/integration/setup.ts); requireLabAuth -> requireOrganization ->

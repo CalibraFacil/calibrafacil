@@ -65,6 +65,7 @@ describe("DomainError (REQ-DE-1)", () => {
       "JOB_STATUS_CONFLICT",
       "LAST_CALIBRATION_APPROVER",
     ]);
+    expect(nonSnake).toEqual(["JOB_STATUS_CONFLICT", "DIMENSIONAL_ERROR"]);
     expect(new Set(API_ERROR_CODES).size).toBe(API_ERROR_CODES.length);
   });
 });

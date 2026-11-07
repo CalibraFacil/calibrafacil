@@ -32,6 +32,10 @@ import { assetTypesRouter } from "./asset-types";
 import { assetsRouter as bareAssetsRouter } from "./assets";
 import { customersRouter as bareCustomersRouter } from "./customers";
 import { methodsRouter } from "./methods";
+import { assetsRouter } from "./assets";
+import { customersRouter } from "./customers";
+import { methodsRouter as bareMethodsRouter } from "./methods";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { serviceOrdersRouter } from "./service-orders";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -41,6 +45,8 @@ import { withErrorHandling } from "../../test/integration/with-error-handling";
 
 const assetsRouter = withErrorHandling(bareAssetsRouter);
 const customersRouter = withErrorHandling(bareCustomersRouter);
+
+const methodsRouter = withErrorHandling(bareMethodsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

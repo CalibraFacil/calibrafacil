@@ -44,7 +44,7 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/jobs.ts", 79],
   ["apps/api/src/routes/lab-setup.ts", 6],
   ["apps/api/src/routes/legal-metrology-regulations.ts", 1],
-  ["apps/api/src/routes/methods.ts", 74],
+
   ["apps/api/src/routes/non-conformances.ts", 38],
   ["apps/api/src/routes/notifications.ts", 4],
   ["apps/api/src/routes/organization-media.ts", 9],
@@ -58,7 +58,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/public-signup.ts", 8],
   ["apps/api/src/routes/reports.ts", 9],
   ["apps/api/src/routes/service-orders.ts", 89],
-  ["apps/api/src/routes/services.ts", 16],
   ["apps/api/src/routes/sessions.ts", 3],
   ["apps/api/src/routes/signatures.ts", 12],
   ["apps/api/src/routes/signing.ts", 16],
