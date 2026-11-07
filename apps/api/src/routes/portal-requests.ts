@@ -38,6 +38,7 @@ import {
 import { orgDb } from "../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { withOrg } from "../lib/org-context";
+import { submitCalibrationRequest } from "../lib/calibration-request-submission";
 import { requestActor } from "../middleware/request-actor";
 import { requireRouteId } from "../lib/route-id";
 
@@ -372,15 +373,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
           if (existingItems.length > 0) throw requestAlreadyActive();
 
-          const [createdRequest] = await ctx.o
-            .insert(calibrationRequest)
-            .values({
-              organizationId: linkedCustomer.labOrganizationId,
-              unitId: unitIds[0]!,
-              customerId: linkedCustomer.id,
-              authOrganizationId: member.organizationId,
-              observations: input.observations || null,
-              requestedDueDate,
+          const createdRequest = await submitCalibrationRequest(ctx, {
+            unitId: unitIds[0]!,
+            customerId: linkedCustomer.id,
+            authOrganizationId: member.organizationId,
+            assetIds: input.assetIds,
+            observations: input.observations,
+            requestedDueDate,
+            fields: {
               deliveryMethod: input.deliveryMethod,
               invoiceRemittanceNumber: isCarrier
                 ? input.invoiceRemittanceNumber || null
@@ -392,30 +392,6 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
               carrierName: isCarrier ? input.carrierName || null : null,
               onsiteAddress,
               preferredVisitDate,
-              submittedBy: ctx.actor.userId,
-            })
-            .returning();
-
-          if (!createdRequest) {
-            throw new Error("Erro ao criar solicitacao");
-          }
-
-          await ctx.o.insert(calibrationRequestItem).values(
-            input.assetIds.map((assetId) => ({
-              organizationId: createdRequest.organizationId,
-              requestId: createdRequest.id,
-              assetId,
-            })),
-          );
-
-          await ctx.audit("calibrationRequest", createdRequest.id, {
-            action: "create",
-            changes: {
-              initial: {
-                assetIds: input.assetIds,
-                observations: input.observations || null,
-                requestedDueDate: requestedDueDate?.toISOString() ?? null,
-              },
             },
           });
 
@@ -583,15 +559,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           }> = [];
 
           for (const group of groups.values()) {
-            const [createdRequest] = await ctx.o
-              .insert(calibrationRequest)
-              .values({
-                organizationId: group.labOrganizationId,
-                unitId: group.unitId,
-                customerId: group.customerId,
-                authOrganizationId: group.authOrganizationId,
-                observations: input.observations || null,
-                requestedDueDate,
+            const createdRequest = await submitCalibrationRequest(ctx, {
+              unitId: group.unitId,
+              customerId: group.customerId,
+              authOrganizationId: group.authOrganizationId,
+              assetIds: group.assetIds,
+              observations: input.observations,
+              requestedDueDate,
+              fields: {
                 deliveryMethod: input.deliveryMethod,
                 invoiceRemittanceNumber: isCarrier
                   ? input.invoiceRemittanceNumber || null
@@ -603,30 +578,6 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
                 carrierName: isCarrier ? input.carrierName || null : null,
                 onsiteAddress,
                 preferredVisitDate,
-                submittedBy: ctx.actor.userId,
-              })
-              .returning();
-
-            if (!createdRequest) {
-              throw new Error("Erro ao criar solicitacao");
-            }
-
-            await ctx.o.insert(calibrationRequestItem).values(
-              group.assetIds.map((assetId) => ({
-                organizationId: createdRequest.organizationId,
-                requestId: createdRequest.id,
-                assetId,
-              })),
-            );
-
-            await ctx.audit("calibrationRequest", createdRequest.id, {
-              action: "create",
-              changes: {
-                initial: {
-                  assetIds: group.assetIds,
-                  observations: input.observations || null,
-                  requestedDueDate: requestedDueDate?.toISOString() ?? null,
-                },
               },
             });
             ctx.afterCommit(() =>

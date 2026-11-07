@@ -21,7 +21,6 @@ import {
   CreateAssetSchema,
   UpdateAssetSchema,
   ListAssetsQuerySchema,
-  RegulatedIntervalSchema,
 } from "@calibra-facil/schemas";
 import type { MeasurementUnit } from "@calibra-facil/shared";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -35,19 +34,17 @@ import { buildUnitScopeCondition } from "../lib/units";
 import { orgDb } from "../lib/org-db";
 import { isUniqueViolation } from "../lib/db-errors";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
-import { deriveRegulatedNextDate } from "../lib/regulated-interval";
-import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import {
   denormalizeAssetSpecificationsForResponse,
   normalizeAssetSpecificationsFromInput,
-  resolveAssetBaseMeasurementUnit,
 } from "../lib/asset-measurement";
+import { forbidden, invalid, notFound } from "../lib/domain-errors";
 import {
-  DomainError,
-  forbidden,
-  invalid,
-  notFound,
-} from "../lib/domain-errors";
+  assertAssetTagFree,
+  createLabAsset,
+  deleteLabAsset,
+  planAssetRegimeUpdate,
+} from "../lib/asset-writes";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 
@@ -203,175 +200,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           member.organizationId,
           requestActor(c),
           async (ctx) => {
-            // Validate that customer exists
-            const [foundCustomer] = await ctx.o
-              .select()
-              .from(customer)
-              .where(
-                and(
-                  eq(customer.id, input.customerId),
-                  eq(customer.labOrganizationId, member.organizationId),
-                ),
-              )
-              .limit(1);
-
-            if (!foundCustomer) {
-              throw notFound("customer_not_found", "Cliente não encontrado");
-            }
-
-            // Validate that asset type exists
-            const [foundAssetType] = await ctx.o
-              .select()
-              .from(assetType)
-              .where(eq(assetType.id, input.assetTypeId))
-              .limit(1);
-
-            if (!foundAssetType) {
-              throw notFound(
-                "asset_type_not_found",
-                "Tipo de instrumento não encontrado",
-              );
-            }
-
-            const baseMeasurementUnitResult = resolveAssetBaseMeasurementUnit(
-              foundAssetType,
-              input.baseMeasurementUnit,
-            );
-
-            if (!baseMeasurementUnitResult.ok) {
-              throw invalid(
-                "asset_base_measurement_unit_required",
-                baseMeasurementUnitResult.error,
-              );
-            }
-
-            // Validate specifications against asset type definition
-            if (foundAssetType.definition && input.specifications) {
-              const requiredFields = foundAssetType.definition.filter(
-                (field) => field.required,
-              );
-              for (const field of requiredFields) {
-                if (
-                  input.specifications[field.key] === undefined ||
-                  input.specifications[field.key] === null ||
-                  input.specifications[field.key] === ""
-                ) {
-                  throw invalid(
-                    "invalid_request",
-                    `Campo obrigatório: ${field.label}`,
-                  );
-                }
-              }
-            }
-
-            // Check if tag is unique. SEC-03a: scope to the caller's org (join
-            // asset → customer) so it cannot read another tenant's assets. The
-            // residual GLOBAL DB unique is caught by the outer catch below.
-            const [existingAsset] = await ctx.o
-              .select({ id: asset.id })
-              .from(asset)
-              .innerJoin(customer, eq(asset.customerId, customer.id))
-              .where(
-                and(
-                  eq(asset.tag, input.tag),
-                  eq(customer.labOrganizationId, member.organizationId),
-                ),
-              )
-              .limit(1);
-
-            if (existingAsset) {
-              throw invalid("asset_tag_conflict", "Tag já está em uso");
-            }
-
-            // Parse dates if provided. The lab does NOT set the calibration interval
-            // or next-calibration date — that periodicity is the customer's decision,
-            // set in the portal (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24). Any
-            // client-supplied `nextCalibrationDate` is ignored here.
-            const lastCalibrationDate = input.lastCalibrationDate
-              ? new Date(input.lastCalibrationDate)
-              : null;
-            // Installation date anchors the legal-metrology verification ceiling
-            // (regulated_interval.kind = 'max_months_from_install'). (REQ-INSTALL-002/003)
-            const installedAt = input.installedAt
-              ? new Date(input.installedAt)
-              : null;
-            const normalizedSpecifications =
-              normalizeAssetSpecificationsFromInput({
-                specifications: input.specifications || null,
-                definition: foundAssetType.definition,
-                baseMeasurementUnit:
-                  baseMeasurementUnitResult.baseMeasurementUnit,
+            const { created: newAsset, assetType: foundAssetType } =
+              await createLabAsset(ctx, input, {
+                resolveUnitId: async () => activeUnitId,
+                enforceRequiredSpecifications: true,
               });
-
-            // Legal-metrology regime (Track 2): the regime + the regulation-fixed verification
-            // periodicity, independent of the customer-owned calibration interval (Track 1),
-            // which the lab never authors. (REQ-MLR-030/031/003)
-            const regimeWrite = resolveAssetRegimeWrite({
-              metrologyRegime: input.metrologyRegime,
-              regulatedInterval: input.regulatedInterval,
-              current: {
-                metrologyRegime: "INDUSTRIAL",
-                regulatedInterval: null,
-              },
-            });
-            const nextLegalVerificationDate = regimeWrite.regulatedInterval
-              ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
-                  lastVerificationDate: lastCalibrationDate,
-                  firstVerificationDate: lastCalibrationDate,
-                  installDate: installedAt,
-                }).date
-              : null;
-
-            // Create asset
-            const [newAsset] = await ctx.o
-              .insert(asset)
-              .values({
-                unitId: activeUnitId,
-                customerId: input.customerId,
-                // SEC-03b (#638): denormalize the lab org from the (already
-                // org-scoped) customer so UNIQUE(lab_organization_id, tag) is
-                // enforced per org. foundCustomer was fetched WHERE labOrganizationId
-                // = member.organizationId, so this is the caller's own lab org.
-                labOrganizationId: foundCustomer.labOrganizationId,
-                assetTypeId: input.assetTypeId,
-                name: input.name,
-                manufacturer: input.manufacturer || null,
-                model: input.model || null,
-                serialNumber: input.serialNumber,
-                tag: input.tag,
-                status: input.status || "ACTIVE",
-                baseMeasurementUnit:
-                  baseMeasurementUnitResult.baseMeasurementUnit,
-                lastCalibrationDate,
-                installedAt,
-                comments: input.comments || null,
-                specifications: normalizedSpecifications.specifications || null,
-                metrologyRegime: regimeWrite.metrologyRegime,
-                regulatedInterval: regimeWrite.regulatedInterval,
-                nextLegalVerificationDate,
-              })
-              .returning();
-
-            if (!newAsset) {
-              throw new DomainError({
-                code: "asset_create_failed",
-                status: 500,
-                message: "Erro ao criar ativo",
-              });
-            }
-
-            // Log audit entry
-            await ctx.audit("asset", newAsset.id, {
-              action: "create",
-              changes: {
-                asset: { old: null, new: newAsset },
-                unitConversions:
-                  normalizedSpecifications.conversions.length > 0
-                    ? normalizedSpecifications.conversions
-                    : undefined,
-              },
-            });
-
             return serializeAssetForResponse({
               ...newAsset,
               assetTypeDefinition: foundAssetType.definition,
@@ -381,7 +214,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
 
         return c.json(created satisfies ServerShape<AssetRecord>, 201);
       } catch (error) {
-        // SEC-03b: the org-scoped tag check above ran first; this catch backstops
+        // SEC-03b: the org-scoped tag check ran first; this catch backstops
         // a SAME-org race that slips past it and hits the per-org unique
         // (asset_lab_org_tag_uidx → 23505). A cross-org duplicate no longer
         // raises (different lab_organization_id). Map 23505 to the SAME response
@@ -740,26 +573,15 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
               existingAsset.customerId,
             );
 
-            // Check if tag is being changed and if it's unique. SEC-03a: scope to
-            // the caller's org (join asset → customer) so it cannot read another
-            // tenant's assets. The residual GLOBAL DB unique is caught by the outer
-            // catch below.
+            // Check if tag is being changed and if it's unique (the residual
+            // 23505 is caught by the outer catch below).
             if (input.tag && input.tag !== existingAsset.tag) {
-              const [duplicateTag] = await ctx.o
-                .select({ id: asset.id })
-                .from(asset)
-                .innerJoin(customer, eq(asset.customerId, customer.id))
-                .where(
-                  and(
-                    eq(asset.tag, input.tag),
-                    eq(customer.labOrganizationId, member.organizationId),
-                  ),
-                )
-                .limit(1);
-
-              if (duplicateTag) {
-                throw invalid("asset_tag_conflict", "Tag ja esta em uso");
-              }
+              await assertAssetTagFree(
+                ctx.o,
+                member.organizationId,
+                input.tag,
+                "Tag ja esta em uso",
+              );
             }
 
             // Parse dates if provided. The lab does NOT set the next-calibration date
@@ -806,53 +628,20 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             }
             if (input.comments !== undefined)
               updateData.comments = input.comments || null;
-            // Legal-metrology regime (Track 2) — recompute when the client touches the regime,
-            // the regulated interval, the install anchor (a standalone installed_at change
-            // must re-derive next_legal_verification_date for an install-anchored LEGAL asset),
-            // OR the last-calibration date (the stored proxy for the last-verification anchor —
-            // without this, an anchor-based regulated date goes stale after a verification is
-            // recorded and the recall sweep keeps re-reminding).
-            // Independent of Track 1 (the customer-owned calibration interval).
-            // (REQ-MLR-030/031/032 + REQ-INSTALL-002)
-            if (
-              input.metrologyRegime !== undefined ||
-              input.regulatedInterval !== undefined ||
-              installedAt !== undefined ||
-              lastCalibrationDate !== undefined
-            ) {
-              const parsedCurrent = RegulatedIntervalSchema.safeParse(
-                existingAsset.regulatedInterval,
-              );
-              const regimeWrite = resolveAssetRegimeWrite({
-                metrologyRegime: input.metrologyRegime,
-                regulatedInterval: input.regulatedInterval,
-                current: {
-                  metrologyRegime: existingAsset.metrologyRegime,
-                  regulatedInterval: parsedCurrent.success
-                    ? parsedCurrent.data
-                    : null,
-                },
-              });
-              updateData.metrologyRegime = regimeWrite.metrologyRegime;
-              updateData.regulatedInterval = regimeWrite.regulatedInterval;
-              const anchorDate =
-                (lastCalibrationDate !== undefined
-                  ? lastCalibrationDate
-                  : existingAsset.lastCalibrationDate) ?? null;
-              // Install anchor: the PATCHed value if provided, else the stored one.
-              // (REQ-INSTALL-002/003 — never fabricated when absent.)
-              const installAnchor =
-                (installedAt !== undefined
-                  ? installedAt
-                  : existingAsset.installedAt) ?? null;
+            // Legal-metrology regime (Track 2): recomputed when the client touches
+            // the regime, the regulated interval, the install anchor or the
+            // last-calibration date (planAssetRegimeUpdate).
+            const regimeUpdate = planAssetRegimeUpdate(existingAsset, {
+              metrologyRegime: input.metrologyRegime,
+              regulatedInterval: input.regulatedInterval,
+              lastCalibrationDate,
+              installedAt,
+            });
+            if (regimeUpdate) {
+              updateData.metrologyRegime = regimeUpdate.metrologyRegime;
+              updateData.regulatedInterval = regimeUpdate.regulatedInterval;
               updateData.nextLegalVerificationDate =
-                regimeWrite.regulatedInterval
-                  ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
-                      lastVerificationDate: anchorDate,
-                      firstVerificationDate: anchorDate,
-                      installDate: installAnchor,
-                    }).date
-                  : null;
+                regimeUpdate.nextLegalVerificationDate;
             }
             if (input.specifications !== undefined) {
               const normalizedSpecifications =
@@ -966,32 +755,16 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           existingAsset.customerId,
         );
 
-        const [deletedAsset] = await ctx.o
-          .update(asset)
-          .set({ deletedAt: new Date() })
-          .where(
-            and(
-              eq(asset.id, id),
-              getAssetScopeCondition(member),
-              isNull(asset.deletedAt),
-              linkedCustomerId !== null
-                ? eq(asset.customerId, linkedCustomerId)
-                : undefined,
-            ),
-          )
-          .returning();
-
-        if (!deletedAsset) {
-          throw notFound("asset_not_found", "Ativo nao encontrado");
-        }
-
-        // TODO: Check for active calibrations before deleting
-
-        // Log audit entry before deletion
-        await ctx.audit("asset", id, {
-          action: "delete",
-          changes: { asset: { old: existingAsset, new: null } },
-        });
+        await deleteLabAsset(
+          ctx,
+          existingAsset,
+          and(
+            getAssetScopeCondition(member),
+            linkedCustomerId !== null
+              ? eq(asset.customerId, linkedCustomerId)
+              : undefined,
+          ),
+        );
       });
 
       return c.json({ success: true });

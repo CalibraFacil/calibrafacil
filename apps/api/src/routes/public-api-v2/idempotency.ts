@@ -1,7 +1,6 @@
 import { toRecord } from "@calibra-facil/shared/record";
 import { type Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   IdempotencyReservationLostError,
   buildPublicApiError,
@@ -12,12 +11,11 @@ import {
   reserveIdempotencyKey,
 } from "../../lib/public-api";
 import { afterCommitQueue, type AfterCommitTask } from "../../lib/after-commit";
-import {
-  orgTransactionWithExecutor,
-  type OrgRawTransaction,
-} from "../../lib/org-transaction";
+import { withOrg, type OrgContext } from "../../lib/org-context";
 import { type ApiKeyAuthVariables } from "../../middleware/api-key-auth";
+import { apiKeyActor } from "./actor";
 import { toIdempotencyResponseStatus } from "./helpers";
+import { v2Refusal } from "./refusals";
 
 /**
  * Idempotent public-API mutations (Idempotency-Key).
@@ -27,11 +25,13 @@ import { toIdempotencyResponseStatus } from "./helpers";
  *      the reservation and is refused with 409 `idempotency_in_progress`; a
  *      finished one is replayed from the stored response; a different payload
  *      is 409 `idempotency_conflict`.
- *   2. `withIdempotentMutation`: the handler's writes and the finalised record
- *      commit in ONE transaction. A failure rolls both back and releases the
- *      reservation, so a retry with the same key runs the mutation once.
- *      Effects that need the committed rows (webhook delivery, notifications)
- *      go to `ctx.afterCommit`.
+ *   2. `withIdempotentMutation`: the handler runs in the lab's write door
+ *      (`withOrg`, as the key's creator) and the finalised record commits in
+ *      the SAME transaction as its writes. A failure rolls both back and
+ *      releases the reservation, so a retry with the same key runs the mutation
+ *      once. Effects that need the committed rows (webhook delivery,
+ *      notifications) go to `ctx.afterCommit`. A `DomainError` the lab's domain
+ *      functions throw is answered as a v2 refusal (`v2Refusal`).
  *   3. `withIdempotentCommand`: for the job transitions whose command owns its
  *      transactions (`executeJob`, `submitJob`, `approveJob`, ...). They commit
  *      on their own, so the record is finalised right after, in a second short
@@ -48,25 +48,12 @@ export type IdempotentResult = {
   resourceId?: string | number | null;
 };
 
-export type IdempotentContext = {
-  /** The transaction the mutation and its idempotency record commit in. */
-  o: OrgDb;
-  /**
-   * The same transaction as a raw Drizzle handle, for a callee that still
-   * takes one (job creation: advisory lock and certificate numbering). Hand it
-   * to that callee only.
-   */
-  tx: OrgRawTransaction;
-  /** Runs after the transaction commits; never runs when it rolls back. */
-  afterCommit: (task: AfterCommitTask) => void;
-};
-
 export type IdempotentOptions = {
   /**
    * Maps an error the handler threw to a response. It runs AFTER the
    * transaction rolled back (so it can name a unique or foreign-key violation
    * without swallowing an error inside the transaction); return `null` to let
-   * the error through.
+   * the error through. A `DomainError` with a v2 refusal is mapped without it.
    */
   mapError?: (error: unknown) => IdempotentResult | null;
 };
@@ -206,45 +193,46 @@ export async function withPreparedIdempotentMutation<
   c: Context<E>,
   body: unknown,
   prepare: () => Promise<P>,
-  handler: (ctx: IdempotentContext, prepared: P) => Promise<IdempotentResult>,
+  handler: (ctx: OrgContext, prepared: P) => Promise<IdempotentResult>,
   options: IdempotentOptions = {},
 ) {
   const begun = await begin(c, body);
   if ("response" in begun) return begun.response;
   const { token, organizationId } = begun;
-  const queue = afterCommitQueue();
 
   let result: IdempotentResult;
   try {
     const prepared = await prepare();
-    result = await orgTransactionWithExecutor(organizationId, async (o, tx) => {
-      const handled = await handler(
-        { o, tx, afterCommit: queue.add },
-        prepared,
-      );
-      // A failure result is not recorded (the retry it asks for must run).
-      if (!isServerError(handled.status)) {
-        await finalizeIdempotencyRecord(
-          {
-            organizationId,
-            token,
-            responseStatus: handled.status,
-            responseBody: handled.body,
-            resourceType: handled.resourceType,
-            resourceId: handled.resourceId,
-          },
-          o,
-        );
-      }
-      return handled;
-    });
+    result = await withOrg(
+      organizationId,
+      apiKeyActor(c.get("apiKey"), c),
+      async (ctx) => {
+        const handled = await handler(ctx, prepared);
+        // A failure result is not recorded (the retry it asks for must run).
+        if (!isServerError(handled.status)) {
+          await finalizeIdempotencyRecord(
+            {
+              organizationId,
+              token,
+              responseStatus: handled.status,
+              responseBody: handled.body,
+              resourceType: handled.resourceType,
+              resourceId: handled.resourceId,
+            },
+            ctx.o,
+          );
+        }
+        return handled;
+      },
+    );
   } catch (error) {
     // The transaction rolled back: neither the mutation nor a final record exist.
     if (error instanceof IdempotencyReservationLostError) {
       // The reservation expired and another request took the key over.
       return inProgressResponse(c);
     }
-    const mapped = options.mapError?.(error) ?? null;
+    const mapped: IdempotentResult | null =
+      options.mapError?.(error) ?? v2Refusal(error);
     if (!mapped) {
       await releaseQuietly({ organizationId, token });
       throw error;
@@ -265,6 +253,9 @@ export async function withPreparedIdempotentMutation<
         resourceId: mapped.resourceId,
       });
     } catch (finalizeError) {
+      if (finalizeError instanceof IdempotencyReservationLostError) {
+        return inProgressResponse(c);
+      }
       await releaseQuietly({ organizationId, token });
       throw finalizeError;
     }
@@ -274,7 +265,7 @@ export async function withPreparedIdempotentMutation<
   if (isServerError(result.status)) {
     await releaseQuietly({ organizationId, token });
   }
-  await runAfterCommit(queue);
+  // The effects registered with `ctx.afterCommit` already ran in `withOrg`.
   return respond(c, result);
 }
 
@@ -283,7 +274,7 @@ export function withIdempotentMutation<
 >(
   c: Context<E>,
   body: unknown,
-  handler: (ctx: IdempotentContext) => Promise<IdempotentResult>,
+  handler: (ctx: OrgContext) => Promise<IdempotentResult>,
   options: IdempotentOptions = {},
 ) {
   return withPreparedIdempotentMutation(

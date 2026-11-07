@@ -1,4 +1,3 @@
-import { uniqueSlug } from "../lib/unique-slug";
 import { Hono } from "hono";
 import type {
   CustomerDetail,
@@ -7,11 +6,9 @@ import type {
 } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   customer,
   customerGroup,
-  organization,
   member,
   invitation,
   user,
@@ -51,6 +48,13 @@ import {
   notFound,
   unprocessable,
 } from "../lib/domain-errors";
+import {
+  createLabCustomer,
+  deleteLabCustomer,
+  groupBelongsToLab,
+  provisionCustomerOrganization,
+  updateLabCustomer,
+} from "../lib/customer-writes";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 import { isReferencedRowViolation } from "../lib/db-errors";
@@ -61,7 +65,6 @@ import {
 } from "../lib/finance";
 import {
   cancelPortalInvitationAsService,
-  createClientOrganizationAsServiceOwner,
   createPortalInvitationAsService,
   enforceClientPortalMembershipBoundary,
   removePortalMemberAsService,
@@ -77,25 +80,6 @@ const CommandPaletteCustomerSearchQuerySchema = z.object({
 function getStringProperty(value: unknown, key: string) {
   const property = toRecord(value)[key];
   return typeof property === "string" ? property : undefined;
-}
-
-/** A branch may only join a group owned by the same lab (cross-tenant guard). */
-async function groupBelongsToLab(
-  groupId: number,
-  labOrganizationId: string,
-  o: Pick<OrgDb, "select">,
-): Promise<boolean> {
-  const [group] = await o
-    .select({ id: customerGroup.id })
-    .from(customerGroup)
-    .where(
-      and(
-        eq(customerGroup.id, groupId),
-        eq(customerGroup.labOrganizationId, labOrganizationId),
-      ),
-    )
-    .limit(1);
-  return Boolean(group);
 }
 
 /**
@@ -138,12 +122,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       // Step 1: Create CLIENT organization via service account (3B model)
-      const slug = uniqueSlug(input.name);
-
-      const orgResult = await createClientOrganizationAsServiceOwner({
-        name: input.name,
-        slug,
-      });
+      const orgResult = await provisionCustomerOrganization(input.name);
 
       if (!orgResult?.id) {
         throw new DomainError({
@@ -156,24 +135,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       // Step 2: Insert customer record
       // - authOrganizationId: The CLIENT org (for portal access)
       // - labOrganizationId: The LAB org that manages this customer (current user's org)
-      const [newCustomer] = await withOrg(
+      const newCustomer = await withOrg(
         memberData.organizationId,
         requestActor(c),
-        (ctx) =>
-          ctx.o
-            .insert(customer)
-            .values({
-              name: input.name,
-              tradeName: input.tradeName || null,
-              taxId: input.taxId || null,
-              email: input.email || null,
-              phone: input.phone || null,
-              address: input.address || null,
-              authOrganizationId: orgResult.id,
-              labOrganizationId: memberData.organizationId,
-              groupId: input.groupId ?? null,
-            })
-            .returning(),
+        (ctx) => createLabCustomer(ctx, input, orgResult.id),
       );
 
       // Step 3: If email provided, create invitation for client portal access.
@@ -477,49 +442,11 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         c.req.param("id"),
         memberData.organizationId,
       );
-      const id = existingCustomer.id;
 
       const updatedCustomer = await withOrg(
         memberData.organizationId,
         requestActor(c),
-        async (ctx) => {
-          // A group reassignment must target a group owned by the same lab.
-          if (
-            input.groupId != null &&
-            !(await groupBelongsToLab(
-              input.groupId,
-              memberData.organizationId,
-              ctx.o,
-            ))
-          ) {
-            throw invalid("invalid_request", "Grupo invalido");
-          }
-
-          const changes: Record<string, { old: unknown; new: unknown }> = {};
-          const existingCustomerRecord = toRecord(existingCustomer);
-          for (const [key, value] of Object.entries(input)) {
-            const oldValue = existingCustomerRecord[key];
-            if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
-              changes[key] = { old: oldValue, new: value };
-            }
-          }
-
-          const [updated] = await ctx.o
-            .update(customer)
-            .set({ ...input, updatedAt: new Date() })
-            .where(
-              and(
-                eq(customer.id, id),
-                eq(customer.labOrganizationId, memberData.organizationId),
-              ),
-            )
-            .returning();
-
-          if (Object.keys(changes).length > 0) {
-            await ctx.audit("customer", id, { action: "update", changes });
-          }
-          return updated;
-        },
+        (ctx) => updateLabCustomer(ctx, existingCustomer, input),
       );
 
       return c.json(updatedCustomer);
@@ -535,7 +462,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       c.req.param("id"),
       memberData.organizationId,
     );
-    const id = existingCustomer.id;
 
     // TODO: Check for active calibrations before deleting
     // For now, we allow deletion
@@ -546,45 +472,9 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     // Postgres refuses the DELETE; the audit rows below are written in the same
     // transaction so a refused delete leaves no "delete" entry behind.
     try {
-      await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
-        // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
-        // longer cascades (soft reference), so this row survives the delete below.
-        await ctx.audit("customer", id, {
-          action: "delete",
-          changes: { customer: { old: existingCustomer, new: null } },
-        });
-
-        // CMP-07 (#692): deleting the customer cascades its assets
-        // (asset.customer_id → customer, intentional). Record a 'delete' audit row
-        // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
-        // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
-        const customerAssets = await ctx.o
-          .select()
-          .from(asset)
-          .where(eq(asset.customerId, id));
-        for (const assetRow of customerAssets) {
-          await ctx.audit("asset", assetRow.id, {
-            action: "delete",
-            changes: { asset: { old: assetRow, new: null } },
-            reason: "Cliente excluído",
-          });
-        }
-
-        // Delete the customer (the asset/customer audit trail above survives)
-        await ctx.o
-          .delete(customer)
-          .where(
-            and(
-              eq(customer.id, id),
-              eq(customer.labOrganizationId, memberData.organizationId),
-            ),
-          );
-
-        // Also delete the associated (CLIENT) organization
-        await ctx.o
-          .delete(organization)
-          .where(eq(organization.id, existingCustomer.authOrganizationId));
-      });
+      await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
+        deleteLabCustomer(ctx, existingCustomer),
+      );
     } catch (error) {
       if (isReferencedRowViolation(error)) {
         throw conflict(

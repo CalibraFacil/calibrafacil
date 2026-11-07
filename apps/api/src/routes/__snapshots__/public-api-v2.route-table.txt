@@ -6,12 +6,12 @@ v2 GET /customers/:id requireApiScope(customers:read)
 v2 GET /customers/:id <anonymous> #6b5f94b308
 v2 POST /customers requireApiScope(customers:write)
 v2 POST /customers zValidator(json:name|tradeName|taxId|email|phone|address|groupId|externalId)
-v2 POST /customers <anonymous> #7043e7c4af
+v2 POST /customers <anonymous> #35a0da08cf
 v2 PUT /customers/:id requireApiScope(customers:write)
 v2 PUT /customers/:id zValidator(json:name|tradeName|taxId|email|phone|address|groupId|externalId)
-v2 PUT /customers/:id <anonymous> #414ba8239b
+v2 PUT /customers/:id <anonymous> #1b923bff95
 v2 DELETE /customers/:id requireApiScope(customers:write)
-v2 DELETE /customers/:id <anonymous> #1030451373
+v2 DELETE /customers/:id <anonymous> #e178baa087
 v2 GET /assets requireApiScope(assets:read)
 v2 GET /assets zValidator(query:page|limit|query|unitId|customerId|customerExternalId|status)
 v2 GET /assets <anonymous> #1e8b096ae8
@@ -19,12 +19,12 @@ v2 GET /assets/:id requireApiScope(assets:read)
 v2 GET /assets/:id <anonymous> #aa15070453
 v2 POST /assets requireApiScope(assets:write)
 v2 POST /assets zValidator(json:customerId|assetTypeId|name|manufacturer|model|serialNumber|tag|status|baseMeasurementUnit|lastCalibrationDate|installedAt|comments|specifications|metrologyRegime|regulatedInterval|externalId|unitId|customerExternalId)
-v2 POST /assets <anonymous> #c0745707d2
+v2 POST /assets <anonymous> #101c7d30df
 v2 PUT /assets/:id requireApiScope(assets:write)
 v2 PUT /assets/:id zValidator(json:name|manufacturer|model|serialNumber|tag|status|lastCalibrationDate|installedAt|comments|specifications|metrologyRegime|regulatedInterval|externalId)
-v2 PUT /assets/:id <anonymous> #c241f644c9
+v2 PUT /assets/:id <anonymous> #9a83dcad06
 v2 DELETE /assets/:id requireApiScope(assets:write)
-v2 DELETE /assets/:id <anonymous> #1d6aacbddf
+v2 DELETE /assets/:id <anonymous> #e950938284
 v2 GET /services requireApiScope(services:read)
 v2 GET /services zValidator(query:page|limit|query|unitId|isActive)
 v2 GET /services <anonymous> #bfa1552646
@@ -54,13 +54,13 @@ v2 GET /requests/:id requireApiScope(requests:read)
 v2 GET /requests/:id <anonymous> #60e72238ad
 v2 POST /requests requireApiScope(requests:write)
 v2 POST /requests zValidator(json:observations|requestedDueDate|deliveryMethod|invoiceRemittanceNumber|invoiceRemittanceKey|carrierName|invoiceRemittanceIssuedAt|onsiteAddress|preferredVisitDate|externalId|customerId|customerExternalId|unitId|assetExternalIds|assetIds)
-v2 POST /requests <anonymous> #0bc08b950f
+v2 POST /requests <anonymous> #1407207e60
 v2 PATCH /requests/:id requireApiScope(requests:write)
 v2 PATCH /requests/:id zValidator(json:observations|requestedDueDate)
-v2 PATCH /requests/:id <anonymous> #23f34f353b
+v2 PATCH /requests/:id <anonymous> #987e06f45f
 v2 POST /requests/:id/cancel requireApiScope(requests:write)
 v2 POST /requests/:id/cancel zValidator(json:reason)
-v2 POST /requests/:id/cancel <anonymous> #3ed4fd99cf
+v2 POST /requests/:id/cancel <anonymous> #597d8732b3
 v2 GET /jobs requireApiScope(jobs:read)
 v2 GET /jobs zValidator(query:page|limit|query|unitId|status|customerId|customerExternalId|assetExternalId|assetId|serviceId)
 v2 GET /jobs <anonymous> #2520653842
@@ -68,7 +68,7 @@ v2 GET /jobs/:id requireApiScope(jobs:read)
 v2 GET /jobs/:id <anonymous> #f2fc69224f
 v2 POST /jobs requireApiScope(jobs:write)
 v2 POST /jobs zValidator(json:assetId|serviceId|technicianId|dueDate|sourceServiceOrderId|externalId|unitId|assetExternalId)
-v2 POST /jobs <anonymous> #c40732b560
+v2 POST /jobs <anonymous> #97ddb8672e
 v2 PATCH /jobs/:id requireApiScope(jobs:write)
 v2 PATCH /jobs/:id zValidator(json:technicianId|dueDate|externalId|status)
 v2 PATCH /jobs/:id <anonymous> #5834523c45
