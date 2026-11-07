@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CalibraBridge } from "@calibra-facil/contracts";
 import {
   desktopBridge,
+  desktopBridgeInvokeMethods,
   desktopBridgeMethods,
 } from "@calibra-facil/contracts/desktop-bridge";
 
@@ -36,6 +37,16 @@ async function importPreload() {
   };
 }
 
+function callBridge(
+  bridge: CalibraBridge,
+  method: string,
+  ...args: unknown[]
+): Promise<unknown> {
+  const call = Reflect.get(bridge, method);
+  if (typeof call !== "function") throw new Error(`${method} is missing`);
+  return Reflect.apply(call, bridge, args);
+}
+
 describe("preload bridge", () => {
   afterEach(() => {
     vi.resetModules();
@@ -51,46 +62,23 @@ describe("preload bridge", () => {
     );
   });
 
-  it("routes bridge calls through the canonical IPC channels", async () => {
-    mocks.invoke.mockResolvedValueOnce({ name: "CalibraFacil" });
-    mocks.invoke.mockResolvedValueOnce({ autoStartSync: true });
-
+  it("forwards every invoke method, arguments intact, to its own channel", async () => {
+    mocks.invoke.mockResolvedValue("answer");
     const { bridge } = await importPreload();
 
-    await bridge.getAppInfo();
-    await bridge.setSettings({ autoStartSync: true });
-
-    expect(mocks.invoke).toHaveBeenNthCalledWith(
-      1,
-      desktopBridge.getAppInfo.channel,
-    );
-    expect(mocks.invoke).toHaveBeenNthCalledWith(
-      2,
-      desktopBridge.setSettings.channel,
-      { autoStartSync: true },
+    const answers = await Promise.all(
+      desktopBridgeInvokeMethods.map((method) =>
+        callBridge(bridge, method, { method }, "second"),
+      ),
     );
 
-    await bridge.authFetch({
-      url: "https://api.calibrafacil.com/api/auth/lab/get-session",
-      method: "GET",
-      headers: [],
-      body: null,
-    });
-    expect(mocks.invoke).toHaveBeenNthCalledWith(
-      3,
-      desktopBridge.authFetch.channel,
-      {
-        url: "https://api.calibrafacil.com/api/auth/lab/get-session",
-        method: "GET",
-        headers: [],
-        body: null,
-      },
-    );
-
-    await bridge.forgetOfflineAccess?.();
-    expect(mocks.invoke).toHaveBeenNthCalledWith(
-      4,
-      desktopBridge.forgetOfflineAccess.channel,
+    expect(answers).toEqual(desktopBridgeInvokeMethods.map(() => "answer"));
+    expect(mocks.invoke.mock.calls).toEqual(
+      desktopBridgeInvokeMethods.map((method) => [
+        desktopBridge[method].channel,
+        { method },
+        "second",
+      ]),
     );
   });
 
