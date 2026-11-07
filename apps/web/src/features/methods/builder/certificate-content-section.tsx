@@ -124,7 +124,7 @@ export function CertificateContentSection({
 const UNDECLARED = 'undeclared'
 
 /**
- * The decision rule of the method (ISO/IEC 17025 7.8.6, ILAC-G8; roadmap 2 C4):
+ * The decision rule of the method (ISO/IEC 17025 7.8.6, ILAC-G8):
  * the as-found verdict and the customer's out-of-tolerance alert follow it.
  * The guard-band rules use the per-point `incerteza_expandida_antes`.
  */

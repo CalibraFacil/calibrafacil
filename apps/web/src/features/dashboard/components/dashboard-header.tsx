@@ -133,7 +133,6 @@ export function DashboardHeader({
   const matches = useMatches()
   const queryClient = useQueryClient()
 
-  // Extract IDs from current pathname
   const pathname = matches[matches.length - 1]?.pathname ?? ''
   const {
     customerId,
@@ -401,7 +400,6 @@ export function DashboardHeader({
   const breadcrumbs = useMemo(() => {
     return matches
       .filter((m) => {
-        // Filter only dashboard routes
         if (!m.routeId?.startsWith('/dashboard')) return false
 
         if (m.routeId.endsWith('/')) {
@@ -413,7 +411,6 @@ export function DashboardHeader({
         return true
       })
       .map((m) => {
-        // Normalize routeId by removing trailing slash for label lookup
         const normalizedRouteId = m.routeId.endsWith('/')
           ? m.routeId.slice(0, -1)
           : m.routeId
@@ -437,7 +434,6 @@ export function DashboardHeader({
           }
         }
 
-        // Fallback to last path segment if no label found
         if (!label) {
           label = m.pathname.split('/').pop() ?? ''
         }

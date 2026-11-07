@@ -80,7 +80,7 @@ test.describe('sync conflicts', () => {
       /\/dashboard\/clients\/customer%3Alocal-1\/info.*syncConflictId=/,
     )
 
-    // Discarding the local change is a recorded decision (roadmap 2 E1): the
+    // Discarding the local change is a recorded decision: the
     // user confirms it (with a reason, optional for a non-regulated record).
     await page
       .getByRole('button', { name: 'Descartar minha alteração' })

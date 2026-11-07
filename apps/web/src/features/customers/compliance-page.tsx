@@ -158,7 +158,6 @@ function ClientComplianceForm({
   const compliance = customer.compliance as CustomerCompliance | undefined
   const activeCommercialAgreement = customer.activeCommercialAgreement ?? null
 
-  // Form state
   const [qualificationStatus, setQualificationStatus] = useState<string>(
     compliance?.qualificationStatus || 'pending',
   )

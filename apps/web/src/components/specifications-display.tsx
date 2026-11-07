@@ -30,7 +30,6 @@ export function SpecificationsDisplay({
     )
   }
 
-  // Filter to only show fields that have values
   const fieldsWithValues = definition.filter((field) => {
     const value = specifications[field.key]
     return value !== undefined && value !== null && value !== ''

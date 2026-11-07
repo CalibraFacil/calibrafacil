@@ -23,9 +23,9 @@ describe('finance date defaults (REQ-DATE-006)', () => {
     const instant = receivedAtPayload('2026-05-20')
     expect(instant).toBe('2026-05-20T15:00:00.000Z')
     expect(formatFinanceDate(instant)).toBe('20/05/2026')
-    // The bare-date parse the form used to send is UTC midnight. A day-only
-    // value stored that way names its own day, so it now reads as the 20th
-    // (it used to read as the 19th, the evening before in Brazil).
+    // A bare-date parse is UTC midnight. A day-only value stored that way
+    // names its own day, so it reads as the 20th (not the 19th, the evening
+    // before in Brazil).
     expect(formatFinanceDate(new Date('2026-05-20').toISOString())).toBe(
       '20/05/2026',
     )

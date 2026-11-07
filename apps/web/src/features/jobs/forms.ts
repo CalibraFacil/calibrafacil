@@ -16,7 +16,7 @@ export type JobFormData = {
   serviceId: number | null
   technicianId: string | null
   dueDate: Date | null
-  // DOM-02 (#655): the repair OS this calibration was opened from, when any.
+  // DOM-02: the repair OS this calibration was opened from, when any.
   // Seeded from the route search and threaded into the create payload so the
   // job records the back-link. Optional + not a user-editable field, so a
   // standalone calibration form omits it entirely.

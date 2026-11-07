@@ -7,7 +7,7 @@ import type { CertificateLifecycleStatus } from '@calibra-facil/schemas'
 export type { JobStatus } from '@calibra-facil/schemas'
 
 /**
- * §7.10 (#426): as-found conformity computed from the pre-adjustment margins.
+ * §7.10: as-found conformity computed from the pre-adjustment margins.
  * NON_CONFORMING means the instrument arrived out of tolerance and the
  * customer may need to be notified.
  */
@@ -115,12 +115,12 @@ export type ApprovedJobRecordData = {
   } | null
   /** The open amendment of this certificate: it stays valid until that one is issued. */
   amendmentInProgress?: { id: number; jobId: string; status: string } | null
-  /** What the signed-in member may do (roadmap 2 F1); absent on the desktop. */
+  /** What the signed-in member may do; absent on the desktop. */
   allowedActions?: JobAllowedActions
   asFoundConformity?: AsFoundConformity | null
   asFoundMargins?: number[] | null
   scopeOverrideJustification?: string | null
-  /** The seal decision frozen at approval (Q42); null/absent for records approved before it was frozen. */
+  /** The seal decision frozen at approval; null/absent for records approved before it was frozen. */
   accreditationSeal?: {
     accredited: boolean
     withheldReason: string | null
@@ -167,7 +167,7 @@ export type ReviewJobDetailData = {
 
 /**
  * Accredited-scope (CMC) finding frozen on the job by the server-side guard
- * (#427 — ISO/IEC 17025 §7.6/§7.8.3). Mirrors `ScopeComplianceFinding` in
+ * (ISO/IEC 17025 §7.6/§7.8.3). Mirrors `ScopeComplianceFinding` in
  * `@calibra-facil/shared`, tolerant of missing fields on older records.
  */
 export type ScopeComplianceFindingData = {

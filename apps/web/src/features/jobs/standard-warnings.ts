@@ -14,7 +14,7 @@ export type StandardWarningItem = {
 }
 
 /**
- * The warnings a draft save answers (P1-11), one item per stale standard: a
+ * The warnings a draft save answers, one item per stale standard: a
  * standard the job already carries is no longer valid. The save went through;
  * the submit will refuse until the standard is replaced. Only standards still
  * selected are listed, so a standard the technician already removed stops

@@ -311,7 +311,6 @@ export function AssetCreateForm({
     updateField('specifications', specifications)
   }
 
-  // Reset specifications when the asset type changes
   const handleAssetTypeChange = (typeId: number | null) => {
     setFormData((prev) => ({
       ...prev,

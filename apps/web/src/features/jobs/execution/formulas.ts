@@ -285,8 +285,7 @@ export function evaluateExecutionFormulaResults({
 }
 
 /**
- * Where the results the execute screen shows come from (roadmap 2 F1, review
- * 3.5): the server's official computation of the SAVED readings, or the local
+ * Where the results the execute screen shows come from: the server's official computation of the SAVED readings, or the local
  * recompute of what is on screen. With unsaved edits the official numbers no
  * longer belong to the readings shown, so the local preview is shown instead
  * (and labelled as unsaved), never the stale server values under "Oficial".

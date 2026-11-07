@@ -35,10 +35,9 @@ export function baseMeasurementUnitOptions(
   return kind ? unitsForKind(kind) : MEASUREMENT_UNITS
 }
 
-// NOTE: the lab no longer authors a calibration periodicity / next-calibration
-// date. Periodicity is the equipment owner's (customer's) decision, set in the
-// client portal (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). The old
-// `buildCalibrationPeriodicityPresets` quick-select was removed for that reason.
+// The lab does not author a calibration periodicity / next-calibration date.
+// Periodicity is the equipment owner's (customer's) decision, set in the client
+// portal (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10).
 
 export type AssetFormData = {
   customerId: number | null
@@ -160,7 +159,7 @@ export function isRegulatedKind(
 }
 
 // =============================================================================
-// LEGAL-METROLOGY REGULATION CATALOG — auto-fill (deferred #3 of #423)
+// LEGAL-METROLOGY REGULATION CATALOG — auto-fill
 // =============================================================================
 
 /**

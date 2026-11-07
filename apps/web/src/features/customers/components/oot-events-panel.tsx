@@ -25,7 +25,7 @@ const DECISION_LABELS: Record<string, string> = {
 
 /**
  * Read-only lab view of the customer's asset OOT events and whether the
- * customer closed their ISO 9001 §7.1.5.2 impact-assessment loop (#740).
+ * customer closed their ISO 9001 §7.1.5.2 impact-assessment loop.
  * The assessment itself is the customer's record, made in the portal.
  */
 export function CustomerOotEventsPanel({ customerId }: { customerId: string }) {

@@ -1,7 +1,7 @@
 import type { JobAction, JobAllowedActions } from '@calibra-facil/contracts'
 
 /**
- * Whether the signed-in member may take `action` on the job (roadmap 2 F1).
+ * Whether the signed-in member may take `action` on the job.
  * The cloud API decides it (status machine, permission, separation of duties,
  * certificate lifecycle) and sends `allowedActions`; the desktop local server
  * does not, so its jobs keep the status rule the screen applied before.

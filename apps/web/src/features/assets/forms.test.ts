@@ -285,7 +285,7 @@ describe('asset feature forms', () => {
         serialNumber: 'SN-002',
         tag: 'BAL-002',
         status: 'MAINTENANCE',
-        // No deprecated boolean in the payload: with the `.default(false)` removed, an
+        // No deprecated boolean in the payload: an
         // omitted regime leaves the API to keep the asset's current regime (so a
         // non-regime update never silently resets a LEGAL asset to INDUSTRIAL).
         metrologyRegime: 'INDUSTRIAL',
@@ -420,11 +420,9 @@ describe('asset feature forms', () => {
     })
   })
 
-  // NOTE: the lab no longer authors a calibration periodicity / next-calibration
-  // date — periodicity is the customer's decision in the portal (§7.8.4.3 +
-  // ILAC-G24). The former "calibration periodicity presets" tests were removed
-  // with the feature. Next-date derivation now lives in the portal API
-  // (apps/api/src/domains/assets/portal-asset-interval.ts + .spec.ts).
+  // The lab does not author a calibration periodicity / next-calibration date
+  // (the customer's decision in the portal, §7.8.4.3 + ILAC-G24); next-date
+  // derivation lives in the portal API.
 })
 
 function validAssetForm(): AssetFormData {

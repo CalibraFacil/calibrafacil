@@ -228,23 +228,19 @@ describe('FromTemplatePage — URL-driven wizard', () => {
     render(<RouterProvider router={router} />)
     await screen.findByText(ENTRY.defaultName)
 
-    // Navigate to context step via "Revisar contexto"
     fireEvent.click(screen.getByRole('button', { name: /revisar contexto/i }))
 
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ step: 'context' })
     })
 
-    // Go back in history
     router.history.back()
 
     await waitFor(() => {
-      // After back, step should be absent (catalog)
       const search = router.state.location.search
       expect(search.step === undefined || search.step === 'catalog').toBe(true)
     })
 
-    // Catalog step should be visible again
     await screen.findByText(ENTRY.defaultName)
     expect(
       screen.getByRole('button', { name: /revisar contexto/i }),
@@ -299,7 +295,6 @@ describe('FromTemplatePage — URL-driven wizard', () => {
     )
     render(<RouterProvider router={router} />)
 
-    // Wait for context step to render
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ step: 'context' })
     })
@@ -377,7 +372,6 @@ describe('FromTemplatePage — URL-driven wizard', () => {
       expect(router.state.location.search).toMatchObject({ step: 'confirm' })
     })
 
-    // Check all acks
     const checkboxes = await screen.findAllByRole('checkbox')
     for (const cb of checkboxes) {
       fireEvent.click(cb)
@@ -390,7 +384,6 @@ describe('FromTemplatePage — URL-driven wizard', () => {
       ).toBe(false),
     )
 
-    // Navigate back to catalog
     router.history.back()
     await waitFor(() => {
       const step = router.state.location.search.step
@@ -399,7 +392,6 @@ describe('FromTemplatePage — URL-driven wizard', () => {
       ).toBe(true)
     })
 
-    // Navigate forward to confirm again
     router.history.forward()
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ step: 'confirm' })
@@ -432,7 +424,6 @@ describe('FromTemplatePage — URL-driven wizard', () => {
 
     await screen.findByRole('button', { name: /criar rascunho/i })
 
-    // Check all acks
     for (const cb of screen.getAllByRole('checkbox')) {
       fireEvent.click(cb)
     }

@@ -156,7 +156,7 @@ function FormulaResultValue({
   )
 }
 
-/** What the results badge says about where the numbers come from (F1). */
+/** What the results badge says about where the numbers come from. */
 const RESULTS_SOURCE_LABEL: Record<ExecutionResultsSource, string> = {
   official: 'Oficial',
   unsaved_preview: 'Prévia (não salva)',

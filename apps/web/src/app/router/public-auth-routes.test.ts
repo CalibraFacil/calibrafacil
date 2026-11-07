@@ -3,10 +3,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Self-serve sign-up was deliberately introduced in 2026-09: a laboratory can
- * now open its own account from the pricing page. What did NOT change is the
- * rule underneath the old "no public registration" invariant — an account is
- * only opened for a laboratory that owns its e-mail domain, and it still costs
+ * Self-serve sign-up: a laboratory can open its own account from the pricing
+ * page. The rule underneath it is that an account is only opened for a laboratory that owns its e-mail domain, and it still costs
  * a click on a link sent to that mailbox.
  *
  * These assertions keep that shape from eroding into "anyone with an e-mail".

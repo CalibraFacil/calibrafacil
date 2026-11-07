@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LegalMetrologyRegulationCatalogEntry } from '@/features/assets/forms'
 import type { MetrologyRegimeFormValues } from '@/features/assets/forms'
 
-// The GLOBAL legal-metrology regulation catalog the regime form auto-fills from
-// (deferred #3 of #423). We stub the network hook + the Radix Select shell (the repo's
+// The GLOBAL legal-metrology regulation catalog the regime form auto-fills from.
+// We stub the network hook + the Radix Select shell (the repo's
 // established pattern — see nc-new-route.test.tsx), then render the REAL component so the
 // auto-fill patch + the secondary DOU caveat are exercised against real rendered output.
 

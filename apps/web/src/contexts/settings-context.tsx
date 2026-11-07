@@ -35,23 +35,18 @@ interface SessionInfo {
 }
 
 interface SettingsContextValue {
-  // User data from session
   user: User | null
 
-  // Session info
   session: SessionInfo | null
 
   isLoading: boolean
   isUpdating: boolean
 
-  // Error state
   error: string | null
   clearError: () => void
 
-  // Profile mutations
   updateProfile: (data: { name?: string; image?: string }) => Promise<void>
 
-  // Session management
   sessions: Array<SessionInfo>
   sessionsLoading: boolean
   refreshSessions: () => Promise<void>

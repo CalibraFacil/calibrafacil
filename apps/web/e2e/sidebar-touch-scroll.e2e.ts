@@ -17,8 +17,8 @@ test.use({
  * Regression test: a touch-drag that starts on a sidebar nav link must scroll
  * the sheet, not dismiss it. The link's prewarm-on-touch intent settles
  * through a same-location `onResolved` router event; SidebarMobileAutoClose
- * used to treat any `onResolved` as a navigation and closed the sheet under
- * the user's finger mid-scroll.
+ * must not treat that as a navigation and close the sheet under the user's
+ * finger mid-scroll.
  */
 test('touch-drag starting on a sidebar link scrolls without closing the sheet', async ({
   page,
@@ -44,7 +44,7 @@ test('touch-drag starting on a sidebar link scrolls without closing the sheet', 
 
   // Playwright's touchscreen API has no drag, so dispatch the gesture via CDP
   // (the suite only runs on chromium). Total drag time must comfortably exceed
-  // the 120ms prewarm-intent debounce that used to trigger the dismissal.
+  // the 120ms prewarm-intent debounce that triggers the same-location event.
   const client = await page.context().newCDPSession(page)
   await client.send('Input.dispatchTouchEvent', {
     type: 'touchStart',

@@ -10,9 +10,8 @@ import { visitKeys } from '@/features/visits/keys'
 import { jobKeys } from './keys'
 
 /**
- * What a job's lifecycle event changes, as query-key prefixes to refresh
- * (roadmap 2 F2, review 3.5). One map instead of a hand-picked list at each
- * call site: an approval also moves the asset's calibration dates, may open an
+ * What a job's lifecycle event changes, as query-key prefixes to refresh. One
+ * map instead of a hand-picked list at each call site: an approval also moves the asset's calibration dates, may open an
  * out-of-tolerance event for the customer and closes service-order work; an
  * amendment creates a new job and, when issued, supersedes the original.
  * The prefixes come from each feature's key factory, never a retyped array.
