@@ -326,6 +326,7 @@ export function ServiceOrderDetailPage({ id }: { id: string }) {
       await queryClient.invalidateQueries({
         queryKey: keys.serviceOrder(id),
       });
+      await queryClient.invalidateQueries({ queryKey: keys.serviceOrders });
       await queryClient.invalidateQueries({ queryKey: keys.overview });
     },
     onError: (error) => {
@@ -350,6 +351,7 @@ export function ServiceOrderDetailPage({ id }: { id: string }) {
       await queryClient.invalidateQueries({
         queryKey: keys.serviceOrder(id),
       });
+      await queryClient.invalidateQueries({ queryKey: keys.serviceOrders });
       await queryClient.invalidateQueries({ queryKey: keys.overview });
     },
     onError: (error) => {

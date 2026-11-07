@@ -55,7 +55,7 @@ import {
   ncAvailableActions,
 } from '@/features/quality/nc-model'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
-import { nonConformanceKeys } from '@/features/quality/keys'
+import { capaKeys, nonConformanceKeys } from '@/features/quality/keys'
 
 export function NCDetailPage({ id }: { id: string }) {
   const queryClient = useQueryClient()
@@ -177,6 +177,9 @@ export function NCDetailPage({ id }: { id: string }) {
       queryClient.invalidateQueries({ queryKey: nonConformanceKeys.audit(id) })
       queryClient.invalidateQueries({ queryKey: nonConformanceKeys.all })
       queryClient.invalidateQueries({ queryKey: nonConformanceKeys.summaries })
+      // Escalating creates a CAPA: its lists and summary are stale too.
+      queryClient.invalidateQueries({ queryKey: capaKeys.all })
+      queryClient.invalidateQueries({ queryKey: capaKeys.summaries })
       toast.success('CAPA criada com sucesso')
       setCapaDialogOpen(false)
     },

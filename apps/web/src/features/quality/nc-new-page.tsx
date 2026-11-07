@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -32,6 +32,7 @@ import {
 } from '@calibra-facil/ui/select'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@calibra-facil/ui/utils'
+import { nonConformanceKeys } from '@/features/quality/keys'
 
 const NC_TYPES: ReadonlyArray<{
   value: NonConformanceFormData['type']
@@ -82,6 +83,7 @@ const NC_FLOW_STEPS = [
 
 export function NewNCPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const now = new Date()
   const [detectedDate, setDetectedDate] = useState<Date | undefined>(now)
   const [detectedTime, setDetectedTime] = useState(
@@ -115,6 +117,8 @@ export function NewNCPage() {
     mutationFn: async (payload: CreateNonConformanceInput) =>
       calibraApi.nonConformances.create({ body: payload }),
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.all })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.summaries })
       toast.success(`NC ${result.ncNumber} registrada com sucesso`)
       navigate({ to: '/dashboard/nc/$id', params: { id: String(result.id) } })
     },

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -30,6 +30,7 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
+import { capaKeys } from '@/features/quality/keys'
 
 const SOURCE_LABELS: Record<string, string> = {
   nc_detection: 'Detecção de NC',
@@ -126,6 +127,7 @@ type CapaCreateInput = EndpointClientInput<typeof capaEndpoints.create>['body']
 
 export function NewCAPAPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const [detectionDate, setDetectionDate] = useState<Date | undefined>(
     new Date(),
@@ -176,6 +178,8 @@ export function NewCAPAPage() {
     mutationFn: async (payload: CapaCreateInput) =>
       calibraApi.capas.create({ body: payload }),
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: capaKeys.all })
+      queryClient.invalidateQueries({ queryKey: capaKeys.summaries })
       toast.success(`${result.capaNumber} criada com sucesso`)
       navigate({
         to: '/dashboard/capa/$id',

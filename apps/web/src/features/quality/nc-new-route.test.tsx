@@ -95,6 +95,7 @@ vi.mock('@calibra-facil/ui/select', () => ({
 }))
 
 import { NewNCPage } from '@/features/quality/nc-new-page'
+import { nonConformanceKeys } from '@/features/quality/keys'
 
 describe('new NC route workflow', () => {
   beforeEach(() => {
@@ -111,7 +112,17 @@ describe('new NC route workflow', () => {
   })
 
   it('submits a schema-validated NC payload and navigates to the detail page', async () => {
-    renderRoute()
+    const queryClient = renderRoute()
+    const list = nonConformanceKeys.list({
+      organizationId: 'org-1',
+      page: 1,
+      search: '',
+      statusFilter: '',
+      typeFilter: '',
+    })
+    const summary = nonConformanceKeys.summary('org-1')
+    queryClient.setQueryData(list, { data: [] })
+    queryClient.setQueryData(summary, { open: 0 })
 
     fireEvent.click(screen.getByRole('radio', { name: /Equipamento/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Selecione a data' }))
@@ -153,6 +164,9 @@ describe('new NC route workflow', () => {
       to: '/dashboard/nc/$id',
       params: { id: '12' },
     })
+    // The list the user lands on next must not serve the pre-create cache.
+    expect(queryClient.getQueryState(list)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(summary)?.isInvalidated).toBe(true)
   })
 
   it('surfaces schema validation errors before calling the API', async () => {
@@ -193,4 +207,5 @@ function renderRoute() {
       <NewNCPage />
     </QueryClientProvider>,
   )
+  return queryClient
 }
