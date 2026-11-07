@@ -10,7 +10,7 @@ import {
   parseImpactAssessmentForm,
   type ImpactAssessmentFormData,
 } from '@/features/quality/forms'
-import { ShowForRole } from '@/components/permission-gate'
+import { ShowForManager } from '@/components/permission-gate'
 import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'
@@ -102,9 +102,9 @@ export function ImpactAssessmentCard({
               assessment={assessment}
             />
             {assessment && (
-              <ShowForRole role={['owner', 'admin']}>
+              <ShowForManager>
                 <SignAssessmentSection ncId={ncId} assessment={assessment} />
-              </ShowForRole>
+              </ShowForManager>
             )}
           </>
         )}

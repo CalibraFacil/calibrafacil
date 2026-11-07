@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { calibraApi } from '@/utils/api'
+import { isLabManagerRole } from '@/hooks/use-current-role'
 import { useOrganizationGovernanceActivityData } from '@/features/settings/queries'
 import type {
   GovernanceMember,
@@ -416,8 +417,7 @@ export function OrganizationUnitsSection({
             ) : governanceMembers.length ? (
               <div className="space-y-4">
                 {governanceMembers.map((member) => {
-                  const isGlobalManagerMember =
-                    member.role === 'owner' || member.role === 'admin'
+                  const isGlobalManagerMember = isLabManagerRole(member.role)
 
                   return (
                     <div

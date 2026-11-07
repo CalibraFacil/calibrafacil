@@ -1,16 +1,6 @@
 import { redirect } from '@tanstack/react-router'
-import { authClient } from '@calibra-facil/auth/client'
 
-import { hasDesktopSession } from '@/runtime/desktop-auth'
-import { isDesktopRuntime } from '@/runtime/desktop'
-import { readSessionWithRetry } from '@calibra-facil/shared/session-retry'
-import { getClientSession } from '@/lib/auth-session'
-
-// Inference through readSessionWithRetry's naked type parameter widens
-// TSession to `{}`, so name it explicitly off the auth client.
-type DashboardSession = NonNullable<
-  Awaited<ReturnType<typeof authClient.getSession>>['data']
->
+import { hasRuntimeSession } from '@/app/session/runtime-session'
 
 /**
  * Where to send the user back to after signing in.
@@ -42,19 +32,7 @@ export async function dashboardBeforeLoad({
 }) {
   if (preload) return
 
-  if (isDesktopRuntime()) {
-    if (await hasDesktopSession()) return
-
-    throw redirect({
-      to: '/sign-in',
-      search: { redirect: continuationHref(location) },
-    })
-  }
-
-  const { data: session } =
-    await readSessionWithRetry<DashboardSession>(getClientSession)
-
-  if (!session) {
+  if (!(await hasRuntimeSession())) {
     throw redirect({
       to: '/sign-in',
       search: { redirect: continuationHref(location) },

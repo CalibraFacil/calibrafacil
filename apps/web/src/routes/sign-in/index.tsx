@@ -1,7 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { SignInPage } from '@/features/auth/sign-in-page'
 import { hasDesktopSession } from '@/runtime/desktop-auth'
-import { isDesktopRuntime } from '@/runtime/desktop'
 
 type SignInSearch = {
   redirect?: string
@@ -12,8 +11,8 @@ export const Route = createFileRoute('/sign-in/')({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
   beforeLoad: async () => {
-    if (!isDesktopRuntime()) return
-
+    // Only the desktop has a session worth skipping sign-in for (a local
+    // snapshot); `hasDesktopSession` is false in the cloud web app.
     if (await hasDesktopSession()) {
       throw redirect({ to: '/dashboard' })
     }

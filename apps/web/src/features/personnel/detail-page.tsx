@@ -1,4 +1,4 @@
-import { useCurrentRole } from '@/hooks/use-current-role'
+import { isLabManagerRole, useCurrentRole } from '@/hooks/use-current-role'
 import { COMPETENCE_MACHINE } from '@calibra-facil/schemas/machines'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -193,7 +193,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
     )
   }
 
-  const canDelete = currentRole === 'owner' || currentRole === 'admin'
+  const canDelete = isLabManagerRole(currentRole)
   const isTerminalInactive = isTerminalInactiveStatus(comp.status)
   const canCancel = canCancelCompetenceStatus(comp.status)
 

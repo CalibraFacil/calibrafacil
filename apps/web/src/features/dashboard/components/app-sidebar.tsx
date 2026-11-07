@@ -1,4 +1,4 @@
-import { useCurrentRole } from '@/hooks/use-current-role'
+import { useIsLabManager } from '@/hooks/use-current-role'
 import { useFinanceModuleAvailable } from '@/hooks/use-finance-access'
 import {
   Analytics01Icon,
@@ -91,9 +91,7 @@ function toNavMainItems(items: DashboardNavItem[]) {
 }
 
 export function AppSidebar() {
-  const currentRole = useCurrentRole()
-  const canAccessAdminOrOwner =
-    currentRole === 'owner' || currentRole === 'admin'
+  const canAccessAdminOrOwner = useIsLabManager()
   // Finance is a cloud-only module: listed whenever its calls can run.
   const financeAvailable = useFinanceModuleAvailable()
   const canAccessFinance = canAccessAdminOrOwner && financeAvailable

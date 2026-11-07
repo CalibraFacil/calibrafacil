@@ -1,4 +1,4 @@
-import { useCurrentRole } from '@/hooks/use-current-role'
+import { useCurrentRole, useIsLabManager } from '@/hooks/use-current-role'
 import { Building06Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
@@ -7,10 +7,7 @@ import {
   useOrganizationGovernanceMembersData,
   useOrganizationUnitsData,
 } from '@/features/settings/queries'
-import {
-  canDeleteOrganization as canDeleteOrganizationForRole,
-  canManageOrganizationSettings as canManageOrganizationSettingsForRole,
-} from '@/features/settings/organization-model'
+import { canDeleteOrganization as canDeleteOrganizationForRole } from '@/features/settings/organization-model'
 import type { ActiveOrganization } from '@/features/settings/organization/shared'
 import { OrganizationProfileSection } from '@/features/settings/organization/profile-section'
 import { OrganizationUnitsSection } from '@/features/settings/organization/units-section'
@@ -76,8 +73,7 @@ function OrganizationSettingsPage({
   section: OrganizationSection
 }) {
   const currentOrgRole = useCurrentRole()
-  const canManageOrganizationSettings =
-    canManageOrganizationSettingsForRole(currentOrgRole)
+  const canManageOrganizationSettings = useIsLabManager()
 
   const unitsQuery = useOrganizationUnitsData({
     organizationId: activeOrg.id,

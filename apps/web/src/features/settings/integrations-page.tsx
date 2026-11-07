@@ -15,10 +15,7 @@ import {
   CollapsibleTrigger,
 } from '@calibra-facil/ui/collapsible'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
-import {
-  canManageIntegrationSettings,
-  getIntegrationSettingsRole,
-} from '@/features/settings/integrations-model'
+import { useIsLabManager } from '@/hooks/use-current-role'
 import { useIntegrationsData } from '@/features/settings/queries'
 import type { IntegrationSummary } from '@/features/settings/types'
 import { ContaAzulCard } from './integrations/conta-azul-card'
@@ -36,13 +33,9 @@ export function IntegrationsSettingsPage({
   contaAzulOAuthError?: { reason: string | null } | null
 } = {}) {
   const queryClient = useQueryClient()
-  const { data: session, isPending: isLoadingSession } = useSession()
-  const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
-  const currentOrgRole = getIntegrationSettingsRole(
-    session?.user?.id,
-    activeOrg?.members,
-  )
-  const canManage = canManageIntegrationSettings(currentOrgRole)
+  const { isPending: isLoadingSession } = useSession()
+  const { isPending: isLoadingOrg } = useActiveOrganization()
+  const canManage = useIsLabManager()
 
   const integrationsQuery = useIntegrationsData({ enabled: canManage })
 

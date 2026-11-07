@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { currentMemberRole } from './use-current-role'
+import { currentMemberRole, isLabManagerRole } from './use-current-role'
 
 describe('currentMemberRole', () => {
   const organization = {
@@ -20,5 +20,26 @@ describe('currentMemberRole', () => {
     expect(
       currentMemberRole({ members: [{ userId: 'x', role: 'weird' }] }, 'x'),
     ).toBe('member')
+  })
+})
+
+describe('isLabManagerRole', () => {
+  it('is true for the roles the access table lets update settings', () => {
+    expect(isLabManagerRole('owner')).toBe(true)
+    expect(isLabManagerRole('admin')).toBe(true)
+  })
+
+  it('is false for every other role, unknown values and no role', () => {
+    for (const role of [
+      'technician',
+      'operator',
+      'member',
+      'client_user',
+      'weird',
+      null,
+      undefined,
+    ]) {
+      expect(isLabManagerRole(role)).toBe(false)
+    }
   })
 })
