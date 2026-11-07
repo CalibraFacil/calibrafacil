@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
+import { commandSearchKeys } from '@/features/command-palette/keys'
 
 export type SearchMode = 'assets' | 'clients' | 'standards' | 'jobs' | null
 
@@ -55,7 +56,7 @@ export function getSearchModeFromPage(activePage: string): SearchMode {
 
 export function commandSearchAssetsQueryOptions(query: string) {
   return queryOptions({
-    queryKey: ['command-search', 'assets', query],
+    queryKey: commandSearchKeys.assets(query),
     queryFn: async () => {
       if (query.length < SEARCH_MIN_LENGTH) return []
       const result = await calibraApi.assets.list({
@@ -81,7 +82,7 @@ export function commandSearchAssetsQueryOptions(query: string) {
 
 export function commandSearchClientsQueryOptions(query: string) {
   return queryOptions({
-    queryKey: ['command-search', 'clients', query],
+    queryKey: commandSearchKeys.clients(query),
     queryFn: async () => {
       if (query.length < SEARCH_MIN_LENGTH) return []
       const result = await calibraApi.customers.list({
@@ -105,7 +106,7 @@ export function commandSearchClientsQueryOptions(query: string) {
 
 export function commandSearchStandardsQueryOptions(query: string) {
   return queryOptions({
-    queryKey: ['command-search', 'standards', query],
+    queryKey: commandSearchKeys.standards(query),
     queryFn: async () => {
       if (query.length < SEARCH_MIN_LENGTH) return []
       const result = await calibraApi.standards.list({
@@ -129,7 +130,7 @@ export function commandSearchStandardsQueryOptions(query: string) {
 
 export function commandSearchJobsQueryOptions(query: string) {
   return queryOptions({
-    queryKey: ['command-search', 'jobs', query],
+    queryKey: commandSearchKeys.jobs(query),
     queryFn: async () => {
       if (query.length < SEARCH_MIN_LENGTH) return []
       const result = await calibraApi.jobs.list({

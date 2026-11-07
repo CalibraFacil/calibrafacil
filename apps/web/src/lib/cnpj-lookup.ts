@@ -5,6 +5,7 @@ import type { CnpjLookupResult } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
+import { lookupKeys } from '@/lib/query-keys'
 
 export type { CnpjLookupResult }
 
@@ -71,7 +72,7 @@ export function useCnpjLookup({
         try {
           // react-doctor-disable-next-line react-doctor/async-defer-await -- the post-await staleness guard cannot run before the await
           const result = await queryClient.fetchQuery({
-            queryKey: ['cnpj-lookup', normalized],
+            queryKey: lookupKeys.cnpj(normalized),
             queryFn: () =>
               calibraApi.customers.lookupCnpj({ params: { cnpj: normalized } }),
             staleTime: 24 * 60 * 60 * 1000,

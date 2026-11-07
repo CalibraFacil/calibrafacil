@@ -15,6 +15,7 @@ import {
 import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import { FinanceDataTable } from '@/features/finance/components/finance-data-table'
 import { formatPercentPoints } from '@calibra-facil/shared/format'
+import { financeKeys } from '@/features/finance/keys'
 
 interface MarginRow {
   entityId: number
@@ -126,7 +127,7 @@ const marginColumns: ColumnDef<MarginRow, unknown>[] = [
 
 function marginDashboardsQueryOptions() {
   return queryOptions<MarginEnvelope>({
-    queryKey: ['finance', 'margin-dashboards'],
+    queryKey: financeKeys.marginDashboards,
     queryFn: () => calibraApi.finance.getMarginDashboards(),
   })
 }

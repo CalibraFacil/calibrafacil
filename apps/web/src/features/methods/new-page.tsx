@@ -11,6 +11,7 @@ import {
   methodDataToDraft,
 } from '@/features/methods/builder/adapters'
 import type { MethodDraft } from '@/features/methods/builder/types'
+import { methodKeys } from '@/features/methods/keys'
 
 const MethodBuilder = lazy(() =>
   import('@/features/methods/builder/method-builder').then((module) => ({
@@ -28,7 +29,7 @@ export function NewMethodPage() {
       return calibraApi.methods.create({ body: payload })
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({ queryKey: methodKeys.all })
       toast.success('Método salvo como rascunho')
       navigate({
         to: '/dashboard/methods/$id/edit',

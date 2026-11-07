@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  organization,
   useActiveOrganization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
@@ -11,7 +10,7 @@ import {
   CommandGroup,
   CommandItem,
 } from '@calibra-facil/ui/command'
-import { setStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
+import { switchActiveOrganization } from '@/lib/switch-scope'
 import { useCommandPalette } from '../command-context'
 
 export function OrganizationGroup() {
@@ -34,12 +33,10 @@ export function OrganizationGroup() {
     setPendingId(organizationId)
     setError('')
     try {
-      const result = await organization.setActive({ organizationId })
+      // Cancels in-flight requests, applies the switch and discards the cached
+      // data of the previous organization before the new scope loads.
+      const result = await switchActiveOrganization(queryClient, organizationId)
       if (result.error) throw new Error(result.error.message)
-      setStoredDashboardOrganizationId(organizationId)
-      // Discard cached data from the previous organization before loading the new scope.
-      await queryClient.cancelQueries()
-      queryClient.clear()
       await navigate({ to: '/dashboard' })
       setOpen(false)
     } catch (cause) {

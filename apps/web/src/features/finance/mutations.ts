@@ -20,13 +20,8 @@ import { toast } from 'sonner'
 
 import { calibraApi } from '@/utils/api'
 import type { FinancialPaymentMethod } from '@calibra-facil/shared'
+import { financeKeys } from '@/features/finance/keys'
 import type { FinanceReceiptsData } from '@/features/finance/types'
-
-const RECEIPTS_KEY = ['finance', 'receipts'] as const
-const OVERVIEW_KEY = ['finance', 'overview'] as const
-const DOCUMENTS_KEY = ['finance', 'documents'] as const
-const ERP_KEY = ['finance', 'erp'] as const
-const CONTRACTS_KEY = ['finance', 'contracts'] as const
 
 export type ReceiveInstallmentInput = {
   installmentId: number
@@ -84,22 +79,28 @@ export function useReceiveInstallmentMutation() {
         },
       }),
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: RECEIPTS_KEY })
-      const previous =
-        queryClient.getQueryData<FinanceReceiptsData>(RECEIPTS_KEY)
-      queryClient.setQueryData<FinanceReceiptsData>(RECEIPTS_KEY, (cache) =>
-        patchReceiptPaid(cache, input),
+      await queryClient.cancelQueries({ queryKey: financeKeys.receipts })
+      const previous = queryClient.getQueryData<FinanceReceiptsData>(
+        financeKeys.receipts,
+      )
+      queryClient.setQueryData<FinanceReceiptsData>(
+        financeKeys.receipts,
+        (cache) => patchReceiptPaid(cache, input),
       )
       return { previous }
     },
     onSuccess: () => {
       toast.success('Baixa registrada')
-      reconcile(queryClient, [RECEIPTS_KEY, OVERVIEW_KEY, DOCUMENTS_KEY])
+      reconcile(queryClient, [
+        financeKeys.receipts,
+        financeKeys.overview,
+        financeKeys.documents,
+      ])
     },
     onError: (error, _input, context) => {
       if (context?.previous) {
         queryClient.setQueryData<FinanceReceiptsData>(
-          RECEIPTS_KEY,
+          financeKeys.receipts,
           context.previous,
         )
       }
@@ -117,7 +118,7 @@ export function useIssueDocumentMutation() {
     mutationFn: (documentId: number | string) =>
       calibraApi.finance.issueDocument({ params: { id: documentId } }),
     onSuccess: () => {
-      reconcile(queryClient, [DOCUMENTS_KEY, OVERVIEW_KEY])
+      reconcile(queryClient, [financeKeys.documents, financeKeys.overview])
     },
     onError: (error) => {
       toast.error(
@@ -148,7 +149,7 @@ export function useUpdateDocumentMutation() {
         },
       }),
     onSuccess: () => {
-      reconcile(queryClient, [DOCUMENTS_KEY, OVERVIEW_KEY])
+      reconcile(queryClient, [financeKeys.documents, financeKeys.overview])
     },
     onError: (error) => {
       toast.error(
@@ -168,7 +169,11 @@ export function useVoidDocumentMutation() {
         body: { reason: input.reason },
       }),
     onSuccess: () => {
-      reconcile(queryClient, [DOCUMENTS_KEY, RECEIPTS_KEY, OVERVIEW_KEY])
+      reconcile(queryClient, [
+        financeKeys.documents,
+        financeKeys.receipts,
+        financeKeys.overview,
+      ])
     },
     onError: (error) => {
       toast.error(
@@ -185,7 +190,11 @@ export function useExportErpDocumentMutation() {
     mutationFn: (documentId: number | string) =>
       calibraApi.finance.exportErpDocument({ params: { id: documentId } }),
     onSuccess: () => {
-      reconcile(queryClient, [DOCUMENTS_KEY, ERP_KEY, OVERVIEW_KEY])
+      reconcile(queryClient, [
+        financeKeys.documents,
+        financeKeys.erp,
+        financeKeys.overview,
+      ])
     },
     onError: (error) => {
       toast.error(
@@ -202,7 +211,7 @@ export function useActivateContractMutation() {
     mutationFn: (id: number | string) =>
       calibraApi.finance.activateContract({ params: { id } }),
     onSuccess: () => {
-      reconcile(queryClient, [CONTRACTS_KEY, OVERVIEW_KEY])
+      reconcile(queryClient, [financeKeys.contracts, financeKeys.overview])
     },
     onError: (error) => {
       toast.error(
@@ -219,7 +228,7 @@ export function useCancelContractMutation() {
     mutationFn: (id: number | string) =>
       calibraApi.finance.cancelContract({ params: { id } }),
     onSuccess: () => {
-      reconcile(queryClient, [CONTRACTS_KEY, OVERVIEW_KEY])
+      reconcile(queryClient, [financeKeys.contracts, financeKeys.overview])
     },
     onError: (error) => {
       toast.error(

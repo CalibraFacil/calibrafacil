@@ -29,6 +29,7 @@ import {
   createEmptyServiceTerm,
   type ServiceTermDraft,
 } from '@/features/finance/service-terms-editor'
+import { financeKeys } from '@/features/finance/keys'
 
 export function NewFinanceContractPage() {
   const navigate = useNavigate()
@@ -83,7 +84,7 @@ export function NewFinanceContractPage() {
     onSuccess: (result) => {
       toast.success('Contrato comercial criado')
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'contracts'],
+        queryKey: financeKeys.contracts,
         refetchType: 'active',
       })
       navigate({

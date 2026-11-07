@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { calibraApi } from '@/utils/api'
 import { isDesktopRuntime } from '@/runtime/desktop'
+import { sessionKeys } from '@/lib/query-keys'
 
 type ActiveOrganization = {
   id: string
@@ -17,7 +18,7 @@ export function useDashboardUnits() {
   const { data: cloudActiveOrg } = useActiveOrganization()
   const cloudRole = useCurrentRole()
   const desktopSessionQuery = useQuery({
-    queryKey: ['desktop-local-session'],
+    queryKey: sessionKeys.desktopLocalSession,
     enabled: isDesktop,
     queryFn: () => calibraApi.sync.getSession(),
     staleTime: 30_000,
@@ -41,12 +42,11 @@ export function useDashboardUnits() {
     : true
 
   const unitsQuery = useQuery({
-    queryKey: [
-      'dashboard-units',
-      activeOrg?.id ?? 'no-org',
+    queryKey: sessionKeys.dashboardUnits(
+      activeOrg?.id,
       hasMultiUnit,
       isDesktop ? 'desktop' : 'cloud',
-    ],
+    ),
     enabled: Boolean(activeOrg?.id && hasMultiUnit),
     queryFn: async () => calibraApi.units.getDashboardUnits(),
   })

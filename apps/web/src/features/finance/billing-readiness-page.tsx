@@ -32,6 +32,7 @@ import {
 } from '@/features/finance/components/finance-data-table'
 import { calibraApi } from '@/utils/api'
 import { useFinanceBillingReadinessData } from '@/features/finance/queries'
+import { financeKeys } from '@/features/finance/keys'
 
 const STATUS_VARIANT: Record<
   BillingReadinessStatus,
@@ -207,10 +208,10 @@ export function FinanceBillingReadinessPage({
     onSuccess: () => {
       toast.success('Ordens enviadas para o financeiro')
       for (const key of [
-        ['finance', 'billing-readiness'],
-        ['finance', 'documents'],
-        ['finance', 'erp'],
-        ['finance', 'overview'],
+        financeKeys.billingReadiness,
+        financeKeys.documents,
+        financeKeys.erp,
+        financeKeys.overview,
       ]) {
         queryClient.invalidateQueries({ queryKey: key, refetchType: 'active' })
       }

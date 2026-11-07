@@ -1,7 +1,8 @@
-import { organization } from '@calibra-facil/auth/client'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 import { setStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
+import { switchActiveOrganization } from '@/lib/switch-scope'
 import {
   DASHBOARD_CONTEXT_END_MARK,
   DASHBOARD_CONTEXT_START_MARK,
@@ -26,12 +27,16 @@ export function DashboardOrgSwitcher({
 }: {
   organizationId: string
 }) {
+  const queryClient = useQueryClient()
+
   useMountEffect(() => {
     if (activeOrganizationSwitches.has(organizationId)) return
 
     activeOrganizationSwitches.add(organizationId)
     mark(DASHBOARD_CONTEXT_START_MARK)
-    void organization.setActive({ organizationId }).finally(() => {
+    // The session may still name another laboratory than the one this page
+    // chose, and anything fetched meanwhile came from it: reset with the switch.
+    void switchActiveOrganization(queryClient, organizationId).finally(() => {
       activeOrganizationSwitches.delete(organizationId)
       setStoredDashboardOrganizationId(organizationId)
       mark(DASHBOARD_CONTEXT_END_MARK)

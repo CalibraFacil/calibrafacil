@@ -25,6 +25,7 @@ import { calibraApi } from '@/utils/api'
 import { startDesktopInitialSync } from '@/components/sign-in-form'
 import { cn } from '@calibra-facil/ui/utils'
 import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
+import { authKeys } from '@/features/auth/keys'
 
 type ClaimAccountPageProps = {
   token?: string
@@ -89,7 +90,7 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
   const [isOtpSigningIn, setIsOtpSigningIn] = useState(false)
 
   const setupQuery = useQuery({
-    queryKey: ['lab-setup', token],
+    queryKey: authKeys.labSetup(token),
     queryFn: () => calibraApi.labSetup.get({ params: { token: token ?? '' } }),
     enabled: Boolean(token),
     retry: false,

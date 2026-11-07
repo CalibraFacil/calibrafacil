@@ -40,6 +40,7 @@ import {
 } from '@calibra-facil/ui/combobox'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@calibra-facil/ui/utils'
+import { serviceKeys } from '@/features/services/keys'
 
 const initialFormData: ServiceFormData = {
   name: '',
@@ -85,7 +86,7 @@ export function NewServicePage() {
     mutationFn: (data: CreateServiceInput) =>
       calibraApi.services.create({ body: data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['services'] })
+      queryClient.invalidateQueries({ queryKey: serviceKeys.all })
       toast.success('Serviço criado com sucesso!')
       navigate({ to: '/dashboard/services' })
     },

@@ -20,6 +20,9 @@ import {
   type ServicesListQueryInput,
   type ServicesListStatus,
 } from './types'
+import { serviceKeys } from '@/features/services/keys'
+import { methodKeys } from '@/features/methods/keys'
+import { assetKeys } from '@/features/assets/keys'
 
 export const SERVICES_LIST_LIMIT = 20
 
@@ -42,13 +45,7 @@ export function servicesListQueryInputFromUrl(
 
 export function servicesListQueryOptions(input: ServicesListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'services',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ],
+    queryKey: serviceKeys.list(input),
     queryFn: (): Promise<ServicesListData> =>
       calibraApi.services.list({
         query: {
@@ -63,16 +60,15 @@ export function servicesListQueryOptions(input: ServicesListQueryInput) {
                 : undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'services',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      serviceKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 export function serviceDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['services', id],
+    queryKey: serviceKeys.detail(id),
     queryFn: (): Promise<ServiceDetail> =>
       calibraApi.services.get({ params: { id } }),
   })
@@ -80,7 +76,7 @@ export function serviceDetailQueryOptions(id: string) {
 
 export function serviceAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['services', id, 'audit-log'],
+    queryKey: serviceKeys.auditLog(id),
     queryFn: async (): Promise<ServiceAuditLogData> => {
       const log = await calibraApi.services.auditLog({ params: { id } })
       return {
@@ -98,7 +94,7 @@ export function serviceAuditLogQueryOptions(id: string) {
 
 export function publishedMethodsQueryOptions() {
   return queryOptions({
-    queryKey: ['methods', 'published'],
+    queryKey: methodKeys.published,
     queryFn: (): Promise<PublishedMethodsData> =>
       calibraApi.methods.list({
         query: { status: 'PUBLISHED', limit: 100 },
@@ -108,7 +104,7 @@ export function publishedMethodsQueryOptions() {
 
 export function serviceAssetTypesQueryOptions() {
   return queryOptions({
-    queryKey: ['asset-types'],
+    queryKey: assetKeys.types,
     queryFn: async (): Promise<ServiceAssetTypesData> => {
       const result = await calibraApi.assetTypes.list()
       return {

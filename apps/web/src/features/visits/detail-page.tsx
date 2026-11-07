@@ -67,6 +67,7 @@ import {
 } from '@/features/visits/types'
 import { formatAddress } from '@calibra-facil/shared/address'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { visitKeys } from '@/features/visits/keys'
 
 export function VisitDetailPage({ visitId }: { visitId: number }) {
   const { activeOrganizationId, isContextSwitching } =
@@ -165,8 +166,8 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   async function invalidate() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['visit', visit.id] }),
-      queryClient.invalidateQueries({ queryKey: ['visits'] }),
+      queryClient.invalidateQueries({ queryKey: visitKeys.detail(visit.id) }),
+      queryClient.invalidateQueries({ queryKey: visitKeys.all }),
     ])
   }
 

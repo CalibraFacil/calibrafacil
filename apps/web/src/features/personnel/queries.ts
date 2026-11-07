@@ -9,6 +9,7 @@ import {
   prewarmRouteQueries,
 } from '@/lib/route-data'
 import { type CompetencesListQueryInput, type CompetenceStatus } from './types'
+import { competenceKeys, trainingRecordKeys } from '@/features/personnel/keys'
 
 export const COMPETENCES_LIST_LIMIT = 20
 
@@ -35,12 +36,7 @@ export function competencesListQueryInputFromUrl(
 
 export function competencesListQueryOptions(input: CompetencesListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'competences',
-      input.organizationId,
-      input.page,
-      input.statusFilter,
-    ],
+    queryKey: competenceKeys.list(input),
     queryFn: () =>
       calibraApi.competences.list({
         query: {
@@ -49,44 +45,43 @@ export function competencesListQueryOptions(input: CompetencesListQueryInput) {
           status: input.statusFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'competences',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      competenceKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 export function competencesMatrixQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['competences-matrix', organizationId],
+    queryKey: competenceKeys.matrix(organizationId),
     queryFn: () => calibraApi.competences.matrix(),
   })
 }
 
 export function newCompetenceMatrixQueryOptions() {
   return queryOptions({
-    queryKey: ['competences-matrix'],
+    queryKey: competenceKeys.matrices,
     queryFn: () => calibraApi.competences.matrix(),
   })
 }
 
 export function competenceDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['competence', id],
+    queryKey: competenceKeys.detail(id),
     queryFn: () => calibraApi.competences.get({ params: { id } }),
   })
 }
 
 export function competenceAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['competence-audit', id],
+    queryKey: competenceKeys.audit(id),
     queryFn: () => calibraApi.competences.auditLog({ params: { id } }),
   })
 }
 
 export function assignableTrainingRecordsQueryOptions(userId: string) {
   return queryOptions({
-    queryKey: ['training-records', 'assignable', userId],
+    queryKey: trainingRecordKeys.assignable(userId),
     queryFn: () =>
       calibraApi.trainingRecords.list({
         query: { page: 1, limit: 100, userId },

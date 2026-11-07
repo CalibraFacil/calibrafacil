@@ -5,6 +5,7 @@ import { calibraApi } from '@/utils/api'
 import { operation } from '@calibra-facil/client-runtime'
 import { isDesktopRuntime } from '@/runtime/desktop'
 import { useAvailability } from '@/runtime/use-operation-availability'
+import { sessionKeys } from '@/lib/query-keys'
 
 const FINANCE_MODULE = [
   operation('access', 'getFinanceAccess'),
@@ -26,7 +27,7 @@ export function useFinanceAccess() {
   const isDesktop = isDesktopRuntime()
 
   return useQuery({
-    queryKey: ['finance', 'access', activeOrg?.id ?? 'no-org'],
+    queryKey: sessionKeys.financeAccess(activeOrg?.id ?? 'no-org'),
     enabled: isDesktop || Boolean(activeOrg?.id),
     queryFn: async () => calibraApi.access.getFinanceAccess(),
   })

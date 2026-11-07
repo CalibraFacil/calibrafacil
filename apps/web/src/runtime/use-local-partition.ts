@@ -10,8 +10,7 @@ import {
   activateLocalPartition,
   type ActivateLocalPartitionOutcome,
 } from '@/runtime/local-partition'
-
-const LOCAL_PARTITION_QUERY_ROOT = 'local-partition'
+import { localPartitionKeys } from '@/runtime/local-partition-keys'
 
 /**
  * Opens the local database for the account and organization on screen, and
@@ -37,11 +36,7 @@ export function useLocalPartition({
   const isDesktop = isDesktopRuntime()
 
   return useQuery({
-    queryKey: [
-      LOCAL_PARTITION_QUERY_ROOT,
-      userId ?? 'no-user',
-      organizationId ?? 'no-org',
-    ],
+    queryKey: localPartitionKeys.activation(userId, organizationId),
     enabled: isDesktop && Boolean(userId) && Boolean(organizationId),
     // Re-verifying on every focus would put a blocking round trip in front of
     // ordinary navigation; the host re-checks ownership on every open anyway.
@@ -78,8 +73,7 @@ export function useLocalPartition({
         // Everything except this activation itself: clearing our own key would
         // cancel the query mid-flight and re-enter here.
         queryClient.removeQueries({
-          predicate: (query) =>
-            query.queryKey[0] !== LOCAL_PARTITION_QUERY_ROOT,
+          predicate: (query) => query.queryKey[0] !== localPartitionKeys.root,
         })
       }
 

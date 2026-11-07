@@ -3,10 +3,11 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
 import type { InvitationData } from './types'
+import { publicKeys } from '@/features/public/keys'
 
 export function invitationQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['accept-invitation', id],
+    queryKey: publicKeys.acceptInvitation(id),
     queryFn: async (): Promise<InvitationData> => {
       // Use the PUBLIC invitation endpoint, not authClient.organization
       // .getInvitation: the latter requires an authenticated session whose

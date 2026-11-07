@@ -42,6 +42,7 @@ import {
   MATERIALS_LIST_STATUSES,
   type MaterialsListStatus,
 } from '@/features/materials/types'
+import { materialKeys } from '@/features/materials/keys'
 
 export function MaterialsListPage() {
   const queryClient = useQueryClient()
@@ -70,7 +71,7 @@ export function MaterialsListPage() {
     mutationFn: (id: number) =>
       calibraApi.materials.deactivate({ params: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['materials'] })
+      queryClient.invalidateQueries({ queryKey: materialKeys.all })
       toast.success('Material desativado com sucesso')
     },
     onError: (error) => {
@@ -85,7 +86,7 @@ export function MaterialsListPage() {
         body: { isActive: true },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['materials'] })
+      queryClient.invalidateQueries({ queryKey: materialKeys.all })
       toast.success('Material reativado com sucesso')
     },
     onError: (error) => {

@@ -42,6 +42,7 @@ import {
   useStandardsListData,
 } from '@/features/standards/queries'
 import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
+import { standardKeys } from '@/features/standards/keys'
 
 export function StandardsListPage({
   onboardingStep,
@@ -76,7 +77,7 @@ export function StandardsListPage({
   const deleteMutation = useMutation({
     mutationFn: (id: number) => calibraApi.standards.delete({ params: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['standards'] })
+      queryClient.invalidateQueries({ queryKey: standardKeys.all })
       toast.success('Padrão removido com sucesso')
     },
     onError: (error) => {
@@ -95,7 +96,7 @@ export function StandardsListPage({
       return calibraApi.standards.update({ params: { id }, body: { status } })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['standards'] })
+      queryClient.invalidateQueries({ queryKey: standardKeys.all })
       toast.success('Status atualizado com sucesso')
     },
     onError: (error) => {

@@ -3,6 +3,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import type { VisitStatus } from './types'
+import { visitKeys } from '@/features/visits/keys'
 
 const VISITS_LIST_LIMIT = 20
 
@@ -14,14 +15,7 @@ function visitsListQueryOptions(input: {
   rescheduleRequested?: boolean
 }) {
   return queryOptions({
-    queryKey: [
-      'visits',
-      input.organizationId,
-      input.page,
-      input.status,
-      input.mine,
-      Boolean(input.rescheduleRequested),
-    ],
+    queryKey: visitKeys.list(input),
     queryFn: () =>
       calibraApi.visits.list({
         query: {
@@ -32,13 +26,15 @@ function visitsListQueryOptions(input: {
           rescheduleRequested: input.rescheduleRequested || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope(['visits', input.organizationId]),
+    placeholderData: keepPreviousDataInScope(
+      visitKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 function visitDetailQueryOptions(visitId: number) {
   return queryOptions({
-    queryKey: ['visit', visitId],
+    queryKey: visitKeys.detail(visitId),
     queryFn: () => calibraApi.visits.get({ params: { id: visitId } }),
   })
 }

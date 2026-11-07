@@ -26,6 +26,7 @@ import {
 } from '@/features/jobs/execution-draft'
 import type { useExecutionCalculation } from './use-execution-calculation'
 import type { useExecutionFieldModel } from './use-execution-field-model'
+import { jobKeys } from '@/features/jobs/keys'
 
 /**
  * The save-draft and submit-for-review mutations, plus the payload pieces they
@@ -117,7 +118,7 @@ export function useExecutionSubmission({
     onSuccess: (data, saved) => {
       setSavedValues(saved)
       setStandardWarnings(data.warnings ?? [])
-      queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(jobId) })
       toast.success('Dados salvos com sucesso!')
       if (shouldReturnToSyncConflicts(conflictReturn)) {
         allowLeave()
@@ -158,7 +159,7 @@ export function useExecutionSubmission({
       setSavedValues(submitted)
       allowLeave()
       if (scope) clearExecutionDraft(scope)
-      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      queryClient.invalidateQueries({ queryKey: jobKeys.all })
       toast.success('Job enviado para revisão!')
       if (shouldReturnToSyncConflicts(conflictReturn)) {
         navigate({ to: '/dashboard/sync/conflicts' })

@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@calibra-facil/ui/table'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { customerKeys } from '@/features/customers/keys'
 
 const DECISION_LABELS: Record<string, string> = {
   NO_IMPACT: 'Sem impacto',
@@ -29,7 +30,7 @@ const DECISION_LABELS: Record<string, string> = {
  */
 export function CustomerOotEventsPanel({ customerId }: { customerId: string }) {
   const { data, isLoading } = useQuery({
-    queryKey: ['customer-oot-events', customerId],
+    queryKey: customerKeys.ootEvents(customerId),
     queryFn: () =>
       calibraApi.customers.ootEvents({ params: { id: customerId } }),
   })

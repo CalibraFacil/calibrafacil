@@ -14,6 +14,7 @@ import {
   type MaterialsListQueryInput,
   type MaterialsListStatus,
 } from './types'
+import { materialKeys } from '@/features/materials/keys'
 
 export const MATERIALS_LIST_LIMIT = 20
 
@@ -36,13 +37,7 @@ export function materialsListQueryInputFromUrl(
 
 export function materialsListQueryOptions(input: MaterialsListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'materials',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ],
+    queryKey: materialKeys.list(input),
     queryFn: (): Promise<MaterialsListData> =>
       calibraApi.materials.list({
         query: {
@@ -57,16 +52,15 @@ export function materialsListQueryOptions(input: MaterialsListQueryInput) {
                 : undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'materials',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      materialKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 export function materialDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['materials', id],
+    queryKey: materialKeys.detail(id),
     queryFn: (): Promise<MaterialDetail> =>
       calibraApi.materials.get({ params: { id } }),
   })

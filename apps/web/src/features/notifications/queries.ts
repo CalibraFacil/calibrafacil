@@ -5,10 +5,11 @@ import type {
   NotificationsListResponse,
   UnreadNotificationsResponse,
 } from '@calibra-facil/client-runtime'
+import { notificationKeys } from '@/features/notifications/keys'
 
 export function unreadNotificationsQueryOptions(organizationKey: string) {
   return queryOptions({
-    queryKey: ['notifications', organizationKey, 'unread-count'],
+    queryKey: notificationKeys.unreadCount(organizationKey),
     queryFn: async (): Promise<UnreadNotificationsResponse> =>
       calibraApi.notifications.getUnreadCount(),
     refetchInterval: 30_000,
@@ -18,7 +19,7 @@ export function unreadNotificationsQueryOptions(organizationKey: string) {
 
 export function recentNotificationsQueryOptions(organizationKey: string) {
   return queryOptions({
-    queryKey: ['notifications', organizationKey, 'recent'],
+    queryKey: notificationKeys.recent(organizationKey),
     queryFn: async (): Promise<NotificationsListResponse> =>
       calibraApi.notifications.listRecent({
         query: {
@@ -55,7 +56,7 @@ export function useNotificationCenterData({
   unreadOnly: boolean
 }) {
   return useQuery({
-    queryKey: ['notifications', organizationKey, 'inbox', { page, unreadOnly }],
+    queryKey: notificationKeys.inbox(organizationKey, { page, unreadOnly }),
     queryFn: () =>
       calibraApi.notifications.listRecent({
         query: {

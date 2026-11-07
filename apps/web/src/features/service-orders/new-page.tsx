@@ -67,6 +67,9 @@ import {
   FieldError,
   FieldLabel,
 } from '@calibra-facil/ui/field'
+import { serviceOrderKeys } from '@/features/service-orders/keys'
+import { customerKeys } from '@/features/customers/keys'
+import { assetKeys } from '@/features/assets/keys'
 
 type EntitySheetKind =
   | 'customer-create'
@@ -212,7 +215,7 @@ export function NewServiceOrderPage() {
     mutationFn: async (data: ServiceOrderCreatePayload) =>
       calibraApi.serviceOrders.create({ body: data }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['service-orders'] })
+      queryClient.invalidateQueries({ queryKey: serviceOrderKeys.all })
       toast.success('OS criada com comprovante e etiqueta em processamento')
       navigate({
         to: '/dashboard/service-orders/$publicId',
@@ -285,7 +288,7 @@ export function NewServiceOrderPage() {
     updateField('customerId', customer.id)
     setCustomerSearch('')
     closeSheet()
-    queryClient.invalidateQueries({ queryKey: ['customers'] })
+    queryClient.invalidateQueries({ queryKey: customerKeys.all })
     toast.success(`Cliente "${customer.name}" criado e selecionado`)
 
     const invitationId = getCustomerInvitationId(customer)
@@ -315,7 +318,7 @@ export function NewServiceOrderPage() {
       compliance: customer.compliance,
     })
     closeSheet()
-    queryClient.invalidateQueries({ queryKey: ['customers'] })
+    queryClient.invalidateQueries({ queryKey: customerKeys.all })
   }
 
   const handleAssetSaved = (asset: CreatedAsset) => {
@@ -323,14 +326,14 @@ export function NewServiceOrderPage() {
     updateField('assetId', asset.id)
     setAssetSearch('')
     closeSheet()
-    queryClient.invalidateQueries({ queryKey: ['assets'] })
+    queryClient.invalidateQueries({ queryKey: assetKeys.all })
     toast.success(`Instrumento "${asset.name}" criado e selecionado`)
   }
 
   const handleAssetUpdated = (asset: UpdatedAsset) => {
     setPendingAssetOption(asset)
     closeSheet()
-    queryClient.invalidateQueries({ queryKey: ['assets'] })
+    queryClient.invalidateQueries({ queryKey: assetKeys.all })
   }
 
   const handleSubmit = (event: React.FormEvent) => {

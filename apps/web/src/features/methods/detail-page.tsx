@@ -52,6 +52,7 @@ import {
 } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@calibra-facil/ui/utils'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { methodKeys } from '@/features/methods/keys'
 
 type VoidMethodMutation = { mutate: () => void; isPending: boolean }
 type ReturnToDraftMutation = {
@@ -147,8 +148,8 @@ export function MethodDetailPage({ id }: { id: string }) {
     mutationFn: async () =>
       calibraApi.methods.technicalReview({ params: { id: method?.id ?? id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['methods', id] })
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({ queryKey: methodKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: methodKeys.all })
       toast.success('Revisão técnica registrada')
     },
     onError: (error) => toast.error(error.message),
@@ -163,8 +164,8 @@ export function MethodDetailPage({ id }: { id: string }) {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['methods', id] })
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({ queryKey: methodKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: methodKeys.all })
       toast.success('Método aprovado e publicado')
     },
     onError: (error) => toast.error(error.message),
@@ -177,8 +178,8 @@ export function MethodDetailPage({ id }: { id: string }) {
         body: { reason },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['methods', id] })
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({ queryKey: methodKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: methodKeys.all })
       toast.success('Método retornou para rascunho')
     },
     onError: (error) => toast.error(error.message),

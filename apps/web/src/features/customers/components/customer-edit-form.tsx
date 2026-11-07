@@ -55,6 +55,8 @@ import {
   ClientSection,
 } from '@/features/customers/components/client-detail-ui'
 import { cn } from '@calibra-facil/ui/utils'
+import { customerKeys } from '@/features/customers/keys'
+import { customerGroupKeys } from '@/features/customer-groups/keys'
 
 const NO_GROUP_VALUE = 'none'
 
@@ -116,11 +118,13 @@ export function CustomerEditForm({
       })
     },
     onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      queryClient.invalidateQueries({
+        queryKey: customerKeys.detail(customerId),
+      })
+      queryClient.invalidateQueries({ queryKey: customerKeys.all })
       // The customer's group membership changed — refresh group rollups too.
-      queryClient.invalidateQueries({ queryKey: ['customer-group'] })
-      queryClient.invalidateQueries({ queryKey: ['customer-groups'] })
+      queryClient.invalidateQueries({ queryKey: customerGroupKeys.details })
+      queryClient.invalidateQueries({ queryKey: customerGroupKeys.all })
       toast.success('Cliente atualizado com sucesso!')
       onSaved(updated)
     },

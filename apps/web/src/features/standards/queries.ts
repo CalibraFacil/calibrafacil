@@ -28,6 +28,7 @@ import {
   type StandardsListQueryInput,
   type StandardStatus,
 } from './types'
+import { standardKeys } from '@/features/standards/keys'
 
 export const STANDARDS_LIST_LIMIT = 20
 
@@ -53,13 +54,7 @@ export function standardsListQueryInputFromUrl(
 
 export function standardsListQueryOptions(input: StandardsListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'standards',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ],
+    queryKey: standardKeys.list(input),
     queryFn: (): Promise<StandardsListData> =>
       calibraApi.standards.list({
         query: {
@@ -69,16 +64,15 @@ export function standardsListQueryOptions(input: StandardsListQueryInput) {
           status: input.statusFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'standards',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      standardKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 export function standardDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['standards', id],
+    queryKey: standardKeys.detail(id),
     queryFn: (): Promise<StandardDetail> =>
       calibraApi.standards.get({ params: { id } }),
   })
@@ -86,7 +80,7 @@ export function standardDetailQueryOptions(id: string) {
 
 export function standardAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['standards', id, 'audit-log'],
+    queryKey: standardKeys.auditLog(id),
     queryFn: async (): Promise<StandardAuditLogData> => {
       const log = await calibraApi.standards.auditLog({ params: { id } })
       return {
@@ -106,7 +100,7 @@ export function standardAuditLogQueryOptions(id: string) {
 // per-certificate notification status) for a reference standard.
 export function standardRecallQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['standards', id, 'recall'],
+    queryKey: standardKeys.recall(id),
     queryFn: (): Promise<StandardRecallData> =>
       calibraApi.standards.getRecall({ params: { id } }),
   })
@@ -121,7 +115,10 @@ export function impactedCertificatesQueryOptions(
   to?: string,
 ) {
   return queryOptions({
-    queryKey: ['standards', id, 'impacted-certificates', from ?? '', to ?? ''],
+    queryKey: standardKeys.impactedCertificates(id, {
+      from: from ?? '',
+      to: to ?? '',
+    }),
     queryFn: (): Promise<ImpactedCertificatesData> =>
       calibraApi.standards.getImpactedCertificates({
         params: { id },
@@ -135,7 +132,7 @@ export function impactedCertificatesQueryOptions(
 // React Query cache is shared. The API scopes by the session organization.
 function compositionProfilesCatalogQueryOptions() {
   return queryOptions({
-    queryKey: ['standards', 'composition-profiles'],
+    queryKey: standardKeys.compositionProfiles,
     queryFn: () => calibraApi.standards.listCompositionProfiles(),
   })
 }
@@ -257,9 +254,9 @@ export function useSendStandardRecall(id: string) {
     mutationFn: (input: SendStandardRecallRequest) =>
       calibraApi.standards.sendRecall({ params: { id }, body: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['standards', id, 'recall'] })
+      queryClient.invalidateQueries({ queryKey: standardKeys.recall(id) })
       queryClient.invalidateQueries({
-        queryKey: ['standards', id, 'impacted-certificates'],
+        queryKey: standardKeys.impactedCertificatesOf(id),
       })
     },
   })
@@ -269,8 +266,6 @@ export function useCompositionProfilesCatalog() {
   return useQuery(compositionProfilesCatalogQueryOptions())
 }
 
-const compositionProfilesCatalogKey = ['standards', 'composition-profiles']
-
 export function useCreateCompositionProfile() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -278,7 +273,7 @@ export function useCreateCompositionProfile() {
       calibraApi.standards.createCompositionProfile({ body: input }),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: compositionProfilesCatalogKey,
+        queryKey: standardKeys.compositionProfiles,
       }),
   })
 }
@@ -299,7 +294,7 @@ export function useUpdateCompositionProfile() {
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: compositionProfilesCatalogKey,
+        queryKey: standardKeys.compositionProfiles,
       }),
   })
 }
@@ -311,7 +306,7 @@ export function useDeleteCompositionProfile() {
       calibraApi.standards.deleteCompositionProfile({ params: { id } }),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: compositionProfilesCatalogKey,
+        queryKey: standardKeys.compositionProfiles,
       }),
   })
 }

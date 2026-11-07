@@ -14,10 +14,12 @@ import type {
   CustomerGroupDetailData,
   CustomerGroupsListData,
 } from '@calibra-facil/client-runtime'
+import { customerGroupKeys } from '@/features/customer-groups/keys'
+import { customerKeys } from '@/features/customers/keys'
 
 function customerGroupsListQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['customer-groups', organizationId],
+    queryKey: customerGroupKeys.list(organizationId),
     queryFn: (): Promise<CustomerGroupsListData> =>
       calibraApi.customerGroups.list(),
   })
@@ -37,7 +39,7 @@ export function useCustomerGroupsList(
 // dashboard org in context. Invalidating ['customer-group'] matches any group.
 function customerGroupDetailQueryOptions(groupId: number) {
   return queryOptions({
-    queryKey: ['customer-group', groupId],
+    queryKey: customerGroupKeys.detail(groupId),
     queryFn: (): Promise<CustomerGroupDetailData> =>
       calibraApi.customerGroups.get({ params: { id: groupId } }),
   })
@@ -58,7 +60,7 @@ export function useCustomerGroupDetailData(groupId: number) {
 
 function customerGroupMembersQueryOptions(groupId: number) {
   return queryOptions({
-    queryKey: ['customer-group-members', groupId],
+    queryKey: customerGroupKeys.members(groupId),
     queryFn: () =>
       calibraApi.customerGroups.listMembers({ params: { id: groupId } }),
   })
@@ -66,7 +68,7 @@ function customerGroupMembersQueryOptions(groupId: number) {
 
 function customerGroupInvitationsQueryOptions(groupId: number) {
   return queryOptions({
-    queryKey: ['customer-group-invitations', groupId],
+    queryKey: customerGroupKeys.invitations(groupId),
     queryFn: () =>
       calibraApi.customerGroups.listInvitations({ params: { id: groupId } }),
   })
@@ -97,7 +99,7 @@ export function useCreateCustomerGroupMutation() {
     mutationFn: (input: CreateCustomerGroupInput) =>
       calibraApi.customerGroups.create({ body: input }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['customer-groups'] })
+      void queryClient.invalidateQueries({ queryKey: customerGroupKeys.all })
     },
   })
 }
@@ -105,10 +107,10 @@ export function useCreateCustomerGroupMutation() {
 // Branch assign/remove changes both the group rollups and the customer's own
 // "Grupo" field — invalidate both sides so counts and columns refresh.
 function invalidateGroupAndCustomerCaches(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({ queryKey: ['customer-group'] })
-  void queryClient.invalidateQueries({ queryKey: ['customer-groups'] })
-  void queryClient.invalidateQueries({ queryKey: ['customer'] })
-  void queryClient.invalidateQueries({ queryKey: ['customers'] })
+  void queryClient.invalidateQueries({ queryKey: customerGroupKeys.details })
+  void queryClient.invalidateQueries({ queryKey: customerGroupKeys.all })
+  void queryClient.invalidateQueries({ queryKey: customerKeys.details })
+  void queryClient.invalidateQueries({ queryKey: customerKeys.all })
 }
 
 export function useAssignBranchMutation(groupId: number) {
@@ -147,7 +149,7 @@ export function useInviteGroupManagerMutation(
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ['customer-group-invitations', groupId],
+        queryKey: customerGroupKeys.invitations(groupId),
       })
     },
   })
@@ -162,7 +164,7 @@ export function useResendGroupInvitationMutation(groupId: number) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ['customer-group-invitations', groupId],
+        queryKey: customerGroupKeys.invitations(groupId),
       })
     },
   })
@@ -177,7 +179,7 @@ export function useCancelGroupInvitationMutation(groupId: number) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ['customer-group-invitations', groupId],
+        queryKey: customerGroupKeys.invitations(groupId),
       })
     },
   })
@@ -192,7 +194,7 @@ export function useRemoveGroupMemberMutation(groupId: number) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ['customer-group-members', groupId],
+        queryKey: customerGroupKeys.members(groupId),
       })
     },
   })

@@ -147,6 +147,7 @@ import {
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
+import { serviceOrderKeys } from '@/features/service-orders/keys'
 
 function openServiceOrderIntakePreview(order: ServiceOrderDetail) {
   const previewWindow = window.open('', '_blank')
@@ -833,7 +834,9 @@ function ServiceOrderDetailContent({
   const reportActionError = (error: unknown, fallback: string) => {
     toast.error(serviceOrderActionErrorMessage(error, fallback))
     if (isServiceOrderLifecycleError(error)) {
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+      queryClient.invalidateQueries({
+        queryKey: serviceOrderKeys.detail(publicId),
+      })
     }
   }
 
@@ -846,8 +849,8 @@ function ServiceOrderDetailContent({
    */
   const settleCloudCommand = async (message: string) => {
     const result = await reconcileAfterCloudCommand(queryClient, [
-      ['service-order', publicId],
-      ['service-orders'],
+      serviceOrderKeys.detail(publicId),
+      serviceOrderKeys.all,
     ])
     const lag = describeReconcileLag(result)
 
@@ -911,7 +914,9 @@ function ServiceOrderDetailContent({
     },
     onSuccess: () => {
       toast.success('Orçamento salvo como rascunho')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+      queryClient.invalidateQueries({
+        queryKey: serviceOrderKeys.detail(publicId),
+      })
       returnToSyncConflicts()
     },
     onError: (error) => {
@@ -949,7 +954,9 @@ function ServiceOrderDetailContent({
     },
     onSuccess: () => {
       toast.success('Execução iniciada')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+      queryClient.invalidateQueries({
+        queryKey: serviceOrderKeys.detail(publicId),
+      })
       returnToSyncConflicts()
     },
     // Starting before the quote is approved is refused by the API; without this
@@ -984,7 +991,9 @@ function ServiceOrderDetailContent({
     },
     onSuccess: () => {
       toast.success('Execução finalizada')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+      queryClient.invalidateQueries({
+        queryKey: serviceOrderKeys.detail(publicId),
+      })
       returnToSyncConflicts()
     },
     onError: (error) => {
@@ -1108,7 +1117,9 @@ function ServiceOrderDetailContent({
     },
     onSuccess: () => {
       toast.success('Comprovante de entrega enviado para geração')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+      queryClient.invalidateQueries({
+        queryKey: serviceOrderKeys.detail(publicId),
+      })
     },
     onError: (error) => {
       reportActionError(error, 'Erro ao gerar comprovante de entrega')

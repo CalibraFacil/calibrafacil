@@ -39,6 +39,7 @@ import { Textarea } from '@calibra-facil/ui/textarea'
 import { calibraApi } from '@/utils/api'
 import { useFinanceEligibleJobsData } from '@/features/finance/queries'
 import type { FinanceBillingMode } from '@/features/finance/types'
+import { financeKeys } from '@/features/finance/keys'
 
 function asBillingMode(value: string): FinanceBillingMode {
   return value === 'consolidated' ? 'consolidated' : 'single'
@@ -89,11 +90,11 @@ export function NewFinanceDocumentPage() {
     onSuccess: (result) => {
       toast.success('Documento financeiro criado')
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'documents'],
+        queryKey: financeKeys.documents,
         refetchType: 'active',
       })
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'overview'],
+        queryKey: financeKeys.overview,
         refetchType: 'active',
       })
       navigate({

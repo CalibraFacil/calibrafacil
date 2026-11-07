@@ -31,21 +31,22 @@ import {
   DesktopDataSourceIndicator,
   DesktopSyncButton,
 } from '@/runtime/sync-status'
+import { customerKeys } from '@/features/customers/keys'
+import { assetKeys } from '@/features/assets/keys'
+import { methodKeys } from '@/features/methods/keys'
+import { jobKeys } from '@/features/jobs/keys'
+import { serviceKeys } from '@/features/services/keys'
+import { serviceOrderKeys } from '@/features/service-orders/keys'
+import { standardKeys } from '@/features/standards/keys'
+import { capaKeys, nonConformanceKeys } from '@/features/quality/keys'
+import { competenceKeys } from '@/features/personnel/keys'
 
 function getCachedLabel(
   queryClient: { getQueryData: (queryKey: readonly unknown[]) => unknown },
-  queryKeys: ReadonlyArray<readonly unknown[]>,
+  queryKey: readonly unknown[],
   pickLabel: (cached: unknown) => string | undefined,
 ): string | null {
-  for (const queryKey of queryKeys) {
-    const cached = queryClient.getQueryData(queryKey)
-    const label = pickLabel(cached)
-    if (label) {
-      return label
-    }
-  }
-
-  return null
+  return pickLabel(queryClient.getQueryData(queryKey)) || null
 }
 
 function stringProperty(value: unknown, key: string) {
@@ -149,78 +150,84 @@ export function DashboardHeader({
 
   const customerCachedLabel = getCachedLabel(
     queryClient,
-    [['customer', customerId]],
+    customerKeys.detail(customerId ?? ''),
     (cached) => stringProperty(cached, 'name'),
   )
   const assetCachedLabel = getCachedLabel(
     queryClient,
-    [['asset', assetId]],
+    assetKeys.detail(assetId ?? ''),
     (cached) => stringProperty(cached, 'name'),
   )
   const methodCachedLabel = getCachedLabel(
     queryClient,
-    [['methods', methodId]],
+    methodKeys.detail(methodId ?? ''),
     (cached) => stringProperty(cached, 'name'),
   )
   const jobCachedLabel = getCachedLabel(
     queryClient,
-    [['jobs', jobId]],
+    jobKeys.detail(jobId ?? ''),
     (cached) => stringProperty(cached, 'jobId'),
   )
   const serviceCachedLabel = getCachedLabel(
     queryClient,
-    [['services', serviceId]],
+    serviceKeys.detail(serviceId ?? ''),
     (cached) => stringProperty(cached, 'name'),
   )
   const serviceOrderCachedLabel = getCachedLabel(
     queryClient,
-    [['service-order', serviceOrderId]],
+    serviceOrderKeys.detail(serviceOrderId ?? ''),
     (cached) => stringProperty(cached, 'serviceOrderNumber'),
   )
   const standardCachedLabel = getCachedLabel(
     queryClient,
-    [['standards', standardId]],
+    standardKeys.detail(standardId ?? ''),
     (cached) => stringProperty(cached, 'name'),
   )
   const ncCachedLabel = getCachedLabel(
     queryClient,
-    [['non-conformance', ncId]],
+    nonConformanceKeys.detail(ncId ?? ''),
     (cached) => stringProperty(cached, 'ncNumber'),
   )
   const capaCachedLabel = getCachedLabel(
     queryClient,
-    [['capa', capaId]],
+    capaKeys.detail(capaId ?? ''),
     (cached) => stringProperty(cached, 'capaNumber'),
   )
   const competenceCachedLabel = getCachedLabel(
     queryClient,
-    [['competence', competenceId]],
+    competenceKeys.detail(competenceId ?? ''),
     (cached) => stringProperty(cached, 'userName'),
   )
 
   const customerDetailFetchCount = useIsFetching({
-    queryKey: ['customer', customerId],
+    queryKey: customerKeys.detail(customerId ?? ''),
   })
-  const assetDetailFetchCount = useIsFetching({ queryKey: ['asset', assetId] })
+  const assetDetailFetchCount = useIsFetching({
+    queryKey: assetKeys.detail(assetId ?? ''),
+  })
   const methodDetailFetchCount = useIsFetching({
-    queryKey: ['methods', methodId],
+    queryKey: methodKeys.detail(methodId ?? ''),
   })
-  const jobDetailFetchCount = useIsFetching({ queryKey: ['jobs', jobId] })
+  const jobDetailFetchCount = useIsFetching({
+    queryKey: jobKeys.detail(jobId ?? ''),
+  })
   const serviceDetailFetchCount = useIsFetching({
-    queryKey: ['services', serviceId],
+    queryKey: serviceKeys.detail(serviceId ?? ''),
   })
   const serviceOrderDetailFetchCount = useIsFetching({
-    queryKey: ['service-order', serviceOrderId],
+    queryKey: serviceOrderKeys.detail(serviceOrderId ?? ''),
   })
   const standardDetailFetchCount = useIsFetching({
-    queryKey: ['standards', standardId],
+    queryKey: standardKeys.detail(standardId ?? ''),
   })
   const ncDetailFetchCount = useIsFetching({
-    queryKey: ['non-conformance', ncId],
+    queryKey: nonConformanceKeys.detail(ncId ?? ''),
   })
-  const capaDetailFetchCount = useIsFetching({ queryKey: ['capa', capaId] })
+  const capaDetailFetchCount = useIsFetching({
+    queryKey: capaKeys.detail(capaId ?? ''),
+  })
   const competenceDetailFetchCount = useIsFetching({
-    queryKey: ['competence', competenceId],
+    queryKey: competenceKeys.detail(competenceId ?? ''),
   })
 
   const { data: customerLabel } = useCustomerLabelData({

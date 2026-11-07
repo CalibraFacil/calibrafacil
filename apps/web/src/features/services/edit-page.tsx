@@ -28,6 +28,7 @@ import { Spinner } from '@calibra-facil/ui/spinner'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@calibra-facil/ui/utils'
+import { serviceKeys } from '@/features/services/keys'
 
 export function EditServicePage({ id }: { id: string }) {
   const {
@@ -122,8 +123,10 @@ function EditServiceForm({
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['services'] })
-      queryClient.invalidateQueries({ queryKey: ['services', serviceData.id] })
+      queryClient.invalidateQueries({ queryKey: serviceKeys.all })
+      queryClient.invalidateQueries({
+        queryKey: serviceKeys.detail(serviceData.id),
+      })
       toast.success('Serviço atualizado com sucesso!')
       navigate({ to: '/dashboard/services' })
     },

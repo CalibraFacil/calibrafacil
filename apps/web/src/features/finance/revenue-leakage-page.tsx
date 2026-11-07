@@ -21,6 +21,7 @@ import {
   FinanceDataTable,
   type FacetConfig,
 } from '@/features/finance/components/finance-data-table'
+import { financeKeys } from '@/features/finance/keys'
 
 type LeakageClass =
   | 'STUCK_READY_TO_BILL'
@@ -153,7 +154,7 @@ const alertColumns: ColumnDef<AlertItem, unknown>[] = [
 
 function revenueLeakageQueryOptions() {
   return queryOptions<RevenueLeakageEnvelope>({
-    queryKey: ['finance', 'revenue-leakage'],
+    queryKey: financeKeys.revenueLeakage,
     queryFn: () => calibraApi.finance.getRevenueLeakage(),
   })
 }

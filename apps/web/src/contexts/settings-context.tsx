@@ -11,6 +11,7 @@ import { authClient, useSession } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 
 import { calibraApi } from '@/utils/api'
+import { accountKeys } from '@/features/settings/keys'
 
 // =============================================================================
 // TYPES
@@ -90,7 +91,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const sessionsQuery = useQuery({
-    queryKey: ['settings', 'sessions'],
+    queryKey: accountKeys.sessions,
     queryFn: async (): Promise<Array<SessionInfo>> => {
       const result = await authClient.listSessions()
       return (result.data ?? []).map((s) => ({
@@ -105,8 +106,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   })
 
   const refreshSessions = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['settings', 'sessions'] })
-    await queryClient.refetchQueries({ queryKey: ['settings', 'sessions'] })
+    await queryClient.invalidateQueries({ queryKey: accountKeys.sessions })
+    await queryClient.refetchQueries({ queryKey: accountKeys.sessions })
   }, [queryClient])
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data])
   const sessionsLoading = sessionsQuery.isPending || sessionsQuery.isFetching
@@ -144,7 +145,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setError(null)
       // Remove from local state immediately (optimistic update)
       queryClient.setQueryData<Array<SessionInfo>>(
-        ['settings', 'sessions'],
+        accountKeys.sessions,
         (prev) => (prev ?? []).filter((s) => s.id !== sessionId),
       )
       try {

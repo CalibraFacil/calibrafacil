@@ -20,6 +20,7 @@ import { Spinner } from '@calibra-facil/ui/spinner'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@calibra-facil/ui/utils'
+import { materialKeys } from '@/features/materials/keys'
 
 export function EditMaterialPage({ id }: { id: string }) {
   const {
@@ -88,9 +89,9 @@ function EditMaterialForm({ materialData }: { materialData: MaterialDetail }) {
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['materials'] })
+      queryClient.invalidateQueries({ queryKey: materialKeys.all })
       queryClient.invalidateQueries({
-        queryKey: ['materials', String(materialData.id)],
+        queryKey: materialKeys.detail(String(materialData.id)),
       })
       toast.success('Material atualizado com sucesso!')
       navigate({ to: '/dashboard/materials' })

@@ -42,6 +42,7 @@ import {
   SERVICES_LIST_STATUSES,
   type ServicesListStatus,
 } from '@/features/services/types'
+import { serviceKeys } from '@/features/services/keys'
 
 export function ServicesListPage() {
   const queryClient = useQueryClient()
@@ -70,7 +71,7 @@ export function ServicesListPage() {
     mutationFn: (id: number) =>
       calibraApi.services.deactivate({ params: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['services'] })
+      queryClient.invalidateQueries({ queryKey: serviceKeys.all })
       toast.success('Serviço desativado com sucesso')
     },
     onError: (error) => {
@@ -85,7 +86,7 @@ export function ServicesListPage() {
         body: { isActive: true },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['services'] })
+      queryClient.invalidateQueries({ queryKey: serviceKeys.all })
       toast.success('Serviço reativado com sucesso')
     },
     onError: (error) => {

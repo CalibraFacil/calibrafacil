@@ -59,6 +59,7 @@ import {
   CompetenceStatusBadge,
   TrainingStatusBadge,
 } from '@/features/personnel/components/status-badges'
+import { competenceKeys, trainingRecordKeys } from '@/features/personnel/keys'
 
 export function CompetenceDetailPage({ id }: { id: string }) {
   const navigate = useNavigate()
@@ -86,9 +87,9 @@ export function CompetenceDetailPage({ id }: { id: string }) {
   const { data: comp, isLoading, error } = useCompetenceDetailData(id)
 
   const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: ['competence', id] })
-    queryClient.invalidateQueries({ queryKey: ['competences'] })
-    queryClient.invalidateQueries({ queryKey: ['competences-matrix'] })
+    queryClient.invalidateQueries({ queryKey: competenceKeys.detail(id) })
+    queryClient.invalidateQueries({ queryKey: competenceKeys.all })
+    queryClient.invalidateQueries({ queryKey: competenceKeys.matrices })
   }
 
   // Workflow transition mutations
@@ -593,7 +594,7 @@ function AssignTrainingDialog({
         body: { trainingRecordIds },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['training-records'] })
+      queryClient.invalidateQueries({ queryKey: trainingRecordKeys.all })
       onAssigned()
       toast.success('Treinamento atribuído')
       setOpen(false)
@@ -622,7 +623,7 @@ function AssignTrainingDialog({
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['training-records'] })
+      queryClient.invalidateQueries({ queryKey: trainingRecordKeys.all })
       onAssigned()
       toast.success('Treinamento atribuído')
       setOpen(false)

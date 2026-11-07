@@ -25,6 +25,7 @@ import { Label } from '@calibra-facil/ui/label'
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { toast } from 'sonner'
+import { financeKeys } from '@/features/finance/keys'
 
 interface CertificateReleaseDto {
   status: CertificateReleaseStatus
@@ -36,7 +37,7 @@ interface CertificateReleaseDto {
 
 function certificateReleaseQueryOptions(calibrationJobId: number) {
   return queryOptions<{ data: CertificateReleaseDto } | null>({
-    queryKey: ['finance', 'certificate-release', calibrationJobId],
+    queryKey: financeKeys.certificateRelease(calibrationJobId),
     queryFn: async () => {
       try {
         return await calibraApi.finance.getCertificateRelease({
@@ -114,7 +115,7 @@ function ManualReleaseDialog({
     onSuccess: () => {
       toast.success('Certificado liberado com exceção')
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'certificate-release', calibrationJobId],
+        queryKey: financeKeys.certificateRelease(calibrationJobId),
       })
       setReason('')
       onOpenChange(false)

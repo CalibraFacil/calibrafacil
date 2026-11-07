@@ -18,6 +18,10 @@ import {
   type NewServiceOrderCustomersData,
   type ServiceOrdersListQueryInput,
 } from './types'
+import { serviceOrderKeys } from '@/features/service-orders/keys'
+import { customerKeys } from '@/features/customers/keys'
+import { assetKeys } from '@/features/assets/keys'
+import { materialKeys } from '@/features/materials/keys'
 
 export const SERVICE_ORDERS_LIST_LIMIT = 20
 
@@ -45,13 +49,7 @@ export function serviceOrdersListQueryOptions(
   input: ServiceOrdersListQueryInput,
 ) {
   return queryOptions({
-    queryKey: [
-      'service-orders',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ],
+    queryKey: serviceOrderKeys.list(input),
     queryFn: () =>
       calibraApi.serviceOrders.list({
         query: {
@@ -61,10 +59,9 @@ export function serviceOrdersListQueryOptions(
           status: input.statusFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'service-orders',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      serviceOrderKeys.listScope(input.organizationId),
+    ),
   })
 }
 
@@ -75,7 +72,7 @@ export function serviceOrdersListQueryOptions(
  */
 export function serviceOrderDetailQueryOptions(publicId: string) {
   return queryOptions({
-    queryKey: ['service-order', publicId],
+    queryKey: serviceOrderKeys.detail(publicId),
     queryFn: () =>
       calibraApi.serviceOrders.getByPublicId({
         params: { publicId },
@@ -85,7 +82,7 @@ export function serviceOrderDetailQueryOptions(publicId: string) {
 
 function serviceOrderCommunicationsQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['service-order', id, 'communications'],
+    queryKey: serviceOrderKeys.communications(id),
     queryFn: () =>
       calibraApi.serviceOrders.listCommunications({ params: { id } }),
   })
@@ -93,7 +90,7 @@ function serviceOrderCommunicationsQueryOptions(id: string) {
 
 export function serviceOrderFinancialStatusQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['service-order', id, 'financial-status'],
+    queryKey: serviceOrderKeys.financialStatus(id),
     queryFn: () =>
       calibraApi.finance.getServiceOrderStatus({
         params: { serviceOrderId: id },
@@ -103,7 +100,7 @@ export function serviceOrderFinancialStatusQueryOptions(id: string) {
 
 export function newServiceOrderCustomersQueryOptions(search = '') {
   return queryOptions({
-    queryKey: ['customers', 'service-order-open', search],
+    queryKey: customerKeys.serviceOrderOpen(search),
     queryFn: async (): Promise<NewServiceOrderCustomersData> => {
       const result = await calibraApi.customers.list({
         query: {
@@ -134,7 +131,7 @@ export function newServiceOrderAssetsQueryOptions({
   search?: string
 }) {
   return queryOptions({
-    queryKey: ['assets', 'service-order-open', customerId, search],
+    queryKey: assetKeys.serviceOrderOpen(customerId, search),
     queryFn: (): Promise<NewServiceOrderAssetsData> => {
       if (!customerId) {
         return Promise.resolve({ data: [] } satisfies NewServiceOrderAssetsData)
@@ -173,7 +170,7 @@ export function fetchServiceOrderMaterials(
 
 export function serviceOrderMaterialsQueryOptions(search = '') {
   return queryOptions({
-    queryKey: ['materials', 'service-order-picker', search],
+    queryKey: materialKeys.serviceOrderPicker(search),
     queryFn: () => fetchServiceOrderMaterials(search),
   })
 }
