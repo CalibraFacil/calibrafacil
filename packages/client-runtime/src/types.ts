@@ -26,10 +26,13 @@ import type {
   UpdateNotificationPreferencesSchema,
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
+import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
 import type { CustomersApi } from "./modules/customers";
 import type { DashboardApi } from "./modules/dashboard";
 import type { ReportsApi } from "./modules/reports";
+import type { SignaturesApi } from "./modules/signatures";
+import type { VisitsApi } from "./modules/visits";
 
 export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
@@ -79,6 +82,8 @@ import type {
   CnpjLookupResult,
   DashboardJob,
   DashboardStats,
+  MySignatureResponse,
+  SignatureUploadResponse,
   UpdateCertificateNumberingProfileResponse,
   CustomerDetail,
   CustomersListResponse,
@@ -1450,137 +1455,10 @@ export interface TrainingRecordsApi {
   ): Promise<TResponse>;
 }
 
-export type CalibrationRequestsListInput = {
-  page: number;
-  limit: number;
-  query?: string;
-  status?: string;
-};
-
-export type CalibrationRequestActionInput = {
-  internalNotes?: string;
-};
-
-export type CalibrationRequestConvertInput = {
-  items: Array<{
-    itemId: number;
-    serviceId: number;
-    technicianId?: string;
-    dueDate?: string;
-  }>;
-  // On-site only: schedule one visit for the whole conversion (the trip).
-  visit?: {
-    scheduledAt?: string | null;
-    technicianId?: string | null;
-  } | null;
-};
-
-export interface CalibrationRequestsApi {
-  list<TResponse = unknown>(
-    input: CalibrationRequestsListInput,
-  ): Promise<TResponse>;
-  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  review<TResponse = unknown>(
-    id: string | number,
-    input?: CalibrationRequestActionInput,
-  ): Promise<TResponse>;
-  approve<TResponse = unknown>(
-    id: string | number,
-    input?: CalibrationRequestActionInput,
-  ): Promise<TResponse>;
-  reject<TResponse = unknown>(
-    id: string | number,
-    input: CalibrationRequestActionInput & { reason: string },
-  ): Promise<TResponse>;
-  convert<TResponse = unknown>(
-    id: string | number,
-    input: CalibrationRequestConvertInput,
-  ): Promise<TResponse>;
-}
-
-// — On-site visits (calibração in loco) —————————————————————————————————————
-
-export type VisitsListInput = {
-  page?: number;
-  limit?: number;
-  status?: string;
-  technicianId?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  mine?: boolean;
-  rescheduleRequested?: boolean;
-};
-
-export type VisitAssignInput = { technicianId: string };
-
-export type VisitConfirmInput = {
-  scheduledAt?: string | null;
-  technicianId?: string | null;
-};
-
-export type VisitRescheduleInput = {
-  scheduledAt?: string | null;
-  scheduledEndAt?: string | null;
-  address?: unknown;
-  notes?: string | null;
-};
-
-export type VisitCancelInput = { reason?: string | null };
-
-export type VisitAddJobInput = {
-  assetId: number;
-  serviceId: number;
-};
-
-export type VisitAcceptRescheduleRequestInput = {
-  scheduledAt: string;
-  scheduledEndAt?: string | null;
-  resolutionNote?: string | null;
-};
-
-export type VisitDeclineRescheduleRequestInput = {
-  resolutionNote?: string | null;
-};
-
-export interface VisitsApi {
-  list<TResponse = unknown>(input?: VisitsListInput): Promise<TResponse>;
-  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  assign<TResponse = unknown>(
-    id: string | number,
-    input: VisitAssignInput,
-  ): Promise<TResponse>;
-  confirm<TResponse = unknown>(
-    id: string | number,
-    input?: VisitConfirmInput,
-  ): Promise<TResponse>;
-  reschedule<TResponse = unknown>(
-    id: string | number,
-    input: VisitRescheduleInput,
-  ): Promise<TResponse>;
-  cancel<TResponse = unknown>(
-    id: string | number,
-    input?: VisitCancelInput,
-  ): Promise<TResponse>;
-  complete<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  addJob<TResponse = unknown>(
-    id: string | number,
-    input: VisitAddJobInput,
-  ): Promise<TResponse>;
-  removeJob<TResponse = unknown>(
-    id: string | number,
-    jobId: string | number,
-  ): Promise<TResponse>;
-  acceptRescheduleRequest<TResponse = unknown>(
-    id: string | number,
-    requestId: string | number,
-    input: VisitAcceptRescheduleRequestInput,
-  ): Promise<TResponse>;
-  declineRescheduleRequest<TResponse = unknown>(
-    id: string | number,
-    requestId: string | number,
-    input?: VisitDeclineRescheduleRequestInput,
-  ): Promise<TResponse>;
-}
+// CALIBRATION REQUESTS and ON-SITE VISITS: the DTOs and the clients are the
+// endpoint definitions' own (`endpoints/calibration-requests.ts`,
+// `endpoints/visits.ts`; `modules/calibration-requests.ts`, `modules/visits.ts`).
+export type { CalibrationRequestsApi, VisitsApi };
 
 export interface IntegrationsApi {
   list<TResponse = unknown>(): Promise<TResponse>;
@@ -2270,39 +2148,10 @@ export interface NotificationsApi {
   ): Promise<NotificationPreferencesResponse>;
 }
 
-type SignatureImageDimensions = {
-  width: number;
-  height: number;
-};
-
-export type MySignatureResponse =
-  | {
-      hasSignature: false;
-    }
-  | {
-      hasSignature: true;
-      url: string;
-      dimensions: SignatureImageDimensions;
-      uploadedAt?: string | Date | null;
-    };
-
-export type SignatureUploadResponse = {
-  message: string;
-  dimensions: SignatureImageDimensions;
-};
-
-export type SignatureDeleteResponse = {
-  message: string;
-};
-
-export interface SignaturesApi {
-  getMine(): Promise<MySignatureResponse>;
-  uploadMine(
-    file: Blob,
-    input?: { fileName?: string },
-  ): Promise<SignatureUploadResponse>;
-  deleteMine(): Promise<SignatureDeleteResponse>;
-}
+// SIGNATURES: the DTOs are the contract schemas' types
+// (`endpoints/signatures.ts`); the client is generated from the endpoint
+// definitions plus the multipart upload (`modules/signatures.ts`).
+export type { MySignatureResponse, SignatureUploadResponse, SignaturesApi };
 
 export type ProfileAvatarUploadResponse = {
   imageUrl: string;

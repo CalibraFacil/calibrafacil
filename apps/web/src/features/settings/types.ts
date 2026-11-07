@@ -4,7 +4,6 @@ import type {
   CertificateNumberingProfileResponse,
   EmailDomainResponse,
   EnvironmentalLimitsResponse,
-  MySignatureResponse,
   NotificationPreferencesResponse,
   PortalDomainResponse,
   SigningCertificatesListResponse,
@@ -31,8 +30,6 @@ export type SettingsCertificateNumberingData =
   CertificateNumberingProfileResponse
 
 export type SettingsSigningCertificatesData = SigningCertificatesListResponse
-
-export type SettingsSignatureData = MySignatureResponse
 
 export type SettingsPortalDomainData = PortalDomainResponse
 
