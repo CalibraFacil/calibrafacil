@@ -6,7 +6,7 @@
 
 export type LogFields = Record<string, unknown>;
 
-export type LogLevel = "debug" | "info" | "warn" | "error";
+type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface StructuredLogger {
   debug(message: string, fields?: LogFields): void;

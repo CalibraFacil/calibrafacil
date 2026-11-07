@@ -4,7 +4,7 @@
  * a filtered view (e.g. the console "Vencido" tile → ?tab=recebimentos&parcela=OVERDUE).
  * Parsing lives here so it is unit-testable and reused by the route adapter.
  */
-export type ReceivablesTab = 'documentos' | 'recebimentos'
+type ReceivablesTab = 'documentos' | 'recebimentos'
 
 export type ReceivablesSearch = {
   tab?: ReceivablesTab

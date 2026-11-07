@@ -32,7 +32,7 @@ import { createNonConformanceRecord } from "./non-conformances";
  */
 
 /** Stable outbox dedup key: one notification email per oot_notification row. */
-export const OOT_NOTIFICATION_EVENT_KEY = "oot_notification";
+const OOT_NOTIFICATION_EVENT_KEY = "oot_notification";
 
 export type FlagJobOutOfToleranceParams = {
   organizationId: string;

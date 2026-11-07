@@ -21,7 +21,7 @@ import { isUniqueViolation } from "./db-errors";
 
 const MAX_SEQ_RETRIES = 3;
 
-export async function generateCapaNumber(
+async function generateCapaNumber(
   organizationId: string,
   executor: Pick<OrgExecutor, "select"> = db,
 ): Promise<string> {

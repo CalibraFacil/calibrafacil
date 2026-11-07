@@ -129,4 +129,4 @@ function DatePicker({
 }
 
 export { DatePicker };
-export type { DatePickerPreset, DatePickerProps };
+export type { DatePickerPreset };

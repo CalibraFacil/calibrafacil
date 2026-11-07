@@ -28,14 +28,14 @@ export type PortalVisitAddress = {
 
 export type PortalVisitReschedulePeriod = "MORNING" | "AFTERNOON" | "ANY";
 
-export type PortalVisitPreferredWindow = {
+type PortalVisitPreferredWindow = {
   /** ISO yyyy-mm-dd */
   date: string;
   period: PortalVisitReschedulePeriod;
   note?: string;
 };
 
-export type PortalVisitRescheduleRequest = {
+type PortalVisitRescheduleRequest = {
   id: number;
   status: "PENDING" | "ACCEPTED" | "DECLINED" | "SUPERSEDED";
   reason: string | null;

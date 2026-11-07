@@ -85,19 +85,6 @@ function AlertDialogFooter({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
-function AlertDialogMedia({ className, ...props }: ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-dialog-media"
-      className={cn(
-        "bg-muted mb-2 inline-flex size-16 items-center justify-center rounded-md sm:group-data-[size=default]/alert-dialog-content:row-span-2 *:[svg:not([class*='size-'])]:size-8",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
 function AlertDialogTitle({
   className,
   ...props
@@ -170,9 +157,6 @@ export {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogOverlay,
-  AlertDialogPortal,
   AlertDialogTitle,
   AlertDialogTrigger,
 };

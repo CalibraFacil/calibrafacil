@@ -11,7 +11,6 @@
 import {
   type SpecificationFieldLike,
   type MethodInputFieldLike,
-  type MethodFormulaLike,
   type UnitConversionTrace,
   convertUnitValue,
   resolveDisplayUnit,
@@ -19,14 +18,11 @@ import {
   denormalizeSpecificationsForDisplay,
   normalizeMethodDataForStorage as genNormalizeMethodDataForStorage,
   denormalizeMethodDataForDisplay as genDenormalizeMethodDataForDisplay,
-  denormalizeMethodResultsForDisplay as genDenormalizeMethodResultsForDisplay,
-  normalizeRangeSpecsForStorage,
-  normalizeRangeSpecsForDisplay,
 } from "./units";
 
 export type MassUnit = "mg" | "g" | "kg";
 
-export const CANONICAL_MASS_UNIT = "g" as const;
+const CANONICAL_MASS_UNIT = "g" as const;
 
 export type AssetSpecificationFieldLike = SpecificationFieldLike;
 
@@ -60,18 +56,8 @@ export function convertMassValue(
   return convertUnitValue(value, normalizedFrom, normalizedTo);
 }
 
-export function toCanonicalMassValue(
-  value: number,
-  fromUnit: unknown,
-): number | null {
+function toCanonicalMassValue(value: number, fromUnit: unknown): number | null {
   return convertMassValue(value, fromUnit, CANONICAL_MASS_UNIT);
-}
-
-export function fromCanonicalMassValue(
-  value: number,
-  toUnit: unknown,
-): number | null {
-  return convertMassValue(value, CANONICAL_MASS_UNIT, toUnit);
 }
 
 export function isMassMeasurementUnit(unit: unknown): unit is MassUnit {
@@ -85,31 +71,11 @@ export function resolveMassDisplayUnit(
   return resolveDisplayUnit(baseMeasurementUnit, literalUnit);
 }
 
-export function isMassSpecificationField(
+function isMassSpecificationField(
   field: AssetSpecificationFieldLike | null | undefined,
 ): boolean {
   if (!field) return false;
   return field.type === "weighing_ranges" || isMassMeasurementUnit(field.unit);
-}
-
-export function isMassMethodField(
-  field: MethodInputFieldLike | null | undefined,
-): boolean {
-  if (!field) return false;
-  if (field.type === "number" && isMassMeasurementUnit(field.unit)) {
-    return true;
-  }
-
-  return (
-    field.type === "table" &&
-    (field.columns ?? []).some((column) => isMassMeasurementUnit(column.unit))
-  );
-}
-
-export function isMassMethodFormula(
-  formula: MethodFormulaLike | null | undefined,
-): boolean {
-  return isMassMeasurementUnit(formula?.unit);
 }
 
 export function isMassAssetTypeDefinition(
@@ -138,24 +104,6 @@ export function isMassAssetTypeDefinition(
     normalizedName.includes("balance") ||
     normalizedName.includes("scale")
   );
-}
-
-export function normalizeWeighingRangeSpecsForStorage(
-  value: unknown,
-  displayUnit: MassUnit | null | undefined,
-  fieldPath = "weighingRanges",
-): {
-  value: unknown;
-  conversions: MassConversionTrace[];
-} {
-  return normalizeRangeSpecsForStorage(value, displayUnit, fieldPath);
-}
-
-export function denormalizeWeighingRangeSpecsForDisplay(
-  value: unknown,
-  displayUnit: MassUnit | null | undefined,
-): unknown {
-  return normalizeRangeSpecsForDisplay(value, displayUnit);
 }
 
 export function normalizeAssetSpecificationsForStorage(
@@ -204,19 +152,7 @@ export function denormalizeMethodDataForDisplay(
   return genDenormalizeMethodDataForDisplay(data, fields, baseMeasurementUnit);
 }
 
-export function denormalizeMethodResultsForDisplay(
-  results: Record<string, unknown> | null | undefined,
-  formulas: MethodFormulaLike[] | null | undefined,
-  baseMeasurementUnit: MassUnit | null | undefined,
-): Record<string, unknown> | null | undefined {
-  return genDenormalizeMethodResultsForDisplay(
-    results,
-    formulas,
-    baseMeasurementUnit,
-  );
-}
-
-export type NormalizableCertifiedValue = {
+type NormalizableCertifiedValue = {
   value: number;
   uncertainty: number;
   unit: string;

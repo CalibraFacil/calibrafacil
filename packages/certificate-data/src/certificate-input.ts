@@ -446,7 +446,7 @@ export function certificateInputSha256(input: CertificateInput): string {
 // ── images ──────────────────────────────────────────────────────────────────
 
 /** Sniffs the content type of an image whose stored metadata has none. */
-export function inferImageContentType(bytes: Uint8Array): string {
+function inferImageContentType(bytes: Uint8Array): string {
   if (
     bytes[0] === 0x89 &&
     bytes[1] === 0x50 &&

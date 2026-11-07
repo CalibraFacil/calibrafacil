@@ -116,7 +116,6 @@ import type {
   MassCompositionProfilesResponse,
   SaveEnvironmentalLimitResponse,
   Standard,
-  StandardCertificateDocument,
   StandardCertificateDocumentDownloadResponse,
   StandardCertificateDocumentUploadResponse,
   StandardRecord,
@@ -147,10 +146,6 @@ export type {
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
   EnvironmentalLimitsResponse,
-  SaveEnvironmentalLimitResponse,
-  StandardCertificateDocumentDownloadResponse,
-  StandardCertificateDocumentUploadResponse,
-  StandardRecord,
 } from "@calibra-facil/contracts";
 export type {
   CreateServiceOrderInput,
@@ -161,16 +156,11 @@ export type {
   SaveServiceOrderExecutionInput,
   SaveServiceOrderEvaluationInput,
   SendServiceOrderQuoteInput,
-  ServiceOrderCommunicationEntry,
-  ServiceOrderCommunicationsData,
   ServiceOrderCommunicationStatus,
   ServiceOrderDetail,
-  ServiceOrderDocumentUrl,
-  ServiceOrderListItem,
   ServiceOrderRepairMarkInput,
   ServiceOrdersListData,
   ServiceOrdersListInput,
-  ServiceOrderStatus,
   UpdateServiceOrderInput,
 } from "./service-orders";
 export type {
@@ -193,7 +183,7 @@ export type JobsListInput = {
 };
 
 /** POST /api/jobs answers with the created job row. */
-export type CreateJobResult = JobCreateResponse;
+type CreateJobResult = JobCreateResponse;
 
 export interface JobsApi {
   list(input: JobsListInput): Promise<JobsListResponse>;
@@ -530,14 +520,14 @@ export type MethodAuditLogData<TRecord = unknown> = {
   data: TRecord[];
 };
 
-export type MethodGovernanceSource = {
+type MethodGovernanceSource = {
   title: string;
   edition: string;
   section?: string;
   url?: string;
 };
 
-export type MethodGovernanceVerificarItem = {
+type MethodGovernanceVerificarItem = {
   ref?: string;
   item: string;
   severity: "info" | "action" | "platform";
@@ -601,7 +591,7 @@ export type MethodTemplateCatalogEntry = {
 };
 
 /** Mandatory acknowledgements for adopting a template (all three must be true). */
-export type MethodTemplateAcknowledgements = {
+type MethodTemplateAcknowledgements = {
   readVerificarAndOmitted: true;
   acceptsVerificationDuty: true;
   understandsDraftGate: true;
@@ -661,103 +651,6 @@ export type StandardStatus =
   | "INACTIVE"
   | "OUT_OF_TOLERANCE"
   | "SENT_FOR_CALIBRATION";
-
-export type CertifiedValue = {
-  nominal: string;
-  authentication?: string | null;
-  value: number;
-  uncertainty: number;
-  unit: string;
-  maxError?: number | null;
-  drift?: number | null;
-  buoyancy?: number | null;
-  coverageFactor?: number | null;
-  compositionProfile?: boolean;
-  profileKey?: string | null;
-  profileClass?: string | null;
-  profileQuantityAvailable?: number | null;
-};
-
-export type ReferenceStandardKind =
-  | "mass_single"
-  | "mass_set"
-  | "thermohygrometer"
-  | "thermometer"
-  | "hygrometer"
-  | "barometer"
-  | "manometer"
-  | "dimensional"
-  | "electrical"
-  | "time_frequency"
-  | "volume"
-  | "force_torque"
-  | "rpm"
-  | "generic_scalar"
-  | "generic_multi_channel";
-
-export type ReferenceStandardMetrologyPoint = {
-  reference?: number | null;
-  indication?: number | null;
-  meanReading?: number | null;
-  correction?: number | null;
-  uncertainty?: number | null;
-  unit: string;
-  coverageFactor?: number | null;
-  degreesOfFreedom?: number | null;
-  degreesOfFreedomOperator?: "exact" | "greater_than" | "infinity";
-  repeatability?: number | null;
-  metadata?: Record<string, unknown>;
-};
-
-export type ReferenceStandardMetrologyChannel = {
-  key: string;
-  label: string;
-  quantity: string;
-  value?: number | null;
-  correction?: number | null;
-  uncertainty?: number | null;
-  unit: string;
-  coverageFactor?: number | null;
-  drift?: number | null;
-  notes?: string | null;
-  points?: ReferenceStandardMetrologyPoint[];
-};
-
-export type ReferenceStandardMassValue = {
-  nominal: string;
-  authentication?: string | null;
-  value: number;
-  uncertainty: number;
-  unit: string;
-  maxError?: number | null;
-  drift?: number | null;
-  buoyancy?: number | null;
-  coverageFactor?: number | null;
-};
-
-export type ReferenceStandardCompositionProfile = {
-  profileKey: string;
-  profileClass?: string | null;
-  nominal: string;
-  value: number;
-  uncertainty: number;
-  unit: string;
-  maxError?: number | null;
-  drift?: number | null;
-  buoyancy?: number | null;
-  coverageFactor?: number | null;
-  quantityAvailable?: number | null;
-};
-
-export type ReferenceStandardMetrologyData = {
-  version: 1;
-  channels: ReferenceStandardMetrologyChannel[];
-  massValues: ReferenceStandardMassValue[];
-  compositionProfiles: ReferenceStandardCompositionProfile[];
-  notes?: string | null;
-};
-
-export type ReferenceStandardCertificateDocument = StandardCertificateDocument;
 
 /** A standard as the list and the detail return it (contract type). */
 export type StandardData = Standard;
@@ -945,7 +838,7 @@ export interface CustomersApi {
 // CUSTOMER GROUPS (multi-unit client networks)
 // =============================================================================
 
-export type CustomerGroupListItem = {
+type CustomerGroupListItem = {
   id: number;
   name: string;
   authOrganizationId: string;
@@ -955,7 +848,7 @@ export type CustomerGroupListItem = {
 
 export type CustomerGroupsListData = { data: Array<CustomerGroupListItem> };
 
-export type CustomerGroupBranch = {
+type CustomerGroupBranch = {
   id: number;
   name: string;
   taxId: string | null;
@@ -1009,65 +902,6 @@ export type AssetsListInput = {
 };
 
 export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
-
-/**
- * Every measurement unit token accepted as an asset's base unit. Mirrors
- * `MeasurementUnitSchema` in `@calibra-facil/schemas` / the kind-aware registry
- * in `@calibra-facil/shared/units`; kept as a local literal union so the SDK
- * contract has no runtime/server dependency. Keep in sync with that enum.
- */
-export type MeasurementUnit =
-  | "mg"
-  | "g"
-  | "kg"
-  | "µm"
-  | "mm"
-  | "cm"
-  | "m"
-  | "°C"
-  | "°F"
-  | "K"
-  | "Pa"
-  | "kPa"
-  | "MPa"
-  | "bar"
-  | "psi"
-  | "kgf/cm²"
-  | "mmHg"
-  | "inHg"
-  | "µL"
-  | "mL"
-  | "L"
-  | "m³"
-  | "ms"
-  | "s"
-  | "min"
-  | "h"
-  | "N·m"
-  | "kgf·m"
-  | "%RH"
-  // force
-  | "N"
-  | "kN"
-  | "kgf"
-  // voltage
-  | "µV"
-  | "mV"
-  | "V"
-  | "kV"
-  // current
-  | "µA"
-  | "mA"
-  | "A"
-  // resistance
-  | "Ω"
-  | "kΩ"
-  | "MΩ"
-  // frequency
-  | "Hz"
-  | "kHz"
-  | "MHz"
-  | "rpm";
 
 export type AssetsListData = {
   data: Array<{
@@ -1505,7 +1339,7 @@ export type ProficiencyTestCreateInput = {
 
 export type ProficiencyTestUpdateInput = Partial<ProficiencyTestCreateInput>;
 
-export type PtResultPointInput = {
+type PtResultPointInput = {
   label: string;
   unit?: string;
   labValue: number;
@@ -1568,7 +1402,7 @@ export type SpcChartListInput = {
   limit?: number;
 };
 
-export type SpcChartParamsInput = {
+type SpcChartParamsInput = {
   baselineWindow?: number;
   centerline?: number;
   sigma?: number;
@@ -2053,7 +1887,7 @@ export interface DashboardApi {
   getStats<TStats = DashboardStats>(): Promise<TStats>;
 }
 
-export type DashboardUnitSummary = {
+type DashboardUnitSummary = {
   id: number;
   name: string;
   slug: string;
@@ -2263,7 +2097,7 @@ export type SsoVerificationRecord = {
   value: string;
 };
 
-export type SsoProviderSummary = {
+type SsoProviderSummary = {
   id: string;
   providerId: string;
   issuer: string;
@@ -2331,7 +2165,7 @@ export interface SsoApi {
   deleteProvider(providerId: string): Promise<void>;
 }
 
-export type ApiKeySummary = {
+type ApiKeySummary = {
   id: string;
   name: string;
   keyPrefix: string;
@@ -2423,10 +2257,6 @@ export interface OrganizationProfileApi {
   ): Promise<OrganizationProfileResponse>;
 }
 
-export type EntityLabelResponse = {
-  label?: string | null;
-};
-
 export interface EntityLabelsApi {
   getNonConformance(id: string | number): Promise<string | null>;
   getCapa(id: string | number): Promise<string | null>;
@@ -2486,7 +2316,7 @@ export interface CertificateNumberingApi {
   ): Promise<UpdateCertificateNumberingProfileResponse>;
 }
 
-export type PortalDomainStatus =
+type PortalDomainStatus =
   | "not_configured"
   | "waiting_dns"
   | "token_mismatch"
@@ -2532,15 +2362,15 @@ export interface PortalDomainsApi {
   delete(): Promise<void>;
 }
 
-export type EmailDomainStatus =
+type EmailDomainStatus =
   | "not_configured"
   | "waiting_verification"
   | "verified"
   | "active";
 
-export type EmailDomainKeyStatus = "ok" | "invalid" | "rate_limited";
+type EmailDomainKeyStatus = "ok" | "invalid" | "rate_limited";
 
-export type EmailDomainRecord = {
+type EmailDomainRecord = {
   id: string;
   mode: "byok" | "managed";
   hostname: string;
@@ -2614,12 +2444,12 @@ export type UnreadNotificationsResponse = {
   count: number;
 };
 
-export type NotificationPreference = {
+type NotificationPreference = {
   inApp: boolean;
   email: boolean;
 };
 
-export type NotificationPreferencesMap = Record<string, NotificationPreference>;
+type NotificationPreferencesMap = Record<string, NotificationPreference>;
 
 export type NotificationPreferencesResponse = {
   preferences: NotificationPreferencesMap;
@@ -2643,7 +2473,7 @@ export interface NotificationsApi {
   ): Promise<NotificationPreferencesResponse>;
 }
 
-export type SignatureImageDimensions = {
+type SignatureImageDimensions = {
   width: number;
   height: number;
 };
@@ -2709,7 +2539,7 @@ export interface OrganizationMediaApi {
   deleteLogo(): Promise<OrganizationLogoDeleteResponse>;
 }
 
-export type SigningCertificateStatus =
+type SigningCertificateStatus =
   | "valid"
   | "expired"
   | "not_yet_valid"

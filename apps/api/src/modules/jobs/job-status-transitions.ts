@@ -33,14 +33,6 @@ export function isCancelableJobStatus(status: JobStatus): boolean {
   return canTransition(status, "cancel");
 }
 
-/** Thrown inside a transaction to roll it back when a compare-and-set loses. */
-export class JobStatusConflictError extends Error {
-  constructor() {
-    super("O status do job mudou durante a operacao");
-    this.name = "JobStatusConflictError";
-  }
-}
-
 /**
  * The 409 returned when a status compare-and-set matched no row: the job moved
  * under the caller. Wire shape is unchanged for existing clients (legacy

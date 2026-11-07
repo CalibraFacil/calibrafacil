@@ -94,7 +94,7 @@ export type NonConformanceDetail = {
   } | null
 }
 
-export type NonConformanceAuditLogEntry = {
+type NonConformanceAuditLogEntry = {
   id: number
   action: string
   changes: unknown
@@ -231,7 +231,7 @@ export type CapaDetail = {
   isOverdue: boolean | null
 }
 
-export type CapaAuditLogEntry = {
+type CapaAuditLogEntry = {
   id: number
   capaId: number
   action: string

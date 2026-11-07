@@ -112,7 +112,7 @@ function BoundaryPanel({
  * Router-level error boundary. Reporting happens in `defaultOnCatch` (below),
  * not here, so it needs no effect and fires once per caught error.
  */
-export function RouteErrorFallback({ reset }: ErrorComponentProps) {
+function RouteErrorFallback({ reset }: ErrorComponentProps) {
   const router = useRouter();
 
   return (
@@ -166,7 +166,7 @@ export function RoutePendingFallback() {
   );
 }
 
-export function RouteNotFoundFallback() {
+function RouteNotFoundFallback() {
   return (
     <BoundaryShell>
       <BoundaryPanel

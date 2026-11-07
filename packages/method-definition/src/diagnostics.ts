@@ -1,6 +1,6 @@
 import type { MethodDiagnostic, MethodDiagnosticSeverity } from "./types";
 
-export function diagnostic(
+function diagnostic(
   code: string,
   severity: MethodDiagnosticSeverity,
   message: string,
@@ -27,22 +27,4 @@ export function errorDiagnostic(
   details?: MethodDiagnostic["details"],
 ): MethodDiagnostic {
   return diagnostic(code, "error", message, path, details);
-}
-
-export function warningDiagnostic(
-  code: string,
-  message: string,
-  path?: string,
-  details?: MethodDiagnostic["details"],
-): MethodDiagnostic {
-  return diagnostic(code, "warning", message, path, details);
-}
-
-export function infoDiagnostic(
-  code: string,
-  message: string,
-  path?: string,
-  details?: MethodDiagnostic["details"],
-): MethodDiagnostic {
-  return diagnostic(code, "info", message, path, details);
 }

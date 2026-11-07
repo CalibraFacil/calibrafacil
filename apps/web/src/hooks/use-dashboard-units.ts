@@ -1,10 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
-import type {
-  DashboardUnitSummary,
-  DashboardUnitsResponse,
-} from '@calibra-facil/client-runtime'
 import { calibraApi } from '@/utils/api'
 import { isDesktopRuntime } from '@/runtime/desktop'
 
@@ -13,15 +9,6 @@ type ActiveOrganization = {
   name: string
   slug: string
   members?: Array<{ role?: string | null }>
-}
-
-export type { DashboardUnitSummary, DashboardUnitsResponse }
-
-export type DashboardScopedUnit = {
-  id: number | string
-  name: string
-  slug: string
-  role: string
 }
 
 function getCurrentOrganizationRole(activeOrg: ActiveOrganization | undefined) {

@@ -7,7 +7,7 @@
 
 export type Theme = "light" | "dark" | "system";
 
-export const THEME_KEY = "theme";
+const THEME_KEY = "theme";
 
 /** Narrows an arbitrary stored value to a valid theme, defaulting to system. */
 export function resolveTheme(value: string | null): Theme {
@@ -21,7 +21,7 @@ export function getStoredTheme(): Theme {
   return resolveTheme(localStorage.getItem(THEME_KEY));
 }
 
-export function applyTheme(theme: Theme) {
+function applyTheme(theme: Theme) {
   const root = document.documentElement;
   root.classList.remove("light", "dark");
 

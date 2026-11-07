@@ -86,7 +86,7 @@ export function methodAuditLogQueryOptions(id: string) {
   })
 }
 
-export async function getMethodsIndexEssentialQueries(url?: URL) {
+async function getMethodsIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 
@@ -183,7 +183,7 @@ export function useMethodAuditLogData(id: string) {
 // The curated method-template catalog is a cloud-only read; it returns only
 // governance-complete templates so the picker never renders a bare "trust-me"
 // card.
-export function methodTemplatesQueryOptions() {
+function methodTemplatesQueryOptions() {
   return queryOptions({
     queryKey: ['methods', 'templates'],
     queryFn: (): Promise<MethodTemplateCatalogEntry[]> =>

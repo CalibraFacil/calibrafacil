@@ -19,7 +19,7 @@ import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { addLabBusinessDays } from "@calibra-facil/shared";
-import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
 import { orgTransactionWithExecutor } from "./org-transaction";
@@ -507,56 +507,6 @@ async function persistCalibrationJob(
   });
 
   return newJob;
-}
-
-async function getNextJobSequence(
-  organizationId: string,
-  year: number,
-  executor: JobDbExecutor,
-) {
-  const prefix = `CAL-${year}-`;
-  const sequenceSql = sql<number>`coalesce(cast(substring(${calibrationJob.jobId} from '[0-9]+$') as integer), 0)`;
-
-  // Lock per organization/year so a brand-new year with no rows cannot race to 0001.
-  await executor.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), ${year})`,
-  );
-
-  const [result] = await executor
-    .select({
-      sequence: sequenceSql,
-    })
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.organizationId, organizationId),
-        ilike(calibrationJob.jobId, `${prefix}%`),
-      ),
-    )
-    .orderBy(desc(sequenceSql))
-    .limit(1)
-    .for("update");
-
-  return (result?.sequence ?? 0) + 1;
-}
-
-/**
- * Generates a unique job ID for the organization.
- * Format: CAL-YYYY-XXXX (per organization per year)
- */
-export async function generateJobId(
-  organizationId: string,
-  year: number,
-  executor?: JobDbExecutor,
-): Promise<string> {
-  const prefix = `CAL-${year}-`;
-  const sequence = executor
-    ? await getNextJobSequence(organizationId, year, executor)
-    : await orgTransactionWithExecutor(organizationId, (_o, tx) =>
-        getNextJobSequence(organizationId, year, tx),
-      );
-
-  return `${prefix}${sequence.toString().padStart(4, "0")}`;
 }
 
 export async function createCalibrationJob(params: CreateCalibrationJobParams) {

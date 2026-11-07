@@ -4,9 +4,9 @@ import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import type { VisitDetail, VisitsListData, VisitStatus } from './types'
 
-export const VISITS_LIST_LIMIT = 20
+const VISITS_LIST_LIMIT = 20
 
-export function visitsListQueryOptions(input: {
+function visitsListQueryOptions(input: {
   organizationId: string
   page: number
   status: VisitStatus | ''
@@ -34,7 +34,7 @@ export function visitsListQueryOptions(input: {
   })
 }
 
-export function visitDetailQueryOptions(visitId: number) {
+function visitDetailQueryOptions(visitId: number) {
   return queryOptions({
     queryKey: ['visit', visitId],
     queryFn: () => calibraApi.visits.get<VisitDetail>(visitId),

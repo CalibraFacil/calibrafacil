@@ -24,7 +24,7 @@ export type PushBatchState = {
 };
 
 /** A device clock within this of the server's is not worth recording. */
-export const CLOCK_SKEW_TOLERANCE_MS = 120_000;
+const CLOCK_SKEW_TOLERANCE_MS = 120_000;
 
 /**
  * The device clock minus the server clock (ms) for a push that says when it

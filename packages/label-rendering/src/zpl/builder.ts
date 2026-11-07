@@ -3,8 +3,8 @@
 
 import { escapeZplField } from "./escape";
 
-export type ZplOrientation = "N" | "R" | "I" | "B";
-export type QrErrorCorrection = "L" | "M" | "Q" | "H";
+type ZplOrientation = "N" | "R" | "I" | "B";
+type QrErrorCorrection = "L" | "M" | "Q" | "H";
 
 /** `^XA` — start of label format. */
 export function startLabel(): string {

@@ -16,11 +16,9 @@ export const paginationSchema = z.object({
   total: z.number(),
   totalPages: z.number(),
 });
-export type Pagination = z.infer<typeof paginationSchema>;
 
 /** The `{ unitId, unitName }` context the unit-scoped settings routes echo. */
 export const unitContextSchema = z.object({
   unitId: z.number().nullable(),
   unitName: nullableString,
 });
-export type UnitContext = z.infer<typeof unitContextSchema>;

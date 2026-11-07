@@ -1166,7 +1166,7 @@ export function createDesktopApiClient(
   };
 }
 
-export function withDesktopLocalFirstReadThroughSync<TNamespace extends object>(
+function withDesktopLocalFirstReadThroughSync<TNamespace extends object>(
   cloudNamespace: TNamespace,
   localNamespace: TNamespace,
   localApi: CalibraApi,

@@ -13,7 +13,7 @@ import { isRecord } from "@calibra-facil/shared/record";
 
 type PortalFinancialScope = Parameters<typeof buildUnitScopeCondition>[1];
 
-export type PortalServiceOrderFinancialSummaryState =
+type PortalServiceOrderFinancialSummaryState =
   | "INVOICE_AVAILABLE"
   | "PAYMENT_PENDING"
   | "PAID"

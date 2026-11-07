@@ -65,7 +65,7 @@ export class DomainError extends Error {
   }
 }
 
-export class InvalidError extends DomainError {
+class InvalidError extends DomainError {
   constructor(
     code: ApiErrorCode,
     message: string,
@@ -76,7 +76,7 @@ export class InvalidError extends DomainError {
   }
 }
 
-export class UnauthenticatedError extends DomainError {
+class UnauthenticatedError extends DomainError {
   constructor(
     code: ApiErrorCode,
     message: string,
@@ -87,7 +87,7 @@ export class UnauthenticatedError extends DomainError {
   }
 }
 
-export class ForbiddenError extends DomainError {
+class ForbiddenError extends DomainError {
   constructor(
     code: ApiErrorCode,
     message: string,
@@ -98,7 +98,7 @@ export class ForbiddenError extends DomainError {
   }
 }
 
-export class NotFoundError extends DomainError {
+class NotFoundError extends DomainError {
   constructor(
     code: ApiErrorCode,
     message: string,
@@ -109,7 +109,7 @@ export class NotFoundError extends DomainError {
   }
 }
 
-export class ConflictError extends DomainError {
+class ConflictError extends DomainError {
   constructor(
     code: ApiErrorCode,
     message: string,
@@ -120,7 +120,7 @@ export class ConflictError extends DomainError {
   }
 }
 
-export class UnprocessableError extends DomainError {
+class UnprocessableError extends DomainError {
   constructor(
     code: ApiErrorCode,
     message: string,

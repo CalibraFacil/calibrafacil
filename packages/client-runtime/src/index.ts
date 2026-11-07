@@ -96,18 +96,9 @@ import { createStandardsApi } from "./modules/standards";
 import { createTrainingRecordsApi } from "./modules/training-records";
 import { createUnitsApi } from "./modules/units";
 
-export type {
-  ActiveUnitProvider,
-  CreateCloudApiClientOptions,
-  HonoCloudClient,
-} from "./transport/cloud";
-export { CalibraApiError } from "./transport/errors";
-export { createRawCloudClient, readJsonResponse } from "./transport";
-export type {
-  CreateDesktopApiClientOptions,
-  CreateDesktopHybridApiClientOptions,
-} from "./transport/desktop";
-export { getDesktopApiBaseUrl, isDesktopRuntime } from "./transport/desktop";
+export type { CreateCloudApiClientOptions } from "./transport/cloud";
+export type { CreateDesktopHybridApiClientOptions } from "./transport/desktop";
+export { isDesktopRuntime } from "./transport/desktop";
 export { createDesktopApiClient } from "./transport/desktop-client";
 
 export * from "./types";

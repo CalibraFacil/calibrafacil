@@ -278,4 +278,3 @@ function SaveButton({
 }
 
 export { SaveButton }
-export type { SaveButtonProps, SaveButtonStatus }

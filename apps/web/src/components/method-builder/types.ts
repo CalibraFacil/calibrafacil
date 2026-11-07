@@ -1,5 +1,5 @@
 import type { DecisionRuleKind } from '@calibra-facil/shared/decision-rule'
-export type MethodDraftStatus =
+type MethodDraftStatus =
   | 'DRAFT'
   | 'PENDING_APPROVAL'
   | 'TECHNICAL_REVIEWED'
@@ -51,14 +51,14 @@ export interface MethodDraftTableColumn {
   }
 }
 
-export interface MethodDraftEccentricityIndicatorConfig {
+interface MethodDraftEccentricityIndicatorConfig {
   enabled?: boolean
   variant?: 'circular_platform' | 'road_scale'
   pointColumn?: string
   loadPoints?: string[]
 }
 
-export interface MethodDraftWeighingRangeResolverConfig {
+interface MethodDraftWeighingRangeResolverConfig {
   enabled?: boolean
   assetSpecKey?: string
   pointColumn?: string

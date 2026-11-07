@@ -8,7 +8,7 @@ import { z } from "zod";
 
 const nullableString = z.string().nullable();
 
-export const portalRequestStatusSchema = z.enum([
+const portalRequestStatusSchema = z.enum([
   "PENDING",
   "UNDER_REVIEW",
   "APPROVED",

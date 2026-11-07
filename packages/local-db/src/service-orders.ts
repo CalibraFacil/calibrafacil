@@ -24,13 +24,9 @@ export type LocalServiceOrderStatus =
   | "canceled"
   | "warranty_return";
 
-export type LocalServiceOrderPriority =
-  | "normal"
-  | "urgent"
-  | "contract"
-  | "warranty";
+type LocalServiceOrderPriority = "normal" | "urgent" | "contract" | "warranty";
 
-export type LocalServiceOrderIntakeType =
+type LocalServiceOrderIntakeType =
   | "counter"
   | "carrier"
   | "third_party"
@@ -42,7 +38,7 @@ type LocalServiceOrderDeliveryMethod =
   | "ship_to_client"
   | "third_party_pickup";
 
-export type LocalServiceOrderItemType =
+type LocalServiceOrderItemType =
   | "service"
   | "part"
   | "external_service"
@@ -51,7 +47,7 @@ export type LocalServiceOrderItemType =
   | "evaluation_fee"
   | "other";
 
-export type LocalServiceOrderExecutionResult =
+type LocalServiceOrderExecutionResult =
   | "repaired"
   | "not_repaired"
   | "condemned"

@@ -16,11 +16,10 @@ import { certifiedValueSchema, metrologyDataSchema } from "./jobs";
  * mirror (`apps/local-server` contract tests parse them with these schemas).
  */
 
-export const standardStatusSchema = ReferenceStandardStatusSchema;
-export type StandardStatus = z.infer<typeof standardStatusSchema>;
+const standardStatusSchema = ReferenceStandardStatusSchema;
 
 /** The original certificate PDF of a standard (current version). */
-export const standardCertificateDocumentSchema = z.object({
+const standardCertificateDocumentSchema = z.object({
   documentId: z.number(),
   r2Key: z.string(),
   fileName: z.string(),
@@ -36,7 +35,7 @@ export type StandardCertificateDocument = z.infer<
 >;
 
 /** A mass composition profile attached to a standard's metrology data. */
-export const standardCompositionProfileSchema = z.object({
+const standardCompositionProfileSchema = z.object({
   profileKey: z.string(),
   profileClass: nullableString.optional(),
   nominal: z.string(),
@@ -54,7 +53,7 @@ export const standardCompositionProfileSchema = z.object({
  * Metrology data of a standard. Same wire shape as the one frozen into a job's
  * standards snapshot, with the composition profiles typed.
  */
-export const standardMetrologyDataSchema = metrologyDataSchema.extend({
+const standardMetrologyDataSchema = metrologyDataSchema.extend({
   compositionProfiles: z.array(standardCompositionProfileSchema),
 });
 
@@ -131,7 +130,7 @@ export type StandardCertificateDocumentDownloadResponse = z.infer<
 >;
 
 /** A row of the normalized mass composition-profile catalog. */
-export const massCompositionProfileSchema = z.object({
+const massCompositionProfileSchema = z.object({
   id: z.number(),
   profileKey: z.string(),
   profileClass: z.string(),

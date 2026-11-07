@@ -158,19 +158,6 @@ function SelectItem({
   );
 }
 
-function SelectSeparator({
-  className,
-  ...props
-}: SelectPrimitive.Separator.Props) {
-  return (
-    <SelectPrimitive.Separator
-      data-slot="select-separator"
-      className={cn("bg-border -mx-1 my-1 h-px pointer-events-none", className)}
-      {...props}
-    />
-  );
-}
-
 function SelectScrollUpButton({
   className,
   ...props
@@ -213,9 +200,6 @@ export {
   SelectGroup,
   SelectItem,
   SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 };

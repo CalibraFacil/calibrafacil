@@ -43,7 +43,7 @@ export type AmendmentChainLoader = (
   id: number,
 ) => Promise<AmendmentChainJob | null>;
 
-export type PortalAmendmentChainMember = {
+type PortalAmendmentChainMember = {
   id: number;
   jobId: string;
   amendmentNumber: number | null;

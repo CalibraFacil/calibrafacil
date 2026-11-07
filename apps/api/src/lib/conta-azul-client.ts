@@ -3,7 +3,7 @@ import { isRecord } from "@calibra-facil/shared/record";
 
 // Conta Azul's OpenAPI specs restrict `tamanho_pagina` to this enum across
 // every paginated endpoint. Requests outside the set are rejected with 400.
-export const CONTA_AZUL_PAGE_SIZES = [10, 20, 50, 100, 200, 500, 1000] as const;
+const CONTA_AZUL_PAGE_SIZES = [10, 20, 50, 100, 200, 500, 1000] as const;
 
 export type ContaAzulPageSize = (typeof CONTA_AZUL_PAGE_SIZES)[number];
 
@@ -28,7 +28,7 @@ type ContaAzulRequestOptions = {
   json?: unknown;
 };
 
-export type ContaAzulPessoaTipo = "Física" | "Jurídica" | "Estrangeira";
+type ContaAzulPessoaTipo = "Física" | "Jurídica" | "Estrangeira";
 export type ContaAzulPessoaPerfil = "Cliente" | "Fornecedor" | "Transportadora";
 
 export type ContaAzulPessoaPayload = {
@@ -124,8 +124,8 @@ export type ContaAzulProductSearchResponse = {
 // Catálogo de serviços (POST/PATCH /v1/servicos). Distinct from
 // ContaAzulServiceInvoice* which models notas-fiscais-servico.
 // Schema: https://developers.contaazul.com/_bundle/open-api-docs/open-api-service.yaml
-export type ContaAzulServicoStatus = "ATIVO" | "INATIVO";
-export type ContaAzulServicoTipo = "PRESTADO" | "TOMADO" | "AMBOS";
+type ContaAzulServicoStatus = "ATIVO" | "INATIVO";
+type ContaAzulServicoTipo = "PRESTADO" | "TOMADO" | "AMBOS";
 
 export type ContaAzulServicoPayload = {
   codigo?: string;
@@ -182,7 +182,7 @@ export type ContaAzulReceivableEventCreate = {
 
 export type ContaAzulPayableEventCreate = ContaAzulReceivableEventCreate;
 
-export type ContaAzulPaymentMethod =
+type ContaAzulPaymentMethod =
   | "DINHEIRO"
   | "CARTAO_CREDITO"
   | "BOLETO_BANCARIO"
@@ -242,7 +242,7 @@ export type ContaAzulCommercialItemPayload = {
   valor_custo?: number;
 };
 
-export type ContaAzulSalePaymentConditionPayload = {
+type ContaAzulSalePaymentConditionPayload = {
   tipo_pagamento?: ContaAzulPaymentMethod | string;
   id_conta_financeira?: string;
   opcao_condicao_pagamento: string;
@@ -320,10 +320,7 @@ export type ContaAzulMdfeLinkPayload = {
   status?: ContaAzulMdfeLinkStatus;
 };
 
-export type ContaAzulProductInvoiceStatus =
-  | "EMITIDA"
-  | "CORRIGIDA_SUCESSO"
-  | string;
+type ContaAzulProductInvoiceStatus = "EMITIDA" | "CORRIGIDA_SUCESSO" | string;
 
 export type ContaAzulProductInvoice = {
   chave_acesso?: string | null;
@@ -343,7 +340,7 @@ export type ContaAzulProductInvoiceSearchResponse = {
   };
 };
 
-export type ContaAzulServiceInvoiceStatus =
+type ContaAzulServiceInvoiceStatus =
   | "PENDENTE"
   | "PRONTA_ENVIO"
   | "AGUARDANDO_RETORNO"
@@ -421,7 +418,7 @@ export type ContaAzulProtocolStatusResponse = {
   evento_financeiro_id?: string | null;
 };
 
-export type ContaAzulInstallmentStatus =
+type ContaAzulInstallmentStatus =
   | "PENDENTE"
   | "QUITADO"
   | "CANCELADO"
@@ -460,24 +457,6 @@ export type ContaAzulReceivableSearchResponse = {
 };
 
 export type ContaAzulPayableSearchResponse = ContaAzulReceivableSearchResponse;
-
-export type ContaAzulCatalogItem = {
-  id: string;
-  nome?: string | null;
-  codigo?: string | null;
-  descricao?: string | null;
-  id_legado?: string | number | null;
-  ativo?: boolean | null;
-  status?: string | null;
-  tipo?: string | null;
-};
-
-export type ContaAzulCatalogResponse = {
-  items?: ContaAzulCatalogItem[];
-  itens?: ContaAzulCatalogItem[];
-  totalItems?: number;
-  itens_totais?: number;
-};
 
 export type ContaAzulClientOptions = {
   accessToken: string;

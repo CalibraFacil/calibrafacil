@@ -157,7 +157,7 @@ export type FinanceSearchQueryInput = {
 
 export type FinanceBillingMode = 'single' | 'consolidated'
 
-export type FinanceEligibleJob = {
+type FinanceEligibleJob = {
   id: number
   jobId: string
   customerId: number
@@ -177,7 +177,7 @@ export type FinanceEligibleJobsData = {
   data: FinanceEligibleJob[]
 }
 
-export type FinanceContractCustomerOption = {
+type FinanceContractCustomerOption = {
   id: number
   name: string
 }

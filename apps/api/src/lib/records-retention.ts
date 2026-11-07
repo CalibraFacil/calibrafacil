@@ -28,7 +28,7 @@ import {
 import { getExecuteRows } from "./db";
 import { orgDb } from "./org-db";
 
-export const SOFT_DELETE_SUSPENSION_REASON =
+const SOFT_DELETE_SUSPENSION_REASON =
   "Organização excluída: registros regulados retidos";
 
 type Executor = Pick<typeof systemDb, "execute">;

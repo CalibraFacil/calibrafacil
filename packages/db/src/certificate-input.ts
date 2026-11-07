@@ -110,7 +110,7 @@ function certificateView<T>(snapshot: unknown): T {
 }
 
 /** An image object read BEFORE the approval transaction: the key it was read under, and its bytes (null: no object). */
-export type PrefetchedImage = { key: string; bytes: Uint8Array | null };
+type PrefetchedImage = { key: string; bytes: Uint8Array | null };
 
 /** The images a certificate embeds, read ahead of the approval transaction. */
 export type PrefetchedImages = {
@@ -226,7 +226,7 @@ function prefetchedBytes(
  * scope override and environmental justification included): the document
  * describes the job AS APPROVED.
  */
-export async function loadCertificateJobSource(
+async function loadCertificateJobSource(
   tx: Transaction,
   job: JobRow,
   images: PrefetchedImages,

@@ -35,7 +35,7 @@ export function applyOriginGuard(app: Hono<{ Bindings: Env }>) {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-export async function crossSiteRequestRefused(
+async function crossSiteRequestRefused(
   c: Context<{ Bindings: Env }>,
 ): Promise<boolean> {
   if (SAFE_METHODS.has(c.req.method)) return false;

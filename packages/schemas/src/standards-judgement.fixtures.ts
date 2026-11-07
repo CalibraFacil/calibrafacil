@@ -16,12 +16,12 @@ import type {
 export const JUDGEMENT_TODAY = new Date("2026-10-21T15:00:00.000Z");
 
 /** The last valid day of the "expired" standard, a stored calendar date. */
-export const JUDGEMENT_VALID_THROUGH = "2026-10-18";
+const JUDGEMENT_VALID_THROUGH = "2026-10-18";
 
 /** A certificate that is still valid today. */
 const FUTURE = "2027-03-01";
 
-export type JudgementFixtureStandard = {
+type JudgementFixtureStandard = {
   /** Stands for the standard's id and is its name. */
   key: string;
   status?: "ACTIVE" | "INACTIVE";

@@ -20,7 +20,7 @@
 // cannot ship without a migration that carries it.
 
 /** The part of a machine the guard reads. */
-export type GuardMachine = {
+type GuardMachine = {
   readonly name: string;
   creationStates(): readonly string[];
   statePairs(): readonly (readonly [string, string])[];
@@ -38,16 +38,16 @@ export type GuardedColumn = {
 };
 
 /** SQLSTATE of an illegal status write: a user-defined class, never P0001. */
-export const STATUS_TRANSITION_SQLSTATE = "CF001";
+const STATUS_TRANSITION_SQLSTATE = "CF001";
 
 /** Setting that lifts the guards for one transaction (audited data repair). */
-export const STATUS_REPAIR_SETTING = "calibra.allow_status_repair";
+const STATUS_REPAIR_SETTING = "calibra.allow_status_repair";
 
-export function statusGuardFunctionName(guarded: GuardedColumn): string {
+function statusGuardFunctionName(guarded: GuardedColumn): string {
   return `calibra_${guarded.table}_${guarded.column}_guard`;
 }
 
-export function statusGuardTriggerName(guarded: GuardedColumn): string {
+function statusGuardTriggerName(guarded: GuardedColumn): string {
   return `${guarded.table}_${guarded.column}_transition_guard`;
 }
 
@@ -55,7 +55,7 @@ export function statusGuardBegin(guarded: GuardedColumn): string {
   return `-- BEGIN generated: ${statusGuardFunctionName(guarded)}`;
 }
 
-export function statusGuardEnd(guarded: GuardedColumn): string {
+function statusGuardEnd(guarded: GuardedColumn): string {
   return `-- END generated: ${statusGuardFunctionName(guarded)}`;
 }
 

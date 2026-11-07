@@ -24,7 +24,3 @@ export const UnsignedIssuanceSettingSchema = z.discriminatedUnion("enabled", [
   }),
   z.object({ enabled: z.literal(false) }),
 ]);
-
-export type UnsignedIssuanceSettingInput = z.infer<
-  typeof UnsignedIssuanceSettingSchema
->;

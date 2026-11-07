@@ -66,7 +66,7 @@ const clientContactSnapshotSchema = z
  *  openedAt             string (ISO-8601; deserialized to Date by the drain)
  *  claimedDefect        string
  */
-export const NovaOsOutboxPayloadSchema = z.object({
+const NovaOsOutboxPayloadSchema = z.object({
   serviceOrderId: z.number().int(),
   serviceOrderNumber: z.string().min(1),
   organizationId: z.string().min(1),
@@ -132,7 +132,7 @@ const orcamentoItemSchema = z.object({
  *  publicAccessToken        string
  *  portalAppUrl             string
  */
-export const OrcamentoSentOutboxPayloadSchema = z.object({
+const OrcamentoSentOutboxPayloadSchema = z.object({
   serviceOrderId: z.number().int(),
   quoteId: z.number().int(),
   serviceOrderNumber: z.string().min(1),
@@ -190,7 +190,7 @@ export type OrcamentoSentOutboxPayload = z.infer<
  *  customerEmail        string | null | undefined
  *  totalApprovedCents   number
  */
-export const QuoteApprovedOutboxPayloadSchema = z.object({
+const QuoteApprovedOutboxPayloadSchema = z.object({
   serviceOrderId: z.number().int(),
   quoteId: z.number().int(),
   serviceOrderNumber: z.string().min(1),
@@ -226,7 +226,7 @@ export type QuoteApprovedOutboxPayload = z.infer<
  *  customerEmail        string | null | undefined
  *  rejectionReason      string | null | undefined
  */
-export const QuoteRejectedOutboxPayloadSchema = z.object({
+const QuoteRejectedOutboxPayloadSchema = z.object({
   serviceOrderId: z.number().int(),
   quoteId: z.number().int(),
   serviceOrderNumber: z.string().min(1),

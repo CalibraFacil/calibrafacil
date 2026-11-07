@@ -15,7 +15,7 @@ const SafeMetadataValueSchema = z.union([
   z.null(),
 ]);
 
-export const SafeMetadataSchema = z
+const SafeMetadataSchema = z
   .record(z.string(), SafeMetadataValueSchema)
   .default({});
 
@@ -27,7 +27,7 @@ const BaseInputSchema = z.object({
   metadata: SafeMetadataSchema.optional(),
 });
 
-export const ScalarInputSchema = BaseInputSchema.extend({
+const ScalarInputSchema = BaseInputSchema.extend({
   kind: z.literal("scalar"),
   quantityKind: z
     .enum([
@@ -53,7 +53,7 @@ export const ScalarInputSchema = BaseInputSchema.extend({
     .optional(),
 }).strict();
 
-export const RepeatedObservationInputSchema = BaseInputSchema.extend({
+const RepeatedObservationInputSchema = BaseInputSchema.extend({
   kind: z.literal("repeated_observation"),
   minCount: z.number().int().min(1),
   maxCount: z.number().int().min(1).optional(),
@@ -71,7 +71,7 @@ export const RepeatedObservationInputSchema = BaseInputSchema.extend({
     path: ["maxCount"],
   });
 
-export const TableColumnSchema = z
+const TableColumnSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),
@@ -139,7 +139,7 @@ export const TableColumnSchema = z
   })
   .strict();
 
-export const TableInputSchema = z
+const TableInputSchema = z
   .object({
     kind: z.literal("table"),
     key: SafeKeySchema,
@@ -156,23 +156,23 @@ export const TableInputSchema = z
     path: ["maxRows"],
   });
 
-export const SelectInputSchema = BaseInputSchema.extend({
+const SelectInputSchema = BaseInputSchema.extend({
   kind: z.literal("select"),
   options: z.array(z.string().trim().min(1)).min(1),
   defaultValue: z.string().trim().optional(),
 }).strict();
 
-export const BooleanInputSchema = BaseInputSchema.extend({
+const BooleanInputSchema = BaseInputSchema.extend({
   kind: z.literal("boolean"),
   defaultValue: z.boolean().optional(),
 }).strict();
 
-export const TextInputSchema = BaseInputSchema.extend({
+const TextInputSchema = BaseInputSchema.extend({
   kind: z.literal("text"),
   defaultValue: z.string().optional(),
 }).strict();
 
-export const MethodInputSchema = z.discriminatedUnion("kind", [
+const MethodInputSchema = z.discriminatedUnion("kind", [
   ScalarInputSchema,
   RepeatedObservationInputSchema,
   TableInputSchema,
@@ -204,7 +204,7 @@ const QuantitySourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("constant"), value: NumericValueSchema }).strict(),
 ]);
 
-export const MethodFormulaSchema = z
+const MethodFormulaSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),
@@ -294,7 +294,7 @@ const DirectStandardUncertaintySchema = z
   })
   .strict();
 
-export const MethodQuantitySchema = z
+const MethodQuantitySchema = z
   .object({
     symbol: SafeKeySchema,
     source: QuantitySourceSchema,
@@ -312,7 +312,7 @@ export const MethodQuantitySchema = z
   })
   .strict();
 
-export const MethodMeasurementModelSchema = z
+const MethodMeasurementModelSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),
@@ -356,7 +356,7 @@ export const MethodMeasurementModelSchema = z
   })
   .strict();
 
-export const MethodAcceptanceCriterionSchema = z
+const MethodAcceptanceCriterionSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),
@@ -388,7 +388,7 @@ const CalibrationPhaseSnapshotSchema = z
   })
   .strict();
 
-export const MethodPreviewScenarioSchema = z
+const MethodPreviewScenarioSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),

@@ -35,7 +35,7 @@ export function baseMeasurementUnitOptions(
   return kind ? unitsForKind(kind) : MEASUREMENT_UNITS
 }
 
-export const ASSET_FORM_STATUSES = AssetStatusSchema.options
+const ASSET_FORM_STATUSES = AssetStatusSchema.options
 
 // NOTE: the lab no longer authors a calibration periodicity / next-calibration
 // date. Periodicity is the equipment owner's (customer's) decision, set in the
@@ -363,7 +363,7 @@ export function regulatedFormFieldsFromAsset(asset: {
   }
 }
 
-export type AssetSpecificationField = {
+type AssetSpecificationField = {
   key: string
   label: string
   type?: string

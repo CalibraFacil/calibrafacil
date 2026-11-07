@@ -50,7 +50,7 @@ const PUBLIC_PREFIXES = [
 
 type LimitKey = { key: string; limit: number } | null;
 
-export function limitKeyOf(c: Context<{ Bindings: Env }>): LimitKey {
+function limitKeyOf(c: Context<{ Bindings: Env }>): LimitKey {
   const { pathname } = new URL(c.req.url);
   if (pathname === "/api/health") return null;
   const config = readRuntimeConfig();

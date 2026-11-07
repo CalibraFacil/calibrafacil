@@ -25,7 +25,6 @@ import type { LocalSyncRuntime } from "./sync";
  *   so a laptop in a Faraday cage does not hammer a dead endpoint.
  * - **Bounded polling.** Idle polling is a safety net, not the mechanism.
  */
-export type { SyncTrigger };
 
 export type SyncSchedulerState = {
   running: boolean;

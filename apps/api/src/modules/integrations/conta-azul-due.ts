@@ -53,7 +53,7 @@ export function isContaAzulPaymentPollingDue(params: {
   return params.now.getTime() - lastPoll.getTime() >= intervalMs;
 }
 
-export function isContaAzulPayablePollingDue(params: {
+function isContaAzulPayablePollingDue(params: {
   config: ReturnType<typeof normalizeContaAzulConnectionConfig>;
   now: Date;
   intervalMs?: number;
@@ -129,7 +129,7 @@ export function isContaAzulFiscalPollingDue(params: {
   return params.now.getTime() - lastPoll.getTime() >= intervalMs;
 }
 
-export function isContaAzulProtocolPollingDue(params: {
+function isContaAzulProtocolPollingDue(params: {
   config: ReturnType<typeof normalizeContaAzulConnectionConfig>;
   now: Date;
   intervalMs?: number;
@@ -162,7 +162,7 @@ export function isContaAzulProtocolPollingDue(params: {
   return params.now.getTime() - lastPoll.getTime() >= intervalMs;
 }
 
-export function isContaAzulDriftPollingDue(params: {
+function isContaAzulDriftPollingDue(params: {
   config: ReturnType<typeof normalizeContaAzulConnectionConfig>;
   now: Date;
   intervalMs?: number;

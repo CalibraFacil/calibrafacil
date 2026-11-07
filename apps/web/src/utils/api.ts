@@ -1,10 +1,8 @@
 import {
   createCloudApiClient,
   createDesktopHybridApiClient,
-  createRawCloudClient,
   isDesktopRuntime,
 } from '@calibra-facil/client-runtime'
-import type { AppType } from '@calibra-facil/contracts'
 import {
   createDesktopLocalFetch,
   createLocalApiEndpointResolver,
@@ -31,7 +29,7 @@ export function getLocalApiBaseURL(): string {
   return getCloudApiBaseUrl()
 }
 
-export function getCloudApiBaseUrl(): string {
+function getCloudApiBaseUrl(): string {
   if (isDesktopRuntime()) {
     return import.meta.env.VITE_DESKTOP_AUTH_API_URL || getDefaultCloudApiUrl()
   }
@@ -49,16 +47,6 @@ export function getCloudApiBaseUrl(): string {
   return getDefaultCloudApiUrl()
 }
 
-export const getApiBaseUrl = getCloudApiBaseUrl
-
-export function resolveApiURL(): string
-export function resolveApiURL(pathOrUrl: string): string
-export function resolveApiURL(pathOrUrl?: string): string {
-  return pathOrUrl === undefined
-    ? resolveCloudApiUrl()
-    : resolveCloudApiUrl(pathOrUrl)
-}
-
 export function resolveCloudApiUrl(): string
 export function resolveCloudApiUrl(pathOrUrl: string): string
 export function resolveCloudApiUrl(pathOrUrl?: string): string {
@@ -74,37 +62,6 @@ export function resolveCloudApiUrl(pathOrUrl?: string): string {
 
   return new URL(pathOrUrl, baseUrl).toString()
 }
-
-export const resolveApiUrl = resolveCloudApiUrl
-
-export function authenticatedCloudFetch(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) {
-  const headers = new Headers(init?.headers)
-  const activeUnitId = getStoredDashboardActiveUnitId()
-
-  if (activeUnitId) {
-    headers.set('x-active-unit-id', activeUnitId)
-  }
-
-  return desktopCloudFetch(resolveApiFetchInput(input), {
-    ...init,
-    credentials: 'include',
-    headers,
-  })
-}
-
-export const calibraFetch = authenticatedCloudFetch
-export const apiFetch = authenticatedCloudFetch
-
-export const rawCloudClient = createRawCloudClient<AppType>({
-  baseUrl: getCloudApiBaseUrl(),
-  activeUnitProvider: getStoredDashboardActiveUnitId,
-  fetch: desktopCloudFetch,
-})
-
-export const api = rawCloudClient
 
 /**
  * Endpoint discovery for the local server. Both the port and the bootstrap
@@ -141,7 +98,7 @@ const RESPONSE_VALIDATION =
     ? 'warn'
     : 'strict'
 
-export const calibraClient = isDesktopRuntime()
+const calibraClient = isDesktopRuntime()
   ? createDesktopHybridApiClient({
       cloud: {
         baseUrl: getCloudApiBaseUrl(),
@@ -188,14 +145,6 @@ async function desktopCloudFetch(input: RequestInfo | URL, init?: RequestInit) {
     statusText: response.statusText,
     headers: response.headers,
   })
-}
-
-function resolveApiFetchInput(input: RequestInfo | URL): RequestInfo | URL {
-  if (typeof input !== 'string' || /^https?:\/\//.test(input)) {
-    return input
-  }
-
-  return resolveCloudApiUrl(input)
 }
 
 async function encodeDesktopCloudRequestBody(request: Request) {

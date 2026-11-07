@@ -186,30 +186,3 @@ export async function generateServiceOrderNumber(
     ? run(executor)
     : orgDb(context.organizationId).transaction(run);
 }
-
-export async function resetServiceOrderNextNumber(params: {
-  organizationId: string;
-  unitId: number | null;
-  sequenceKey: string;
-  nextNumber: number;
-}) {
-  const currentValue = Math.max(params.nextNumber - 1, 0);
-  await orgDb(params.organizationId).transaction((o) =>
-    o
-      .insert(serviceOrderNumberingSequence)
-      .values({
-        organizationId: params.organizationId,
-        unitId: params.unitId,
-        sequenceKey: params.sequenceKey,
-        currentValue,
-      })
-      .onConflictDoUpdate({
-        target: [
-          serviceOrderNumberingSequence.organizationId,
-          serviceOrderNumberingSequence.unitId,
-          serviceOrderNumberingSequence.sequenceKey,
-        ],
-        set: { currentValue, updatedAt: new Date() },
-      }),
-  );
-}

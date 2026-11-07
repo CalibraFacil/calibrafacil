@@ -195,7 +195,7 @@ export function roundToSignificantDigits(
 }
 
 /** CMC at a point, with the point already expressed in the line's rangeUnit. */
-export function cmcAtPoint(
+function cmcAtPoint(
   line: AccreditedScopeLineLike,
   valueInRangeUnit: number,
 ): number {

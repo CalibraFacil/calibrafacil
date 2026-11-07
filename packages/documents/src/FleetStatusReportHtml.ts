@@ -18,7 +18,7 @@ import {
   getLabCalendarDay,
 } from "./dates.js";
 
-export type FleetDueStatus = "OVERDUE" | "DUE_SOON" | "OK" | "UNSCHEDULED";
+type FleetDueStatus = "OVERDUE" | "DUE_SOON" | "OK" | "UNSCHEDULED";
 
 export type FleetStatusClassification = {
   status: FleetDueStatus;

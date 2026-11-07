@@ -118,23 +118,3 @@ export async function reconcileSupplierWithPersonLink(
     return byName ?? null;
   });
 }
-
-export async function listSuppliers(
-  params: {
-    organizationId: string;
-    includeArchived?: boolean;
-  },
-  executor?: OrgDb,
-): Promise<SupplierRow[]> {
-  const conditions = [eq(supplier.organizationId, params.organizationId)];
-  if (!params.includeArchived) {
-    conditions.push(isNull(supplier.archivedAt));
-  }
-  return inOrgTransaction(params.organizationId, executor, (o) =>
-    o
-      .select()
-      .from(supplier)
-      .where(and(...conditions))
-      .orderBy(supplier.name),
-  );
-}

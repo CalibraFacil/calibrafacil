@@ -12,7 +12,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
-export const LAB_SETUP_TOKEN_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
+const LAB_SETUP_TOKEN_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 
 export type CreateLabAccountSetupTokenInput = {
   userId: string;
@@ -25,7 +25,7 @@ export type CreateLabAccountSetupTokenInput = {
   expiresInSeconds?: number;
 };
 
-export type LabSetupTokenStatus =
+type LabSetupTokenStatus =
   | "ready"
   | "invalid"
   | "expired"
@@ -36,7 +36,7 @@ export type LabSetupTokenStatus =
   | "membership_missing"
   | "invitation_invalid";
 
-export type ValidLabSetupToken = {
+type ValidLabSetupToken = {
   id: string;
   userId: string;
   organizationId: string;
@@ -326,22 +326,4 @@ export async function hasValidLabSetupTokenForEmail(
   return (
     validation.ok && validation.token.email === normalizeLabAccessEmail(email)
   );
-}
-
-export async function consumeLabAccountSetupToken(id: string) {
-  // System path (P2-18j): single-use consumption by the token's own id, after its
-  // secret was verified by the caller; the id is what names the laboratory.
-  const [updated] = await getSystemDb()
-    .update(labAccountSetupToken)
-    .set({ consumedAt: new Date() })
-    .where(
-      and(
-        eq(labAccountSetupToken.id, id),
-        isNull(labAccountSetupToken.consumedAt),
-        gt(labAccountSetupToken.expiresAt, new Date()),
-      ),
-    )
-    .returning();
-
-  return Boolean(updated);
 }

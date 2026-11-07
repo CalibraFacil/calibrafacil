@@ -100,7 +100,7 @@ export async function listBrowserPrintDevices(): Promise<BrowserPrintDevice[]> {
     .filter((device): device is BrowserPrintDevice => device !== null)
 }
 
-export async function getDefaultBrowserPrintDevice(): Promise<BrowserPrintDevice | null> {
+async function getDefaultBrowserPrintDevice(): Promise<BrowserPrintDevice | null> {
   const response = await agentFetch('/default?type=printer')
   if (!response.ok) {
     return null

@@ -6,7 +6,7 @@ import type { LabelRenderOptions } from "./types";
  * Dot dimensions of the 50×30 mm calibration label for a given resolution.
  * 203 dpi = 8 dots/mm → 400×240; 300 dpi ≈ 11.81 dots/mm → 591×354.
  */
-export function defaultLabelDimensions(dpi: PrinterDpi): {
+function defaultLabelDimensions(dpi: PrinterDpi): {
   widthDots: number;
   heightDots: number;
 } {

@@ -109,7 +109,7 @@ export function serviceAssetTypesQueryOptions() {
   })
 }
 
-export async function getServicesIndexEssentialQueries(url?: URL) {
+async function getServicesIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

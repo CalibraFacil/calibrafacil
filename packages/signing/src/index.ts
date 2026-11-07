@@ -23,74 +23,35 @@
  */
 
 // Signing functions
-export {
-  signPdf,
-  getCertificateInfo,
-  parsePkcs12,
-  validateCertificateValidity,
-} from "./signer.js";
+export { signPdf, parsePkcs12 } from "./signer.js";
 
 // Encryption functions for password storage
 export {
   encryptPassword,
   decryptPassword,
   encryptBinary,
-  decryptBinary,
   generateMasterKey,
 } from "./encryption.js";
 
 // Types
-export type {
-  SigningOptions,
-  SigningResult,
-  SignatureMetadata,
-  CertificateInfo,
-  SigningErrorCode,
-} from "./types.js";
+export type { SignatureMetadata } from "./types.js";
 
 export { SigningError } from "./types.js";
 
 // Chain validation against the ICP-Brasil trust anchors
-export {
-  validateCertificateChain,
-  validatePkijsChain,
-  validatePkcs12Chain,
-  parsePemCertificates,
-  loadTrustStore,
-  getIcpBrasilTrustAnchors,
-} from "./chain-validation.js";
-export type {
-  ChainValidationResult,
-  ChainValidationOptions,
-  PkijsChainValidationOptions,
-} from "./chain-validation.js";
+export { getIcpBrasilTrustAnchors } from "./chain-validation.js";
 
 // Public PDF signature verification (powers the verification page)
 export { verifyPdf } from "./verify.js";
-export type {
-  VerifyPdfResult,
-  VerifyPdfOptions,
-  VerifyPdfSigner,
-  VerifyPdfTimestamp,
-  VerifyOverall,
-} from "./verify.js";
+export type { VerifyPdfResult, VerifyPdfTimestamp } from "./verify.js";
 
 // RFC-3161 timestamp (carimbo de tempo) — PAdES-T building block
-export { addRfc3161Timestamp } from "./timestamp.js";
-export type { TimestampConfig, TimestampOutcome } from "./timestamp.js";
+export type { TimestampConfig } from "./timestamp.js";
 
 // PAdES-T orchestration (#646 / CMP-03): sign + RFC-3161 stamp, fail-closed.
 export { signAndTimestampPdf } from "./sign-and-timestamp.js";
-export type { SignAndTimestampOptions } from "./sign-and-timestamp.js";
 
 // CRL revocation (#646 / CMP-03 fase b): pure check + injectable HTTP fetcher.
-export {
-  extractCrlDistributionUrls,
-  parseCrl,
-  checkRevocation,
-  adjudicateRevocation,
-} from "./revocation.js";
-export type { RevocationStatus, RevocationAdjudication } from "./revocation.js";
 export { createCrlFetcher } from "./crl-fetcher.js";
 
 // Envelope encryption of the signing credentials (roadmap 2 B4a): per-field data
@@ -98,32 +59,17 @@ export { createCrlFetcher } from "./crl-fetcher.js";
 export {
   CREDENTIAL_FORMAT_ENVELOPE,
   CREDENTIAL_FORMAT_LEGACY,
-  DEFAULT_KEK_ID,
-  ENVELOPE_PASSWORD_IV_PLACEHOLDER,
   createSigningKeyring,
   credentialNeedsRewrap,
   openSigningCredential,
   sealSigningCredential,
   signingKeyringFromEnv,
 } from "./envelope.js";
-export type {
-  OpenedSigningCredential,
-  SigningCredentialBinding,
-  SigningKeyring,
-  SigningKeyringEnv,
-  SigningKeyringInput,
-  StoredSigningCredential,
-} from "./envelope.js";
+export type { SigningKeyring, StoredSigningCredential } from "./envelope.js";
 
 // Validation of a signing credential at upload (roadmap 2 B4a): validity window,
 // key usage and the chain to the configured trust store.
 export {
   resolveSigningTrustAnchors,
   validateSigningCredential,
-} from "./credential-validation.js";
-export type {
-  CredentialRejectionCode,
-  CredentialValidationOptions,
-  CredentialValidationResult,
-  TrustStoreEnv,
 } from "./credential-validation.js";

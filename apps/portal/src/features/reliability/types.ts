@@ -8,7 +8,7 @@
 export type FleetAnalyticsBucket = "quarter" | "year";
 
 /** Rates are % over KNOWN cycles; `unknown` counts cycles without an as-found signal. */
-export type FleetRateFields = {
+type FleetRateFields = {
   jobs: number;
   known: number;
   conforming: number;
@@ -23,12 +23,12 @@ export type FleetTrendBucket = FleetRateFields & {
   bucket: string;
 };
 
-export type FleetAssetTypeBreakdown = FleetRateFields & {
+type FleetAssetTypeBreakdown = FleetRateFields & {
   assetTypeId: number | null;
   assetTypeName: string;
 };
 
-export type FleetWorstOffender = {
+type FleetWorstOffender = {
   assetId: number;
   assetPublicId: string;
   tag: string;
@@ -54,9 +54,9 @@ export type FleetAnalytics = {
   attribution: string;
 };
 
-export type DriftConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
+type DriftConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
 
-export type DriftRegression = {
+type DriftRegression = {
   slope: number;
   intercept: number;
   residualStdErr: number;

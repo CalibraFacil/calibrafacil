@@ -7,7 +7,7 @@ import { calibraApi } from '@/utils/api'
  * cheap to refetch and must not be cached hard: a lab that publishes a method
  * in another tab should see that step tick over when they come back.
  */
-export function activationChecklistQueryOptions() {
+function activationChecklistQueryOptions() {
   return queryOptions({
     queryKey: ['onboarding', 'checklist'],
     queryFn: () => calibraApi.onboarding.getChecklist(),

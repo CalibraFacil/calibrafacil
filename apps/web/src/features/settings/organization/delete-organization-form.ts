@@ -15,7 +15,7 @@ export type SoftDeleteOrganizationFormResult =
   | { ok: true; value: SoftDeleteOrganizationInput }
   | { ok: false; error: string }
 
-export const CONFIRMATION_MISMATCH_MESSAGE =
+const CONFIRMATION_MISMATCH_MESSAGE =
   'O nome digitado não confere com o nome da organização'
 
 export function parseSoftDeleteOrganizationForm(input: {

@@ -4,33 +4,6 @@ import type { NotificationSummary } from '@calibra-facil/client-runtime'
 import { calibraApi } from '@/utils/api'
 import { unreadNotificationsQueryOptions } from './queries'
 
-/**
- * Mirrors the notification feed to the desktop host, which turns it into a
- * taskbar badge and native notifications.
- *
- * Deliberately a *query* rather than an effect watching another query. The
- * publish is the natural end of a poll, so making it the poll keeps one
- * timer, one code path, and no `useEffect` (which this codebase bans anyway).
- *
- * De-duplication lives in the host, keyed by notification id, so publishing
- * the same page repeatedly is harmless — and publishing is best-effort: an IPC
- * failure must never surface as a broken notification centre.
- */
-export type DesktopNotificationPublisher = {
-  publishNotifications(payload: {
-    organizationKey: string
-    unreadCount: number
-    highWaterMarkId: number | null
-    entries: Array<{
-      id: number
-      title: string
-      message: string
-      status: string
-      actionUrl?: string | null
-    }>
-  }): Promise<boolean>
-}
-
 /** The host caps the array; sending a whole inbox would be pointless anyway. */
 const PUBLISHED_ENTRY_LIMIT = 20
 
@@ -114,7 +87,7 @@ export function useDesktopNotificationBridge({
  * existed" marker — which is what lets the host seed a backlog larger than one
  * page without announcing it later.
  */
-export function highestNotificationId(
+function highestNotificationId(
   notifications: readonly { id: number }[],
 ): number | null {
   let highest: number | null = null

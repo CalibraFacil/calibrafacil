@@ -1,12 +1,3 @@
-export { getRenderer, renderLabel, renderTestLabel } from "./render";
-export {
-  defaultLabelDimensions,
-  defaultRenderOptions,
-  formatLabelDate,
-} from "./options";
-export type {
-  LabelInput,
-  LabelRenderer,
-  LabelRenderOptions,
-  PrinterLanguage,
-} from "./types";
+export { renderLabel, renderTestLabel } from "./render";
+export { defaultRenderOptions } from "./options";
+export type { PrinterLanguage } from "./types";

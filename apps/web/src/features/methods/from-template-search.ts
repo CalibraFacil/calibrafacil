@@ -4,7 +4,7 @@
  * REQ-FTPL-001: step defaults to 'catalog' when absent.
  * REQ-FTPL-002: unknown step values resolve to 'catalog' without throwing.
  */
-export type FromTemplateStep = 'catalog' | 'context' | 'confirm'
+type FromTemplateStep = 'catalog' | 'context' | 'confirm'
 
 export type FromTemplateSearch = {
   step?: FromTemplateStep

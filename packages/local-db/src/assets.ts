@@ -4,11 +4,7 @@ import type { MetrologyRegime } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
-export type LocalAssetStatus =
-  | "ACTIVE"
-  | "INACTIVE"
-  | "MAINTENANCE"
-  | "SCRAPPED";
+type LocalAssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 
 export type LocalAssetsListInput = {
   page: number;

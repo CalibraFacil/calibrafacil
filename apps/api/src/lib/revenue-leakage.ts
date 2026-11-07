@@ -37,23 +37,7 @@ export type RevenueLeakageClass =
   | "LONG_OVERDUE"
   | "BLOCKED_TOO_LONG";
 
-export const REVENUE_LEAKAGE_CLASSES: ReadonlyArray<RevenueLeakageClass> = [
-  "STUCK_READY_TO_BILL",
-  "STUCK_SENT_TO_FINANCE",
-  "STUCK_INVOICED",
-  "LONG_OVERDUE",
-  "BLOCKED_TOO_LONG",
-];
-
-export const REVENUE_LEAKAGE_LABEL: Record<RevenueLeakageClass, string> = {
-  STUCK_READY_TO_BILL: "Pronto para faturar há muito tempo",
-  STUCK_SENT_TO_FINANCE: "Enviado ao financeiro sem fatura emitida",
-  STUCK_INVOICED: "Faturado sem recebimento há mais de 30 dias",
-  LONG_OVERDUE: "Vencido há mais de 14 dias",
-  BLOCKED_TOO_LONG: "Bloqueado há mais de 7 dias",
-};
-
-export const REVENUE_LEAKAGE_THRESHOLDS = {
+const REVENUE_LEAKAGE_THRESHOLDS = {
   stuckReadyToBillDays: 7,
   stuckSentToFinanceDays: 3,
   stuckInvoicedDays: 30,

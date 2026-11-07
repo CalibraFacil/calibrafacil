@@ -75,11 +75,7 @@ export function ratMul(a: Rational, b: Rational): Rational {
   return rational(a.n * b.n, a.d * b.d);
 }
 
-export function ratNeg(a: Rational): Rational {
-  return a.n === 0 ? RAT_ZERO : { n: -a.n, d: a.d };
-}
-
-export function ratEq(a: Rational, b: Rational): boolean {
+function ratEq(a: Rational, b: Rational): boolean {
   // Both operands are reduced by construction, so field equality is exact.
   return a.n === b.n && a.d === b.d;
 }
@@ -104,7 +100,7 @@ export function ratIsZero(a: Rational): boolean {
  *  - N  amount of substance
  *  - J  luminous intensity
  */
-export const BASE_DIMENSIONS = ["M", "L", "T", "I", "Θ", "N", "J"] as const;
+const BASE_DIMENSIONS = ["M", "L", "T", "I", "Θ", "N", "J"] as const;
 
 export type BaseDimension = (typeof BASE_DIMENSIONS)[number];
 

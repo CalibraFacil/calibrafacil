@@ -23,10 +23,6 @@ export const TEMPLATE_REGISTRY = {
   "weighing-instrument": weighingInstrumentTemplate,
 } as const satisfies Record<TemplateKey, TemplateModule>;
 
-export function getTemplate(key: TemplateKey): TemplateModule {
-  return TEMPLATE_REGISTRY[key];
-}
-
 export function listTemplates(): readonly TemplateModule[] {
   return Object.values(TEMPLATE_REGISTRY);
 }

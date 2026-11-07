@@ -17,7 +17,7 @@ type AssetTypeDescriptor = {
   name?: string | null;
 };
 
-export function assetTypeRequiresMassBaseUnit(
+function assetTypeRequiresMassBaseUnit(
   assetType: AssetTypeDescriptor,
 ): boolean {
   return isMassAssetTypeDefinition(assetType.definition, assetType);

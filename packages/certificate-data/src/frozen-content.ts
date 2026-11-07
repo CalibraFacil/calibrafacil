@@ -218,15 +218,14 @@ export type TraceabilityStandard = {
   calibrationProvider?: CalibrationProviderFacts | null;
 };
 
-export const TRACEABILITY_FAILURE_REASONS = [
+const TRACEABILITY_FAILURE_REASONS = [
   "no_standards",
   "no_certificate_number",
   "no_calibration_provider",
   "provider_not_accredited",
   "certificate_not_valid_on_calibration_day",
 ] as const;
-export type TraceabilityFailureReason =
-  (typeof TRACEABILITY_FAILURE_REASONS)[number];
+type TraceabilityFailureReason = (typeof TRACEABILITY_FAILURE_REASONS)[number];
 
 export type FrozenTraceability = {
   /** True only when every standard used passed every check. */

@@ -25,7 +25,7 @@ import { Textarea } from '@calibra-facil/ui/textarea'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { toast } from 'sonner'
 
-export interface CertificateReleaseDto {
+interface CertificateReleaseDto {
   status: CertificateReleaseStatus
   appliedPolicy: { id: number; mode: CertificateReleasePolicyMode } | null
   lastEvaluatedAt: string
@@ -33,7 +33,7 @@ export interface CertificateReleaseDto {
   releaseReason: string | null
 }
 
-export function certificateReleaseQueryOptions(calibrationJobId: number) {
+function certificateReleaseQueryOptions(calibrationJobId: number) {
   return queryOptions<{ data: CertificateReleaseDto } | null>({
     queryKey: ['finance', 'certificate-release', calibrationJobId],
     queryFn: async () => {
@@ -58,10 +58,7 @@ export function certificateReleaseQueryOptions(calibrationJobId: number) {
   })
 }
 
-export function useCertificateRelease(
-  calibrationJobId: number,
-  enabled = true,
-) {
+function useCertificateRelease(calibrationJobId: number, enabled = true) {
   return useQuery({
     ...certificateReleaseQueryOptions(calibrationJobId),
     enabled,
@@ -119,7 +116,7 @@ interface ManualReleaseDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-export function ManualReleaseDialog({
+function ManualReleaseDialog({
   calibrationJobId,
   open,
   onOpenChange,

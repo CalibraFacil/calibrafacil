@@ -20,7 +20,7 @@ import { jobAuditLog } from "./schema.js";
 // key or an action here without a migration of the stored rows.
 
 /** `{ old, new }`: a field before and after the event. */
-export type Change<T = unknown> = { old: T; new: T };
+type Change<T = unknown> = { old: T; new: T };
 
 /**
  * HOW the actor reached the API, merged into the `changes` of a job command:
@@ -72,7 +72,7 @@ type JobEventBase = {
   performedAt?: Date;
 };
 
-export type JobCreatedChanges = {
+type JobCreatedChanges = {
   initial: {
     assetId: number;
     serviceId: number;
@@ -133,7 +133,7 @@ export type JobExecutionChanges = JobActorAuditFields & {
  * from a build that predates the rule, so an auditor can list jobs whose
  * location was never validated.
  */
-export type JobSubmitChanges = JobExecutionChanges & {
+type JobSubmitChanges = JobExecutionChanges & {
   calibrationRecordCheck: "enforced" | "legacy_exempt";
 };
 
@@ -142,7 +142,7 @@ export type JobSubmitChanges = JobExecutionChanges & {
  * saved snapshot that have since gone stale: one entry per reason, the same
  * shape the API answers. A submit never accepts one, so it never records this.
  */
-export type JobExecuteChanges = JobExecutionChanges & {
+type JobExecuteChanges = JobExecutionChanges & {
   standardsWarnings?: Array<{
     code: "standard_no_longer_valid";
     reason: "standard_deleted" | "standard_inactive" | "standard_expired";

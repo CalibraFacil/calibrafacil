@@ -166,7 +166,7 @@ export function rlsSystemRoleProblem(
 }
 
 /** Shadow mode is for diagnosis; running production on the owner has no second wall. */
-export const SHADOW_IN_PRODUCTION_WARNING =
+const SHADOW_IN_PRODUCTION_WARNING =
   'WARNING: DATABASE_RLS_MODE=shadow in production: the application connects as the table owner, so row-level security does NOT protect any laboratory\'s data from a missed organization predicate. Shadow mode is for diagnosis only; use DATABASE_RLS_MODE=enforced (the default) with DATABASE_URL as calibra_app and DATABASE_OWNER_URL as the owner, see DEPLOYMENT.md ("Row-level security").';
 
 /**

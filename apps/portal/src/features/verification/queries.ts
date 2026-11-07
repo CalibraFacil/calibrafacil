@@ -24,7 +24,7 @@ import { fetchPortalResponse, readPortalJsonResult } from "@/lib/api-fetch";
 export type VerificationData = VerificationResponse;
 
 /** A token that is well-formed but resolves to no publicly verifiable certificate. */
-export class CertificateNotFoundError extends Error {
+class CertificateNotFoundError extends Error {
   constructor() {
     super("Certificado não encontrado ou inválido.");
     this.name = "CertificateNotFoundError";
@@ -65,7 +65,7 @@ export function useVerification(token: string) {
 
 // — Signature integrity (Phase 1) — `/api/verify/:token/signature` —————————————
 
-export type SignatureVerdict = SignatureVerdictResponse;
+type SignatureVerdict = SignatureVerdictResponse;
 export type SignatureVerdictOverall = SignatureVerdict["overall"];
 export type SignatureVerification = SignatureVerificationResponse;
 

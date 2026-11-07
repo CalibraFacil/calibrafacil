@@ -10,17 +10,12 @@ import type {
   CreatePtPlanItemInput,
   RecordPtResultsInput,
 } from '@calibra-facil/schemas'
-import type {
-  ProficiencyTestUpdateInput,
-  PtPlanItemUpdateInput,
-} from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
@@ -38,7 +33,7 @@ import {
 
 const PT_LIST_LIMIT = 20
 
-export function ptListInputFromUrl(organizationId: string, url?: URL) {
+function ptListInputFromUrl(organizationId: string, url?: URL) {
   return {
     organizationId,
     page: pageFromUrl(url),
@@ -51,7 +46,7 @@ export function ptListInputFromUrl(organizationId: string, url?: URL) {
   } satisfies PtListQueryInput
 }
 
-export function ptListQueryOptions(input: PtListQueryInput) {
+function ptListQueryOptions(input: PtListQueryInput) {
   return queryOptions({
     queryKey: [
       'proficiency-tests',
@@ -76,35 +71,35 @@ export function ptListQueryOptions(input: PtListQueryInput) {
   })
 }
 
-export function ptSummaryQueryOptions(organizationId: string) {
+function ptSummaryQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['proficiency-tests-summary', organizationId],
     queryFn: () => calibraApi.proficiencyTests.summary<PtSummaryData>(),
   })
 }
 
-export function ptDetailQueryOptions(id: string) {
+function ptDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['proficiency-test', id],
     queryFn: () => calibraApi.proficiencyTests.get<PtDetail>(id),
   })
 }
 
-export function ptAuditLogQueryOptions(id: string) {
+function ptAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['proficiency-test-audit-log', id],
     queryFn: () => calibraApi.proficiencyTests.auditLog<PtAuditLogData>(id),
   })
 }
 
-export function ptPlanQueryOptions(organizationId: string) {
+function ptPlanQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['proficiency-tests-plan', organizationId],
     queryFn: () => calibraApi.proficiencyTests.listPlan<PtPlanData>(),
   })
 }
 
-export function ptStandardOptionsQueryOptions() {
+function ptStandardOptionsQueryOptions() {
   return queryOptions({
     queryKey: ['pt-standard-options'],
     queryFn: (): Promise<PtStandardOptionsData> =>
@@ -115,7 +110,7 @@ export function ptStandardOptionsQueryOptions() {
   })
 }
 
-export async function getPtIndexEssentialQueries(url?: URL) {
+async function getPtIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 
@@ -127,17 +122,6 @@ export async function getPtIndexEssentialQueries(url?: URL) {
 
 export async function loadPtIndexData(queryClient: QueryClient, url?: URL) {
   await ensureRouteQueries(queryClient, await getPtIndexEssentialQueries(url))
-}
-
-export async function prewarmPtIndex(queryClient: QueryClient, url?: URL) {
-  await prewarmRouteQueries(queryClient, await getPtIndexEssentialQueries(url))
-}
-
-export async function prewarmPtDetail(queryClient: QueryClient, id: string) {
-  await prewarmRouteQueries(queryClient, [
-    ptDetailQueryOptions(id),
-    ptAuditLogQueryOptions(id),
-  ])
 }
 
 export function usePtStandardOptionsData({ enabled }: { enabled: boolean }) {
@@ -237,21 +221,6 @@ export function useCreatePtRound() {
   })
 }
 
-export function useUpdatePtRound(id: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: ProficiencyTestUpdateInput) =>
-      calibraApi.proficiencyTests.update<PtDetail>(id, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proficiency-test', id] })
-      queryClient.invalidateQueries({
-        queryKey: ['proficiency-test-audit-log', id],
-      })
-      invalidatePtCollections(queryClient)
-    },
-  })
-}
-
 export function useRecordPtResults(id: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -268,35 +237,11 @@ export function useRecordPtResults(id: string) {
   })
 }
 
-export function useRemovePtRound() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => calibraApi.proficiencyTests.remove(id),
-    onSuccess: () => {
-      invalidatePtCollections(queryClient)
-    },
-  })
-}
-
 export function useCreatePtPlanItem() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: CreatePtPlanItemInput) =>
       calibraApi.proficiencyTests.createPlanItem<PtPlanItem>(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proficiency-tests-plan'] })
-      queryClient.invalidateQueries({
-        queryKey: ['proficiency-tests-summary'],
-      })
-    },
-  })
-}
-
-export function useUpdatePtPlanItem() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: PtPlanItemUpdateInput }) =>
-      calibraApi.proficiencyTests.updatePlanItem<PtPlanItem>(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proficiency-tests-plan'] })
       queryClient.invalidateQueries({

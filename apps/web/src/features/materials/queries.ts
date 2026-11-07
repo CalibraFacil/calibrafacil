@@ -5,7 +5,6 @@ import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
@@ -70,7 +69,7 @@ export function materialDetailQueryOptions(id: string) {
   })
 }
 
-export async function getMaterialsIndexEssentialQueries(url?: URL) {
+async function getMaterialsIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 
@@ -91,28 +90,11 @@ export async function loadMaterialsIndexData(
   )
 }
 
-export async function prewarmMaterialsIndex(
-  queryClient: QueryClient,
-  url?: URL,
-) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getMaterialsIndexEssentialQueries(url),
-  )
-}
-
 export async function loadMaterialEditData(
   queryClient: QueryClient,
   id: string,
 ) {
   await ensureRouteQueries(queryClient, [materialDetailQueryOptions(id)])
-}
-
-export async function prewarmMaterialEdit(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [materialDetailQueryOptions(id)])
 }
 
 export function useMaterialsListData({

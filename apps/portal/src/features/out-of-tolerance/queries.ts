@@ -16,13 +16,9 @@ import { usePortalQueryKey } from "@/lib/portal-org-context";
  * measurements on their side.
  */
 
-export type OotNotificationStatus =
-  | "PENDING"
-  | "GENERATED"
-  | "SENT"
-  | "ACKNOWLEDGED";
+type OotNotificationStatus = "PENDING" | "GENERATED" | "SENT" | "ACKNOWLEDGED";
 
-export type OotNotificationAckVia = "email_link" | "portal_link" | "manual";
+type OotNotificationAckVia = "email_link" | "portal_link" | "manual";
 
 export type OotNotification = {
   /** Opaque acknowledgment token — never a numeric database id. */

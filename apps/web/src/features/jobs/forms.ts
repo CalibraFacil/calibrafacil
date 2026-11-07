@@ -25,7 +25,7 @@ export type JobFormData = {
 
 export type JobFormField = keyof JobFormData
 
-export const emptyJobFormData: JobFormData = {
+const emptyJobFormData: JobFormData = {
   customerId: null,
   assetId: null,
   serviceId: null,

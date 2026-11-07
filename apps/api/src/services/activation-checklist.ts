@@ -25,7 +25,7 @@ import { orgDb } from "../lib/org-db";
  * again.
  */
 
-export type ActivationStepId =
+type ActivationStepId =
   | "organizationProfile"
   | "methodPublished"
   | "referenceStandard"

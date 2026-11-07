@@ -30,12 +30,12 @@ export type DashboardNavItem = {
   requiredRole?: 'admin-or-owner'
 }
 
-export type DashboardRedirectRouteMeta = {
+type DashboardRedirectRouteMeta = {
   from: string
   to: string
 }
 
-export const dashboardRedirectRouteMeta = [
+const dashboardRedirectRouteMeta = [
   {
     // Portal branding now lives alongside the custom-domain workspace.
     from: '/dashboard/settings/branding',

@@ -22,14 +22,14 @@ import {
   parseCrl,
 } from "./revocation.js";
 
-export type VerifyOverall =
+type VerifyOverall =
   | "VALID"
   | "ALTERED"
   | "UNSIGNED"
   | "REVOKED"
   | "UNVERIFIABLE";
 
-export interface VerifyPdfSigner {
+interface VerifyPdfSigner {
   commonName: string | null;
   cpfCnpj: string | null;
   certificateSerial: string | null;

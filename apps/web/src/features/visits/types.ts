@@ -1,4 +1,4 @@
-export const VISIT_STATUSES = [
+const VISIT_STATUSES = [
   'PROPOSED',
   'CONFIRMED',
   'IN_PROGRESS',
@@ -18,7 +18,7 @@ export type VisitAddress = {
   state?: string
 } | null
 
-export type VisitListItem = {
+type VisitListItem = {
   id: number
   status: VisitStatus
   scheduledAt: string | null

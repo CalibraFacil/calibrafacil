@@ -277,7 +277,7 @@ WHERE aggregate_id = @entityId
     });
 }
 
-export function getSyncConflict(database: LocalDatabase, id: string) {
+function getSyncConflict(database: LocalDatabase, id: string) {
   const row = database
     .prepare<{ id: string }, SyncConflictRow>(
       `

@@ -117,7 +117,7 @@ export function impactedCertificatesQueryOptions(
 // The org-shared mass composition profile catalog (normalized buildup weights,
 // keyed by class + nominal). Same query key as the execution-flow hook so the
 // React Query cache is shared. The API scopes by the session organization.
-export function compositionProfilesCatalogQueryOptions() {
+function compositionProfilesCatalogQueryOptions() {
   return queryOptions({
     queryKey: ['standards', 'composition-profiles'],
     queryFn: () => calibraApi.standards.listCompositionProfiles(),
@@ -130,7 +130,7 @@ export async function loadCompositionProfilesCatalogData(
   await queryClient.ensureQueryData(compositionProfilesCatalogQueryOptions())
 }
 
-export async function getStandardsIndexEssentialQueries(url?: URL) {
+async function getStandardsIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

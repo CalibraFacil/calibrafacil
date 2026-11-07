@@ -11,7 +11,7 @@ import type { ReactNode } from 'react'
  * (not a hook passed around as a value) so it composes with the React rules;
  * tests hand the feature a plain fake gate.
  */
-export type UnsavedChangesBlocker =
+type UnsavedChangesBlocker =
   | { status: 'idle' }
   | { status: 'blocked'; proceed: () => void; reset: () => void }
 

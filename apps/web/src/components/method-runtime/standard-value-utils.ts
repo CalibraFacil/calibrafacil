@@ -1,8 +1,6 @@
 import { convertUnitValue, unitKind } from '@calibra-facil/shared/units'
 
-import type { MethodTableColumn, StandardValueConfig } from './types'
-
-export type { StandardValueConfig }
+import type { MethodTableColumn } from './types'
 
 /**
  * A single discipline-agnostic certified-value option, derived from one
@@ -23,33 +21,6 @@ export interface StandardCertifiedValueOption {
   drift: number | null
   unit: string
   optionLabel: string
-}
-
-/**
- * Match a calibration row's nominal against the certified-value options. The
- * (default and only) `matchBy` is `"nominal"`: case/whitespace-insensitive exact
- * match on the nominal label. Returns the first matching option, or null.
- */
-export function matchStandardValueOption(
-  options: StandardCertifiedValueOption[],
-  nominal: unknown,
-  _config?: StandardValueConfig,
-): StandardCertifiedValueOption | null {
-  const needle = normalizeNominal(nominal)
-  if (needle === '') return null
-  return (
-    options.find((option) => normalizeNominal(option.nominal) === needle) ??
-    null
-  )
-}
-
-export function normalizeNominal(value: unknown): string {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
 }
 
 /**

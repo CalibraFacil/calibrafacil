@@ -52,7 +52,7 @@ import {
   type DimExpr,
 } from "./dim-expr";
 
-export type DimensionalDiagnosticCode =
+type DimensionalDiagnosticCode =
   | "DIMENSIONAL_MISMATCH"
   | "DIMENSIONAL_EXPONENT"
   | "DIMENSIONAL_TRANSCENDENTAL_ARGUMENT"

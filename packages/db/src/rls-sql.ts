@@ -80,15 +80,15 @@ function ident(name: string): string {
  * transaction-local setting reads back as '' (not NULL) on a connection that
  * once set it, and the empty string must never match a row.
  */
-export function organizationExpression(sqlType: string): string {
+function organizationExpression(sqlType: string): string {
   return `NULLIF(current_setting('${ORGANIZATION_SETTING}', true), '')::${sqlType}`;
 }
 
-export function policyPredicate(entry: RlsTable): string {
+function policyPredicate(entry: RlsTable): string {
   return `${ident(entry.column)} = ${organizationExpression(entry.sqlType)}`;
 }
 
-export function rlsTableStatements(entry: RlsTable): string {
+function rlsTableStatements(entry: RlsTable): string {
   const table = `public.${ident(entry.table)}`;
   const predicate = policyPredicate(entry);
   return `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;

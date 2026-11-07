@@ -47,13 +47,3 @@ export const SelfServeSignupSchema = z.object({
   website: z.string().trim().max(200).optional().default(""),
 });
 export type SelfServeSignupInput = z.infer<typeof SelfServeSignupSchema>;
-
-/**
- * Turning an organization the visitor just created into a payable checkout.
- * Authenticated (the owner), so it carries no identity of its own.
- */
-export const SelfServeCheckoutSchema = z.object({
-  planId: z.enum(["STANDARD", "PROFESSIONAL", "ADVANCED"]),
-  billingCycle: z.enum(["MONTHLY", "YEARLY"]),
-});
-export type SelfServeCheckoutInput = z.infer<typeof SelfServeCheckoutSchema>;

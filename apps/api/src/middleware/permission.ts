@@ -7,17 +7,8 @@ import {
   type MemberUnitRole,
 } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
-import type {
-  PermissionCheck,
-  CalibrationState,
-  CalibrationAction,
-  RoleName,
-} from "@calibra-facil/auth/access";
-import {
-  canPerformCalibrationAction,
-  PORTAL_ACCESS_ROLES,
-  roles,
-} from "@calibra-facil/auth/access";
+import type { PermissionCheck, RoleName } from "@calibra-facil/auth/access";
+import { PORTAL_ACCESS_ROLES, roles } from "@calibra-facil/auth/access";
 import {
   resolveMemberUnitScope,
   type ResolvedUnit,
@@ -80,7 +71,7 @@ export interface MemberData {
 
 export type GovernanceAccess = UnitGovernanceAccess;
 
-export type AuthSource = "lab" | "portal";
+type AuthSource = "lab" | "portal";
 
 /**
  * Context type extension for authenticated requests
@@ -510,7 +501,7 @@ export type OrgType = "LAB" | "CLIENT";
  * app.use("*", requireAuth);
  * app.use("*", requireOrganization);
  */
-export const requireOrganization = createMiddleware<{
+const requireOrganization = createMiddleware<{
   Variables: AuthVariables;
 }>(async (c, next) => {
   const orgStartedAt = performance.now();
@@ -765,58 +756,6 @@ export function requireOrgType(allowedType: OrgType) {
 }
 
 // =============================================================================
-// CALIBRATION WORKFLOW MIDDLEWARE
-// =============================================================================
-
-/**
- * State getter function type for calibration workflow middleware.
- * Should fetch the calibration and return its current state.
- */
-export type CalibrationStateGetter<T extends { Variables: AuthVariables }> = (
-  c: Parameters<ReturnType<typeof createMiddleware<T>>>[0],
-) => Promise<CalibrationState>;
-
-/**
- * Middleware factory for calibration workflow actions.
- * Enforces ISO 17025 separation of duties based on calibration state.
- * Must be used after `requireAuth` and `requireOrganization`.
- *
- * @example
- * // Define a state getter for your calibrations
- * const getCalibrationState: CalibrationStateGetter<{ Variables: AuthVariables }> = async (c) => {
- *   const id = c.req.param("id");
- *   const calibration = await db.query.calibrations.findFirst({ where: eq(calibrations.id, id) });
- *   return calibration?.state ?? "draft";
- * };
- *
- * app.post(
- *   "/calibrations/:id/approve",
- *   requireAuth,
- *   requireOrganization,
- *   requireCalibrationAction("approve", getCalibrationState),
- *   handler
- * );
- */
-export function requireCalibrationAction<
-  T extends { Variables: AuthVariables },
->(action: CalibrationAction, getState: CalibrationStateGetter<T>) {
-  return createMiddleware<T>(async (c, next) => {
-    const member = c.get("member");
-    const state = await getState(c);
-
-    const effectiveRole = getCalibrationAuthorizationRole(member);
-
-    if (!canPerformCalibrationAction(effectiveRole, state, action)) {
-      throw new HTTPException(403, {
-        message: `Cannot ${action} calibration in '${state}' state with role '${effectiveRole}'`,
-      });
-    }
-
-    await next();
-  });
-}
-
-// =============================================================================
 // COMBINED MIDDLEWARE
 // =============================================================================
 
@@ -828,7 +767,7 @@ export function requireCalibrationAction<
  * const protectedRoutes = new Hono<{ Variables: AuthVariables }>();
  * protectedRoutes.use("*", ...requireProtected);
  */
-export const requireProtected = [requireAuth, requireOrganization] as const;
+const requireProtected = [requireAuth, requireOrganization] as const;
 
 /**
  * Combined middleware for LAB-protected routes.
@@ -840,7 +779,7 @@ export const requireLabProtected = [
   requireOrganization,
 ] as const;
 
-export const requirePortalAccess = createMiddleware<{
+const requirePortalAccess = createMiddleware<{
   Variables: AuthVariables;
 }>(async (c, next) => {
   const member = c.get("member");
@@ -876,16 +815,6 @@ export const requirePortalProtected = [
  */
 export function withPermission(permissions: PermissionCheck) {
   return [...requireProtected, requirePermission(permissions)] as const;
-}
-
-/**
- * Create a protected route handler with role check.
- *
- * @example
- * app.get("/admin", ...withRole(["admin", "owner"]), handler);
- */
-export function withRole(allowedRoles: RoleName[]) {
-  return [...requireProtected, requireRole(allowedRoles)] as const;
 }
 
 /**

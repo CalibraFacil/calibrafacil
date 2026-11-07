@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import type { SignalTone } from "@calibra-facil/ui/status-tone";
 
-export type TimelineItemState = "done" | "current" | "upcoming";
+type TimelineItemState = "done" | "current" | "upcoming";
 
 export type TimelineItem = {
   title: React.ReactNode;

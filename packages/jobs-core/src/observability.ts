@@ -13,7 +13,7 @@ import {
 
 let reporter: ErrorReporter | null = null;
 
-export function getWorkerErrorReporter(): ErrorReporter {
+function getWorkerErrorReporter(): ErrorReporter {
   const observability = readObservabilityConfig();
   reporter ??= createLogErrorReporter({
     service: "worker",
@@ -23,7 +23,7 @@ export function getWorkerErrorReporter(): ErrorReporter {
   return reporter;
 }
 
-export const workerLogger: StructuredLogger = createLogger("Worker");
+const workerLogger: StructuredLogger = createLogger("Worker");
 
 /** Capture + structured log for a failed job; never throws. */
 export function reportWorkerError(

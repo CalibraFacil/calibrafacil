@@ -18,7 +18,7 @@ import {
  * {@link TEMPLATE_ENGINE_OPTIONS} from here so there is a
  * single source of truth.
  */
-export const TEMPLATE_ENGINE_OPTIONS: CalculationEngineOptions = {
+const TEMPLATE_ENGINE_OPTIONS: CalculationEngineOptions = {
   numericMode: "decimal",
   rejectUnusedInputs: true,
   maxExponentMagnitude: 12,

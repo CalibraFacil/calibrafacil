@@ -45,7 +45,7 @@ export async function laboratoryIsAccredited(
  * own work. `submittedBy` is null on a job that predates the column (and on
  * one approved before it existed): the other two still apply.
  */
-export function isApproverTheWorkDoer(
+function isApproverTheWorkDoer(
   job: Pick<JobRow, "technicianId" | "createdBy" | "submittedBy">,
   approverId: string,
 ): boolean {
@@ -64,7 +64,7 @@ export function isApproverTheWorkDoer(
  * admin and owner only; both are global multi-unit roles, so any such member
  * can access the job's unit by construction.
  */
-export async function hasAlternateApprover(
+async function hasAlternateApprover(
   params: { organizationId: string; approverId: string },
   reader: Reader,
 ): Promise<boolean> {

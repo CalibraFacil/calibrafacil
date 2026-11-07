@@ -51,8 +51,6 @@ export function useFleetAssets(params: FleetAssetsParams) {
   });
 }
 
-export type PortalUnit = { id: number; name: string };
-
 /** Units (branch customers) in the active scope; more than one only in group mode. */
 export function usePortalUnits() {
   const key = usePortalQueryKey();

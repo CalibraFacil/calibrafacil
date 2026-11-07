@@ -10,16 +10,10 @@ import type {
   PortalFleetAssetsResponse,
 } from "@calibra-facil/contracts";
 
-export type FleetAssetStatus =
-  | "ACTIVE"
-  | "INACTIVE"
-  | "MAINTENANCE"
-  | "SCRAPPED";
-
 export type FleetAsset = PortalFleetAsset;
 
 /** Server-side sort fields accepted by `/api/portal/assets`. */
-export const FLEET_SORT_FIELDS = [
+const FLEET_SORT_FIELDS = [
   "tag",
   "name",
   "nextCalibrationDate",

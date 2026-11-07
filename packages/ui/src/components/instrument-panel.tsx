@@ -17,7 +17,7 @@ import { cn } from "../lib/utils";
 import { ACTION_BUTTON_CLASS, PANEL_CLASS } from "../lib/panel-styles";
 import { STATUS_TONE, type SignalTone } from "../lib/status-tone";
 
-export { ACTION_BUTTON_CLASS, PANEL_CLASS };
+export { ACTION_BUTTON_CLASS };
 export type { SignalTone };
 
 type IconType = Parameters<typeof HugeiconsIcon>[0]["icon"];

@@ -62,7 +62,7 @@ const rowPayloadSchema = z.looseObject({});
  * reads to decide are typed; the snapshots travel whole and are validated by
  * the submit command that applies them.
  */
-export const syncExecutionPayloadSchema = z.looseObject({
+const syncExecutionPayloadSchema = z.looseObject({
   remoteId: z.number().int().positive().optional(),
   data: jsonObjectSchema.nullable().optional(),
   results: jsonObjectSchema.nullable().optional(),
@@ -96,7 +96,7 @@ function command<
  * owns the rules and the required ones). Typed when present, optional here so an
  * event applied by an earlier push is still recognised and acknowledged.
  */
-export const syncCreateAssetPayloadSchema = z.looseObject({
+const syncCreateAssetPayloadSchema = z.looseObject({
   customerId: z.number().int().optional(),
   assetTypeId: z.number().int().optional(),
   name: z.string().optional(),
@@ -111,7 +111,7 @@ export const syncCreateAssetPayloadSchema = z.looseObject({
 });
 
 /** `create_local_service_order_intake` (`CreateServiceOrderSchema` owns the rules). */
-export const syncServiceOrderIntakePayloadSchema = z.looseObject({
+const syncServiceOrderIntakePayloadSchema = z.looseObject({
   customerId: z.number().int().optional(),
   assetId: z.number().int().optional(),
   claimedDefect: z.string().optional(),
@@ -137,27 +137,27 @@ export const syncAttachmentPayloadSchema = z.looseObject({
   sizeBytes: z.number().optional(),
 });
 
-export const createLocalAssetCommandSchema = command(
+const createLocalAssetCommandSchema = command(
   "asset",
   "create_local_asset",
   syncCreateAssetPayloadSchema,
 );
-export const saveLocalExecutionCommandSchema = command(
+const saveLocalExecutionCommandSchema = command(
   "calibration_job",
   "save_local_execution",
   syncExecutionPayloadSchema,
 );
-export const submitLocalExecutionCommandSchema = command(
+const submitLocalExecutionCommandSchema = command(
   "calibration_job",
   "submit_local_execution",
   syncExecutionPayloadSchema,
 );
-export const createLocalServiceOrderIntakeCommandSchema = command(
+const createLocalServiceOrderIntakeCommandSchema = command(
   "service_order",
   "create_local_service_order_intake",
   syncServiceOrderIntakePayloadSchema,
 );
-export const createLocalAttachmentCommandSchema = command(
+const createLocalAttachmentCommandSchema = command(
   "attachment",
   "create_local_attachment",
   syncAttachmentPayloadSchema,
@@ -165,53 +165,52 @@ export const createLocalAttachmentCommandSchema = command(
 
 // ---- legacy members: only an older build's outbox can still hold these -----
 
-export const updateLocalAssetCommandSchema = command(
+const updateLocalAssetCommandSchema = command(
   "asset",
   "update_local_asset",
   rowPayloadSchema,
 );
-export const createLocalCustomerCommandSchema = command(
+const createLocalCustomerCommandSchema = command(
   "customer",
   "create_local_customer",
   rowPayloadSchema,
 );
-export const updateLocalCustomerCommandSchema = command(
+const updateLocalCustomerCommandSchema = command(
   "customer",
   "update_local_customer",
   rowPayloadSchema,
 );
-export const updateLocalCustomerComplianceCommandSchema = command(
+const updateLocalCustomerComplianceCommandSchema = command(
   "customer",
   "update_local_customer_compliance",
   rowPayloadSchema,
 );
-export const createLocalJobDraftCommandSchema = command(
+const createLocalJobDraftCommandSchema = command(
   "calibration_job",
   "create_local_job_draft",
   rowPayloadSchema,
 );
-export const createLocalNonConformanceCommandSchema = command(
+const createLocalNonConformanceCommandSchema = command(
   "non_conformance",
   "create_local_non_conformance",
   rowPayloadSchema,
 );
-export const createLocalServiceOrderQuoteDraftCommandSchema = command(
+const createLocalServiceOrderQuoteDraftCommandSchema = command(
   "service_order_quote",
   "create_local_service_order_quote_draft",
   rowPayloadSchema,
 );
-export const saveLocalServiceOrderExecutionNotesCommandSchema = command(
+const saveLocalServiceOrderExecutionNotesCommandSchema = command(
   "service_order_execution",
   "save_local_service_order_execution_notes",
   rowPayloadSchema,
 );
-export const createLocalServiceOrderDeliveryDocumentDraftCommandSchema =
-  command(
-    "service_order_delivery_document",
-    "create_local_service_order_delivery_document_draft",
-    rowPayloadSchema,
-  );
-export const createLocalCertificateDraftCommandSchema = command(
+const createLocalServiceOrderDeliveryDocumentDraftCommandSchema = command(
+  "service_order_delivery_document",
+  "create_local_service_order_delivery_document_draft",
+  rowPayloadSchema,
+);
+const createLocalCertificateDraftCommandSchema = command(
   "certificate_draft",
   "create_local_certificate_draft",
   rowPayloadSchema,
@@ -222,7 +221,7 @@ export const createLocalCertificateDraftCommandSchema = command(
  * member only to be refused with its own code. Older builds wrote its entity
  * type inconsistently, so any is accepted.
  */
-export const generateLocalCertificatePdfCommandSchema = z.object({
+const generateLocalCertificatePdfCommandSchema = z.object({
   ...envelopeShape,
   operation: z.literal("generate_local_certificate_pdf"),
   payload: z.unknown(),
@@ -232,7 +231,7 @@ export const generateLocalCertificatePdfCommandSchema = z.object({
  * Every operation of the push protocol, keyed by `operation`. Order is the
  * documentation order: current members first.
  */
-export const syncCommandSchema = z.discriminatedUnion("operation", [
+const syncCommandSchema = z.discriminatedUnion("operation", [
   createLocalAssetCommandSchema,
   saveLocalExecutionCommandSchema,
   submitLocalExecutionCommandSchema,
@@ -402,9 +401,6 @@ export const syncPushRequestEnvelopeSchema = z.object({
 });
 
 export type SyncPushRequest = z.infer<typeof syncPushRequestSchema>;
-export type SyncPushRequestEnvelope = z.infer<
-  typeof syncPushRequestEnvelopeSchema
->;
 
 // ---------------------------------------------------------------------------
 // Minimum desktop version (Q28)
@@ -487,11 +483,6 @@ function parseVersion(value: string): ParsedVersion | null {
     numbers: [Number(major), Number(minor), Number(patch)],
     prerelease: prerelease ?? null,
   };
-}
-
-/** Whether `value` is a `MAJOR.MINOR.PATCH[-prerelease]` version. */
-export function isDesktopVersion(value: string): boolean {
-  return parseVersion(value) !== null;
 }
 
 /**

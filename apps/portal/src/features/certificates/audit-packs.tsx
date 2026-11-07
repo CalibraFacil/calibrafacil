@@ -33,7 +33,7 @@ import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 type AuditPackStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 
-export type AuditPack = {
+type AuditPack = {
   id: number;
   status: AuditPackStatus;
   dateFrom: string;
@@ -68,7 +68,7 @@ function isInFlight(pack: AuditPack): boolean {
   return pack.status === "PENDING" || pack.status === "PROCESSING";
 }
 
-export function useAuditPacks() {
+function useAuditPacks() {
   const key = usePortalQueryKey();
   return useQuery({
     queryKey: key(AUDIT_PACKS_SCOPE),

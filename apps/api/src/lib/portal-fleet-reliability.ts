@@ -26,7 +26,7 @@ import {
 const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
 
 /** Confidence used for the drift-series slope test — matches drift.ts usage. */
-export const DRIFT_SERIES_CONFIDENCE = 0.95;
+const DRIFT_SERIES_CONFIDENCE = 0.95;
 
 export type FleetJobRow = {
   approvedAt: Date | null;
@@ -42,7 +42,7 @@ export type FleetJobRow = {
 
 export type FleetBucket = "quarter" | "year";
 
-export type FleetRateSlice = {
+type FleetRateSlice = {
   jobs: number;
   known: number;
   conforming: number;
@@ -54,14 +54,14 @@ export type FleetRateSlice = {
   coveragePct: number | null;
 };
 
-export type FleetTrendPoint = FleetRateSlice & { bucket: string };
+type FleetTrendPoint = FleetRateSlice & { bucket: string };
 
-export type FleetAssetTypeSlice = FleetRateSlice & {
+type FleetAssetTypeSlice = FleetRateSlice & {
   assetTypeId: number;
   assetTypeName: string;
 };
 
-export type FleetWorstOffender = {
+type FleetWorstOffender = {
   assetId: number;
   assetPublicId: string;
   tag: string;
@@ -248,12 +248,12 @@ export type DriftSeriesJobRow = {
   asFoundMargins: number[] | null;
 };
 
-export type DriftSeriesPoint = {
+type DriftSeriesPoint = {
   approvedAt: string;
   margin: number;
 };
 
-export type DriftSeriesEntry = {
+type DriftSeriesEntry = {
   /** Positional index of the measured point across cycles (drift.ts semantics). */
   pointIndex: number;
   series: DriftSeriesPoint[];

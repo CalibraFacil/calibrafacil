@@ -8,7 +8,7 @@ import { labPasskey } from '@calibra-facil/auth/client'
 
 import { type UserPasskey } from './types'
 
-export const PASSKEYS_QUERY_KEY = ['lab-passkeys']
+const PASSKEYS_QUERY_KEY = ['lab-passkeys']
 
 function toIsoString(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString()
@@ -16,7 +16,7 @@ function toIsoString(value: unknown): string | null {
   return null
 }
 
-export async function fetchUserPasskeys(): Promise<UserPasskey[]> {
+async function fetchUserPasskeys(): Promise<UserPasskey[]> {
   const result = await labPasskey.listUserPasskeys()
 
   if (result.error) {

@@ -58,10 +58,7 @@ export function customersListQueryOptions(input: CustomersListQueryInput) {
   })
 }
 
-export function customersSearchQueryOptions(
-  organizationId: string,
-  search = '',
-) {
+function customersSearchQueryOptions(organizationId: string, search = '') {
   return queryOptions({
     queryKey: ['customers', organizationId, 'search', search],
     queryFn: (): Promise<CustomersListData> =>
@@ -184,7 +181,7 @@ export function customerInvitationsQueryOptions(id: string) {
   })
 }
 
-export async function getCustomersIndexEssentialQueries(url?: URL) {
+async function getCustomersIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 
@@ -330,17 +327,6 @@ export async function loadCustomerCalibrationsData(
       search: '',
       statusFilter: '',
     }),
-  ])
-}
-
-export async function prewarmCustomerOverview(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    customerDetailQueryOptions(id),
-    customerMembersQueryOptions(id),
-    customerInvitationsQueryOptions(id),
   ])
 }
 

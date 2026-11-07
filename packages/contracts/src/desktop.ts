@@ -129,7 +129,7 @@ export const syncTriggerSchema = z.enum([
   "poll",
 ]);
 
-export const syncSchedulerStateSchema = z.object({
+const syncSchedulerStateSchema = z.object({
   running: z.boolean(),
   paused: z.boolean(),
   syncing: z.boolean(),
@@ -308,9 +308,9 @@ export type LocalEnvironmentBootstrap = z.infer<
 export type LocalServerBootstrapConfig = z.infer<
   typeof localServerBootstrapConfigSchema
 >;
-export type AppInfo = z.infer<typeof appInfoSchema>;
+type AppInfo = z.infer<typeof appInfoSchema>;
 export type DesktopSettings = z.infer<typeof desktopSettingsSchema>;
-export type DesktopSettingsPatch = z.infer<typeof desktopSettingsPatchSchema>;
+type DesktopSettingsPatch = z.infer<typeof desktopSettingsPatchSchema>;
 export type DesktopSecretName = z.infer<typeof desktopSecretNameSchema>;
 export type DesktopSecretStatus = z.infer<typeof desktopSecretStatusSchema>;
 export type SyncActionResult = z.infer<typeof syncActionResultSchema>;

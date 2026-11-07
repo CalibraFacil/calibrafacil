@@ -1,7 +1,4 @@
-import type {
-  FinancialPaymentMethod,
-  IntegrationSyncCursor,
-} from "@calibra-facil/shared";
+import type { FinancialPaymentMethod } from "@calibra-facil/shared";
 import type {
   ContaAzulInstallment,
   ContaAzulReceivableSearchResponse,
@@ -124,25 +121,6 @@ export function buildContaAzulPaymentReceiptSummary(params: {
     paymentMethod:
       mapContaAzulPaymentMethod(params.installment.metodo_pagamento) ?? "OTHER",
     reference: `conta_azul:${params.installment.id}`,
-  };
-}
-
-export function buildContaAzulPollingCursor(params: {
-  previousCursor: IntegrationSyncCursor;
-  nextLastRemoteUpdatedAt: string;
-  processedCount: number;
-  updatedCount: number;
-}): IntegrationSyncCursor {
-  return {
-    ...params.previousCursor,
-    lastRemoteUpdatedAt: params.nextLastRemoteUpdatedAt,
-    lastSuccessfulPollAt: new Date().toISOString(),
-    nextPage: null,
-    state: {
-      ...params.previousCursor.state,
-      processedCount: params.processedCount,
-      updatedCount: params.updatedCount,
-    },
   };
 }
 

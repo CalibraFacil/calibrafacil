@@ -11,7 +11,7 @@
  * The plan is injected so the logic is testable without signals or a real clock.
  */
 
-export type ShutdownStep = {
+type ShutdownStep = {
   name: string;
   run: () => void | Promise<void>;
 };

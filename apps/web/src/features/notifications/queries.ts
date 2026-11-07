@@ -41,19 +41,6 @@ export function useUnreadNotificationsData({
   })
 }
 
-export function useRecentNotificationsData({
-  enabled,
-  organizationKey,
-}: {
-  enabled: boolean
-  organizationKey: string
-}) {
-  return useQuery({
-    ...recentNotificationsQueryOptions(organizationKey),
-    enabled,
-  })
-}
-
 export function useNotificationCenterData({
   organizationKey,
   enabled,

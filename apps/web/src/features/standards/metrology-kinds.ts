@@ -228,7 +228,7 @@ export const METROLOGY_KIND_DEFINITIONS: MetrologyKindDefinition[] = [
   },
 ]
 
-export const METROLOGY_KIND_BY_KIND = new Map(
+const METROLOGY_KIND_BY_KIND = new Map(
   METROLOGY_KIND_DEFINITIONS.map((definition) => [definition.kind, definition]),
 )
 

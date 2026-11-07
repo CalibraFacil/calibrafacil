@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
  * status-bound LifecycleStepper (which tracks DRAFT→PUBLISHED), this tracks the
  * 1-Modelo / 2-Contexto / 3-Confirmação wizard step index.
  */
-export const FROM_TEMPLATE_STEPS = [
+const FROM_TEMPLATE_STEPS = [
   { key: 'catalog', label: 'Modelo' },
   { key: 'context', label: 'Contexto' },
   { key: 'confirm', label: 'Confirmação' },

@@ -16,7 +16,6 @@ import type {
   ContaAzulReferenceItem,
   ContaAzulReferencePage,
   FinancialErpAdapter,
-  FinancialErpConnectionConfig,
   GenericFinancialErpConnectionConfig,
   IntegrationBillingDocumentPayload,
   IntegrationBudgetPayload,
@@ -28,7 +27,6 @@ import type {
   IntegrationObjectLinkTarget,
   IntegrationPayablePayload,
   IntegrationPessoaPayload,
-  IntegrationProvider,
   IntegrationSalePayload,
   IntegrationSupplierPayload,
   IntegrationSyncCursor,
@@ -968,7 +966,7 @@ function mapGenericPayload(
   return mappedPayload;
 }
 
-export class GenericHttpFinancialErpAdapter implements FinancialErpAdapter {
+class GenericHttpFinancialErpAdapter implements FinancialErpAdapter {
   readonly provider = "generic_http" as const;
   private readonly config: GenericFinancialErpConnectionConfig;
   private readonly secret: string;
@@ -1067,7 +1065,7 @@ export class GenericHttpFinancialErpAdapter implements FinancialErpAdapter {
   }
 }
 
-export class ContaAzulFinancialErpAdapter implements FinancialErpAdapter {
+class ContaAzulFinancialErpAdapter implements FinancialErpAdapter {
   readonly provider = "conta_azul" as const;
   private readonly config: ContaAzulConnectionConfig;
   private readonly client: ContaAzulClient;
@@ -3285,15 +3283,4 @@ export function createFinancialErpAdapter(
   }
 
   return new ContaAzulFinancialErpAdapter(options);
-}
-
-export function normalizeAdapterConfig(
-  provider: IntegrationProvider,
-  config: FinancialErpConnectionConfig,
-): FinancialErpConnectionConfig {
-  if (provider === "conta_azul") {
-    return normalizeContaAzulConnectionConfig(config);
-  }
-
-  return normalizeGenericFinancialErpConfig(config);
 }

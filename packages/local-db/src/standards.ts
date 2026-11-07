@@ -3,7 +3,7 @@ import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 import { toRecord } from "@calibra-facil/shared/record";
 
-export type LocalStandardStatus =
+type LocalStandardStatus =
   | "ACTIVE"
   | "INACTIVE"
   | "OUT_OF_TOLERANCE"
@@ -16,7 +16,7 @@ export type LocalStandardsListInput = {
   status?: LocalStandardStatus;
 };
 
-export type LocalCertifiedValue = {
+type LocalCertifiedValue = {
   nominal: string;
   authentication?: string | null;
   value: number;

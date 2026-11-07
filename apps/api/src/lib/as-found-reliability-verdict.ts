@@ -34,7 +34,7 @@ import {
   isNonConformingDecision,
 } from "@calibra-facil/shared/decision-rule";
 
-export type AsFoundConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
+type AsFoundConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
 
 export type AsFoundReliabilityVerdict = {
   /** Overall as-found conformance; UNKNOWN when the method emits no as-found margin. */

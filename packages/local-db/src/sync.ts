@@ -14,7 +14,7 @@ import { toRecord } from "@calibra-facil/shared/record";
 type JsonRecord = Record<string, unknown>;
 
 /** A pulled row that was left untouched because local changes are queued. */
-export type SkippedPulledRow = {
+type SkippedPulledRow = {
   entityType: "customer" | "asset" | "calibration_job" | "service_order";
   localId: string;
 };

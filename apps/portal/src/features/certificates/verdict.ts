@@ -13,7 +13,7 @@ import { dateOnlyDaysBetween } from "@/lib/date-only";
  * detail page renders.
  */
 
-export type CertificateConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
+type CertificateConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
 
 export type CertificateVerdict = {
   conformity: CertificateConformity;
@@ -22,7 +22,7 @@ export type CertificateVerdict = {
   expandedUncertainty: string | null;
 };
 
-export type MethodFormula = {
+type MethodFormula = {
   outputKey: string;
   label?: string | null;
   unit?: string | null;

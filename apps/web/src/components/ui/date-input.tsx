@@ -161,4 +161,3 @@ function DateInput({
 }
 
 export { DateInput }
-export type { DateInputProps }

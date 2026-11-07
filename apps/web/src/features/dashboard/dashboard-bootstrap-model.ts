@@ -1,4 +1,4 @@
-export type DashboardOrganizationLike = {
+type DashboardOrganizationLike = {
   id: string
   type?: string | null
 }

@@ -349,7 +349,7 @@ export type ReferentialAction =
   | "set null"
   | "set default";
 
-export type TenantColumn = {
+type TenantColumn = {
   name: string;
   notNull: boolean;
   /** Foreign key of this column to `organization`, when it has one. */
@@ -358,7 +358,7 @@ export type TenantColumn = {
   indexed: boolean;
 };
 
-export type CompositeTenantKey = {
+type CompositeTenantKey = {
   name: string;
   table: string;
   /** The child's pointer column (the second column of the pair). */

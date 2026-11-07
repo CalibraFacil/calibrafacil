@@ -13,7 +13,7 @@ function pathMatchesPrefix(path: string, prefix: string): boolean {
   )
 }
 
-export function sanitizeInternalRedirect(
+function sanitizeInternalRedirect(
   value: string | undefined,
   options: RedirectOptions,
 ): string {

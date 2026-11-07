@@ -25,13 +25,13 @@ export const DEMO_ACTORS = {
 
 export type Actor = keyof typeof DEMO_ACTORS;
 
-export type ApiResult = {
+type ApiResult = {
   status: number;
   ok: boolean;
   body: unknown;
 };
 
-export class SeedApiError extends Error {
+class SeedApiError extends Error {
   readonly status: number;
   readonly body: unknown;
   constructor(method: string, path: string, result: ApiResult) {

@@ -185,7 +185,7 @@ export function orgPartition(org: OrgRef): string {
 // Descriptive certificate filename
 // ---------------------------------------------------------------------------
 
-export interface CertificateDescriptor {
+interface CertificateDescriptor {
   /** Human certificate number (e.g. "CAL-2026-9001"); fall back to job id. */
   certNumber: string;
   year: number;
@@ -428,8 +428,8 @@ export function avatarKey(userId: string): StorageObject {
 // Organization logo proxy-URL helpers (shared by api + worker)
 // ---------------------------------------------------------------------------
 
-export const ORGANIZATION_LOGO_KEY_PREFIX = "organization-logos/";
-export const ORGANIZATION_LOGO_URL_MARKER = "/api/organization-media/logo/";
+const ORGANIZATION_LOGO_KEY_PREFIX = "organization-logos/";
+const ORGANIZATION_LOGO_URL_MARKER = "/api/organization-media/logo/";
 
 export function encodeLogoAssetKey(key: string): string {
   return Buffer.from(key, "utf8").toString("base64url");

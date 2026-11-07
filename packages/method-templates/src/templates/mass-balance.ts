@@ -17,9 +17,9 @@ import type { BuildDraftArgs } from "../types";
  * and do not affect the fingerprint, so they are intentionally not included.
  */
 
-export const METHOD_NAME = "Calibração Rastreável de Balanças";
-export const BALANCE_ASSET_TYPE_SLUG = "balanca-digital";
-export const methodDescription =
+const METHOD_NAME = "Calibração Rastreável de Balanças";
+const BALANCE_ASSET_TYPE_SLUG = "balanca-digital";
+const methodDescription =
   "Método de exemplo derivado da planilha de calibração rastreável de balanças de um laboratório piloto, contemplando indicação antes e após ajuste, repetibilidade, excentricidade, composição de pesos e orçamento de incerteza com resolução por faixa, repetibilidade, erro dos pesos, incerteza dos pesos, empuxo, deriva e excentricidade. As condições ambientais são registradas pelo fluxo de execução e congeladas no job.";
 
 function safeVeffExpression(
@@ -38,7 +38,7 @@ function safeCoverageFactorExpression(
 
 const rowScope = (tableKey: string) => ({ kind: "table_row", tableKey });
 
-export const dataFields = [
+const dataFields = [
   {
     key: "pontos_indicacao",
     type: "table",
@@ -293,7 +293,7 @@ export const dataFields = [
   },
 ];
 
-export const formulas: Record<string, unknown>[] = [
+const formulas: Record<string, unknown>[] = [
   {
     outputKey: "media_indicacao_antes",
     label: "Média por ponto antes do ajuste",
@@ -757,67 +757,7 @@ for (const formula of formulas) {
   }
 }
 
-export const validations: unknown[] = [];
-
-export const uncertaintyParams: unknown[] = [];
-
-/**
- * Certificate-content template. NOT part of `buildDraft`/the fingerprint — the
- * seed stores it on the `calibration_method` row, and the from-template route
- * carries it into the new method. Exported raw so the seed writes a byte-
- * identical row.
- */
-export const certificateContent = {
-  procedureCode: "PBT09",
-  referenceStandards: ["UKAS LAB 14", "EURAMET cg-18"],
-  certifiedValuesDisplay: "hidden",
-  massCompositionDisplay: "hidden",
-  uncertaintyBudgetDisplay: "hidden",
-  sections: [
-    {
-      kind: "paragraphs",
-      title: "MÉTODO",
-      paragraphs: [
-        "A calibração é realizada por meio de comparação direta entre os valores dos pesos padrão e a indicação da balança.",
-      ],
-    },
-    {
-      kind: "definition_list",
-      title: "CONVENÇÕES",
-      items: [
-        {
-          term: "VC",
-          definition:
-            "Valor Convencional, valor correspondente ao padrão utilizado.",
-        },
-        {
-          term: "EI",
-          definition: "Erro de Indicação, (VI - VC).",
-        },
-        {
-          term: "U",
-          definition: "Incerteza expandida.",
-        },
-      ],
-    },
-    {
-      kind: "paragraphs",
-      title: "INCERTEZA DE MEDIÇÃO",
-      paragraphs: [
-        "A incerteza expandida de medição relatada é declarada como a incerteza padrão de medição multiplicada pelo fator de abrangência k, o qual para uma distribuição t-Student, com Veff graus de liberdade efetivos corresponde a uma probabilidade de abrangência de aproximadamente 95%.",
-        "A incerteza padrão de medição foi determinada de acordo com a publicação EA-4/02. Os valores de k e Veff são apresentados na tabela de resultados.",
-      ],
-    },
-    {
-      kind: "bullets",
-      items: [
-        "Os resultados deste certificado referem-se exclusivamente ao instrumento submetido à calibração específica, não sendo extensivo a quaisquer lotes.",
-        "Este certificado não tem valor para fins de metrologia legal.",
-        "Os resultados são válidos somente para o estado do instrumento no momento da calibração.",
-      ],
-    },
-  ],
-};
+const validations: unknown[] = [];
 export function buildDraft(args: BuildDraftArgs = {}): MethodDraft {
   return buildDraftFromProduct(
     {

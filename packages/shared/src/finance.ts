@@ -182,7 +182,7 @@ export type BillingBlockerOwner =
   | "support";
 
 /** How far a blocker reaches: one order, one customer, or all future work. */
-export type BillingBlockerScope = "order" | "customer" | "all_future";
+type BillingBlockerScope = "order" | "customer" | "all_future";
 
 /**
  * Provider-neutral blocker codes from the strategy's failure/blocking model.
@@ -241,7 +241,7 @@ export type BillingIntegrationState =
   | "disconnected"
   | "not_configured";
 
-export interface BillingReadinessCertificateRef {
+interface BillingReadinessCertificateRef {
   jobId: number;
   /** Human-readable certificate/job number. */
   displayId: string;
@@ -321,8 +321,6 @@ export interface FinancialFiscalDocument {
   lastSyncedAt: string | null;
 }
 
-export type FiscalDocumentView = FinancialFiscalDocument;
-
 export interface FinancialInstallmentStatus {
   id: number;
   installmentNumber: number;
@@ -334,8 +332,6 @@ export interface FinancialInstallmentStatus {
   paidAt: string | null;
   paymentMethod: FinancialPaymentMethod | null;
 }
-
-export type ReceivableInstallmentView = FinancialInstallmentStatus;
 
 // Phase 2 slice 2 — installments + partial-payment lab surface.
 // Provider-neutral summary that the lab UI consumes to render
@@ -415,8 +411,6 @@ export interface FinancialReceiptStatus {
   reference: string | null;
 }
 
-export type PaymentReceiptView = FinancialReceiptStatus;
-
 export interface ServiceOrderFinancialStatus {
   serviceOrderId: number;
   serviceOrderNumber: string;
@@ -481,13 +475,6 @@ export interface CustomerFinancialTimeline {
   data: CustomerFinancialTimelineDocument[];
 }
 
-export interface FinancialContinuitySummary {
-  openCents: number;
-  overdueCents: number;
-  receivedCents: number;
-  documents: number;
-}
-
 export interface FinancialContinuityStatusInput {
   hasBillingDocument: boolean;
   billingDocumentStatus?: BillingDocumentStatus | null;
@@ -497,8 +484,6 @@ export interface FinancialContinuityStatusInput {
   isStale?: boolean;
   isConfigured?: boolean;
 }
-
-export type DeriveFinancialContinuityInput = FinancialContinuityStatusInput;
 
 export const FINANCIAL_FRESHNESS_STALE_AFTER_HOURS = 24;
 

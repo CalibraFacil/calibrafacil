@@ -25,7 +25,7 @@ export function formatVisitDay(scheduledAt: string | null | undefined): string {
 }
 
 /** Empty or invalid input leaves the schedule untouched (`null`). */
-export function visitScheduledAtPayload(dateInput: string): string | null {
+function visitScheduledAtPayload(dateInput: string): string | null {
   return dateInputToNoonIso(dateInput)
 }
 

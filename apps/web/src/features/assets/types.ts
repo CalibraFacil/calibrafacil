@@ -43,7 +43,7 @@ export type AssetDetail = Omit<
   baseMeasurementUnit?: MassUnit | null
 }
 
-export type AssetType = Omit<ClientRuntimeAssetTypeListItem, 'definition'> & {
+type AssetType = Omit<ClientRuntimeAssetTypeListItem, 'definition'> & {
   slug: string
   definition: SpecFieldDefinition[]
 }

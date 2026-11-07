@@ -10,12 +10,12 @@ export const PT_ACTIVITY_TYPES = [
   'interlab_comparison',
 ] as const
 
-export const SCORE_TYPES = ['en', 'z', 'z_prime', 'zeta'] as const
+const SCORE_TYPES = ['en', 'z', 'z_prime', 'zeta'] as const
 
 export type PtStatus = (typeof PT_STATUSES)[number]
 export type PtActivityType = (typeof PT_ACTIVITY_TYPES)[number]
 export type PtScoreType = (typeof SCORE_TYPES)[number]
-export type PtVerdict = Exclude<PtStatus, 'pending'>
+type PtVerdict = Exclude<PtStatus, 'pending'>
 
 export const PT_STATUS_LABELS: Record<PtStatus, string> = {
   pending: 'Pendente',
@@ -113,7 +113,7 @@ export type PtDetail = PtRound & {
   createdByName: string | null
 }
 
-export type PtAuditLogEntry = {
+type PtAuditLogEntry = {
   id: number
   action: string
   changes: unknown
@@ -143,7 +143,7 @@ export type PtPlanData = {
 }
 
 /** Minimal reference-standard option list for the create-round form. */
-export type PtStandardOption = {
+type PtStandardOption = {
   id: number
   name: string
   serialNumber: string

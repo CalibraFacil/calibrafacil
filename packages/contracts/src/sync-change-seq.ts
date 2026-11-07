@@ -96,7 +96,7 @@ export function syncChangeCursorBefore(position: SyncChangePosition): string {
 
 export const SYNC_RESYNC_REQUIRED_CODE = "SYNC_RESYNC_REQUIRED";
 
-export const syncResyncReasonSchema = z.enum([
+const syncResyncReasonSchema = z.enum([
   /** The desktop has no cursor (its bootstrap never completed). */
   "no_cursor",
   /** The cursor is of the `updatedAt` protocols: a desktop that just upgraded. */
@@ -146,7 +146,7 @@ export function buildSyncResyncRequiredResponse(
 
 /** Rows of one bootstrap page when the desktop does not ask for a size. */
 export const SYNC_BOOTSTRAP_DEFAULT_PAGE_SIZE = 500;
-export const SYNC_BOOTSTRAP_MAX_PAGE_SIZE = 1000;
+const SYNC_BOOTSTRAP_MAX_PAGE_SIZE = 1000;
 
 export const syncBootstrapPageRequestSchema = z.object({
   /**

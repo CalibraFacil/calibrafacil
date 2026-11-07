@@ -4,7 +4,6 @@ import type {
   InputQuantityLike,
   MeasurementModelInputLike,
   MethodDiagnostic,
-  MethodInput,
   MethodMeasurementModel,
   MethodQuantity,
   NumericInput,
@@ -340,8 +339,4 @@ function isCalculationEngineErrorLike(error: unknown): error is {
     "code" in error &&
     "message" in error
   );
-}
-
-export function inputIsNumeric(input: MethodInput): boolean {
-  return input.kind === "scalar";
 }

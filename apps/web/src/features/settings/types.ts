@@ -11,11 +11,9 @@ import type {
   SsoSettingsResponse,
 } from '@calibra-facil/client-runtime'
 import type {
-  ContaAzulConnectionConfig,
   FinancialErpConnectionConfig,
   IntegrationDependencyWarning,
   IntegrationMappedPreviewSample,
-  IntegrationMappingsConfig,
   IntegrationReadinessSummary,
   IntegrationRemoteDocumentSummary,
   IntegrationTargetCoverageSummary,
@@ -90,7 +88,7 @@ export type GovernanceViewer = {
   managedUnitIds: number[]
 }
 
-export type GovernanceAssignment = {
+type GovernanceAssignment = {
   unitId: number
   unitName: string
   role: UnitAssignmentRole
@@ -174,18 +172,6 @@ export type SyncTarget =
   | 'billing_document'
   | 'payable'
 
-export type IntegrationConfig = {
-  baseUrl: string
-  healthPath: string
-  customerPath: string
-  serviceOrderPath: string
-  billingDocumentPath: string
-  authType: 'bearer'
-  mappings: IntegrationMappingsConfig
-}
-
-export type ContaAzulConfig = ContaAzulConnectionConfig
-
 export type IntegrationRun = {
   id: string
   target: SyncTarget
@@ -205,7 +191,7 @@ export type IntegrationRun = {
   } | null
 }
 
-export type IntegrationSyncItem = {
+type IntegrationSyncItem = {
   id: string
   runId: string
   target: SyncTarget
@@ -238,7 +224,7 @@ export type IntegrationRunItemsResponse = {
   }
 }
 
-export type IntegrationEvent = {
+type IntegrationEvent = {
   id: number
   level: 'info' | 'warning' | 'error'
   event: string
@@ -246,7 +232,7 @@ export type IntegrationEvent = {
   createdAt: string
 }
 
-export type IntegrationOverview = {
+type IntegrationOverview = {
   readiness: IntegrationReadinessSummary
   targets: IntegrationTargetSyncSummary[]
   remoteDocuments: IntegrationRemoteDocumentSummary

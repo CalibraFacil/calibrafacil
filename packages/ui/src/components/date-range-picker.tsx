@@ -78,4 +78,3 @@ function DateRangePicker({
 }
 
 export { DateRangePicker };
-export type { DateRangePickerProps };

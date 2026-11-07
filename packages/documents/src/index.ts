@@ -1,33 +1,18 @@
 export { LabelHtml, type LabelData } from "./LabelHtml.js";
 export {
   LAB_TIME_ZONE,
-  formatCalendarDate,
-  formatInstant,
-  formatDateOnlyKey,
-  getDateOnlyDay,
   getLabCalendarDay,
   formatLabDayKey,
   startOfLabMonth,
 } from "./dates.js";
-export {
-  renderIntervalReportHtml,
-  type IntervalReportData,
-} from "./IntervalReportHtml.js";
+export { renderIntervalReportHtml } from "./IntervalReportHtml.js";
 export {
   renderFleetStatusReportHtml,
   classifyFleetDueStatus,
   FLEET_DUE_SOON_DAYS,
-  type FleetStatusReportData,
   type FleetStatusAsset,
-  type FleetDueStatus,
-  type FleetStatusClassification,
 } from "./FleetStatusReportHtml.js";
-export {
-  AccreditationSealSvg,
-  ACCREDITATION_SEAL_VIEWBOX,
-  type AccreditationSealEffect,
-  type AccreditationSealProps,
-} from "./AccreditationSeal.js";
+export { AccreditationSealSvg } from "./AccreditationSeal.js";
 export {
   ServiceOrderIntakeDocumentHtml,
   ServiceOrderDeliveryReceiptHtml,
@@ -44,24 +29,12 @@ export {
 } from "./OotNotificationHtml.js";
 export { CalibrationCertificateHtml } from "./certificate/CalibrationCertificateHtml.js";
 export {
-  CERTIFICATE_PAGE_STYLES,
   certificateFooterHtml,
   certificateHeaderHtml,
 } from "./certificate/certificate-styles.js";
 export type {
   CalibrationCertificateData,
-  CertificateCalibratingBody,
-  CertificateConformity,
-  CertificateCustomer,
-  CertificateDates,
-  CertificateEccentricity,
-  CertificateEnvironment,
-  CertificateItem,
-  CertificateLabIdentity,
-  CertificateMethod,
   CertificateResultRow,
-  CertificateRepeatability,
   CertificateResultTable,
-  CertificateSignatory,
   CertificateStandard,
 } from "./certificate/types.js";

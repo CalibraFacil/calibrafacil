@@ -24,7 +24,7 @@ export function PortalOrgProvider({
   );
 }
 
-export function usePortalOrgId(): string | null {
+function usePortalOrgId(): string | null {
   return useContext(PortalOrgContext);
 }
 

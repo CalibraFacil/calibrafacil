@@ -126,7 +126,7 @@ const LegalMetrologyRegulationListSchema = z.object({
   data: z.array(LegalMetrologyRegulationEntrySchema),
 })
 
-export function legalMetrologyRegulationsQueryOptions() {
+function legalMetrologyRegulationsQueryOptions() {
   return queryOptions({
     queryKey: ['legal-metrology-regulations'],
     queryFn: async (): Promise<LegalMetrologyRegulationCatalogEntry[]> => {
@@ -163,7 +163,7 @@ export function newAssetCustomersQueryOptions(search = '') {
   })
 }
 
-export async function getAssetsIndexEssentialQueries(url?: URL) {
+async function getAssetsIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

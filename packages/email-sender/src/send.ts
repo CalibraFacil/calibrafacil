@@ -16,7 +16,7 @@ import { classifyResendErrorName } from "./resend-domains";
 import { sendPlatformEmail } from "./transport";
 
 /** Passed to the payload builder when the lab variant is being rendered. */
-export interface LabSenderContext {
+interface LabSenderContext {
   fromAddress: string;
   hostname: string;
 }

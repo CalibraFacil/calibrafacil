@@ -15,15 +15,13 @@
 import { SERVICE_ORDER_QUOTE_STATUSES } from "@calibra-facil/shared";
 import { defineStateMachine } from "../state-machine";
 
-export const SERVICE_ORDER_QUOTE_COMMANDS = [
+const SERVICE_ORDER_QUOTE_COMMANDS = [
   "create",
   "edit",
   "send",
   "approve",
   "reject",
 ] as const;
-export type ServiceOrderQuoteCommand =
-  (typeof SERVICE_ORDER_QUOTE_COMMANDS)[number];
 
 export const SERVICE_ORDER_QUOTE_MACHINE = defineStateMachine({
   name: "service order quote",

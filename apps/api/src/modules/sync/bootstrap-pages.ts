@@ -122,7 +122,7 @@ function arrayFor(
   }
 }
 
-export type BootstrapPage =
+type BootstrapPage =
   | { kind: "invalid_token" }
   | {
       kind: "page";
@@ -132,7 +132,7 @@ export type BootstrapPage =
       arrays: EntityArrays;
     };
 
-export async function loadBootstrapPage(input: {
+async function loadBootstrapPage(input: {
   scope: SyncScope;
   pageToken: string | null | undefined;
   limit: number;

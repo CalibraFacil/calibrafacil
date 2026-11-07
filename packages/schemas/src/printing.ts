@@ -15,18 +15,18 @@ import { z } from "zod";
  * Supported printer resolutions (dots per inch). Zebra/TSC desktop units are 203
  * or 300 dpi; the dot math for the 50×30 mm calibration label depends on it.
  */
-export const PrinterDpiSchema = z.union([z.literal(203), z.literal(300)]);
+const PrinterDpiSchema = z.union([z.literal(203), z.literal(300)]);
 export type PrinterDpi = z.infer<typeof PrinterDpiSchema>;
 
 /** Printer command language. `zpl` = Zebra and compatibles; `tspl` = TSC. */
-export const PrinterLanguageSchema = z.enum(["zpl", "tspl"]);
+const PrinterLanguageSchema = z.enum(["zpl", "tspl"]);
 export type PrinterLanguage = z.infer<typeof PrinterLanguageSchema>;
 
 /**
  * How to physically reach the printer. Discriminated on `type` so each transport
  * carries exactly the fields it needs.
  */
-export const PrinterConnectionSchema = z.discriminatedUnion("type", [
+const PrinterConnectionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("network"),
     host: z.string().trim().min(1, "Endereço do host é obrigatório"),
@@ -45,19 +45,16 @@ export const PrinterConnectionSchema = z.discriminatedUnion("type", [
     baudRate: z.coerce.number().int().positive().default(9600),
   }),
 ]);
-export type PrinterConnection = z.infer<typeof PrinterConnectionSchema>;
-export type PrinterConnectionType = PrinterConnection["type"];
 
 /**
  * Label-home offset in dots, for top-of-form calibration (maps to ZPL `^LH`).
  */
-export const PrinterOffsetsSchema = z
+const PrinterOffsetsSchema = z
   .object({
     xDots: z.coerce.number().int().default(0),
     yDots: z.coerce.number().int().default(0),
   })
   .default({ xDots: 0, yDots: 0 });
-export type PrinterOffsets = z.infer<typeof PrinterOffsetsSchema>;
 
 /**
  * A saved printer configuration. `widthDots`/`heightDots` describe the media in
@@ -112,14 +109,12 @@ export const PrintLabelRequestSchema = z
     (value) => value.jobId !== undefined || value.commands !== undefined,
     { message: "Informe jobId ou commands" },
   );
-export type PrintLabelRequest = z.infer<typeof PrintLabelRequestSchema>;
 
 /** A "print a test label" request: just which printer to target. */
 export const PrintTestRequestSchema = z.object({
   profileId: z.string().trim().optional(),
   profile: PrinterProfileSchema.optional(),
 });
-export type PrintTestRequest = z.infer<typeof PrintTestRequestSchema>;
 
 export const PrintResultSchema = z.object({
   success: z.boolean(),
@@ -128,7 +123,7 @@ export const PrintResultSchema = z.object({
 });
 export type PrintResult = z.infer<typeof PrintResultSchema>;
 
-export const DiscoveredUsbPrinterSchema = z.object({
+const DiscoveredUsbPrinterSchema = z.object({
   vendorId: z.number().int(),
   productId: z.number().int(),
   manufacturer: z.string().optional(),
@@ -136,7 +131,7 @@ export const DiscoveredUsbPrinterSchema = z.object({
   serialNumber: z.string().optional(),
 });
 
-export const DiscoveredSerialPortSchema = z.object({
+const DiscoveredSerialPortSchema = z.object({
   path: z.string(),
   manufacturer: z.string().optional(),
 });

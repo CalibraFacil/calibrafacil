@@ -20,8 +20,8 @@ import {
   type RetentionInventory,
 } from "./records-retention";
 
-export const INVENTORY_BEGIN = "<!-- BEGIN GENERATED: records-retention -->";
-export const INVENTORY_END = "<!-- END GENERATED: records-retention -->";
+const INVENTORY_BEGIN = "<!-- BEGIN GENERATED: records-retention -->";
+const INVENTORY_END = "<!-- END GENERATED: records-retention -->";
 
 const ACTION_LABEL: Record<ForeignKeyEdge["onDelete"], string> = {
   cascade: "CASCADE",
@@ -155,7 +155,7 @@ function renderOwnership(): string[] {
   ];
 }
 
-export function renderInventoryBlock(): string {
+function renderInventoryBlock(): string {
   const inventory = buildRetentionInventory();
   const evidenceCount = inventory.evidenceTables.length;
   const totalEdges = listForeignKeys().length;

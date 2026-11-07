@@ -39,13 +39,6 @@ export function isDesktopRuntime(windowLike?: Window): boolean {
   );
 }
 
-export async function getDesktopApiBaseUrl(
-  bridge: CalibraBridge,
-): Promise<string | null> {
-  const bootstrap = await bridge.getLocalEnvironmentBootstrap();
-  return bootstrap?.httpBaseUrl ?? null;
-}
-
 declare global {
   interface Window {
     calibraBridge?: CalibraBridge;

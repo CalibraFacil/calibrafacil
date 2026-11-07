@@ -11,7 +11,7 @@ import type { Rng } from "./prng";
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-export type JobFinalState =
+type JobFinalState =
   | "APPROVED"
   | "REJECTED"
   | "REVIEW"
@@ -90,9 +90,7 @@ const TURNAROUND_DAYS: Readonly<Record<DemoTemplateKey, number>> = {
   "frequency-indication": 5,
 };
 
-export function templateForAssetType(
-  typeSlug: string,
-): DemoTemplateKey | undefined {
+function templateForAssetType(typeSlug: string): DemoTemplateKey | undefined {
   return TEMPLATE_BY_TYPE[typeSlug];
 }
 

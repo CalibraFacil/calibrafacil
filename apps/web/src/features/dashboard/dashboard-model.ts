@@ -30,7 +30,7 @@ export const STATUS_LABEL: Record<DashboardJobStatus, string> = {
 
 // — Pipeline —
 
-export type PipelineStageStatus =
+type PipelineStageStatus =
   | 'DRAFT'
   | 'IN_PROGRESS'
   | 'REVIEW'
@@ -45,7 +45,7 @@ export type PipelineStage = {
   share: number
 }
 
-export const PIPELINE_STAGES: ReadonlyArray<{
+const PIPELINE_STAGES: ReadonlyArray<{
   status: PipelineStageStatus
   label: string
 }> = [

@@ -26,7 +26,7 @@ const STATUS_MESSAGES: Partial<Record<number, string>> = {
 };
 
 /** `{ error, code }` for an HTTPException thrown without a body of its own. */
-export function httpExceptionBody(error: HTTPException): {
+function httpExceptionBody(error: HTTPException): {
   error: string;
   code?: ApiErrorCode;
 } {

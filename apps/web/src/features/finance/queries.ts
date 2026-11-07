@@ -85,9 +85,7 @@ export function financeErpQueryOptions() {
   })
 }
 
-export function financeBillingReadinessQueryOptions(
-  input: { status?: string } = {},
-) {
+function financeBillingReadinessQueryOptions(input: { status?: string } = {}) {
   return queryOptions({
     queryKey: ['finance', 'billing-readiness', input.status ?? 'all'],
     queryFn: () =>
@@ -220,12 +218,6 @@ export async function loadFinanceBillingReadinessData(
   queryClient: QueryClient,
 ) {
   await ensureRouteQueries(queryClient, [financeBillingReadinessQueryOptions()])
-}
-
-export async function prewarmFinanceBillingReadiness(queryClient: QueryClient) {
-  await prewarmRouteQueries(queryClient, [
-    financeBillingReadinessQueryOptions(),
-  ])
 }
 
 export async function prewarmNewFinanceDocument(queryClient: QueryClient) {

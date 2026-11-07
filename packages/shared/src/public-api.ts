@@ -1,4 +1,4 @@
-export const PUBLIC_API_RESOURCE_TYPES = [
+const PUBLIC_API_RESOURCE_TYPES = [
   "customer",
   "asset",
   "request",

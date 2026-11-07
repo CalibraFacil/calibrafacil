@@ -17,7 +17,7 @@ export const SPC_ENGINE_VERSION = "0.1.0";
 
 export type SpcChartType = "i_mr" | "xbar_r" | "cusum" | "ewma";
 
-export type SpcStatus =
+type SpcStatus =
   | "insufficient_data"
   | "in_control"
   | "trending"

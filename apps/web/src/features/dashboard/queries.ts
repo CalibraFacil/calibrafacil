@@ -23,7 +23,7 @@ export function dashboardStatsQueryOptions(organizationId: string) {
   })
 }
 
-export async function getDashboardIndexEssentialQueries() {
+async function getDashboardIndexEssentialQueries() {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

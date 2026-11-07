@@ -4,7 +4,7 @@ import { calibraApi } from '@/utils/api'
 
 export type SearchMode = 'assets' | 'clients' | 'standards' | 'jobs' | null
 
-export type AssetSearchResult = {
+type AssetSearchResult = {
   id: number
   tag: string
   serialNumber: string
@@ -13,21 +13,21 @@ export type AssetSearchResult = {
   customerTaxId: string | null
 }
 
-export type ClientSearchResult = {
+type ClientSearchResult = {
   id: number
   name: string
   email: string | null
   taxId: string | null
 }
 
-export type StandardSearchResult = {
+type StandardSearchResult = {
   id: number
   name: string
   serialNumber: string
   manufacturer: string | null
 }
 
-export type JobSearchResult = {
+type JobSearchResult = {
   id: number
   jobId: string
   status: string
@@ -35,7 +35,7 @@ export type JobSearchResult = {
 
 export const SEARCH_DEBOUNCE_MS = 150
 export const SEARCH_MIN_LENGTH = 2
-export const SEARCH_RESULT_LIMIT = 5
+const SEARCH_RESULT_LIMIT = 5
 const SEARCH_STALE_TIME_MS = 30_000
 
 export function getSearchModeFromPage(activePage: string): SearchMode {

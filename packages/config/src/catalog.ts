@@ -8,7 +8,7 @@ import {
 import { RUNTIME_SPECS } from "./runtimes";
 
 /** One variable as the documentation lists it. */
-export interface CatalogEntry {
+interface CatalogEntry {
   readonly meta: VarMeta;
   /** The runtimes whose configuration includes it. */
   readonly runtimes: readonly RuntimeName[];

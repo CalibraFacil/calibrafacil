@@ -26,7 +26,7 @@ type PositionOption = {
   className: string
 }
 
-export const CIRCULAR_ECCENTRICITY_INDICATOR_OPTIONS: PositionOption[] = [
+const CIRCULAR_ECCENTRICITY_INDICATOR_OPTIONS: PositionOption[] = [
   {
     value: 'top',
     label: 'Superior',
@@ -53,7 +53,7 @@ export const CIRCULAR_ECCENTRICITY_INDICATOR_OPTIONS: PositionOption[] = [
   },
 ]
 
-export const ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS: PositionOption[] = [
+const ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS: PositionOption[] = [
   {
     value: '1',
     label: 'Seção 1',
@@ -90,12 +90,7 @@ const CIRCULAR_LOAD_POINT_CLASSES: Record<string, string> = {
 
 const DEFAULT_CIRCULAR_LOAD_POINTS = Object.keys(CIRCULAR_LOAD_POINT_CLASSES)
 
-export const ECCENTRICITY_INDICATOR_OPTIONS = [
-  ...CIRCULAR_ECCENTRICITY_INDICATOR_OPTIONS,
-  ...ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS,
-]
-
-export function getEccentricityIndicatorOptions(
+function getEccentricityIndicatorOptions(
   variant: EccentricityIndicatorVariant = 'circular_platform',
 ) {
   return variant === 'road_scale'
@@ -115,7 +110,7 @@ export function isEccentricityIndicatorPosition(
   )
 }
 
-export function getEccentricityIndicatorLabel(
+function getEccentricityIndicatorLabel(
   value: EccentricityIndicatorPosition | null | undefined,
   variant: EccentricityIndicatorVariant = 'circular_platform',
 ) {

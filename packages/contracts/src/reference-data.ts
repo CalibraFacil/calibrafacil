@@ -33,7 +33,7 @@ const customerComplianceSchema = z.object({
 });
 
 /** One customer row as GET /api/customers lists it. */
-export const customerSchema = z.object({
+const customerSchema = z.object({
   id: z.number(),
   name: z.string(),
   tradeName: nullableString.optional(),
@@ -49,7 +49,6 @@ export const customerSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
-export type Customer = z.infer<typeof customerSchema>;
 
 /** GET /api/customers */
 export const customersListResponseSchema = z.object({
@@ -75,7 +74,7 @@ export type CustomerDetail = z.infer<typeof customerDetailSchema>;
 // Asset types
 // ---------------------------------------------------------------------------
 
-export const assetTypeSchema = z.object({
+const assetTypeSchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
@@ -83,7 +82,6 @@ export const assetTypeSchema = z.object({
   /** The field definitions of the specification form (opaque list of records). */
   definition: z.array(jsonRecordSchema).nullable(),
 });
-export type AssetTypeItem = z.infer<typeof assetTypeSchema>;
 
 /** GET /api/asset-types */
 export const assetTypesResponseSchema = z.object({
@@ -118,14 +116,13 @@ export const assetRecordSchema = z.object({
 export type AssetRecord = z.infer<typeof assetRecordSchema>;
 
 /** An asset with its customer and type joined in, as the list and the detail show it. */
-export const assetSchema = assetRecordSchema.extend({
+const assetSchema = assetRecordSchema.extend({
   customerName: z.string(),
   customerTaxId: nullableString,
   assetTypeName: z.string(),
   assetTypeSlug: nullableString,
   assetTypeDefinition: z.array(jsonRecordSchema).nullable(),
 });
-export type Asset = z.infer<typeof assetSchema>;
 
 /** GET /api/assets */
 export const assetsListResponseSchema = z.object({
@@ -148,7 +145,7 @@ export type AssetDetail = z.infer<typeof assetDetailSchema>;
 // ---------------------------------------------------------------------------
 
 /** One method as GET /api/methods lists it (the compiled artifact stays out). */
-export const methodSchema = z.object({
+const methodSchema = z.object({
   id: z.number(),
   name: z.string(),
   description: nullableString,
@@ -171,7 +168,6 @@ export const methodSchema = z.object({
   publishedAt: nullableString,
   parentId: nullableNumber,
 });
-export type Method = z.infer<typeof methodSchema>;
 
 /** GET /api/methods */
 export const methodsListResponseSchema = z.object({

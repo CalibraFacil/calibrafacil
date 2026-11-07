@@ -113,7 +113,7 @@ export function createTransactionScopeRunner(open: OpenTransaction) {
  */
 const scopeCallbacks = new WeakSet<object>();
 
-export function markTransactionScopeCallback(callback: object): void {
+function markTransactionScopeCallback(callback: object): void {
   scopeCallbacks.add(callback);
 }
 

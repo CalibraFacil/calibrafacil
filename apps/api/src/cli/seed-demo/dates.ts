@@ -5,7 +5,7 @@ import type { Rng } from "./prng";
  * done on this shifted clock; the returned instants are plain UTC dates, which
  * is how the database stores them.
  */
-export const LAB_UTC_OFFSET_HOURS = -3;
+const LAB_UTC_OFFSET_HOURS = -3;
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
@@ -15,12 +15,12 @@ const WORK_START_HOUR = 8.5;
 const WORK_END_HOUR = 17.5;
 
 /** Wall-clock fields of `date` on the lab clock (read them with the getUTC* methods). */
-export function labClock(date: Date): Date {
+function labClock(date: Date): Date {
   return new Date(date.getTime() + OFFSET_MS);
 }
 
 /** Instant for a wall-clock time on the lab clock (inverse of `labClock`). */
-export function fromLabClock(
+function fromLabClock(
   year: number,
   month: number,
   day: number,
@@ -30,7 +30,7 @@ export function fromLabClock(
   return new Date(Date.UTC(year, month, day, hour, minute) - OFFSET_MS);
 }
 
-export function labDayStart(date: Date): Date {
+function labDayStart(date: Date): Date {
   const clock = labClock(date);
   return fromLabClock(
     clock.getUTCFullYear(),

@@ -17,7 +17,7 @@ import {
  * `seal-foil`, `seal-glare`). The default ("none") is the regulated artwork.
  */
 
-export type AccreditationSealEffect = "none" | "sheen" | "holo";
+type AccreditationSealEffect = "none" | "sheen" | "holo";
 
 export type AccreditationSealProps = {
   /** Digits-only accreditation number; rendered as "CAL 0123". */
@@ -29,7 +29,7 @@ export type AccreditationSealProps = {
 
 const SEAL_FONT_FAMILY = ACCREDITATION_SEAL_FONT_FAMILY;
 
-export const ACCREDITATION_SEAL_VIEWBOX = "0 0 130 196";
+const ACCREDITATION_SEAL_VIEWBOX = "0 0 130 196";
 
 export function AccreditationSealSvg({
   accreditationNumber,

@@ -158,7 +158,7 @@ export type QueueReceiptRunResult =
   | { ran: false; reason: "duplicate-completed" };
 
 /** Thrown in enforce mode when another worker holds a live lease on the unit. */
-export class QueueReceiptHeldError extends Error {
+class QueueReceiptHeldError extends Error {
   constructor(jobType: string, idempotencyKey: string) {
     super(
       `queue receipt for ${jobType}/${idempotencyKey} is held by another worker`,

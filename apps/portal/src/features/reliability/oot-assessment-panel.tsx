@@ -35,20 +35,18 @@ import { useOotEvents } from "./queries";
 import { isOotDecision, type OotDecision, type OotEvent } from "./types";
 import { formatInstant } from "@calibra-facil/shared/format";
 
-export const DECISION_META: Record<
-  OotDecision,
-  { label: string; tone: SignalTone }
-> = {
-  NO_IMPACT: { label: "Sem impacto em resultados anteriores", tone: "ok" },
-  IMPACT_CONTAINED: {
-    label: "Impacto identificado e contido",
-    tone: "warning",
-  },
-  IMPACT_ESCALATED: {
-    label: "Impacto identificado — ação escalada",
-    tone: "critical",
-  },
-};
+const DECISION_META: Record<OotDecision, { label: string; tone: SignalTone }> =
+  {
+    NO_IMPACT: { label: "Sem impacto em resultados anteriores", tone: "ok" },
+    IMPACT_CONTAINED: {
+      label: "Impacto identificado e contido",
+      tone: "warning",
+    },
+    IMPACT_ESCALATED: {
+      label: "Impacto identificado — ação escalada",
+      tone: "critical",
+    },
+  };
 
 function yesNo(value: boolean | null): string {
   return value === null ? "—" : value ? "Sim" : "Não";

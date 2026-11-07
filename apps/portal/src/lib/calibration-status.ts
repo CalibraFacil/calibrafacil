@@ -157,7 +157,7 @@ export function getInstrumentStatus(
 }
 
 /** URL-safe filter values used to deep-link the equipment list to a status. */
-export const CALIBRATION_FILTERS = [
+const CALIBRATION_FILTERS = [
   "overdue",
   "due_soon",
   "scheduled",

@@ -172,18 +172,6 @@ LIMIT @limit
   return { data: rows.map(toLocalAttachment) };
 }
 
-/**
- * Where an attachment's file is on its way to the cloud.
- *
- * - `pending`: not uploaded (or uploaded and since refused: it goes again)
- * - `uploaded`: the cloud holds and verified the bytes (`remote_key` is set); the
- *   `create_local_attachment` event has not been accepted yet
- * - `synced`: the cloud accepted the event. Never reached without `remote_key`
- * - `dead`: the upload can never succeed as it stands (the file is gone or changed,
- *   or the cloud refuses it); its outbox event is dead too and waits for a person
- */
-export type AttachmentUploadStatus = "pending" | "uploaded" | "synced" | "dead";
-
 /** Records that the cloud holds and verified the file; the only way to `uploaded`. */
 export function markAttachmentUploaded(
   database: LocalDatabase,

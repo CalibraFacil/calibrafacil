@@ -14,26 +14,14 @@ import { z } from "zod";
  * files and the docs all read the same metadata.
  */
 
-export const RUNTIMES = [
-  "api",
-  "worker",
-  "local-server",
-  "web",
-  "portal",
-] as const;
+const RUNTIMES = ["api", "worker", "local-server", "web", "portal"] as const;
 
 export type RuntimeName = (typeof RUNTIMES)[number];
 
 /** What the process reads its settings from: `process.env`, or any bag of strings. */
 export type EnvSource = Readonly<Record<string, string | undefined>>;
 
-export type VarKind =
-  | "string"
-  | "url"
-  | "integer"
-  | "boolean"
-  | "enum"
-  | "list";
+type VarKind = "string" | "url" | "integer" | "boolean" | "enum" | "list";
 
 /** How a variable appears in a generated `.env.example`. */
 export type ExampleSpec =
@@ -51,7 +39,7 @@ export const example = {
   generated: (): ExampleSpec => ({ state: "generated" }),
 } as const;
 
-export type RequiredInProduction = boolean | readonly RuntimeName[];
+type RequiredInProduction = boolean | readonly RuntimeName[];
 
 export interface VarMeta {
   /** The environment variable this setting reads. */

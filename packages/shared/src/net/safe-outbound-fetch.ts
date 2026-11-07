@@ -139,9 +139,9 @@ export function setOutboundTestOverrides(
   testOverrides = overrides;
 }
 
-export const DEFAULT_OUTBOUND_TIMEOUT_MS = 10_000;
-export const DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MS = 5_000;
-export const DEFAULT_OUTBOUND_MAX_RESPONSE_BYTES = 64 * 1024;
+const DEFAULT_OUTBOUND_TIMEOUT_MS = 10_000;
+const DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MS = 5_000;
+const DEFAULT_OUTBOUND_MAX_RESPONSE_BYTES = 64 * 1024;
 
 export type SafeOutboundInit = {
   method?: string;
@@ -171,7 +171,7 @@ const CROSS_ORIGIN_HEADERS = new Set([
   "user-agent",
 ]);
 
-export async function resolveHostAddresses(
+async function resolveHostAddresses(
   hostname: string,
 ): Promise<readonly ResolvedAddress[]> {
   const found = await lookup(hostname, { all: true, verbatim: true });
@@ -244,7 +244,7 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 }
 
 /** The `node:http(s)` transport: connects to the pinned IP, names the host. */
-export const nodePinnedTransport: PinnedTransport = (request) =>
+const nodePinnedTransport: PinnedTransport = (request) =>
   new Promise<RawOutboundResponse>((resolve, reject) => {
     const { url, address } = request;
     const secure = url.protocol === "https:";

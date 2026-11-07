@@ -206,25 +206,3 @@ export async function markLabEmailKeyFailure(
     );
   }
 }
-
-/** Clear a previously recorded key failure (rotation or recovered health). */
-export async function markLabEmailKeyOk(organizationId: string): Promise<void> {
-  try {
-    await forOrg(db, organizationId).transaction(async (o) => {
-      await o
-        .update(organizationEmailDomain)
-        .set({ keyStatus: "ok", keyLastError: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(organizationEmailDomain.organizationId, organizationId),
-            ne(organizationEmailDomain.keyStatus, "ok"),
-          ),
-        );
-    });
-  } catch (error) {
-    console.error(
-      `[EmailSender] Failed to reset key status for org ${organizationId}:`,
-      error,
-    );
-  }
-}

@@ -48,7 +48,7 @@ export type CalibraApiMethodsWithPolicy<
     : never;
 }[CalibraApiMethod<TNamespace>];
 
-export const desktopDataPolicyUnavailableMessages = {
+const desktopDataPolicyUnavailableMessages = {
   "cloud-only":
     "Esta tela depende da API da nuvem e não está disponível offline. Verifique a conexão e tente novamente.",
   "cloud-first-read-fallback":

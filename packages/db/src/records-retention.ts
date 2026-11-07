@@ -26,7 +26,7 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
 import { TENANT_FK_SUFFIX } from "./tenancy";
 
-export type ReferentialAction =
+type ReferentialAction =
   | "cascade"
   | "restrict"
   | "no action"
@@ -519,16 +519,9 @@ export function findStaleOwnedPartEdges(): readonly OwnedPartEdge[] {
 // ---------------------------------------------------------------------------
 
 /** Roots whose deletion the inventory follows. */
-export const RETENTION_ROOTS = [
-  "organization",
-  "customer",
-  "asset",
-  "user",
-] as const;
+const RETENTION_ROOTS = ["organization", "customer", "asset", "user"] as const;
 
 export type RetentionRoot = (typeof RETENTION_ROOTS)[number];
-
-export type PathStep = { edge: ForeignKeyEdge };
 
 /** How deleting a root reaches one evidence table. */
 export type EvidenceImpact = {
@@ -636,7 +629,7 @@ export type RetentionInventory = {
   violations: readonly ForeignKeyEdge[];
 };
 
-export function cascadeClosure(root: string): readonly string[] {
+function cascadeClosure(root: string): readonly string[] {
   const edges = listForeignKeys();
   const reached = new Set<string>([root]);
   const queue = [root];

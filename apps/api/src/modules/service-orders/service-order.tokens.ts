@@ -57,7 +57,7 @@ type PublicAccessRow = typeof serviceOrderPublicAccessToken.$inferSelect;
  * - "not_found": missing, expired, or revoked for any other reason
  *   (superseded, legacy null reason).
  */
-export type PublicAccessLookup =
+type PublicAccessLookup =
   | { kind: "active"; access: PublicAccessRow }
   | { kind: "decided" }
   | { kind: "not_found" };
@@ -85,7 +85,7 @@ async function findPublicAccessGrant(
   return grant ?? null;
 }
 
-export async function getPublicServiceOrderAccessByToken(
+async function getPublicServiceOrderAccessByToken(
   token: string,
 ): Promise<PublicAccessLookup> {
   const tokenHash = await hashServiceOrderToken(token);

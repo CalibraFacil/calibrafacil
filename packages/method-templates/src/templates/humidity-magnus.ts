@@ -302,7 +302,7 @@ const certificateContent = {
   ],
 };
 
-export const humidityProductDefinition: TemplateProductDefinition = {
+const humidityProductDefinition: TemplateProductDefinition = {
   assetTypeSlug: HYGROMETER_ASSET_TYPE_SLUG,
   name: METHOD_NAME,
   description: methodDescription,

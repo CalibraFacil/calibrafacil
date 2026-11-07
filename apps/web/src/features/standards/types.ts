@@ -62,9 +62,9 @@ export type ImpactedCertificatesData = {
   window: { from: string; to: string }
 }
 
-export type StandardRecallStatus = 'DRAFT' | 'SENT'
+type StandardRecallStatus = 'DRAFT' | 'SENT'
 
-export type StandardRecallNotificationStatus =
+type StandardRecallNotificationStatus =
   | 'PENDING'
   | 'GENERATED'
   | 'SENT'

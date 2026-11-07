@@ -47,7 +47,7 @@ import type { LocalServerConfig } from "./bootstrap";
  * (roadmap 2 E2). The sync stops in `auth_required` until the user signs in
  * again; queued changes are not marked failed (they are not the problem).
  */
-export class CloudAuthRequiredError extends Error {
+class CloudAuthRequiredError extends Error {
   constructor() {
     super("Sessão expirada: entre novamente para sincronizar.");
     this.name = "CloudAuthRequiredError";
@@ -76,7 +76,7 @@ type PushSyncOptions = { includeDeferred?: boolean };
  * version is higher). Nothing was applied and nothing is changed locally: the
  * queued events wait for the update.
  */
-export class DesktopUpdateRequiredError extends Error {
+class DesktopUpdateRequiredError extends Error {
   readonly minimumVersion: string;
 
   constructor(minimumVersion: string) {
@@ -355,7 +355,7 @@ const MAX_BOOTSTRAP_PAGES = 100_000;
  * The cloud cannot serve this desktop's pull cursor (SYNC_RESYNC_REQUIRED): there is
  * none, it is of the `updatedAt` protocols, or it is older than the change log is kept.
  */
-export class ResyncRequiredError extends Error {
+class ResyncRequiredError extends Error {
   readonly reason: SyncResyncRequiredResponse["reason"];
 
   constructor(reason: SyncResyncRequiredResponse["reason"]) {
@@ -644,7 +644,7 @@ async function pushPendingOutbox(
  * What one push request carries at most, in bytes of JSON. Events beyond it stay queued for the
  * next run (the drain loop comes back for them); one event larger than this travels alone.
  */
-export const MAX_PUSH_BODY_BYTES = 1_000_000;
+const MAX_PUSH_BODY_BYTES = 1_000_000;
 
 /**
  * The answers to a push request that mean "this request, as sent, is refused" rather than

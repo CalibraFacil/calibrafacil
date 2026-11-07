@@ -29,7 +29,7 @@ export type DataSourceIndicatorSnapshot = DesktopSyncAvailabilitySnapshot & {
   conflictCount: number
 }
 
-export type DataSourceIndicatorVariant =
+type DataSourceIndicatorVariant =
   | 'default'
   | 'secondary'
   | 'destructive'

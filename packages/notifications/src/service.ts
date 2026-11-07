@@ -110,7 +110,7 @@ let emailMisconfigWarningLogged = false;
 // =============================================================================
 
 /** Context for job-related email templates */
-export interface JobEmailContext {
+interface JobEmailContext {
   jobId: string;
   jobInternalId: number;
   actorName?: string;
@@ -118,14 +118,14 @@ export interface JobEmailContext {
 }
 
 /** Context for certificate ready email templates */
-export interface AssetOotEmailContext {
+interface AssetOotEmailContext {
   assetTag: string;
   assetName?: string;
   jobId: string;
   portalUrl: string;
 }
 
-export interface CertificateEmailContext {
+interface CertificateEmailContext {
   jobId: string;
   originalJobId?: string;
   assetName?: string;
@@ -135,7 +135,7 @@ export interface CertificateEmailContext {
 }
 
 /** Context for the audit-pack ready email template (#738) */
-export interface AuditPackEmailContext {
+interface AuditPackEmailContext {
   customerName?: string;
   periodLabel: string;
   certificateCount: number;
@@ -144,14 +144,14 @@ export interface AuditPackEmailContext {
 }
 
 /** Context for compliance alert email templates */
-export interface ComplianceEmailContext {
+interface ComplianceEmailContext {
   itemName: string;
   dueDate: string;
   daysRemaining: number;
 }
 
 /** Context for NC email templates */
-export interface NCEmailContext {
+interface NCEmailContext {
   ncNumber: string;
   ncType?: "work" | "equipment" | "documentation" | "out_of_tolerance";
   description?: string;
@@ -160,7 +160,7 @@ export interface NCEmailContext {
 }
 
 /** Context for competence email templates */
-export interface CompetenceEmailContext {
+interface CompetenceEmailContext {
   subjectName: string;
   scopeDescription: string;
   dueDate?: string;
@@ -169,7 +169,7 @@ export interface CompetenceEmailContext {
 }
 
 /** Context for calibration request email templates */
-export interface CalibrationRequestEmailContext {
+interface CalibrationRequestEmailContext {
   requestId: number;
   customerName: string;
   labName?: string;
@@ -181,7 +181,7 @@ export interface CalibrationRequestEmailContext {
 }
 
 /** Context for on-site visit (calibração in loco) email templates */
-export interface VisitEmailContext {
+interface VisitEmailContext {
   customerName: string;
   scheduledDate: string;
   technicianName?: string;
@@ -191,7 +191,7 @@ export interface VisitEmailContext {
 }
 
 /** Union type for all email contexts */
-export type EmailContext =
+type EmailContext =
   | { type: "job"; data: JobEmailContext }
   | { type: "certificate"; data: CertificateEmailContext }
   | { type: "assetOot"; data: AssetOotEmailContext }

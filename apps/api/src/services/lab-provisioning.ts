@@ -48,7 +48,7 @@ function platformUserFromUnknown(value: unknown) {
   };
 }
 
-export function slugifyLabName(value: string) {
+function slugifyLabName(value: string) {
   return value
     .toLowerCase()
     .normalize("NFD")
@@ -57,7 +57,7 @@ export function slugifyLabName(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export function labSlugCandidate(
+function labSlugCandidate(
   input: { name: string; slug?: string },
   suffix: number,
 ) {
@@ -65,7 +65,7 @@ export function labSlugCandidate(
   return suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
 }
 
-export function labOrganizationCreateErrorWasSlugConflict(error: unknown) {
+function labOrganizationCreateErrorWasSlugConflict(error: unknown) {
   // Reads through every shape Better Auth reports a conflict in — a nested
   // `statusCode` or `body` that this missed would abort provisioning on a name
   // collision the next suffix would have resolved.
@@ -213,7 +213,7 @@ export async function ensureLabProvisioningUser(input: {
   }
 }
 
-export async function ensureOwnerMembership(input: {
+async function ensureOwnerMembership(input: {
   organizationId: string;
   userId: string;
 }) {

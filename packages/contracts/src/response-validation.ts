@@ -17,7 +17,7 @@ import type { z } from "zod";
  */
 export type ResponseValidationMode = "strict" | "warn";
 
-export type ResponseContractIssue = {
+type ResponseContractIssue = {
   path: string;
   code: string;
   message: string;

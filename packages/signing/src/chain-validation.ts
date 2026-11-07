@@ -18,7 +18,6 @@ import * as pkijs from "pkijs";
 import forge from "node-forge";
 
 import { SigningError } from "./types.js";
-import type { CertificateInfo } from "./types.js";
 import { ICP_BRASIL_TRUST_STORE_PEM } from "./trust-store.generated.js";
 
 // pkijs resolves its crypto engine from globalThis.crypto (WebCrypto), which is
@@ -197,17 +196,4 @@ export function getIcpBrasilTrustAnchors(): pkijs.Certificate[] {
     cachedAnchors = parsePemCertificates(ICP_BRASIL_TRUST_STORE_PEM);
   }
   return cachedAnchors;
-}
-
-/**
- * Convenience: validate the chain carried by a parsed PKCS#12 (CertificateInfo).
- */
-export async function validatePkcs12Chain(
-  certInfo: CertificateInfo,
-  options: Omit<ChainValidationOptions, "intermediates">,
-): Promise<ChainValidationResult> {
-  return validateCertificateChain(certInfo.certificate, {
-    ...options,
-    intermediates: certInfo.chain,
-  });
 }

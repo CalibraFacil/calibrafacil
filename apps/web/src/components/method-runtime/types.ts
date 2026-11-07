@@ -5,17 +5,17 @@ import type { MeasurementUnit } from '@calibra-facil/shared/units'
  */
 
 export type MethodInputType = 'text' | 'number' | 'select' | 'table'
-export type MethodInputSource = 'manual' | 'asset_spec'
-export type EccentricityIndicatorVariant = 'circular_platform' | 'road_scale'
+type MethodInputSource = 'manual' | 'asset_spec'
+type EccentricityIndicatorVariant = 'circular_platform' | 'road_scale'
 
-export interface EccentricityIndicatorConfig {
+interface EccentricityIndicatorConfig {
   enabled?: boolean
   variant?: EccentricityIndicatorVariant
   pointColumn?: string
   loadPoints?: string[]
 }
 
-export interface WeighingRangeResolverConfig {
+interface WeighingRangeResolverConfig {
   enabled?: boolean
   assetSpecKey?: string
   pointColumn?: string
@@ -30,11 +30,9 @@ export interface WeighingRangeResolverConfig {
   }
 }
 
-export type MethodTableColumnRole =
-  | 'standard_value'
-  | 'mass_standard_composition'
+type MethodTableColumnRole = 'standard_value' | 'mass_standard_composition'
 
-export interface MassCompositionConfig {
+interface MassCompositionConfig {
   targetUnit?: 'mg' | 'g' | 'kg'
   optionSource?: 'certified_values' | 'composition_profiles'
   targetColumns?: {
@@ -98,7 +96,7 @@ export interface MethodInputField {
   weighingRangeResolver?: WeighingRangeResolverConfig
 }
 
-export interface MethodFormulaReporting {
+interface MethodFormulaReporting {
   includeInCertificate?: boolean
   role?:
     | 'primary_result'
@@ -179,7 +177,7 @@ export type MethodVariableBinding =
         | 'drift'
     }
 
-export interface MethodTypeBComponent {
+interface MethodTypeBComponent {
   name: string
   value: number
   distribution: 'normal' | 'rectangular' | 'triangular' | 'u-shaped'
@@ -188,7 +186,7 @@ export interface MethodTypeBComponent {
   degreesOfFreedom?: number
 }
 
-export type MethodCertificateContentSection =
+type MethodCertificateContentSection =
   | {
       kind: 'paragraphs'
       title: string
@@ -205,7 +203,7 @@ export type MethodCertificateContentSection =
       items: Array<string>
     }
 
-export interface MethodCertificateContent {
+interface MethodCertificateContent {
   procedureCode?: string
   referenceStandards?: Array<string>
   certifiedValuesDisplay?: 'full' | 'hidden'
@@ -214,7 +212,7 @@ export interface MethodCertificateContent {
   sections?: Array<MethodCertificateContentSection>
 }
 
-export type MethodStatus =
+type MethodStatus =
   | 'DRAFT'
   | 'PENDING_APPROVAL'
   | 'TECHNICAL_REVIEWED'
@@ -267,21 +265,4 @@ export interface ValidationResult {
   passed?: boolean
   error?: string
   errorCode?: string
-}
-
-// Default empty method for new methods
-export const defaultMethodData: MethodData = {
-  name: '',
-  description: '',
-  version: 1,
-  status: 'DRAFT',
-  dataFields: [],
-  variableBindings: [],
-  formulas: [],
-  validations: [],
-  uncertaintyParams: [],
-  certificateContent: {
-    referenceStandards: [],
-    sections: [],
-  },
 }
