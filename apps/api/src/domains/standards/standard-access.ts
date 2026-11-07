@@ -3,9 +3,9 @@ import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers"
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { referenceStandard } from "@calibra-facil/db/schema";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { notFound } from "./domain-errors";
-import { buildUnitScopeCondition } from "./units";
-import type { AuthVariables } from "../middleware/permission";
+import { notFound } from "../../lib/domain-errors";
+import { buildUnitScopeCondition } from "../../lib/units";
+import type { AuthVariables } from "../../middleware/permission";
 
 async function resolveStandardRouteId(
   identifier: string,

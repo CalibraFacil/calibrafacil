@@ -37,21 +37,21 @@ import {
   standardRecall,
 } from "@calibra-facil/db/schema";
 import { standardsRouter } from "./standards";
-import { enqueueBackgroundJob } from "../lib/background-jobs";
-import { uploadToR2 } from "../lib/storage";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg, seedStandard } from "../../test/integration/seed";
-import { setJobStatus } from "../../test/integration/job-fixtures";
-import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { enqueueBackgroundJob } from "../../../lib/background-jobs";
+import { uploadToR2 } from "../../../lib/storage";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg, seedStandard } from "../../../../test/integration/seed";
+import { setJobStatus } from "../../../../test/integration/job-fixtures";
+import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 
-vi.mock("../lib/storage", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../lib/storage")>();
+vi.mock("../../../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/storage")>();
   return {
     ...actual,
     createR2Client: vi.fn(() => ({})),

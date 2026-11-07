@@ -1,10 +1,10 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { createHash, randomUUID } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
 import {
   calibrationJob,
   emailSuppression,
@@ -36,15 +36,15 @@ import {
   ensureStandardRecall,
   createStandardRecallNotifications,
   type RecallStandardIdentity,
-} from "../lib/oot-notifications";
+} from "../../../lib/oot-notifications";
 import {
   findImpactedCertificates,
   findInFlightJobsUsingStandard,
-} from "../lib/job-standards";
+} from "../../../lib/job-standards";
 import {
   withLabPermission,
   type AuthVariables,
-} from "../middleware/permission";
+} from "../../../middleware/permission";
 import {
   eq,
   and,
@@ -64,21 +64,23 @@ import {
   REFERENCE_STANDARD_MACHINE,
   STANDARD_RECALL_MACHINE,
 } from "@calibra-facil/schemas/machines";
-import { buildUnitScopeCondition } from "../lib/units";
-import { conflict, forbidden, invalid, notFound } from "../lib/domain-errors";
+import { buildUnitScopeCondition } from "../../../lib/units";
 import {
-  requireLabStandard,
-  requireLabStandardId,
-} from "../lib/standard-access";
-import { withOrg } from "../lib/org-context";
-import { requestActor } from "../middleware/request-actor";
+  conflict,
+  forbidden,
+  invalid,
+  notFound,
+} from "../../../lib/domain-errors";
+import { requireLabStandard, requireLabStandardId } from "../standard-access";
+import { withOrg } from "../../../lib/org-context";
+import { requestActor } from "../../../middleware/request-actor";
 import {
   createR2Client,
   generatePresignedUrl,
   resolveBucketName,
   uploadToR2,
   type R2Env,
-} from "../lib/storage";
+} from "../../../lib/storage";
 import { standardCertificateKey } from "@calibra-facil/shared/storage-keys";
 import {
   addCalendarDays,

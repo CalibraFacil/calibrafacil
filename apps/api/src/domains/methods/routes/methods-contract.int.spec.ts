@@ -14,9 +14,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { methodEndpoints } from "@calibra-facil/contracts";
 import { methodsRouter } from "./methods";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

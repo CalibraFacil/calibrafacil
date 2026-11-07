@@ -24,24 +24,24 @@ import {
   standardRecall,
 } from "@calibra-facil/db/schema";
 import { standardsRouter } from "./standards";
-import { jobsRouter } from "./jobs";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg, seedStandard } from "../../test/integration/seed";
+import { jobsRouter } from "../../../routes/jobs";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg, seedStandard } from "../../../../test/integration/seed";
 import {
   seedExtraMember,
   seedJobForOrg,
-} from "../../test/integration/tenant-refs";
-import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { insertJobs } from "../../test/integration/job-fixtures";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+} from "../../../../test/integration/tenant-refs";
+import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 
-vi.mock("../lib/storage", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../lib/storage")>();
+vi.mock("../../../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/storage")>();
   return {
     ...actual,
     createR2Client: vi.fn(() => ({ send: vi.fn() })),
@@ -61,9 +61,9 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyAssetFoundOutOfTolerance: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../lib/scope-compliance", async (importOriginal) => {
+vi.mock("../../../lib/scope-compliance", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../lib/scope-compliance")>();
+    await importOriginal<typeof import("../../../lib/scope-compliance")>();
   return {
     ...actual,
     classifyJobScopeCompliance: vi.fn(async () => ({

@@ -6,10 +6,10 @@ import {
   referenceStandardAuditLog,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg, seedStandard } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg, seedStandard } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the standardsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts).

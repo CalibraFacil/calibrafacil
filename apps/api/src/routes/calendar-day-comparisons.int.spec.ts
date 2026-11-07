@@ -35,7 +35,7 @@ import {
 import { dashboardRouter } from "../domains/reports/routes/dashboard";
 import { jobsRouter } from "./jobs";
 import { portalRouter } from "./portal";
-import { standardsRouter } from "./standards";
+import { standardsRouter } from "../domains/standards/routes/standards";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };

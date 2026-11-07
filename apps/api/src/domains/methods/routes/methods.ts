@@ -1,8 +1,8 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { methodEndpoints } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
 import {
   calibrationMethod,
   methodAuditLog,
@@ -43,16 +43,16 @@ import {
   invalid,
   notFound,
   unprocessable,
-} from "../lib/domain-errors";
-import { withOrg } from "../lib/org-context";
-import { requireLabMethod, requireMethodRouteId } from "../lib/method-access";
-import { requestActor } from "../middleware/request-actor";
+} from "../../../lib/domain-errors";
+import { withOrg } from "../../../lib/org-context";
+import { requireLabMethod, requireMethodRouteId } from "../method-access";
+import { requestActor } from "../../../middleware/request-actor";
 import { METHOD_MACHINE, isMethodDraft } from "@calibra-facil/schemas/machines";
 import {
   withLabPermission,
   type AuthVariables,
   requireRole,
-} from "../middleware/permission";
+} from "../../../middleware/permission";
 import { alias } from "drizzle-orm/pg-core";
 import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
