@@ -8,7 +8,7 @@ import { Spinner } from "@calibra-facil/ui/spinner";
 import {
   magicLinkPreviewResponseSchema,
   type MagicLinkPreviewResponse,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 import {
   fetchPortalResponse,
   getApiBaseUrl,

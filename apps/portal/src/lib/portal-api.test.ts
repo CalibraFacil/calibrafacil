@@ -1,7 +1,7 @@
 import {
   portalAssetEndpoints,
   ResponseContractError,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 import {
   buildPortalFleetAssetsResponse,
   buildPortalOverview,

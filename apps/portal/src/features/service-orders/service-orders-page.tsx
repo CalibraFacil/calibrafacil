@@ -10,7 +10,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Button } from "@calibra-facil/ui/button";
 import { StatusBadge } from "@calibra-facil/ui/status-badge";
-import type { PortalServiceOrdersResponse } from "@calibra-facil/contracts";
+import type { PortalServiceOrdersResponse } from "@calibra-facil/contracts/portal-client";
 import {
   SERVICE_ORDER_STATUS,
   type ServiceOrderStatus,

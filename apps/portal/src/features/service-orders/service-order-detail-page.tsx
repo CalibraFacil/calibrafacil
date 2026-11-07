@@ -23,7 +23,7 @@ import { StatusPill } from "@/components/status-pill";
 import { Timeline, type TimelineItem } from "@/components/timeline";
 import { FinancialSummaryCard } from "@/features/service-orders/financial-summary-card";
 import { getServiceOrderStatus } from "@/lib/status-labels";
-import type { PortalServiceOrderDetail } from "@calibra-facil/contracts";
+import type { PortalServiceOrderDetail } from "@calibra-facil/contracts/portal-client";
 import {
   useApproveQuote,
   useRejectQuote,

@@ -29,21 +29,6 @@ import { materialEndpoints } from "./materials";
 import { methodEndpoints } from "./methods";
 import { nonConformanceEndpoints } from "./non-conformances";
 import { portalDomainEndpoints } from "./portal-domains";
-import {
-  portalAssetEndpoints,
-  portalAuditPackEndpoints,
-  portalCertificateEndpoints,
-  portalDashboardEndpoints,
-  portalReliabilityEndpoints,
-  portalShellEndpoints,
-} from "./portal";
-import {
-  portalNotificationEndpoints,
-  portalOotNotificationEndpoints,
-  portalRequestEndpoints,
-  portalServiceOrderEndpoints,
-  portalVisitEndpoints,
-} from "./portal-engagement";
 import { jobEndpoints } from "./jobs";
 import { proficiencyTestEndpoints } from "./proficiency-tests";
 import { reportEndpoints } from "./reports";
@@ -72,6 +57,7 @@ export * from "./portal-domains";
 export * from "./portal";
 export * from "./portal-engagement";
 export * from "./request";
+export * from "./portal-groups";
 export * from "./profile-media";
 export * from "./organization-media";
 export * from "./organization-profile";
@@ -161,27 +147,3 @@ export const ENDPOINT_GROUPS = {
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;
-
-/**
- * The client portal's endpoints (`/api/portal/*`), keyed by the namespace of the
- * portal's own client (`apps/portal/src/lib/portal-api.ts`). Kept apart from
- * `ENDPOINT_GROUPS` on purpose: the lab SDK, the policy registry and the desktop
- * stubs are built from that list, and none of them call the portal. The API
- * mounts these the same way (`mount`) and the route-drift spec checks them
- * beside `ENDPOINT_GROUPS`.
- */
-export const PORTAL_ENDPOINT_GROUPS = {
-  shell: portalShellEndpoints,
-  dashboard: portalDashboardEndpoints,
-  assets: portalAssetEndpoints,
-  certificates: portalCertificateEndpoints,
-  auditPacks: portalAuditPackEndpoints,
-  reliability: portalReliabilityEndpoints,
-  notifications: portalNotificationEndpoints,
-  ootNotifications: portalOotNotificationEndpoints,
-  visits: portalVisitEndpoints,
-  requests: portalRequestEndpoints,
-  serviceOrders: portalServiceOrderEndpoints,
-} as const satisfies Record<string, EndpointGroup>;
-
-export type PortalEndpointGroups = typeof PORTAL_ENDPOINT_GROUPS;

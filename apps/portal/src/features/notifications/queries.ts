@@ -8,7 +8,7 @@ import {
 import type {
   PortalNotificationFeedResponse,
   PortalNotificationPreferencesResponse,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 import type { PortalNotificationType } from "@calibra-facil/schemas";
 
 import { usePortalKeys } from "@/lib/portal-keys";

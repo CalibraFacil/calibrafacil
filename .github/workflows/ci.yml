@@ -157,6 +157,20 @@ jobs:
           fi
           bunx turbo build ${filter:+"$filter"}
 
+      # The web and portal bundle budgets (apps/*/scripts/check-bundle-size.mjs,
+      # the same check `build:ci` runs after `vite build`). They read the dist the
+      # build above just produced (or restored from the turbo cache), so a pull
+      # request that did not rebuild an app has no dist for it and skips it.
+      - name: Bundle budgets
+        run: |
+          for app in web portal; do
+            if [ -d "apps/$app/dist" ]; then
+              pnpm --dir "apps/$app" check:bundle
+            else
+              echo "apps/$app was not built for this change: budget not checked"
+            fi
+          done
+
   # A pull request that adds or bumps a dependency with a known high or critical
   # vulnerability fails here, before it can merge.
   dependency-review:

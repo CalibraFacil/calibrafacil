@@ -196,6 +196,14 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   literal array or a retyped `key("portal-...")` string at a call site. Public
   and pre-auth queries (verification, invites, magic link, branding) and the
   user-level org list stay unscoped, under `portalPublicKeys`.
+- **Contracts come from `@calibra-facil/contracts/portal-client`, never the
+  barrel** (`packages/contracts/src/portal-client.ts`, a lint error otherwise).
+  The barrel builds every Zod schema of the lab app, the sync protocol and the
+  desktop at import time, which a bundler cannot drop, and the portal loads its
+  contracts on every page (~90 KiB raw in the initial graph). A name the portal
+  needs and the entry lacks is added to the entry. The initial graph is held by
+  `apps/portal/scripts/check-bundle-size.mjs`, which CI runs after the build
+  (`Bundle budgets` step); the script's header says what the budget contains.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint
   in `apps/api/src/domains/portal/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
   the sidebar badges reuse the same hook so counts cannot drift.

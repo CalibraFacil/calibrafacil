@@ -2,7 +2,7 @@ import {
   validateResponsePayload,
   type ResponseValidationMode,
   type ResponseValidationOptions,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 import type { z } from "zod";
 
 import { resolveApiBaseUrl } from "@calibra-facil/shared/api-base-url";

@@ -38,7 +38,7 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { useOverview } from "@/features/dashboard/queries";
-import type { PortalRequestsResponse } from "@calibra-facil/contracts";
+import type { PortalRequestsResponse } from "@calibra-facil/contracts/portal-client";
 import { cn } from "@calibra-facil/ui/utils";
 import { useRequests } from "./queries";
 import {

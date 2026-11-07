@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   type PortalOverviewResponse,
   type PortalUnitsSummaryResponse,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/portal-client";
 
 import { usePortalKeys } from "@/lib/portal-keys";
 import { portalApi } from "@/lib/portal-api";

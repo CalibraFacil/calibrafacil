@@ -16,7 +16,7 @@ import { Input } from "@calibra-facil/ui/input";
 import { Label } from "@calibra-facil/ui/label";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { useMountEffect } from "@calibra-facil/ui/use-mount-effect";
-import { invitationLookupResponseSchema } from "@calibra-facil/contracts";
+import { invitationLookupResponseSchema } from "@calibra-facil/contracts/portal-client";
 import { PortalApiError, fetchPortalJson } from "@/lib/api-fetch";
 import { portalPublicKeys } from "@/lib/portal-keys";
 

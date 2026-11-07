@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import type { PortalOrganizationsResponse } from "@calibra-facil/contracts";
+import type { PortalOrganizationsResponse } from "@calibra-facil/contracts/portal-client";
 
 import { prefetchBranding } from "@/features/branding/queries";
 

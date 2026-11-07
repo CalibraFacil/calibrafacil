@@ -11,7 +11,7 @@ import {
   formatInstant,
   formatMoneyBRL,
 } from "@calibra-facil/shared/format";
-import type { PortalFinancialSummary } from "@calibra-facil/contracts";
+import type { PortalFinancialSummary } from "@calibra-facil/contracts/portal-client";
 import { cn } from "@calibra-facil/ui/utils";
 
 function financialSummaryLabel(state: PortalFinancialSummary["state"]) {

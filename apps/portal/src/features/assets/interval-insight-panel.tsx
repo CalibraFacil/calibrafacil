@@ -23,7 +23,7 @@ import {
   PanelHeader,
   type SignalTone,
 } from "@calibra-facil/ui/instrument-panel";
-import { portalAssetEndpoints } from "@calibra-facil/contracts";
+import { portalAssetEndpoints } from "@calibra-facil/contracts/portal-client";
 import { portalEndpointUrl } from "@/lib/portal-api";
 import { useIntervalInsight, useSetAssetInterval } from "./queries";
 import type { IntervalInsight } from "./types";

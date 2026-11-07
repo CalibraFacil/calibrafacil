@@ -113,6 +113,37 @@
       }
     },
     {
+      // The portal's initial graph loads its contracts on every page: the barrel
+      // would build the lab's schemas into the browser bundle (~90 KiB raw).
+      // Everything else of this config's `no-restricted-imports` is repeated
+      // here because an override replaces the rule's options.
+      "files": ["apps/portal/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "importNames": ["useEffect"],
+                "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (@calibra-facil/ui/use-mount-effect)."
+              },
+              {
+                "name": "@calibra-facil/contracts",
+                "message": "The portal imports its contracts from @calibra-facil/contracts/portal-client: the barrel pulls the lab's schemas into the portal bundle (see scripts check-bundle-size)."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@calibra-facil/db/testing"],
+                "message": "@calibra-facil/db/testing holds test seams for the transaction scope: tests and test harnesses only (the override below lists them), never production code."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/ui/src/hooks/use-mount-effect.ts"],
       "rules": {
         "no-restricted-imports": "off",

@@ -17,7 +17,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@calibra-facil/ui/chart";
-import { DRIFT_REGRESSION_MS_PER_MONTH } from "@calibra-facil/contracts";
+import { DRIFT_REGRESSION_MS_PER_MONTH } from "@calibra-facil/contracts/portal-client";
 import type { AssetDriftSeries, DriftPointSeries } from "./types";
 import { formatInstant, formatNumber } from "@calibra-facil/shared/format";
 

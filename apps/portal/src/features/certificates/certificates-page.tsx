@@ -29,7 +29,7 @@ import { DateRangePicker } from "@calibra-facil/ui/date-range-picker";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { DataTable } from "@calibra-facil/ui/data-table";
 import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
-import type { PortalCertificateListItem } from "@calibra-facil/contracts";
+import type { PortalCertificateListItem } from "@calibra-facil/contracts/portal-client";
 import { useCertificates } from "./queries";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
 import { formatInstant } from "@calibra-facil/shared/format";
