@@ -1,7 +1,4 @@
-import type {
-  OotNotificationStatus,
-  StandardRecallStatus as RecallStatus,
-} from '@calibra-facil/schemas/machines'
+import type { StandardRecallNotification } from '@calibra-facil/contracts'
 import type {
   StandardData,
   StandardStatus,
@@ -25,94 +22,25 @@ export type StandardsListQueryInput = {
   statusFilter: StandardStatus | ''
 }
 
-export type ImpactedCertificate = {
-  jobId: number
-  certificateNumber: string
-  status: string
-  approvedAt: string | null
-  performedAt: string | null
-  customer: {
-    id: number
-    name: string
-    email: string | null
-  }
-  supersededByJobId: number | null
-  supersededByCertificateNumber: string | null
-  alreadyNotified: boolean
-}
+// The recall and reverse-traceability DTOs are the endpoint definitions' types
+// (`@calibra-facil/contracts`, `endpoints/standards.ts`).
+export type {
+  ImpactedCertificate,
+  ImpactedCertificatesData,
+  InFlightRecallJob,
+  StandardRecall,
+  StandardRecallData,
+  StandardRecallNotification,
+} from '@calibra-facil/contracts'
 
-/** A job still on its way to a certificate that uses the recalled standard. */
-export type InFlightRecallJob = {
-  jobId: number
-  certificateNumber: string
-  status: string
-  performedAt: string | null
-  customer: {
-    id: number
-    name: string
-  }
-}
-
-export type ImpactedCertificatesData = {
-  data: ImpactedCertificate[]
-  inFlight: InFlightRecallJob[]
-  window: { from: string; to: string }
-}
-
-type StandardRecallStatus = RecallStatus
-
-type StandardRecallNotificationStatus = OotNotificationStatus
-
-export type StandardRecallAcknowledgedVia =
-  | 'email_link'
-  | 'portal_link'
-  | 'manual'
-
-export type StandardRecallNotification = {
-  id: number
-  jobId: number
-  certificateNumber: string
-  recipientName: string | null
-  recipientEmail: string | null
-  status: StandardRecallNotificationStatus
-  sentAt: string | null
-  acknowledgedAt: string | null
-  acknowledgedVia: StandardRecallAcknowledgedVia | null
-  bounced: boolean
-}
-
-export type StandardRecall = {
-  id: number
-  standardId: number
-  ncId: number
-  ncNumber: string
-  status: StandardRecallStatus
-  fromDate: string | null
-  toDate: string | null
-  approvedBy: string | null
-  approvedAt: string | null
-  createdAt: string
-  notifications: StandardRecallNotification[]
-  counts: {
-    total: number
-    sent: number
-    acknowledged: number
-    bounced: number
-    missingEmail: number
-  }
-}
-
-export type StandardRecallData = { data: StandardRecall | null }
+export type StandardRecallAcknowledgedVia = NonNullable<
+  StandardRecallNotification['acknowledgedVia']
+>
 
 export type SendStandardRecallRequest = {
   jobIds: number[]
   from?: string
   to?: string
-}
-
-export type SendStandardRecallResult = {
-  message: string
-  data: { recallId: number; created: number; skipped: number }
 }
 
 export type StandardAuditLogRecord = {

@@ -74,7 +74,7 @@ export function StandardsListPage({
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => calibraApi.standards.delete(id),
+    mutationFn: (id: number) => calibraApi.standards.delete({ params: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
       toast.success('Padrão removido com sucesso')
@@ -92,7 +92,7 @@ export function StandardsListPage({
       id: number
       status: ReferenceStandard['status']
     }) => {
-      return calibraApi.standards.update(id, { status })
+      return calibraApi.standards.update({ params: { id }, body: { status } })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })

@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   methodEndpoints,
   assetEndpoints,
+  standardEndpoints,
   assetTypesResponseSchema,
   customerEndpoints,
   effectiveEnvironmentalLimitsResponseSchema,
@@ -30,10 +31,7 @@ import {
   localSyncConflictsResponseSchema,
   syncBootstrapResponseSchema,
   syncPushRequestSchema,
-  massCompositionProfilesResponseSchema,
   serviceOrderEndpoints,
-  standardSchema,
-  standardsListResponseSchema,
   syncStatusSnapshotSchema,
   type SyncBootstrapResponse,
 } from "@calibra-facil/contracts";
@@ -511,13 +509,16 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
 
     const list = await parsedBody(
       await app.request("/api/standards?status=ACTIVE&limit=100"),
-      standardsListResponseSchema,
+      standardEndpoints.list.response,
     );
     expect(list.data.map((standard) => standard.id)).toEqual([111]);
-    await parsedBody(await app.request("/api/standards/111"), standardSchema);
+    await parsedBody(
+      await app.request("/api/standards/111"),
+      standardEndpoints.get.response,
+    );
     const catalog = await parsedBody(
       await app.request("/api/standards/composition-profiles"),
-      massCompositionProfilesResponseSchema,
+      standardEndpoints.listCompositionProfiles.response,
     );
     expect(catalog.data).toHaveLength(1);
     database.close();

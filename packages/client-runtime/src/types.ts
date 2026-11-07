@@ -11,6 +11,7 @@ import type {
 import type {
   AccreditedScopeLineSchema,
   AdjustMaterialStockSchema,
+  MassCompositionProfileCreateSchema,
   CreateCustomerSchema,
   CreateCustomerGroupSchema,
   CreateJobSchema,
@@ -27,26 +28,27 @@ import type {
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
 import type { AccreditedScopeApi } from "./modules/accredited-scope";
-import type { PortalDomainsApi } from "./modules/portal-domains";
-import type { SigningCertificatesApi } from "./modules/signing-certificates";
-import type { SsoApi } from "./modules/sso";
-import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { AssetsApi } from "./modules/assets";
-import type { CertificateNumberingApi } from "./modules/certificate-numbering";
+import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CapasApi } from "./modules/capa";
+import type { CertificateNumberingApi } from "./modules/certificate-numbering";
 import type { CompetencesApi } from "./modules/competences";
 import type { CustomersApi } from "./modules/customers";
 import type { DashboardApi } from "./modules/dashboard";
-import type { NonConformancesApi } from "./modules/non-conformances";
-import type { FinanceApi } from "./modules/finance";
-import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
 import type { EnvironmentalLimitsApi } from "./modules/environmental-limits";
+import type { FinanceApi } from "./modules/finance";
 import type { MaterialsApi } from "./modules/materials";
 import type { MethodsApi } from "./modules/methods";
+import type { NonConformancesApi } from "./modules/non-conformances";
+import type { PortalDomainsApi } from "./modules/portal-domains";
+import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
 import type { ReportsApi } from "./modules/reports";
 import type { ServiceOrdersApi } from "./modules/service-orders";
 import type { SignaturesApi } from "./modules/signatures";
+import type { SigningCertificatesApi } from "./modules/signing-certificates";
 import type { SpcApi } from "./modules/spc";
+import type { SsoApi } from "./modules/sso";
+import type { StandardsApi } from "./modules/standards";
 import type { TrainingRecordsApi } from "./modules/training-records";
 import type { VisitsApi } from "./modules/visits";
 
@@ -138,9 +140,6 @@ import type {
   MassCompositionProfile,
   MassCompositionProfilesResponse,
   Standard,
-  StandardCertificateDocumentDownloadResponse,
-  StandardCertificateDocumentUploadResponse,
-  StandardRecord,
   StandardsListResponse,
   SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
@@ -391,92 +390,21 @@ export type { MethodGovernance, MethodTemplateCatalogEntry };
 export type MethodFromTemplateInput = z.input<typeof FromTemplateSchema>;
 export type { MethodsApi };
 
+// STANDARDS: the DTOs are the contract schemas' types (`endpoints/standards.ts`);
+// the client is generated from the endpoint definitions (`modules/standards.ts`).
 export type StandardStatus = ReferenceStandardStatus;
 
 /** A standard as the list and the detail return it (contract type). */
 export type StandardData = Standard;
-
-export type StandardsListInput = {
-  page?: number;
-  limit?: number;
-  query?: string;
-  status?: StandardStatus;
-};
-
 export type StandardsListData = StandardsListResponse;
-
-export type StandardWriteInput = Record<string, unknown>;
-
-export type StandardAuditLogData<TRecord = unknown> = {
-  data: TRecord[];
-};
 
 /** A row of the normalized mass composition-profile catalog (per organization). */
 export type MassCompositionProfileDto = MassCompositionProfile;
-
 export type MassCompositionProfilesData = MassCompositionProfilesResponse;
-
-export type MassCompositionProfileWriteInput = {
-  profileKey: string;
-  profileClass: string;
-  nominal: string;
-  nominalG: number;
-  value: number;
-  uncertainty: number;
-  unit?: string;
-  maxError?: number | null;
-  drift?: number | null;
-  buoyancy?: number | null;
-  coverageFactor?: number | null;
-  quantityAvailable?: number | null;
-};
-
-export interface StandardsApi {
-  list(input?: StandardsListInput): Promise<StandardsListData>;
-  get(id: string | number): Promise<StandardData>;
-  listCompositionProfiles(): Promise<MassCompositionProfilesData>;
-  createCompositionProfile(
-    input: MassCompositionProfileWriteInput,
-  ): Promise<MassCompositionProfileDto>;
-  updateCompositionProfile(
-    id: number,
-    input: Partial<MassCompositionProfileWriteInput>,
-  ): Promise<MassCompositionProfileDto>;
-  deleteCompositionProfile(
-    id: number,
-  ): Promise<{ success: boolean; id: number }>;
-  auditLog<TRecord = unknown>(
-    id: string | number,
-  ): Promise<StandardAuditLogData<TRecord>>;
-  create(input: StandardWriteInput): Promise<StandardRecord>;
-  /** The stored row: no validity verdict (`isExpired`) or certificate document. */
-  update(
-    id: string | number,
-    input: StandardWriteInput,
-  ): Promise<StandardRecord>;
-  delete(id: string | number): Promise<unknown>;
-  renew(id: string | number, input: StandardWriteInput): Promise<unknown>;
-  /** #426 Phase 1: certificates issued using this standard, date-bounded. */
-  getImpactedCertificates<TResponse = unknown>(
-    id: string | number,
-    input?: { from?: string; to?: string },
-  ): Promise<TResponse>;
-  /** #426 Phase 1: latest recall campaign + per-certificate ack status. */
-  getRecall<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  /** #426 Phase 1: approval-gated batch send of the recall notifications. */
-  sendRecall<TResponse = unknown>(
-    id: string | number,
-    input: { jobIds: number[]; from?: string; to?: string },
-  ): Promise<TResponse>;
-  uploadCertificateDocument(
-    id: string | number,
-    file: Blob,
-    input?: { fileName?: string },
-  ): Promise<StandardCertificateDocumentUploadResponse>;
-  getCertificateDocumentDownloadUrl(
-    id: string | number,
-  ): Promise<StandardCertificateDocumentDownloadResponse>;
-}
+export type MassCompositionProfileWriteInput = z.input<
+  typeof MassCompositionProfileCreateSchema
+>;
+export type { StandardsApi };
 
 // =============================================================================
 // CUSTOMERS: the DTOs are the contract schemas' types

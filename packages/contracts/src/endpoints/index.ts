@@ -1,26 +1,27 @@
-import { signingCertificateEndpoints } from "./signing-certificates";
-import { ssoEndpoints } from "./sso";
-import { portalDomainEndpoints } from "./portal-domains";
+import { accreditedScopeEndpoints } from "./accredited-scope";
 import { assetEndpoints } from "./assets";
 import { calibrationRequestEndpoints } from "./calibration-requests";
-import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { capaEndpoints } from "./capa";
-import { customerEndpoints } from "./customers";
-import { financeEndpoints } from "./finance";
-import { dashboardEndpoints } from "./dashboard";
+import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { competenceEndpoints } from "./competences";
+import { customerEndpoints } from "./customers";
+import { dashboardEndpoints } from "./dashboard";
+import { environmentalLimitEndpoints } from "./environmental-limits";
+import { financeEndpoints } from "./finance";
+import { materialEndpoints } from "./materials";
 import { methodEndpoints } from "./methods";
 import { nonConformanceEndpoints } from "./non-conformances";
+import { portalDomainEndpoints } from "./portal-domains";
 import { proficiencyTestEndpoints } from "./proficiency-tests";
-import { spcEndpoints } from "./spc";
-import { trainingRecordEndpoints } from "./training-records";
-import { accreditedScopeEndpoints } from "./accredited-scope";
-import { environmentalLimitEndpoints } from "./environmental-limits";
-import { materialEndpoints } from "./materials";
-import type { EndpointGroup, EndpointPaths } from "./define";
 import { reportEndpoints } from "./reports";
 import { serviceOrderEndpoints } from "./service-orders";
 import { signatureEndpoints } from "./signatures";
+import { signingCertificateEndpoints } from "./signing-certificates";
+import type { EndpointGroup, EndpointPaths } from "./define";
+import { spcEndpoints } from "./spc";
+import { ssoEndpoints } from "./sso";
+import { standardEndpoints } from "./standards";
+import { trainingRecordEndpoints } from "./training-records";
 import { visitEndpoints } from "./visits";
 
 export * from "./define";
@@ -37,6 +38,7 @@ export * from "./finance";
 export * from "./service-orders";
 export * from "./dashboard";
 export * from "./reports";
+export * from "./standards";
 export * from "./certificate-numbering";
 export * from "./competences";
 export * from "./proficiency-tests";
@@ -64,6 +66,7 @@ export const ENDPOINT_GROUPS = {
   serviceOrders: serviceOrderEndpoints,
   dashboard: dashboardEndpoints,
   reports: reportEndpoints,
+  standards: standardEndpoints,
   certificateNumbering: certificateNumberingEndpoints,
   competences: competenceEndpoints,
   trainingRecords: trainingRecordEndpoints,

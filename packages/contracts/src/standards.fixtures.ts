@@ -15,7 +15,7 @@ import type {
   StandardCertificateDocumentUploadResponse,
   StandardRecord,
   StandardsListResponse,
-} from "./standards";
+} from "./endpoints/standards";
 
 /**
  * Contract-valid example payloads for the reference-standards and

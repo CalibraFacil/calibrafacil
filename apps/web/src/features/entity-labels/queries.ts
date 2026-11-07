@@ -107,7 +107,7 @@ export function standardLabelQueryOptions(id: string) {
     queryKey: ['standards', id, 'label'],
     queryFn: async () => {
       try {
-        const standard = await calibraApi.standards.get(id)
+        const standard = await calibraApi.standards.get({ params: { id } })
         return standard.name ?? null
       } catch {
         return null

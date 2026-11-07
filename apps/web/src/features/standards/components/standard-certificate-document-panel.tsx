@@ -63,7 +63,9 @@ export function StandardCertificateDocumentPanel({
 
   const downloadMutation = useMutation({
     mutationFn: () =>
-      calibraApi.standards.getCertificateDocumentDownloadUrl(standard.id),
+      calibraApi.standards.getCertificateDocumentDownloadUrl({
+        params: { id: standard.id },
+      }),
     onSuccess: ({ url, filename }) => openSignedDownload(url, filename),
     onError: (error) => toast.error(error.message),
   })

@@ -6,6 +6,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import type { MassCompositionProfileWriteInput } from '@calibra-facil/client-runtime'
+import { isRecord } from '@calibra-facil/shared/record'
 
 import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
@@ -19,7 +20,6 @@ import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type ImpactedCertificatesData,
   type SendStandardRecallRequest,
-  type SendStandardRecallResult,
   type StandardAuditLogData,
   type StandardAuditLogRecord,
   type StandardDetail,
@@ -62,10 +62,12 @@ export function standardsListQueryOptions(input: StandardsListQueryInput) {
     ],
     queryFn: (): Promise<StandardsListData> =>
       calibraApi.standards.list({
-        page: input.page,
-        limit: input.limit,
-        query: input.search || undefined,
-        status: input.statusFilter || undefined,
+        query: {
+          page: input.page,
+          limit: input.limit,
+          query: input.search || undefined,
+          status: input.statusFilter || undefined,
+        },
       }),
     placeholderData: keepPreviousDataInScope([
       'standards',
@@ -77,15 +79,26 @@ export function standardsListQueryOptions(input: StandardsListQueryInput) {
 export function standardDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['standards', id],
-    queryFn: (): Promise<StandardDetail> => calibraApi.standards.get(id),
+    queryFn: (): Promise<StandardDetail> =>
+      calibraApi.standards.get({ params: { id } }),
   })
 }
 
 export function standardAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['standards', id, 'audit-log'],
-    queryFn: (): Promise<StandardAuditLogData> =>
-      calibraApi.standards.auditLog<StandardAuditLogRecord>(id),
+    queryFn: async (): Promise<StandardAuditLogData> => {
+      const log = await calibraApi.standards.auditLog({ params: { id } })
+      return {
+        data: log.data.map(
+          (entry): StandardAuditLogRecord => ({
+            ...entry,
+            // The column is untyped JSON; the timeline reads it as a record.
+            changes: isRecord(entry.changes) ? entry.changes : null,
+          }),
+        ),
+      }
+    },
   })
 }
 
@@ -95,7 +108,7 @@ export function standardRecallQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['standards', id, 'recall'],
     queryFn: (): Promise<StandardRecallData> =>
-      calibraApi.standards.getRecall<StandardRecallData>(id),
+      calibraApi.standards.getRecall({ params: { id } }),
   })
 }
 
@@ -110,10 +123,10 @@ export function impactedCertificatesQueryOptions(
   return queryOptions({
     queryKey: ['standards', id, 'impacted-certificates', from ?? '', to ?? ''],
     queryFn: (): Promise<ImpactedCertificatesData> =>
-      calibraApi.standards.getImpactedCertificates<ImpactedCertificatesData>(
-        id,
-        { from, to },
-      ),
+      calibraApi.standards.getImpactedCertificates({
+        params: { id },
+        query: { from, to },
+      }),
   })
 }
 
@@ -242,7 +255,7 @@ export function useSendStandardRecall(id: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: SendStandardRecallRequest) =>
-      calibraApi.standards.sendRecall<SendStandardRecallResult>(id, input),
+      calibraApi.standards.sendRecall({ params: { id }, body: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards', id, 'recall'] })
       queryClient.invalidateQueries({
@@ -262,7 +275,7 @@ export function useCreateCompositionProfile() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: MassCompositionProfileWriteInput) =>
-      calibraApi.standards.createCompositionProfile(input),
+      calibraApi.standards.createCompositionProfile({ body: input }),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: compositionProfilesCatalogKey,
@@ -279,7 +292,11 @@ export function useUpdateCompositionProfile() {
     }: {
       id: number
       input: Partial<MassCompositionProfileWriteInput>
-    }) => calibraApi.standards.updateCompositionProfile(id, input),
+    }) =>
+      calibraApi.standards.updateCompositionProfile({
+        params: { id },
+        body: input,
+      }),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: compositionProfilesCatalogKey,
@@ -291,7 +308,7 @@ export function useDeleteCompositionProfile() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) =>
-      calibraApi.standards.deleteCompositionProfile(id),
+      calibraApi.standards.deleteCompositionProfile({ params: { id } }),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: compositionProfilesCatalogKey,

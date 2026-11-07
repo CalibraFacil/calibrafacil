@@ -104,8 +104,10 @@ function spcStandardOptionsQueryOptions() {
     queryKey: ['spc-standard-options'],
     queryFn: (): Promise<SpcStandardOptionsData> =>
       calibraApi.standards.list({
-        page: 1,
-        limit: 100,
+        query: {
+          page: 1,
+          limit: 100,
+        },
       }),
   })
 }
