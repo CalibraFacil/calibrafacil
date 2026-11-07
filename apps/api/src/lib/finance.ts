@@ -1,3 +1,4 @@
+import { withOrg } from "./org-context";
 import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   type CustomerAddress,
@@ -67,7 +68,6 @@ import {
 } from "./conta-azul-oauth";
 import { requireContaAzulOAuthConfig } from "./conta-azul-app";
 import { orgDb } from "./org-db";
-import { orgTransactionWithExecutor } from "./org-transaction";
 
 /**
  * What the finance helpers read and write through: an org-bound handle or the
@@ -76,32 +76,11 @@ import { orgTransactionWithExecutor } from "./org-transaction";
  */
 type FinanceDbExecutor = Pick<OrgExecutor, "insert" | "select" | "update">;
 
-/** The raw transaction of `orgTransactionWithExecutor`: it can run raw SQL. */
+/** The raw transaction of a `withOrg` (`ctx.tx`): it can run raw SQL. */
 type FinanceRawExecutor = Pick<
   OrgExecutor,
   "execute" | "insert" | "select" | "update"
 >;
-
-/**
- * Runs `run` on the caller's executor, or in an organization-bound transaction of
- * its own (naming the laboratory for row-level security) when it has none.
- */
-function withFinanceExecutor<R>(
-  organizationId: string,
-  executor: FinanceDbExecutor | undefined,
-  run: (executor: FinanceDbExecutor) => Promise<R>,
-): Promise<R> {
-  return executor ? run(executor) : orgDb(organizationId).transaction(run);
-}
-
-/** Same, for the helpers that only read. */
-function withFinanceReader<R>(
-  organizationId: string,
-  executor: Pick<OrgExecutor, "select"> | undefined,
-  run: (reader: Pick<OrgExecutor, "select">) => Promise<R>,
-): Promise<R> {
-  return executor ? run(executor) : orgDb(organizationId).transaction(run);
-}
 
 export type JobFinancialContext = {
   documentId: number | null;
@@ -252,11 +231,9 @@ export function resolveServiceOrderBillingDocumentLinks(
   inputs: ServiceOrderBillingDocumentLinkInput[],
   organizationId: string,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<Map<number, ResolvedBillingDocumentLink>> {
-  return withFinanceReader(organizationId, executor, (reader) =>
-    resolveBillingDocumentLinksOn(reader, inputs, organizationId),
-  );
+  return resolveBillingDocumentLinksOn(executor, inputs, organizationId);
 }
 
 async function resolveBillingDocumentLinksOn(
@@ -556,57 +533,52 @@ async function resolveApplicableAgreement(
   return null;
 }
 
-export function loadCustomerActiveCommercialAgreement(
+export async function loadCustomerActiveCommercialAgreement(
   organizationId: string,
   customerId: number,
   // Reads only: any executor with `select` (an org-bound transaction handle).
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<ActiveCommercialAgreementSummary | null> {
-  return withFinanceReader(organizationId, executor, async (runner) => {
-    const now = new Date();
-
-    const [agreement] = await runner
-      .select({
-        id: commercialAgreement.id,
-        agreementCode: commercialAgreement.agreementCode,
-        title: commercialAgreement.title,
-        effectiveFrom: commercialAgreement.effectiveFrom,
-        effectiveTo: commercialAgreement.effectiveTo,
-        currency: commercialAgreement.currency,
-        defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
-      })
-      .from(commercialAgreement)
-      .where(
-        and(
-          eq(commercialAgreement.organizationId, organizationId),
-          eq(commercialAgreement.customerId, customerId),
-          eq(
-            commercialAgreement.status,
-            "ACTIVE" satisfies CommercialAgreementStatus,
-          ),
-          lte(commercialAgreement.effectiveFrom, now),
-          or(
-            isNull(commercialAgreement.effectiveTo),
-            gte(commercialAgreement.effectiveTo, now),
-          ),
+  const now = new Date();
+  const [agreement] = await executor
+    .select({
+      id: commercialAgreement.id,
+      agreementCode: commercialAgreement.agreementCode,
+      title: commercialAgreement.title,
+      effectiveFrom: commercialAgreement.effectiveFrom,
+      effectiveTo: commercialAgreement.effectiveTo,
+      currency: commercialAgreement.currency,
+      defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
+    })
+    .from(commercialAgreement)
+    .where(
+      and(
+        eq(commercialAgreement.organizationId, organizationId),
+        eq(commercialAgreement.customerId, customerId),
+        eq(
+          commercialAgreement.status,
+          "ACTIVE" satisfies CommercialAgreementStatus,
         ),
-      )
-      .orderBy(
-        desc(commercialAgreement.effectiveFrom),
-        desc(commercialAgreement.id),
-      )
-      .limit(1);
-
-    if (!agreement) {
-      return null;
-    }
-
-    return {
-      ...agreement,
-      effectiveFrom: agreement.effectiveFrom.toISOString(),
-      effectiveTo: agreement.effectiveTo?.toISOString() ?? null,
-    };
-  });
+        lte(commercialAgreement.effectiveFrom, now),
+        or(
+          isNull(commercialAgreement.effectiveTo),
+          gte(commercialAgreement.effectiveTo, now),
+        ),
+      ),
+    )
+    .orderBy(
+      desc(commercialAgreement.effectiveFrom),
+      desc(commercialAgreement.id),
+    )
+    .limit(1);
+  if (!agreement) {
+    return null;
+  }
+  return {
+    ...agreement,
+    effectiveFrom: agreement.effectiveFrom.toISOString(),
+    effectiveTo: agreement.effectiveTo?.toISOString() ?? null,
+  };
 }
 
 export function syncComplianceWithActiveAgreement(
@@ -669,11 +641,9 @@ type EnsureJobCommercialSnapshotParams = {
 
 export function ensureJobCommercialSnapshot(
   params: EnsureJobCommercialSnapshotParams,
-  executor?: FinanceDbExecutor,
+  executor: FinanceDbExecutor,
 ) {
-  return withFinanceExecutor(params.organizationId, executor, (runner) =>
-    ensureSnapshotOn(runner, params),
-  );
+  return ensureSnapshotOn(executor, params);
 }
 
 async function ensureSnapshotOn(
@@ -778,11 +748,9 @@ type EnsureJobCommercialSnapshotFromJobParams = {
 
 export function ensureJobCommercialSnapshotFromJob(
   params: EnsureJobCommercialSnapshotFromJobParams,
-  executor?: FinanceDbExecutor,
+  executor: FinanceDbExecutor,
 ) {
-  return withFinanceExecutor(params.organizationId, executor, (runner) =>
-    ensureSnapshotFromJobOn(runner, params),
-  );
+  return ensureSnapshotFromJobOn(executor, params);
 }
 
 async function ensureSnapshotFromJobOn(
@@ -826,39 +794,37 @@ export async function loadJobFinancialContexts(
   organizationId: string,
   jobIds: number[],
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ) {
   if (jobIds.length === 0) {
     return new Map<number, JobFinancialContext>();
   }
 
-  const rows = await withFinanceReader(organizationId, executor, (reader) =>
-    reader
-      .select({
-        jobId: billingDocumentItem.jobId,
-        documentId: billingDocument.id,
-        documentNumber: billingDocument.documentNumber,
-        documentStatus: billingDocument.status,
-        dueDate: billingDocument.dueDate,
-        installmentStatus: receivableInstallment.status,
-      })
-      .from(billingDocumentItem)
-      .innerJoin(
-        billingDocument,
-        eq(billingDocumentItem.documentId, billingDocument.id),
-      )
-      .leftJoin(
-        receivableInstallment,
-        eq(receivableInstallment.documentId, billingDocument.id),
-      )
-      .where(
-        and(
-          eq(billingDocument.organizationId, organizationId),
-          inArray(billingDocumentItem.jobId, jobIds),
-        ),
-      )
-      .orderBy(desc(billingDocument.createdAt)),
-  );
+  const rows = await executor
+    .select({
+      jobId: billingDocumentItem.jobId,
+      documentId: billingDocument.id,
+      documentNumber: billingDocument.documentNumber,
+      documentStatus: billingDocument.status,
+      dueDate: billingDocument.dueDate,
+      installmentStatus: receivableInstallment.status,
+    })
+    .from(billingDocumentItem)
+    .innerJoin(
+      billingDocument,
+      eq(billingDocumentItem.documentId, billingDocument.id),
+    )
+    .leftJoin(
+      receivableInstallment,
+      eq(receivableInstallment.documentId, billingDocument.id),
+    )
+    .where(
+      and(
+        eq(billingDocument.organizationId, organizationId),
+        inArray(billingDocumentItem.jobId, jobIds),
+      ),
+    )
+    .orderBy(desc(billingDocument.createdAt));
 
   const now = new Date();
   const result = new Map<number, JobFinancialContext>();
@@ -906,24 +872,22 @@ export async function loadCustomerFinancialSummary(
   organizationId: string,
   customerId: number,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<CustomerFinancialSummary> {
-  const rows = await withFinanceReader(organizationId, executor, (reader) =>
-    reader
-      .select({
-        documentStatus: billingDocument.status,
-        totalCents: billingDocument.totalCents,
-        dueDate: billingDocument.dueDate,
-      })
-      .from(billingDocument)
-      .where(
-        and(
-          eq(billingDocument.organizationId, organizationId),
-          eq(billingDocument.customerId, customerId),
-          inArray(billingDocument.status, ["ISSUED", "OVERDUE", "PAID"]),
-        ),
+  const rows = await executor
+    .select({
+      documentStatus: billingDocument.status,
+      totalCents: billingDocument.totalCents,
+      dueDate: billingDocument.dueDate,
+    })
+    .from(billingDocument)
+    .where(
+      and(
+        eq(billingDocument.organizationId, organizationId),
+        eq(billingDocument.customerId, customerId),
+        inArray(billingDocument.status, ["ISSUED", "OVERDUE", "PAID"]),
       ),
-  );
+    );
 
   const now = new Date();
   let openDocumentsCount = 0;
@@ -986,20 +950,19 @@ async function getNextBillingDocumentSequence(
 }
 
 /**
- * The advisory lock is raw SQL, so this takes the raw transaction of
- * `orgTransactionWithExecutor` (it names the laboratory for row-level security);
- * without one it opens such a transaction of its own.
+ * The advisory lock is raw SQL, so this takes the raw transaction of the
+ * caller's `withOrg` (`ctx.tx`).
  */
 export async function generateBillingDocumentNumber(
   organizationId: string,
-  executor?: FinanceRawExecutor,
+  executor: FinanceRawExecutor,
 ) {
   const year = new Date().getFullYear();
-  const sequence = executor
-    ? await getNextBillingDocumentSequence(organizationId, year, executor)
-    : await orgTransactionWithExecutor(organizationId, (_o, tx) =>
-        getNextBillingDocumentSequence(organizationId, year, tx),
-      );
+  const sequence = await getNextBillingDocumentSequence(
+    organizationId,
+    year,
+    executor,
+  );
 
   return `FIN-${year}-${sequence.toString().padStart(4, "0")}`;
 }
@@ -1008,11 +971,9 @@ export function loadBillingDocumentExportPayload(
   organizationId: string,
   documentId: number,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<IntegrationBillingDocumentPayload | null> {
-  return withFinanceReader(organizationId, executor, (reader) =>
-    readBillingDocumentExportPayload(reader, organizationId, documentId),
-  );
+  return readBillingDocumentExportPayload(executor, organizationId, documentId);
 }
 
 async function readBillingDocumentExportPayload(
@@ -1102,38 +1063,33 @@ async function readBillingDocumentExportPayload(
   };
 }
 
-export function loadBillingDocumentPayloadsForIntegration(
+export async function loadBillingDocumentPayloadsForIntegration(
   organizationId: string,
   limit: number,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ) {
-  return withFinanceReader(organizationId, executor, async (reader) => {
-    const documents = await reader
-      .select({
-        id: billingDocument.id,
-      })
-      .from(billingDocument)
-      .where(
-        and(
-          eq(billingDocument.organizationId, organizationId),
-          inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
-        ),
-      )
-      .orderBy(desc(billingDocument.issueDate), desc(billingDocument.createdAt))
-      .limit(limit);
-
-    const payloads = await Promise.all(
-      documents.map((document) =>
-        loadBillingDocumentExportPayload(organizationId, document.id, reader),
+  const documents = await executor
+    .select({
+      id: billingDocument.id,
+    })
+    .from(billingDocument)
+    .where(
+      and(
+        eq(billingDocument.organizationId, organizationId),
+        inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
       ),
-    );
-
-    return payloads.filter(
-      (payload): payload is IntegrationBillingDocumentPayload =>
-        payload !== null,
-    );
-  });
+    )
+    .orderBy(desc(billingDocument.issueDate), desc(billingDocument.createdAt))
+    .limit(limit);
+  const payloads = await Promise.all(
+    documents.map((document) =>
+      loadBillingDocumentExportPayload(organizationId, document.id, executor),
+    ),
+  );
+  return payloads.filter(
+    (payload): payload is IntegrationBillingDocumentPayload => payload !== null,
+  );
 }
 
 export async function exportBillingDocumentToPrimaryIntegration(params: {
@@ -1542,9 +1498,10 @@ async function sendServiceOrderToFinance(params: {
     // runs after the commit (and opens short transactions of its own).
     // `o` is the org-bound handle; `tx` is the raw transaction the numbering
     // helper needs for its advisory lock.
-    const documentId = await orgTransactionWithExecutor(
+    const documentId = await withOrg(
       organizationId,
-      async (o, tx) => {
+      { userId: actorUserId, ipAddress: null },
+      async ({ o, tx }) => {
         const [order] = await o
           .select({
             id: serviceOrder.id,

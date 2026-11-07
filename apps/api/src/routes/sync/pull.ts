@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import {
   SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
   SYNC_PULL_PROTOCOL_PARAM,
@@ -14,7 +14,7 @@ import { parseSyncPullPosition } from "../../modules/sync/pull-cursor";
 import { type SyncRouterEnv, getMemberData } from "./env";
 import { loadCloudSyncEventsSince } from "../../modules/sync/cloud-events";
 
-export const pullRoutes = new Hono<SyncRouterEnv>()
+export const pullRoutes = createRouter<SyncRouterEnv>()
   .get("/pull", ...withLabPermission({ calibration: ["read"] }), async (c) => {
     const limit = parseSyncPullLimit(c.req.query("limit"));
     const memberData = getMemberData(c);

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { asset, assetType, customer } from "@calibra-facil/db/schema";
@@ -17,7 +17,7 @@ import { ListQuerySchema } from "./schemas";
 import { resolveCustomerId, resolveExternalResourceId } from "./resolvers";
 import { orgDb } from "../../lib/org-db";
 
-export const assetReadRoutes = new Hono<PublicApiV2Env>()
+export const assetReadRoutes = createRouter<PublicApiV2Env>()
   .get(
     "/assets",
     requireApiScope("assets:read"),
@@ -41,11 +41,17 @@ export const assetReadRoutes = new Hono<PublicApiV2Env>()
         status,
       } = c.req.valid("query");
       const offset = (page - 1) * limit;
-      const resolvedCustomerId = await resolveCustomerId({
-        organizationId: apiKey.organizationId,
-        customerId,
-        customerExternalId,
-      });
+      const resolvedCustomerId = await orgDb(apiKey.organizationId).transaction(
+        (o) =>
+          resolveCustomerId(
+            {
+              organizationId: apiKey.organizationId,
+              customerId,
+              customerExternalId,
+            },
+            o,
+          ),
+      );
 
       const conditions = [
         eq(customer.labOrganizationId, apiKey.organizationId),
@@ -106,11 +112,16 @@ export const assetReadRoutes = new Hono<PublicApiV2Env>()
         ]),
       );
 
-      const externalIds = await getResourceExternalIdMap({
-        organizationId: apiKey.organizationId,
-        resourceType: "asset",
-        resourceIds: rows.map((row) => row.id),
-      });
+      const externalIds = await orgDb(apiKey.organizationId).transaction((o) =>
+        getResourceExternalIdMap(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "asset",
+            resourceIds: rows.map((row) => row.id),
+          },
+          o,
+        ),
+      );
 
       return c.json({
         data: rows.map((row) => ({
@@ -139,11 +150,16 @@ export const assetReadRoutes = new Hono<PublicApiV2Env>()
   )
   .get("/assets/:id", requireApiScope("assets:read"), async (c) => {
     const apiKey = c.get("apiKey");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "asset",
-      value: c.req.param("id"),
-    });
+    const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+      resolveExternalResourceId(
+        {
+          organizationId: apiKey.organizationId,
+          resourceType: "asset",
+          value: c.req.param("id"),
+        },
+        o,
+      ),
+    );
 
     if (!resolvedId) {
       return c.json(
@@ -210,11 +226,16 @@ export const assetReadRoutes = new Hono<PublicApiV2Env>()
             definition: found.assetTypeDefinition,
             baseMeasurementUnit: found.baseMeasurementUnit,
           }) ?? null,
-        externalId: await getResourceExternalId({
-          organizationId: apiKey.organizationId,
-          resourceType: "asset",
-          resourceId: found.id,
-        }),
+        externalId: await orgDb(apiKey.organizationId).transaction((o) =>
+          getResourceExternalId(
+            {
+              organizationId: apiKey.organizationId,
+              resourceType: "asset",
+              resourceId: found.id,
+            },
+            o,
+          ),
+        ),
       },
     });
   });

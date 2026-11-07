@@ -3,9 +3,7 @@ import {
   forOrg,
   setTransactionOrganization,
   type OrgDb,
-  type OrgExecutor,
 } from "@calibra-facil/db/for-org";
-import { orgDb } from "./org-db";
 
 /** The Drizzle transaction handle of `db.transaction`, with `execute`. */
 export type OrgRawTransaction = Parameters<
@@ -13,44 +11,13 @@ export type OrgRawTransaction = Parameters<
 >[0];
 
 /**
- * Runs `run` on the caller's org-bound transaction when it has one, else in a
- * transaction of its own that names the laboratory. A lib function that reads
- * for a handler takes an optional `executor` (the handler's `o`) and calls this,
- * so it works both inside a handler's transaction and standalone.
- */
-export function inOrgTransaction<R>(
-  organizationId: string,
-  executor: OrgDb | undefined,
-  run: (o: OrgDb) => Promise<R>,
-): Promise<R> {
-  return executor ? run(executor) : orgDb(organizationId).transaction(run);
-}
-
-/**
- * Same, for a reader: runs `run` on the caller's org-bound handle (or any
- * executor with `select`), else in a short transaction of its own that names the
- * laboratory. For lib functions that only read.
- */
-export function withOrgReader<R>(
-  organizationId: string,
-  executor: Pick<OrgExecutor, "select"> | undefined,
-  run: (reader: Pick<OrgExecutor, "select">) => Promise<R>,
-): Promise<R> {
-  return executor ? run(executor) : orgDb(organizationId).transaction(run);
-}
-
-/**
- * One transaction that names the laboratory for row-level security
- * (`calibra.organization_id`, as `orgDb(org).transaction` does) and hands the
- * caller BOTH the org-bound handle and the raw transaction.
- *
- * Use it only where a callee still takes a plain Drizzle executor with
- * `execute` (calibration-job creation: the per-organization advisory lock and
- * the certificate numbering run raw SQL the handle cannot express). Everything
- * the handler itself reads or writes goes through the handle `o`; the raw
- * transaction `tx` is handed to those callees and nothing else. Their own
- * statements already carry the organization predicate by hand, and the setting
- * made here is what lets them through as `calibra_app`.
+ * `withOrg`'s transaction without its after-commit run, for the one place that
+ * needs two transactions with work in between that `withOrg` cannot sit
+ * around: the job approval (`modules/jobs/approve-job.ts`: object-storage reads
+ * before the write transaction, and a compensation transaction that must see a
+ * dispatch failure after it). Hands the caller BOTH the org-bound handle and
+ * the raw transaction (the frozen certificate input and the queue outbox run
+ * raw SQL). Every other write goes through `withOrg`.
  */
 export function orgTransactionWithExecutor<R>(
   organizationId: string,

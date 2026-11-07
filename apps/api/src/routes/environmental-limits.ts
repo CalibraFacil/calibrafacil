@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { environmentalLimits, assetType } from "@calibra-facil/db/schema";
@@ -26,7 +26,7 @@ import { invalid, notFound } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 
-export const environmentalLimitsRouter = new Hono<{
+export const environmentalLimitsRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   // ===========================================================================

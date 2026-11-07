@@ -1,5 +1,5 @@
+import { createRouter } from "../../server/router";
 import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { asset, calibrationJob, customer } from "@calibra-facil/db/schema";
@@ -19,7 +19,7 @@ import {
   withdrawalOf,
 } from "../../lib/certificate-lifecycle";
 
-export const certificateRoutes = new Hono<PublicApiV2Env>()
+export const certificateRoutes = createRouter<PublicApiV2Env>()
   .get(
     "/certificates",
     requireApiScope("certificates:read"),

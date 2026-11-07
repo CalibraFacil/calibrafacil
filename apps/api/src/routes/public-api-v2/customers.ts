@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { customer } from "@calibra-facil/db/schema";
@@ -36,7 +36,7 @@ import {
 import { apiKeyActor } from "./actor";
 import { answeringRefusals } from "./refusals";
 
-export const customerRoutes = new Hono<PublicApiV2Env>()
+export const customerRoutes = createRouter<PublicApiV2Env>()
   .get(
     "/customers",
     requireApiScope("customers:read"),
@@ -111,11 +111,16 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
   )
   .get("/customers/:id", requireApiScope("customers:read"), async (c) => {
     const apiKey = c.get("apiKey");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "customer",
-      value: c.req.param("id"),
-    });
+    const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+      resolveExternalResourceId(
+        {
+          organizationId: apiKey.organizationId,
+          resourceType: "customer",
+          value: c.req.param("id"),
+        },
+        o,
+      ),
+    );
 
     if (!resolvedId) {
       return c.json(
@@ -257,11 +262,16 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "customer",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "customer",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(
@@ -347,11 +357,16 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
   )
   .delete("/customers/:id", requireApiScope("customers:write"), async (c) => {
     const apiKey = c.get("apiKey");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "customer",
-      value: c.req.param("id"),
-    });
+    const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+      resolveExternalResourceId(
+        {
+          organizationId: apiKey.organizationId,
+          resourceType: "customer",
+          value: c.req.param("id"),
+        },
+        o,
+      ),
+    );
 
     if (!resolvedId) {
       return c.json(

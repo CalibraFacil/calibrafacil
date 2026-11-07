@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import {
   service,
@@ -41,7 +41,7 @@ import {
  * - PUT /:id: service:update (admin, owner - LAB only)
  * - DELETE /:id: service:delete (admin, owner - LAB only) - soft delete
  */
-export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
+export const servicesRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List services with pagination and filtering
   // =========================================================================

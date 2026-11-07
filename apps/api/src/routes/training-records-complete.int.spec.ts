@@ -18,14 +18,11 @@ import {
   trainingRecord,
   trainingRecordAuditLog,
 } from "@calibra-facil/db/schema";
-import { trainingRecordsRouter as bareTrainingRecordsRouter } from "./training-records";
+import { trainingRecordsRouter } from "./training-records";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const trainingRecordsRouter = withErrorHandling(bareTrainingRecordsRouter);
 
 async function seedTrainingRecord(organizationId: string, userId: string) {
   const [row] = await withStatusRepair((tx) =>

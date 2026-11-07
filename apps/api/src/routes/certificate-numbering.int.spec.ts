@@ -22,7 +22,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { certificateNumberingRouter as bareCertificateNumberingRouter } from "./certificate-numbering";
+import { certificateNumberingRouter } from "./certificate-numbering";
 import { db } from "@calibra-facil/db";
 import {
   certificateNumberingProfile,
@@ -32,11 +32,6 @@ import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const certificateNumberingRouter = withErrorHandling(
-  bareCertificateNumberingRouter,
-);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { randomBytes } from "node:crypto";
 import { createLabAuth, sendLabAccountSetupEmail } from "@calibra-facil/auth";
 import {
@@ -119,7 +119,7 @@ async function ensureInvitationUser(email: string) {
  * These endpoints do NOT require authentication - they are used by the
  * accept-invite flow where users are not yet signed up.
  */
-export const invitationsRouter = new Hono()
+export const invitationsRouter = createRouter()
   // =========================================================================
   // GET /:id - Get invitation details (public)
   // =========================================================================

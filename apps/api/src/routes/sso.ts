@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { ssoProvider } from "@calibra-facil/db/schema";
@@ -275,7 +275,7 @@ function writeSsoAuditEvent(
   );
 }
 
-export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
+export const ssoRouter = createRouter<{ Variables: AuthVariables }>()
   .get(
     "/providers",
     ...withLabPermission({ organization: ["update"] }),

@@ -22,8 +22,7 @@
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { changeJobBeforeNextTransaction } from "../../test/integration/job-cas";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { jobsRouter } from "./jobs";
 import {
   compileMethodDraft,
   fingerprintJson,
@@ -60,8 +59,6 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 // ---------------------------------------------------------------------------
 // Mock background jobs and notifications — these are side-effects we don't want

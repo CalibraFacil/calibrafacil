@@ -36,12 +36,11 @@ import {
   serviceOrderQuote,
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
-import { portalRouter as barePortalRouter } from "./portal";
-import { portalRequestsRouter as barePortalRequestsRouter } from "./portal-requests";
-import { portalVisitsRouter as barePortalVisitsRouter } from "./portal-visits";
-import { portalNotificationsRouter as barePortalNotificationsRouter } from "./portal-notifications";
-import { portalServiceOrdersRouter as portalServiceOrdersRouterBare } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { portalRouter } from "./portal";
+import { portalRequestsRouter } from "./portal-requests";
+import { portalVisitsRouter } from "./portal-visits";
+import { portalNotificationsRouter } from "./portal-notifications";
+import { portalServiceOrdersRouter } from "./service-orders";
 import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -53,19 +52,8 @@ import {
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 
-const portalRouter = withErrorHandling(barePortalRouter);
-const portalNotificationsRouter = withErrorHandling(
-  barePortalNotificationsRouter,
-);
-
-const portalRequestsRouter = withErrorHandling(barePortalRequestsRouter);
-const portalVisitsRouter = withErrorHandling(barePortalVisitsRouter);
-
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const portalServiceOrdersRouter = withErrorHandling(
-  portalServiceOrdersRouterBare,
-);
 
 const ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = { ...ORIGIN, "content-type": "application/json" };

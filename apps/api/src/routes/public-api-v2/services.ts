@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { service } from "@calibra-facil/db/schema";
@@ -9,7 +9,7 @@ import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
 import { orgDb } from "../../lib/org-db";
 
-export const serviceRoutes = new Hono<PublicApiV2Env>()
+export const serviceRoutes = createRouter<PublicApiV2Env>()
   .get(
     "/services",
     requireApiScope("services:read"),

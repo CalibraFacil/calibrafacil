@@ -51,12 +51,9 @@ import {
 import { executableMethodSnapshot } from "../../../test/integration/executable-method";
 import { insertJobs } from "../../../test/integration/job-fixtures";
 import { createApiKeySecret } from "../../lib/api-keys";
-import { jobsRouter as bareJobsRouter } from "../../routes/jobs";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
+import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),

@@ -147,11 +147,13 @@ vi.mock("../lib/org-db", () => ({
   },
 }));
 
-vi.mock("../lib/org-transaction", () => ({
-  orgTransactionWithExecutor: async (
+vi.mock("../lib/org-context", () => ({
+  SYSTEM_ACTOR: { userId: "system", ipAddress: null },
+  withOrg: async (
     _organizationId: string,
-    run: (o: unknown, tx: unknown) => unknown,
-  ) => run({ select: mockDbSelectFn }, { execute: mockExecute }),
+    _actor: unknown,
+    run: (ctx: { o: unknown; tx: unknown }) => unknown,
+  ) => run({ o: { select: mockDbSelectFn }, tx: { execute: mockExecute } }),
 }));
 
 vi.mock("@calibra-facil/db/schema", () => ({

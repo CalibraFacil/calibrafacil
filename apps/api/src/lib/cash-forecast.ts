@@ -1,5 +1,4 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { inOrgTransaction } from "./org-transaction";
 import { labToday } from "@calibra-facil/shared";
 import {
   billingDocument,
@@ -170,11 +169,9 @@ export interface BuildCashForecastInput {
 export async function buildCashForecast(
   input: BuildCashForecastInput,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<CashForecastSummary> {
-  return inOrgTransaction(input.organizationId, executor, (o) =>
-    readCashForecast(o, input),
-  );
+  return readCashForecast(executor, input);
 }
 
 /**

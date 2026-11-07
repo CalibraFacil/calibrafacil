@@ -525,9 +525,9 @@ export async function approveJob(
   // ones that were fetched.
   const images = await readCertificateImages(imageKeys, readCertificateImage);
 
-  // The write transaction names the laboratory (row-level security) and hands
-  // the raw executor to the frozen certificate input and the queue outbox,
-  // which run raw SQL. Every statement in it carries the organization predicate.
+  // `orgTransactionWithExecutor`, not `withOrg`: this is the approval's own
+  // write transaction, bracketed by the storage read above and the dispatch
+  // (and its compensation) below, which both need to see its commit.
   const outcome = await orgTransactionWithExecutor(
     memberData.organizationId,
     async (o, tx) => {
@@ -766,8 +766,8 @@ async function revertApprovalAfterDispatchFailure(params: {
   try {
     const approvedStatus = requireTargetOf(existing.status, "approve");
     const revertedStatus = requireTargetOf(approvedStatus, "revert_approval");
-    // Names the laboratory (row-level security); raw executor for the frozen
-    // input's delete and the audit row, which carry the organization predicate.
+    // `orgTransactionWithExecutor`, not `withOrg`: the compensation is its own
+    // transaction after a failed dispatch, and runs from the failure handler.
     await orgTransactionWithExecutor(existing.organizationId, async (o, tx) => {
       const [reverted] = await tx
         .update(calibrationJob)
@@ -896,9 +896,8 @@ function runCloudApprovalSideEffects(params: {
   // call regardless of outcome.
   void (async () => {
     try {
-      const linkedSoIds = await findServiceOrdersForCalibrationJob(
-        jobId,
-        organizationId,
+      const linkedSoIds = await orgDb(organizationId).transaction((o) =>
+        findServiceOrdersForCalibrationJob(jobId, organizationId, o),
       );
       for (const serviceOrderId of linkedSoIds) {
         await triggerAutomaticSendForMilestone({

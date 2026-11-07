@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
@@ -29,7 +29,7 @@ const ListQuerySchema = z.object({
   query: z.string().trim().optional(),
 });
 
-export const publicApiRouter = new Hono<{
+export const publicApiRouter = createRouter<{
   Variables: ApiKeyAuthVariables;
   Bindings: R2Env;
 }>()

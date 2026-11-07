@@ -27,10 +27,7 @@ import {
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
-import { syncRouter as bareSyncRouter } from "./sync";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const syncRouter = withErrorHandling(bareSyncRouter);
+import { syncRouter } from "./sync";
 
 // An in-memory object store. Hoisted: the vi.mock factory below runs before imports.
 const store = vi.hoisted(() => {

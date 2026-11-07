@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { findUserImage } from "../lib/identity";
 import {
   createR2Client,
@@ -22,7 +22,7 @@ function getAvatarApiUrl(): string {
   return `${process.env.API_URL || "https://localhost:3000"}/api/profile-media/avatar`;
 }
 
-export const profileMediaRouter = new Hono<{
+export const profileMediaRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env;
 }>()

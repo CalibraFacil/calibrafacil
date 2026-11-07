@@ -338,83 +338,79 @@ function buildCertificateIdentity(params: {
 
 export async function generateCertificateIdentity(
   context: CertificateNumberingContext,
-  executor?: CertificateNumberingDbExecutor,
+  tx: CertificateNumberingDbExecutor,
 ): Promise<CertificateIdentity> {
-  const run = async (tx: CertificateNumberingDbExecutor) => {
-    const [org] = await tx
-      .select({
-        id: organization.id,
-        name: organization.name,
-      })
-      .from(organization)
-      .where(eq(organization.id, context.organizationId))
+  const [org] = await tx
+    .select({
+      id: organization.id,
+      name: organization.name,
+    })
+    .from(organization)
+    .where(eq(organization.id, context.organizationId))
+    .limit(1);
+
+  if (!org) {
+    throw new Error("Laboratorio nao encontrado");
+  }
+
+  const profile = await ensureCertificateNumberingProfile(
+    context.organizationId,
+    tx,
+  );
+  const sequenceKey = buildCertificateSequenceKey(
+    profile.config.sequence.resetScope,
+    context,
+    profile.config,
+  );
+
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const sequence = await reserveNextSequence({
+      organizationId: context.organizationId,
+      profileId: profile.id,
+      sequenceKey,
+      config: profile.config,
+      executor: tx,
+    });
+    const identity = buildCertificateIdentity({
+      profileId: profile.id,
+      profileName: profile.name,
+      config: profile.config,
+      organizationName: org.name,
+      generatedAt: context.generatedAt,
+      sequenceKey,
+      sequence,
+    });
+
+    const [collision] = await tx
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.organizationId, context.organizationId),
+          eq(calibrationJob.jobId, identity.certificateNumber),
+        ),
+      )
       .limit(1);
 
-    if (!org) {
-      throw new Error("Laboratorio nao encontrado");
-    }
-
-    const profile = await ensureCertificateNumberingProfile(
-      context.organizationId,
-      tx,
-    );
-    const sequenceKey = buildCertificateSequenceKey(
-      profile.config.sequence.resetScope,
-      context,
-      profile.config,
-    );
-
-    for (let attempt = 0; attempt < 25; attempt += 1) {
-      const sequence = await reserveNextSequence({
+    if (!collision) {
+      await tx.insert(certificateNumberingAuditLog).values({
         organizationId: context.organizationId,
         profileId: profile.id,
-        sequenceKey,
-        config: profile.config,
-        executor: tx,
-      });
-      const identity = buildCertificateIdentity({
-        profileId: profile.id,
-        profileName: profile.name,
-        config: profile.config,
-        organizationName: org.name,
-        generatedAt: context.generatedAt,
-        sequenceKey,
-        sequence,
+        action: "generate",
+        changes: {
+          certificateNumber: identity.certificateNumber,
+          certificateName: identity.certificateName,
+          sequenceKey,
+          sequenceValue: sequence,
+        },
+        performedBy: context.performedBy ?? null,
       });
 
-      const [collision] = await tx
-        .select({ id: calibrationJob.id })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, context.organizationId),
-            eq(calibrationJob.jobId, identity.certificateNumber),
-          ),
-        )
-        .limit(1);
-
-      if (!collision) {
-        await tx.insert(certificateNumberingAuditLog).values({
-          organizationId: context.organizationId,
-          profileId: profile.id,
-          action: "generate",
-          changes: {
-            certificateNumber: identity.certificateNumber,
-            certificateName: identity.certificateName,
-            sequenceKey,
-            sequenceValue: sequence,
-          },
-          performedBy: context.performedBy ?? null,
-        });
-
-        return identity;
-      }
+      return identity;
     }
+  }
 
-    throw new Error(
-      "Nao foi possivel gerar um numero de certificado unico para este laboratorio",
-    );
-  };
-
-  return executor ? run(executor) : db.transaction(run);
+  throw new Error(
+    "Nao foi possivel gerar um numero de certificado unico para este laboratorio",
+  );
 }

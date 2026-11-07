@@ -45,6 +45,7 @@
  * across orgs for B/C/D rows.
  */
 
+import { withOrg, SYSTEM_ACTOR } from "./org-context";
 import { systemDb } from "@calibra-facil/db";
 import { customer, serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
 import { eq, and, isNull, lt, asc } from "drizzle-orm";
@@ -74,7 +75,6 @@ import { dispatchNovoOrcamentoEmail } from "../modules/service-orders/novo-orcam
 import { dispatchOrcamentoAprovadoEmail } from "../modules/service-orders/orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "../modules/service-orders/orcamento-recusado-email-dispatch";
 import { isReleaseExhausting } from "./outbox-release";
-import { orgTransactionWithExecutor } from "./org-transaction";
 
 // =============================================================================
 // CONSTANTS
@@ -180,9 +180,10 @@ async function claimOutboxRow(
 ): Promise<ClaimResult | undefined> {
   // One short transaction that names the row's laboratory (row-level security);
   // the statement keeps its explicit organization predicate.
-  const result: unknown = await orgTransactionWithExecutor(
+  const result: unknown = await withOrg(
     organizationId,
-    async (_o, tx) =>
+    SYSTEM_ACTOR,
+    async ({ tx }) =>
       tx.execute(
         sql`UPDATE service_order_email_outbox
         SET claimed_at = now()
@@ -230,7 +231,7 @@ async function releaseOutboxRow(
   errorMessage: string,
   deadLetter: boolean,
 ): Promise<void> {
-  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+  await withOrg(organizationId, SYSTEM_ACTOR, async ({ tx }) => {
     if (deadLetter) {
       await tx.execute(
         sql`UPDATE service_order_email_outbox
@@ -274,7 +275,7 @@ async function markOutboxRowProcessed(
   rowId: number,
   options: { redactCredentials: boolean },
 ): Promise<void> {
-  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+  await withOrg(organizationId, SYSTEM_ACTOR, async ({ tx }) => {
     if (options.redactCredentials) {
       await tx.execute(
         sql`UPDATE service_order_email_outbox
@@ -743,9 +744,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
         // Raw SQL so the organization_id predicate is directly assertable in tests.
         // One transaction that names the laboratory: the service order (raw SQL
         // so the organization predicate stays assertable) and its customer.
-        const { soResult, custRows } = await orgTransactionWithExecutor(
+        const { soResult, custRows } = await withOrg(
           row.organizationId,
-          async (o, tx) => {
+          SYSTEM_ACTOR,
+          async ({ o, tx }) => {
             const loaded = await tx.execute(
               sql`SELECT id, public_id, organization_id, customer_id, service_order_number, client_contact_snapshot
               FROM service_order

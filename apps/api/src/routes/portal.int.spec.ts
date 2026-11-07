@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { portalRouter as barePortalRouter } from "./portal";
+import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
 import { asset, assetType, calibrationRequest } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
@@ -10,9 +10,6 @@ import {
   seedPortalCustomer,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const portalRouter = withErrorHandling(barePortalRouter);
 
 // Real-DB + real-RBAC integration test for the CLIENT PORTAL — the highest-stakes
 // tenant boundary, since it is customer-facing. Only the portal better-auth

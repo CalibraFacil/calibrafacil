@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import {
   nonConformance,
@@ -69,7 +69,9 @@ import {
  * - POST /:id/escalate-to-capa: non_conformance:escalate (admin, owner)
  * - GET /:id/audit-log: non_conformance:read (all roles)
  */
-export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
+export const nonConformancesRouter = createRouter<{
+  Variables: AuthVariables;
+}>()
   // =========================================================================
   // GET / - List non-conformances with pagination and filtering
   // =========================================================================

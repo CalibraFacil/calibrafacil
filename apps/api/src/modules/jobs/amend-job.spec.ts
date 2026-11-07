@@ -3,12 +3,9 @@ import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
 // amend-job.ts opens database connections at import time through its lib imports;
-// technicalRecordOf is pure, so the unit tier stubs the two that do.
+// technicalRecordOf is pure, so the unit tier stubs the one that does.
 vi.mock("../../lib/certificate-numbering", () => ({
   generateCertificateIdentity: vi.fn(),
-}));
-vi.mock("../../lib/org-transaction", () => ({
-  orgTransactionWithExecutor: vi.fn(),
 }));
 
 import { technicalRecordOf } from "./amend-job";

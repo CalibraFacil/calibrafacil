@@ -32,19 +32,11 @@ import {
   seedOrg,
   seedPortalContext,
 } from "../../test/integration/seed";
-import { dashboardRouter as bareDashboardRouter } from "./dashboard";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { portalRouter as barePortalRouter } from "./portal";
-import { standardsRouter as bareStandardsRouter } from "./standards";
+import { dashboardRouter } from "./dashboard";
+import { jobsRouter } from "./jobs";
+import { portalRouter } from "./portal";
+import { standardsRouter } from "./standards";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const portalRouter = withErrorHandling(barePortalRouter);
-const dashboardRouter = withErrorHandling(bareDashboardRouter);
-
-const standardsRouter = withErrorHandling(bareStandardsRouter);
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 // The portal resolves the host lab from the request Origin; a local host is the

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { competencesRouter as bareCompetencesRouter } from "./competences";
+import { competencesRouter } from "./competences";
 import { db } from "@calibra-facil/db";
 import {
   personnelCompetence,
@@ -11,9 +11,6 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const competencesRouter = withErrorHandling(bareCompetencesRouter);
 
 // Real-DB + real-RBAC integration test for the competences router.
 // Only the better-auth session is mocked (see test/integration/setup.ts).

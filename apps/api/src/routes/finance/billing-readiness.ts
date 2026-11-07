@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
+import { orgDb } from "../../lib/org-db";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { BillingReadinessStatus } from "@calibra-facil/shared";
@@ -25,7 +26,7 @@ function parseStatusFilter(value: string | undefined) {
   return READINESS_STATUSES.find((status) => status === value);
 }
 
-export const financeBillingReadinessRouter = new Hono<{
+export const financeBillingReadinessRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
 }>()
@@ -38,15 +39,22 @@ export const financeBillingReadinessRouter = new Hono<{
       ? Number.parseInt(customerIdRaw, 10)
       : undefined;
 
-    const queue = await computeBillingReadinessQueue({
-      organizationId: member.organizationId,
-      scope: member,
-      filters: {
-        status: statusFilter,
-        customerId:
-          customerId && Number.isInteger(customerId) ? customerId : undefined,
-      },
-    });
+    const queue = await orgDb(member.organizationId).transaction((o) =>
+      computeBillingReadinessQueue(
+        {
+          organizationId: member.organizationId,
+          scope: member,
+          filters: {
+            status: statusFilter,
+            customerId:
+              customerId && Number.isInteger(customerId)
+                ? customerId
+                : undefined,
+          },
+        },
+        o,
+      ),
+    );
 
     return c.json({
       billing: {

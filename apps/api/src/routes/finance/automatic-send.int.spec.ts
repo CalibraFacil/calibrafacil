@@ -15,18 +15,13 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { financeAutomaticSendRouter as bareFinanceAutomaticSendRouter } from "./automatic-send";
+import { financeAutomaticSendRouter } from "./automatic-send";
 import { db } from "@calibra-facil/db";
 import { automaticSendRule } from "@calibra-facil/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { loginAs } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
-
-const financeAutomaticSendRouter = withErrorHandling(
-  bareFinanceAutomaticSendRouter,
-);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

@@ -84,17 +84,38 @@ fan-out, cron and queue sweeps. They run on the named **system path**: `systemDb
   laboratory's session. Reads of the catalog stay on the application pool (no policy on a global table). If a
   route ever has to write the catalog, it calls a named lib function on `systemDb`.
 
+## The write door today
+
+Everything below the "Row-level security" heading is the migration log (P2-18c to P2-18k); it names helpers
+that no longer exist (`inOrgTransaction`, `withOrgReader`, `OrgScope`, `afterCommitQueue`). What is true now:
+
+- **One door for writes.** `withOrg(org, actor, (ctx) => ...)` (`apps/api/src/lib/org-context.ts`) opens the
+  RLS transaction and hands the work an `OrgContext`: `ctx.o` (the org-bound handle), `ctx.tx` (the raw
+  transaction for advisory locks and raw SQL), `ctx.audit`, `ctx.emit` (a job staged in the transaction) and
+  `ctx.afterCommit`. Work with no signed-in user (a drain, a reconciler, the retention purge) passes
+  `SYSTEM_ACTOR`. Inside the desktop sync's transaction scope it is a savepoint and its after-commit work waits
+  for the scope's commit.
+- **Libs take the handle, they do not look for one.** A lib that writes takes the `OrgContext` (or `ctx.o` /
+  `ctx.tx` when that is all it needs); a lib that reads takes `ctx.o`, an `OrgDb` or a `Pick<OrgExecutor,
+"select">`. A caller with no transaction of its own opens `withOrg` (writes) or `orgDb(org).transaction`
+  (reads). There is no "inside or outside" mode: no optional `executor`, no `scope`, no default to the raw `db`.
+- **`orgTransactionWithExecutor` is kept for the job approval only** (`modules/jobs/approve-job.ts`): its write
+  transaction sits between an object-storage read and the queue dispatch, and its compensation is a second
+  transaction that must see a dispatch failure, so neither can be one `withOrg`.
+- **Routers render what they throw.** Route modules build their router with `createRouter`
+  (`apps/api/src/server/router.ts`), which sets the app's error handler on it; Hono uses a mounted sub-app's
+  handler for that sub-app's routes, so a `DomainError` answers the same mounted in the app or on its own.
+
 ## The lint ratchet
 
 `calibra/no-raw-db-in-routes` (`packages/oxlint-plugin-calibra`) forbids the raw handle in
 `apps/api/src/routes/**`: `db` and `getDb()` from `@calibra-facil/db`, a namespace import reaching
 them (`import * as x`, `x.db`), a dynamic `import("@calibra-facil/db")`, and importing `db` or
-`getDb` by name from ANY module (so a lib that re-exports the raw handle is no way around it). The routes that still use it are grandfathered as
-exact per-file counts in `packages/oxlint-plugin-calibra/src/lib/raw-db-baseline.ts`: a count may
-not go up, and a count above the file's real number of uses fails too, so the allowance shrinks in
-the same change that migrates a handler (delete the entry at zero). The baseline is EMPTY since P2-18j:
-every route is migrated, so a route that needs a statement outside an organization calls a named lib
-function (`lib/identity.ts`, `lib/public-signup-store.ts`, ...), never the raw handle.
+`getDb` by name from ANY module (so a lib that re-exports the raw handle is no way around it). No route is
+grandfathered since P2-18j (the committed baseline file is gone; the rule keeps a `baseline` option that
+only its own tests use, to cover the exact-count / +1 / stale branches): a route that needs a statement
+outside an organization calls a named lib function (`lib/identity.ts`, `lib/public-signup-store.ts`, ...),
+never the raw handle.
 
 ## Row-level security (enforced since P2-18k)
 

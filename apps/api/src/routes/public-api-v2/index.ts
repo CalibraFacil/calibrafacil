@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { Scalar } from "@scalar/hono-api-reference";
 import { type R2Env } from "../../lib/storage";
 import { requireApiKeyAuth } from "../../middleware/api-key-auth";
@@ -25,7 +25,7 @@ import { jobWriteRoutes } from "./jobs-write";
 import { jobDecisionRoutes } from "./jobs-decisions";
 import { webhookRoutes } from "./webhooks";
 
-export const publicApiV2Router = new Hono<PublicApiV2Env>();
+export const publicApiV2Router = createRouter<PublicApiV2Env>();
 
 const requirePublicApiDocsAccess = [
   ...requireLabProtected,
@@ -33,7 +33,7 @@ const requirePublicApiDocsAccess = [
   requireRole(["admin", "owner"]),
 ] as const;
 
-export const publicApiV2DocsRouter = new Hono<{
+export const publicApiV2DocsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env & {
     PUBLIC_API_MASTER_KEY?: string;

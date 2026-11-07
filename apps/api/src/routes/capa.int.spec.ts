@@ -38,7 +38,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { capaRouter as bareCapaRouter } from "./capa";
+import { capaRouter } from "./capa";
 import { db } from "@calibra-facil/db";
 import {
   correctiveAction,
@@ -53,9 +53,6 @@ import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { inSequence } from "../../test/integration/in-sequence";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const capaRouter = withErrorHandling(bareCapaRouter);
 
 // ---------------------------------------------------------------------------
 // Constants

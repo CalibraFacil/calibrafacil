@@ -26,12 +26,10 @@ import {
   type BillingLab,
 } from "../../test/integration/billing-fixtures";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
-import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { serviceOrdersRouter } from "./service-orders";
 
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 // The document jobs render PDFs; they are not under test here.
 vi.mock("../lib/background-jobs", async (importOriginal) => ({

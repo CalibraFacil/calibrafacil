@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { invitationsRouter as bareInvitationsRouter } from "./invitations";
+import { invitationsRouter } from "./invitations";
 import { db } from "@calibra-facil/db";
 import {
   invitation,
@@ -14,9 +14,6 @@ import { and, eq } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const invitationsRouter = withErrorHandling(bareInvitationsRouter);
 
 // Real-DB integration test for the PUBLIC invitations router
 // (apps/api/src/routes/invitations.ts). Unlike the authed routers, this one is

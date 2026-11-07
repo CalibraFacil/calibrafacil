@@ -2,7 +2,6 @@ import {
   publicApiWebhookDelivery,
   publicApiWebhookSubscription,
 } from "@calibra-facil/db/schema";
-import type { WebhookDeliveryBackgroundJobMessage } from "@calibra-facil/schemas";
 import {
   PUBLIC_API_WEBHOOK_EVENTS,
   PUBLIC_API_WEBHOOK_RESPONSE_SNIPPET_BYTES,
@@ -10,17 +9,7 @@ import {
   type PublicApiWebhookEvent,
 } from "@calibra-facil/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { afterCommitQueue, type AfterCommitTask } from "./after-commit";
-import { enqueueBackgroundJob } from "./background-jobs";
-import {
-  dispatchStagedBackgroundJob,
-  stageBackgroundJob,
-} from "./background-job-outbox";
-import type { OrgContext } from "./org-context";
-import {
-  orgTransactionWithExecutor,
-  type OrgRawTransaction,
-} from "./org-transaction";
+import { withOrg, type OrgActor, type OrgContext } from "./org-context";
 
 /**
  * Webhook deliveries are queue jobs (`WEBHOOK_DELIVERY`), not calls made inside
@@ -31,11 +20,8 @@ import {
  * and records every attempt on the delivery row.
  */
 
-/**
- * The transaction a mutation runs in, and where to register post-commit work:
- * the `OrgContext` of the write (`withOrg`) is one.
- */
-export type WebhookStagingScope = Pick<OrgContext, "o" | "tx" | "afterCommit">;
+/** The write an event is staged in: the `OrgContext` of a `withOrg`. */
+export type WebhookStagingScope = Pick<OrgContext, "o" | "emit">;
 
 type StageParams = {
   organizationId: string;
@@ -54,7 +40,7 @@ export async function stagePublicApiWebhookEvent(
   params: StageParams,
 ): Promise<void> {
   if (!PUBLIC_API_WEBHOOK_EVENTS.includes(params.eventType)) return;
-  const { o, tx, afterCommit } = scope;
+  const { o, emit } = scope;
 
   const subscriptions = await o
     .select({
@@ -92,44 +78,15 @@ export async function stagePublicApiWebhookEvent(
     )
     .returning({ id: publicApiWebhookDelivery.id });
 
-  await stageDeliveries(
-    tx,
-    afterCommit,
-    deliveries.map((delivery) => ({
+  // Each delivery is a queue row of this transaction (an in-process dispatch
+  // mode runs it after the commit instead).
+  for (const delivery of deliveries) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- the queue rows are written on one transaction, one statement after the other.
+    await emit({
       type: "WEBHOOK_DELIVERY",
       deliveryId: delivery.id,
       organizationId: params.organizationId,
-    })),
-  );
-}
-
-async function stageDeliveries(
-  tx: OrgRawTransaction,
-  afterCommit: (task: AfterCommitTask) => void,
-  messages: WebhookDeliveryBackgroundJobMessage[],
-) {
-  let anyStaged = false;
-  for (const message of messages) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- the queue rows are written on one transaction, one statement after the other.
-    const staged = await stageBackgroundJob(tx, message);
-    if (staged) {
-      anyStaged = true;
-    } else {
-      // In-process dispatch (local/inline mode): runs after the commit.
-      afterCommit(() => enqueueBackgroundJob(message));
-    }
-  }
-  // Queue rows are durable already; the document worker only needs a nudge.
-  if (anyStaged) afterCommit(() => dispatchStagedBackgroundJob());
-}
-
-async function runAfterCommit(queue: ReturnType<typeof afterCommitQueue>) {
-  try {
-    await queue.run();
-  } catch (error) {
-    // The mutation is committed and the delivery is a row the queue (or a
-    // replay) can still drive: a failed wake-up must not fail the request.
-    console.error("[PublicApi] Webhook dispatch failed after commit", error);
+    });
   }
 }
 
@@ -138,12 +95,13 @@ async function runAfterCommit(queue: ReturnType<typeof afterCommitQueue>) {
  * commit before they know the payload. Prefer `stagePublicApiWebhookEvent` in
  * the mutation's own transaction.
  */
-export async function emitPublicApiWebhookEvent(params: StageParams) {
-  const queue = afterCommitQueue();
-  await orgTransactionWithExecutor(params.organizationId, (o, tx) =>
-    stagePublicApiWebhookEvent({ o, tx, afterCommit: queue.add }, params),
+export function emitPublicApiWebhookEvent(
+  actor: OrgActor,
+  params: StageParams,
+) {
+  return withOrg(params.organizationId, actor, (ctx) =>
+    stagePublicApiWebhookEvent(ctx, params),
   );
-  await runAfterCommit(queue);
 }
 
 /**
@@ -151,72 +109,62 @@ export async function emitPublicApiWebhookEvent(params: StageParams) {
  * subscription (the original stays on record). Returns the new delivery, or
  * `null` when the subscription or the delivery is not the laboratory's.
  */
-export async function replayPublicApiWebhookDelivery(params: {
-  organizationId: string;
-  subscriptionId: string;
-  deliveryId: string;
-}) {
-  const queue = afterCommitQueue();
-  const replay = await orgTransactionWithExecutor(
-    params.organizationId,
-    async (o, tx) => {
-      const [subscription] = await o
-        .select({
-          id: publicApiWebhookSubscription.id,
-          targetUrl: publicApiWebhookSubscription.targetUrl,
-        })
-        .from(publicApiWebhookSubscription)
-        .where(
-          and(
-            eq(publicApiWebhookSubscription.id, params.subscriptionId),
-            eq(
-              publicApiWebhookSubscription.organizationId,
-              params.organizationId,
-            ),
-          ),
-        )
-        .limit(1);
-      if (!subscription) return null;
+export async function replayPublicApiWebhookDelivery(
+  { o, emit }: Pick<OrgContext, "o" | "emit">,
+  params: {
+    organizationId: string;
+    subscriptionId: string;
+    deliveryId: string;
+  },
+) {
+  const [subscription] = await o
+    .select({
+      id: publicApiWebhookSubscription.id,
+      targetUrl: publicApiWebhookSubscription.targetUrl,
+    })
+    .from(publicApiWebhookSubscription)
+    .where(
+      and(
+        eq(publicApiWebhookSubscription.id, params.subscriptionId),
+        eq(publicApiWebhookSubscription.organizationId, params.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!subscription) return null;
 
-      const [delivery] = await o
-        .select()
-        .from(publicApiWebhookDelivery)
-        .where(
-          and(
-            eq(publicApiWebhookDelivery.id, params.deliveryId),
-            eq(publicApiWebhookDelivery.subscriptionId, subscription.id),
-            eq(publicApiWebhookDelivery.organizationId, params.organizationId),
-          ),
-        )
-        .orderBy(desc(publicApiWebhookDelivery.createdAt))
-        .limit(1);
-      if (!delivery) return null;
+  const [delivery] = await o
+    .select()
+    .from(publicApiWebhookDelivery)
+    .where(
+      and(
+        eq(publicApiWebhookDelivery.id, params.deliveryId),
+        eq(publicApiWebhookDelivery.subscriptionId, subscription.id),
+        eq(publicApiWebhookDelivery.organizationId, params.organizationId),
+      ),
+    )
+    .orderBy(desc(publicApiWebhookDelivery.createdAt))
+    .limit(1);
+  if (!delivery) return null;
 
-      const [created] = await o
-        .insert(publicApiWebhookDelivery)
-        .values({
-          id: crypto.randomUUID(),
-          subscriptionId: subscription.id,
-          organizationId: params.organizationId,
-          eventId: delivery.eventId,
-          eventType: delivery.eventType,
-          requestUrl: subscription.targetUrl,
-          requestBody: delivery.requestBody,
-          replayOfDeliveryId: delivery.id,
-        })
-        .returning();
-      await stageDeliveries(tx, queue.add, [
-        {
-          type: "WEBHOOK_DELIVERY",
-          deliveryId: created!.id,
-          organizationId: params.organizationId,
-        },
-      ]);
-      return created!;
-    },
-  );
-  if (replay) await runAfterCommit(queue);
-  return replay;
+  const [created] = await o
+    .insert(publicApiWebhookDelivery)
+    .values({
+      id: crypto.randomUUID(),
+      subscriptionId: subscription.id,
+      organizationId: params.organizationId,
+      eventId: delivery.eventId,
+      eventType: delivery.eventType,
+      requestUrl: subscription.targetUrl,
+      requestBody: delivery.requestBody,
+      replayOfDeliveryId: delivery.id,
+    })
+    .returning();
+  await emit({
+    type: "WEBHOOK_DELIVERY",
+    deliveryId: created!.id,
+    organizationId: params.organizationId,
+  });
+  return created!;
 }
 
 type DeliveryRow = typeof publicApiWebhookDelivery.$inferSelect;

@@ -1,8 +1,6 @@
 import {
-  createRatchet,
   importSourceOf,
   normalizedFilename,
-  type Baseline,
   type RuleContext,
   type RuleModule,
 } from "../lib/rule-support.ts";
@@ -14,10 +12,6 @@ import {
 // place (docs/architecture/api-client-contract.md).
 
 const ALLOWED_PATTERN = /(^|\/)packages\/(client-runtime|contracts)\//;
-
-// No known violations today — pure prevention (see the ratchet note in
-// no-api-import-in-frontend.ts).
-const LEGACY_BASELINE: Baseline = new Map<string, number>([]);
 
 const MESSAGE =
   'Raw Hono RPC ("hono/client") is only allowed inside packages/client-runtime (and type-level use in packages/contracts). Call product-level methods on @calibra-facil/client-runtime instead.';
@@ -34,13 +28,11 @@ const rule: RuleModule = {
     const filename = normalizedFilename(context);
     if (ALLOWED_PATTERN.test(filename)) return {};
 
-    const ratchet = createRatchet(LEGACY_BASELINE, filename);
     const check = (node: unknown) => {
       const source = importSourceOf(node);
       if (source !== "hono/client" && !source?.startsWith("hono/client/")) {
         return;
       }
-      if (!ratchet.exceeds()) return;
       context.report({ node, message: MESSAGE });
     };
 

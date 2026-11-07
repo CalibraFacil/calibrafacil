@@ -1,10 +1,10 @@
+import { createRouter } from "../server/router";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   ListNotificationsQuerySchema,
   MarkNotificationsReadSchema,
   UpdateNotificationPreferencesSchema,
 } from "@calibra-facil/schemas";
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
   notification,
@@ -36,7 +36,7 @@ import { requestActor } from "../middleware/request-actor";
  * - Never hard-delete notifications (use ARCHIVED status)
  * - All notification events are auditable
  */
-export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
+export const notificationsRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List notifications with pagination and filters
   // =========================================================================

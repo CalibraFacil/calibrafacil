@@ -16,7 +16,6 @@ import {
 import { and, eq, inArray, type SQL } from "drizzle-orm";
 import type { ApiErrorCode } from "@calibra-facil/contracts";
 import { invalid } from "../../lib/domain-errors";
-import { withOrgReader } from "../../lib/org-transaction";
 
 /**
  * The cloud's runtime of the one standards judgement (Q12). This file is only a
@@ -47,58 +46,48 @@ async function loadStandardFacts(
     /** The caller's unit scope, as `buildUnitScopeCondition` builds it. */
     unitScope?: SQL;
   },
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<JudgedStandardFacts[]> {
   if (input.standardIds.length === 0) return [];
-  const rows = await withOrgReader(input.organizationId, executor, (reader) =>
-    reader
-      .select({
-        id: referenceStandard.id,
-        name: referenceStandard.name,
-        status: referenceStandard.status,
-        deletedAt: referenceStandard.deletedAt,
-        certificateNumber: referenceStandard.certificateNumber,
-        calibrationDate: referenceStandard.calibrationDate,
-        nextCalibrationDate: referenceStandard.nextCalibrationDate,
-      })
-      .from(referenceStandard)
-      .where(
-        and(
-          inArray(referenceStandard.id, [...input.standardIds]),
-          eq(referenceStandard.organizationId, input.organizationId),
-          input.unitScope,
-        ),
+  const rows = await executor
+    .select({
+      id: referenceStandard.id,
+      name: referenceStandard.name,
+      status: referenceStandard.status,
+      deletedAt: referenceStandard.deletedAt,
+      certificateNumber: referenceStandard.certificateNumber,
+      calibrationDate: referenceStandard.calibrationDate,
+      nextCalibrationDate: referenceStandard.nextCalibrationDate,
+    })
+    .from(referenceStandard)
+    .where(
+      and(
+        inArray(referenceStandard.id, [...input.standardIds]),
+        eq(referenceStandard.organizationId, input.organizationId),
+        input.unitScope,
       ),
-  );
+    );
   if (rows.length === 0) return [];
   // Roadmap 2 C3: the certificates each standard has had, so work is judged by
   // the one valid on the day it was performed, not by the latest renewal.
-  const history = await withOrgReader(
-    input.organizationId,
-    executor,
-    (reader) =>
-      reader
-        .select({
-          standardId: referenceStandardCalibration.standardId,
-          certificateNumber: referenceStandardCalibration.certificateNumber,
-          source: referenceStandardCalibration.source,
-          calibrationDate: referenceStandardCalibration.calibrationDate,
-          nextCalibrationDate: referenceStandardCalibration.nextCalibrationDate,
-        })
-        .from(referenceStandardCalibration)
-        .where(
-          and(
-            eq(
-              referenceStandardCalibration.organizationId,
-              input.organizationId,
-            ),
-            inArray(
-              referenceStandardCalibration.standardId,
-              rows.map((row) => row.id),
-            ),
-          ),
+  const history = await executor
+    .select({
+      standardId: referenceStandardCalibration.standardId,
+      certificateNumber: referenceStandardCalibration.certificateNumber,
+      source: referenceStandardCalibration.source,
+      calibrationDate: referenceStandardCalibration.calibrationDate,
+      nextCalibrationDate: referenceStandardCalibration.nextCalibrationDate,
+    })
+    .from(referenceStandardCalibration)
+    .where(
+      and(
+        eq(referenceStandardCalibration.organizationId, input.organizationId),
+        inArray(
+          referenceStandardCalibration.standardId,
+          rows.map((row) => row.id),
         ),
-  );
+      ),
+    );
   const byStandard = new Map<
     number,
     Array<{
@@ -173,7 +162,7 @@ export async function judgeSnapshotStandards(
   },
   // The caller's org-bound handle (row-level security); absent, a short
   // transaction of its own that names the laboratory.
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<StandardsJudgement> {
   const loaded = await loadStandardFacts(input, executor);
   const facts = input.lifecycleStatusesAfterTheWorkAreFine
@@ -211,7 +200,7 @@ export async function judgeDraftSnapshotStandards(
     now: Date;
     mode: StandardsJudgementMode;
   },
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<DraftStandardsJudgement> {
   const facts = await loadStandardFacts(input, executor);
   return judgeDraftExecutionStandards(

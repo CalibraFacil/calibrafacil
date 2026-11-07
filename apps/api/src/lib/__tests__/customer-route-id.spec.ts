@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -76,7 +77,11 @@ describe("resolveCustomerRouteId", () => {
   it("resolves a direct numeric id without scanning customer slugs", async () => {
     useDbResults([{ id: 42 }]);
 
-    await expect(resolveCustomerRouteId("42", "org-1")).resolves.toBe(42);
+    await expect(
+      orgDb("org-1").transaction((o) =>
+        resolveCustomerRouteId("42", "org-1", o),
+      ),
+    ).resolves.toBe(42);
 
     expect(mocks.db.select).toHaveBeenCalledTimes(1);
     expect(mocks.state.limits).toEqual([1]);
@@ -95,7 +100,9 @@ describe("resolveCustomerRouteId", () => {
     );
 
     await expect(
-      resolveCustomerRouteId("cliente-matriz", "org-1"),
+      orgDb("org-1").transaction((o) =>
+        resolveCustomerRouteId("cliente-matriz", "org-1", o),
+      ),
     ).resolves.toBe(17);
 
     expect(mocks.db.select).toHaveBeenCalledTimes(2);

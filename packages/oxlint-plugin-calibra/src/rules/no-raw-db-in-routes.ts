@@ -9,7 +9,6 @@ import {
   toRecord,
   type UnknownRecord,
 } from "../lib/rule-support.ts";
-import { RAW_DB_BASELINE } from "../lib/raw-db-baseline.ts";
 
 // A route handler that queries through the global Drizzle `db` has to remember
 // the organization predicate on every statement (the tenant SQL guard only
@@ -19,8 +18,8 @@ import { RAW_DB_BASELINE } from "../lib/raw-db-baseline.ts";
 // @calibra-facil/db/for-org - which adds the predicate itself.
 //
 // So apps/api/src/routes may not use the `db` exported by @calibra-facil/db.
-// The routes that still do are grandfathered as exact per-file counts of
-// references to the binding (lib/raw-db-baseline.ts, same ratchet as
+// A route that still did would be grandfathered as an exact per-file count of
+// references to the binding (the rule option `baseline`, same ratchet as
 // no-json-error-body-in-routes): a file may never gain one, and - unlike the
 // other ratchets - a count that is higher than the file's real number of uses
 // is reported too, so the allowance shrinks in the same change that migrates a
@@ -210,15 +209,15 @@ function collectReferences(
 }
 
 /**
- * The baseline in force: the committed one, or `{ baseline: { "<path suffix>":
- * <count> } }` from the rule options. The option exists for the rule's own tests
- * (they inject entries so the exact-count / +1 / stale branches stay covered while
- * the committed baseline is empty); the repo config never sets it.
+ * The baseline in force: none, or `{ baseline: { "<path suffix>": <count> } }`
+ * from the rule options. The option exists for the rule's own tests (they inject
+ * entries so the exact-count / +1 / stale branches stay covered while no route is
+ * grandfathered); the repo config never sets it.
  */
 function baselineInForce(context: RuleContext): Baseline {
   const options = toRecord(context.options?.[0]);
   const injected = toRecord(options?.baseline);
-  if (!injected) return RAW_DB_BASELINE;
+  if (!injected) return new Map<string, number>();
   const entries: Array<[string, number]> = [];
   for (const [file, count] of Object.entries(injected)) {
     if (typeof count === "number") entries.push([file, count]);

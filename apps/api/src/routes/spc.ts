@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { orgDb } from "../lib/org-db";
@@ -160,7 +160,7 @@ async function recomputeControlChart(
   return evaluation;
 }
 
-export const spcRouter = new Hono<{ Variables: AuthVariables }>()
+export const spcRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /charts - List control charts (org-wide overview)
   // =========================================================================

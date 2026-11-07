@@ -1,6 +1,6 @@
+import { orgDb } from "./org-db";
 import { and, eq } from "drizzle-orm";
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { inOrgTransaction } from "./org-transaction";
 import { integrationOAuthApp } from "@calibra-facil/db/schema";
 import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
 
@@ -50,34 +50,30 @@ async function resolveContaAzulAppCredentials(
     organizationId: string;
     env: ContaAzulOAuthEnv;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<(ContaAzulAppCredentials & { source: ContaAzulAppSource }) | null> {
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
-    const [row] = await o
-      .select({
-        clientId: integrationOAuthApp.clientId,
-        encryptedClientSecret: integrationOAuthApp.encryptedClientSecret,
-        clientSecretIv: integrationOAuthApp.clientSecretIv,
-      })
-      .from(integrationOAuthApp)
-      .where(organizationAppCondition(params.organizationId))
-      .limit(1);
-
-    if (row) {
-      return {
-        source: "organization",
-        clientId: row.clientId,
-        clientSecret: decryptPassword(
-          row.encryptedClientSecret,
-          row.clientSecretIv,
-          getMasterKey(params.env),
-        ),
-      };
-    }
-
-    const server = getServerContaAzulCredentials(params.env);
-    return server ? { source: "server", ...server } : null;
-  });
+  const [row] = await executor
+    .select({
+      clientId: integrationOAuthApp.clientId,
+      encryptedClientSecret: integrationOAuthApp.encryptedClientSecret,
+      clientSecretIv: integrationOAuthApp.clientSecretIv,
+    })
+    .from(integrationOAuthApp)
+    .where(organizationAppCondition(params.organizationId))
+    .limit(1);
+  if (row) {
+    return {
+      source: "organization",
+      clientId: row.clientId,
+      clientSecret: decryptPassword(
+        row.encryptedClientSecret,
+        row.clientSecretIv,
+        getMasterKey(params.env),
+      ),
+    };
+  }
+  const server = getServerContaAzulCredentials(params.env);
+  return server ? { source: "server", ...server } : null;
 }
 
 /** The OAuth configuration for a laboratory, or null when it has no application. */
@@ -85,7 +81,9 @@ export async function resolveContaAzulOAuthConfig(params: {
   organizationId: string;
   env: ContaAzulOAuthEnv;
 }): Promise<ContaAzulOAuthConfig | null> {
-  const credentials = await resolveContaAzulAppCredentials(params);
+  const credentials = await orgDb(params.organizationId).transaction((o) =>
+    resolveContaAzulAppCredentials(params, o),
+  );
   return credentials
     ? buildContaAzulOAuthConfig(credentials, params.env)
     : null;
@@ -103,14 +101,11 @@ export async function requireContaAzulOAuthConfig(params: {
 }
 
 /** What settings shows: never the secret, only its last four characters. */
-export async function getContaAzulAppSummary(
-  params: {
-    organizationId: string;
-    env: ContaAzulOAuthEnv;
-  },
-  executor?: OrgDb,
-): Promise<ContaAzulAppSummary> {
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
+export async function getContaAzulAppSummary(params: {
+  organizationId: string;
+  env: ContaAzulOAuthEnv;
+}): Promise<ContaAzulAppSummary> {
+  return orgDb(params.organizationId).transaction(async (o) => {
     const redirectUri = resolveContaAzulRedirectUri(params.env);
     const [row] = await o
       .select({
@@ -149,37 +144,34 @@ export async function saveContaAzulAppCredentials(
     credentials: ContaAzulAppCredentials;
     env: ContaAzulOAuthEnv;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
-    const { encryptedPassword, iv } = encryptPassword(
-      params.credentials.clientSecret,
-      getMasterKey(params.env),
-    );
-    const values = {
-      clientId: params.credentials.clientId,
-      encryptedClientSecret: encryptedPassword,
-      clientSecretIv: iv,
-      clientSecretLast4: params.credentials.clientSecret.slice(-4),
-      updatedBy: params.actorUserId,
-    };
-
-    await o
-      .insert(integrationOAuthApp)
-      .values({
-        id: crypto.randomUUID(),
-        organizationId: params.organizationId,
-        provider: "conta_azul",
-        ...values,
-      })
-      .onConflictDoUpdate({
-        target: [
-          integrationOAuthApp.organizationId,
-          integrationOAuthApp.provider,
-        ],
-        set: { ...values, updatedAt: new Date() },
-      });
-  });
+  const { encryptedPassword, iv } = encryptPassword(
+    params.credentials.clientSecret,
+    getMasterKey(params.env),
+  );
+  const values = {
+    clientId: params.credentials.clientId,
+    encryptedClientSecret: encryptedPassword,
+    clientSecretIv: iv,
+    clientSecretLast4: params.credentials.clientSecret.slice(-4),
+    updatedBy: params.actorUserId,
+  };
+  await executor
+    .insert(integrationOAuthApp)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: params.organizationId,
+      provider: "conta_azul",
+      ...values,
+    })
+    .onConflictDoUpdate({
+      target: [
+        integrationOAuthApp.organizationId,
+        integrationOAuthApp.provider,
+      ],
+      set: { ...values, updatedAt: new Date() },
+    });
 }
 
 /** Returns whether the laboratory had an application of its own to remove. */
@@ -187,15 +179,13 @@ export async function deleteContaAzulAppCredentials(
   params: {
     organizationId: string;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<boolean> {
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
-    const deleted = await o
-      .delete(integrationOAuthApp)
-      .where(organizationAppCondition(params.organizationId))
-      .returning();
-    return deleted.length > 0;
-  });
+  const deleted = await executor
+    .delete(integrationOAuthApp)
+    .where(organizationAppCondition(params.organizationId))
+    .returning();
+  return deleted.length > 0;
 }
 
 export { ContaAzulAppMissingError };

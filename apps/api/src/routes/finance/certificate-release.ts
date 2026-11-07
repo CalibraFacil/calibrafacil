@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -207,7 +207,7 @@ async function loadReleaseDto(o: OrgDb, calibrationJobId: number) {
   };
 }
 
-export const financeCertificateReleaseRouter = new Hono<{
+export const financeCertificateReleaseRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   // -------------------------------------------------------------------------
@@ -340,7 +340,7 @@ export const financeCertificateReleaseRouter = new Hono<{
 // Settings router for org-level policy CRUD. Mounted under /api/settings.
 // ---------------------------------------------------------------------------
 
-export const settingsCertificateReleasePolicyRouter = new Hono<{
+export const settingsCertificateReleasePolicyRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   .get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {

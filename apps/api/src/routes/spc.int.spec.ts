@@ -11,7 +11,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { spcRouter as bareSpcRouter } from "./spc";
+import { spcRouter } from "./spc";
 import { db } from "@calibra-facil/db";
 import {
   checkStandardReading,
@@ -23,9 +23,6 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const spcRouter = withErrorHandling(bareSpcRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 

@@ -6,7 +6,6 @@ import {
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { orgDb } from "./org-db";
 
 type ServiceOrderNumberingDbExecutor = Pick<
   OrgExecutor,
@@ -117,72 +116,66 @@ export async function generateServiceOrderNumber(
     unitId: number;
     generatedAt: Date;
   },
-  executor?: ServiceOrderNumberingDbExecutor,
+  tx: ServiceOrderNumberingDbExecutor,
 ) {
-  const run = async (tx: ServiceOrderNumberingDbExecutor) => {
-    const settings = await getOrCreateServiceOrderSettings(
-      context.organizationId,
-      tx,
-    );
-    const [unit] = await tx
-      .select({
-        id: organizationUnit.id,
-        slug: organizationUnit.slug,
-        name: organizationUnit.name,
-      })
-      .from(organizationUnit)
-      .where(eq(organizationUnit.id, context.unitId))
+  const settings = await getOrCreateServiceOrderSettings(
+    context.organizationId,
+    tx,
+  );
+  const [unit] = await tx
+    .select({
+      id: organizationUnit.id,
+      slug: organizationUnit.slug,
+      name: organizationUnit.name,
+    })
+    .from(organizationUnit)
+    .where(eq(organizationUnit.id, context.unitId))
+    .limit(1);
+
+  if (!unit) {
+    throw new Error("Unidade nao encontrada");
+  }
+
+  const year = context.generatedAt.getFullYear();
+  const sequenceKey = `year:${year}`;
+  const sequenceUnitId =
+    settings.numberingScope === "unit" ? context.unitId : null;
+
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const sequence = await reserveNextSequence({
+      organizationId: context.organizationId,
+      unitId: sequenceUnitId,
+      sequenceKey,
+      executor: tx,
+    });
+
+    const number = renderTemplate(settings.numberingTemplate, {
+      YYYY: String(year),
+      YY: String(year).slice(-2),
+      UNIT: unit.slug.toUpperCase(),
+      SEQ: pad(sequence, 6),
+    });
+
+    const [collision] = await tx
+      .select({ id: serviceOrder.id })
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.organizationId, context.organizationId),
+          eq(serviceOrder.serviceOrderNumber, number),
+        ),
+      )
       .limit(1);
 
-    if (!unit) {
-      throw new Error("Unidade nao encontrada");
-    }
-
-    const year = context.generatedAt.getFullYear();
-    const sequenceKey = `year:${year}`;
-    const sequenceUnitId =
-      settings.numberingScope === "unit" ? context.unitId : null;
-
-    for (let attempt = 0; attempt < 25; attempt += 1) {
-      const sequence = await reserveNextSequence({
-        organizationId: context.organizationId,
-        unitId: sequenceUnitId,
+    if (!collision) {
+      return {
+        number,
+        sequence,
         sequenceKey,
-        executor: tx,
-      });
-
-      const number = renderTemplate(settings.numberingTemplate, {
-        YYYY: String(year),
-        YY: String(year).slice(-2),
-        UNIT: unit.slug.toUpperCase(),
-        SEQ: pad(sequence, 6),
-      });
-
-      const [collision] = await tx
-        .select({ id: serviceOrder.id })
-        .from(serviceOrder)
-        .where(
-          and(
-            eq(serviceOrder.organizationId, context.organizationId),
-            eq(serviceOrder.serviceOrderNumber, number),
-          ),
-        )
-        .limit(1);
-
-      if (!collision) {
-        return {
-          number,
-          sequence,
-          sequenceKey,
-          sequenceUnitId,
-        };
-      }
+        sequenceUnitId,
+      };
     }
+  }
 
-    throw new Error("Nao foi possivel gerar um numero unico de OS");
-  };
-
-  return executor
-    ? run(executor)
-    : orgDb(context.organizationId).transaction(run);
+  throw new Error("Nao foi possivel gerar um numero unico de OS");
 }

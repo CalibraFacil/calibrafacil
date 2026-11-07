@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { materialsRouter as bareMaterialsRouter } from "./materials";
+import { materialsRouter } from "./materials";
 import { db } from "@calibra-facil/db";
 import { material } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const materialsRouter = withErrorHandling(bareMaterialsRouter);
 
 // Real-DB + real-RBAC integration test for the materials catalog CRUD.
 // Only the better-auth session is mocked (see test/integration/setup.ts);

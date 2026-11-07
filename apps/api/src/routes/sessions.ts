@@ -1,10 +1,10 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 
 import { invalid, notFound } from "../lib/domain-errors";
 import { revokeOwnSession } from "../lib/identity";
 import { requireLabAuth, type AuthVariables } from "../middleware/permission";
 
-export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
+export const sessionsRouter = createRouter<{ Variables: AuthVariables }>().post(
   "/revoke",
   requireLabAuth,
   async (c) => {

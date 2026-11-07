@@ -22,7 +22,6 @@ import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
 import { invalid, notFound } from "./domain-errors";
-import { orgTransactionWithExecutor } from "./org-transaction";
 import { toRecord } from "@calibra-facil/shared/record";
 
 type JobDbExecutor = Pick<
@@ -46,7 +45,7 @@ type CreateCalibrationJobParams = {
   // the job. Re-validated to be in the caller's organization before persisting;
   // a cross-tenant id is dropped to null rather than linked.
   sourceServiceOrderId?: number | null;
-  executor?: JobDbExecutor;
+  executor: JobDbExecutor;
   // On-site (calibração in loco): pre-freeze the calibration location to the
   // customer's site so the technician doesn't re-enter it during execution.
   onsiteLocation?: { addressText: string; notes?: string | null } | null;
@@ -149,10 +148,13 @@ function validatePublishedMethodCompiledArtifact(methodData: {
   }
 }
 
-async function persistCalibrationJob(
-  params: CreateCalibrationJobParams,
-  executor: JobDbExecutor,
-) {
+/**
+ * Creates the calibration job on `params.executor`, the raw transaction of the
+ * caller's `withOrg` (`ctx.tx`): the advisory lock and the certificate
+ * numbering run raw SQL the org-bound handle cannot express.
+ */
+export async function createCalibrationJob(params: CreateCalibrationJobParams) {
+  const { executor } = params;
   const [assetData] = await executor
     .select({
       id: asset.id,
@@ -524,19 +526,6 @@ async function persistCalibrationJob(
       },
     },
   });
-
-  return newJob;
-}
-
-export async function createCalibrationJob(params: CreateCalibrationJobParams) {
-  // Without the caller's transaction the job is created in one of its own that
-  // names the laboratory (row-level security) and hands the raw executor to the
-  // advisory lock and the certificate numbering, which run raw SQL.
-  const newJob = params.executor
-    ? await persistCalibrationJob(params, params.executor)
-    : await orgTransactionWithExecutor(params.organizationId, (_o, tx) =>
-        persistCalibrationJob(params, tx),
-      );
 
   return newJob;
 }

@@ -1,3 +1,4 @@
+import { orgDb } from "./org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { customer, customerGroup } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -6,7 +7,6 @@ import {
   loadCustomerFinancialSummary,
 } from "./finance";
 import { invalid, notFound } from "./domain-errors";
-import { inOrgTransaction } from "./org-transaction";
 import { resolveCustomerRouteId } from "./customer-route-id";
 
 /**
@@ -18,55 +18,46 @@ import { resolveCustomerRouteId } from "./customer-route-id";
 export async function getLabCustomerById(
   customerId: number,
   labOrganizationId: string,
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  return inOrgTransaction(labOrganizationId, executor, async (o) => {
-    const [foundCustomer] = await o
-      .select()
-      .from(customer)
-      .where(
-        and(
-          eq(customer.id, customerId),
-          eq(customer.labOrganizationId, labOrganizationId),
-        ),
-      )
+  const [foundCustomer] = await executor
+    .select()
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, customerId),
+        eq(customer.labOrganizationId, labOrganizationId),
+      ),
+    )
+    .limit(1);
+  if (!foundCustomer) {
+    return null;
+  }
+  const financialSummary = await loadCustomerFinancialSummary(
+    labOrganizationId,
+    foundCustomer.id,
+    executor,
+  );
+  const activeCommercialAgreement = await loadCustomerActiveCommercialAgreement(
+    labOrganizationId,
+    foundCustomer.id,
+    executor,
+  );
+  let group: { id: number; name: string } | null = null;
+  if (foundCustomer.groupId !== null) {
+    const [groupRow] = await executor
+      .select({ id: customerGroup.id, name: customerGroup.name })
+      .from(customerGroup)
+      .where(eq(customerGroup.id, foundCustomer.groupId))
       .limit(1);
-
-    if (!foundCustomer) {
-      return null;
-    }
-
-    // Sequential: the statements share one transaction (one connection).
-    const financialSummary = await loadCustomerFinancialSummary(
-      labOrganizationId,
-      foundCustomer.id,
-      o,
-    );
-    const activeCommercialAgreement =
-      await loadCustomerActiveCommercialAgreement(
-        labOrganizationId,
-        foundCustomer.id,
-        o,
-      );
-    // Secondary lookup (keeps the whole-row select() above intact) so the
-    // detail payload can show which group/rede the customer belongs to.
-    let group: { id: number; name: string } | null = null;
-    if (foundCustomer.groupId !== null) {
-      const [groupRow] = await o
-        .select({ id: customerGroup.id, name: customerGroup.name })
-        .from(customerGroup)
-        .where(eq(customerGroup.id, foundCustomer.groupId))
-        .limit(1);
-      group = groupRow ?? null;
-    }
-
-    return {
-      ...foundCustomer,
-      financialSummary,
-      activeCommercialAgreement,
-      group,
-    };
-  });
+    group = groupRow ?? null;
+  }
+  return {
+    ...foundCustomer,
+    financialSummary,
+    activeCommercialAgreement,
+    group,
+  };
 }
 
 /**
@@ -78,7 +69,9 @@ export async function requireLabCustomerId(
   routeIdentifier: string,
   labOrganizationId: string,
 ) {
-  const id = await resolveCustomerRouteId(routeIdentifier, labOrganizationId);
+  const id = await orgDb(labOrganizationId).transaction((o) =>
+    resolveCustomerRouteId(routeIdentifier, labOrganizationId, o),
+  );
   if (id === null) throw invalid("invalid_request", "ID invalido");
   return id;
 }
@@ -93,7 +86,9 @@ export async function requireLabCustomer(
   labOrganizationId: string,
 ) {
   const id = await requireLabCustomerId(routeIdentifier, labOrganizationId);
-  const found = await getLabCustomerById(id, labOrganizationId);
+  const found = await orgDb(labOrganizationId).transaction((o) =>
+    getLabCustomerById(id, labOrganizationId, o),
+  );
   if (!found) throw notFound("customer_not_found", "Cliente nao encontrado");
   return found;
 }

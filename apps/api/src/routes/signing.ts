@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
@@ -78,7 +78,7 @@ function certificateNotFound() {
 // ROUTES
 // =============================================================================
 
-export const signingRouter = new Hono<{
+export const signingRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: SigningEnv;
 }>()

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import {
   syncAttachmentCompleteUploadRequestSchema,
   syncAttachmentCompleteUploadResponseSchema,
@@ -41,7 +41,7 @@ function refusalError(refusal: SyncAttachmentRefusal) {
   });
 }
 
-export const attachmentRoutes = new Hono<SyncRouterEnv>()
+export const attachmentRoutes = createRouter<SyncRouterEnv>()
   .post(
     "/attachments/init-upload",
     ...withLabPermission(SYNC_ATTACHMENT_PERMISSION),

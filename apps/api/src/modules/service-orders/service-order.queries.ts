@@ -2,7 +2,6 @@ import type { OrgDb } from "@calibra-facil/db/for-org";
 import { serviceOrder, serviceOrderQuote } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { orgDb } from "../../lib/org-db";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { serviceOrderNotFound } from "./service-order-errors";
 import type { ServiceOrderScope } from "./service-order-scope";
@@ -12,26 +11,24 @@ export async function getQuoteForAction(
   quoteId: number,
   organizationId: string,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
   // Lock the row for the caller's transaction: a lifecycle command reads the
   // status, checks it against SERVICE_ORDER_QUOTE_MACHINE and writes, and a
   // concurrent command waits instead of acting on the same stale status.
   options: { lock?: boolean } = {},
 ) {
-  const [quote] = await inOrgTransaction(organizationId, executor, (o) => {
-    const query = o
-      .select()
-      .from(serviceOrderQuote)
-      .where(
-        and(
-          eq(serviceOrderQuote.id, quoteId),
-          eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
-          eq(serviceOrderQuote.organizationId, organizationId),
-        ),
-      )
-      .limit(1);
-    return options.lock ? query.for("update") : query;
-  });
+  const query = executor
+    .select()
+    .from(serviceOrderQuote)
+    .where(
+      and(
+        eq(serviceOrderQuote.id, quoteId),
+        eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
+        eq(serviceOrderQuote.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  const [quote] = await (options.lock ? query.for("update") : query);
   return quote ?? null;
 }
 
@@ -64,28 +61,22 @@ export async function getScopedServiceOrder(
   id: number,
   member: ServiceOrderScope,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
   // Lock the row for the caller's transaction (see getQuoteForAction).
   options: { lock?: boolean } = {},
 ) {
-  const [order] = await inOrgTransaction(
-    member.organizationId,
-    executor,
-    (o) => {
-      const query = o
-        .select()
-        .from(serviceOrder)
-        .where(
-          and(
-            eq(serviceOrder.id, id),
-            eq(serviceOrder.organizationId, member.organizationId),
-            buildUnitScopeCondition(serviceOrder.unitId, member),
-          ),
-        )
-        .limit(1);
-      return options.lock ? query.for("update") : query;
-    },
-  );
+  const query = executor
+    .select()
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, id),
+        eq(serviceOrder.organizationId, member.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, member),
+      ),
+    )
+    .limit(1);
+  const [order] = await (options.lock ? query.for("update") : query);
 
   return order ?? null;
 }

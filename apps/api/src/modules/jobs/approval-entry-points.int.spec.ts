@@ -52,14 +52,11 @@ import { truncateAll } from "../../../test/integration/db";
 import { outsideApplication } from "../../../test/integration/app-role-mode";
 import { seedOrg } from "../../../test/integration/seed";
 import { createApiKeySecret } from "../../lib/api-keys";
-import { jobsRouter as bareJobsRouter } from "../../routes/jobs";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
+import { jobsRouter } from "../../routes/jobs";
 import { syncRouter } from "../../routes/sync";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { approveJob } from "./approve-job";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 const mocks = vi.hoisted(() => {
   const scope: {

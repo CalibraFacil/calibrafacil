@@ -117,7 +117,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     sql: /select distinct organization_id from sync_change_log/i,
     reason:
-      "System path (P2-18j, systemDb): the change-log retention cron lists which laboratories hold entries older than the window (organization ids only); the delete and the purge horizon of each laboratory then run in orgTransactionWithExecutor(laboratory) with an explicit organization_id predicate.",
+      "System path (P2-18j, systemDb): the change-log retention cron lists which laboratories hold entries older than the window (organization ids only); the delete and the purge horizon of each laboratory then run in withOrg(laboratory) with an explicit organization_id predicate.",
   },
   // -------------------------------------------------------------------------
   // public-token: the unguessable token/secret is the credential; the
@@ -186,12 +186,12 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/org-transaction.ts",
+    file: "apps/api/src/lib/org-context.ts",
     tables: ["sync_change_log", "sync_change_log_purge"],
     kinds: ["insert"],
     sql: /insert into sync_change_log_purge/,
     reason:
-      "Change-log retention (P2-18j): the per-laboratory purge runs in orgTransactionWithExecutor(laboratory); one statement deletes that laboratory's old entries (organization_id = $1) and records its purge horizon from the deleted rows' own organization_id, which a statement-level analysis cannot see through the CTE.",
+      "Change-log retention (P2-18j): the per-laboratory purge runs in withOrg(laboratory); one statement deletes that laboratory's old entries (organization_id = $1) and records its purge horizon from the deleted rows' own organization_id, which a statement-level analysis cannot see through the CTE.",
   },
   {
     category: "cron-queue",
@@ -260,7 +260,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     sql: /from "calibration_job" where .*not exists \(select 1 from "asset_oot_event"/,
     reason:
-      "System path (roadmap 2 B2, systemDb): the nightly approval-effects reconciler lists, across EVERY laboratory (cron, no request), the approved NON_CONFORMING jobs that have no out-of-tolerance event (ids only, and a count of the ones older than its window). Each job is then repaired in orgTransactionWithExecutor(job.organizationId), which re-reads it under row-level security before writing.",
+      "System path (roadmap 2 B2, systemDb): the nightly approval-effects reconciler lists, across EVERY laboratory (cron, no request), the approved NON_CONFORMING jobs that have no out-of-tolerance event (ids only, and a count of the ones older than its window). Each job is then repaired in withOrg(job.organizationId), which re-reads it under row-level security before writing.",
   },
   {
     category: "cron-queue",
@@ -269,7 +269,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     sql: /from "calibration_job" inner join "asset"/,
     reason:
-      "System path (roadmap 2 B2, systemDb): the approval-effects reconciler lists, across every laboratory, the approved jobs whose asset's last calibration date is older than the job's own (ids only). Each advance runs in orgTransactionWithExecutor(job.organizationId).",
+      "System path (roadmap 2 B2, systemDb): the approval-effects reconciler lists, across every laboratory, the approved jobs whose asset's last calibration date is older than the job's own (ids only). Each advance runs in withOrg(job.organizationId).",
   },
   {
     category: "cron-queue",
@@ -278,7 +278,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     sql: /from "asset_oot_event" inner join "calibration_job"/,
     reason:
-      "System path (roadmap 2 B2, systemDb): the approval-effects reconciler lists, across every laboratory, the out-of-tolerance events whose customer alert never left (no `notify` audit entry, no live queue job): event id, its laboratory and the approver. The alert is staged in orgTransactionWithExecutor(event.labOrganizationId).",
+      "System path (roadmap 2 B2, systemDb): the approval-effects reconciler lists, across every laboratory, the out-of-tolerance events whose customer alert never left (no `notify` audit entry, no live queue job): event id, its laboratory and the approver. The alert is staged in withOrg(event.labOrganizationId).",
   },
   {
     category: "cron-queue",
@@ -391,15 +391,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["asset", "customer", "job_commercial_snapshot"],
     kinds: ["select"],
     reason:
-      "persistCalibrationJob: asset read by id, then customer.lab_organization_id !== organizationId -> 'Ativo nao encontrado' (REQ-TENANT-JOB-001); the commercial snapshot is read for the job id just created.",
-  },
-  {
-    category: "ownership-checked-in-code",
-    file: "apps/api/src/lib/org-transaction.ts",
-    tables: ["asset", "customer", "job_commercial_snapshot"],
-    kinds: ["select"],
-    reason:
-      "orgTransactionWithExecutor hands its raw, organization-named transaction to persistCalibrationJob (request->job conversion, visit POST /:id/jobs): see the lib/jobs.ts entry. Every other statement of those handlers goes through the org-bound handle, which carries the predicate.",
+      "createCalibrationJob: asset read by id, then customer.lab_organization_id !== organizationId -> 'Ativo nao encontrado' (REQ-TENANT-JOB-001); the commercial snapshot is read for the job id just created.",
   },
   {
     category: "ownership-checked-in-code",
@@ -407,7 +399,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["asset", "customer", "job_commercial_snapshot"],
     kinds: ["select"],
     reason:
-      "withOrg hands its raw, organization-named transaction (ctx.tx) to persistCalibrationJob (request->job conversion, visit POST /:id/jobs): see the lib/jobs.ts entry. Every other statement of those handlers goes through the org-bound handle (ctx.o), which carries the predicate.",
+      "withOrg hands its raw, organization-named transaction (ctx.tx) to createCalibrationJob (request->job conversion, visit POST /:id/jobs): see the lib/jobs.ts entry. Every other statement of those handlers goes through the org-bound handle (ctx.o), which carries the predicate.",
   },
   {
     category: "ownership-checked-in-code",
@@ -421,7 +413,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     ],
     kinds: ["select"],
     reason:
-      "Request->job conversion runs persistCalibrationJob (see lib/jobs.ts entry); the item/asset listing is keyed by request ids a scoped read returned.",
+      "Request->job conversion runs createCalibrationJob (see lib/jobs.ts entry); the item/asset listing is keyed by request ids a scoped read returned.",
   },
   // -------------------------------------------------------------------------
   // unit-scoped

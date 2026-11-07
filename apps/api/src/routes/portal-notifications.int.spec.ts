@@ -11,8 +11,8 @@ import {
   user,
   type NotificationType,
 } from "@calibra-facil/db/schema";
-import { portalNotificationsRouter as barePortalNotificationsRouter } from "./portal-notifications";
-import { portalRouter as barePortalRouter } from "./portal";
+import { portalNotificationsRouter } from "./portal-notifications";
+import { portalRouter } from "./portal";
 import { loginAsPortal, logoutPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import {
@@ -20,12 +20,6 @@ import {
   seedPortalCustomer,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const portalRouter = withErrorHandling(barePortalRouter);
-const portalNotificationsRouter = withErrorHandling(
-  barePortalNotificationsRouter,
-);
 
 // Real-DB integration tests for the portal notification center (#741). Only
 // the portal better-auth getSession is mocked; requirePortalProtected and

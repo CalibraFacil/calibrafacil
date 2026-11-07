@@ -9,7 +9,6 @@ import { generateCertificateIdentity } from "../../lib/certificate-numbering";
 import { loadCertificateLifecycles } from "../../lib/certificate-lifecycle";
 import { conflict, invalid, type DomainError } from "../../lib/domain-errors";
 import type { OrgContext } from "../../lib/org-context";
-import { orgTransactionWithExecutor } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
 import {
   jobActorAuditFields,
@@ -128,20 +127,13 @@ export type AmendJobResult =
     }
   | { status: "certificate_withdrawn"; error: DomainError };
 
-export function amendJob(command: AmendJobCommand): Promise<AmendJobResult> {
-  // The transaction names the laboratory (row-level security). It hands the
-  // raw executor on purpose: the certificate numbering runs raw SQL (advisory
-  // lock). Every statement below carries the organization predicate itself.
-  return orgTransactionWithExecutor(command.organizationId, (o, tx) =>
-    amendJobIn({ o, tx }, command),
-  );
-}
-
 /**
  * The command inside the caller's transaction (a `withOrg` context): the
  * route runs it there so the standards links are written once it committed.
+ * The raw transaction is on purpose: the certificate numbering runs raw SQL
+ * (advisory lock). Every statement carries the organization predicate itself.
  */
-export async function amendJobIn(
+export async function amendJob(
   { o, tx }: Pick<OrgContext, "o" | "tx">,
   command: AmendJobCommand,
 ): Promise<AmendJobResult> {

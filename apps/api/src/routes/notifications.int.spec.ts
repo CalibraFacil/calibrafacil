@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { notificationsRouter as bareNotificationsRouter } from "./notifications";
+import { notificationsRouter } from "./notifications";
 import { db } from "@calibra-facil/db";
 import {
   notification,
@@ -11,9 +11,6 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const notificationsRouter = withErrorHandling(bareNotificationsRouter);
 
 // Real-DB + real-RBAC integration test for the notifications router. Only the
 // better-auth lab session is mocked (see test/integration/setup.ts); the real

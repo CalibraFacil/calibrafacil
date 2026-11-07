@@ -13,6 +13,10 @@
  *              packages/db/src/job-events.test.ts)
  */
 
+import {
+  amendJobInOrg,
+  cancelJobInOrg,
+} from "../../../test/integration/job-commands";
 import { setJobStatus } from "../../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -26,9 +30,7 @@ import {
 } from "../../../test/integration/tenant-refs";
 import { failJobAuditInserts, jobRow } from "../../../test/integration/job-cas";
 import type { JobLifecycleActor } from "./job-actor";
-import { amendJob } from "./amend-job";
 import { assignJob } from "./assign-job";
-import { cancelJob } from "./cancel-job";
 import { editJob } from "./edit-job";
 import { rejectJob } from "./reject-job";
 
@@ -145,7 +147,12 @@ describe("job lifecycle audit rows through appendJobEvent (real Postgres)", () =
     async (_name, actor, actorFields) => {
       const { jobId } = await seedWorld("DRAFT");
 
-      await cancelJob({ ...base, actor, jobId, reason: "Cliente desistiu" });
+      await cancelJobInOrg({
+        ...base,
+        actor,
+        jobId,
+        reason: "Cliente desistiu",
+      });
 
       expect(await storedRows(jobId)).toEqual([
         {
@@ -232,7 +239,7 @@ describe("job lifecycle audit rows through appendJobEvent (real Postgres)", () =
   it("REQ-AUD-2: amend stores amendment_started on the original (still APPROVED) and create_amendment on the new job", async () => {
     const { jobId } = await seedWorld("APPROVED");
 
-    const result = await amendJob({
+    const result = await amendJobInOrg({
       ...base,
       actor: user,
       jobId,

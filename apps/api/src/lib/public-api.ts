@@ -1,3 +1,4 @@
+import { orgDb } from "./org-db";
 import type { ApiErrorCode } from "@calibra-facil/contracts";
 import { createHash, randomBytes } from "node:crypto";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -9,7 +10,6 @@ import {
 import { and, eq, inArray, lt } from "drizzle-orm";
 import { type PublicApiResourceType } from "@calibra-facil/shared";
 import { encryptPassword } from "@calibra-facil/signing";
-import { inOrgTransaction } from "./org-transaction";
 import { clientIp, type ClientIpContext } from "./client-ip";
 
 const DEFAULT_IDEMPOTENCY_TTL_DAYS = 7;
@@ -99,21 +99,19 @@ export async function getResourceExternalId(
     resourceType: PublicApiResourceType;
     resourceId: string | number;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  const [ref] = await inOrgTransaction(params.organizationId, executor, (o) =>
-    o
-      .select()
-      .from(publicApiResourceRef)
-      .where(
-        and(
-          eq(publicApiResourceRef.organizationId, params.organizationId),
-          eq(publicApiResourceRef.resourceType, params.resourceType),
-          eq(publicApiResourceRef.resourceId, String(params.resourceId)),
-        ),
-      )
-      .limit(1),
-  );
+  const [ref] = await executor
+    .select()
+    .from(publicApiResourceRef)
+    .where(
+      and(
+        eq(publicApiResourceRef.organizationId, params.organizationId),
+        eq(publicApiResourceRef.resourceType, params.resourceType),
+        eq(publicApiResourceRef.resourceId, String(params.resourceId)),
+      ),
+    )
+    .limit(1);
 
   return ref?.externalId ?? null;
 }
@@ -124,7 +122,7 @@ export async function getResourceExternalIdMap(
     resourceType: PublicApiResourceType;
     resourceIds: Array<string | number>;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   const ids = Array.from(
     new Set(
@@ -138,21 +136,19 @@ export async function getResourceExternalIdMap(
     return new Map<string, string>();
   }
 
-  const refs = await inOrgTransaction(params.organizationId, executor, (o) =>
-    o
-      .select({
-        resourceId: publicApiResourceRef.resourceId,
-        externalId: publicApiResourceRef.externalId,
-      })
-      .from(publicApiResourceRef)
-      .where(
-        and(
-          eq(publicApiResourceRef.organizationId, params.organizationId),
-          eq(publicApiResourceRef.resourceType, params.resourceType),
-          inArray(publicApiResourceRef.resourceId, ids),
-        ),
+  const refs = await executor
+    .select({
+      resourceId: publicApiResourceRef.resourceId,
+      externalId: publicApiResourceRef.externalId,
+    })
+    .from(publicApiResourceRef)
+    .where(
+      and(
+        eq(publicApiResourceRef.organizationId, params.organizationId),
+        eq(publicApiResourceRef.resourceType, params.resourceType),
+        inArray(publicApiResourceRef.resourceId, ids),
       ),
-  );
+    );
 
   return new Map(refs.map((ref) => [ref.resourceId, ref.externalId]));
 }
@@ -165,31 +161,29 @@ export async function upsertResourceExternalId(
     resourceId: string | number;
     externalId: string;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  await inOrgTransaction(params.organizationId, executor, async (o) => {
-    await o
-      .insert(publicApiResourceRef)
-      .values({
-        id: crypto.randomUUID(),
-        organizationId: params.organizationId,
-        resourceType: params.resourceType,
-        resourceId: String(params.resourceId),
+  await executor
+    .insert(publicApiResourceRef)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: params.organizationId,
+      resourceType: params.resourceType,
+      resourceId: String(params.resourceId),
+      externalId: params.externalId,
+      createdByApiKeyId: params.apiKeyId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [
+        publicApiResourceRef.organizationId,
+        publicApiResourceRef.resourceType,
+        publicApiResourceRef.resourceId,
+      ],
+      set: {
         externalId: params.externalId,
-        createdByApiKeyId: params.apiKeyId ?? null,
-      })
-      .onConflictDoUpdate({
-        target: [
-          publicApiResourceRef.organizationId,
-          publicApiResourceRef.resourceType,
-          publicApiResourceRef.resourceId,
-        ],
-        set: {
-          externalId: params.externalId,
-          updatedAt: new Date(),
-        },
-      });
-  });
+        updatedAt: new Date(),
+      },
+    });
 }
 
 /**
@@ -241,9 +235,7 @@ export class IdempotencyReservationLostError extends Error {
 export async function reserveIdempotencyKey(
   params: IdempotencyKeyScope & { requestHash: string },
 ): Promise<IdempotencyReservation> {
-  return inOrgTransaction(
-    params.organizationId,
-    undefined,
+  return orgDb(params.organizationId).transaction(
     async (o): Promise<IdempotencyReservation> => {
       const now = new Date();
       const reservationExpiresAt = new Date(
@@ -337,35 +329,30 @@ export async function finalizeIdempotencyRecord(
     resourceType?: PublicApiResourceType;
     resourceId?: string | number | null;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + DEFAULT_IDEMPOTENCY_TTL_DAYS);
 
-  const finalized = await inOrgTransaction(
-    params.organizationId,
-    executor,
-    (o) =>
-      o
-        .update(publicApiIdempotencyKey)
-        .set({
-          responseStatus: params.responseStatus,
-          responseBody: params.responseBody,
-          resourceType: params.resourceType ?? null,
-          resourceId: params.resourceId ? String(params.resourceId) : null,
-          expiresAt,
-        })
-        .where(
-          and(
-            eq(publicApiIdempotencyKey.id, params.token),
-            eq(
-              publicApiIdempotencyKey.responseStatus,
-              IDEMPOTENCY_IN_PROGRESS_STATUS,
-            ),
-          ),
-        )
-        .returning({ id: publicApiIdempotencyKey.id }),
-  );
+  const finalized = await executor
+    .update(publicApiIdempotencyKey)
+    .set({
+      responseStatus: params.responseStatus,
+      responseBody: params.responseBody,
+      resourceType: params.resourceType ?? null,
+      resourceId: params.resourceId ? String(params.resourceId) : null,
+      expiresAt,
+    })
+    .where(
+      and(
+        eq(publicApiIdempotencyKey.id, params.token),
+        eq(
+          publicApiIdempotencyKey.responseStatus,
+          IDEMPOTENCY_IN_PROGRESS_STATUS,
+        ),
+      ),
+    )
+    .returning({ id: publicApiIdempotencyKey.id });
   if (finalized.length === 0) throw new IdempotencyReservationLostError();
 }
 
@@ -374,7 +361,7 @@ export async function releaseIdempotencyReservation(params: {
   organizationId: string;
   token: string;
 }) {
-  await inOrgTransaction(params.organizationId, undefined, (o) =>
+  await orgDb(params.organizationId).transaction((o) =>
     o
       .delete(publicApiIdempotencyKey)
       .where(
@@ -389,24 +376,22 @@ export async function releaseIdempotencyReservation(params: {
   );
 }
 
-async function listAccessibleUnits(organizationId: string, executor?: OrgDb) {
-  return inOrgTransaction(organizationId, executor, (o) =>
-    o
-      .select({
-        id: organizationUnit.id,
-        name: organizationUnit.name,
-        slug: organizationUnit.slug,
-        isDefault: organizationUnit.isDefault,
-      })
-      .from(organizationUnit)
-      .where(
-        and(
-          eq(organizationUnit.organizationId, organizationId),
-          eq(organizationUnit.status, "ACTIVE"),
-        ),
-      )
-      .orderBy(organizationUnit.name),
-  );
+async function listAccessibleUnits(organizationId: string, executor: OrgDb) {
+  return executor
+    .select({
+      id: organizationUnit.id,
+      name: organizationUnit.name,
+      slug: organizationUnit.slug,
+      isDefault: organizationUnit.isDefault,
+    })
+    .from(organizationUnit)
+    .where(
+      and(
+        eq(organizationUnit.organizationId, organizationId),
+        eq(organizationUnit.status, "ACTIVE"),
+      ),
+    )
+    .orderBy(organizationUnit.name);
 }
 
 export async function resolvePublicApiUnitScope(
@@ -414,7 +399,7 @@ export async function resolvePublicApiUnitScope(
     organizationId: string;
     requestedUnitId?: number | null;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   const units = await listAccessibleUnits(params.organizationId, executor);
 

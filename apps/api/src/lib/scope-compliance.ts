@@ -15,7 +15,6 @@
  * `enforce` mode blocks, and only on an adverse verdict.
  */
 
-import { db } from "@calibra-facil/db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   accreditedScopeLine,
@@ -62,7 +61,7 @@ export async function classifyJobScopeCompliance(
     atDate: Date;
   },
   /** The org-bound handle of the caller's transaction (row-level security). */
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<JobScopeClassification> {
   const [lab] = await executor
     .select({

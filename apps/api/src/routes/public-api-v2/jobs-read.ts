@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
@@ -27,7 +27,7 @@ import {
 } from "./resolvers";
 import { orgDb } from "../../lib/org-db";
 
-export const jobReadRoutes = new Hono<PublicApiV2Env>()
+export const jobReadRoutes = createRouter<PublicApiV2Env>()
   .get(
     "/jobs",
     requireApiScope("jobs:read"),
@@ -57,16 +57,28 @@ export const jobReadRoutes = new Hono<PublicApiV2Env>()
         serviceId,
       } = c.req.valid("query");
       const offset = (page - 1) * limit;
-      const resolvedCustomerId = await resolveCustomerId({
-        organizationId: apiKey.organizationId,
-        customerId,
-        customerExternalId,
-      });
-      const resolvedAssetId = await resolveAssetId({
-        organizationId: apiKey.organizationId,
-        assetId,
-        assetExternalId,
-      });
+      const resolvedCustomerId = await orgDb(apiKey.organizationId).transaction(
+        (o) =>
+          resolveCustomerId(
+            {
+              organizationId: apiKey.organizationId,
+              customerId,
+              customerExternalId,
+            },
+            o,
+          ),
+      );
+      const resolvedAssetId = await orgDb(apiKey.organizationId).transaction(
+        (o) =>
+          resolveAssetId(
+            {
+              organizationId: apiKey.organizationId,
+              assetId,
+              assetExternalId,
+            },
+            o,
+          ),
+      );
       const conditions = [
         eq(calibrationJob.organizationId, apiKey.organizationId),
         unitId ? eq(calibrationJob.unitId, unitId) : undefined,
@@ -126,11 +138,16 @@ export const jobReadRoutes = new Hono<PublicApiV2Env>()
         ]),
       );
 
-      const externalIds = await getResourceExternalIdMap({
-        organizationId: apiKey.organizationId,
-        resourceType: "job",
-        resourceIds: rows.map((row) => row.id),
-      });
+      const externalIds = await orgDb(apiKey.organizationId).transaction((o) =>
+        getResourceExternalIdMap(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "job",
+            resourceIds: rows.map((row) => row.id),
+          },
+          o,
+        ),
+      );
 
       return c.json({
         data: rows.map((row) => ({
@@ -158,11 +175,16 @@ export const jobReadRoutes = new Hono<PublicApiV2Env>()
   )
   .get("/jobs/:id", requireApiScope("jobs:read"), async (c) => {
     const apiKey = c.get("apiKey");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      value: c.req.param("id"),
-    });
+    const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+      resolveExternalResourceId(
+        {
+          organizationId: apiKey.organizationId,
+          resourceType: "job",
+          value: c.req.param("id"),
+        },
+        o,
+      ),
+    );
 
     if (!resolvedId) {
       return c.json(
@@ -238,11 +260,16 @@ export const jobReadRoutes = new Hono<PublicApiV2Env>()
     return c.json({
       data: {
         ...job,
-        externalId: await getResourceExternalId({
-          organizationId: apiKey.organizationId,
-          resourceType: "job",
-          resourceId: job.id,
-        }),
+        externalId: await orgDb(apiKey.organizationId).transaction((o) =>
+          getResourceExternalId(
+            {
+              organizationId: apiKey.organizationId,
+              resourceType: "job",
+              resourceId: job.id,
+            },
+            o,
+          ),
+        ),
         unit: job.unitId
           ? { id: job.unitId, name: job.unitName ?? "Unidade removida" }
           : null,

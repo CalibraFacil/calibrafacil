@@ -7,6 +7,7 @@
  * the SQLite adapter (`packages/local-db/src/standards-judgement-parity.test.ts`).
  */
 
+import { orgDb } from "../../lib/org-db";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@calibra-facil/db";
 import { organizationUnit, referenceStandard } from "@calibra-facil/db/schema";
@@ -116,15 +117,20 @@ describe("cloud standards judgement parity (REQ-SJ-3, REQ-SJ-4)", () => {
     }
     const input = fixtureJudgementInput(fixture);
 
-    const result = await judgeSnapshotStandards({
-      standardIds: input.standardIds,
-      organizationId: world.mine.orgId,
-      performedAt: input.performedAt,
-      now: input.today,
-      backdateReason: input.backdateReason,
-      mode: input.mode,
-      requireBackdateReason: input.requireBackdateReason,
-    });
+    const result = await orgDb(world.mine.orgId).transaction((o) =>
+      judgeSnapshotStandards(
+        {
+          standardIds: input.standardIds,
+          organizationId: world.mine.orgId,
+          performedAt: input.performedAt,
+          now: input.today,
+          backdateReason: input.backdateReason,
+          mode: input.mode,
+          requireBackdateReason: input.requireBackdateReason,
+        },
+        o,
+      ),
+    );
 
     expect(summarizeJudgement(fixture, result)).toEqual(fixture.expected);
     // ... exactly what the pure function says of the same facts.
@@ -170,18 +176,23 @@ describe("cloud standards judgement parity (REQ-SJ-3, REQ-SJ-4)", () => {
       unitId: otherUnit?.id,
     });
 
-    const result = await judgeSnapshotStandards({
-      standardIds: [901],
-      organizationId: world.mine.orgId,
-      unitScope: buildUnitScopeCondition(referenceStandard.unitId, {
-        selectedUnitScope: "unit",
-        activeUnitId: world.mine.unitId,
-        accessibleUnitIds: [world.mine.unitId],
-      }),
-      performedAt: JUDGEMENT_TODAY,
-      now: JUDGEMENT_TODAY,
-      mode: "desktop_legacy",
-    });
+    const result = await orgDb(world.mine.orgId).transaction((o) =>
+      judgeSnapshotStandards(
+        {
+          standardIds: [901],
+          organizationId: world.mine.orgId,
+          unitScope: buildUnitScopeCondition(referenceStandard.unitId, {
+            selectedUnitScope: "unit",
+            activeUnitId: world.mine.unitId,
+            accessibleUnitIds: [world.mine.unitId],
+          }),
+          performedAt: JUDGEMENT_TODAY,
+          now: JUDGEMENT_TODAY,
+          mode: "desktop_legacy",
+        },
+        o,
+      ),
+    );
 
     expect(result).toEqual({
       ok: false,

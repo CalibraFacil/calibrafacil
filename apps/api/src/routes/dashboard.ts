@@ -1,8 +1,8 @@
+import { createRouter } from "../server/router";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { OPEN_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { LAB_TIME_ZONE } from "@calibra-facil/shared/calendar-date";
-import { Hono } from "hono";
 import { isCalendarDatePast } from "@calibra-facil/shared";
 import {
   calibrationJob,
@@ -56,7 +56,7 @@ import { buildUnitScopeCondition } from "../lib/units";
  * Permissions:
  * - GET /stats: calibration:read (all lab roles)
  */
-export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
+export const dashboardRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /stats - Get all dashboard statistics
   // =========================================================================

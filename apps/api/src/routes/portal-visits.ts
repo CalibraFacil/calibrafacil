@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { requirePortalLabScope } from "../lib/portal-lab-scope";
-import { Hono } from "hono";
 import type {
   PortalVisitConfirmResponse,
   PortalVisitRescheduleResponse,
@@ -89,7 +89,7 @@ function pendingRescheduleExists() {
  * internal actor ids or notes — just the date, técnico name, status, address
  * and instrument count the client needs to plan for the trip.
  */
-export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
+export const portalVisitsRouter = createRouter<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...requirePortalProtected,

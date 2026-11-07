@@ -1,9 +1,9 @@
+import { orgDb } from "../../lib/org-db";
 import {
   integrationConnection,
   integrationObjectLink,
 } from "@calibra-facil/db/schema";
 import { requireContaAzulOAuthConfig } from "../../lib/conta-azul-app";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   normalizeContaAzulConnectionConfig,
   type ContaAzulReferenceDomain,
@@ -58,14 +58,19 @@ async function refreshContaAzulTokenForConnection(params: {
   } catch (error) {
     const failure = buildContaAzulRefreshFailurePolicy(error);
 
-    await markContaAzulReconnectRequired({
-      integrationId: params.record.integration.id,
-      organizationId: params.record.integration.organizationId,
-      message: failure.message,
-      details: {
-        reason: failure.reason,
-      },
-    });
+    await orgDb(params.record.integration.organizationId).transaction((o) =>
+      markContaAzulReconnectRequired(
+        {
+          integrationId: params.record.integration.id,
+          organizationId: params.record.integration.organizationId,
+          message: failure.message,
+          details: {
+            reason: failure.reason,
+          },
+        },
+        o,
+      ),
+    );
 
     throw new ContaAzulReconnectRequiredError(failure.message);
   }
@@ -81,9 +86,7 @@ async function refreshContaAzulTokenForConnection(params: {
 
   // The refreshed token and its event commit together (the HTTP refresh above
   // ran before this transaction opened).
-  await inOrgTransaction(
-    params.record.integration.organizationId,
-    undefined,
+  await orgDb(params.record.integration.organizationId).transaction(
     async (o) => {
       await o
         .update(integrationConnection)
@@ -171,18 +174,21 @@ export async function createContaAzulAdapterForRecord(params: {
     rateLimitKey: params.record.integration.id,
     links: {
       async getExistingRemoteId({ target, localEntityId }) {
-        const existing = await getExistingLink(
+        const existing = await orgDb(
           params.record.integration.organizationId,
-          params.record.integration.id,
-          target,
-          localEntityId,
+        ).transaction((o) =>
+          getExistingLink(
+            params.record.integration.organizationId,
+            params.record.integration.id,
+            target,
+            localEntityId,
+            o,
+          ),
         );
         return existing?.remoteEntityId ?? null;
       },
       async listLinks({ targets, limit, offset }) {
-        return inOrgTransaction(
-          params.record.integration.organizationId,
-          undefined,
+        return orgDb(params.record.integration.organizationId).transaction(
           (o) =>
             o
               .select({
@@ -217,16 +223,21 @@ export async function createContaAzulAdapterForRecord(params: {
         remoteEntityType,
         metadata,
       }) {
-        await upsertLink({
-          integrationId: params.record.integration.id,
-          organizationId: params.record.integration.organizationId,
-          target,
-          localEntityId,
-          remoteEntityId,
-          remoteDisplayId,
-          remoteEntityType,
-          metadata,
-        });
+        await orgDb(params.record.integration.organizationId).transaction((o) =>
+          upsertLink(
+            {
+              integrationId: params.record.integration.id,
+              organizationId: params.record.integration.organizationId,
+              target,
+              localEntityId,
+              remoteEntityId,
+              remoteDisplayId,
+              remoteEntityType,
+              metadata,
+            },
+            o,
+          ),
+        );
       },
     },
     async onUnauthorized() {
@@ -282,9 +293,8 @@ export async function listContaAzulCatalog(params: {
     | "balances"
     | "transfers";
 }) {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {
@@ -336,12 +346,17 @@ export async function listContaAzulCatalog(params: {
 
   const page = await adapter.listReferenceData(domain);
 
-  await cacheContaAzulReferenceLinks({
-    integrationId: record.integration.id,
-    organizationId: record.integration.organizationId,
-    domain,
-    items: page.items,
-  });
+  await orgDb(record.integration.organizationId).transaction((o) =>
+    cacheContaAzulReferenceLinks(
+      {
+        integrationId: record.integration.id,
+        organizationId: record.integration.organizationId,
+        domain,
+        items: page.items,
+      },
+      o,
+    ),
+  );
 
   return page;
 }

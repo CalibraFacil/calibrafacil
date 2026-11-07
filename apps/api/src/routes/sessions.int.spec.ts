@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { sessionsRouter as bareSessionsRouter } from "./sessions";
+import { sessionsRouter } from "./sessions";
 import { db } from "@calibra-facil/db";
 import { session as sessionTable } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const sessionsRouter = withErrorHandling(bareSessionsRouter);
 
 // Real-DB + real-RBAC integration test for the session-revoke boundary.
 // Only better-auth's getSession is mocked (see test/integration/setup.ts);

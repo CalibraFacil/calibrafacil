@@ -16,8 +16,7 @@
 
 import { setJobStatus } from "../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { jobsRouter } from "./jobs";
 import type { JobStatus } from "@calibra-facil/db/schema";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -32,8 +31,6 @@ import {
   raceWithRowLock,
   withoutVolatile,
 } from "../../test/integration/job-cas";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

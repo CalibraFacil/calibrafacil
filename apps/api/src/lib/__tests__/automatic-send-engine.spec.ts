@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomaticSendMilestone } from "@calibra-facil/shared";
 
@@ -100,12 +101,17 @@ describe("evaluateMilestone", () => {
 describe("resolveAutomaticSendRule", () => {
   it("returns the fallback when no rules exist", async () => {
     mocks.ruleRows = [];
-    const result = await resolveAutomaticSendRule({
-      organizationId: "org-1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      resolveAutomaticSendRule(
+        {
+          organizationId: "org-1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result).toEqual({
       id: null,
       milestone: "manual_only",
@@ -132,12 +138,17 @@ describe("resolveAutomaticSendRule", () => {
         priority: 0,
       },
     ];
-    const result = await resolveAutomaticSendRule({
-      organizationId: "org-1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      resolveAutomaticSendRule(
+        {
+          organizationId: "org-1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(2);
     expect(result.scope).toBe("customer");
     expect(result.milestone).toBe("certificate_approved");
@@ -162,12 +173,17 @@ describe("resolveAutomaticSendRule", () => {
         priority: 0,
       },
     ];
-    const result = await resolveAutomaticSendRule({
-      organizationId: "org-1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      resolveAutomaticSendRule(
+        {
+          organizationId: "org-1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(1);
     expect(result.scope).toBe("organization");
     expect(result.milestone).toBe("service_order_delivered");
@@ -200,12 +216,17 @@ describe("resolveAutomaticSendRule", () => {
         priority: 0,
       },
     ];
-    const result = await resolveAutomaticSendRule({
-      organizationId: "org-1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      resolveAutomaticSendRule(
+        {
+          organizationId: "org-1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(7);
     expect(result.scope).toBe("customer");
   });

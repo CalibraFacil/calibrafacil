@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 import { type Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -10,7 +11,6 @@ import {
   releaseIdempotencyReservation,
   reserveIdempotencyKey,
 } from "../../lib/public-api";
-import { afterCommitQueue, type AfterCommitTask } from "../../lib/after-commit";
 import { withOrg, type OrgContext } from "../../lib/org-context";
 import { type ApiKeyAuthVariables } from "../../middleware/api-key-auth";
 import { apiKeyActor } from "./actor";
@@ -168,13 +168,21 @@ async function releaseQuietly(params: {
   }
 }
 
-async function runAfterCommit(queue: ReturnType<typeof afterCommitQueue>) {
-  try {
-    await queue.run();
-  } catch (error) {
-    // The mutation and its record are committed: a failing side effect (a
-    // webhook delivery, a notification) must not turn that into an error.
-    console.error("[PublicApi] After-commit task failed", error);
+type AfterCommitTask = () => unknown;
+
+/**
+ * Runs the effects of a committed command, one after the other. A failing side
+ * effect (a webhook delivery, a notification) is logged and never turns the
+ * committed command into an error.
+ */
+async function runAfterCommit(tasks: AfterCommitTask[]) {
+  for (const task of tasks) {
+    try {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- the effects run in the order the command registered them.
+      await task();
+    } catch (error) {
+      console.error("[PublicApi] After-commit task failed", error);
+    }
   }
 }
 
@@ -244,14 +252,19 @@ export async function withPreparedIdempotentMutation<
       return respond(c, mapped);
     }
     try {
-      await finalizeIdempotencyRecord({
-        organizationId,
-        token,
-        responseStatus: mapped.status,
-        responseBody: mapped.body,
-        resourceType: mapped.resourceType,
-        resourceId: mapped.resourceId,
-      });
+      await orgDb(organizationId).transaction((o) =>
+        finalizeIdempotencyRecord(
+          {
+            organizationId,
+            token,
+            responseStatus: mapped.status,
+            responseBody: mapped.body,
+            resourceType: mapped.resourceType,
+            resourceId: mapped.resourceId,
+          },
+          o,
+        ),
+      );
     } catch (finalizeError) {
       if (finalizeError instanceof IdempotencyReservationLostError) {
         return inProgressResponse(c);
@@ -303,11 +316,13 @@ export async function withIdempotentCommand<
   const begun = await begin(c, body);
   if ("response" in begun) return begun.response;
   const { token, organizationId } = begun;
-  const queue = afterCommitQueue();
+  const tasks: AfterCommitTask[] = [];
 
   let result: IdempotentResult;
   try {
-    result = await handler(queue.add);
+    result = await handler((task) => {
+      tasks.push(task);
+    });
   } catch (error) {
     await releaseQuietly({ organizationId, token });
     throw error;
@@ -317,14 +332,19 @@ export async function withIdempotentCommand<
     await releaseQuietly({ organizationId, token });
   } else {
     try {
-      await finalizeIdempotencyRecord({
-        organizationId,
-        token,
-        responseStatus: result.status,
-        responseBody: result.body,
-        resourceType: result.resourceType,
-        resourceId: result.resourceId,
-      });
+      await orgDb(organizationId).transaction((o) =>
+        finalizeIdempotencyRecord(
+          {
+            organizationId,
+            token,
+            responseStatus: result.status,
+            responseBody: result.body,
+            resourceType: result.resourceType,
+            resourceId: result.resourceId,
+          },
+          o,
+        ),
+      );
     } catch (error) {
       // The command committed but its record did not: give the key back, so a
       // retry reaches the command, which refuses a repeat transition.
@@ -335,6 +355,6 @@ export async function withIdempotentCommand<
       await releaseQuietly({ organizationId, token });
     }
   }
-  await runAfterCommit(queue);
+  await runAfterCommit(tasks);
   return respond(c, result);
 }

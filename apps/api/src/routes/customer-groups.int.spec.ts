@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { customerGroupsRouter as bareCustomerGroupsRouter } from "./customer-groups";
+import { customerGroupsRouter } from "./customer-groups";
 import { db } from "@calibra-facil/db";
 import {
   customer,
@@ -12,9 +12,6 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const customerGroupsRouter = withErrorHandling(bareCustomerGroupsRouter);
 
 // Real-DB + real-RBAC integration test for customer-groups (redes/grupos). Only
 // the better-auth session is mocked (see test/integration/setup.ts); the real

@@ -1,5 +1,4 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { inOrgTransaction } from "./org-transaction";
 import {
   billingDocument,
   calibrationJob,
@@ -183,11 +182,9 @@ const MAX_ROWS = 500;
 export async function buildRevenueLeakage(
   input: BuildRevenueLeakageInput,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<RevenueLeakageEnvelope> {
-  return inOrgTransaction(input.organizationId, executor, (o) =>
-    readRevenueLeakage(o, input),
-  );
+  return readRevenueLeakage(executor, input);
 }
 
 async function readRevenueLeakage(

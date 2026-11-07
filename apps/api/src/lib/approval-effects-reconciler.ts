@@ -31,10 +31,11 @@
  * Cross-laboratory by design (cron, no request): FOUR statements on the system
  * path (`systemDb`, allowlisted in test/integration/tenant-sql-allowlist.ts) list
  * the candidates of every laboratory, ids only. Everything after that runs per
- * job in a transaction that names its laboratory (`orgTransactionWithExecutor`),
+ * job in a transaction that names its laboratory (`withOrg`),
  * which re-reads the job under row-level security before it writes.
  */
 
+import { withOrg, SYSTEM_ACTOR } from "./org-context";
 import { systemDb } from "@calibra-facil/db";
 import {
   appQueueJob,
@@ -66,7 +67,6 @@ import {
   stageBackgroundJob,
 } from "./background-job-outbox";
 import { enqueueBackgroundJob } from "./background-jobs";
-import { orgTransactionWithExecutor } from "./org-transaction";
 
 /** A job approved this recently is not reconciled yet. */
 const RECONCILE_GRACE_MINUTES = 15;
@@ -303,9 +303,10 @@ export async function reconcileApprovalEffects(
       userId: event.approvedBy,
     };
     try {
-      const staged = await orgTransactionWithExecutor(
+      const staged = await withOrg(
         event.organizationId,
-        (_o, tx) => stageBackgroundJob(tx, message),
+        SYSTEM_ACTOR,
+        ({ tx }) => stageBackgroundJob(tx, message),
       );
       if (staged) stagedAny = true;
       else afterCommit.push(message);
@@ -346,9 +347,10 @@ async function repairMissingOotEvent(
   candidate: Candidate,
   afterCommit: QueueMessage[],
 ): Promise<boolean | null> {
-  const outcome = await orgTransactionWithExecutor(
+  const outcome = await withOrg(
     candidate.organizationId,
-    async (o, tx) => {
+    SYSTEM_ACTOR,
+    async ({ o, tx }) => {
       const [job] = await o
         .select({
           assetId: calibrationJob.assetId,
@@ -397,9 +399,10 @@ async function repairMissingOotEvent(
 
 /** Advance the asset of one approved job, forward-only, in its laboratory. */
 async function repairStaleAssetDates(candidate: Candidate): Promise<boolean> {
-  const applied = await orgTransactionWithExecutor(
+  const applied = await withOrg(
     candidate.organizationId,
-    async (o) => {
+    SYSTEM_ACTOR,
+    async ({ o }) => {
       const [job] = await o
         .select({
           assetId: calibrationJob.assetId,

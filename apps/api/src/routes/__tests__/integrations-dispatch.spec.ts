@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
 import { dispatchSyncRun, integrationsRouter } from "../integrations";
 import type { AuthVariables } from "../../middleware/permission";
 import type { IntegrationOverview } from "../../modules/integrations";
@@ -187,7 +186,7 @@ function createTestApp() {
   });
   app.route("/api/integrations", integrationsRouter);
 
-  return withErrorHandling(app);
+  return app;
 }
 
 function emptyOverview(
@@ -762,10 +761,13 @@ describe("Conta Azul active connection guards", () => {
         enabled: true,
       },
     });
-    expect(mocks.getContaAzulScheduleState).toHaveBeenCalledWith({
-      integrationId: "int-1",
-      organizationId: "org-1",
-    });
+    expect(mocks.getContaAzulScheduleState).toHaveBeenCalledWith(
+      {
+        integrationId: "int-1",
+        organizationId: "org-1",
+      },
+      expect.anything(),
+    );
   });
 
   it("returns 404 for schedule state on a non-Conta Azul integration", async () => {

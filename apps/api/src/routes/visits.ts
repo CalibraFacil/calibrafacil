@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -136,7 +136,7 @@ async function supersedePendingRescheduleRequests(
     );
 }
 
-export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
+export const visitsRouter = createRouter<{ Variables: AuthVariables }>()
   // ===========================================================================
   // GET / — list visits (status / technician / date filters; `mine` for técnico)
   // ===========================================================================
@@ -673,7 +673,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
  *
  * REQ-VISITJOB-001,002,003,004,005,006,007,008,009,010
  */
-export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
+export const visitJobsRouter = createRouter<{ Variables: AuthVariables }>()
   // ===========================================================================
   // POST /:id/jobs — add an instrument (calibration job) to a PROPOSED visit
   // ===========================================================================
@@ -801,25 +801,22 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
           // validated (a job that moved meanwhile is a 409) and commits the audit
           // row (append-only ISO 17025 trail, parity with the main job-cancel
           // route) with the write.
-          const result = await cancelJob(
-            {
-              actor: {
-                kind: "user",
-                userId: ctx.actor.userId,
-                ipAddress: ctx.actor.ipAddress,
-              },
-              jobId,
-              organizationId: member.organizationId,
-              // The visit was scoped above (requireScopedVisit) and the removal
-              // guard checked that the job belongs to it.
-              unitScope: null,
-              reason: `Instrumento removido da visita #${id}`,
-              expectedStatus: foundJob.status,
+          // The command reads and writes on the door's transaction; its
+          // compare-and-set keeps guarding the status.
+          const result = await cancelJob(ctx, {
+            actor: {
+              kind: "user",
+              userId: ctx.actor.userId,
+              ipAddress: ctx.actor.ipAddress,
             },
-            // The command reads and writes on the door's transaction; its
-            // compare-and-set keeps guarding the status.
-            { read: (run) => run(ctx.o), write: (run) => run(ctx.tx) },
-          );
+            jobId,
+            organizationId: member.organizationId,
+            // The visit was scoped above (requireScopedVisit) and the removal
+            // guard checked that the job belongs to it.
+            unitScope: null,
+            reason: `Instrumento removido da visita #${id}`,
+            expectedStatus: foundJob.status,
+          });
           switch (result.status) {
             case "not_found":
               throw notFound(
@@ -875,7 +872,7 @@ const RESCHEDULE_REQUEST_RESOLVED = "Solicitacao ja resolvida";
  * (like visitJobsRouter) to keep the main visitsRouter under Hono's type
  * chain limits (TS7056).
  */
-export const visitRescheduleRequestsRouter = new Hono<{
+export const visitRescheduleRequestsRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   // ===========================================================================

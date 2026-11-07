@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { requirePortalLabScope } from "../lib/portal-lab-scope";
-import { Hono } from "hono";
 import type {
   PortalRequestBatchResponse,
   PortalRequestDetail,
@@ -80,7 +80,7 @@ async function getRequestItems(o: OrgDb, requestIds: number[]) {
     .orderBy(calibrationRequestItem.id);
 }
 
-export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
+export const portalRequestsRouter = createRouter<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...requirePortalProtected,

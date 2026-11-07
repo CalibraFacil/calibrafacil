@@ -22,14 +22,11 @@ import {
   controlChart,
   controlChartAuditLog,
 } from "@calibra-facil/db/schema";
-import { spcRouter as bareSpcRouter } from "./spc";
+import { spcRouter } from "./spc";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const spcRouter = withErrorHandling(bareSpcRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 

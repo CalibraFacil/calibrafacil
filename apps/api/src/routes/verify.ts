@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { createHash } from "node:crypto";
-import { Hono } from "hono";
 import { normalizeAccreditationNumber } from "@calibra-facil/shared";
 import { issuedSealOf } from "../lib/frozen-seal";
 import {
@@ -56,7 +56,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
  *
  * Human page: {VERIFY_URL}/v/{verificationToken} (portal route /v/$token).
  */
-export const verifyRouter = new Hono<{ Bindings: R2Env }>()
+export const verifyRouter = createRouter<{ Bindings: R2Env }>()
   // =========================================================================
   // GET /:token - Get certificate verification info
   // =========================================================================

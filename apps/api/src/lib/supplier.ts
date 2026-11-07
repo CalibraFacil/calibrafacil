@@ -1,7 +1,6 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { supplier } from "@calibra-facil/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { inOrgTransaction } from "./org-transaction";
 
 export interface SupplierRow {
   id: number;
@@ -33,40 +32,35 @@ export async function findOrCreateSupplierByName(
     name: string;
     defaultKind?: SupplierRow["kind"];
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<SupplierRow | null> {
   const trimmed = params.name.trim();
   if (!trimmed) return null;
 
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
-    const [existing] = await o
-      .select()
-      .from(supplier)
-      .where(
-        and(
-          eq(supplier.organizationId, params.organizationId),
-          isNull(supplier.archivedAt),
-          sql`lower(trim(${supplier.name})) = ${normalize(trimmed)}`,
-        ),
-      )
-      .limit(1);
-
-    if (existing) {
-      return existing;
-    }
-
-    const inserted = await o
-      .insert(supplier)
-      .values({
-        organizationId: params.organizationId,
-        name: trimmed,
-        kind: params.defaultKind ?? "other",
-      })
-      .returning();
-
-    const created = inserted[0];
-    return created ?? null;
-  });
+  const [existing] = await executor
+    .select()
+    .from(supplier)
+    .where(
+      and(
+        eq(supplier.organizationId, params.organizationId),
+        isNull(supplier.archivedAt),
+        sql`lower(trim(${supplier.name})) = ${normalize(trimmed)}`,
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    return existing;
+  }
+  const inserted = await executor
+    .insert(supplier)
+    .values({
+      organizationId: params.organizationId,
+      name: trimmed,
+      kind: params.defaultKind ?? "other",
+    })
+    .returning();
+  const created = inserted[0];
+  return created ?? null;
 }
 
 /**
@@ -81,40 +75,37 @@ export async function reconcileSupplierWithPersonLink(
     remoteName: string;
     remoteTaxId: string | null;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<SupplierRow | null> {
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
-    if (params.remoteTaxId) {
-      const trimmedTaxId = params.remoteTaxId.trim();
-      if (trimmedTaxId) {
-        const [byTaxId] = await o
-          .select()
-          .from(supplier)
-          .where(
-            and(
-              eq(supplier.organizationId, params.organizationId),
-              eq(supplier.taxId, trimmedTaxId),
-              isNull(supplier.archivedAt),
-            ),
-          )
-          .limit(1);
-        if (byTaxId) return byTaxId;
-      }
+  if (params.remoteTaxId) {
+    const trimmedTaxId = params.remoteTaxId.trim();
+    if (trimmedTaxId) {
+      const [byTaxId] = await executor
+        .select()
+        .from(supplier)
+        .where(
+          and(
+            eq(supplier.organizationId, params.organizationId),
+            eq(supplier.taxId, trimmedTaxId),
+            isNull(supplier.archivedAt),
+          ),
+        )
+        .limit(1);
+      if (byTaxId) return byTaxId;
     }
-
-    const trimmedName = params.remoteName.trim();
-    if (!trimmedName) return null;
-    const [byName] = await o
-      .select()
-      .from(supplier)
-      .where(
-        and(
-          eq(supplier.organizationId, params.organizationId),
-          isNull(supplier.archivedAt),
-          sql`lower(trim(${supplier.name})) = ${normalize(trimmedName)}`,
-        ),
-      )
-      .limit(1);
-    return byName ?? null;
-  });
+  }
+  const trimmedName = params.remoteName.trim();
+  if (!trimmedName) return null;
+  const [byName] = await executor
+    .select()
+    .from(supplier)
+    .where(
+      and(
+        eq(supplier.organizationId, params.organizationId),
+        isNull(supplier.archivedAt),
+        sql`lower(trim(${supplier.name})) = ${normalize(trimmedName)}`,
+      ),
+    )
+    .limit(1);
+  return byName ?? null;
 }

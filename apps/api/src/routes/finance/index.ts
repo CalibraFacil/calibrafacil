@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import type { AuthVariables } from "../../middleware/permission";
 import { financeAccessRouter } from "./access";
 import { financeOverviewRouter } from "./overview";
@@ -18,7 +18,7 @@ import { financeRevenueLeakageRouter } from "./revenue-leakage";
 import { financeCashForecastRouter } from "./cash-forecast";
 import { financeMarginDashboardsRouter } from "./margin-dashboards";
 
-export const financeRouter = new Hono<{ Variables: AuthVariables }>()
+export const financeRouter = createRouter<{ Variables: AuthVariables }>()
   .route("/access", financeAccessRouter)
   .route("/overview", financeOverviewRouter)
   .route("/contracts", financeContractsRouter)

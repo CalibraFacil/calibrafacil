@@ -1,14 +1,9 @@
-import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { and, eq } from "drizzle-orm";
 import { invalid, type DomainError } from "../../lib/domain-errors";
-import { orgDb } from "../../lib/org-db";
-import {
-  orgTransactionWithExecutor,
-  type OrgRawTransaction,
-} from "../../lib/org-transaction";
+import type { OrgContext } from "../../lib/org-context";
 import {
   jobActorAuditFields,
   loadScopedJob,
@@ -73,43 +68,24 @@ function cancelRefusal(status: JobStatus): DomainError {
   );
 }
 
-type CancelJobTransaction = OrgRawTransaction;
-
 /**
- * How the command reaches the database under row-level security: the read of
- * the job and the transaction of the write each name the organization
- * (`orgDb(org).transaction`, `orgTransactionWithExecutor`). That is the
- * default; a caller may pass its own runners. The read and the write stay two
- * transactions on purpose: the compare-and-set below is what protects the
- * status between them.
+ * The command inside the caller's transaction (a `withOrg` context). The read
+ * and the compare-and-set write run on its one transaction; the write still
+ * matches on the status it read.
  */
-export type CancelJobRunners = {
-  read?: <R>(
-    run: (reader: Pick<OrgExecutor, "select">) => Promise<R>,
-  ) => Promise<R>;
-  write?: <R>(run: (tx: CancelJobTransaction) => Promise<R>) => Promise<R>;
-};
-
 export async function cancelJob(
+  { o, tx }: Pick<OrgContext, "o" | "tx">,
   command: CancelJobCommand,
-  runners: CancelJobRunners = {},
 ): Promise<CancelJobResult> {
   const { actor, organizationId } = command;
-  const read =
-    runners.read ?? ((run) => orgDb(organizationId).transaction(run));
-  const write =
-    runners.write ??
-    ((run) => orgTransactionWithExecutor(organizationId, (_o, tx) => run(tx)));
 
-  const existing = await read((reader) =>
-    loadScopedJob(
-      {
-        jobId: command.jobId,
-        organizationId,
-        unitScope: command.unitScope,
-      },
-      reader,
-    ),
+  const existing = await loadScopedJob(
+    {
+      jobId: command.jobId,
+      organizationId,
+      unitScope: command.unitScope,
+    },
+    o,
   );
   if (!existing) return { status: "not_found" };
 
@@ -125,55 +101,51 @@ export async function cancelJob(
   }
 
   const canceledStatus = requireTargetOf(existing.status, "cancel");
-  const updated = await write(async (tx) => {
-    const [row] = await tx
-      .update(calibrationJob)
-      .set({ status: canceledStatus })
-      .where(
-        and(
-          eq(calibrationJob.id, existing.id),
-          eq(calibrationJob.organizationId, organizationId),
-          eq(calibrationJob.status, existing.status),
-        ),
-      )
-      .returning();
-    if (!row) return null;
+  const [updated] = await tx
+    .update(calibrationJob)
+    .set({ status: canceledStatus })
+    .where(
+      and(
+        eq(calibrationJob.id, existing.id),
+        eq(calibrationJob.organizationId, organizationId),
+        eq(calibrationJob.status, existing.status),
+      ),
+    )
+    .returning();
+  if (!updated) return { status: "concurrent_update" };
 
+  await appendJobEvent(tx, {
+    action: "cancel",
+    organizationId,
+    jobId: existing.id,
+    actor: { kind: "user", userId: actor.userId },
+    changes: {
+      ...jobActorAuditFields(actor),
+      status: { old: existing.status, new: canceledStatus },
+    },
+    ipAddress: actor.ipAddress ?? null,
+    reason: command.reason,
+  });
+
+  // An amendment cancelled before it was issued: the original was never
+  // superseded (it stays APPROVED, the valid certificate) and may be amended
+  // again, because a CANCELED job no longer occupies the one-amendment slot
+  // (migration 0130). Say so on the original's own trail.
+  if (existing.supersedesId !== null) {
     await appendJobEvent(tx, {
-      action: "cancel",
+      action: "amendment_canceled",
       organizationId,
-      jobId: existing.id,
+      jobId: existing.supersedesId,
       actor: { kind: "user", userId: actor.userId },
       changes: {
         ...jobActorAuditFields(actor),
-        status: { old: existing.status, new: canceledStatus },
+        amendedJobId: existing.id,
+        amendmentStatus: { old: existing.status, new: canceledStatus },
       },
       ipAddress: actor.ipAddress ?? null,
-      reason: command.reason,
+      reason: `Retificacao ${existing.jobId} cancelada: o certificado original segue valido. ${command.reason}`,
     });
-
-    // An amendment cancelled before it was issued: the original was never
-    // superseded (it stays APPROVED, the valid certificate) and may be amended
-    // again, because a CANCELED job no longer occupies the one-amendment slot
-    // (migration 0130). Say so on the original's own trail.
-    if (existing.supersedesId !== null) {
-      await appendJobEvent(tx, {
-        action: "amendment_canceled",
-        organizationId,
-        jobId: existing.supersedesId,
-        actor: { kind: "user", userId: actor.userId },
-        changes: {
-          ...jobActorAuditFields(actor),
-          amendedJobId: existing.id,
-          amendmentStatus: { old: existing.status, new: canceledStatus },
-        },
-        ipAddress: actor.ipAddress ?? null,
-        reason: `Retificacao ${existing.jobId} cancelada: o certificado original segue valido. ${command.reason}`,
-      });
-    }
-    return row;
-  });
-  if (!updated) return { status: "concurrent_update" };
+  }
 
   return { status: "ok", job: updated, previousStatus: existing.status };
 }

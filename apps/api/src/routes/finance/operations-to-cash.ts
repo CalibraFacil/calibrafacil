@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
+import { orgDb } from "../../lib/org-db";
 import {
   withLabPermission,
   type AuthVariables,
@@ -16,15 +17,20 @@ function parseStage(
   return OPERATIONS_TO_CASH_STAGES.find((stage) => stage === value);
 }
 
-export const financeOperationsToCashRouter = new Hono<{
+export const financeOperationsToCashRouter = createRouter<{
   Variables: AuthVariables;
 }>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
   const member = c.get("member");
   const stageFilter = parseStage(c.req.query("stage"));
-  const envelope = await buildOperationsToCash({
-    organizationId: member.organizationId,
-    scope: member,
-    stageFilter,
-  });
+  const envelope = await orgDb(member.organizationId).transaction((o) =>
+    buildOperationsToCash(
+      {
+        organizationId: member.organizationId,
+        scope: member,
+        stageFilter,
+      },
+      o,
+    ),
+  );
   return c.json(envelope);
 });

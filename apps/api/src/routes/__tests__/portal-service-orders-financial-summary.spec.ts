@@ -74,6 +74,15 @@ vi.mock("../../modules/service-orders/service-order.read-model", () => ({
   toClientVisibleServiceOrderDetail: vi.fn(),
 }));
 
+// The detail read runs in an org-bound transaction; the double hands its
+// callback a marker handle.
+vi.mock("../../lib/org-db", () => ({
+  orgDb: (organizationId: string) => ({
+    transaction: async (run: (tx: unknown) => unknown) =>
+      run({ transactionOf: organizationId }),
+  }),
+}));
+
 vi.mock("../../lib/portal-financial-summary", () => ({
   buildPortalServiceOrderFinancialSummary:
     mocks.buildPortalServiceOrderFinancialSummary,

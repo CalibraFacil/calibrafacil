@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { accreditedScopeRouter as bareAccreditedScopeRouter } from "./accredited-scope";
+import { accreditedScopeRouter } from "./accredited-scope";
 import { db } from "@calibra-facil/db";
 import {
   accreditedScopeLine,
@@ -10,9 +10,6 @@ import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const accreditedScopeRouter = withErrorHandling(bareAccreditedScopeRouter);
 
 // Real-DB + real-RBAC integration tests for the accredited-scope router
 // (#427 — ISO/IEC 17025 §7.6/§7.8.3 CMC guard, Phase 0). Only the better-auth

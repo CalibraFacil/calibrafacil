@@ -20,18 +20,18 @@ import {
 //
 // Flagged: `<x>.json(..., <status >= 400>)` or `<x>.body(..., <status >= 400>)`
 // anywhere inside a function passed to `<db>.transaction(...)`,
-// `orgTransactionWithExecutor(...)` or `inOrgTransaction(...)` in apps/api/src.
-// Legacy sites (most return before any write, so commit nothing) are grandfathered
-// as exact per-file counts; a file may never gain one.
+// `orgTransactionWithExecutor(...)` or `withOrg(...)` in apps/api/src. No site is
+// grandfathered: the committed baseline is empty, and `baseline` in the rule
+// options exists only for the rule's own tests.
 
 const API_SRC_PATTERN = /(^|\/)apps\/api\/src\//;
 
 const TRANSACTION_FUNCTIONS = new Set([
   "orgTransactionWithExecutor",
-  "inOrgTransaction",
+  "withOrg",
 ]);
 
-const LEGACY_BASELINE: Baseline = new Map<string, number>([]);
+const NO_COMMITTED_BASELINE: Baseline = new Map<string, number>();
 
 const MESSAGE =
   "Do not return an error response from inside a transaction callback: the return commits every write made before it. Throw a DomainError (apps/api/src/lib/domain-errors.ts) so the transaction rolls back.";
@@ -109,7 +109,7 @@ const rule: RuleModule = {
     if (!API_SRC_PATTERN.test(filename) || isTestFile(filename)) return {};
 
     const ratchet = createRatchet(
-      baselineInForce(context, LEGACY_BASELINE),
+      baselineInForce(context, NO_COMMITTED_BASELINE),
       filename,
     );
     return {

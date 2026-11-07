@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { createHash } from "node:crypto";
 import {
   findLiveVerificationValue,
@@ -19,7 +19,7 @@ import {
  * Best-effort: any miss returns `{ found: false }` and the page falls back to a
  * generic confirmation. The actual sign-in never depends on this endpoint.
  */
-export const magicLinkRouter = new Hono().get("/preview", async (c) => {
+export const magicLinkRouter = createRouter().get("/preview", async (c) => {
   const token = c.req.query("token");
   if (!token || token.length < 16) {
     return c.json({ found: false });

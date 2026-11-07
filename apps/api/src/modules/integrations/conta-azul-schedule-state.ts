@@ -1,6 +1,5 @@
 import { toRecord } from "@calibra-facil/shared/record";
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   integrationEventLog,
   integrationSyncCursor,
@@ -82,100 +81,93 @@ export async function getContaAzulScheduleState(
     organizationId: string;
     now?: Date;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<ContaAzulScheduleState> {
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
-    const record = await getIntegrationRecord(
-      params.organizationId,
-      params.integrationId,
-      o,
+  const record = await getIntegrationRecord(
+    params.organizationId,
+    params.integrationId,
+    executor,
+  );
+  if (!record || record.integration.provider !== "conta_azul") {
+    throw new Error("Integração Conta Azul não encontrada");
+  }
+  const config = normalizeContaAzulConnectionConfig(record.connection.config);
+  const runs = await executor
+    .select()
+    .from(integrationSyncRun)
+    .where(
+      and(
+        eq(integrationSyncRun.integrationId, params.integrationId),
+        eq(integrationSyncRun.organizationId, params.organizationId),
+        eq(integrationSyncRun.trigger, "scheduled"),
+      ),
+    )
+    .orderBy(desc(integrationSyncRun.createdAt))
+    .limit(100);
+  const errorEvents = await executor
+    .select()
+    .from(integrationEventLog)
+    .where(
+      and(
+        eq(integrationEventLog.integrationId, params.integrationId),
+        eq(integrationEventLog.organizationId, params.organizationId),
+        eq(integrationEventLog.level, "error"),
+        isNotNull(sql`${integrationEventLog.details}->>'pollKind'`),
+        inArray(
+          sql<string>`${integrationEventLog.details}->>'pollKind'`,
+          CONTA_AZUL_POLL_DEFINITIONS.map((definition) => definition.kind),
+        ),
+      ),
+    )
+    .orderBy(desc(integrationEventLog.createdAt))
+    .limit(500);
+  const state: ContaAzulScheduleState = {
+    paymentStatusPolling: buildEmptyScheduleRow(),
+    payables: buildEmptyScheduleRow(),
+    fiscalDocuments: buildEmptyScheduleRow(),
+    protocols: buildEmptyScheduleRow(),
+    driftChecks: buildEmptyScheduleRow(),
+    productStock: buildEmptyScheduleRow(),
+  };
+  for (const definition of CONTA_AZUL_POLL_DEFINITIONS) {
+    const enabled = isContaAzulPollEnabled(config, definition.kind);
+    const lastSuccessRun = runs.find((run) =>
+      isSuccessfulScheduleRun(run, definition.kind),
     );
+    const lastFailedRun = runs.find((run) =>
+      isFailedScheduleRun(run, definition.kind),
+    );
+    const lastErrorEvent = errorEvents.find(
+      (event) => getEventPollKind(event) === definition.kind,
+    );
+    const lastSuccessAt =
+      lastSuccessRun?.finishedAt?.toISOString?.() ??
+      lastSuccessRun?.createdAt?.toISOString?.() ??
+      null;
+    const lastErrorAt =
+      lastFailedRun?.finishedAt?.toISOString?.() ??
+      lastFailedRun?.createdAt?.toISOString?.() ??
+      lastErrorEvent?.createdAt?.toISOString?.() ??
+      null;
+    const hasRecentFailure =
+      lastErrorAt !== null &&
+      (lastSuccessAt === null || lastErrorAt > lastSuccessAt);
+    const nextDueAt =
+      enabled && lastSuccessAt && !hasRecentFailure
+        ? addMilliseconds(lastSuccessAt, definition.intervalMs)
+        : null;
 
-    if (!record || record.integration.provider !== "conta_azul") {
-      throw new Error("Integração Conta Azul não encontrada");
-    }
-
-    const config = normalizeContaAzulConnectionConfig(record.connection.config);
-    const runs = await o
-      .select()
-      .from(integrationSyncRun)
-      .where(
-        and(
-          eq(integrationSyncRun.integrationId, params.integrationId),
-          eq(integrationSyncRun.organizationId, params.organizationId),
-          eq(integrationSyncRun.trigger, "scheduled"),
-        ),
-      )
-      .orderBy(desc(integrationSyncRun.createdAt))
-      .limit(100);
-    const errorEvents = await o
-      .select()
-      .from(integrationEventLog)
-      .where(
-        and(
-          eq(integrationEventLog.integrationId, params.integrationId),
-          eq(integrationEventLog.organizationId, params.organizationId),
-          eq(integrationEventLog.level, "error"),
-          isNotNull(sql`${integrationEventLog.details}->>'pollKind'`),
-          inArray(
-            sql<string>`${integrationEventLog.details}->>'pollKind'`,
-            CONTA_AZUL_POLL_DEFINITIONS.map((definition) => definition.kind),
-          ),
-        ),
-      )
-      .orderBy(desc(integrationEventLog.createdAt))
-      .limit(500);
-
-    const state: ContaAzulScheduleState = {
-      paymentStatusPolling: buildEmptyScheduleRow(),
-      payables: buildEmptyScheduleRow(),
-      fiscalDocuments: buildEmptyScheduleRow(),
-      protocols: buildEmptyScheduleRow(),
-      driftChecks: buildEmptyScheduleRow(),
-      productStock: buildEmptyScheduleRow(),
+    state[definition.kind] = {
+      enabled,
+      lastSuccessAt,
+      lastErrorAt,
+      lastErrorMessage:
+        lastFailedRun?.errorSummary ?? lastErrorEvent?.message ?? null,
+      nextDueAt,
+      intervalMinutes: Math.round(definition.intervalMs / 60_000),
     };
-
-    for (const definition of CONTA_AZUL_POLL_DEFINITIONS) {
-      const enabled = isContaAzulPollEnabled(config, definition.kind);
-      const lastSuccessRun = runs.find((run) =>
-        isSuccessfulScheduleRun(run, definition.kind),
-      );
-      const lastFailedRun = runs.find((run) =>
-        isFailedScheduleRun(run, definition.kind),
-      );
-      const lastErrorEvent = errorEvents.find(
-        (event) => getEventPollKind(event) === definition.kind,
-      );
-      const lastSuccessAt =
-        lastSuccessRun?.finishedAt?.toISOString?.() ??
-        lastSuccessRun?.createdAt?.toISOString?.() ??
-        null;
-      const lastErrorAt =
-        lastFailedRun?.finishedAt?.toISOString?.() ??
-        lastFailedRun?.createdAt?.toISOString?.() ??
-        lastErrorEvent?.createdAt?.toISOString?.() ??
-        null;
-      const hasRecentFailure =
-        lastErrorAt !== null &&
-        (lastSuccessAt === null || lastErrorAt > lastSuccessAt);
-      const nextDueAt =
-        enabled && lastSuccessAt && !hasRecentFailure
-          ? addMilliseconds(lastSuccessAt, definition.intervalMs)
-          : null;
-
-      state[definition.kind] = {
-        enabled,
-        lastSuccessAt,
-        lastErrorAt,
-        lastErrorMessage:
-          lastFailedRun?.errorSummary ?? lastErrorEvent?.message ?? null,
-        nextDueAt,
-        intervalMinutes: Math.round(definition.intervalMs / 60_000),
-      };
-    }
-
-    return state;
-  });
+  }
+  return state;
 }
 
 export function readCursorStateText(
@@ -192,23 +184,18 @@ export async function getIntegrationCursor(
     organizationId: string;
     cursorType: string;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  const [cursor] = await inOrgTransaction(
-    params.organizationId,
-    executor,
-    (o) =>
-      o
-        .select()
-        .from(integrationSyncCursor)
-        .where(
-          and(
-            eq(integrationSyncCursor.integrationId, params.integrationId),
-            eq(integrationSyncCursor.cursorType, params.cursorType),
-          ),
-        )
-        .limit(1),
-  );
+  const [cursor] = await executor
+    .select()
+    .from(integrationSyncCursor)
+    .where(
+      and(
+        eq(integrationSyncCursor.integrationId, params.integrationId),
+        eq(integrationSyncCursor.cursorType, params.cursorType),
+      ),
+    )
+    .limit(1);
   return cursor;
 }
 
@@ -218,38 +205,34 @@ export async function upsertIntegrationCursor(
     organizationId: string;
     cursor: IntegrationSyncCursor;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  return inOrgTransaction(params.organizationId, executor, async (o) => {
-    const existing = await getIntegrationCursor(
-      {
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        cursorType: params.cursor.cursorType,
-      },
-      o,
-    );
-    const values = {
-      lastRemoteUpdatedAt: parseRemoteDate(params.cursor.lastRemoteUpdatedAt),
-      lastSuccessfulPollAt: parseRemoteDate(params.cursor.lastSuccessfulPollAt),
-      nextPage: params.cursor.nextPage,
-      state: params.cursor.state,
-      updatedAt: new Date(),
-    };
-
-    if (existing) {
-      await o
-        .update(integrationSyncCursor)
-        .set(values)
-        .where(eq(integrationSyncCursor.id, existing.id));
-      return;
-    }
-
-    await o.insert(integrationSyncCursor).values({
+  const existing = await getIntegrationCursor(
+    {
       integrationId: params.integrationId,
       organizationId: params.organizationId,
       cursorType: params.cursor.cursorType,
-      ...values,
-    });
+    },
+    executor,
+  );
+  const values = {
+    lastRemoteUpdatedAt: parseRemoteDate(params.cursor.lastRemoteUpdatedAt),
+    lastSuccessfulPollAt: parseRemoteDate(params.cursor.lastSuccessfulPollAt),
+    nextPage: params.cursor.nextPage,
+    state: params.cursor.state,
+    updatedAt: new Date(),
+  };
+  if (existing) {
+    await executor
+      .update(integrationSyncCursor)
+      .set(values)
+      .where(eq(integrationSyncCursor.id, existing.id));
+    return;
+  }
+  await executor.insert(integrationSyncCursor).values({
+    integrationId: params.integrationId,
+    organizationId: params.organizationId,
+    cursorType: params.cursor.cursorType,
+    ...values,
   });
 }

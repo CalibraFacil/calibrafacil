@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { randomBytes } from "node:crypto";
 import { createLabAuth } from "@calibra-facil/auth";
 import {
@@ -74,7 +74,7 @@ async function logClaimEvent(input: {
   });
 }
 
-export const labSetupRouter = new Hono()
+export const labSetupRouter = createRouter()
   .get("/:token", async (c) => {
     const rawToken = c.req.param("token");
     const validation = await validateLabAccountSetupToken(rawToken);

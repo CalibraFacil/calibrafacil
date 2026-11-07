@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { eq } from "drizzle-orm";
 import { organization } from "@calibra-facil/db/schema";
@@ -101,7 +101,7 @@ function isoOrNull(value: Date | null) {
   return value ? value.toISOString() : null;
 }
 
-export const organizationProfileRouter = new Hono<{
+export const organizationProfileRouter = createRouter<{
   Variables: AuthVariables;
 }>().patch(
   "/profile",

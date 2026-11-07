@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@calibra-facil/db";
 import { material, service } from "@calibra-facil/db/schema";
@@ -102,7 +103,9 @@ describe("loadCatalogItemPayloads — services + materials (real DB)", () => {
       name: "Material de outro laboratório",
     });
 
-    const payloads = await loadCatalogItemPayloads(orgA.orgId, 50);
+    const payloads = await orgDb(orgA.orgId).transaction((o) =>
+      loadCatalogItemPayloads(orgA.orgId, 50, o),
+    );
     const byExternalId = new Map(
       payloads.map((payload) => [payload.externalId, payload]),
     );
@@ -147,7 +150,9 @@ describe("loadCatalogItemPayloads — services + materials (real DB)", () => {
       name: "Material",
     });
 
-    const payloads = await loadCatalogItemPayloads(org.orgId, 50);
+    const payloads = await orgDb(org.orgId).transaction((o) =>
+      loadCatalogItemPayloads(org.orgId, 50, o),
+    );
     expect(payloads).toHaveLength(2);
 
     const servicesOnly = filterContaAzulCatalogPayloadsByEnabledKinds(

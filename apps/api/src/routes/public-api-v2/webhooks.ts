@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import {
   publicApiWebhookDelivery,
@@ -16,6 +16,8 @@ import { type PublicApiV2Env } from "./env";
 import { WebhookSubscriptionSchema } from "./schemas";
 import { withIdempotentMutation } from "./idempotency";
 import { orgDb } from "../../lib/org-db";
+import { withOrg } from "../../lib/org-context";
+import { apiKeyActor } from "./actor";
 
 function mapWebhookSubscription(
   record: typeof publicApiWebhookSubscription.$inferSelect,
@@ -37,7 +39,7 @@ function mapWebhookSubscription(
   };
 }
 
-export const webhookRoutes = new Hono<PublicApiV2Env>()
+export const webhookRoutes = createRouter<PublicApiV2Env>()
   .get("/webhooks", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
     const subscriptions = await orgDb(apiKey.organizationId).transaction((o) =>
@@ -217,7 +219,7 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    await emitPublicApiWebhookEvent({
+    await emitPublicApiWebhookEvent(apiKeyActor(apiKey, c), {
       organizationId: apiKey.organizationId,
       eventType: existing.events[0] ?? "customer.created",
       payload: {
@@ -257,11 +259,16 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
     requireApiScope("webhooks:manage"),
     async (c) => {
       const apiKey = c.get("apiKey");
-      const replay = await replayPublicApiWebhookDelivery({
-        organizationId: apiKey.organizationId,
-        subscriptionId: c.req.param("id"),
-        deliveryId: c.req.param("deliveryId"),
-      });
+      const replay = await withOrg(
+        apiKey.organizationId,
+        apiKeyActor(apiKey, c),
+        (ctx) =>
+          replayPublicApiWebhookDelivery(ctx, {
+            organizationId: apiKey.organizationId,
+            subscriptionId: c.req.param("id"),
+            deliveryId: c.req.param("deliveryId"),
+          }),
+      );
 
       if (!replay) {
         return c.json(

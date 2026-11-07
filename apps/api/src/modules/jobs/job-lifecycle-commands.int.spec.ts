@@ -18,6 +18,10 @@
  *   REQ-LC-1g  the audit row names the actor, and the key for an API key
  */
 
+import {
+  amendJobInOrg,
+  cancelJobInOrg,
+} from "../../../test/integration/job-commands";
 import { setJobStatus } from "../../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -39,9 +43,7 @@ import {
 } from "../../../test/integration/job-cas";
 import { requireCompetenceForJob } from "../../../test/integration/job-competence";
 import type { JobLifecycleActor } from "./job-actor";
-import { amendJob } from "./amend-job";
 import { assignJob } from "./assign-job";
-import { cancelJob } from "./cancel-job";
 import { editJob } from "./edit-job";
 import { rejectJob } from "./reject-job";
 
@@ -115,7 +117,7 @@ const COMMANDS = {
       reason: "Leitura inconsistente",
     }),
   cancel: (jobId: number, organizationId = ORG) =>
-    cancelJob({
+    cancelJobInOrg({
       actor: user,
       jobId,
       organizationId,
@@ -139,7 +141,7 @@ const COMMANDS = {
       dueDate: "2031-03-04T12:00:00.000Z",
     }),
   amend: (jobId: number, organizationId = ORG) =>
-    amendJob({
+    amendJobInOrg({
       actor: user,
       jobId,
       organizationId,
@@ -209,7 +211,7 @@ describe("job lifecycle commands (real Postgres)", () => {
             reason: "x",
           }),
         cancel: () =>
-          cancelJob({
+          cancelJobInOrg({
             actor: user,
             jobId,
             organizationId: ORG,
@@ -233,7 +235,7 @@ describe("job lifecycle commands (real Postgres)", () => {
             dueDate: "2031-03-04T12:00:00.000Z",
           }),
         amend: () =>
-          amendJob({
+          amendJobInOrg({
             actor: user,
             jobId,
             organizationId: ORG,
@@ -412,7 +414,7 @@ describe("job lifecycle commands (real Postgres)", () => {
     it("REQ-LC-1f: expectedStatus pins the status the caller validated; a job that moved to another cancelable status is concurrent_update", async () => {
       const { jobId } = await seedWorld("IN_PROGRESS");
 
-      const result = await cancelJob({
+      const result = await cancelJobInOrg({
         actor: user,
         jobId,
         organizationId: ORG,
@@ -429,7 +431,7 @@ describe("job lifecycle commands (real Postgres)", () => {
     it("REQ-LC-1g: an API key actor is recorded with the key's identity", async () => {
       const { jobId } = await seedWorld("DRAFT");
 
-      await cancelJob({
+      await cancelJobInOrg({
         actor: apiKey,
         jobId,
         organizationId: ORG,

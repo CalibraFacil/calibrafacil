@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
+import { orgDb } from "../../lib/org-db";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { asset, assetType } from "@calibra-facil/db/schema";
@@ -27,7 +28,7 @@ import { answeringRefusals } from "./refusals";
 import { resolveExternalResourceId } from "./resolvers";
 import { withIdempotentMutation } from "./idempotency";
 
-export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
+export const assetUpdateRoutes = createRouter<PublicApiV2Env>()
   .put(
     "/assets/:id",
     requireApiScope("assets:write"),
@@ -38,11 +39,16 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "asset",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "asset",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(
@@ -244,11 +250,16 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
   )
   .delete("/assets/:id", requireApiScope("assets:write"), async (c) => {
     const apiKey = c.get("apiKey");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "asset",
-      value: c.req.param("id"),
-    });
+    const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+      resolveExternalResourceId(
+        {
+          organizationId: apiKey.organizationId,
+          resourceType: "asset",
+          value: c.req.param("id"),
+        },
+        o,
+      ),
+    );
 
     if (!resolvedId) {
       return c.json(

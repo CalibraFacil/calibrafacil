@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
 import {
   findOotNotificationByAckToken,
@@ -70,7 +70,7 @@ function alreadyConfirmedPage(notification: AckNotification): string {
   );
 }
 
-export const ootAckRouter = new Hono()
+export const ootAckRouter = createRouter()
   // =========================================================================
   // GET /:token - Confirmation page (no state change)
   // =========================================================================

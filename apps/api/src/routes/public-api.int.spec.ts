@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { publicApiRouter as barePublicApiRouter } from "./public-api";
+import { publicApiRouter } from "./public-api";
 import { createApiKeySecret } from "../lib/api-keys";
 import { truncateAll } from "../../test/integration/db";
 import { seedApiKey, seedCustomer, seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const publicApiRouter = withErrorHandling(barePublicApiRouter);
 
 // Real-DB integration test for the EXTERNAL integrator API (`publicApiRouter`,
 // v1), which is gated entirely by `requireApiKeyAuth` + `requireApiScope`. There

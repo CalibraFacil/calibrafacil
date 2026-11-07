@@ -2,7 +2,6 @@ import type { OrgDb } from "@calibra-facil/db/for-org";
 import { publicApiResourceRef } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { resolvePublicApiUnitScope } from "../../lib/public-api";
-import { inOrgTransaction } from "../../lib/org-transaction";
 
 // Each resolver reads in the caller's org-bound transaction (`executor`) or in
 // one of its own. A handler already inside a transaction passes its handle, so
@@ -12,7 +11,7 @@ export async function resolveUnitIdForWrite(
     organizationId: string;
     requestedUnitId?: number;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   const scope = await resolvePublicApiUnitScope(
     {
@@ -39,26 +38,24 @@ export async function resolveExternalResourceId(
     resourceType: "customer" | "asset" | "request" | "job";
     value: string;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   const numericId = Number.parseInt(params.value, 10);
   if (!Number.isNaN(numericId) && String(numericId) === params.value) {
     return numericId;
   }
 
-  const [ref] = await inOrgTransaction(params.organizationId, executor, (o) =>
-    o
-      .select()
-      .from(publicApiResourceRef)
-      .where(
-        and(
-          eq(publicApiResourceRef.organizationId, params.organizationId),
-          eq(publicApiResourceRef.resourceType, params.resourceType),
-          eq(publicApiResourceRef.externalId, params.value),
-        ),
-      )
-      .limit(1),
-  );
+  const [ref] = await executor
+    .select()
+    .from(publicApiResourceRef)
+    .where(
+      and(
+        eq(publicApiResourceRef.organizationId, params.organizationId),
+        eq(publicApiResourceRef.resourceType, params.resourceType),
+        eq(publicApiResourceRef.externalId, params.value),
+      ),
+    )
+    .limit(1);
 
   if (!ref?.resourceId) {
     return null;
@@ -73,7 +70,7 @@ export async function resolveCustomerId(
     customerId?: number;
     customerExternalId?: string;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   if (params.customerId) {
     return params.customerId;
@@ -99,7 +96,7 @@ export async function resolveAssetId(
     assetId?: number;
     assetExternalId?: string;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   if (params.assetId) {
     return params.assetId;

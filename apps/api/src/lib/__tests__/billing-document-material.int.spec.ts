@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
@@ -214,9 +215,8 @@ describe("billing document material references (real DB)", () => {
       { description: "Mão de obra", materialId: null },
     ]);
 
-    const payload = await loadBillingDocumentExportPayload(
-      ctx.org.orgId,
-      documentId,
+    const payload = await orgDb(ctx.org.orgId).transaction((o) =>
+      loadBillingDocumentExportPayload(ctx.org.orgId, documentId, o),
     );
     expect(payload).not.toBeNull();
     const catalogRefs = payload?.items.map((item) => ({

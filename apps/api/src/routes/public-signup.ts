@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import {
   buildLabClaimUrl,
@@ -91,7 +91,7 @@ async function hasExistingLabMembership(email: string) {
   return hasLabMembership(existing.id);
 }
 
-export const publicSignupRouter = new Hono()
+export const publicSignupRouter = createRouter()
   .use("*", async (c, next) => {
     await next();
     c.header("Cache-Control", "private, no-store, max-age=0");

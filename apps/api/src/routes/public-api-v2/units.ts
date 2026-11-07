@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { organizationUnit } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { buildPublicApiError } from "../../lib/public-api";
@@ -6,7 +6,7 @@ import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { orgDb } from "../../lib/org-db";
 
-export const unitRoutes = new Hono<PublicApiV2Env>()
+export const unitRoutes = createRouter<PublicApiV2Env>()
   .get("/units", requireApiScope("units:read"), async (c) => {
     const apiKey = c.get("apiKey");
     const units = await orgDb(apiKey.organizationId).transaction((o) =>

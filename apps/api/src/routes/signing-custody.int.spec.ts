@@ -41,17 +41,9 @@ import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, type SeededOrg } from "../../test/integration/seed";
 import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
-import { signingRouter as bareSigningRouter } from "./signing";
-import { organizationProfileRouter as bareOrganizationProfileRouter } from "./organization-profile";
-import { accreditedScopeRouter as bareAccreditedScopeRouter } from "./accredited-scope";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const organizationProfileRouter = withErrorHandling(
-  bareOrganizationProfileRouter,
-);
-const signingRouter = withErrorHandling(bareSigningRouter);
-
-const accreditedScopeRouter = withErrorHandling(bareAccreditedScopeRouter);
+import { signingRouter } from "./signing";
+import { organizationProfileRouter } from "./organization-profile";
+import { accreditedScopeRouter } from "./accredited-scope";
 
 const MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
 const PASSWORD = "s3nha-do-p12-B4A";

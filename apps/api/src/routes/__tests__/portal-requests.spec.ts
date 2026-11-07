@@ -83,10 +83,7 @@ vi.mock("../../middleware/permission", () => {
   };
 });
 
-const { portalRequestsRouter: bareRouter } = await import("../portal-requests");
-const { withErrorHandling } =
-  await import("../../../test/integration/with-error-handling");
-const portalRequestsRouter = withErrorHandling(bareRouter);
+const { portalRequestsRouter } = await import("../portal-requests");
 
 const JSON_HEADERS = {
   origin: "http://localhost",

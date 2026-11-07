@@ -1,3 +1,4 @@
+import { withOrg } from "./org-context";
 import { readEmailConfig } from "@calibra-facil/config";
 import {
   organization,
@@ -15,7 +16,6 @@ import {
   buildFromAddress,
   otherOrganizationHoldsHostname,
 } from "./email-domains";
-import { orgTransactionWithExecutor } from "./org-transaction";
 
 type Actor = { organizationId: string; userId: string; memberId: string };
 
@@ -82,148 +82,162 @@ export async function saveManagedEmailDomain(
   // is held across the provider call ON PURPOSE (it is what serialises a
   // concurrent create for the same organization and lets a rejected database
   // write be compensated before the lock is released, see below).
-  return orgTransactionWithExecutor(actor.organizationId, async (lab, tx) => {
-    await tx
-      .select({ id: organization.id })
-      .from(organization)
-      .where(eq(organization.id, actor.organizationId))
-      .for("update");
-    const [existing] = await lab
-      .select()
-      .from(organizationEmailDomain)
-      .where(eq(organizationEmailDomain.organizationId, actor.organizationId))
-      .limit(1);
-    if (existing) {
-      if (existing.mode !== "managed" || existing.hostname !== input.hostname) {
+  return withOrg(
+    actor.organizationId,
+    { userId: actor.userId, ipAddress: null },
+    async ({ o: lab, tx }) => {
+      await tx
+        .select({ id: organization.id })
+        .from(organization)
+        .where(eq(organization.id, actor.organizationId))
+        .for("update");
+      const [existing] = await lab
+        .select()
+        .from(organizationEmailDomain)
+        .where(eq(organizationEmailDomain.organizationId, actor.organizationId))
+        .limit(1);
+      if (existing) {
+        if (
+          existing.mode !== "managed" ||
+          existing.hostname !== input.hostname
+        ) {
+          return emailDomainError(
+            "Remova a configuração atual antes de configurar outro domínio.",
+            409,
+          );
+        }
+        // Reuse only our own stored ID. Never adopt a provider domain by hostname:
+        // it could belong to another tenant or to the platform itself.
+        const fromAddress = buildFromAddress(
+          input.fromLocalPart,
+          input.hostname,
+        );
+        if (existing.fromAddress === fromAddress)
+          return { domain: existing, created: false };
+        const [updated] = await lab
+          .update(organizationEmailDomain)
+          .set({
+            fromAddress,
+            isActive: false,
+            activatedAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationEmailDomain.id, existing.id))
+          .returning();
+        await lab.insert(organizationEventLog).values({
+          organizationId: actor.organizationId,
+          actorUserId: actor.userId,
+          actorMemberId: actor.memberId,
+          action: "email_sender_domain.updated",
+          entityType: "email_sender_domain",
+          entityId: existing.id,
+          details: { hostname: input.hostname, fromAddress },
+        });
+        return { domain: updated!, created: false };
+      }
+      if (hostnameHeldElsewhere)
         return emailDomainError(
-          "Remova a configuração atual antes de configurar outro domínio.",
+          "Este domínio já está em uso por outra organização",
           409,
         );
-      }
-      // Reuse only our own stored ID. Never adopt a provider domain by hostname:
-      // it could belong to another tenant or to the platform itself.
-      const fromAddress = buildFromAddress(input.fromLocalPart, input.hostname);
-      if (existing.fromAddress === fromAddress)
-        return { domain: existing, created: false };
-      const [updated] = await lab
-        .update(organizationEmailDomain)
-        .set({
-          fromAddress,
-          isActive: false,
-          activatedAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(organizationEmailDomain.id, existing.id))
-        .returning();
-      await lab.insert(organizationEventLog).values({
-        organizationId: actor.organizationId,
-        actorUserId: actor.userId,
-        actorMemberId: actor.memberId,
-        action: "email_sender_domain.updated",
-        entityType: "email_sender_domain",
-        entityId: existing.id,
-        details: { hostname: input.hostname, fromAddress },
-      });
-      return { domain: updated!, created: false };
-    }
-    if (hostnameHeldElsewhere)
-      return emailDomainError(
-        "Este domínio já está em uso por outra organização",
-        409,
-      );
 
-    const details = await createResendDomain(apiKey, input.hostname);
-    if (!details.ok) return emailProviderError(details.failureClass);
-    try {
-      const now = new Date();
-      const [created] = await lab
-        .insert(organizationEmailDomain)
-        .values({
-          id: crypto.randomUUID(),
+      const details = await createResendDomain(apiKey, input.hostname);
+      if (!details.ok) return emailProviderError(details.failureClass);
+      try {
+        const now = new Date();
+        const [created] = await lab
+          .insert(organizationEmailDomain)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: actor.organizationId,
+            createdBy: actor.userId,
+            mode: "managed",
+            hostname: input.hostname,
+            resendDomainId: details.data.id,
+            resendApiKeyEncrypted: null,
+            resendApiKeyIv: null,
+            resendApiKeyLast4: null,
+            fromAddress: buildFromAddress(input.fromLocalPart, input.hostname),
+            dnsRecords: details.data.records,
+            status: details.data.status,
+            verifiedAt: details.data.status === "verified" ? now : null,
+            lastVerifiedAt: details.data.status === "verified" ? now : null,
+            keyStatus: "ok",
+            keyLastError: null,
+          })
+          .returning();
+        await lab.insert(organizationEventLog).values({
           organizationId: actor.organizationId,
-          createdBy: actor.userId,
-          mode: "managed",
-          hostname: input.hostname,
-          resendDomainId: details.data.id,
-          resendApiKeyEncrypted: null,
-          resendApiKeyIv: null,
-          resendApiKeyLast4: null,
-          fromAddress: buildFromAddress(input.fromLocalPart, input.hostname),
-          dnsRecords: details.data.records,
-          status: details.data.status,
-          verifiedAt: details.data.status === "verified" ? now : null,
-          lastVerifiedAt: details.data.status === "verified" ? now : null,
-          keyStatus: "ok",
-          keyLastError: null,
-        })
-        .returning();
-      await lab.insert(organizationEventLog).values({
-        organizationId: actor.organizationId,
-        actorUserId: actor.userId,
-        actorMemberId: actor.memberId,
-        action: "email_sender_domain.created",
-        entityType: "email_sender_domain",
-        entityId: created!.id,
-        details: {
-          hostname: input.hostname,
-          fromAddress: created!.fromAddress,
-        },
-      });
-      return { domain: created!, created: true };
-    } catch (error) {
-      // Compensate a rejected database write before releasing the tenant lock.
-      // Only the ID returned by this create is eligible for cleanup.
-      const cleanup = await deleteResendDomain(apiKey, details.data.id);
-      if (!cleanup.ok) {
-        console.error("[EmailDomain] Provider cleanup required", {
-          organizationId: actor.organizationId,
-          hostname: input.hostname,
-          resendDomainId: details.data.id,
-          failureClass: cleanup.failureClass,
+          actorUserId: actor.userId,
+          actorMemberId: actor.memberId,
+          action: "email_sender_domain.created",
+          entityType: "email_sender_domain",
+          entityId: created!.id,
+          details: {
+            hostname: input.hostname,
+            fromAddress: created!.fromAddress,
+          },
         });
+        return { domain: created!, created: true };
+      } catch (error) {
+        // Compensate a rejected database write before releasing the tenant lock.
+        // Only the ID returned by this create is eligible for cleanup.
+        const cleanup = await deleteResendDomain(apiKey, details.data.id);
+        if (!cleanup.ok) {
+          console.error("[EmailDomain] Provider cleanup required", {
+            organizationId: actor.organizationId,
+            hostname: input.hostname,
+            resendDomainId: details.data.id,
+            failureClass: cleanup.failureClass,
+          });
+        }
+        throw error;
       }
-      throw error;
-    }
-  });
+    },
+  );
 }
 
 export async function removeEmailDomain(actor: Actor) {
-  await orgTransactionWithExecutor(actor.organizationId, async (lab, tx) => {
-    await tx
-      .select({ id: organization.id })
-      .from(organization)
-      .where(eq(organization.id, actor.organizationId))
-      .for("update");
-    const [record] = await lab
-      .select()
-      .from(organizationEmailDomain)
-      .where(eq(organizationEmailDomain.organizationId, actor.organizationId))
-      .limit(1);
-    if (!record) return;
-    if (record.mode === "managed") {
-      const result = await deleteResendDomain(
-        platformKey(),
-        record.resendDomainId,
-      );
-      // Keep the row and provider ID on failure so removal can be retried.
-      if (!result.ok) return emailProviderError(result.failureClass);
-    }
-    // Legacy domains belong to the laboratory's account; unlink them only.
-    await lab
-      .delete(organizationEmailDomain)
-      .where(eq(organizationEmailDomain.id, record.id));
-    await lab.insert(organizationEventLog).values({
-      organizationId: actor.organizationId,
-      actorUserId: actor.userId,
-      actorMemberId: actor.memberId,
-      action: "email_sender_domain.deleted",
-      entityType: "email_sender_domain",
-      entityId: record.id,
-      details: {
-        hostname: record.hostname,
-        wasVerified: Boolean(record.verifiedAt),
-        wasActive: record.isActive,
-      },
-    });
-  });
+  await withOrg(
+    actor.organizationId,
+    { userId: actor.userId, ipAddress: null },
+    async ({ o: lab, tx }) => {
+      await tx
+        .select({ id: organization.id })
+        .from(organization)
+        .where(eq(organization.id, actor.organizationId))
+        .for("update");
+      const [record] = await lab
+        .select()
+        .from(organizationEmailDomain)
+        .where(eq(organizationEmailDomain.organizationId, actor.organizationId))
+        .limit(1);
+      if (!record) return;
+      if (record.mode === "managed") {
+        const result = await deleteResendDomain(
+          platformKey(),
+          record.resendDomainId,
+        );
+        // Keep the row and provider ID on failure so removal can be retried.
+        if (!result.ok) return emailProviderError(result.failureClass);
+      }
+      // Legacy domains belong to the laboratory's account; unlink them only.
+      await lab
+        .delete(organizationEmailDomain)
+        .where(eq(organizationEmailDomain.id, record.id));
+      await lab.insert(organizationEventLog).values({
+        organizationId: actor.organizationId,
+        actorUserId: actor.userId,
+        actorMemberId: actor.memberId,
+        action: "email_sender_domain.deleted",
+        entityType: "email_sender_domain",
+        entityId: record.id,
+        details: {
+          hostname: record.hostname,
+          wasVerified: Boolean(record.verifiedAt),
+          wasActive: record.isActive,
+        },
+      });
+    },
+  );
 }

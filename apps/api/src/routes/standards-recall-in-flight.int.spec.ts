@@ -23,9 +23,8 @@ import {
   referenceStandard,
   standardRecall,
 } from "@calibra-facil/db/schema";
-import { standardsRouter as bareStandardsRouter } from "./standards";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { standardsRouter } from "./standards";
+import { jobsRouter } from "./jobs";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
@@ -36,10 +35,6 @@ import {
 import { executableMethodSnapshot } from "../../test/integration/executable-method";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-
-const standardsRouter = withErrorHandling(bareStandardsRouter);
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

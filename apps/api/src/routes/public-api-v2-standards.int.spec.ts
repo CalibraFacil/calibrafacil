@@ -26,12 +26,9 @@ import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedApiKey, seedCustomer, seedOrg } from "../../test/integration/seed";
 import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { jobsRouter } from "./jobs";
 import { publicApiV2Router } from "./public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

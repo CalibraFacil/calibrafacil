@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import type {
   MethodDetail,
   MethodsListResponse,
@@ -1158,7 +1158,7 @@ function resolvePublicationPreviewScenarios(
   );
 }
 
-export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
+export const methodsRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List methods with filtering and pagination
   // =========================================================================

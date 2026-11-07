@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import {
   integrationObjectLink,
   material,
@@ -9,7 +10,6 @@ import {
 } from "@calibra-facil/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { getIntegrationRecord, writeIntegrationEvent } from "./records";
 import { createContaAzulAdapterForRecord } from "./conta-azul-auth";
 import { CONTA_AZUL_PRODUCT_STOCK_CURSOR_TYPE } from "./constants";
@@ -33,65 +33,58 @@ export async function adjustMaterialErpStock(params: {
   }
 
   // The lookups share one transaction; the remote call below runs outside it.
-  const { integrationRow, record, link } = await inOrgTransaction(
+  const { integrationRow, record, link } = await orgDb(
     params.organizationId,
-    undefined,
-    async (o) => {
-      const [integrationRow] = await o
-        .select({ integrationId: organizationIntegration.id })
-        .from(organizationIntegration)
-        .where(
-          and(
-            eq(organizationIntegration.organizationId, params.organizationId),
-            eq(organizationIntegration.type, "financial_erp"),
-            eq(organizationIntegration.provider, "conta_azul"),
-            eq(organizationIntegration.status, "ACTIVE"),
-          ),
-        )
-        .orderBy(desc(organizationIntegration.updatedAt))
-        .limit(1);
-      if (!integrationRow) {
-        throw new Error("Nenhuma integração Conta Azul ativa encontrada");
-      }
+  ).transaction(async (o) => {
+    const [integrationRow] = await o
+      .select({ integrationId: organizationIntegration.id })
+      .from(organizationIntegration)
+      .where(
+        and(
+          eq(organizationIntegration.organizationId, params.organizationId),
+          eq(organizationIntegration.type, "financial_erp"),
+          eq(organizationIntegration.provider, "conta_azul"),
+          eq(organizationIntegration.status, "ACTIVE"),
+        ),
+      )
+      .orderBy(desc(organizationIntegration.updatedAt))
+      .limit(1);
+    if (!integrationRow) {
+      throw new Error("Nenhuma integração Conta Azul ativa encontrada");
+    }
 
-      const record = await getIntegrationRecord(
-        params.organizationId,
-        integrationRow.integrationId,
-        o,
+    const record = await getIntegrationRecord(
+      params.organizationId,
+      integrationRow.integrationId,
+      o,
+    );
+    if (!record) {
+      throw new Error("Integração Conta Azul não encontrada");
+    }
+
+    const config = normalizeContaAzulConnectionConfig(record.connection.config);
+    if (!config.enabledTargets.products) {
+      throw new Error(
+        "Sincronização de produtos da Conta Azul está desativada",
       );
-      if (!record) {
-        throw new Error("Integração Conta Azul não encontrada");
-      }
+    }
 
-      const config = normalizeContaAzulConnectionConfig(
-        record.connection.config,
-      );
-      if (!config.enabledTargets.products) {
-        throw new Error(
-          "Sincronização de produtos da Conta Azul está desativada",
-        );
-      }
-
-      const [link] = await o
-        .select({ remoteEntityId: integrationObjectLink.remoteEntityId })
-        .from(integrationObjectLink)
-        .where(
-          and(
-            eq(
-              integrationObjectLink.integrationId,
-              integrationRow.integrationId,
-            ),
-            eq(integrationObjectLink.target, "catalog_item"),
-            eq(
-              integrationObjectLink.localEntityId,
-              `material:${params.materialId}`,
-            ),
+    const [link] = await o
+      .select({ remoteEntityId: integrationObjectLink.remoteEntityId })
+      .from(integrationObjectLink)
+      .where(
+        and(
+          eq(integrationObjectLink.integrationId, integrationRow.integrationId),
+          eq(integrationObjectLink.target, "catalog_item"),
+          eq(
+            integrationObjectLink.localEntityId,
+            `material:${params.materialId}`,
           ),
-        )
-        .limit(1);
-      return { integrationRow, record, link };
-    },
-  );
+        ),
+      )
+      .limit(1);
+    return { integrationRow, record, link };
+  });
   if (!link?.remoteEntityId) {
     throw new Error(
       "Material não está vinculado a um produto na Conta Azul — sincronize o catálogo antes de ajustar o estoque",
@@ -110,7 +103,7 @@ export async function adjustMaterialErpStock(params: {
   await adapter.setProductStock(remoteEntityId, params.quantity);
 
   const stockSyncedAt = new Date();
-  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+  await orgDb(params.organizationId).transaction(async (o) => {
     await o
       .update(material)
       .set({ stockQuantity: params.quantity, stockSyncedAt })
@@ -155,9 +148,8 @@ export async function pollContaAzulProductStock(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {
@@ -178,7 +170,7 @@ export async function pollContaAzulProductStock(params: {
   }
 
   const limit = Math.max(1, Math.min(params.limit ?? 50, 200));
-  const rows = await inOrgTransaction(params.organizationId, undefined, (o) =>
+  const rows = await orgDb(params.organizationId).transaction((o) =>
     o
       .select({
         materialId: material.id,
@@ -211,7 +203,7 @@ export async function pollContaAzulProductStock(params: {
     }
     try {
       const { quantity } = await adapter.fetchProductStock(row.remoteEntityId);
-      await inOrgTransaction(params.organizationId, undefined, async (o) => {
+      await orgDb(params.organizationId).transaction(async (o) => {
         await o
           .update(material)
           .set({ stockQuantity: quantity, stockSyncedAt: new Date() })
@@ -242,7 +234,7 @@ export async function pollContaAzulProductStock(params: {
     },
   };
 
-  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+  await orgDb(params.organizationId).transaction(async (o) => {
     await upsertIntegrationCursor(
       {
         integrationId: params.integrationId,

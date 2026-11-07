@@ -1,6 +1,6 @@
+import { createRouter } from "../server/router";
 import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
-import { Hono } from "hono";
 import type {
   AssetDetail,
   AssetRecord,
@@ -174,7 +174,7 @@ async function requireClientCustomerLink(
   return linkedCustomer.id;
 }
 
-export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
+export const assetsRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // POST / - Create a new asset
   // =========================================================================

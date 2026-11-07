@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import {
   SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION,
   type SyncCommand,
@@ -68,7 +69,11 @@ export async function prepareCreateLocalAttachment(
   if (command.operation !== "create_local_attachment") return {};
 
   // Already applied (a retried push): the transaction answers from its record.
-  if (await findAppliedDesktopSyncEvent(memberData.organizationId, command)) {
+  if (
+    await orgDb(memberData.organizationId).transaction((o) =>
+      findAppliedDesktopSyncEvent(memberData.organizationId, command, o),
+    )
+  ) {
     return {};
   }
 
@@ -110,9 +115,8 @@ export async function prepareCreateLocalAttachment(
   }
   const objectKey = objectKeyOf(memberData, command.eventId, payload);
 
-  const completed = await findCompletedSyncAttachment(
-    memberData.organizationId,
-    objectKey,
+  const completed = await orgDb(memberData.organizationId).transaction((o) =>
+    findCompletedSyncAttachment(memberData.organizationId, objectKey, o),
   );
   const stored = completed
     ? await headObject(

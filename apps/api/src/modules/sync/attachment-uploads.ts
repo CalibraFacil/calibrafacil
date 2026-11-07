@@ -9,7 +9,6 @@ import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { and, desc, eq } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../../lib/audit";
 import { orgDb } from "../../lib/org-db";
-import { withOrgReader } from "../../lib/org-transaction";
 import {
   type R2Env,
   createR2Client,
@@ -253,25 +252,23 @@ export type CompletedSyncAttachment = {
 export async function findCompletedSyncAttachment(
   organizationId: string,
   objectKey: string,
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<CompletedSyncAttachment | null> {
-  const [row] = await withOrgReader(organizationId, executor, (reader) =>
-    reader
-      .select({ details: organizationEventLog.details })
-      .from(organizationEventLog)
-      .where(
-        and(
-          eq(organizationEventLog.organizationId, organizationId),
-          eq(
-            organizationEventLog.action,
-            SYNC_ATTACHMENT_UPLOAD_COMPLETED_ACTION,
-          ),
-          eq(organizationEventLog.entityId, objectKey),
+  const [row] = await executor
+    .select({ details: organizationEventLog.details })
+    .from(organizationEventLog)
+    .where(
+      and(
+        eq(organizationEventLog.organizationId, organizationId),
+        eq(
+          organizationEventLog.action,
+          SYNC_ATTACHMENT_UPLOAD_COMPLETED_ACTION,
         ),
-      )
-      .orderBy(desc(organizationEventLog.id))
-      .limit(1),
-  );
+        eq(organizationEventLog.entityId, objectKey),
+      ),
+    )
+    .orderBy(desc(organizationEventLog.id))
+    .limit(1);
   if (!row) return null;
 
   const details = toRecord(row.details);

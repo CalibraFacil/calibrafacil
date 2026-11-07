@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
 import {
@@ -26,7 +26,9 @@ import { requestActor } from "../middleware/request-actor";
 /**
  * Training Records Router - ISO 17025:2017 Clause 6.2.3 (Training Evidence)
  */
-export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
+export const trainingRecordsRouter = createRouter<{
+  Variables: AuthVariables;
+}>()
   // =========================================================================
   // GET / - List training records with pagination and filtering
   // =========================================================================

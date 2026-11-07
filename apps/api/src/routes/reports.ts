@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
-import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -217,7 +217,7 @@ function getHealthReason(params: {
   return "Operação sem alertas executivos no período";
 }
 
-export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
+export const reportsRouter = createRouter<{ Variables: AuthVariables }>()
   .get(
     "/consolidated/executive-overview",
     ...requireLabProtected,

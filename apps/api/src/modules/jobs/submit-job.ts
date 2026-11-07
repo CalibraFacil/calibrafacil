@@ -37,9 +37,9 @@ import {
   type DomainError,
   unprocessable,
 } from "../../lib/domain-errors";
-import { afterCommitQueue, type AfterCommitTask } from "../../lib/after-commit";
 import { syncJobStandardLinks } from "../../lib/job-standards";
 import { orgDb } from "../../lib/org-db";
+import { withOrg, type OrgContext } from "../../lib/org-context";
 import { reconcileMethodSnapshotEngine } from "../../lib/method-snapshot-engine";
 import { classifyJobScopeCompliance } from "../../lib/scope-compliance";
 import { buildUnitScopeCondition } from "../../lib/units";
@@ -339,18 +339,19 @@ async function runJobExecution(
   // `concurrent_update`, and a failing audit insert rolls the write back. The
   // derived bookkeeping (the job_standard projection, the visit roll-forward)
   // reads what the write committed, so it waits for the commit.
-  const queue = afterCommitQueue();
-  const result = await orgDb(command.organizationId).transaction((o) =>
-    runJobExecutionIn(o, command, queue.add),
+  return withOrg(
+    command.organizationId,
+    {
+      userId: command.actor.userId,
+      ipAddress: command.actor.ipAddress ?? null,
+    },
+    (ctx) => runJobExecutionIn(ctx, command),
   );
-  await queue.run();
-  return result;
 }
 
 async function runJobExecutionIn(
-  o: OrgDb,
+  { o, afterCommit }: Pick<OrgContext, "o" | "afterCommit">,
   command: RunCommand,
-  afterCommit: (task: AfterCommitTask) => void,
 ): Promise<JobExecutionResult> {
   const { actor, organizationId } = command;
   const isSubmit = command.command === "submit";

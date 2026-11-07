@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { slugify } from "@calibra-facil/shared/text";
-import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -257,7 +257,7 @@ function getScopeSummary(
   };
 }
 
-export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
+export const unitsRouter = createRouter<{ Variables: AuthVariables }>()
   .get("/", ...withLabPermission({ calibration: ["read"] }), async (c) => {
     const { memberData, viewer } = getViewerAccess(c);
 

@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { toApiErrorJson } from "../lib/api-error-json";
@@ -16,7 +16,6 @@ import {
 } from "../lib/job-access";
 import { orgDb } from "../lib/org-db";
 import { withOrg } from "../lib/org-context";
-import { orgTransactionWithExecutor } from "../lib/org-transaction";
 import { requestActor } from "../middleware/request-actor";
 import { sendServiceOrdersToFinance } from "../lib/finance";
 import type { IntegrationsEnv } from "../modules/integrations";
@@ -118,7 +117,7 @@ import {
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
 import { approvalRefusalError } from "../modules/jobs/approval-refusals";
-import { amendJobIn } from "../modules/jobs/amend-job";
+import { amendJob } from "../modules/jobs/amend-job";
 import { withdrawCertificateIn } from "../modules/jobs/withdraw-certificate";
 import { loadCertificateLifecycles } from "../lib/certificate-lifecycle";
 import { assignJobIn } from "../modules/jobs/assign-job";
@@ -224,7 +223,7 @@ async function jobExecutionRefusal(
  * - POST /:id/reject: calibration:reject (admin, owner only)
  * - POST /:id/retry-render: calibration:approve (admin, owner only)
  */
-export const jobsRouter = new Hono<{
+export const jobsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
 }>()
@@ -1137,9 +1136,8 @@ export const jobsRouter = new Hono<{
                 scoped.asFoundConformity === "NON_CONFORMING"
                   ? "as_found_verdict"
                   : "manual",
-              ipAddress: ctx.actor.ipAddress,
             },
-            { executor: ctx.o, afterCommit: ctx.afterCommit },
+            ctx,
           );
           // A refusal comes back before anything is written.
           if (!result.ok) {
@@ -1184,19 +1182,13 @@ export const jobsRouter = new Hono<{
             id,
             // The read and the compare-and-set write run on the context's one
             // transaction; the write still matches on the status it read.
-            await cancelJob(
-              {
-                actor: userJobActor(ctx.actor),
-                jobId: id,
-                organizationId: ctx.org,
-                unitScope: memberData,
-                reason: input.reason,
-              },
-              {
-                read: (run) => run(ctx.o),
-                write: (run) => run(ctx.tx),
-              },
-            ),
+            await cancelJob(ctx, {
+              actor: userJobActor(ctx.actor),
+              jobId: id,
+              organizationId: ctx.org,
+              unitScope: memberData,
+              reason: input.reason,
+            }),
           ),
       );
 
@@ -1227,7 +1219,7 @@ export const jobsRouter = new Hono<{
           const amended = await requireJobCommandOk(
             ctx.o,
             id,
-            await amendJobIn(ctx, {
+            await amendJob(ctx, {
               actor: userJobActor(ctx.actor),
               jobId: id,
               organizationId: ctx.org,
@@ -1344,9 +1336,10 @@ export const jobsRouter = new Hono<{
         // that names the laboratory (row-level security). The chain is raw SQL
         // (a recursive CTE the handle cannot express): it takes the raw
         // executor, and every table in it carries the organization predicate.
-        const chain = await orgTransactionWithExecutor(
+        const chain = await withOrg(
           memberData.organizationId,
-          async (o, tx) => {
+          requestActor(c),
+          async ({ o, tx }) => {
             // Verify job exists and belongs to organization
             const [job] = await o
               .select({ id: calibrationJob.id })

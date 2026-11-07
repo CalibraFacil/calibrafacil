@@ -1,5 +1,4 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   calibrationJob,
   commercialAgreement,
@@ -35,7 +34,7 @@ export async function loadTargetPayloads(
   organizationId: string,
   target: IntegrationSyncTarget,
   limit: number,
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
   switch (target) {
     case "catalog_item":
@@ -60,159 +59,154 @@ export async function loadTargetPayloads(
 export async function countLocalTargetRecords(
   organizationId: string,
   target: IntegrationSyncTarget,
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  return inOrgTransaction(organizationId, executor, async (o) => {
-    switch (target) {
-      case "catalog_item": {
-        const [row] = await o
-          .select({ total: count() })
-          .from(service)
-          .where(eq(service.organizationId, organizationId));
-        return Number(row?.total ?? 0);
-      }
-      case "contract": {
-        const [row] = await o
-          .select({ total: count() })
-          .from(commercialAgreement)
-          .where(
-            and(
-              eq(commercialAgreement.organizationId, organizationId),
-              eq(commercialAgreement.status, "ACTIVE"),
-            ),
-          );
-        return Number(row?.total ?? 0);
-      }
-      case "customer": {
-        const [row] = await o
-          .select({ total: count() })
-          .from(customer)
-          .where(eq(customer.labOrganizationId, organizationId));
-        return Number(row?.total ?? 0);
-      }
-      case "supplier": {
-        const rows = await o
-          .select({
-            id: serviceOrder.id,
-            name: serviceOrder.thirdPartyName,
-            taxId: serviceOrder.thirdPartyDocument,
-          })
-          .from(serviceOrder)
-          .where(
-            and(
-              eq(serviceOrder.organizationId, organizationId),
-              isNotNull(serviceOrder.thirdPartyName),
-            ),
-          );
-        return new Set(
-          rows
-            .filter((row) => row.name?.trim())
-            .map((row) =>
-              buildPessoaExternalId({
-                role: "supplier",
-                sourceId: row.id,
-                document: row.taxId,
-              }),
-            ),
-        ).size;
-      }
-      case "transporter": {
-        const rows = await o
-          .select({
-            id: serviceOrder.id,
-            name: serviceOrder.carrierName,
-            taxId: serviceOrder.carrierDocument,
-          })
-          .from(serviceOrder)
-          .where(
-            and(
-              eq(serviceOrder.organizationId, organizationId),
-              isNotNull(serviceOrder.carrierName),
-            ),
-          );
-        return new Set(
-          rows
-            .filter((row) => row.name?.trim())
-            .map((row) =>
-              buildPessoaExternalId({
-                role: "transporter",
-                sourceId: row.id,
-                document: row.taxId,
-              }),
-            ),
-        ).size;
-      }
-      case "service_order": {
-        const [row] = await o
-          .select({ total: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, organizationId),
-              inArray(calibrationJob.status, [
-                "DRAFT",
-                "IN_PROGRESS",
-                "REVIEW",
-                "APPROVED",
-                "SUPERSEDED",
-              ]),
-            ),
-          );
-        return Number(row?.total ?? 0);
-      }
-      case "billing_document": {
-        const payloads = await loadBillingDocumentPayloadsForIntegration(
-          organizationId,
-          500,
-          o,
-        );
-        return payloads.length;
-      }
-      case "payable": {
-        const [row] = await o
-          .select({ total: count() })
-          .from(serviceOrderExecutionItem)
-          .innerJoin(
-            serviceOrderExecution,
-            eq(serviceOrderExecutionItem.executionId, serviceOrderExecution.id),
-          )
-          .innerJoin(
-            serviceOrder,
-            eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
-          )
-          .where(
-            and(
-              eq(serviceOrder.organizationId, organizationId),
-              isNotNull(serviceOrder.thirdPartyName),
-              isNotNull(serviceOrderExecution.finishedAt),
-              gt(serviceOrderExecutionItem.unitCostCents, 0),
-            ),
-          );
-        return Number(row?.total ?? 0);
-      }
+  switch (target) {
+    case "catalog_item": {
+      const [row] = await executor
+        .select({ total: count() })
+        .from(service)
+        .where(eq(service.organizationId, organizationId));
+      return Number(row?.total ?? 0);
     }
-  });
+    case "contract": {
+      const [row] = await executor
+        .select({ total: count() })
+        .from(commercialAgreement)
+        .where(
+          and(
+            eq(commercialAgreement.organizationId, organizationId),
+            eq(commercialAgreement.status, "ACTIVE"),
+          ),
+        );
+      return Number(row?.total ?? 0);
+    }
+    case "customer": {
+      const [row] = await executor
+        .select({ total: count() })
+        .from(customer)
+        .where(eq(customer.labOrganizationId, organizationId));
+      return Number(row?.total ?? 0);
+    }
+    case "supplier": {
+      const rows = await executor
+        .select({
+          id: serviceOrder.id,
+          name: serviceOrder.thirdPartyName,
+          taxId: serviceOrder.thirdPartyDocument,
+        })
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.organizationId, organizationId),
+            isNotNull(serviceOrder.thirdPartyName),
+          ),
+        );
+      return new Set(
+        rows
+          .filter((row) => row.name?.trim())
+          .map((row) =>
+            buildPessoaExternalId({
+              role: "supplier",
+              sourceId: row.id,
+              document: row.taxId,
+            }),
+          ),
+      ).size;
+    }
+    case "transporter": {
+      const rows = await executor
+        .select({
+          id: serviceOrder.id,
+          name: serviceOrder.carrierName,
+          taxId: serviceOrder.carrierDocument,
+        })
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.organizationId, organizationId),
+            isNotNull(serviceOrder.carrierName),
+          ),
+        );
+      return new Set(
+        rows
+          .filter((row) => row.name?.trim())
+          .map((row) =>
+            buildPessoaExternalId({
+              role: "transporter",
+              sourceId: row.id,
+              document: row.taxId,
+            }),
+          ),
+      ).size;
+    }
+    case "service_order": {
+      const [row] = await executor
+        .select({ total: count() })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.organizationId, organizationId),
+            inArray(calibrationJob.status, [
+              "DRAFT",
+              "IN_PROGRESS",
+              "REVIEW",
+              "APPROVED",
+              "SUPERSEDED",
+            ]),
+          ),
+        );
+      return Number(row?.total ?? 0);
+    }
+    case "billing_document": {
+      const payloads = await loadBillingDocumentPayloadsForIntegration(
+        organizationId,
+        500,
+        executor,
+      );
+      return payloads.length;
+    }
+    case "payable": {
+      const [row] = await executor
+        .select({ total: count() })
+        .from(serviceOrderExecutionItem)
+        .innerJoin(
+          serviceOrderExecution,
+          eq(serviceOrderExecutionItem.executionId, serviceOrderExecution.id),
+        )
+        .innerJoin(
+          serviceOrder,
+          eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
+        )
+        .where(
+          and(
+            eq(serviceOrder.organizationId, organizationId),
+            isNotNull(serviceOrder.thirdPartyName),
+            isNotNull(serviceOrderExecution.finishedAt),
+            gt(serviceOrderExecutionItem.unitCostCents, 0),
+          ),
+        );
+      return Number(row?.total ?? 0);
+    }
+  }
 }
 
 export async function countLinkedTargetRecords(
   organizationId: string,
   integrationId: string,
   target: IntegrationSyncTarget,
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  return inOrgTransaction(organizationId, executor, async (o) => {
-    const [row] = await o
-      .select({ total: count() })
-      .from(integrationObjectLink)
-      .where(
-        and(
-          eq(integrationObjectLink.integrationId, integrationId),
-          eq(integrationObjectLink.target, target),
-        ),
-      );
-
-    return Number(row?.total ?? 0);
-  });
+  const [row] = await executor
+    .select({ total: count() })
+    .from(integrationObjectLink)
+    .where(
+      and(
+        eq(integrationObjectLink.integrationId, integrationId),
+        eq(integrationObjectLink.target, target),
+      ),
+    );
+  return Number(row?.total ?? 0);
 }
 
 export function hasRemoteValidation(record: GenericConnectionRecord) {

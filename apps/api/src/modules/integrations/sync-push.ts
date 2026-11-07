@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import {
   normalizeContaAzulConnectionConfig,
   type IntegrationPayablePayload,
@@ -141,22 +142,28 @@ export async function pushContaAzulTargetRecord(params: {
       const budget = await adapter.exportBudget(
         mapServiceOrderToBudgetPayload(params.payload),
       );
-      await upsertLink({
-        integrationId: params.record.integration.id,
-        organizationId: params.record.integration.organizationId,
-        target: "service_order",
-        localEntityId: params.payload.externalId,
-        remoteEntityId: budget.remoteEntityId,
-        remoteDisplayId: budget.remoteDisplayId ?? budget.remoteEntityId,
-        remoteEntityType: budget.remoteEntityType ?? "conta_azul_budget_sale",
-        metadata: {
-          provider: "conta_azul",
-          resource: "venda/busca",
-          exportMode: config.exportMode,
-          aliasForTarget: "budget",
-          budgetRemoteId: budget.remoteEntityId,
-        },
-      });
+      await orgDb(params.record.integration.organizationId).transaction((o) =>
+        upsertLink(
+          {
+            integrationId: params.record.integration.id,
+            organizationId: params.record.integration.organizationId,
+            target: "service_order",
+            localEntityId: params.payload.externalId,
+            remoteEntityId: budget.remoteEntityId,
+            remoteDisplayId: budget.remoteDisplayId ?? budget.remoteEntityId,
+            remoteEntityType:
+              budget.remoteEntityType ?? "conta_azul_budget_sale",
+            metadata: {
+              provider: "conta_azul",
+              resource: "venda/busca",
+              exportMode: config.exportMode,
+              aliasForTarget: "budget",
+              budgetRemoteId: budget.remoteEntityId,
+            },
+          },
+          o,
+        ),
+      );
       return budget;
     }
 
@@ -169,22 +176,27 @@ export async function pushContaAzulTargetRecord(params: {
     const sale = await adapter.exportSale(
       mapServiceOrderToSalePayload(params.payload),
     );
-    await upsertLink({
-      integrationId: params.record.integration.id,
-      organizationId: params.record.integration.organizationId,
-      target: "service_order",
-      localEntityId: params.payload.externalId,
-      remoteEntityId: sale.remoteEntityId,
-      remoteDisplayId: sale.remoteDisplayId ?? sale.remoteEntityId,
-      remoteEntityType: sale.remoteEntityType ?? "conta_azul_sale",
-      metadata: {
-        provider: "conta_azul",
-        resource: "venda",
-        exportMode: config.exportMode,
-        aliasForTarget: "sale",
-        saleRemoteId: sale.remoteEntityId,
-      },
-    });
+    await orgDb(params.record.integration.organizationId).transaction((o) =>
+      upsertLink(
+        {
+          integrationId: params.record.integration.id,
+          organizationId: params.record.integration.organizationId,
+          target: "service_order",
+          localEntityId: params.payload.externalId,
+          remoteEntityId: sale.remoteEntityId,
+          remoteDisplayId: sale.remoteDisplayId ?? sale.remoteEntityId,
+          remoteEntityType: sale.remoteEntityType ?? "conta_azul_sale",
+          metadata: {
+            provider: "conta_azul",
+            resource: "venda",
+            exportMode: config.exportMode,
+            aliasForTarget: "sale",
+            saleRemoteId: sale.remoteEntityId,
+          },
+        },
+        o,
+      ),
+    );
     return sale;
   }
 
@@ -234,9 +246,15 @@ export async function pushContaAzulTargetRecord(params: {
       throw error;
     }
 
-    const customerPayload = await loadCustomerPayloadByExternalId(
+    const { customerExternalId } = params.payload;
+    const customerPayload = await orgDb(
       params.record.integration.organizationId,
-      params.payload.customerExternalId,
+    ).transaction((o) =>
+      loadCustomerPayloadByExternalId(
+        params.record.integration.organizationId,
+        customerExternalId,
+        o,
+      ),
     );
 
     if (!customerPayload) {
@@ -244,17 +262,22 @@ export async function pushContaAzulTargetRecord(params: {
     }
 
     await adapter.upsertCustomer(customerPayload);
-    await writeIntegrationEvent({
-      integrationId: params.record.integration.id,
-      organizationId: params.record.integration.organizationId,
-      level: "info",
-      event: "integration.conta_azul.customer_auto_synced",
-      message: "Cliente sincronizado automaticamente antes do faturamento",
-      details: {
-        customerExternalId: customerPayload.externalId,
-        billingDocumentExternalId: params.payload.externalId,
-      },
-    });
+    await orgDb(params.record.integration.organizationId).transaction((o) =>
+      writeIntegrationEvent(
+        {
+          integrationId: params.record.integration.id,
+          organizationId: params.record.integration.organizationId,
+          level: "info",
+          event: "integration.conta_azul.customer_auto_synced",
+          message: "Cliente sincronizado automaticamente antes do faturamento",
+          details: {
+            customerExternalId: customerPayload.externalId,
+            billingDocumentExternalId: params.payload.externalId,
+          },
+        },
+        o,
+      ),
+    );
 
     return adapter.exportBillingDocument(params.payload);
   }
@@ -308,11 +331,14 @@ export async function pushTargetRecord(params: {
     );
   }
 
-  const existing = await getExistingLink(
-    params.organizationId,
-    params.integrationId,
-    params.target,
-    params.payload.externalId,
+  const existing = await orgDb(params.organizationId).transaction((o) =>
+    getExistingLink(
+      params.organizationId,
+      params.integrationId,
+      params.target,
+      params.payload.externalId,
+      o,
+    ),
   );
   const targetPath = getTargetPath(params.config, params.target);
   const remoteEntityId = existing?.remoteEntityId ?? null;
@@ -335,13 +361,18 @@ export async function pushTargetRecord(params: {
 
   const resolvedRemoteId = extractRemoteId(result.data) ?? remoteEntityId;
 
-  await upsertLink({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    target: params.target,
-    localEntityId: params.payload.externalId,
-    remoteEntityId: resolvedRemoteId,
-  });
+  await orgDb(params.organizationId).transaction((o) =>
+    upsertLink(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        target: params.target,
+        localEntityId: params.payload.externalId,
+        remoteEntityId: resolvedRemoteId,
+      },
+      o,
+    ),
+  );
 
   return {
     remoteEntityId: resolvedRemoteId,
