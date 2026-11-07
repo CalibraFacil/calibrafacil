@@ -1308,9 +1308,6 @@ importers:
 
   packages/method-templates:
     dependencies:
-      '@calibra-facil/math-engine':
-        specifier: workspace:^
-        version: link:../math-engine
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../method-definition

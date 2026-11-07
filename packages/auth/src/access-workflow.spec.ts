@@ -19,7 +19,6 @@ import {
   type CalibrationAction,
   type RoleName,
   canPerformCalibrationAction,
-  getAllowedCalibrationActions,
   rolesAllowedTo,
 } from "./access.js";
 
@@ -100,7 +99,13 @@ describe("REQ-CAL-011: allowed actions match the oracle", () => {
     for (const [role, expected] of Object.entries(byRole)) {
       it(`status=${status} role=${role}`, () => {
         expect(
-          getAllowedCalibrationActions(roleOf(role), jobStatusOf(status)),
+          ALL_ACTIONS.filter((action) =>
+            canPerformCalibrationAction(
+              roleOf(role),
+              jobStatusOf(status),
+              action,
+            ),
+          ),
         ).toStrictEqual(expected);
       });
     }
@@ -312,42 +317,5 @@ describe("REQ-CAL-008: action correctly maps to distinct permission lists", () =
     expect(canPerformCalibrationAction("admin", "REVIEW", "approve")).toBe(
       true,
     );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// REQ-CAL-009: getAllowedCalibrationActions returns empty array for approved
-// ---------------------------------------------------------------------------
-
-// REQ-CAL-009 [HIGH RISK]: getAllowedCalibrationActions(role, "approved") SHALL
-// return [] for EVERY role.
-describe("REQ-CAL-009: getAllowedCalibrationActions returns [] for approved state", () => {
-  for (const role of ALL_ROLES) {
-    it(`role=${role} → []`, () => {
-      expect(getAllowedCalibrationActions(role, "APPROVED")).toStrictEqual([]);
-    });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// REQ-CAL-010: getAllowedCalibrationActions specific oracle values
-// ---------------------------------------------------------------------------
-
-// REQ-CAL-010: Specific oracle outputs for owner/DRAFT and admin/REVIEW.
-describe("REQ-CAL-010: getAllowedCalibrationActions oracle values", () => {
-  it('owner + DRAFT → ["edit","delete","submit"]', () => {
-    expect(getAllowedCalibrationActions("owner", "DRAFT")).toStrictEqual([
-      "edit",
-      "delete",
-      "submit",
-    ]);
-  });
-
-  it('admin + REVIEW → ["delete","approve","reject"]', () => {
-    expect(getAllowedCalibrationActions("admin", "REVIEW")).toStrictEqual([
-      "delete",
-      "approve",
-      "reject",
-    ]);
   });
 });

@@ -145,7 +145,6 @@ describe("desktop policy parity", () => {
           expect(result, qualified).toBe(`local:${qualified}`);
           break;
         case "cloud-only":
-        case "cloud-first-read-fallback":
           expect(result, qualified).toBe(`cloud:${qualified}`);
           break;
       }

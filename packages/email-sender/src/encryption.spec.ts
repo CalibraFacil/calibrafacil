@@ -3,7 +3,6 @@ import {
   decryptResendApiKey,
   encryptResendApiKey,
   generateEmailDomainMasterKey,
-  maskResendApiKey,
   resendApiKeyLast4,
 } from "./encryption";
 
@@ -38,8 +37,7 @@ describe("email-domain key custody (AES-256-GCM)", () => {
     );
   });
 
-  it("masks everything except the last 4 characters", () => {
-    expect(maskResendApiKey("re_test_1234567890abcdef")).toBe("••••cdef");
+  it("exposes only the last 4 characters", () => {
     expect(resendApiKeyLast4("re_test_1234567890abcdef")).toBe("cdef");
   });
 });

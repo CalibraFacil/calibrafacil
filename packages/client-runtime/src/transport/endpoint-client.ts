@@ -8,6 +8,8 @@ import {
   type ResponseValidationOptions,
 } from "@calibra-facil/contracts";
 
+import { isRecord } from "@calibra-facil/shared/record";
+
 import { createCloudHeaders, type CreateCloudApiClientOptions } from "./cloud";
 import {
   createDesktopHeaders,
@@ -104,7 +106,7 @@ async function callEndpoint(
   const payload =
     response.status === 204
       ? undefined
-      : await readJsonResponse<unknown>(response, def.failure);
+      : await readJsonResponse(response, def.failure);
   return validateResponsePayload(
     def.response,
     payload,
@@ -143,10 +145,6 @@ function readInput(input: unknown): InputParts {
     query: isRecord(query) ? query : {},
     body: record.body,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function fillPath(path: string, params: Record<string, unknown>) {

@@ -59,7 +59,7 @@ export function createProfileMediaApi(
       const def = profileMediaEndpoints.uploadAvatar;
       return validateResponsePayload(
         def.response,
-        await readJsonResponse<unknown>(response, def.failure),
+        await readJsonResponse(response, def.failure),
         endpointLabel(def),
         options,
       );

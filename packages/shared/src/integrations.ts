@@ -105,13 +105,6 @@ export function getProviderCapabilities(
   return { ...INTEGRATION_PROVIDER_CAPABILITIES[provider] };
 }
 
-export function providerSupports(
-  provider: IntegrationProvider,
-  flag: IntegrationProviderCapabilityFlag,
-) {
-  return INTEGRATION_PROVIDER_CAPABILITIES[provider][flag];
-}
-
 // Lifecycles: the integration machines of @calibra-facil/schemas/machines.
 export const INTEGRATION_STATUSES = [
   "ACTIVE",

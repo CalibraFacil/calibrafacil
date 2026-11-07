@@ -16,15 +16,6 @@ export function normalizeHostname(value: string): string | null {
   return hostname;
 }
 
-export function normalizeOrigin(value: string): string | null {
-  try {
-    const url = new URL(value);
-    return `${url.protocol}//${url.host}`.toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
 export function isLocalHostname(hostname: string): boolean {
   return (
     hostname === "localhost" ||

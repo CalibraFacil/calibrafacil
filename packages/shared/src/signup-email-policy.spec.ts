@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   checkSignupEmail,
   emailDomain,
-  isCorporateSignupEmail,
   SIGNUP_EMAIL_REJECTION_MESSAGES,
 } from "./signup-email-policy";
 
@@ -61,15 +60,6 @@ describe("checkSignupEmail", () => {
     const result = checkSignupEmail(email);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("invalid_format");
-  });
-
-  it("does not refuse a domain merely because a provider name appears inside it", () => {
-    // A real lab could own gmail-consultoria.com.br; only the exact domain is
-    // on the list, never a substring of it.
-    expect(isCorporateSignupEmail("contato@gmail-consultoria.com.br")).toBe(
-      true,
-    );
-    expect(isCorporateSignupEmail("contato@meugmail.com")).toBe(true);
   });
 
   it("uses the last @ so a quoted local part cannot smuggle a domain in", () => {

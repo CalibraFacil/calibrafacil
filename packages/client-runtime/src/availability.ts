@@ -153,8 +153,6 @@ function evaluatePolicyAvailability(
   switch (policy) {
     case "cloud-only":
       return evaluateCloudCommand(policy, health, target);
-    case "cloud-first-read-fallback":
-      return evaluateCloudFirstRead(policy, health);
     case "local-first-read-through-sync":
       return evaluateLocalFirstRead(policy, health);
     case "local-command-sync":
@@ -253,30 +251,6 @@ function evaluateCloudCommand(
   }
 
   return { available: true, source: "cloud", policy };
-}
-
-function evaluateCloudFirstRead(
-  policy: DataPolicy,
-  health: RuntimeHealthSnapshot,
-): OperationAvailability {
-  if (health.cloud !== "unreachable") {
-    return { available: true, source: "cloud", policy };
-  }
-
-  if (!health.localCacheBootstrapped) {
-    return unavailable(policy, "initial-sync-required");
-  }
-
-  if (health.localRuntime === "unavailable") {
-    return unavailable(policy, "local-runtime-unavailable");
-  }
-
-  return {
-    available: true,
-    source: "local-cache",
-    policy,
-    staleness: "local-cache-may-lag-cloud",
-  };
 }
 
 function evaluateLocalFirstRead(

@@ -1,21 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  cnpjCharValue,
   computeCnpjCheckDigits,
   formatCnpj,
   isValidCnpj,
   normalizeCnpj,
 } from "./cnpj";
-
-describe("cnpjCharValue", () => {
-  it("maps digits to themselves and letters via ASCII - 48", () => {
-    expect(cnpjCharValue("0")).toBe(0);
-    expect(cnpjCharValue("9")).toBe(9);
-    expect(cnpjCharValue("A")).toBe(17);
-    expect(cnpjCharValue("B")).toBe(18);
-    expect(cnpjCharValue("Z")).toBe(42);
-  });
-});
 
 describe("computeCnpjCheckDigits", () => {
   it("computes the alphanumeric example from the technical note", () => {

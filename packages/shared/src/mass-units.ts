@@ -15,8 +15,6 @@ import {
   type UnitConversionTrace,
   convertUnitValue,
   resolveDisplayUnit,
-  normalizeSpecificationsForStorage,
-  denormalizeSpecificationsForDisplay,
   normalizeMethodDataForStorage as genNormalizeMethodDataForStorage,
   denormalizeMethodDataForDisplay as genDenormalizeMethodDataForDisplay,
 } from "./units";
@@ -100,33 +98,6 @@ export function isWeighingScaleAssetType(assetType?: {
 }): boolean {
   const text = `${foldText(assetType?.slug ?? "")} ${foldText(assetType?.name ?? "")}`;
   return WEIGHING_SCALE_KEYWORDS.some((keyword) => text.includes(keyword));
-}
-
-export function normalizeAssetSpecificationsForStorage(
-  specifications: Record<string, unknown> | null | undefined,
-  definition: AssetSpecificationFieldLike[] | null | undefined,
-  baseMeasurementUnit: MassUnit | null | undefined,
-): {
-  specifications: Record<string, unknown> | null | undefined;
-  conversions: MassConversionTrace[];
-} {
-  return normalizeSpecificationsForStorage(
-    specifications,
-    definition,
-    baseMeasurementUnit,
-  );
-}
-
-export function denormalizeAssetSpecificationsForDisplay(
-  specifications: Record<string, unknown> | null | undefined,
-  definition: AssetSpecificationFieldLike[] | null | undefined,
-  baseMeasurementUnit: MassUnit | null | undefined,
-): Record<string, unknown> | null | undefined {
-  return denormalizeSpecificationsForDisplay(
-    specifications,
-    definition,
-    baseMeasurementUnit,
-  );
 }
 
 export function normalizeMethodDataForStorage(

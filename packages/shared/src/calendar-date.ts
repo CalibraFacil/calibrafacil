@@ -291,20 +291,6 @@ export function instantToDateInputValue(
 }
 
 /**
- * Whole calendar days from `today`'s laboratory day to the laboratory day of
- * `instant` (negative when past). Independent of the browser's zone.
- */
-export function labDaysBetween(today: Date, instant: Date): number {
-  const from = getLabCalendarDay(today);
-  const to = getLabCalendarDay(instant);
-  return Math.round(
-    (Date.UTC(to.year, to.month - 1, to.day) -
-      Date.UTC(from.year, from.month - 1, from.day)) /
-      MS_PER_DAY,
-  );
-}
-
-/**
  * A stored calendar-date value (a standard's calibration date, a due date, a
  * visit day: typed in a date field, saved at UTC midnight) as the day it names,
  * for a `<input type="date">`. {@link instantToDateInputValue} would read it in

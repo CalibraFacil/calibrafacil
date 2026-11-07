@@ -6,7 +6,6 @@ import {
   MEASUREMENT_UNITS,
   canonicalUnitFor,
   isMeasurementUnit,
-  isUnitOfKind,
   unitKind,
   unitsForKind,
 } from "./registry";
@@ -62,7 +61,7 @@ describe("registry membership", () => {
     expect(unitsForKind("resistance")).toEqual(["Ω", "kΩ", "MΩ"]);
     expect(unitsForKind("frequency")).toEqual(["Hz", "kHz", "MHz", "rpm"]);
     for (const unit of unitsForKind("pressure")) {
-      expect(isUnitOfKind(unit, "pressure")).toBe(true);
+      expect(unitKind(unit)).toBe("pressure");
     }
   });
 

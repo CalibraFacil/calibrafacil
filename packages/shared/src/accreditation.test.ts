@@ -9,7 +9,6 @@ import {
   ACCREDITATION_SEAL_SCHEME_LINE2,
   formatAccreditationNumber,
   getAccreditationStatus,
-  isAccreditationActive,
   normalizeAccreditationNumber,
   shouldRenderAccreditationSeal,
   decideAccreditationSeal,
@@ -130,30 +129,6 @@ describe("getAccreditationStatus", () => {
 });
 
 // REQ-ACCR-009
-describe("isAccreditationActive", () => {
-  it("REQ-ACCR-009: returns true only when status is active", () => {
-    expect(
-      isAccreditationActive({
-        accreditationActive: true,
-        accreditationNumber: "0123",
-      }),
-    ).toBe(true);
-  });
-
-  it("REQ-ACCR-009: returns false for incomplete status", () => {
-    expect(
-      isAccreditationActive({
-        accreditationActive: true,
-        accreditationNumber: null,
-      }),
-    ).toBe(false);
-  });
-
-  it("REQ-ACCR-009: returns false for inactive status", () => {
-    expect(isAccreditationActive({ accreditationActive: false })).toBe(false);
-  });
-});
-
 // REQ-ACCR-010 / REQ-ACCR-011
 describe("shouldRenderAccreditationSeal", () => {
   const activeLab = { accreditationActive: true, accreditationNumber: "9999" };

@@ -97,16 +97,6 @@ export const VISIT_RESCHEDULE_REQUEST_STATUSES = [
 export type VisitRescheduleRequestStatus =
   (typeof VISIT_RESCHEDULE_REQUEST_STATUSES)[number];
 
-export const VISIT_RESCHEDULE_REQUEST_STATUS = defineStatusVocabulary(
-  VISIT_RESCHEDULE_REQUEST_STATUSES,
-  {
-    PENDING: { label: "Pendente", tone: "warning" },
-    ACCEPTED: { label: "Aceita", tone: "ok" },
-    DECLINED: { label: "Recusada", tone: "neutral" },
-    SUPERSEDED: { label: "Substituída", tone: "neutral" },
-  },
-);
-
 export const VISIT_RESCHEDULE_REQUEST_MACHINE = defineStateMachine({
   name: "visit reschedule request",
   states: VISIT_RESCHEDULE_REQUEST_STATUSES,

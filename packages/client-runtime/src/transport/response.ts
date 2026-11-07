@@ -17,13 +17,14 @@ export async function readApiError(response: Response, fallback: string) {
   }
 }
 
-export async function readJsonResponse<TResponse>(
+/** The JSON body of a 2xx answer; any other status is a `CalibraApiError` (the body's `error`, else `fallback`). */
+export async function readJsonResponse(
   response: Response,
   fallback: string,
-  options: { allowDiagnosticsResponse?: boolean } = {},
-) {
+): Promise<unknown> {
   if (response.ok) {
-    return assumeClientResponse<TResponse>(await response.json());
+    const body: unknown = await response.json();
+    return body;
   }
 
   let payload: unknown = null;
@@ -33,45 +34,12 @@ export async function readJsonResponse<TResponse>(
     payload = null;
   }
 
-  if (options.allowDiagnosticsResponse && hasDiagnosticsPayload(payload)) {
-    return assumeClientResponse<TResponse>(payload);
-  }
-
   const message =
     typeof payload === "object" && payload !== null
       ? (apiErrorMessage(payload) ?? fallback)
       : fallback;
 
   throw new CalibraApiError(message, response.status, payload);
-}
-
-export async function readOptionalForbiddenResponse<TResponse>(
-  response: Response,
-  forbiddenValue: unknown,
-  fallback: string,
-) {
-  if (response.status === 403) {
-    return assumeClientResponse<TResponse>(forbiddenValue);
-  }
-
-  return readJsonResponse<TResponse>(response, fallback);
-}
-
-export async function readMutationResponse<TResponse>(
-  response: Response,
-  fallback: string,
-) {
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok || hasApiError(data)) {
-    throw new CalibraApiError(
-      apiErrorMessage(data) ?? fallback,
-      response.status,
-      data,
-    );
-  }
-
-  return assumeClientResponse<TResponse>(data);
 }
 
 /**
@@ -85,7 +53,7 @@ async function readValidatedJsonResponse<TSchema extends z.ZodType>(
   schema: TSchema,
   context: { endpoint: string; fallback: string } & ResponseValidationOptions,
 ): Promise<z.output<TSchema>> {
-  const payload = await readJsonResponse<unknown>(response, context.fallback);
+  const payload = await readJsonResponse(response, context.fallback);
   return validateResponsePayload(schema, payload, context.endpoint, context);
 }
 
@@ -111,19 +79,6 @@ export function createValidatedReader(options: ResponseValidationOptions) {
 
 function hasApiError(value: unknown): value is { error?: unknown } {
   return typeof value === "object" && value !== null && "error" in value;
-}
-
-function hasDiagnosticsPayload(value: unknown) {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray(Reflect.get(value, "diagnostics"))
-  );
-}
-
-function assumeClientResponse<TResponse>(payload: unknown): TResponse {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- generic client-runtime methods expose typed API surfaces after HTTP success/error handling; response schemas are not currently available for every endpoint.
-  return payload as TResponse;
 }
 
 function apiErrorMessage(value: unknown) {

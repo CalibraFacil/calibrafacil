@@ -16,7 +16,6 @@ import { z } from "zod";
 /** Where a client method runs on the desktop (audit decision Q13; see `data-policy.ts` in client-runtime). */
 export type DataPolicy =
   | "cloud-only"
-  | "cloud-first-read-fallback"
   | "local-first-read-through-sync"
   | "local-command-sync"
   | "local-only";

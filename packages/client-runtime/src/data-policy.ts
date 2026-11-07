@@ -52,8 +52,6 @@ export type CalibraApiMethodsWithPolicy<
 const desktopDataPolicyUnavailableMessages = {
   "cloud-only":
     "Esta tela depende da API da nuvem e não está disponível offline. Verifique a conexão e tente novamente.",
-  "cloud-first-read-fallback":
-    "Dados offline ainda não estão prontos para fallback local. Esta leitura usa a nuvem primeiro e só usa o cache local depois de uma sincronização inicial.",
   "local-first-read-through-sync":
     "O cache local ainda não está pronto para esta tela. Conecte-se à internet e sincronize antes de depender do modo offline.",
   "local-command-sync":

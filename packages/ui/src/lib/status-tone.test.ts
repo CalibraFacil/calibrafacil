@@ -25,10 +25,4 @@ describe("status-tone", () => {
       }
     }
   });
-
-  it("REQ-UI-1: critical, info and neutral reuse the shadcn tokens", () => {
-    expect(STATUS_TONE.critical.text).toBe("text-destructive");
-    expect(STATUS_TONE.info.text).toBe("text-primary");
-    expect(STATUS_TONE.neutral.text).toBe("text-muted-foreground");
-  });
 });

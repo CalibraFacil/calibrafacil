@@ -227,13 +227,6 @@ export function getAccreditationStatus(
   return "active";
 }
 
-export function isAccreditationActive(
-  profile: AccreditationProfile,
-  atDate?: Date,
-): boolean {
-  return getAccreditationStatus(profile, atDate) === "active";
-}
-
 /** What decides whether the lab and the method are eligible for the seal at all. */
 export type AccreditationSealEligibilityParams = {
   lab: AccreditationProfile;

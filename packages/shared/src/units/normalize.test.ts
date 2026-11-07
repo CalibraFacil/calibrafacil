@@ -11,10 +11,7 @@ import {
   normalizeSpecificationsForStorage,
   resolveDisplayUnit,
 } from "./index";
-import {
-  normalizeAssetSpecificationsForStorage,
-  denormalizeAssetSpecificationsForDisplay,
-} from "../mass-units";
+import {} from "../mass-units";
 
 // A termômetro-digital + humidity fixture (NOT seeded in production) proving the
 // kind-aware path: temperature fields convert affine, %RH stays untouched.
@@ -200,35 +197,6 @@ describe("mass golden-value regression", () => {
       "kg",
     );
     expect(back?.capacidade).toBe(1.5);
-  });
-
-  it("mass wrappers byte-match the generic helpers", () => {
-    const input = { capacidade: 2.5 };
-    const wrapper = normalizeAssetSpecificationsForStorage(
-      input,
-      massDefinition,
-      "kg",
-    );
-    const generic = normalizeSpecificationsForStorage(
-      input,
-      massDefinition,
-      "kg",
-    );
-    expect(wrapper).toEqual(generic);
-
-    expect(
-      denormalizeAssetSpecificationsForDisplay(
-        wrapper.specifications,
-        massDefinition,
-        "kg",
-      ),
-    ).toEqual(
-      denormalizeSpecificationsForDisplay(
-        generic.specifications,
-        massDefinition,
-        "kg",
-      ),
-    );
   });
 });
 

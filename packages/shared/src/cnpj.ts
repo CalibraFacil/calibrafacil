@@ -13,11 +13,6 @@
 const CNPJ_LENGTH = 14;
 const CNPJ_BASE_LENGTH = 12;
 
-/** Decimal value used by the check-digit algorithm: ASCII code minus 48. */
-export function cnpjCharValue(char: string): number {
-  return char.charCodeAt(0) - 48;
-}
-
 /**
  * Strip mask punctuation/whitespace, uppercase, and drop anything outside `[0-9A-Z]`.
  * Preserves letters (unlike a digits-only strip) so alphanumeric CNPJs survive intact.

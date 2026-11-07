@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { CalibraApiError } from "./errors";
-import { readJsonResponse, readMutationResponse } from "./response";
+import { readJsonResponse } from "./response";
 
 describe("client-runtime response helpers", () => {
-  it("returns typed JSON payloads for successful responses", async () => {
+  it("returns the JSON payload of a successful response", async () => {
     const response = Response.json({ data: { id: 1 } });
 
-    await expect(
-      readJsonResponse<{ data: { id: number } }>(response, "Fallback"),
-    ).resolves.toEqual({ data: { id: 1 } });
+    await expect(readJsonResponse(response, "Fallback")).resolves.toEqual({
+      data: { id: 1 },
+    });
   });
 
   it("throws CalibraApiError with API error payloads", async () => {
@@ -23,29 +23,6 @@ describe("client-runtime response helpers", () => {
       message: "Mensagem da API",
       status: 422,
     });
-  });
-
-  it("can return diagnostics payloads for validation-style failures", async () => {
-    const response = Response.json(
-      { diagnostics: [{ message: "Fórmula inválida" }] },
-      { status: 422 },
-    );
-
-    await expect(
-      readJsonResponse(response, "Fallback", {
-        allowDiagnosticsResponse: true,
-      }),
-    ).resolves.toEqual({
-      diagnostics: [{ message: "Fórmula inválida" }],
-    });
-  });
-
-  it("accepts empty successful mutation responses", async () => {
-    const response = new Response(null, { status: 204 });
-
-    await expect(
-      readMutationResponse(response, "Fallback"),
-    ).resolves.toBeNull();
   });
 
   it("REQ-DE-4: surfaces the stable API error code on CalibraApiError.code", async () => {
@@ -84,22 +61,6 @@ describe("client-runtime response helpers", () => {
     expect(error).toMatchObject({
       code: "scope_violation",
       payload: { code: "SCOPE_VIOLATION" },
-    });
-  });
-
-  it("REQ-DE-4: surfaces the code from mutation responses too", async () => {
-    const response = Response.json(
-      { error: "Registro emitido", code: "record_immutable" },
-      { status: 409 },
-    );
-
-    const error = await readMutationResponse(response, "Fallback").catch(
-      (caught: unknown) => caught,
-    );
-
-    expect(error).toMatchObject({
-      message: "Registro emitido",
-      code: "record_immutable",
     });
   });
 

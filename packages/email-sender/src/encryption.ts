@@ -5,7 +5,7 @@
  * `packages/signing/src/encryption.ts`, but under its OWN master key
  * (EMAIL_DOMAIN_MASTER_KEY) so email credentials and signing secrets never
  * share key material. The encrypted key must never leave the server — API
- * responses expose only the last 4 characters (see maskResendApiKey).
+ * responses expose only the last 4 characters (see resendApiKeyLast4).
  */
 
 import { readEmailConfig } from "@calibra-facil/config";
@@ -75,15 +75,6 @@ export function decryptResendApiKey(
     decipher.update(ciphertext),
     decipher.final(),
   ]).toString("utf8");
-}
-
-/**
- * The only representation of the key that may appear in an API response,
- * log line, or audit detail.
- */
-export function maskResendApiKey(apiKey: string): string {
-  const last4 = apiKey.slice(-4);
-  return `••••${last4}`;
 }
 
 export function resendApiKeyLast4(apiKey: string): string {
