@@ -6,9 +6,9 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { labAuthClient, signIn } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { useCountdown } from '@/hooks/use-countdown'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { sanitizeLabRedirect } from '@/lib/auth-redirect'
 import {
   AuthStatusMessage,

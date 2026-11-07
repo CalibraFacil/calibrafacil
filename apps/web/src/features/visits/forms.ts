@@ -1,6 +1,9 @@
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
-import { dateInputToNoonIso, dateOnlyToInputValue } from '@/lib/date-only'
+import {
+  dateInputToNoonIso,
+  dateOnlyToInputValue,
+} from '@calibra-facil/shared/calendar-date'
 
 /**
  * The visit's scheduled day is picked in a `<input type="date">` ("2026-08-10")

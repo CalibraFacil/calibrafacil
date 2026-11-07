@@ -39,7 +39,7 @@ import {
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
 import { jobRouteId } from '@/lib/route-identifiers'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 const QUALIFICATION: Record<
   NonNullable<CustomerCompliance['qualificationStatus']>,

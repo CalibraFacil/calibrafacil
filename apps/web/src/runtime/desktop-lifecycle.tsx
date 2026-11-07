@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useRouter } from '@tanstack/react-router'
 
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 import { subscribeToDeepLinks } from '@/runtime/deep-link-navigation'
 import {
   installHistoryShortcuts,

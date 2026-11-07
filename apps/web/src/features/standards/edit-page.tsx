@@ -43,7 +43,7 @@ import type {
   RenewCertificateInput,
   UpdateReferenceStandardInput,
 } from '@calibra-facil/schemas'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 function toStandardWriteInput(
   input: UpdateReferenceStandardInput | RenewCertificateInput,

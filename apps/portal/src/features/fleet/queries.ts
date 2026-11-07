@@ -6,7 +6,7 @@ import {
 } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
+import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { CalibrationFilter } from "@/lib/calibration-status";
 import type { FleetAssetsResponse, FleetSortBy } from "./types";

@@ -38,7 +38,7 @@ import { StatusPill } from "@/components/status-pill";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import { getInstrumentStatus } from "@/lib/calibration-status";
 import { formatLocalDay } from "@calibra-facil/shared/format";
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { useCalendarDues, type CalendarDueAsset } from "./queries";
 import { usePortalUnits } from "@/features/fleet/queries";
 import { PortalVisitsPanel } from "@/features/visits/visits-panel";

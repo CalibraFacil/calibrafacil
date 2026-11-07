@@ -1,4 +1,4 @@
-import { dateOnlyToInputValue } from '@/lib/date-only'
+import { dateOnlyToInputValue } from '@calibra-facil/shared/calendar-date'
 import {
   CreateReferenceStandardSchema,
   RenewCertificateSchema,

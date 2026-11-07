@@ -34,7 +34,7 @@ import { Button } from "@calibra-facil/ui/button";
 import { Input } from "@calibra-facil/ui/input";
 import { Label } from "@calibra-facil/ui/label";
 import { sanitizePortalRedirect } from "@/lib/auth-redirect";
-import { readSessionWithRetry } from "@/lib/auth-session";
+import { readSessionWithRetry } from "@calibra-facil/shared/session-retry";
 import { PortalOrgProvider } from "@/lib/portal-org-context";
 import {
   loadPortalStartup,

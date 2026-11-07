@@ -77,7 +77,7 @@ import {
   isMeasurementUnit,
 } from '@calibra-facil/shared/units'
 import type { CreateAssetInput } from '@calibra-facil/schemas'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /**
  * The asset `assets.create` stored (used to auto-select it), plus the name of

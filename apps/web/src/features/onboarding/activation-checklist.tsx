@@ -15,7 +15,7 @@ import {
 } from '@calibra-facil/ui/instrument-panel'
 import { Button } from '@calibra-facil/ui/button'
 import { Progress } from '@calibra-facil/ui/progress'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 import { startInterfaceTour } from './interface-tour'
 import { useActivationChecklist } from './queries'

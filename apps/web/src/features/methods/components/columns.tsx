@@ -20,7 +20,7 @@ import {
 } from '@calibra-facil/ui/dropdown-menu'
 import type { MethodListItem } from '@/features/methods/types'
 import { MethodStatusBadge } from '@/features/methods/components/method-status-badge'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 export type Method = MethodListItem
 

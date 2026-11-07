@@ -27,7 +27,7 @@ import {
   Panel,
   PanelHeader,
 } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 import { cloneMethodDraft } from './adapters'
 import {

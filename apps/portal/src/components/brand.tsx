@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { useBranding } from "@/features/branding/branding-context";
 
 type BrandMarkProps = Omit<React.ComponentProps<"img">, "src">;

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { reportClientError } from "./report-client-error";
+import { reportClientError } from "./client-error";
 
-describe("reportClientError (portal)", () => {
+describe("reportClientError", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -12,6 +12,7 @@ describe("reportClientError (portal)", () => {
     const error = new TypeError("boom");
 
     reportClientError(error, {
+      app: "portal",
       route: "/ordens",
       componentStack: "\n  at Broken",
     });
@@ -34,11 +35,12 @@ describe("reportClientError (portal)", () => {
   it("REQ-FE-BOUNDARY-041: reports non-Error throwables and a missing component stack", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    reportClientError("texto solto", { route: "/" });
+    reportClientError("texto solto", { app: "web", route: "/" });
 
     const entry = JSON.parse(String(spy.mock.calls[0]?.[0]));
     expect(entry.message).toBe("texto solto");
     expect(entry.componentStack).toBeNull();
+    expect(entry.app).toBe("web");
   });
 
   it("REQ-FE-BOUNDARY-042: never throws, even when the console fails", () => {
@@ -47,7 +49,7 @@ describe("reportClientError (portal)", () => {
     });
 
     expect(() =>
-      reportClientError(new Error("x"), { route: "/" }),
+      reportClientError(new Error("x"), { app: "web", route: "/" }),
     ).not.toThrow();
   });
 });

@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { useMountEffect } from "@/hooks/use-mount-effect";
+import { useMountEffect } from "@calibra-facil/ui/use-mount-effect";
 import { brandingQueryOptions, type PortalBranding } from "./queries";
 
 const DEFAULT_BRAND_NAME = "CalibraFácil";

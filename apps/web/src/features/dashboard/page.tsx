@@ -39,8 +39,8 @@ import {
 } from '@calibra-facil/ui/instrument-panel'
 import { ActivationChecklist } from '@/features/onboarding/activation-checklist'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
-import { useMountEffect } from '@/hooks/use-mount-effect'
-import { cn } from '@/lib/utils'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
+import { cn } from '@calibra-facil/ui/utils'
 import { jobRouteId } from '@/lib/route-identifiers'
 import {
   useDashboardIndexData,

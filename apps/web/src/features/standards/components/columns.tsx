@@ -31,7 +31,7 @@ import type {
   StandardStatus,
 } from '@/features/standards/types'
 import { formatStandardDate } from '@/features/standards/dates'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 export type ReferenceStandard = StandardListItem
 

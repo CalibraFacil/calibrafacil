@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { formatAddressLine } from '@calibra-facil/shared/address'
+
 vi.mock('@calibra-facil/math-engine', () => ({
   METHOD_ENGINE_OPTIONS: {
     numericMode: 'decimal',
@@ -54,7 +56,6 @@ import {
   evaluateExecutionValidationResults,
   filterActiveCalculationItems,
   findMissingNotPerformedPhaseReasons,
-  formatAddress,
   formatLabAddress,
   getCalculationFormulas,
   getCalculationValidations,
@@ -142,7 +143,7 @@ describe('job execution feature model', () => {
 
   it('formats addresses and lab addresses without route component state', () => {
     expect(
-      formatAddress({
+      formatAddressLine({
         street: 'Rua Um',
         number: '123',
         city: 'Curitiba',

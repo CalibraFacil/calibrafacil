@@ -4,7 +4,7 @@ import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import type { CnpjLookupResult } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
 export type { CnpjLookupResult }
 

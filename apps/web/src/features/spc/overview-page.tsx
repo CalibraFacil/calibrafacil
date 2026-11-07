@@ -50,7 +50,7 @@ import {
   SelectTrigger,
 } from '@calibra-facil/ui/select'
 import { DataTable } from '@calibra-facil/ui/data-table'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,

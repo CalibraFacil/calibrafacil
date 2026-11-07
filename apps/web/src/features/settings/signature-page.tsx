@@ -21,7 +21,7 @@ import {
 import { Button } from '@calibra-facil/ui/button'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { useMySignatureData } from '@/features/settings/queries'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 export function SignatureSettingsPage() {
   const queryClient = useQueryClient()

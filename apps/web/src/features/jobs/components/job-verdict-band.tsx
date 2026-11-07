@@ -23,7 +23,7 @@ import {
   StaggerGroup,
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import type { ReactNode } from 'react'
 import type { useOperationAvailability } from '@/runtime/use-operation-availability'
 import type { JobDetailData } from '../job-detail-types'

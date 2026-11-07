@@ -199,11 +199,11 @@ the server, in structured logs).
 
 Router boundaries (`app/router/route-boundaries.tsx`: default error, pending and
 not-found components) report render and loader crashes through `defaultOnCatch`
--> `reportClientError` (`lib/report-client-error.ts`), a structured
+-> `reportClientError` (`@calibra-facil/shared/client-error`, shared with the portal), a structured
 `console.error` line with no third-party SDK.
 
 Paginated list query options pass `placeholderData:
-keepPreviousDataInScope([...])` (`lib/keep-previous-page.ts`) so paging never
+keepPreviousDataInScope([...])` (`@calibra-facil/shared/query-scope`) so paging never
 flashes the skeleton, scoped so rows never carry across an organization switch.
 
 Do not expose session tokens through React context unless a real consumer

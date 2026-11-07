@@ -17,7 +17,7 @@ import { Separator } from "@calibra-facil/ui/separator";
 import { SidebarTrigger } from "@calibra-facil/ui/sidebar";
 import { CommandMenu } from "@/components/command-menu";
 import { NotificationBell } from "@/features/notifications/notification-bell";
-import { useMountEffect } from "@/hooks/use-mount-effect";
+import { useMountEffect } from "@calibra-facil/ui/use-mount-effect";
 import { shortcutLabel } from "@/lib/platform";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 

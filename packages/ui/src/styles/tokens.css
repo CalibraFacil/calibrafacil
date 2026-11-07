@@ -12,6 +12,7 @@
 
 /* shadcn's Tailwind layer: data-* variants, accordion keyframes, no-scrollbar. */
 @import "./shadcn.css";
+@import "./accreditation-seal.css";
 
 /* Tailwind v4 scans the app's own sources only; the package's classes live in
    a workspace dependency, so register it (path is relative to this file). */

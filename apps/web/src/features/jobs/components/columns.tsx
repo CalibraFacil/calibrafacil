@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { FinancialStatusBadge } from './financial-status-badge'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'

@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner'
 import { useInvitationData } from '@/features/public/queries'
 import { calibraApi } from '@/utils/api'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 export const Route = createFileRoute('/accept-invitation/$id')({
   head: () => ({

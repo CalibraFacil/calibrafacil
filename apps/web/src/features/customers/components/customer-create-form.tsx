@@ -27,18 +27,19 @@ import {
   PanelHeader,
 } from '@calibra-facil/ui/instrument-panel'
 import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
+import { EMPTY_ADDRESS_FORM } from '@calibra-facil/shared/address'
 import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import {
   mergeViaCepAddress,
   type ViaCepAddress,
-  useViaCepLookup,
-} from '@/lib/viacep'
+} from '@calibra-facil/shared/viacep'
+import { useViaCepLookup } from '@/lib/viacep'
 import {
   keepOrFill,
   useCnpjLookup,
   type CnpjLookupResult,
 } from '@/lib/cnpj-lookup'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /** The customer record returned by `customers.create` (used to auto-select it). */
 export type CreatedCustomer = Awaited<
@@ -63,15 +64,7 @@ const initialFormData: CustomerFormData = {
   taxId: '',
   email: '',
   phone: '',
-  address: {
-    cep: '',
-    street: '',
-    number: '',
-    complement: '',
-    neighbourhood: '',
-    city: '',
-    state: '',
-  },
+  address: EMPTY_ADDRESS_FORM,
 }
 
 const PANEL_CLASS = 'p-4 sm:p-5'

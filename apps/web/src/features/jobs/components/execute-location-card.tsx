@@ -1,3 +1,4 @@
+import { formatAddressLine } from '@calibra-facil/shared/address'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 import { Badge } from '@calibra-facil/ui/badge'
@@ -22,7 +23,6 @@ import {
   SelectTrigger,
 } from '@calibra-facil/ui/select'
 import {
-  formatAddress,
   formatLabAddress,
   type CalibrationLocationSnapshot,
   type JobData,
@@ -76,7 +76,7 @@ export function ExecuteLocationCard({
                 value={calibrationLocation.type}
                 onValueChange={(value) => {
                   const type = toCalibrationLocationType(value)
-                  const customerAddress = formatAddress(job.customerAddress)
+                  const customerAddress = formatAddressLine(job.customerAddress)
                   const labAddress = formatLabAddress(job)
                   setCalibrationLocation((current) => ({
                     ...current,

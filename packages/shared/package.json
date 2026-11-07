@@ -30,7 +30,15 @@
     "./ip-range": "./src/net/ip-range.ts",
     "./outbound-policy": "./src/net/outbound-policy.ts",
     "./safe-outbound-fetch": "./src/net/safe-outbound-fetch.ts",
-    "./outbound-testing": "./src/net/testing.ts"
+    "./outbound-testing": "./src/net/testing.ts",
+    "./address": "./src/address.ts",
+    "./viacep": "./src/viacep.ts",
+    "./session-retry": "./src/session-retry.ts",
+    "./internal-redirect": "./src/internal-redirect.ts",
+    "./api-base-url": "./src/api-base-url.ts",
+    "./query-scope": "./src/query-scope.ts",
+    "./client-error": "./src/client-error.ts",
+    "./client-storage-keys": "./src/client-storage-keys.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
@@ -41,7 +49,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@calibra-facil/config": "workspace:^"
+    "@calibra-facil/config": "workspace:^",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",

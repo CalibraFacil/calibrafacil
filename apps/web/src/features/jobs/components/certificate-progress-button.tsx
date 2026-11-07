@@ -11,8 +11,8 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { cn } from '@/lib/utils'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { cn } from '@calibra-facil/ui/utils'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
 type ProgressStatus = 'idle' | 'running' | 'done'
 type IconSvg = ComponentProps<typeof HugeiconsIcon>['icon']

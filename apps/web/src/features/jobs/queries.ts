@@ -6,7 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
-import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
+import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   JOBS_LIST_STATUSES,

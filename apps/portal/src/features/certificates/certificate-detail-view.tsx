@@ -20,7 +20,7 @@ import {
   Target02Icon,
 } from "@hugeicons/core-free-icons";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { Button } from "@calibra-facil/ui/button";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import {
@@ -46,7 +46,7 @@ import {
   StaggerItem,
   type SignalTone,
 } from "@calibra-facil/ui/instrument-panel";
-import { AccreditationSeal } from "@/components/accreditation-seal";
+import { AccreditationSeal } from "@calibra-facil/ui/accreditation-seal";
 import { StatusPill } from "@/components/status-pill";
 import { CertificateLifecyclePill } from "@/components/certificate-lifecycle-pill";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";

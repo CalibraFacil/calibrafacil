@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import { getNotificationTypeMeta, normalizeActionUrl } from "./lib";
 import {

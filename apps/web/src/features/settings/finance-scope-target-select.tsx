@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { Button } from '@calibra-facil/ui/button'
 import {
   Command,

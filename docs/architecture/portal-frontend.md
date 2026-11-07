@@ -30,8 +30,8 @@ apps/portal/src/
   features/          # Extracted domain modules (page + queries + types + components + tests)
   components/        # App components: status-pill, timeline, command-menu…
                      # (primitives and instrument-panel come from @calibra-facil/ui)
-  lib/               # calibration-status, status-labels, format, platform, utils (getApiBaseUrl)
-  hooks/             # use-mount-effect, use-mobile
+  lib/               # calibration-status, status-labels, format, platform, api-fetch (getApiBaseUrl)
+  hooks/             # use-large-screen (use-mount-effect and use-mobile come from @calibra-facil/ui)
 ```
 
 ### Routes and feature modules
@@ -113,7 +113,7 @@ magic-link sign-in), not raw `fetch`. That client is distinct from
 imports `client-runtime` or `@calibra-facil/api`. Only business data under
 `/api/portal/*` uses raw `fetch`.
 
-- `getApiBaseUrl()` (`lib/utils.ts`) resolves the API origin per host
+- `getApiBaseUrl()` (`lib/api-fetch.ts`, over `resolveApiBaseUrl` in `@calibra-facil/shared/api-base-url`, which the lab app uses too) resolves the API origin per host
   (localhost:3000 in dev, `VITE_API_URL` when set, else the same origin). Always go through it; never hardcode the origin.
 - Wrap reads in `useQuery` with a stable `queryKey` and a sensible `staleTime`.
 - **Authenticated query keys are scoped to the active client organization.** The
@@ -148,7 +148,7 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   lab's once it lands.
 - **Boundaries are router defaults** (`components/route-boundaries.tsx`:
   `defaultErrorComponent`, `defaultPendingComponent`, `defaultNotFoundComponent`,
-  `defaultOnCatch`). Crashes are reported through `lib/report-client-error.ts`:
+  `defaultOnCatch`). Crashes are reported through `reportClientError` from `@calibra-facil/shared/client-error`:
   one structured `console.error` line (JSON), no third-party SDK, no network
   call. The boundaries are in the
   initial graph, so they use `@calibra-facil/ui/panel-styles`,
@@ -157,7 +157,7 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   toaster takes no icon set for the same reason: the lab app passes its own.
 - **Paginated lists keep their rows while the next page loads**: pass
   `placeholderData: keepPreviousDataInScope(key("portal-<list>"))`
-  (`lib/keep-previous-page.ts`). The scope guard (portal root + active
+  (from `@calibra-facil/shared/query-scope`). The scope guard (portal root + active
   organization + list name) stops one organization's rows from showing under
   another after a switch, which plain `keepPreviousData` would allow.
 
@@ -194,7 +194,7 @@ carries `min-w-0 overflow-x-hidden` so the inset frame keeps its rounded corners
 ## Repo Guards (apply here too)
 
 - **`useEffect` is banned.** Use derived state, event handlers, data hooks, keyed
-  remounts, or `@/hooks/use-mount-effect`.
+  remounts, or `@calibra-facil/ui/use-mount-effect`.
 - **`as` type assertions are banned** (oxlint `consistent-type-assertions`). Use
   type guards, `satisfies`, or schema parsing. Where a single narrowing is
   genuinely unavoidable, isolate it behind an `oxlint-disable` with a reason.

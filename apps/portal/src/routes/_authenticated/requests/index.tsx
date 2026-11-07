@@ -42,8 +42,8 @@ import { StatusPill } from "@/components/status-pill";
 import { useOverview } from "@/features/dashboard/queries";
 import { portalRequestsResponseSchema } from "@calibra-facil/contracts";
 import { PortalApiError, fetchPortalJson } from "@/lib/api-fetch";
-import { cn } from "@/lib/utils";
-import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
+import { cn } from "@calibra-facil/ui/utils";
+import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import {
   CALIBRATION_REQUEST_STATUS,

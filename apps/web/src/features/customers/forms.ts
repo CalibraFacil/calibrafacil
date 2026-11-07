@@ -1,3 +1,4 @@
+import type { AddressForm } from '@calibra-facil/shared/address'
 import {
   CreateCustomerSchema,
   type CreateCustomerInput,
@@ -14,17 +15,7 @@ export type CustomerFormData = {
   taxId: string
   email: string
   phone: string
-  address: CustomerAddressFormData
-}
-
-type CustomerAddressFormData = {
-  cep: string
-  street: string
-  number: string
-  complement: string
-  neighbourhood: string
-  city: string
-  state: string
+  address: AddressForm
 }
 
 export type CustomerFormField = keyof CustomerFormData
@@ -90,7 +81,7 @@ export function parseCustomerForm(
   return { success: true, data: parsed.data }
 }
 
-function parseAddress(address: CustomerAddressFormData) {
+function parseAddress(address: AddressForm) {
   const parsed = {
     cep: optionalText(address.cep),
     street: optionalText(address.street),

@@ -1,6 +1,6 @@
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
-import { dateOnlyToInputValue } from '@/lib/date-only'
+import { dateOnlyToInputValue } from '@calibra-facil/shared/calendar-date'
 
 /**
  * A standard's calibration and expiry dates are typed into date fields and

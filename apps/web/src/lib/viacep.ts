@@ -1,45 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { z } from 'zod'
-
-import { useMountEffect } from '@/hooks/use-mount-effect'
-
-export type EditableAddress = {
-  cep?: string
-  street?: string
-  complement?: string
-  neighbourhood?: string
-  city?: string
-  state?: string
-}
-
-export type ViaCepAddress = {
-  cep: string
-  street: string
-  neighbourhood: string
-  city: string
-  state: string
-}
-
-type ViaCepResponse = {
-  cep?: string
-  logradouro?: string
-  complemento?: string
-  bairro?: string
-  localidade?: string
-  uf?: string
-  erro?: boolean
-}
-
-const ViaCepResponseSchema = z.looseObject({
-  cep: z.string().optional(),
-  logradouro: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  localidade: z.string().optional(),
-  uf: z.string().optional(),
-  erro: z.boolean().optional(),
-})
+import {
+  getCepDigits,
+  mapViaCepResponse,
+  viaCepUrl,
+  ViaCepResponseSchema,
+  type ViaCepAddress,
+} from '@calibra-facil/shared/viacep'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
 export type ViaCepLookupStatus =
   | 'idle'
@@ -47,39 +15,6 @@ export type ViaCepLookupStatus =
   | 'success'
   | 'not-found'
   | 'error'
-
-export function getCepDigits(value: string) {
-  return value.replace(/\D/g, '')
-}
-
-export function mapViaCepResponse(
-  response: ViaCepResponse,
-): ViaCepAddress | null {
-  if (response.erro) {
-    return null
-  }
-
-  return {
-    cep: response.cep ?? '',
-    street: response.logradouro ?? '',
-    neighbourhood: response.bairro ?? '',
-    city: response.localidade ?? '',
-    state: response.uf ?? '',
-  }
-}
-
-export function mergeViaCepAddress<TAddress extends EditableAddress>(
-  currentAddress: TAddress,
-  viaCepAddress: ViaCepAddress,
-): TAddress {
-  return Object.assign({}, currentAddress, {
-    cep: viaCepAddress.cep || currentAddress.cep,
-    street: viaCepAddress.street,
-    neighbourhood: viaCepAddress.neighbourhood,
-    city: viaCepAddress.city,
-    state: viaCepAddress.state,
-  })
-}
 
 async function fetchViaCepAddress(
   cep: string,
@@ -90,9 +25,7 @@ async function fetchViaCepAddress(
     return null
   }
 
-  const response = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`, {
-    signal,
-  })
+  const response = await fetch(viaCepUrl(cepDigits), { signal })
 
   if (!response.ok) {
     throw new Error('Falha ao consultar CEP')

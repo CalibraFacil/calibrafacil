@@ -6,7 +6,7 @@ import type {
   IntegrationRunMode,
   IntegrationScheduleFrequency,
 } from '@calibra-facil/shared'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { Button } from '@calibra-facil/ui/button'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import {

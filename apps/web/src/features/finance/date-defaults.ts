@@ -1,4 +1,7 @@
-import { dateInputToNoonIso, todayDateInputValue } from '@/lib/date-only'
+import {
+  dateInputToNoonIso,
+  todayDateInputValue,
+} from '@calibra-facil/shared/calendar-date'
 
 /** Defaults and payload dates for the finance forms that ask for a plain day. */
 

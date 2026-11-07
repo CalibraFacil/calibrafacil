@@ -3,7 +3,7 @@ import { AssetTypeFieldSchema } from '@calibra-facil/schemas'
 import { z } from 'zod'
 
 import { calibraApi, getApiBaseURL } from '@/utils/api'
-import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
+import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import type { LegalMetrologyRegulationCatalogEntry } from './forms'
 import {
   ensureRouteQueries,

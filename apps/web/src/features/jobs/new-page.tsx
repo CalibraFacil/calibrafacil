@@ -11,7 +11,6 @@ import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { DatePicker } from '@calibra-facil/ui/date-picker'
-import { formatFinanceMoney } from '@/lib/finance-formatters'
 import {
   Field,
   FieldDescription,
@@ -39,15 +38,7 @@ import {
   type JobFormField,
 } from '@/features/jobs/forms'
 import type { NewJobSearch } from '@/features/jobs/new-job-search'
-import { formatLocalDay } from '@calibra-facil/shared/format'
-
-function formatPrice(priceInCents: number | null, currency: string): string {
-  if (priceInCents === null) {
-    return 'Sob consulta'
-  }
-
-  return formatFinanceMoney(priceInCents, currency || 'BRL')
-}
+import { formatLocalDay, formatPrice } from '@calibra-facil/shared/format'
 
 export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
   const navigate = useNavigate()

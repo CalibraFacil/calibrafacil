@@ -6,6 +6,7 @@ import {
   portalVisitsResponseSchema,
 } from "@calibra-facil/contracts";
 
+import type { Address } from "@calibra-facil/shared/address";
 import type {
   VisitRescheduleRequestStatus,
   VisitStatus,
@@ -15,15 +16,7 @@ import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 type PortalVisitStatus = VisitStatus;
 
-export type PortalVisitAddress = {
-  cep?: string;
-  number?: string;
-  street?: string;
-  complement?: string;
-  neighbourhood?: string;
-  city?: string;
-  state?: string;
-} | null;
+type PortalVisitAddress = Address | null;
 
 export type PortalVisitReschedulePeriod = "MORNING" | "AFTERNOON" | "ANY";
 
@@ -157,16 +150,4 @@ export function isVisitActionable(visit: PortalVisit): boolean {
   }
   if (!visit.scheduledAt) return false;
   return new Date(visit.scheduledAt).getTime() > Date.now();
-}
-
-export function formatPortalVisitAddress(address: PortalVisitAddress): string {
-  if (!address) return "";
-  const street = [address.street, address.number].filter(Boolean).join(", ");
-  const region = [address.neighbourhood, address.city, address.state]
-    .filter(Boolean)
-    .join(" - ");
-  return [street, region]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" · ");
 }

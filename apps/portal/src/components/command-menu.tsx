@@ -20,7 +20,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { fetchPortalJson } from "@/lib/api-fetch";
 import { getCalibrationStatus } from "@/lib/calibration-status";

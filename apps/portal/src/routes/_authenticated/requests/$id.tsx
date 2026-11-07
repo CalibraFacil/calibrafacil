@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 
+import { formatAddress, type Address } from "@calibra-facil/shared/address";
 import { Button } from "@calibra-facil/ui/button";
 import { Card, CardContent } from "@calibra-facil/ui/card";
 import { Spinner } from "@calibra-facil/ui/spinner";
@@ -56,15 +57,7 @@ type RequestDetail = {
   invoiceRemittanceKey: string | null;
   invoiceRemittanceIssuedAt: string | null;
   carrierName: string | null;
-  onsiteAddress: {
-    cep?: string;
-    number?: string;
-    street?: string;
-    complement?: string;
-    neighbourhood?: string;
-    city?: string;
-    state?: string;
-  } | null;
+  onsiteAddress: Address | null;
   preferredVisitDate: string | null;
   visit: {
     status: VisitStatus;
@@ -80,19 +73,6 @@ type RequestDetail = {
   customerName: string;
   items: Array<RequestItem>;
 };
-
-/** Single-line address for the on-site visit, or "" when none was provided. */
-function formatOnsiteAddress(address: RequestDetail["onsiteAddress"]): string {
-  if (!address) return "";
-  const street = [address.street, address.number].filter(Boolean).join(", ");
-  const region = [address.neighbourhood, address.city, address.state]
-    .filter(Boolean)
-    .join(" - ");
-  return [street, address.complement, region, address.cep]
-    .map((part) => (part ?? "").trim())
-    .filter(Boolean)
-    .join(" · ");
-}
 
 function RequestDetailPage() {
   const { id } = Route.useParams();
@@ -142,7 +122,7 @@ function RequestDetailPage() {
     : isOnsite
       ? "Calibração no local (em loco)"
       : "Entrega no laboratório";
-  const onsiteAddressText = formatOnsiteAddress(data.onsiteAddress);
+  const onsiteAddressText = formatAddress(data.onsiteAddress);
 
   return (
     <div className="portal-shell-sm space-y-6">

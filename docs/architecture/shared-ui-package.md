@@ -12,8 +12,9 @@ instrument-panel design system and the status-tone vocabulary that
 packages/ui/src/
   components/   # one file per primitive: button, dialog, field, sidebar, ...
   lib/          # utils (cn), status-tone, panel-styles, button-variants, sidebar scroll-tap guard
-  hooks/        # use-mobile, use-mount-effect (the sidebar's shortcut listener)
-  styles/       # tokens.css (entry), shadcn.css (data-* variants, accordion keyframes)
+  hooks/        # use-mobile, use-mount-effect (the one app-wide wrapper around raw useEffect)
+  styles/       # tokens.css (entry), shadcn.css (data-* variants, accordion keyframes),
+                # accreditation-seal.css (the seal's drop shadow and hover sheen)
 ```
 
 Consumers import per-module subpaths, never a barrel, so a page only pays for

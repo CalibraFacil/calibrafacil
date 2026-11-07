@@ -17,7 +17,6 @@
   "dependencies": {
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/contracts": "workspace:^",
-    "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@calibra-facil/ui": "workspace:^",

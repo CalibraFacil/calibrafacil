@@ -1,7 +1,7 @@
 import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { formatCalibrationValue } from "@calibra-facil/shared";
 
-import { dateOnlyDaysBetween } from "@/lib/date-only";
+import { dateOnlyDaysBetween } from "@calibra-facil/shared/calendar-date";
 
 /**
  * Customer-facing presentation helpers for a portal calibration certificate.

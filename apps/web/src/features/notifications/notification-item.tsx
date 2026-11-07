@@ -12,7 +12,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@calibra-facil/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { formatInstant } from '@calibra-facil/shared/format'
 
 interface Notification {

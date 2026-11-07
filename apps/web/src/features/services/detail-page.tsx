@@ -34,12 +34,7 @@ import {
   StaggerGroup,
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
-import { formatFinanceMoney } from '@/lib/finance-formatters'
-
-function formatPrice(priceInCents: number | null, currency: string): string {
-  if (priceInCents === null) return 'Sob consulta'
-  return formatFinanceMoney(priceInCents, currency || 'BRL')
-}
+import { formatPrice } from '@calibra-facil/shared/format'
 
 function getMethodRouteParam(service: ServiceDetail): string {
   if (service.methodId && service.methodName && service.methodVersion) {

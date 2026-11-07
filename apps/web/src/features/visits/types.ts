@@ -1,16 +1,9 @@
+import type { Address } from '@calibra-facil/shared/address'
 import type { VisitStatus } from '@calibra-facil/schemas/machines'
 
 export type { VisitStatus }
 
-export type VisitAddress = {
-  cep?: string
-  number?: string
-  street?: string
-  complement?: string
-  neighbourhood?: string
-  city?: string
-  state?: string
-} | null
+type VisitAddress = Address | null
 
 type VisitListItem = {
   id: number
@@ -89,16 +82,4 @@ export const PREFERRED_PERIOD_LABELS: Record<
   MORNING: 'Manhã',
   AFTERNOON: 'Tarde',
   ANY: 'Qualquer horário',
-}
-
-export function formatVisitAddress(address: VisitAddress): string {
-  if (!address) return ''
-  const street = [address.street, address.number].filter(Boolean).join(', ')
-  const region = [address.neighbourhood, address.city, address.state]
-    .filter(Boolean)
-    .join(' - ')
-  return [street, address.complement, region, address.cep]
-    .map((part) => (part ?? '').trim())
-    .filter(Boolean)
-    .join(' · ')
 }

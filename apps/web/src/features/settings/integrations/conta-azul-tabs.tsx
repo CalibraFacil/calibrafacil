@@ -43,7 +43,7 @@ import {
   contaAzulSaleTriggerOptions,
 } from './conta-azul-constants'
 import { Badge } from '@calibra-facil/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import {
   ContaAzulCatalogSelect,
   ContaAzulOptionSelect,

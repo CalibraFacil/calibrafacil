@@ -79,7 +79,7 @@ import {
 import { DatePicker } from '@calibra-facil/ui/date-picker'
 import { EventTimeline } from '@/components/event-timeline'
 import { moneyFieldError } from '@/lib/finance-formatters'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { Button } from '@calibra-facil/ui/button'
 import type { OperationAvailability } from '@calibra-facil/client-runtime'
 import {

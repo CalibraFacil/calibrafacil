@@ -40,7 +40,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {

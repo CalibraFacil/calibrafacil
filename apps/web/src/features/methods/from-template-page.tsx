@@ -32,7 +32,7 @@ import {
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
 import { Badge } from '@calibra-facil/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { assetTypesQueryOptions } from '@/features/assets/queries'
 
 import { useMethodTemplatesData } from './queries'

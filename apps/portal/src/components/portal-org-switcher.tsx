@@ -4,6 +4,10 @@ import { Building02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import {
+  DASHBOARD_ORG_KEY,
+  PORTAL_ORG_KEY,
+} from "@calibra-facil/shared/client-storage-keys";
+import {
   portalOrganization,
   usePortalActiveOrganization,
   usePortalListOrganizations,
@@ -60,13 +64,13 @@ export function PortalOrgSwitcher() {
     // new org's own entries are kept: its queries may already be in flight.
     removePortalQueries(queryClient, orgId);
     // Store preference for portal to avoid conflicts with dashboard
-    localStorage.setItem("portal-active-org", orgId);
+    localStorage.setItem(PORTAL_ORG_KEY, orgId);
   };
 
   const handleGoToLab = (orgId: string) => {
     // Set the org as active, store preference for dashboard, and redirect
     portalOrganization.setActive({ organizationId: orgId }).then(() => {
-      localStorage.setItem("dashboard-active-org", orgId);
+      localStorage.setItem(DASHBOARD_ORG_KEY, orgId);
       window.location.href = `${getWebAppUrl()}/dashboard`;
     });
   };

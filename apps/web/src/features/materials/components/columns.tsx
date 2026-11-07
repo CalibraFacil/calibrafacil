@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
 import type { MaterialListItem } from '@/features/materials/types'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { formatFinanceMoney } from '@/lib/finance-formatters'
 
 export type Material = MaterialListItem

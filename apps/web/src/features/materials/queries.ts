@@ -1,7 +1,7 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
-import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
+import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,

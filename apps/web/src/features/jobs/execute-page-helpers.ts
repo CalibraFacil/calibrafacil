@@ -1,3 +1,4 @@
+import { formatAddressLine } from '@calibra-facil/shared/address'
 import { type DatePickerPreset } from '@calibra-facil/ui/date-picker'
 import {
   CALIBRATION_LOCATION_TYPES,
@@ -12,7 +13,6 @@ import type {
 import {
   evaluateExecutionFormulaResults,
   DEFAULT_PHASE_MODE,
-  formatAddress,
   formatLabAddress,
   type CalibrationLocationSnapshot,
   type CalibrationLocationType,
@@ -99,7 +99,7 @@ export function buildInitialCalibrationLocation(
 ): CalibrationLocationSnapshot {
   const existing = job.calibrationLocationSnapshot
   if (existing?.addressText) return existing
-  const customerAddress = formatAddress(job.customerAddress)
+  const customerAddress = formatAddressLine(job.customerAddress)
   const labAddress = formatLabAddress(job)
   const type: CalibrationLocationType = customerAddress
     ? 'customer_site'

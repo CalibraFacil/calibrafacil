@@ -5,6 +5,7 @@ import { prefetchBranding } from "@/features/branding/queries";
 import { portalOrganizationsResponseSchema } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
+import { PORTAL_ORG_KEY } from "@calibra-facil/shared/client-storage-keys";
 import { isRecord } from "@calibra-facil/shared/record";
 
 /**
@@ -15,9 +16,6 @@ import { isRecord } from "@calibra-facil/shared/record";
  * is switching the session's active organization when it differs from the
  * one the user should land on, and that is skipped in the common case.
  */
-
-const PORTAL_ORG_KEY = "portal-active-org";
-
 export type PortalOrganization = {
   id: string;
   name: string;

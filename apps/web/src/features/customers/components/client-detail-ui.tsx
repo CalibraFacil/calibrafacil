@@ -6,7 +6,7 @@ import {
   StaggerGroup,
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /**
  * Shared building blocks for the client detail tabs, in the metrology-console

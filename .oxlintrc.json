@@ -33,7 +33,7 @@
           {
             "name": "react",
             "importNames": ["useEffect"],
-            "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (apps/<app>/src/hooks/use-mount-effect.ts)."
+            "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (@calibra-facil/ui/use-mount-effect)."
           }
         ],
         "patterns": [
@@ -51,7 +51,7 @@
       {
         "object": "React",
         "property": "useEffect",
-        "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (apps/<app>/src/hooks/use-mount-effect.ts)."
+        "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (@calibra-facil/ui/use-mount-effect)."
       }
     ],
     // React Compiler diagnostic, not a defect: it fires on third-party APIs
@@ -103,7 +103,7 @@
               {
                 "name": "react",
                 "importNames": ["useEffect"],
-                "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (apps/<app>/src/hooks/use-mount-effect.ts)."
+                "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (@calibra-facil/ui/use-mount-effect)."
               }
             ]
           }
@@ -111,10 +111,7 @@
       }
     },
     {
-      "files": [
-        "apps/*/src/hooks/use-mount-effect.ts",
-        "packages/ui/src/hooks/use-mount-effect.ts"
-      ],
+      "files": ["packages/ui/src/hooks/use-mount-effect.ts"],
       "rules": {
         "no-restricted-imports": "off",
         "no-restricted-properties": "off"

@@ -26,7 +26,6 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getCalibrationStatus } from "@/lib/calibration-status";
-import { z } from "zod";
 import {
   portalFleetAssetsResponseSchema,
   portalRequestBatchResponseSchema,
@@ -34,9 +33,20 @@ import {
   type PortalRequestBatchResponse,
 } from "@calibra-facil/contracts";
 import { fetchExternalJson, fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
+import {
+  EMPTY_ADDRESS_FORM,
+  type AddressForm,
+} from "@calibra-facil/shared/address";
 import { pluralize } from "@calibra-facil/shared/format";
+import {
+  getCepDigits,
+  mapViaCepResponse,
+  mergeViaCepAddress,
+  ViaCepResponseSchema,
+  viaCepUrl,
+} from "@calibra-facil/shared/viacep";
 
 type NewRequestSearch = {
   /** Self-service recall: instruments to preselect (e.g. from asset detail). */
@@ -72,35 +82,6 @@ type PortalAsset = {
 type AssetsResponse = PortalFleetAssetsResponse;
 
 type DeliveryMethod = "dropoff" | "carrier" | "onsite";
-
-type OnsiteAddress = {
-  cep: string;
-  street: string;
-  number: string;
-  complement: string;
-  neighbourhood: string;
-  city: string;
-  state: string;
-};
-
-const EMPTY_ONSITE_ADDRESS: OnsiteAddress = {
-  cep: "",
-  street: "",
-  number: "",
-  complement: "",
-  neighbourhood: "",
-  city: "",
-  state: "",
-};
-
-/** ViaCEP's answer (the fields the address autofill reads; `erro` = unknown CEP). */
-const viaCepResponseSchema = z.object({
-  erro: z.union([z.boolean(), z.string()]).optional(),
-  logradouro: z.string().optional(),
-  bairro: z.string().optional(),
-  localidade: z.string().optional(),
-  uf: z.string().optional(),
-});
 
 // The batch endpoint splits a (possibly cross-unit) selection into one request
 // per unit and returns `{ created: [{ id, ... }] }`.
@@ -167,30 +148,23 @@ function NewRequestPage() {
   const [nfIssuedAt, setNfIssuedAt] = useState("");
   const [preferredVisitDate, setPreferredVisitDate] = useState("");
   const [onsiteAddress, setOnsiteAddress] =
-    useState<OnsiteAddress>(EMPTY_ONSITE_ADDRESS);
+    useState<AddressForm>(EMPTY_ADDRESS_FORM);
   const limit = 20;
 
-  function setAddressField(field: keyof OnsiteAddress, value: string) {
+  function setAddressField(field: keyof AddressForm, value: string) {
     setOnsiteAddress((current) => ({ ...current, [field]: value }));
   }
 
   // ViaCEP autofill — best-effort; manual entry still works if it's offline.
   async function lookupCep(rawCep: string) {
-    const cep = rawCep.replace(/\D/g, "");
+    const cep = getCepDigits(rawCep);
     if (cep.length !== 8) return;
-    const data = await fetchExternalJson(
-      `https://viacep.com.br/ws/${cep}/json/`,
-      viaCepResponseSchema,
-    );
-    // Best-effort: a failed lookup leaves the address to be filled by hand.
-    if (!data || data.erro) return;
-    setOnsiteAddress((current) => ({
-      ...current,
-      street: data.logradouro || current.street,
-      neighbourhood: data.bairro || current.neighbourhood,
-      city: data.localidade || current.city,
-      state: data.uf || current.state,
-    }));
+    const data = await fetchExternalJson(viaCepUrl(cep), ViaCepResponseSchema);
+    // Best-effort: a failed lookup (or an unknown CEP) leaves the address to be
+    // filled by hand.
+    const resolved = data ? mapViaCepResponse(data) : null;
+    if (!resolved) return;
+    setOnsiteAddress((current) => mergeViaCepAddress(current, resolved));
   }
 
   const { data, isLoading, error } = useQuery({

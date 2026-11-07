@@ -8,6 +8,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 
+import { formatAddress } from "@calibra-facil/shared/address";
+
 import {
   ACTION_BUTTON_CLASS,
   Panel,
@@ -34,7 +36,6 @@ import {
 } from "@calibra-facil/ui/select";
 import { Textarea } from "@calibra-facil/ui/textarea";
 import {
-  formatPortalVisitAddress,
   isVisitActionable,
   PREFERRED_PERIOD_LABELS,
   useConfirmVisitPresence,
@@ -332,7 +333,7 @@ function VisitActions({ visit }: { visit: PortalVisit }) {
 }
 
 function VisitRow({ visit }: { visit: PortalVisit }) {
-  const addressText = formatPortalVisitAddress(visit.address);
+  const addressText = formatAddress(visit.address);
   const assetLabel =
     visit.assetCount === 1
       ? "1 instrumento"

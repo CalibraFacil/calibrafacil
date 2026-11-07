@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@calibra-facil/ui/card'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 type ThemeValue = 'light' | 'dark' | 'system'
 

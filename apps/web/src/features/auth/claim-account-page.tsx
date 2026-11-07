@@ -23,8 +23,8 @@ import { OTP_CODE_LENGTH, OtpCodeField } from '@/components/otp-code-field'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { startDesktopInitialSync } from '@/components/sign-in-form'
-import { cn } from '@/lib/utils'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { cn } from '@calibra-facil/ui/utils'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
 type ClaimCompleteResponse = {
   claimed: boolean

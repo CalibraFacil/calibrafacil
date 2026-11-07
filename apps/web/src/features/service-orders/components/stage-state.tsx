@@ -11,7 +11,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /**
  * A stage that cannot be worked on yet. The tab stays reachable — the four
