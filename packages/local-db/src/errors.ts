@@ -19,3 +19,20 @@ export class LocalNotFoundError extends LocalDomainError {
     this.name = "LocalNotFoundError";
   }
 }
+
+/**
+ * A well-formed request that a business rule of the local data refuses (a
+ * reference standard that is expired or not in the cache, a method execution
+ * that does not compute). The local server answers 422 with the message, and
+ * with `diagnostics` when the refusal carries them (the cloud's execute/submit
+ * answer the same refusal with its method diagnostics).
+ */
+export class LocalUnprocessableError extends LocalDomainError {
+  constructor(
+    message: string,
+    readonly diagnostics?: unknown,
+  ) {
+    super(message);
+    this.name = "LocalUnprocessableError";
+  }
+}

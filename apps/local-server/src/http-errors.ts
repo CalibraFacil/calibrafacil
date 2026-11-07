@@ -1,11 +1,18 @@
 import type { Context } from "hono";
-import { LocalDomainError, LocalNotFoundError } from "@calibra-facil/local-db";
+import {
+  LocalDomainError,
+  LocalNotFoundError,
+  LocalUnprocessableError,
+} from "@calibra-facil/local-db";
 
 /**
  * The one place a thrown error becomes an HTTP answer (Hono `onError`).
  *
  * - a domain refusal (`LocalDomainError`, from local-db): 400, or 404 for a
  *   record that is not there, with its message: the person can act on it;
+ * - a well-formed request a business rule refuses (`LocalUnprocessableError`:
+ *   an expired standard, a method execution that does not compute): 422, with
+ *   its message and, when it has them, the method `diagnostics`;
  * - a body that is not JSON, or does not fit its schema: 400;
  * - anything else is our bug (SQLite, a null dereference, a full disk): 500
  *   with a fixed message. The detail goes to the log, not to the screen.
@@ -13,6 +20,17 @@ import { LocalDomainError, LocalNotFoundError } from "@calibra-facil/local-db";
 export function handleLocalServerError(error: unknown, c: Context) {
   if (error instanceof LocalNotFoundError) {
     return c.json({ error: error.message }, 404);
+  }
+  if (error instanceof LocalUnprocessableError) {
+    return c.json(
+      {
+        error: error.message,
+        ...(error.diagnostics === undefined
+          ? {}
+          : { diagnostics: error.diagnostics }),
+      },
+      422,
+    );
   }
   if (error instanceof LocalDomainError) {
     return c.json({ error: error.message }, 400);

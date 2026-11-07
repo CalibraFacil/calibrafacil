@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SyncBootstrapResponse } from "@calibra-facil/contracts";
 import { applySyncBootstrap, openLocalDatabase } from "@calibra-facil/local-db";
 import { createLocalServer } from "./server";
@@ -193,6 +193,54 @@ describe("local server draft save with a standard that went stale (P1-11)", () =
     await expect(detail.json()).resolves.toMatchObject({
       data: { reading: 1 },
     });
+    database.close();
+  });
+});
+
+// How a refusal of the execute/submit commands reaches the wire: the domain
+// refusals keep their 4xx and message, anything else is a 500 with a fixed one.
+describe("local server job commands: error mapping", () => {
+  it("answers a standard that is not in the local cache with 422 and its message", async () => {
+    const { app, database } = createApp();
+
+    const refused = await executeWith(app, [12345], 1);
+
+    expect(refused.status).toBe(422);
+    await expect(refused.json()).resolves.toEqual({
+      error: "Padrao 12345 nao encontrado no cache local",
+    });
+    database.close();
+  });
+
+  it("answers a job whose status does not allow the command with 400 and its message", async () => {
+    const { app, database } = createApp();
+    database
+      .prepare(
+        "UPDATE calibration_jobs SET status = 'APPROVED' WHERE remote_id = 789",
+      )
+      .run();
+
+    const refused = await executeWith(app, [], 1);
+
+    expect(refused.status).toBe(400);
+    await expect(refused.json()).resolves.toEqual({
+      error: "Nao e possivel executar um job com status APPROVED",
+    });
+    database.close();
+  });
+
+  it("answers an unexpected failure with 500 and a fixed message, not the error's own", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { app, database } = createApp();
+    database.exec("DROP TABLE reference_standards");
+
+    const failed = await executeWith(app, [999], 1);
+
+    expect(failed.status).toBe(500);
+    const body = await failed.json();
+    expect(body).toEqual({ error: "Erro interno do servidor local" });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
     database.close();
   });
 });

@@ -5,6 +5,7 @@ import {
   type CalibrationPhaseSnapshot,
   type CompiledMethod,
 } from "@calibra-facil/method-definition";
+import { LocalUnprocessableError } from "@calibra-facil/local-db";
 import { toRecord } from "@calibra-facil/shared/record";
 
 type ExecutionInput = {
@@ -58,10 +59,7 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
     const message =
       execution.diagnostics.find((item) => item.severity === "error")
         ?.message ?? "Execucao local do metodo compilado falhou";
-    const error = Object.assign(new Error(message), {
-      diagnostics: execution.diagnostics,
-    });
-    throw error;
+    throw new LocalUnprocessableError(message, execution.diagnostics);
   }
 
   return results;

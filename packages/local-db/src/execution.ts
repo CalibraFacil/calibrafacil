@@ -19,6 +19,11 @@ import {
   requireTargetOf,
 } from "@calibra-facil/schemas/job-transitions";
 import type { LocalDatabase } from "./database";
+import {
+  LocalDomainError,
+  LocalNotFoundError,
+  LocalUnprocessableError,
+} from "./errors";
 import { getLocalEffectiveEnvironmentalLimits } from "./environmental-limits";
 import { stableLocalNumericId } from "./ids";
 import type { LocalJobStatus } from "./jobs";
@@ -73,14 +78,14 @@ export function saveLocalJobExecution(
 ) {
   const existing = findLocalJob(database, input.routeId);
   if (!existing) {
-    throw new Error("Job nao encontrado");
+    throw new LocalNotFoundError("Job nao encontrado");
   }
 
   // The same table the cloud uses: a submit goes to REVIEW, a plain save keeps
   // the job open (DRAFT becomes IN_PROGRESS).
   const command = input.requireResults ? "submit" : "execute";
   if (!canTransition(existing.status, command)) {
-    throw new Error(
+    throw new LocalDomainError(
       `Nao e possivel executar um job com status ${existing.status}`,
     );
   }
@@ -143,7 +148,7 @@ export function saveLocalJobExecution(
       location: calibrationLocationSnapshot,
       phases: calibrationPhaseSnapshot,
     });
-    if (incomplete) throw new Error(incomplete);
+    if (incomplete) throw new LocalDomainError(incomplete);
   }
 
   database.transaction(() => {
@@ -312,7 +317,7 @@ function resolveLocalExecutionTime(
       performedAt: input.performedAt,
       backdateReason: input.backdateReason,
     });
-    if (!resolved.ok) throw new Error(resolved.message);
+    if (!resolved.ok) throw new LocalDomainError(resolved.message);
 
     return {
       performedAt: resolved.performedAt.toISOString(),
@@ -645,21 +650,25 @@ function judgeLocalDraftStandards(
 /** The pt-BR error the offline paths throw for a refused judgement. */
 function localStandardsRefusalError(
   refusal: Extract<StandardsJudgement, { ok: false }>,
-): Error {
+): LocalUnprocessableError {
   const names = refusal.standardNames.join(", ");
   switch (refusal.code) {
     case "standard_not_found":
-      return new Error(
+      return new LocalUnprocessableError(
         `Padrao ${refusal.standardIds.join(", ")} nao encontrado no cache local`,
       );
     case "standard_deleted":
-      return new Error(`Padrao ${names} nao encontrado no cache local`);
+      return new LocalUnprocessableError(
+        `Padrao ${names} nao encontrado no cache local`,
+      );
     case "standard_inactive":
-      return new Error(`Padrao ${names} nao esta ativo`);
+      return new LocalUnprocessableError(`Padrao ${names} nao esta ativo`);
     case "standard_expired":
-      return new Error(`Padrao ${names} esta com certificado vencido`);
+      return new LocalUnprocessableError(
+        `Padrao ${names} esta com certificado vencido`,
+      );
     case "standard_backdate_reason_required":
-      return new Error(
+      return new LocalUnprocessableError(
         `O certificado de ${names} venceu apos a data de execucao; e necessario justificar o lancamento retroativo (motivo do registro retroativo)`,
       );
   }
@@ -771,7 +780,9 @@ export function resolveLocalDraftStandards(
   const snapshot = standardIds.map((standardId) => {
     const row = rowsByRemoteId.get(standardId);
     if (!row) {
-      throw new Error(`Padrao ${standardId} nao encontrado no cache local`);
+      throw new LocalUnprocessableError(
+        `Padrao ${standardId} nao encontrado no cache local`,
+      );
     }
 
     // A stale standard keeps the entry the technician picked, frozen as saved.
@@ -785,7 +796,7 @@ export function resolveLocalDraftStandards(
       source.certifiedValues,
     );
     if (compositionStandardIdSet.has(standardId) && !certifiedValues?.length) {
-      throw new Error(
+      throw new LocalUnprocessableError(
         `Padrao ${row.name} nao possui valores certificados completos no cache local`,
       );
     }

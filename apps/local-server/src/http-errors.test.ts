@@ -1,5 +1,9 @@
 import { Hono } from "hono";
-import { LocalDomainError, LocalNotFoundError } from "@calibra-facil/local-db";
+import {
+  LocalDomainError,
+  LocalNotFoundError,
+  LocalUnprocessableError,
+} from "@calibra-facil/local-db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { handleLocalServerError } from "./http-errors";
@@ -33,6 +37,27 @@ describe("handleLocalServerError", () => {
     ).request("/boom");
 
     expect(response.status).toBe(404);
+  });
+
+  it("answers a refused business rule with 422, its message and its diagnostics", async () => {
+    const withDiagnostics = await appThatThrows(
+      new LocalUnprocessableError("Execucao falhou", [{ severity: "error" }]),
+    ).request("/boom");
+    expect(withDiagnostics.status).toBe(422);
+    await expect(withDiagnostics.json()).resolves.toEqual({
+      error: "Execucao falhou",
+      diagnostics: [{ severity: "error" }],
+    });
+
+    const plain = await appThatThrows(
+      new LocalUnprocessableError(
+        "Padrao Massa A esta com certificado vencido",
+      ),
+    ).request("/boom");
+    expect(plain.status).toBe(422);
+    await expect(plain.json()).resolves.toEqual({
+      error: "Padrao Massa A esta com certificado vencido",
+    });
   });
 
   it("answers a body that is not JSON with 400", async () => {
