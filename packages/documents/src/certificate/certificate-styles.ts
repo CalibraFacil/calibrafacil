@@ -294,7 +294,7 @@ export const CERTIFICATE_PAGE_STYLES = `
  * Gotenberg header/footer templates get no page CSS and no @font-face, so
  * every style is inline and the font is a generic family.
  *
- * CAVEAT for whoever wires this in Phase 3: Chromium renders headerTemplate on
+ * CAVEAT: Chromium renders headerTemplate on
  * EVERY page, page one included — there is no first-page opt-out. So the §11.5.2
  * text form will also sit above the masthead that already carries the symbol.
  * That is redundant rather than wrong (the clause permits the text form; it

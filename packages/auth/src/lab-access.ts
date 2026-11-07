@@ -138,7 +138,7 @@ export async function validateLabAccountSetupToken(
     return { ok: false, status: "invalid" };
   }
 
-  // System path (P2-18j): the token id from the link is a bearer credential and
+  // System path: the token id from the link is a bearer credential and
   // its row is what NAMES the laboratory (this lookup runs before any
   // organization is known, on the owner connection). Only the one row of that
   // id is read; the membership and invitation checks below run in the
@@ -269,7 +269,7 @@ export async function validateLabAccountSetupToken(
 
 export async function hasActiveLabMembership(email: string) {
   const normalizedEmail = normalizeLabAccessEmail(email);
-  // System path (P2-18j): the sign-in gate asks "does this e-mail belong to ANY
+  // System path: the sign-in gate asks "does this e-mail belong to ANY
   // laboratory?" before a session, so before an organization, exists. It reads
   // the person's own memberships by e-mail across laboratories on purpose, and
   // returns only whether one exists.
@@ -292,7 +292,7 @@ export async function hasActiveLabMembership(email: string) {
 
 export async function hasPendingLabInvitation(email: string) {
   const normalizedEmail = normalizeLabAccessEmail(email);
-  // System path (P2-18j): same gate as above, for an e-mail that holds a pending
+  // System path: same gate as above, for an e-mail that holds a pending
   // invitation to a laboratory but is not a member yet (no organization is
   // active before the first sign-in).
   const [record] = await getSystemDb()

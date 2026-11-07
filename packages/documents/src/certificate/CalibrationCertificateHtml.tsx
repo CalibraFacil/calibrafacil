@@ -12,7 +12,7 @@ import type {
 } from "./types.js";
 
 /**
- * The fixed, system-owned calibration certificate (#865).
+ * The fixed, system-owned calibration certificate.
  *
  * Replaces the lab-authored XLSX template. The layout is ours and identical
  * for every laboratory; the lab supplies only its identity — name, CNPJ,
@@ -171,9 +171,7 @@ function RepeatabilityTable({ data }: { data: CertificateRepeatability }) {
 
 /**
  * Eccentricity, with the platform diagram beside the table — the arrangement
- * a pilot lab's own legacy form used, and the reason
- * `renderEccentricityIndicatorSvgMarkup` was salvaged out of the deleted XLSX
- * renderer in the first place. The diagram marks which position the indicator
+ * a pilot lab's own form used. The diagram marks which position the indicator
  * sat on, which is what makes the per-position figures interpretable.
  */
 function EccentricityBlock({ data }: { data: CertificateEccentricity }) {

@@ -60,7 +60,7 @@ export const CERTIFICATE_LAYOUT_VERSION = "1.1.0";
 
 /**
  * Which statement rules a frozen input is rendered under. 1.0.0 inputs predate
- * roadmap 2 C1/C2 and must re-render byte-identically, so they keep the
+ * the frozen content decisions and must re-render byte-identically, so they keep the
  * statements they were issued with ("legacy": traceability from the free-text
  * `calibratedBy`, the fixed coverage sentence, the lab profile's title for the
  * signatory, no calibrating body). From 1.1.0 the statements are built from the
@@ -103,13 +103,13 @@ export type CertificateInput = {
   /** Public verification link printed on (and encoded in the QR of) the certificate. */
   verificationUrl: string;
   /**
-   * The accreditation-seal decision taken at approval (Q42). It is a decision,
+   * The accreditation-seal decision taken at approval. It is a decision,
    * not a computation to repeat: the vigência window is evaluated at
    * `evaluatedAt` (= `approved_at`), never at the clock of whoever renders, and
    * the scope (CMC) verdict it rests on is frozen alongside it.
    *
    * `withheldReason` and `scopeEvaluation` are absent on inputs frozen before
-   * Q42 (their `accredited` was decided without the scope verdict); every input
+   * the scope verdict was recorded (their `accredited` was decided without it); every input
    * built now writes both. Verification and the portal read `accredited` from
    * here and never re-decide it from the lab's live fields.
    */

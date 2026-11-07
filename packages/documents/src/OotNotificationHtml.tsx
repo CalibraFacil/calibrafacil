@@ -24,7 +24,7 @@ export type OotNotificationDocumentData = {
   issuedAt: Date;
   /**
    * Notification variant. "as_found": the customer's instrument was found
-   * out of tolerance during its calibration (Phase 0 behavior; default when
+   * out of tolerance during its calibration (the default when
    * absent). "standard_recall": the lab's reference standard used in the
    * customer's calibration was later found out of tolerance, so the issued
    * certificate may be affected.

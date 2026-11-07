@@ -360,7 +360,7 @@ interface GroupDefinition<Shape extends Record<string, z.ZodType>, Derived> {
   title: string;
   intro?: readonly string[];
   vars: Shape;
-  /** Variables the group used to read; setting one fails the start-up. */
+  /** Variables the group no longer reads; setting one fails the start-up. */
   retired?: readonly RetiredVar[];
   derive?: (
     values: z.output<z.ZodObject<Shape>>,

@@ -272,8 +272,7 @@ describe("buildCertificateData", () => {
 });
 
 /**
- * ISO/IEC 17025 §7.8 content items the product had no home for until now —
- * see docs/referencias/iso-17025-7.8-conteudo.md. Each is a field an assessor
+ * ISO/IEC 17025 §7.8 content items — see docs/referencias/iso-17025-7.8-conteudo.md. Each is a field an assessor
  * looks for, so the projection must carry it verbatim or omit it honestly; it
  * must never synthesise one.
  */
@@ -381,7 +380,7 @@ describe("§7.8 content items", () => {
   });
 
   it("§7.8.4.1(c): never guesses the calibrating body from the certificate number", () => {
-    // Regression: `issuer` used to fall back to
+    // Regression guard: `issuer` must not fall back to
     // `certificateNumber.split("-")[0]`, which would print "RBC" — a string
     // fragment — as the laboratory that established traceability.
     const job = goldenJob();

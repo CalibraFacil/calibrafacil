@@ -53,9 +53,8 @@ function getEmailLogoSrc(): string {
  *
  * Providers report a rejected message (invalid/rotated key, unverified sender
  * domain, suppressed recipient, quota/rate limit) as a result, not an
- * exception. Every auth email below once discarded that result, so a total
- * delivery outage surfaced as a silent HTTP 200 with nothing logged —
- * undetectable until users reported it. Surfacing the error (log + throw →
+ * exception. Discarding that result would let a total delivery outage surface
+ * as a silent HTTP 200 with nothing logged. Surfacing the error (log + throw →
  * 5xx) makes a rejection observable instead of invisible.
  */
 async function sendAuthEmail(payload: CreateEmailOptions): Promise<void> {
@@ -139,7 +138,7 @@ function platformFromEmail(): string {
 
 /**
  * The portal INVITATION is lab-branded and may leave through the lab's own
- * sending domain when one is active (#584). It fails loud like every auth mail.
+ * sending domain when one is active. It fails loud like every auth mail.
  */
 export async function deliverPortalInvitationEmail(input: {
   to: string;

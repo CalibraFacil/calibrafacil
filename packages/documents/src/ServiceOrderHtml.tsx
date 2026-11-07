@@ -238,8 +238,8 @@ const pageStyles = `
   .seal-box { border: 1px dashed #000; min-height: 26mm; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 7pt; font-weight: 700; text-transform: uppercase; }
   .signature-img { display: block; max-width: 60mm; max-height: 12mm; object-fit: contain; margin: 0 auto 1mm; }
   .signature-line { border-top: 1px solid #000; padding-top: 1mm; text-align: center; min-height: 8mm; }
-  /* Delivery receipt (revamped): flex header (kills the old equal-height-table
-     whitespace) + flex-column page so the open signature lines anchor to the sheet
+  /* Delivery receipt: flex header (avoids the whitespace of an equal-height
+     table) + flex-column page so the open signature lines anchor to the sheet
      foot and the body fills it; degrades gracefully when the items table grows. */
   .receipt-page { font-size: 8.2pt; display: flex; flex-direction: column; min-height: 270mm; }
   .receipt-page .section-title { margin-top: 0.7mm; }
@@ -373,7 +373,7 @@ function Cell({
 
 /**
  * Renders the instrument's blueprint-driven specs as rows of three labeled cells
- * (only fields that have a value). Replaces the old hardcoded weighing rows so the
+ * (only fields that have a value), so the
  * Equipamento section adapts to any asset type. Renders nothing when there are no specs.
  */
 function AssetSpecRows({
@@ -489,7 +489,7 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
 
 /**
  * Balanced delivery-receipt header. Uses flexbox (not a height-matched <table>) so the
- * lab block no longer stretches to the QR column's height and leaves a big blank gap.
+ * lab block does not stretch to the QR column's height and leave a big blank gap.
  */
 const QR_CAPTION =
   "Leia o QR Code para acompanhar a OS e validar a autenticidade no portal.";
@@ -807,8 +807,8 @@ function DeliveryReceiptCopy({
                     </>
                   ) : (
                     // The number already prints in the first column of this same
-                    // section — repeating it here (old "Marca de Reparo aplicada")
-                    // gave the reader two labels for one fact. The client via keeps
+                    // section — repeating it here
+                    // would give the reader two labels for one fact. The client via keeps
                     // only the verification notice.
                     <span className="seal-note">
                       Marca de Reparo sujeita a verificação após o reparo pelo

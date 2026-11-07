@@ -52,7 +52,7 @@ const Q13_OFFLINE_METHODS = [
   "sync.requeueDeadEvent",
 ] as const;
 
-/** Methods that used to work offline and are online-only since Q13. */
+/** Methods outside the Q13 offline scope: online-only. */
 const RECLASSIFIED_TO_CLOUD_ONLY = [
   "dashboard.getStats",
   "customers.create",

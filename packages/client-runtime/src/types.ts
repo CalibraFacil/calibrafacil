@@ -1,6 +1,5 @@
-// Request payload types derived from @calibra-facil/schemas — the client
-// can no longer drift from what the API validates (e.g. the hand-written
-// CreateJobInput was missing sourceServiceOrderId). z.input (not z.infer)
+// Request payload types derived from @calibra-facil/schemas, so the client
+// cannot drift from what the API validates. z.input (not z.infer)
 // keeps fields with schema defaults optional for callers, matching what
 // the wire actually accepts.
 import type { z } from "zod";
@@ -264,7 +263,7 @@ export type { AssetTypeListItem };
 
 export type { EnvironmentalLimitsApi };
 
-/** Accredited-scope (CMC) line: ISO/IEC 17025 7.6/7.8.3, ILAC P14 (#427). */
+/** Accredited-scope (CMC) line: ISO/IEC 17025 7.6/7.8.3, ILAC P14. */
 export type AccreditedScopeLine = ContractAccreditedScopeLine;
 export type ScopeEnforcementMode = ContractScopeEnforcementMode;
 export type AccreditedScopeResponse = ContractAccreditedScopeResponse;

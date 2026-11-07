@@ -1,6 +1,6 @@
 /**
  * The content decisions of a certificate that are taken ONCE, at approval, and
- * frozen with the certificate input (roadmap 2, C1/C2):
+ * frozen with the certificate input:
  *
  *   - the signatory, from the approver's authorized-signatory record
  *     (ISO/IEC 17025 §6.2.6, §7.8.2.1(o)), not from the lab profile's free text

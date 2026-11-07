@@ -23,8 +23,8 @@ function health(
 
 describe("evaluateOperationAvailability", () => {
   it("allows a cloud command on connected desktop", () => {
-    // The regression this whole module exists to prevent: `isDesktop` alone
-    // used to deny jobs.approve outright.
+    // The regression this whole module exists to prevent: denying jobs.approve
+    // on `isDesktop` alone.
     expect(
       evaluateOperationAvailability({
         namespace: "jobs",

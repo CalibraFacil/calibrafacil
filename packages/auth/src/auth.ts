@@ -423,7 +423,7 @@ function isPrivateDevWebOrigin(origin: string): boolean {
 async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
   try {
     const url = new URL(origin);
-    // System path (P2-18j): the Origin of a request is checked BEFORE any session
+    // System path: the Origin of a request is checked BEFORE any session
     // or organization exists, and a hostname is unique across the platform, so
     // "is this hostname an active, verified portal domain of ANY laboratory" is
     // cross-organization by design (one row, only its existence is used).
@@ -488,7 +488,7 @@ async function findPendingPortalInvitation(
     conditions.push(eq(schema.invitation.id, invitationId));
   }
 
-  // System path (P2-18j): the portal magic link is requested by an e-mail that
+  // System path: the portal magic link is requested by an e-mail that
   // has no session yet; the invitation (by e-mail, or by its id, which is the
   // bearer secret of the invite link) is what names the CLIENT organization.
   const [pendingInvitation] = await getSystemDb()
@@ -513,7 +513,7 @@ async function findPendingPortalInvitation(
 async function findLabBrandForClientOrganization(
   clientOrganizationId: string,
 ): Promise<EmailBrand | undefined> {
-  // System path (P2-18j): maps a CLIENT organization to the laboratory whose
+  // System path: maps a CLIENT organization to the laboratory whose
   // customer it is (customer.auth_organization_id), to brand the invitation
   // e-mail. It is the lookup that LEARNS the laboratory, so it cannot name one.
   const [customerData] = await getSystemDb()
@@ -551,7 +551,7 @@ async function findLabBrandForClientOrganization(
     : undefined;
   if (!brand) return undefined;
 
-  // Lab-owned sending domain (#584): portal invitations may leave through the
+  // Lab-owned sending domain: portal invitations may leave through the
   // lab's own verified domain when one is active.
   const sender = await resolveLabEmailSender(customerData.labOrganizationId);
   if (sender) {
@@ -565,7 +565,7 @@ async function findLabBrandForClientOrganization(
 }
 
 async function hasExistingPortalAccess(email: string): Promise<boolean> {
-  // System path (P2-18j): a portal sign-in link is requested before a session
+  // System path: a portal sign-in link is requested before a session
   // exists. "Is this e-mail a member of ANY client organization" is a lookup of
   // the person's own memberships by e-mail across organizations, by design.
   const [existingPortalMember] = await getSystemDb()
@@ -885,7 +885,7 @@ async function ensureLabInvitationUser(email: string): Promise<void> {
   }
 }
 
-// #647: vigência fields travel as ISO strings (see additionalFields below).
+// Vigência fields travel as ISO strings (see additionalFields below).
 function formatVigenciaOutput(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString();
   return typeof value === "string" && value ? value : null;
@@ -934,18 +934,18 @@ function createOrganizationPlugin() {
     roles,
     defaultMemberRole: "member",
     creatorRole: "owner",
-    // Architecture review P0-1: organizations are created by the platform only
+    // Organizations are created by the platform only
     // (public sign-up, lab provisioning, the portal service account). With
     // `false`, Better Auth still lets a server call that names `userId` and has
     // no session through (its "system action") and refuses every signed-in user.
     allowUserToCreateOrganization: false,
-    // Records retention (decision Q16): an organization that holds regulated
+    // Records retention: an organization that holds regulated
     // records is never hard-deleted through the API. Soft delete is a platform
     // operation (softDeleteLabOrganization), and Postgres refuses the DELETE.
     disableOrganizationDeletion: true,
     schema: {
       organization: {
-        // Every field below is `input: false` (architecture review P0-1): a
+        // Every field below is `input: false`: a
         // client request cannot set or change any of them. Server code writes
         // them: `provisionOrganization` at creation and the laboratory's profile
         // route (`PATCH /api/organization/profile`, which checks the role and
@@ -966,7 +966,7 @@ function createOrganizationPlugin() {
             required: false,
             defaultValue: false,
           },
-          // #647: vigência window (nullable). Declared "string" on the wire:
+          // Vigência window (nullable). Declared "string" on the wire:
           // Better Auth validates `type: "date"` additional fields with a
           // plain z.date(), which rejects every JSON body (the Date arrives
           // as an ISO string). The output transform restores an ISO string at
@@ -1122,7 +1122,7 @@ function createSharedConfig(surface: AuthSurface) {
 
   return {
     secret: authSecret,
-    // System path (P2-18j): Better Auth is the identity layer and runs BEFORE an
+    // System path: Better Auth is the identity layer and runs BEFORE an
     // organization is chosen (sign-in, sessions, accounts) and across the
     // person's memberships (organization plugin: create / list / set active /
     // invitations / SSO providers). Its statements cannot name one organization
@@ -1224,7 +1224,7 @@ function createSharedConfig(surface: AuthSurface) {
         enabled: true,
         maxAge: 60 * 5, // 5 minutes
       },
-      // Explicit lifetimes (previously implicit Better Auth defaults) for the
+      // Explicit lifetimes for the
       // regulated context. expiresIn = absolute lifetime; updateAge = how often
       // a live session slides its expiry on use.
       expiresIn: 60 * 60 * 24 * 7, // 7 days
@@ -1292,7 +1292,7 @@ export type DeletedUserIdentity = {
 export async function preserveRegulatedRecordsOnUserDeletion(
   deletedUser: DeletedUserIdentity,
 ): Promise<void> {
-  // System path (P2-18j): deleting a person preserves their regulated records in
+  // System path: deleting a person preserves their regulated records in
   // EVERY laboratory they belonged to, in one transaction (the preservation and
   // its audit rows land together or not at all). The rows are found by user_id
   // across laboratories, so no single organization can be named; the one
@@ -1393,8 +1393,8 @@ export async function preserveRegulatedRecordsOnUserDeletion(
 
 /**
  * Append a sign-in entry to the platform event log. Session creation is the
- * one auth transition the audit trail previously missed (setup-token claims
- * and impersonation were already logged). Failures are swallowed: an audit
+ * one auth transition that needs its own entry (setup-token claims and
+ * impersonation are logged where they happen). Failures are swallowed: an audit
  * write must never block a sign-in.
  */
 async function logAuthSessionCreated(
@@ -1431,7 +1431,7 @@ export async function findDefaultActiveOrganizationId(
   userId: string,
   organizationType: "CLIENT" | "LAB",
 ): Promise<string | null> {
-  // System path (P2-18j): picks the person's default organization when a
+  // System path: picks the person's default organization when a
   // session is created, i.e. before any organization is active: their own
   // memberships by user_id across laboratories, by design.
   const [membership] = await getSystemDb()
@@ -1605,7 +1605,7 @@ export function createLabAuth() {
     ...sharedConfig,
     basePath: "/api/auth/lab",
     baseURL,
-    // SEC-09 (#669): the lab surface is passwordless by principle — passwords
+    // The lab surface is passwordless by principle — passwords
     // are never accepted. Override the shared `enabled: true` so the lab auth
     // instance does NOT mount /sign-in/email, /forget-password or
     // /reset-password. Existing credential rows are left untouched (no schema

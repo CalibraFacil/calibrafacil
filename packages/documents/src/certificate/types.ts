@@ -29,7 +29,7 @@ type CertificateLabIdentity = {
 
 /**
  * §7.8.2.1(a) and (c): the legal entity that performed the calibration. Frozen
- * with the certificate input (roadmap 2 C2); absent on certificates issued
+ * with the certificate input; absent on certificates issued
  * before it was modelled, which then print as they always did.
  */
 type CertificateCalibratingBody = {

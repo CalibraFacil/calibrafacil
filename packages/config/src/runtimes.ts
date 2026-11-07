@@ -43,7 +43,7 @@ const KEK_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 const BASE64_KEY = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /**
- * The key ring of the signing credentials (envelope encryption, roadmap 2 B4a):
+ * The key ring of the signing credentials (envelope encryption):
  * a bad id or a malformed previous key would only surface when a certificate has
  * to be signed, so it stops the start instead. The shapes mirror
  * `createSigningKeyring` in @calibra-facil/signing, which is what parses them.
