@@ -134,8 +134,18 @@ export function evaluateOperationAvailability<
   health,
   target,
 }: EvaluateOperationAvailabilityInput<TNamespace>): OperationAvailability {
-  const policy = getCalibraApiDataPolicy(namespace, method);
+  return evaluatePolicyAvailability(
+    getCalibraApiDataPolicy(namespace, method),
+    health,
+    target,
+  );
+}
 
+function evaluatePolicyAvailability(
+  policy: DataPolicy,
+  health: RuntimeHealthSnapshot,
+  target: OperationTargetState | undefined,
+): OperationAvailability {
   if (!health.isDesktop) {
     return evaluateBrowserAvailability(policy, health);
   }
@@ -152,6 +162,61 @@ export function evaluateOperationAvailability<
     case "local-only":
       return evaluateLocalRuntime(policy, health, "local-runtime");
   }
+}
+
+/**
+ * One product API method a UI section needs, with its data policy resolved.
+ * Build it with {@link operation} so the namespace and method are checked
+ * against `CalibraApi` and an unknown pair fails at compile time.
+ */
+export type OperationRef = {
+  namespace: CalibraApiNamespace;
+  method: string;
+  policy: DataPolicy;
+};
+
+export function operation<TNamespace extends CalibraApiNamespace>(
+  namespace: TNamespace,
+  method: CalibraApiMethod<TNamespace>,
+): OperationRef {
+  return {
+    namespace,
+    method,
+    policy: getCalibraApiDataPolicy(namespace, method),
+  };
+}
+
+/**
+ * Whether a section that renders from (or acts through) every one of
+ * `operations` can run right now. The first blocker wins, so the caller can
+ * show its reason; when all are available the result describes the first.
+ * Replaces runtime sniffing (`isDesktopRuntime()`) as the way to decide that a
+ * feature is shown: the answer follows the data-policy registry, so moving a
+ * method between policies moves every section that calls it.
+ */
+export function evaluateOperationsAvailability({
+  operations,
+  health,
+  target,
+}: {
+  operations: readonly [OperationRef, ...OperationRef[]];
+  health: RuntimeHealthSnapshot;
+  target?: OperationTargetState;
+}): OperationAvailability {
+  const [head, ...rest] = operations;
+  const first = evaluatePolicyAvailability(head.policy, health, target);
+  if (!first.available) {
+    return first;
+  }
+
+  for (const ref of rest) {
+    const result = evaluatePolicyAvailability(ref.policy, health, target);
+    if (!result.available) {
+      return result;
+    }
+  }
+
+  return first;
 }
 
 function evaluateBrowserAvailability(

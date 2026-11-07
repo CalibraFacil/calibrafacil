@@ -81,7 +81,10 @@ import { EventTimeline } from '@/components/event-timeline'
 import { moneyFieldError } from '@/lib/finance-formatters'
 import { cn } from '@calibra-facil/ui/utils'
 import { Button } from '@calibra-facil/ui/button'
-import type { OperationAvailability } from '@calibra-facil/client-runtime'
+import {
+  operation,
+  type OperationAvailability,
+} from '@calibra-facil/client-runtime'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -122,7 +125,10 @@ import {
   ActionAvailabilityGate,
   OperationUnavailableNotice,
 } from '@/components/availability/action-availability-gate'
-import { useOperationAvailability } from '@/runtime/use-operation-availability'
+import {
+  useAvailability,
+  useOperationAvailability,
+} from '@/runtime/use-operation-availability'
 import {
   describeReconcileLag,
   reconcileAfterCloudCommand,
@@ -141,7 +147,6 @@ import {
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
-import { isDesktopRuntime } from '@/runtime/desktop'
 
 function openServiceOrderIntakePreview(order: ServiceOrderDetail) {
   const previewWindow = window.open('', '_blank')
@@ -515,13 +520,21 @@ function ServiceOrderCommunicationsBlock({ id }: { id: string }) {
   )
 }
 
+const FINANCIAL_STATUS_OPERATIONS = [
+  operation('finance', 'getServiceOrderStatus'),
+] as const
+
 export function ServiceOrderDetailPage({
   publicId,
   conflictReturn,
 }: ServiceOrderDetailPageProps) {
   const orderQuery = useServiceOrderDetailData(publicId)
-  // Finance is a cloud-only module; the desktop shell does not show it.
-  const hasFinancial = !isDesktopRuntime()
+  // Finance is a cloud module: the status block shows whenever its call can
+  // run. An order created offline has no cloud identity yet, so the read would
+  // address an order the server has never seen.
+  const hasFinancial = useAvailability(FINANCIAL_STATUS_OPERATIONS, {
+    synced: serviceOrderCloudCommandTarget(orderQuery.data).synced,
+  })
   // Everything below the detail read still addresses the OS by its numeric id,
   // which only exists once the detail has loaded.
   const numericId = orderQuery.data ? String(orderQuery.data.id) : null

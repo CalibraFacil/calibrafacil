@@ -1,4 +1,5 @@
 import { useCurrentRole } from '@/hooks/use-current-role'
+import { useFinanceModuleAvailable } from '@/hooks/use-finance-access'
 import {
   Analytics01Icon,
   AlertCircleIcon,
@@ -33,7 +34,6 @@ import {
   type DashboardNavItem,
 } from '@/app/router/route-meta'
 import { OrganizationSwitcher } from './organization-switcher'
-import { isDesktopRuntime } from '@/runtime/desktop'
 import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
 import { SidebarSearch } from './sidebar-search'
@@ -94,8 +94,9 @@ export function AppSidebar() {
   const currentRole = useCurrentRole()
   const canAccessAdminOrOwner =
     currentRole === 'owner' || currentRole === 'admin'
-  // Finance is a cloud-only module; the desktop shell never lists it.
-  const canAccessFinance = canAccessAdminOrOwner && !isDesktopRuntime()
+  // Finance is a cloud-only module: listed whenever its calls can run.
+  const financeAvailable = useFinanceModuleAvailable()
+  const canAccessFinance = canAccessAdminOrOwner && financeAvailable
 
   const navAccess = { canAccessFinance, canAccessAdminOrOwner }
   const sections = dashboardNavSections

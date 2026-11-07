@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateOperationAvailability,
+  evaluateOperationsAvailability,
+  operation,
   type RuntimeHealthSnapshot,
 } from "./availability";
 
@@ -205,5 +207,76 @@ describe("evaluateOperationAvailability", () => {
         target: { synced: false, hasPendingLocalChanges: true },
       }),
     ).toMatchObject({ available: true });
+  });
+});
+
+describe("evaluateOperationsAvailability", () => {
+  const financeSection = [
+    operation("access", "getFinanceAccess"),
+    operation("finance", "getOverview"),
+  ] as const;
+
+  it("shows a cloud-only section on a connected desktop and in the browser", () => {
+    expect(
+      evaluateOperationsAvailability({
+        operations: financeSection,
+        health: health(),
+      }).available,
+    ).toBe(true);
+    expect(
+      evaluateOperationsAvailability({
+        operations: financeSection,
+        health: health({ isDesktop: false, cloud: "unknown" }),
+      }).available,
+    ).toBe(true);
+  });
+
+  it("hides a cloud-only section while the desktop cloud is unreachable", () => {
+    const result = evaluateOperationsAvailability({
+      operations: financeSection,
+      health: health({ cloud: "unreachable" }),
+    });
+
+    expect(result).toMatchObject({
+      available: false,
+      reason: "cloud-unreachable",
+    });
+  });
+
+  it("keeps a local-first read section working offline", () => {
+    expect(
+      evaluateOperationsAvailability({
+        operations: [
+          operation("customers", "get"),
+          operation("assets", "list"),
+        ],
+        health: health({ cloud: "unreachable" }),
+      }).available,
+    ).toBe(true);
+  });
+
+  it("is unavailable when any one method is blocked, and says which", () => {
+    const result = evaluateOperationsAvailability({
+      operations: [
+        operation("customers", "get"),
+        operation("finance", "getOverview"),
+      ],
+      health: health({ cloud: "unreachable" }),
+    });
+
+    expect(result).toMatchObject({ available: false, policy: "cloud-only" });
+  });
+
+  it("passes the target through to cloud commands", () => {
+    const result = evaluateOperationsAvailability({
+      operations: financeSection,
+      health: health(),
+      target: { synced: false },
+    });
+
+    expect(result).toMatchObject({
+      available: false,
+      reason: "entity-not-synced",
+    });
   });
 });
