@@ -1,18 +1,12 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 
 import { Button } from "@calibra-facil/ui/button";
 import { Card, CardContent } from "@calibra-facil/ui/card";
 import { Spinner } from "@calibra-facil/ui/spinner";
-import { portalCertificateDetailSchema } from "@calibra-facil/contracts";
-import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalKeys } from "@/lib/portal-keys";
-import {
-  CertificateDetailView,
-  type Certificate,
-} from "@/features/certificates/certificate-detail-view";
+import { CertificateDetailView } from "@/features/certificates/certificate-detail-view";
+import { useCertificateDetail } from "@/features/certificates/queries";
 
 export const Route = createFileRoute("/_authenticated/certificates/$id")({
   component: CertificateDetailPage,
@@ -20,22 +14,7 @@ export const Route = createFileRoute("/_authenticated/certificates/$id")({
 
 function CertificateDetailPage() {
   const { id } = Route.useParams();
-  const keys = usePortalKeys();
-
-  const {
-    data: certificate,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: keys.certificate(id),
-    queryFn: async (): Promise<Certificate> => {
-      return fetchPortalJson(
-        `/api/portal/certificates/${encodeURIComponent(id)}`,
-        portalCertificateDetailSchema,
-        { errorMessage: "Falha ao carregar certificado" },
-      );
-    },
-  });
+  const { data: certificate, isLoading, error } = useCertificateDetail(id);
 
   if (isLoading) {
     return (

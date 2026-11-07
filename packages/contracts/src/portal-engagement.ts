@@ -24,8 +24,6 @@ import { serviceOrderStatusSchema } from "./endpoints/service-orders";
  * allowed, timestamps are ISO strings.
  */
 
-const jsonRecordSchema = z.record(z.string(), z.unknown());
-
 // ---------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------
@@ -310,6 +308,13 @@ const portalQuoteItemSchema = z.object({
   warrantyCovered: z.boolean(),
 });
 
+const portalOrderDocumentSchema = z.object({
+  id: z.number(),
+  documentNumber: z.string(),
+  version: z.number(),
+  pdfR2Key: nullableString,
+});
+
 /** GET /api/portal/service-orders/:id (`data`): the client-visible order. */
 export const portalServiceOrderDetailSchema = z.object({
   id: z.number(),
@@ -333,7 +338,40 @@ export const portalServiceOrderDetailSchema = z.object({
   inmetroRepairMarkNotes: nullableString.optional(),
   warrantyUntil: nullableString.optional(),
   warrantyTerms: nullableString.optional(),
-  assetSnapshot: jsonRecordSchema.nullable().optional(),
+  /** The instrument as it was received (`service_order_asset_snapshot`). */
+  assetSnapshot: z
+    .object({
+      assetName: nullableString.optional(),
+      assetType: nullableString.optional(),
+      manufacturer: nullableString.optional(),
+      model: nullableString.optional(),
+      serialNumber: nullableString.optional(),
+      patrimonyNumber: nullableString.optional(),
+    })
+    .nullable()
+    .optional(),
+  intakeDocuments: z.array(portalOrderDocumentSchema).optional(),
+  deliveryDocuments: z.array(portalOrderDocumentSchema).optional(),
+  certificateLinks: z
+    .array(
+      z.object({
+        id: z.number(),
+        certificateJobId: z.number(),
+        /** The certificate's job code. */
+        jobId: nullableString.optional(),
+      }),
+    )
+    .optional(),
+  /** Customer-relevant timeline entries; the page filters the event types it names. */
+  events: z
+    .array(
+      z.object({
+        id: z.number(),
+        eventType: z.string(),
+        createdAt: z.string(),
+      }),
+    )
+    .optional(),
   evaluations: z
     .array(
       z.object({

@@ -1,13 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  portalOotAcknowledgeResponseSchema,
-  portalOotNotificationsResponseSchema,
-} from "@calibra-facil/contracts";
-import type { OotNotificationStatus } from "@calibra-facil/schemas/machines";
+import type { PortalOotNotificationsResponse } from "@calibra-facil/contracts";
 
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalKeys } from "@/lib/portal-keys";
+import { portalApi } from "@/lib/portal-api";
 
 /**
  * ISO/IEC 17025 §7.10 out-of-tolerance notifications: the lab informed this
@@ -17,42 +13,14 @@ import { usePortalKeys } from "@/lib/portal-keys";
  * measurements on their side.
  */
 
-type OotNotificationAckVia = "email_link" | "portal_link" | "manual";
-
-export type OotNotification = {
-  /** Opaque acknowledgment token — never a numeric database id. */
-  id: string;
-  ncNumber: string;
-  certificateNumber: string | null;
-  affectedScope: string | null;
-  status: OotNotificationStatus;
-  sentAt: string | null;
-  acknowledgedAt: string | null;
-  acknowledgedVia: OotNotificationAckVia | null;
-  createdAt: string;
-  assetName: string | null;
-  assetTag: string | null;
-  unitName: string | null;
-};
-
-export type OotNotificationsResponse = {
-  data: Array<OotNotification>;
-  counts: {
-    total: number;
-    pending: number;
-  };
-};
+/** `id` is the opaque acknowledgment token, never a numeric database id. */
+export type OotNotification = PortalOotNotificationsResponse["data"][number];
 
 export function useOotNotifications() {
   const keys = usePortalKeys();
   return useQuery({
     queryKey: keys.ootNotifications,
-    queryFn: (): Promise<OotNotificationsResponse> =>
-      fetchPortalJson(
-        "/api/portal/oot-notifications",
-        portalOotNotificationsResponseSchema,
-        { errorMessage: "Falha ao carregar as notificações." },
-      ),
+    queryFn: () => portalApi.ootNotifications.list(),
     staleTime: 60_000,
   });
 }
@@ -64,14 +32,9 @@ export function useAcknowledgeOotNotification() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      await fetchPortalJson(
-        `/api/portal/oot-notifications/${id}/acknowledge`,
-        portalOotAcknowledgeResponseSchema,
-        {
-          errorMessage: "Não foi possível confirmar o recebimento.",
-          serverErrorMessage: true,
-          init: jsonInit("POST"),
-        },
+      await portalApi.ootNotifications.acknowledge(
+        { params: { token: id } },
+        { serverErrorMessage: true },
       );
     },
     onSuccess: async () => {

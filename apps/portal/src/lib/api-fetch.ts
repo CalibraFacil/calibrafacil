@@ -50,6 +50,8 @@ type RequestOptions = {
 
 type FetchPortalJsonOptions = ResponseValidationOptions &
   RequestOptions & {
+    /** Names the call in a contract error (default: the method and the path). */
+    contractLabel?: string;
     /** Shown to the user when the API answers with an HTTP error. */
     errorMessage: string;
     /**
@@ -152,6 +154,7 @@ export async function fetchPortalJson<TSchema extends z.ZodType>(
   {
     errorMessage,
     serverErrorMessage,
+    contractLabel,
     init,
     credentials,
     responseValidation,
@@ -165,7 +168,7 @@ export async function fetchPortalJson<TSchema extends z.ZodType>(
   return readPortalJson(
     response,
     schema,
-    `${init?.method ?? "GET"} ${path.split("?")[0]}`,
+    contractLabel ?? `${init?.method ?? "GET"} ${path.split("?")[0]}`,
     { responseValidation, onResponseContractViolation },
   );
 }

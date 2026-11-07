@@ -2,10 +2,8 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  FinancialSummaryCard,
-  type PortalFinancialSummary,
-} from "./financial-summary-card";
+import type { PortalFinancialSummary } from "@calibra-facil/contracts";
+import { FinancialSummaryCard } from "./financial-summary-card";
 
 function summary(
   overrides: Partial<PortalFinancialSummary> = {},

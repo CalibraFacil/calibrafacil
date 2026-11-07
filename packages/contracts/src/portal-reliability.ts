@@ -11,6 +11,13 @@ import { nullableNumber, nullableString } from "./common";
  * Wire schemas (see `jobs.ts`); the portal never recomputes verdicts.
  */
 
+/**
+ * The time unit of the drift regression's x axis (months since the first
+ * cycle: 365.25 / 12 days). The API fits the line in it and the portal's chart
+ * evaluates the fitted line in it, so both read this one constant.
+ */
+export const DRIFT_REGRESSION_MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
+
 const conformitySchema = z.enum(["CONFORMING", "NON_CONFORMING", "UNKNOWN"]);
 
 /** Rates are % over KNOWN cycles; `unknown` counts cycles without an as-found signal. */

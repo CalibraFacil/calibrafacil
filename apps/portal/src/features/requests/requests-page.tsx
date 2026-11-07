@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
-import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
@@ -39,11 +38,9 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { useOverview } from "@/features/dashboard/queries";
-import { portalRequestsResponseSchema } from "@calibra-facil/contracts";
-import { PortalApiError, fetchPortalJson } from "@/lib/api-fetch";
+import type { PortalRequestsResponse } from "@calibra-facil/contracts";
 import { cn } from "@calibra-facil/ui/utils";
-import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
-import { usePortalKeys } from "@/lib/portal-keys";
+import { useRequests } from "./queries";
 import {
   CALIBRATION_REQUEST_STATUS,
   type CalibrationRequestStatus,
@@ -54,46 +51,7 @@ import {
   pluralize,
 } from "@calibra-facil/shared/format";
 
-type CalibrationRequest = {
-  id: number;
-  status: CalibrationRequestStatus;
-  observations: string | null;
-  requestedDueDate: string | null;
-  submittedAt: string;
-  reviewedAt: string | null;
-  approvedAt: string | null;
-  convertedAt: string | null;
-  customerName: string;
-  itemCount: number;
-};
-
-type RequestsResponse = {
-  data: Array<CalibrationRequest>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-function getPortalErrorMessage(payload: unknown) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return null;
-  }
-
-  const errorBody = Object.fromEntries(Object.entries(payload));
-  if (typeof errorBody.error === "string") return errorBody.error;
-  if (!Array.isArray(errorBody.errors)) return null;
-
-  return errorBody.errors
-    .flatMap((item) => {
-      if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-      const message = Object.fromEntries(Object.entries(item)).message;
-      return typeof message === "string" ? [message] : [];
-    })
-    .join(", ");
-}
+type CalibrationRequest = PortalRequestsResponse["data"][number];
 
 // Module-level so the header/cell renderers are stable component types
 // instead of being re-created on every render of the page.
@@ -203,41 +161,11 @@ export function RequestsPage({
   const overview = useOverview();
   const requestStats = overview.data?.requests;
 
-  const keys = usePortalKeys();
-  const { data, isLoading, error } = useQuery({
-    queryKey: keys.requestsPage({
-      page,
-      limit,
-      search: deferredSearch,
-      statusFilter,
-    }),
-    queryFn: async (): Promise<RequestsResponse> => {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-      });
-      if (deferredSearch) params.set("query", deferredSearch);
-      if (statusFilter) params.set("status", statusFilter);
-
-      try {
-        return await fetchPortalJson(
-          `/api/portal/requests?${params.toString()}`,
-          portalRequestsResponseSchema,
-          { errorMessage: "Falha ao carregar solicitacoes" },
-        );
-      } catch (failure) {
-        if (!(failure instanceof PortalApiError)) throw failure;
-        // Show the API's own message (or its validation errors) with the status.
-        const apiMessage = getPortalErrorMessage(failure.body);
-        throw new Error(
-          apiMessage
-            ? `${apiMessage} (${failure.status})`
-            : `Falha ao carregar solicitacoes (${failure.status})`,
-          { cause: failure },
-        );
-      }
-    },
-    placeholderData: keepPreviousDataInScope(keys.requests),
+  const { data, isLoading, error } = useRequests({
+    page,
+    limit,
+    search: deferredSearch,
+    statusFilter,
   });
 
   function applyStatusFilter(next: CalibrationRequestStatus | "") {

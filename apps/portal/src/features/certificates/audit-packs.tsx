@@ -1,7 +1,6 @@
 import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { formatFileSize } from "@calibra-facil/shared/format";
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Download04Icon, FolderZipIcon } from "@hugeicons/core-free-icons";
 import type { DateRange } from "react-day-picker";
@@ -24,65 +23,12 @@ import { Spinner } from "@calibra-facil/ui/spinner";
 import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { usePortalUnits } from "@/features/fleet/queries";
-import {
-  portalAuditPackRequestedResponseSchema,
-  portalAuditPacksResponseSchema,
-  portalDownloadLinkResponseSchema,
-} from "@calibra-facil/contracts";
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalKeys } from "@/lib/portal-keys";
+import type { PortalAuditPack } from "@calibra-facil/contracts";
+import { useAuditPacks, useRequestAuditPack } from "./queries";
+import { portalApi } from "@/lib/portal-api";
 
-type AuditPackStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
-
-type AuditPack = {
-  id: number;
-  status: AuditPackStatus;
-  dateFrom: string;
-  dateTo: string;
-  unitId: number | null;
-  unitName: string | null;
-  include: {
-    certificates: boolean;
-    fleetReport: boolean;
-    verificationIndex: boolean;
-  };
-  certificateCount: number | null;
-  fileSizeBytes: number | null;
-  expiresAt: string | null;
-  expired: boolean;
-  completedAt: string | null;
-  createdAt: string;
-};
-
-type AuditPacksResponse = { data: Array<AuditPack> };
-
-type AuditPackRequest = {
-  dateFrom: string;
-  dateTo: string;
-  unitId?: number;
-  include: AuditPack["include"];
-};
-
-function isInFlight(pack: AuditPack): boolean {
-  return pack.status === "PENDING" || pack.status === "PROCESSING";
-}
-
-function useAuditPacks() {
-  const keys = usePortalKeys();
-  return useQuery({
-    queryKey: keys.auditPacks,
-    queryFn: (): Promise<AuditPacksResponse> =>
-      fetchPortalJson(
-        "/api/portal/audit-packs",
-        portalAuditPacksResponseSchema,
-        { errorMessage: "Falha ao carregar pacotes de auditoria" },
-      ),
-    // The pack is generated asynchronously — poll while one is in flight so
-    // the row flips to "Pronto" without a manual refresh.
-    refetchInterval: (query) =>
-      query.state.data?.data.some(isInFlight) ? 5_000 : false,
-  });
-}
+type AuditPack = PortalAuditPack;
+type AuditPackStatus = AuditPack["status"];
 
 function toDateParam(date: Date): string {
   const year = date.getFullYear();
@@ -123,13 +69,9 @@ function AuditPackDownloadButton({ pack }: { pack: AuditPack }) {
     if (isDownloading) return;
     setIsDownloading(true);
     try {
-      const { url, filename } = await fetchPortalJson(
-        `/api/portal/audit-packs/${pack.id}/download`,
-        portalDownloadLinkResponseSchema,
-        {
-          errorMessage: "Falha ao baixar o pacote.",
-          serverErrorMessage: true,
-        },
+      const { url, filename } = await portalApi.auditPacks.download(
+        { params: { id: pack.id } },
+        { serverErrorMessage: true },
       );
       const link = document.createElement("a");
       link.href = url;
@@ -166,8 +108,6 @@ function AuditPackDownloadButton({ pack }: { pack: AuditPack }) {
 }
 
 function AuditPackDialog() {
-  const queryClient = useQueryClient();
-  const keys = usePortalKeys();
   const unitsQuery = usePortalUnits();
   const units = unitsQuery.data?.units ?? [];
   const showUnitFilter = units.length > 1;
@@ -182,29 +122,15 @@ function AuditPackDialog() {
   const [includeVerificationIndex, setIncludeVerificationIndex] =
     useState(true);
 
-  const requestMutation = useMutation({
-    mutationFn: async (body: AuditPackRequest) => {
-      return fetchPortalJson(
-        "/api/portal/audit-packs",
-        portalAuditPackRequestedResponseSchema,
-        {
-          errorMessage: "Falha ao solicitar o pacote.",
-          serverErrorMessage: true,
-          init: jsonInit("POST", body),
-        },
-      );
-    },
-    onSuccess: async () => {
+  const requestMutation = useRequestAuditPack({
+    onSuccess: () => {
       setOpen(false);
       toast.success(
         "Pacote em preparação. Você receberá um e-mail quando estiver pronto.",
       );
-      await queryClient.invalidateQueries({ queryKey: keys.auditPacks });
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Falha ao solicitar o pacote.",
-      );
+      toast.error(error.message || "Falha ao solicitar o pacote.");
     },
   });
 
@@ -366,7 +292,7 @@ function AuditPackRow({ pack }: { pack: AuditPack }) {
           {pack.status === "FAILED"
             ? "Não foi possível gerar o pacote. Tente novamente."
             : null}
-          {isInFlight(pack)
+          {pack.status === "PENDING" || pack.status === "PROCESSING"
             ? "Preparando pacote… Você receberá um e-mail quando estiver pronto."
             : null}
           {pack.expired

@@ -1,5 +1,4 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeferredValue, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -25,15 +24,15 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getCalibrationStatus } from "@/lib/calibration-status";
-import {
-  portalFleetAssetsResponseSchema,
-  portalRequestBatchResponseSchema,
-  type PortalFleetAssetsResponse,
-  type PortalRequestBatchResponse,
-} from "@calibra-facil/contracts";
-import { fetchExternalJson, fetchPortalJson, jsonInit } from "@/lib/api-fetch";
+import type { PortalFleetAsset } from "@calibra-facil/contracts";
+import { fetchExternalJson } from "@/lib/api-fetch";
 import { cn } from "@calibra-facil/ui/utils";
-import { usePortalKeys } from "@/lib/portal-keys";
+import {
+  preselectKeyOf,
+  usePreselectedAssets,
+  useCreateRequests,
+  useRequestableAssets,
+} from "./queries";
 import {
   EMPTY_ADDRESS_FORM,
   type AddressForm,
@@ -47,31 +46,9 @@ import {
   viaCepUrl,
 } from "@calibra-facil/shared/viacep";
 
-type PortalAsset = {
-  id: number;
-  name: string;
-  tag: string;
-  serialNumber: string;
-  manufacturer: string | null;
-  model: string | null;
-  assetTypeName: string;
-  nextCalibrationDate: string | null;
-};
-
-type AssetsResponse = PortalFleetAssetsResponse;
+type PortalAsset = PortalFleetAsset;
 
 type DeliveryMethod = "dropoff" | "carrier" | "onsite";
-
-// The batch endpoint splits a (possibly cross-unit) selection into one request
-// per unit and returns `{ created: [{ id, ... }] }`.
-function getCreatedRequestIds(
-  result: PortalRequestBatchResponse,
-): Array<number> {
-  if (result.created.length === 0) {
-    throw new Error("Resposta inválida ao criar solicitação");
-  }
-  return result.created.map((item) => item.id);
-}
 
 function DeliveryOption({
   active,
@@ -134,8 +111,6 @@ function Field({
 
 export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
   const navigate = useNavigate();
-  const keys = usePortalKeys();
-  const queryClient = useQueryClient();
 
   const [selectedAssets, setSelectedAssets] = useState<Array<PortalAsset>>([]);
 
@@ -143,26 +118,8 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
   // selection once per assetIds value. Seeding happens during render (the
   // sanctioned setState-during-render adjustment — no useEffect), so the user
   // can still unselect them afterwards.
-  const preselectKey =
-    assetIds && assetIds.length > 0
-      ? [...assetIds].sort((a, b) => a - b).join(",")
-      : null;
-  const preselectQuery = useQuery({
-    queryKey: keys.requestPreselect(preselectKey),
-    enabled: preselectKey !== null,
-    staleTime: Infinity,
-    queryFn: async (): Promise<AssetsResponse> => {
-      const params = new URLSearchParams({
-        ids: preselectKey ?? "",
-        limit: "50",
-      });
-      return fetchPortalJson(
-        `/api/portal/assets?${params.toString()}`,
-        portalFleetAssetsResponseSchema,
-        { errorMessage: "Falha ao carregar ativos" },
-      );
-    },
-  });
+  const preselectKey = preselectKeyOf(assetIds);
+  const preselectQuery = usePreselectedAssets(assetIds);
   const [seededKey, setSeededKey] = useState<string | null>(null);
   if (preselectKey && seededKey !== preselectKey && preselectQuery.data) {
     setSeededKey(preselectKey);
@@ -204,22 +161,11 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
     setOnsiteAddress((current) => mergeViaCepAddress(current, resolved));
   }
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: keys.requestAssets(page, limit, deferredSearch),
-    queryFn: async (): Promise<AssetsResponse> => {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-      });
-      if (deferredSearch) params.set("query", deferredSearch);
-
-      return fetchPortalJson(
-        `/api/portal/assets?${params.toString()}`,
-        portalFleetAssetsResponseSchema,
-        { errorMessage: "Falha ao carregar ativos" },
-      );
-    },
-  });
+  const { data, isLoading, error } = useRequestableAssets(
+    page,
+    limit,
+    deferredSearch,
+  );
 
   const selectedIds = useMemo(
     () => new Set(selectedAssets.map((asset) => asset.id)),
@@ -239,57 +185,18 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
   );
   const hasOnsiteAddress = Object.keys(onsiteAddressPayload).length > 0;
 
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const result = await fetchPortalJson(
-        "/api/portal/requests/batch",
-        portalRequestBatchResponseSchema,
-        {
-          errorMessage: "Erro ao criar solicitação",
-          serverErrorMessage: true,
-          init: jsonInit("POST", {
-            assetIds: selectedAssets.map((asset) => asset.id),
-            observations: observations || undefined,
-            requestedDueDate: requestedDueDate
-              ? new Date(`${requestedDueDate}T12:00:00`).toISOString()
-              : undefined,
-            deliveryMethod,
-            invoiceRemittanceNumber: isCarrier
-              ? nfNumber || undefined
-              : undefined,
-            invoiceRemittanceKey: isCarrier
-              ? nfKeyDigits || undefined
-              : undefined,
-            carrierName: isCarrier ? carrier || undefined : undefined,
-            invoiceRemittanceIssuedAt:
-              isCarrier && nfIssuedAt
-                ? new Date(`${nfIssuedAt}T12:00:00`).toISOString()
-                : undefined,
-            onsiteAddress:
-              isOnsite && hasOnsiteAddress ? onsiteAddressPayload : undefined,
-            preferredVisitDate:
-              isOnsite && preferredVisitDate
-                ? new Date(`${preferredVisitDate}T12:00:00`).toISOString()
-                : undefined,
-          }),
-        },
-      );
-
-      return { ids: getCreatedRequestIds(result) };
-    },
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: keys.requests });
-      await queryClient.invalidateQueries({ queryKey: keys.overview });
+  const createMutation = useCreateRequests({
+    onSuccess: (ids) => {
       // A cross-unit selection becomes one request per unit. Land on the detail
       // page for a single request; otherwise go to the list.
-      if (result.ids.length === 1) {
+      if (ids.length === 1) {
         toast.success("Solicitação enviada com sucesso");
         navigate({
           to: "/requests/$id",
-          params: { id: String(result.ids[0]) },
+          params: { id: String(ids[0]) },
         });
       } else {
-        toast.success(`${result.ids.length} solicitações enviadas`);
+        toast.success(`${ids.length} solicitações enviadas`);
         navigate({ to: "/requests" });
       }
     },
@@ -297,6 +204,30 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
       toast.error(mutationError.message);
     },
   });
+
+  function submitRequest() {
+    createMutation.mutate({
+      assetIds: selectedAssets.map((asset) => asset.id),
+      observations: observations || undefined,
+      requestedDueDate: requestedDueDate
+        ? new Date(`${requestedDueDate}T12:00:00`).toISOString()
+        : undefined,
+      deliveryMethod,
+      invoiceRemittanceNumber: isCarrier ? nfNumber || undefined : undefined,
+      invoiceRemittanceKey: isCarrier ? nfKeyDigits || undefined : undefined,
+      carrierName: isCarrier ? carrier || undefined : undefined,
+      invoiceRemittanceIssuedAt:
+        isCarrier && nfIssuedAt
+          ? new Date(`${nfIssuedAt}T12:00:00`).toISOString()
+          : undefined,
+      onsiteAddress:
+        isOnsite && hasOnsiteAddress ? onsiteAddressPayload : undefined,
+      preferredVisitDate:
+        isOnsite && preferredVisitDate
+          ? new Date(`${preferredVisitDate}T12:00:00`).toISOString()
+          : undefined,
+    });
+  }
 
   function toggleAsset(asset: PortalAsset) {
     setSelectedAssets((current) =>
@@ -730,7 +661,7 @@ export function NewRequestPage({ assetIds }: { assetIds?: Array<number> }) {
           <Button
             className={cn("w-full", ACTION_BUTTON_CLASS)}
             disabled={!canSubmit}
-            onClick={() => createMutation.mutate()}
+            onClick={submitRequest}
           >
             {createMutation.isPending ? (
               <>

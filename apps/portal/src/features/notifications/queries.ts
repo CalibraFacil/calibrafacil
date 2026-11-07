@@ -1,4 +1,3 @@
-import { PortalNotificationType } from "@calibra-facil/schemas";
 import {
   useInfiniteQuery,
   useMutation,
@@ -6,47 +5,26 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
-import type { NotificationStatus } from "@calibra-facil/schemas/machines";
-import {
-  portalNotificationCountResponseSchema,
-  portalNotificationFeedResponseSchema,
-  portalNotificationMarkReadResponseSchema,
-  portalNotificationPreferencesResponseSchema,
+import type {
+  PortalNotificationFeedResponse,
+  PortalNotificationPreferencesResponse,
 } from "@calibra-facil/contracts";
+import type { PortalNotificationType } from "@calibra-facil/schemas";
 
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalKeys } from "@/lib/portal-keys";
+import { portalApi } from "@/lib/portal-api";
 
 /**
- * General in-app notification center (issue #741). Shapes mirror
- * apps/api/src/routes/portal-notifications.ts and the portal
- * notification-preferences endpoints in portal.ts.
+ * General in-app notification center (issue #741). The shapes are the
+ * contracts of `/api/portal/notifications` and `/notification-preferences`.
  */
 
-export type PortalNotificationItem = {
-  id: number;
-  type: string;
-  priority: "HIGH" | "MEDIUM" | "LOW";
-  status: NotificationStatus;
-  title: string;
-  message: string;
-  actionUrl: string | null;
-  createdAt: string;
-  readAt: string | null;
-};
+export type NotificationFeedPage = PortalNotificationFeedResponse;
+export type PortalNotificationItem = NotificationFeedPage["data"][number];
 
-export type NotificationFeedPage = {
-  data: Array<PortalNotificationItem>;
-  nextCursor: number | null;
-};
-
-export type NotificationChannels = { inApp: boolean; email: boolean };
-
-export type NotificationPreferences = {
-  digestFrequency: "NONE" | "DAILY" | "WEEKLY";
-  emailEnabled: boolean;
-  preferences: Partial<Record<PortalNotificationType, NotificationChannels>>;
-};
+export type NotificationPreferences = PortalNotificationPreferencesResponse;
+export type NotificationChannels =
+  NotificationPreferences["preferences"][string];
 
 /**
  * Bell badge. Polled — the portal has no realtime channel by design; a
@@ -57,14 +35,9 @@ export function useUnreadNotificationCount() {
   return useQuery({
     queryKey: keys.notificationCount,
     queryFn: async (): Promise<number> => {
-      const result = await fetchPortalJson(
-        "/api/portal/notifications/unread-count",
-        portalNotificationCountResponseSchema,
-        {
-          errorMessage: "Falha ao carregar as notificações.",
-          serverErrorMessage: true,
-        },
-      );
+      const result = await portalApi.notifications.unreadCount(undefined, {
+        serverErrorMessage: true,
+      });
       return result.count;
     },
     staleTime: 30_000,
@@ -82,15 +55,9 @@ export function useNotificationFeed(enabled: boolean) {
     }: {
       pageParam: number | undefined;
     }): Promise<NotificationFeedPage> => {
-      const params = new URLSearchParams({ limit: "20" });
-      if (pageParam !== undefined) params.set("cursor", String(pageParam));
-      return fetchPortalJson(
-        `/api/portal/notifications?${params}`,
-        portalNotificationFeedResponseSchema,
-        {
-          errorMessage: "Falha ao carregar as notificações.",
-          serverErrorMessage: true,
-        },
+      return portalApi.notifications.list(
+        { query: { limit: 20, cursor: pageParam } },
+        { serverErrorMessage: true },
       );
     },
     initialPageParam: undefined,
@@ -117,14 +84,9 @@ export function useMarkNotificationsRead() {
   const invalidate = useInvalidateNotifications();
   return useMutation({
     mutationFn: async (notificationIds: Array<number>): Promise<void> => {
-      await fetchPortalJson(
-        "/api/portal/notifications/mark-read",
-        portalNotificationMarkReadResponseSchema,
-        {
-          errorMessage: "Não foi possível marcar como lida.",
-          serverErrorMessage: true,
-          init: jsonInit("POST", { notificationIds }),
-        },
+      await portalApi.notifications.markRead(
+        { body: { notificationIds } },
+        { serverErrorMessage: true },
       );
     },
     onSuccess: invalidate,
@@ -135,15 +97,9 @@ export function useMarkAllNotificationsRead() {
   const invalidate = useInvalidateNotifications();
   return useMutation({
     mutationFn: async (): Promise<void> => {
-      await fetchPortalJson(
-        "/api/portal/notifications/mark-all-read",
-        portalNotificationCountResponseSchema,
-        {
-          errorMessage: "Não foi possível marcar todas como lidas.",
-          serverErrorMessage: true,
-          init: jsonInit("POST"),
-        },
-      );
+      await portalApi.notifications.markAllRead(undefined, {
+        serverErrorMessage: true,
+      });
     },
     onSuccess: invalidate,
   });
@@ -154,20 +110,15 @@ export function useNotificationPreferences() {
   return useQuery({
     queryKey: keys.notificationPreferences,
     queryFn: async (): Promise<NotificationPreferences> => {
-      return fetchPortalJson(
-        "/api/portal/notification-preferences",
-        portalNotificationPreferencesResponseSchema,
-        {
-          errorMessage: "Falha ao carregar preferências.",
-          serverErrorMessage: true,
-        },
-      );
+      return portalApi.notifications.preferences(undefined, {
+        serverErrorMessage: true,
+      });
     },
   });
 }
 
 export type UpdatePreferencesInput = {
-  digestFrequency?: "NONE" | "DAILY" | "WEEKLY";
+  digestFrequency?: NotificationPreferences["digestFrequency"];
   emailEnabled?: boolean;
   preferences?: Partial<Record<PortalNotificationType, NotificationChannels>>;
 };
@@ -184,14 +135,9 @@ export function useUpdateNotificationPreferences() {
     mutationFn: async (
       input: UpdatePreferencesInput,
     ): Promise<NotificationPreferences> => {
-      return fetchPortalJson(
-        "/api/portal/notification-preferences",
-        portalNotificationPreferencesResponseSchema,
-        {
-          errorMessage: "Falha ao salvar preferências.",
-          serverErrorMessage: true,
-          init: jsonInit("PUT", input),
-        },
+      return portalApi.notifications.updatePreferences(
+        { body: input },
+        { serverErrorMessage: true },
       );
     },
     onMutate: async (input) => {

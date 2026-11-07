@@ -1,66 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  portalVisitConfirmResponseSchema,
-  portalVisitRescheduleResponseSchema,
-  portalVisitsResponseSchema,
+import type {
+  PortalVisit,
+  PortalVisitsResponse,
 } from "@calibra-facil/contracts";
 
-import type { Address } from "@calibra-facil/shared/address";
-import type {
-  VisitRescheduleRequestStatus,
-  VisitStatus,
-} from "@calibra-facil/schemas/machines";
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalKeys } from "@/lib/portal-keys";
+import { portalApi } from "@/lib/portal-api";
 
-type PortalVisitStatus = VisitStatus;
+export type { PortalVisit };
 
-type PortalVisitAddress = Address | null;
+type PortalVisitPreferredWindow = NonNullable<
+  PortalVisit["rescheduleRequest"]
+>["preferredWindows"][number];
 
-export type PortalVisitReschedulePeriod = "MORNING" | "AFTERNOON" | "ANY";
-
-type PortalVisitPreferredWindow = {
-  /** ISO yyyy-mm-dd */
-  date: string;
-  period: PortalVisitReschedulePeriod;
-  note?: string;
-};
-
-type PortalVisitRescheduleRequest = {
-  id: number;
-  status: VisitRescheduleRequestStatus;
-  reason: string | null;
-  preferredWindows: Array<PortalVisitPreferredWindow>;
-  resolutionNote: string | null;
-  createdAt: string;
-  resolvedAt: string | null;
-};
-
-export type PortalVisit = {
-  id: number;
-  status: PortalVisitStatus;
-  scheduledAt: string | null;
-  scheduledEndAt: string | null;
-  address: PortalVisitAddress;
-  customerName: string;
-  technicianName: string | null;
-  sourceRequestId: number | null;
-  cancelReason: string | null;
-  assetCount: number;
-  customerConfirmedAt: string | null;
-  /** Latest reschedule request for this visit (any status), if one exists. */
-  rescheduleRequest: PortalVisitRescheduleRequest | null;
-};
-
-type PortalVisitsResponse = {
-  data: Array<PortalVisit>;
-};
+export type PortalVisitReschedulePeriod = PortalVisitPreferredWindow["period"];
 
 function fetchVisits(): Promise<PortalVisitsResponse> {
-  return fetchPortalJson("/api/portal/visits", portalVisitsResponseSchema, {
-    errorMessage: "Falha ao carregar as visitas",
-  });
+  return portalApi.visits.list();
 }
 
 /** On-site visits scheduled for the customer (excludes cancelled). */
@@ -86,14 +43,9 @@ export function useConfirmVisitPresence() {
   const invalidate = useInvalidateVisits();
   return useMutation({
     mutationFn: async (visitId: number): Promise<void> => {
-      await fetchPortalJson(
-        `/api/portal/visits/${visitId}/confirm`,
-        portalVisitConfirmResponseSchema,
-        {
-          errorMessage: "Não foi possível confirmar a presença.",
-          serverErrorMessage: true,
-          init: jsonInit("POST"),
-        },
+      await portalApi.visits.confirm(
+        { params: { id: visitId } },
+        { serverErrorMessage: true },
       );
     },
     onSuccess: invalidate,
@@ -115,17 +67,15 @@ export function useRequestVisitReschedule() {
       reason,
       preferredWindows,
     }: RequestVisitRescheduleInput): Promise<void> => {
-      await fetchPortalJson(
-        `/api/portal/visits/${visitId}/reschedule-request`,
-        portalVisitRescheduleResponseSchema,
+      await portalApi.visits.requestReschedule(
         {
-          errorMessage: "Não foi possível solicitar o reagendamento.",
-          serverErrorMessage: true,
-          init: jsonInit("POST", {
+          params: { id: visitId },
+          body: {
             reason: reason.trim() === "" ? null : reason.trim(),
             preferredWindows,
-          }),
+          },
         },
+        { serverErrorMessage: true },
       );
     },
     onSuccess: invalidate,

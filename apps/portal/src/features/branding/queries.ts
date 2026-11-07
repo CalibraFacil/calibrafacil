@@ -1,9 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { portalBrandingResponseSchema } from "@calibra-facil/contracts";
-
-import { fetchPortalJson } from "@/lib/api-fetch";
+import { portalApi } from "@/lib/portal-api";
 import { portalPublicKeys } from "@/lib/portal-keys";
 
 export interface PortalBranding {
@@ -20,11 +18,7 @@ const DEFAULT_BRANDING: PortalBranding = { name: null, logo: null };
  */
 async function fetchBranding(): Promise<PortalBranding> {
   try {
-    return await fetchPortalJson(
-      "/api/portal/branding",
-      portalBrandingResponseSchema,
-      { errorMessage: "Falha ao carregar a identidade do laboratório." },
-    );
+    return await portalApi.shell.branding();
   } catch {
     return DEFAULT_BRANDING;
   }

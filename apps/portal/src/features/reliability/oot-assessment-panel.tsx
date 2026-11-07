@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -7,9 +6,6 @@ import {
   CheckmarkCircle02Icon,
 } from "@hugeicons/core-free-icons";
 
-import { portalOotAssessmentResponseSchema } from "@calibra-facil/contracts";
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { usePortalKeys } from "@/lib/portal-keys";
 import { Button } from "@calibra-facil/ui/button";
 import { Checkbox } from "@calibra-facil/ui/checkbox";
 import { Input } from "@calibra-facil/ui/input";
@@ -34,7 +30,7 @@ import {
   dateInputToNoonIso,
   instantToDateInputValue,
 } from "@calibra-facil/shared/calendar-date";
-import { useOotEvents } from "./queries";
+import { useAssessOotEvent, useOotEvents } from "./queries";
 import { isOotDecision, type OotDecision, type OotEvent } from "./types";
 import { formatInstant } from "@calibra-facil/shared/format";
 
@@ -91,8 +87,6 @@ export function OotAssessmentPanel({ assetId }: { assetId: number }) {
 }
 
 function OotAssessmentForm({ event }: { event: OotEvent }) {
-  const queryClient = useQueryClient();
-  const keys = usePortalKeys();
   const [decision, setDecision] = useState<OotDecision | "">("");
   const [rationale, setRationale] = useState("");
   const [periodStart, setPeriodStart] = useState(
@@ -104,38 +98,24 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
   const [suspectShipped, setSuspectShipped] = useState(false);
   const [customerNotified, setCustomerNotified] = useState(false);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const body: Record<string, unknown> = {
-        decision,
-        rationale: rationale.trim(),
-        suspectProductShipped: suspectShipped,
-      };
-      const affectedPeriodStart = dateInputToNoonIso(periodStart);
-      const affectedPeriodEnd = dateInputToNoonIso(periodEnd);
-      if (affectedPeriodStart) body.affectedPeriodStart = affectedPeriodStart;
-      if (affectedPeriodEnd) body.affectedPeriodEnd = affectedPeriodEnd;
+  const mutation = useAssessOotEvent(event.id, {
+    onSuccess: () => toast.success("Avaliação registrada"),
+    onError: (error) => toast.error(error.message),
+  });
+
+  function submit() {
+    if (decision === "") return;
+    mutation.mutate({
+      decision,
+      rationale: rationale.trim(),
+      suspectProductShipped: suspectShipped,
+      affectedPeriodStart: dateInputToNoonIso(periodStart) ?? undefined,
+      affectedPeriodEnd: dateInputToNoonIso(periodEnd) ?? undefined,
       // The schema requires an answer when suspect product was shipped — the
       // checkbox IS the answer (checked = sim, unchecked = não).
-      if (suspectShipped) body.customerNotified = customerNotified;
-
-      await fetchPortalJson(
-        `/api/portal/oot-events/${event.id}/assessment`,
-        portalOotAssessmentResponseSchema,
-        {
-          errorMessage: "Não foi possível registrar a avaliação.",
-          init: jsonInit("POST", body),
-        },
-      );
-    },
-    onSuccess: () => {
-      toast.success("Avaliação registrada");
-      queryClient.invalidateQueries({ queryKey: keys.ootEvents });
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+      customerNotified: suspectShipped ? customerNotified : undefined,
+    });
+  }
 
   const canSubmit =
     decision !== "" && rationale.trim().length >= 10 && !mutation.isPending;
@@ -174,7 +154,7 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
         onSubmit={(formEvent) => {
           formEvent.preventDefault();
           if (!canSubmit) return;
-          mutation.mutate();
+          submit();
         }}
       >
         <div className="space-y-1.5">

@@ -103,6 +103,14 @@ What derives from it:
 | Desktop stubs | `desktopEndpointStubs()` throws for every `cloud-only` endpoint of every group with its `desktopLabel`; local-first methods are the group's own client over `createDesktopEndpointTransport` (the local server answers the same `response`).                                                                                  |
 | Route drift   | `apps/api/src/server/api-app-routes.spec.ts` checks every definition is served at its method + path.                                                                                                                                                                                                                          |
 
+The client portal's `/api/portal/*` surface is declared the same way
+(`endpoints/portal.ts`, `endpoints/portal-engagement.ts`), as `PORTAL_ENDPOINT_GROUPS`
+beside `ENDPOINT_GROUPS`, not inside it: the lab SDK, the policy registry and the
+desktop stubs are computed from `ENDPOINT_GROUPS`, and none of them call the portal.
+The portal calls the definitions through its own transport (`portalApi` in
+`apps/portal/src/lib/portal-api.ts`, see `portal-frontend.md`); both clients build
+the request from the definition with `buildEndpointRequest`.
+
 To convert a domain:
 
 1. Write the definitions (`endpoints/<domain>.ts`) and add the group to

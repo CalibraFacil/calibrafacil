@@ -1,8 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, ArrowLeft02Icon } from "@hugeicons/core-free-icons";
-import { formatAddress, type Address } from "@calibra-facil/shared/address";
+import { formatAddress } from "@calibra-facil/shared/address";
 import { Button } from "@calibra-facil/ui/button";
 import { Card, CardContent } from "@calibra-facil/ui/card";
 import { Spinner } from "@calibra-facil/ui/spinner";
@@ -16,71 +15,15 @@ import { StatusPill } from "@/components/status-pill";
 import {
   CALIBRATION_REQUEST_STATUS,
   VISIT_STATUS,
-  type CalibrationRequestStatus,
-  type VisitStatus,
 } from "@calibra-facil/schemas/machines";
-import { portalRequestDetailSchema } from "@calibra-facil/contracts";
-import { fetchPortalJson } from "@/lib/api-fetch";
-import { usePortalKeys } from "@/lib/portal-keys";
+import { useRequestDetail } from "./queries";
 import {
   formatCalendarDate,
   formatInstant,
 } from "@calibra-facil/shared/format";
 
-type RequestItem = {
-  id: number;
-  assetId: number;
-  assetName: string;
-  assetTag: string;
-  assetSerialNumber: string;
-  assetManufacturer: string | null;
-  assetModel: string | null;
-  assetTypeName: string | null;
-  convertedJobId: number | null;
-  convertedJobCode: string | null;
-  convertedJobStatus: string | null;
-  convertedServiceName: string | null;
-};
-
-type RequestDetail = {
-  id: number;
-  status: CalibrationRequestStatus;
-  observations: string | null;
-  requestedDueDate: string | null;
-  deliveryMethod: "dropoff" | "carrier" | "onsite";
-  invoiceRemittanceNumber: string | null;
-  invoiceRemittanceKey: string | null;
-  invoiceRemittanceIssuedAt: string | null;
-  carrierName: string | null;
-  onsiteAddress: Address | null;
-  preferredVisitDate: string | null;
-  visit: {
-    status: VisitStatus;
-    scheduledAt: string | null;
-    technicianName: string | null;
-  } | null;
-  submittedAt: string;
-  reviewedAt: string | null;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  rejectionReason: string | null;
-  convertedAt: string | null;
-  customerName: string;
-  items: Array<RequestItem>;
-};
-
 export function RequestDetailPage({ id }: { id: string }) {
-  const keys = usePortalKeys();
-  const { data, isLoading, error } = useQuery({
-    queryKey: keys.requestDetail(id),
-    queryFn: async (): Promise<RequestDetail> => {
-      return fetchPortalJson(
-        `/api/portal/requests/${id}`,
-        portalRequestDetailSchema,
-        { errorMessage: "Falha ao carregar solicitação" },
-      );
-    },
-  });
+  const { data, isLoading, error } = useRequestDetail(id);
 
   if (isLoading) {
     return (

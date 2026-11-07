@@ -1,15 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  portalFleetAssetsResponseSchema,
-  portalUnitsResponseSchema,
-} from "@calibra-facil/contracts";
-
-import { fetchPortalJson } from "@/lib/api-fetch";
 import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
 import { usePortalKeys } from "@/lib/portal-keys";
 import type { CalibrationFilter } from "@/lib/calibration-status";
 import type { FleetAssetsResponse, FleetSortBy } from "./types";
+import { portalApi } from "@/lib/portal-api";
 
 export type FleetAssetsParams = {
   page: number;
@@ -25,21 +20,17 @@ export type FleetAssetsParams = {
 async function fetchFleetAssets(
   params: FleetAssetsParams,
 ): Promise<FleetAssetsResponse> {
-  const searchParams = new URLSearchParams({
-    page: String(params.page),
-    limit: String(params.limit),
-    sortBy: params.sortBy,
-    sortDir: params.sortDir,
+  return portalApi.assets.list({
+    query: {
+      page: params.page,
+      limit: params.limit,
+      sortBy: params.sortBy,
+      sortDir: params.sortDir,
+      query: params.query || undefined,
+      dueStatus: params.dueStatus || undefined,
+      unitId: params.unitId || undefined,
+    },
   });
-  if (params.query) searchParams.set("query", params.query);
-  if (params.dueStatus) searchParams.set("dueStatus", params.dueStatus);
-  if (params.unitId) searchParams.set("unitId", String(params.unitId));
-
-  return fetchPortalJson(
-    `/api/portal/assets?${searchParams.toString()}`,
-    portalFleetAssetsResponseSchema,
-    { errorMessage: "Falha ao carregar ativos" },
-  );
 }
 
 export function useFleetAssets(params: FleetAssetsParams) {
@@ -56,10 +47,7 @@ export function usePortalUnits() {
   const keys = usePortalKeys();
   return useQuery({
     queryKey: keys.units,
-    queryFn: () =>
-      fetchPortalJson("/api/portal/units", portalUnitsResponseSchema, {
-        errorMessage: "Falha ao carregar unidades",
-      }),
+    queryFn: () => portalApi.dashboard.units(),
     staleTime: 60_000,
   });
 }

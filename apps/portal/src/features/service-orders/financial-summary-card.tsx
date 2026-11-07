@@ -11,24 +11,8 @@ import {
   formatInstant,
   formatMoneyBRL,
 } from "@calibra-facil/shared/format";
+import type { PortalFinancialSummary } from "@calibra-facil/contracts";
 import { cn } from "@calibra-facil/ui/utils";
-
-export type PortalFinancialSummary = {
-  state: "INVOICE_AVAILABLE" | "PAYMENT_PENDING" | "PAID" | "OVERDUE" | null;
-  visible: boolean;
-  dueDate: string | null;
-  paidAt: string | null;
-  openAmountCents: number;
-  overdueAmountCents: number;
-  lastUpdatedAt: string | null;
-  freshness: "fresh" | "stale" | "unknown";
-  documents: Array<{
-    kind: "invoice" | "fiscal_document" | "receipt";
-    label: string;
-    availableAt: string | null;
-    href: string | null;
-  }>;
-};
 
 function financialSummaryLabel(state: PortalFinancialSummary["state"]) {
   switch (state) {
