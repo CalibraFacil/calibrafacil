@@ -71,7 +71,6 @@
     "react/iframe-missing-sandbox": "error",
     "eslint/preserve-caught-error": "error",
     "calibra/no-api-import-in-frontend": "error",
-    "calibra/no-hono-client-outside-client-runtime": "error",
     "calibra/no-calibration-job-update-outside-owner": "error",
     "calibra/no-job-audit-insert-outside-owner": "error",
     "calibra/no-raw-locale-formatting": "error",

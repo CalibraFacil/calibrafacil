@@ -5,16 +5,13 @@
 //
 // A rule whose legacy violations are not all gone carries a LEGACY_BASELINE
 // ratchet: existing violations are grandfathered with exact per-file counts while
-// net-new ones fail. Only no-json-error-body-in-routes,
-// no-calibration-job-update-outside-owner, no-process-env, no-raw-locale-formatting
-// and no-raw-palette-color-classes have a non-empty baseline (the rest, including
-// no-features-import-from-low-layers, no-literal-query-keys and
-// no-api-domain-boundary-violations, report every
-// occurrence; no-raw-db-in-routes and no-error-response-in-transaction keep a
-// `baseline` rule option for their own tests only). no-raw-db-in-routes also fails
-// a count that is higher than the file's real number of uses (stale).
+// net-new ones fail, and an entry that allows more than the file has fails too
+// (stale, so a migrated site cannot keep allowing a new one). Only
+// no-json-error-body-in-routes, no-calibration-job-update-outside-owner,
+// no-process-env and no-raw-palette-color-classes have a baseline (the palette one
+// is generated and checked by its own test); every other rule reports every
+// occurrence.
 import noApiImportInFrontend from "./rules/no-api-import-in-frontend.ts";
-import noHonoClientOutsideClientRuntime from "./rules/no-hono-client-outside-client-runtime.ts";
 import noCalibrationJobUpdateOutsideOwner from "./rules/no-calibration-job-update-outside-owner.ts";
 import noJobAuditInsertOutsideOwner from "./rules/no-job-audit-insert-outside-owner.ts";
 import noRawLocaleFormatting from "./rules/no-raw-locale-formatting.ts";
@@ -36,7 +33,6 @@ export default {
   },
   rules: {
     "no-api-import-in-frontend": noApiImportInFrontend,
-    "no-hono-client-outside-client-runtime": noHonoClientOutsideClientRuntime,
     "no-calibration-job-update-outside-owner":
       noCalibrationJobUpdateOutsideOwner,
     "no-job-audit-insert-outside-owner": noJobAuditInsertOutsideOwner,

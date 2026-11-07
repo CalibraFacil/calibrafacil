@@ -1,5 +1,7 @@
 import { describe, it } from "vitest";
+import { LEGACY_BASELINE } from "../src/rules/no-json-error-body-in-routes.ts";
 import { expectClean, expectViolation } from "./harness.ts";
+import { ratchetSuite } from "./ratchet.ts";
 
 const RULE = "no-json-error-body-in-routes";
 
@@ -42,26 +44,15 @@ describe("calibra/no-json-error-body-in-routes (real oxlint)", () => {
         'export const h = (c: any) => c.json({ error: "x" }, 400);\n',
     });
   });
+});
 
-  it("REQ-DE-5: grandfathers the exact legacy count and fails above it", async () => {
-    // The committed baseline shrinks toward empty, so the ratchet is exercised
-    // with a baseline INJECTED through the rule options (the repo config never sets it).
-    const options = { baseline: { "apps/api/src/routes/legacy.ts": 1 } };
-    await expectClean(
-      RULE,
-      {
-        "apps/api/src/routes/legacy.ts":
-          'export const h = (c: any) => c.json({ error: "x" }, 400);\n',
-      },
-      options,
-    );
-    await expectViolation(
-      RULE,
-      {
-        "apps/api/src/routes/legacy.ts":
-          'export const h = (c: any) => c.json({ error: "x" }, 400);\nexport const g = (c: any) => c.json({ error: "y" }, 400);\n',
-      },
-      options,
-    );
-  });
+ratchetSuite({
+  rule: RULE,
+  baseline: LEGACY_BASELINE,
+  source: (count) =>
+    Array.from(
+      { length: count },
+      (_, i) =>
+        `export const h${i} = (c: any) => c.json({ error: "x" }, 400);\n`,
+    ).join(""),
 });

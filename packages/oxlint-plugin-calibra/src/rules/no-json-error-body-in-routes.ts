@@ -1,7 +1,6 @@
 import {
-  BASELINE_OPTION_SCHEMA,
-  baselineInForce,
   createRatchet,
+  staleBaselineVisitor,
   isTestFile,
   normalizedFilename,
   type Baseline,
@@ -24,7 +23,7 @@ import {
 const ROUTES_PATTERN =
   /(^|\/)apps\/api\/src\/(routes|domains\/[^/]+\/routes)\//;
 
-const LEGACY_BASELINE: Baseline = new Map<string, number>([
+export const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/customers.ts", 1],
   ["apps/api/src/routes/finance/erp.ts", 1],
   ["apps/api/src/routes/public-signup.ts", 1],
@@ -72,17 +71,18 @@ const rule: RuleModule = {
       description:
         "Disallow c.json({ error }) domain-failure bodies in API routes; throw a DomainError instead.",
     },
-    schema: BASELINE_OPTION_SCHEMA,
   },
   create(context: RuleContext) {
     const filename = normalizedFilename(context);
     if (!ROUTES_PATTERN.test(filename) || isTestFile(filename)) return {};
 
-    const ratchet = createRatchet(
-      baselineInForce(context, LEGACY_BASELINE),
-      filename,
-    );
+    const ratchet = createRatchet(LEGACY_BASELINE, filename);
     return {
+      "Program:exit": staleBaselineVisitor(
+        context,
+        ratchet,
+        "no-json-error-body-in-routes LEGACY_BASELINE",
+      ),
       CallExpression(node: unknown) {
         if (!isJsonErrorBodyCall(node)) return;
         if (!ratchet.exceeds()) return;

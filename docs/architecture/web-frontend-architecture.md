@@ -311,8 +311,6 @@ custom oxlint plugin (`packages/oxlint-plugin-calibra`, prefix `calibra/`):
 
 - `calibra/no-api-import-in-frontend` — no `@calibra-facil/api` / `apps/api/*`
   imports from `apps/web` or `apps/portal`;
-- `calibra/no-hono-client-outside-client-runtime` — raw `hono/client` only in
-  `packages/client-runtime` (type-level use allowed in `packages/contracts`);
 - `calibra/no-router-coupling-in-features` — no `createFileRoute` / `useParams`
   / `useSearch` imports inside `apps/web/src/features` (test files exempt);
 - `calibra/no-literal-query-keys` — query keys come from the key factories, never

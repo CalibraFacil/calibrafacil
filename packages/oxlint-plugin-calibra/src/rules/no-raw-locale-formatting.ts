@@ -1,8 +1,6 @@
 import {
-  createRatchet,
   isTestFile,
   normalizedFilename,
-  type Baseline,
   type RuleContext,
   type RuleModule,
   toRecord,
@@ -25,12 +23,6 @@ import {
 
 const ALLOWED_PATTERN =
   /(^|\/)packages\/shared\/src\/(format|calendar-date)\.ts$/;
-
-// Grandfathered violations in files this change could not touch (another
-// branch owns apps/api/src/routes/*); exact per-file counts, net-new fail.
-const LEGACY_BASELINE: Baseline = new Map<string, number>([
-  ["apps/api/src/routes/signing.ts", 1],
-]);
 
 const BANNED_METHODS = new Set([
   "toLocaleDateString",
@@ -89,9 +81,7 @@ const rule: RuleModule = {
     const filename = normalizedFilename(context);
     if (ALLOWED_PATTERN.test(filename) || isTestFile(filename)) return {};
 
-    const ratchet = createRatchet(LEGACY_BASELINE, filename);
     const report = (node: unknown, what: string) => {
-      if (!ratchet.exceeds()) return;
       context.report({ node, message: `${what} is banned. ${HINT}` });
     };
 
