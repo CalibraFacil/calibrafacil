@@ -40,8 +40,7 @@ import { endpoint, type EndpointGroup } from "./define";
  * palette search, the label line, the amendment chain, the audit log, the file
  * and label-file downloads, and the job edit (`PUT /:id`). `GET /:id/label-commands`
  * answers plain text (ZPL/TSPL), which the JSON endpoint client does not read:
- * the SDK method is hand-written, and its two siblings that read other domains'
- * routes (`listStandards`, `getEffectiveEnvironmentalLimits`) too.
+ * the SDK method is hand-written.
  */
 
 const DESKTOP_LABEL = "Jobs de calibração";

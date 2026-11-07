@@ -42,6 +42,7 @@ import {
   assetType,
   calibrationJob,
   calibrationMethod,
+  jobStandard,
   member,
   referenceStandard,
   service,
@@ -49,6 +50,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { addCalendarDays, labToday } from "@calibra-facil/shared";
 import { eq, sql } from "drizzle-orm";
+import { syncJobStandardLinks } from "../lib/job-standards";
 import { jobsRouter } from "./jobs";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -58,6 +60,16 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
+
+// The reverse-traceability index is written by the real function; the spy lets
+// a test make it fail to prove the write it rides on rolls back.
+vi.mock("../lib/job-standards", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/job-standards")>();
+  return {
+    ...actual,
+    syncJobStandardLinks: vi.fn(actual.syncJobStandardLinks),
+  };
+});
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyJobSubmittedForReview: vi.fn().mockResolvedValue(undefined),
@@ -247,6 +259,15 @@ async function seedJob(
   return row.id;
 }
 
+/** The standards the reverse-traceability index holds for a job. */
+async function linkedStandardIds(jobId: number) {
+  const rows = await db
+    .select({ standardId: jobStandard.standardId })
+    .from(jobStandard)
+    .where(eq(jobStandard.jobId, jobId));
+  return rows.map((row) => row.standardId).sort();
+}
+
 function post(path: string, body: unknown) {
   return jobsRouter.request(path, {
     method: "POST",
@@ -327,6 +348,8 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
       jobMutationResponseSchema,
     );
     expect(executed.data.status).toBe("IN_PROGRESS");
+    // The reverse-traceability links are there as soon as the save answers.
+    expect(await linkedStandardIds(id)).toEqual([lab.standardId]);
     // The frozen evidence is part of the contract, not an opaque blob.
     const inProgress = await parsedBody(
       await jobsRouter.request(`/${id}`),
@@ -343,6 +366,7 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
       jobMutationResponseSchema,
     );
     expect(submitted.data.status).toBe("REVIEW");
+    expect(await linkedStandardIds(id)).toEqual([lab.standardId]);
     await parsedBody(await jobsRouter.request(`/${id}`), jobDetailSchema);
 
     loginAs({ userId: APPROVER, organizationId: ORG });
@@ -370,6 +394,10 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
     );
     expect(amended.originalJob.status).toBe("APPROVED");
     expect(amended.amendedJob.amendmentNumber).toBe(1);
+    // The amendment clones the frozen standards: its links exist at once too.
+    expect(await linkedStandardIds(amended.amendedJob.id)).toEqual([
+      lab.standardId,
+    ]);
 
     // Still the valid certificate: not superseded until the replacement is issued.
     const original = await parsedBody(
@@ -385,6 +413,55 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
       await jobsRouter.request(`/${amended.amendedJob.id}`),
       jobDetailSchema,
     );
+  });
+
+  it("REQ-TC-5: a failing standards index rolls the submit and the amendment back", async () => {
+    const lab = await seedLab();
+    const id = await seedJob(lab, "JOB-TC-INDEX", "DRAFT");
+    loginAs({ userId: TECHNICIAN, organizationId: ORG });
+    const worksheet = {
+      data: { indication: "10", reference: "9" },
+      selectedStandardIds: [lab.standardId],
+      environment: { temperature: 22, humidity: 50, pressure: 1013 },
+      calibrationLocation: { type: "lab", addressText: "Laboratório" },
+      performedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    vi.mocked(syncJobStandardLinks).mockRejectedValueOnce(
+      new Error("index down"),
+    );
+    expect((await post(`/${id}/submit`, worksheet)).status).toBe(500);
+    const [afterFailedSubmit] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, id));
+    expect(afterFailedSubmit?.status).toBe("DRAFT");
+    expect(await linkedStandardIds(id)).toEqual([]);
+
+    expect((await post(`/${id}/submit`, worksheet)).status).toBe(200);
+    loginAs({ userId: APPROVER, organizationId: ORG });
+    expect((await post(`/${id}/approve`, { reason: "Conforme" })).status).toBe(
+      200,
+    );
+    await setJobStatus(id, "APPROVED", {
+      certificateUrl: "/certificates/x.pdf",
+    });
+
+    vi.mocked(syncJobStandardLinks).mockRejectedValueOnce(
+      new Error("index down"),
+    );
+    expect(
+      (
+        await post(`/${id}/amend`, {
+          reason: "Correção do valor de referência",
+        })
+      ).status,
+    ).toBe(500);
+    const amendments = await db
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.supersedesId, id));
+    expect(amendments).toEqual([]);
   });
 
   it("REQ-TC-5: the detail of an approved job returns its as-found verdict and margins", async () => {

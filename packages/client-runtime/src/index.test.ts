@@ -1023,16 +1023,6 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "listStandards",
-          "namespace": "jobs",
-          "policy": "local-first-read-through-sync",
-        },
-        {
-          "method": "getEffectiveEnvironmentalLimits",
-          "namespace": "jobs",
-          "policy": "local-first-read-through-sync",
-        },
-        {
           "method": "getLabelCommands",
           "namespace": "jobs",
           "policy": "cloud-only",
@@ -1189,6 +1179,11 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "list",
+          "namespace": "environmentalLimits",
+          "policy": "local-first-read-through-sync",
+        },
+        {
+          "method": "effective",
           "namespace": "environmentalLimits",
           "policy": "local-first-read-through-sync",
         },
@@ -3297,8 +3292,11 @@ describe("desktop hybrid runtime adapter", () => {
     await client.environmentalLimits.list();
     await client.jobs.list({ query: { page: 1, limit: 20 } });
     await client.jobs.get({ params: { id: "job-1" } });
-    await client.jobs.listStandards();
-    await client.jobs.getEffectiveEnvironmentalLimits(1, { unitId: 10 });
+    await client.standards.list({ query: { status: "ACTIVE", limit: 100 } });
+    await client.environmentalLimits.effective({
+      params: { assetTypeId: 1 },
+      query: { unitId: "10" },
+    });
     await client.serviceOrders.list({ query: { page: 1, limit: 20 } });
     await client.serviceOrders.get({ params: { id: "service-order-1" } });
 

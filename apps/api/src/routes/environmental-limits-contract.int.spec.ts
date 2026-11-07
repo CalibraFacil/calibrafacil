@@ -2,9 +2,8 @@
  * environmental-limits-contract.int.spec.ts: P2-15 REQ-TC-1. The environmental
  * limits endpoints' REAL responses (real handlers, real middleware, real
  * Postgres) must parse with the response schemas of the `environmentalLimitEndpoints`
- * definitions in `@calibra-facil/contracts` (`GET /effective` keeps its own exported
- * schema: the jobs client reaches it) that the client SDK validates against and the
- * desktop local-server mirrors.
+ * definitions in `@calibra-facil/contracts` that the client SDK validates against
+ * and the desktop local-server mirrors.
  *
  * Covered: GET /, GET /effective/:assetTypeId (unit default, asset-type
  * override, nothing configured), PUT / and DELETE /:id.
@@ -12,10 +11,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
-import {
-  effectiveEnvironmentalLimitsResponseSchema,
-  environmentalLimitEndpoints,
-} from "@calibra-facil/contracts";
+import { environmentalLimitEndpoints } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { assetType } from "@calibra-facil/db/schema";
 import { environmentalLimitsRouter } from "./environmental-limits";
@@ -123,21 +119,21 @@ describe("environmental-limits endpoints: real responses honor the contract sche
     // Nothing configured yet.
     const none = await parsedBody(
       await environmentalLimitsRouter.request(`/effective/${type?.id}`),
-      effectiveEnvironmentalLimitsResponseSchema,
+      environmentalLimitEndpoints.effective.response,
     );
     expect(none).toMatchObject({ limits: null, source: null });
 
     await put({ assetTypeId: null, ...NO_LIMITS, temperatureMax: 25 });
     const fallback = await parsedBody(
       await environmentalLimitsRouter.request(`/effective/${type?.id}`),
-      effectiveEnvironmentalLimitsResponseSchema,
+      environmentalLimitEndpoints.effective.response,
     );
     expect(fallback.source).toBe("unit_default");
 
     await put({ assetTypeId: type?.id, ...NO_LIMITS, temperatureMax: 23 });
     const override = await parsedBody(
       await environmentalLimitsRouter.request(`/effective/${type?.id}`),
-      effectiveEnvironmentalLimitsResponseSchema,
+      environmentalLimitEndpoints.effective.response,
     );
     expect(override.source).toBe("asset_type");
     expect(override.limits?.temperatureMax).toBe(23);
@@ -145,8 +141,13 @@ describe("environmental-limits endpoints: real responses honor the contract sche
     // The other type still falls back to the unit default.
     const otherType = await parsedBody(
       await environmentalLimitsRouter.request(`/effective/${other?.id}`),
-      effectiveEnvironmentalLimitsResponseSchema,
+      environmentalLimitEndpoints.effective.response,
     );
     expect(otherType.source).toBe("unit_default");
+
+    // The asset type id is a numeric path parameter, refused before the handler.
+    expect(
+      (await environmentalLimitsRouter.request("/effective/abc")).status,
+    ).toBe(400);
   });
 });

@@ -1252,15 +1252,14 @@ mount(
 
         // Reverse traceability (#426 Phase 1): the amendment clones the
         // frozen standards snapshot verbatim, so mirror the links for the new
-        // job too. A derived index: after the commit, as the submit does.
-        ctx.afterCommit(() =>
-          syncJobStandardLinks(
-            amended.amendedJob.id,
-            amended.originalJob.standardsSnapshot,
-            amended.originalJob.performedAt,
-            ctx.org,
-            orgDb(ctx.org),
-          ),
+        // job too. A derived index of that snapshot, written in the same
+        // transaction: a failure rolls the amendment back.
+        await syncJobStandardLinks(
+          amended.amendedJob.id,
+          amended.originalJob.standardsSnapshot,
+          amended.originalJob.performedAt,
+          ctx.org,
+          ctx.o,
         );
         return amended;
       },

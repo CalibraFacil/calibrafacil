@@ -18,16 +18,14 @@ import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
  * that makes "which certificates relied on standard X" a relational query.
  *
  * Called after every write that persists the snapshot (submit, execute/save,
- * desktop-sync ingest). Idempotent full rewrite per job. Failures are logged
- * but never propagate: a derived-index hiccup must not fail a calibration
- * save; drift is repairable by re-running the same rewrite (or the migration
- * backfill logic) since the snapshot is retained.
+ * amend), on the same org-bound transaction as that write: the links commit
+ * with the snapshot they mirror, and a failure rolls the write back instead of
+ * leaving the index missing. Idempotent full rewrite per job.
  *
  * `organizationId` is the job's laboratory; the composite (organization_id,
  * job_id) foreign key rejects a pair that is not the same tenant.
  *
- * `executor` is the org-bound handle of the caller (row-level security); the
- * rewrite is a savepoint of its transaction.
+ * `executor` is the org-bound handle of the caller (row-level security).
  */
 export async function syncJobStandardLinks(
   jobId: number,
@@ -70,14 +68,7 @@ export async function syncJobStandardLinks(
       )
       .onConflictDoNothing();
   };
-  try {
-    await executor.transaction(rewrite);
-  } catch (error) {
-    console.error(
-      `[JobStandards] Failed to sync standard links for job ${jobId}:`,
-      error,
-    );
-  }
+  await executor.transaction(rewrite);
 }
 
 export type ImpactedCertificate = {

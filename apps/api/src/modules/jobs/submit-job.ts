@@ -923,16 +923,15 @@ async function runJobExecutionIn(
   if (!updated) return { status: "concurrent_update" };
 
   // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into the
-  // indexed job_standard projection. After the commit, as before: a hiccup of
-  // this derived index never fails a calibration save.
-  afterCommit(() =>
-    syncJobStandardLinks(
-      existing.id,
-      nextStandardsSnapshot,
-      updated.performedAt ?? existing.performedAt,
-      organizationId,
-      orgDb(organizationId),
-    ),
+  // indexed job_standard projection, in the same transaction as the write that
+  // froze it: a failure rolls the submit (or save) back instead of leaving the
+  // index missing.
+  await syncJobStandardLinks(
+    existing.id,
+    nextStandardsSnapshot,
+    updated.performedAt ?? existing.performedAt,
+    organizationId,
+    o,
   );
 
   // On-site visits roll forward to IN_PROGRESS once any of their jobs starts.

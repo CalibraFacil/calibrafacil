@@ -197,11 +197,11 @@ describe("syncJobStandardLinks", () => {
     );
   });
 
-  it("never propagates a database failure (derived data)", async () => {
+  it("propagates a database failure, so the write it rides on rolls back", async () => {
     mockTransaction.mockRejectedValueOnce(new Error("db down"));
     await expect(
       syncJobStandardLinks(1, null, null, "org-1", o),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("db down");
   });
 });
 
