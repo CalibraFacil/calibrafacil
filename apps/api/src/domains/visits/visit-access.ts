@@ -3,7 +3,7 @@ import { calibrationVisit } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "../../lib/domain-errors";
 import { buildUnitScopeCondition } from "../../lib/units";
-import type { AuthVariables } from "../../middleware/permission";
+import type { MemberData } from "../../middleware/permission";
 
 /**
  * The laboratory's visit scoped to the caller's organization and units. Throws
@@ -12,7 +12,7 @@ import type { AuthVariables } from "../../middleware/permission";
  */
 export async function requireScopedVisit(
   id: number,
-  member: AuthVariables["member"],
+  member: MemberData,
   o: Pick<OrgDb, "select">,
 ) {
   const [visit] = await o

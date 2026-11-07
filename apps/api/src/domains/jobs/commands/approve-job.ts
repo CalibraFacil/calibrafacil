@@ -15,7 +15,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 import {
   getCalibrationAuthorizationRole,
-  type AuthVariables,
+  type MemberData,
 } from "../../../middleware/permission";
 import { enqueueBackgroundJob } from "../../../lib/background-jobs";
 import { stageBackgroundJob } from "../../../lib/background-job-outbox";
@@ -79,11 +79,11 @@ type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
  *   (API-key auth rejects them).
  */
 type ApprovalActor =
-  | { kind: "user"; member: AuthVariables["member"] }
+  | { kind: "user"; member: MemberData }
   | {
       kind: "api_key";
       apiKey: { id: string; name: string; keyPrefix: string };
-      member: AuthVariables["member"] | null;
+      member: MemberData | null;
     };
 
 /**
