@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createSessionExpiryHandler,
   isUnauthenticatedError,
+  sessionExpiredDescription,
   shouldRetryQuery,
 } from './session-expiry'
 
@@ -51,5 +52,29 @@ describe('global session expiry (roadmap 2 F4)', () => {
 
     notify.mock.calls[1]?.[0].onSignIn()
     expect(goToSignIn).toHaveBeenCalledWith('/dashboard')
+  })
+})
+
+describe('session expiry on the desktop', () => {
+  it('runs prepareSignIn (mark signed out) before going to sign-in, so the offline snapshot cannot bounce it back', () => {
+    const order: string[] = []
+    const notify = vi.fn()
+    const handler = createSessionExpiryHandler({
+      currentLocation: () => '/dashboard/assets',
+      notify,
+      prepareSignIn: () => order.push('prepare'),
+      goToSignIn: () => order.push('sign-in'),
+    })
+
+    handler({ status: 401 })
+    expect(order).toEqual([])
+    notify.mock.calls[0]?.[0].onSignIn()
+
+    expect(order).toEqual(['prepare', 'sign-in'])
+  })
+
+  it('tells the desktop that local changes stay safe; the web copy does not mention it', () => {
+    expect(sessionExpiredDescription(true)).toContain('alterações locais')
+    expect(sessionExpiredDescription(false)).not.toContain('locais')
   })
 })
