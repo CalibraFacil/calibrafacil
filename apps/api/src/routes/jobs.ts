@@ -1,4 +1,5 @@
 import { createRouter } from "../server/router";
+import { jobEndpoints } from "@calibra-facil/contracts";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import {
   requireJobRouteId,
   resolveJobRouteId,
 } from "../lib/job-access";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
@@ -223,272 +225,281 @@ async function jobExecutionRefusal(
  * - POST /:id/reject: calibration:reject (admin, owner only)
  * - POST /:id/retry-render: calibration:approve (admin, owner only)
  */
+const PREFIX = "/api/jobs";
+
 export const jobsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
-}>()
-  // =========================================================================
-  // GET /search - Lightweight search for command palette
-  // =========================================================================
-  .get(
-    "/search",
-    ...withLabPermission({ calibration: ["read"] }),
-    zValidator("query", CommandPaletteJobSearchQuerySchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const { query, limit } = c.req.valid("query");
+}>();
 
-      const results = await orgDb(memberData.organizationId).transaction((o) =>
-        o
+// =========================================================================
+// GET /search - Lightweight search for command palette
+// =========================================================================
+jobsRouter.get(
+  "/search",
+  ...withLabPermission({ calibration: ["read"] }),
+  zValidator("query", CommandPaletteJobSearchQuerySchema),
+  async (c) => {
+    const memberData = c.get("member");
+    const { query, limit } = c.req.valid("query");
+
+    const results = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          status: calibrationJob.status,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            or(
+              ilike(calibrationJob.jobId, `%${query}%`),
+              ilike(calibrationJob.certificateName, `%${query}%`),
+            )!,
+          ),
+        )
+        .orderBy(desc(calibrationJob.createdAt))
+        .limit(limit),
+    );
+
+    return c.json(results);
+  },
+);
+
+// =========================================================================
+// GET / - List jobs with pagination and filtering
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.list,
+  withLabPermission({ calibration: ["read"] }),
+  async (c, { query: filters }) => {
+    const memberData = c.get("member");
+    const {
+      page,
+      limit,
+      query,
+      status,
+      customerId,
+      assetId,
+      serviceId,
+      technicianId,
+      dateFrom,
+      dateTo,
+      dueSoon,
+      overdue,
+    } = filters;
+    const offset = (page - 1) * limit;
+
+    // Build conditions - always scope to organization
+    const conditions = [
+      eq(calibrationJob.organizationId, memberData.organizationId),
+      buildUnitScopeCondition(calibrationJob.unitId, memberData),
+    ];
+
+    if (query) {
+      conditions.push(
+        or(
+          ilike(calibrationJob.jobId, `%${query}%`),
+          ilike(calibrationJob.certificateName, `%${query}%`),
+        )!,
+      );
+    }
+
+    if (status) {
+      conditions.push(eq(calibrationJob.status, status));
+    }
+
+    if (customerId) {
+      conditions.push(eq(calibrationJob.customerId, customerId));
+    }
+
+    if (assetId) {
+      conditions.push(eq(calibrationJob.assetId, assetId));
+    }
+
+    if (serviceId) {
+      conditions.push(eq(calibrationJob.serviceId, serviceId));
+    }
+
+    if (technicianId) {
+      conditions.push(eq(calibrationJob.technicianId, technicianId));
+    }
+
+    if (dateFrom) {
+      conditions.push(gte(calibrationJob.createdAt, new Date(dateFrom)));
+    }
+
+    if (dateTo) {
+      conditions.push(lte(calibrationJob.createdAt, new Date(dateTo)));
+    }
+
+    // Filter jobs due within 7 days. due_date is a calendar day: compare it
+    // with the laboratory's days (today .. today + 7), both inclusive.
+    if (dueSoon) {
+      const today = labToday();
+      conditions.push(gte(calibrationJob.dueDate, today));
+      conditions.push(lte(calibrationJob.dueDate, addCalendarDays(today, 7)));
+    }
+
+    // Filter overdue jobs: due before today in the laboratory (a job due
+    // today is not overdue until the day is over).
+    if (overdue) {
+      conditions.push(lt(calibrationJob.dueDate, labToday()));
+      conditions.push(inArray(calibrationJob.status, OPEN_JOB_STATUSES));
+    }
+
+    const whereCondition = and(...conditions);
+
+    // The count, the page and the financial contexts read ONE consistent
+    // view, in a transaction that names the laboratory (row-level security).
+    const { countResult, jobs, financialContexts } = await orgDb(
+      memberData.organizationId,
+    ).transaction(async (o) => {
+      // Get total count
+      const [countResult] = await o
+        .select({ total: count() })
+        .from(calibrationJob)
+        .where(whereCondition);
+
+      // Get paginated data with joins
+      const jobs = await o
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          certificateName: calibrationJob.certificateName,
+          status: calibrationJob.status,
+          dueDate: calibrationJob.dueDate,
+          performedAt: calibrationJob.performedAt,
+          createdAt: calibrationJob.createdAt,
+          updatedAt: calibrationJob.updatedAt,
+          approvedAt: calibrationJob.approvedAt,
+          // Related entities
+          customerId: calibrationJob.customerId,
+          customerName: customer.name,
+          assetId: calibrationJob.assetId,
+          assetName: asset.name,
+          assetTag: asset.tag,
+          serviceId: calibrationJob.serviceId,
+          serviceName: service.name,
+          technicianId: calibrationJob.technicianId,
+          technicianName: user.name,
+          // Method snapshot summary
+          methodSnapshot: calibrationJob.methodSnapshot,
+        })
+        .from(calibrationJob)
+        .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+        .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+        .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+        .where(whereCondition)
+        .orderBy(desc(calibrationJob.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const financialContexts = await loadJobFinancialContexts(
+        memberData.organizationId,
+        jobs.map((job) => job.id),
+        o,
+      );
+      return { countResult, jobs, financialContexts };
+    });
+
+    // Add computed fields
+    const now = new Date();
+    const jobsWithComputedFields = jobs.map((job) => ({
+      ...job,
+      isOverdue: job.dueDate
+        ? isCalendarDatePast(job.dueDate, now) &&
+          isOneOf(OPEN_JOB_STATUSES, job.status)
+        : null,
+      daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
+      // Extract method name from snapshot for display
+      methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
+      methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
+      ...financialContexts.get(job.id),
+    }));
+
+    return {
+      data: jobsWithComputedFields,
+      pagination: {
+        page,
+        limit,
+        total: countResult?.total ?? 0,
+        totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+      },
+    };
+  },
+);
+
+// =========================================================================
+// GET /:id/label - Get job label by ID
+// =========================================================================
+jobsRouter.get(
+  "/:id/label",
+  ...withLabPermission({ calibration: ["read"] }),
+  async (c) => {
+    const memberData = c.get("member");
+
+    const found = await orgDb(memberData.organizationId).transaction(
+      async (o) => {
+        const id = await resolveJobRouteId(c.req.param("id"), memberData, o);
+        if (id === null) return null;
+
+        const [job] = await o
           .select({
             id: calibrationJob.id,
-            jobId: calibrationJob.jobId,
-            status: calibrationJob.status,
+            label: calibrationJob.jobId,
           })
           .from(calibrationJob)
           .where(
             and(
+              eq(calibrationJob.id, id),
               eq(calibrationJob.organizationId, memberData.organizationId),
               buildUnitScopeCondition(calibrationJob.unitId, memberData),
-              or(
-                ilike(calibrationJob.jobId, `%${query}%`),
-                ilike(calibrationJob.certificateName, `%${query}%`),
-              )!,
             ),
           )
-          .orderBy(desc(calibrationJob.createdAt))
-          .limit(limit),
-      );
+          .limit(1);
+        if (!job) return null;
 
-      return c.json(results);
-    },
-  )
-
-  // =========================================================================
-  // GET / - List jobs with pagination and filtering
-  // =========================================================================
-  .get(
-    "/",
-    ...withLabPermission({ calibration: ["read"] }),
-    zValidator("query", ListJobsQuerySchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const {
-        page,
-        limit,
-        query,
-        status,
-        customerId,
-        assetId,
-        serviceId,
-        technicianId,
-        dateFrom,
-        dateTo,
-        dueSoon,
-        overdue,
-      } = c.req.valid("query");
-      const offset = (page - 1) * limit;
-
-      // Build conditions - always scope to organization
-      const conditions = [
-        eq(calibrationJob.organizationId, memberData.organizationId),
-        buildUnitScopeCondition(calibrationJob.unitId, memberData),
-      ];
-
-      if (query) {
-        conditions.push(
-          or(
-            ilike(calibrationJob.jobId, `%${query}%`),
-            ilike(calibrationJob.certificateName, `%${query}%`),
-          )!,
-        );
-      }
-
-      if (status) {
-        conditions.push(eq(calibrationJob.status, status));
-      }
-
-      if (customerId) {
-        conditions.push(eq(calibrationJob.customerId, customerId));
-      }
-
-      if (assetId) {
-        conditions.push(eq(calibrationJob.assetId, assetId));
-      }
-
-      if (serviceId) {
-        conditions.push(eq(calibrationJob.serviceId, serviceId));
-      }
-
-      if (technicianId) {
-        conditions.push(eq(calibrationJob.technicianId, technicianId));
-      }
-
-      if (dateFrom) {
-        conditions.push(gte(calibrationJob.createdAt, new Date(dateFrom)));
-      }
-
-      if (dateTo) {
-        conditions.push(lte(calibrationJob.createdAt, new Date(dateTo)));
-      }
-
-      // Filter jobs due within 7 days. due_date is a calendar day: compare it
-      // with the laboratory's days (today .. today + 7), both inclusive.
-      if (dueSoon) {
-        const today = labToday();
-        conditions.push(gte(calibrationJob.dueDate, today));
-        conditions.push(lte(calibrationJob.dueDate, addCalendarDays(today, 7)));
-      }
-
-      // Filter overdue jobs: due before today in the laboratory (a job due
-      // today is not overdue until the day is over).
-      if (overdue) {
-        conditions.push(lt(calibrationJob.dueDate, labToday()));
-        conditions.push(inArray(calibrationJob.status, OPEN_JOB_STATUSES));
-      }
-
-      const whereCondition = and(...conditions);
-
-      // The count, the page and the financial contexts read ONE consistent
-      // view, in a transaction that names the laboratory (row-level security).
-      const { countResult, jobs, financialContexts } = await orgDb(
-        memberData.organizationId,
-      ).transaction(async (o) => {
-        // Get total count
-        const [countResult] = await o
-          .select({ total: count() })
-          .from(calibrationJob)
-          .where(whereCondition);
-
-        // Get paginated data with joins
-        const jobs = await o
-          .select({
-            id: calibrationJob.id,
-            jobId: calibrationJob.jobId,
-            certificateName: calibrationJob.certificateName,
-            status: calibrationJob.status,
-            dueDate: calibrationJob.dueDate,
-            performedAt: calibrationJob.performedAt,
-            createdAt: calibrationJob.createdAt,
-            updatedAt: calibrationJob.updatedAt,
-            approvedAt: calibrationJob.approvedAt,
-            // Related entities
-            customerId: calibrationJob.customerId,
-            customerName: customer.name,
-            assetId: calibrationJob.assetId,
-            assetName: asset.name,
-            assetTag: asset.tag,
-            serviceId: calibrationJob.serviceId,
-            serviceName: service.name,
-            technicianId: calibrationJob.technicianId,
-            technicianName: user.name,
-            // Method snapshot summary
-            methodSnapshot: calibrationJob.methodSnapshot,
-          })
-          .from(calibrationJob)
-          .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
-          .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
-          .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-          .leftJoin(user, eq(calibrationJob.technicianId, user.id))
-          .where(whereCondition)
-          .orderBy(desc(calibrationJob.createdAt))
-          .limit(limit)
-          .offset(offset);
-
-        const financialContexts = await loadJobFinancialContexts(
+        const financialContextMap = await loadJobFinancialContexts(
           memberData.organizationId,
-          jobs.map((job) => job.id),
+          [job.id],
           o,
         );
-        return { countResult, jobs, financialContexts };
-      });
+        return { job, financialContext: financialContextMap.get(job.id) };
+      },
+    );
 
-      // Add computed fields
-      const now = new Date();
-      const jobsWithComputedFields = jobs.map((job) => ({
-        ...job,
-        isOverdue: job.dueDate
-          ? isCalendarDatePast(job.dueDate, now) &&
-            isOneOf(OPEN_JOB_STATUSES, job.status)
-          : null,
-        daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
-        // Extract method name from snapshot for display
-        methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
-        methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
-        ...financialContexts.get(job.id),
-      }));
+    if (!found) {
+      throw jobNotFound();
+    }
 
-      return c.json({
-        data: jobsWithComputedFields,
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
-      } satisfies ServerShape<JobsListResponse>);
-    },
-  )
+    return c.json({
+      ...found.job,
+      ...found.financialContext,
+    });
+  },
+);
 
-  // =========================================================================
-  // GET /:id/label - Get job label by ID
-  // =========================================================================
-  .get(
-    "/:id/label",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-
-      const found = await orgDb(memberData.organizationId).transaction(
-        async (o) => {
-          const id = await resolveJobRouteId(c.req.param("id"), memberData, o);
-          if (id === null) return null;
-
-          const [job] = await o
-            .select({
-              id: calibrationJob.id,
-              label: calibrationJob.jobId,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.id, id),
-                eq(calibrationJob.organizationId, memberData.organizationId),
-                buildUnitScopeCondition(calibrationJob.unitId, memberData),
-              ),
-            )
-            .limit(1);
-          if (!job) return null;
-
-          const financialContextMap = await loadJobFinancialContexts(
-            memberData.organizationId,
-            [job.id],
-            o,
-          );
-          return { job, financialContext: financialContextMap.get(job.id) };
-        },
-      );
-
-      if (!found) {
-        throw jobNotFound();
-      }
-
-      return c.json({
-        ...found.job,
-        ...found.financialContext,
-      });
-    },
-  )
-
-  // =========================================================================
-  // GET /:id - Get single job with full details
-  // =========================================================================
-  .get("/:id", ...withLabPermission({ calibration: ["read"] }), async (c) => {
+// =========================================================================
+// GET /:id - Get single job with full details
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.get,
+  withLabPermission({ calibration: ["read"] }),
+  async (c, { params }) => {
     const memberData = c.get("member");
 
     const loaded = await orgDb(memberData.organizationId).transaction(
       async (o) => {
-        const id = await resolveJobRouteId(c.req.param("id"), memberData, o);
+        const id = await resolveJobRouteId(params.id, memberData, o);
 
         if (id === null) {
           return null;
@@ -724,640 +735,652 @@ export const jobsRouter = createRouter<{
       ...financialContextMap.get(job.id),
     };
 
-    return c.json(result satisfies ServerShape<JobDetail>);
-  })
+    return result;
+  },
+);
 
-  // =========================================================================
-  // POST / - Create new job (THE CRITICAL SNAPSHOT LOGIC)
-  // =========================================================================
-  .post(
-    "/",
-    ...withLabPermission({ calibration: ["create"] }),
-    zValidator("json", CreateJobSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const input = c.req.valid("json");
+// =========================================================================
+// POST / - Create new job (THE CRITICAL SNAPSHOT LOGIC)
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.create,
+  withLabPermission({ calibration: ["create"] }),
+  async (c, { body }) => {
+    const memberData = c.get("member");
+    const input = body;
 
-      const activeUnitId = memberData.activeUnitId;
-      if (!activeUnitId) {
-        throw invalid(
-          "unit_active_required",
-          "Selecione uma unidade específica para criar ordens",
-        );
-      }
+    const activeUnitId = memberData.activeUnitId;
+    if (!activeUnitId) {
+      throw invalid(
+        "unit_active_required",
+        "Selecione uma unidade específica para criar ordens",
+      );
+    }
 
-      // One transaction that names the laboratory (row-level security); the
-      // raw executor goes to the creator, whose advisory lock and certificate
-      // numbering run raw SQL.
-      const newJob = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const job = await createCalibrationJob({
+    // One transaction that names the laboratory (row-level security); the
+    // raw executor goes to the creator, whose advisory lock and certificate
+    // numbering run raw SQL.
+    const newJob = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const job = await createCalibrationJob({
+          organizationId: ctx.org,
+          unitId: activeUnitId,
+          createdBy: ctx.actor.userId,
+          assetId: input.assetId,
+          serviceId: input.serviceId,
+          technicianId: input.technicianId,
+          dueDate: input.dueDate,
+          // DOM-02 (#655): back-link to the repair OS this calibration came
+          // from, when opened from the pending-after-repair flow. Org-scoped
+          // in createCalibrationJob.
+          sourceServiceOrderId: input.sourceServiceOrderId ?? null,
+          ipAddress: ctx.actor.ipAddress,
+          executor: ctx.tx,
+        });
+
+        // The assignment notification waits for the commit: sending it from
+        // inside an open transaction that might still roll back would notify
+        // a technician about a job that never existed.
+        const { technicianId } = job;
+        if (technicianId) {
+          ctx.afterCommit(() =>
+            notifyJobAssigned(job.id, technicianId, ctx.actor.userId),
+          );
+        }
+        return job;
+      },
+    );
+
+    return newJob;
+  },
+);
+
+// =========================================================================
+// PUT /:id - Update job (technician, due date)
+// =========================================================================
+jobsRouter.put(
+  "/:id",
+  ...withLabPermission({ calibration: ["update"] }),
+  zValidator("json", UpdateJobSchema),
+  async (c) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(c.req.param("id"), memberData);
+    const input = c.req.valid("json");
+
+    const job = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const result = await requireJobCommandOk(
+          ctx.o,
+          id,
+          await editJobIn(ctx.o, {
+            actor: userJobActor(ctx.actor),
+            jobId: id,
             organizationId: ctx.org,
-            unitId: activeUnitId,
-            createdBy: ctx.actor.userId,
-            assetId: input.assetId,
-            serviceId: input.serviceId,
+            unitScope: memberData,
             technicianId: input.technicianId,
             dueDate: input.dueDate,
-            // DOM-02 (#655): back-link to the repair OS this calibration came
-            // from, when opened from the pending-after-repair flow. Org-scoped
-            // in createCalibrationJob.
-            sourceServiceOrderId: input.sourceServiceOrderId ?? null,
-            ipAddress: ctx.actor.ipAddress,
-            executor: ctx.tx,
+          }),
+        );
+        // Notify the technician if it changed.
+        const { technicianId } = input;
+        if (result.changed.technician && technicianId) {
+          ctx.afterCommit(() =>
+            notifyJobAssigned(id, technicianId, ctx.actor.userId),
+          );
+        }
+        return result.job;
+      },
+    );
+
+    return c.json(job);
+  },
+);
+
+// =========================================================================
+// POST /:id/assign - Assign technician to job
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.assign,
+  withLabPermission({ calibration: ["assign_technician"] }),
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
+
+    const assigned = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const result = await requireJobCommandOk(
+          ctx.o,
+          id,
+          await assignJobIn(ctx.o, {
+            actor: userJobActor(ctx.actor),
+            jobId: id,
+            organizationId: ctx.org,
+            unitScope: memberData,
+            technicianId: input.technicianId,
+          }),
+        );
+        // Send notification to assigned technician
+        ctx.afterCommit(() =>
+          notifyJobAssigned(id, input.technicianId, ctx.actor.userId),
+        );
+        return result;
+      },
+    );
+
+    return {
+      message: `Job atribuido a ${assigned.technicianName}`,
+      data: assigned.job,
+    };
+  },
+);
+
+// =========================================================================
+// POST /:id/submit - Submit job for review (transition from DRAFT/IN_PROGRESS to REVIEW)
+// Transport only: the policy is `submitJob` (modules/jobs/submit-job.ts).
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.submitExecution,
+  withLabPermission({ calibration: ["submit"] }),
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
+
+    const result = await submitJob({
+      actor: {
+        kind: "user",
+        userId: session.user.id,
+        ipAddress: clientIp(c),
+      },
+      jobId: id,
+      organizationId: memberData.organizationId,
+      unitScope: memberData,
+      data: input.data,
+      clientResults: input.results,
+      performedAt: input.performedAt,
+      backdateReason: input.backdateReason,
+      selectedStandardIds: input.selectedStandardIds,
+      environment: input.environment,
+      calibrationLocation: input.calibrationLocation,
+      calibrationPhases: input.calibrationPhases,
+    });
+    if (result.status !== "ok") {
+      throw await jobExecutionRefusal(id, memberData.organizationId, result);
+    }
+
+    // Send notifications to admins/owners (fire and forget)
+    notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
+      console.error("[Jobs] Failed to send submit notification:", err);
+    });
+
+    return {
+      message: "Job submetido para revisao",
+      data: result.job,
+    };
+  },
+);
+
+// =========================================================================
+// POST /:id/execute - Save execution data (worksheet auto-save / manual save)
+// Transport only: the policy is `executeJob` (modules/jobs/submit-job.ts).
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.saveExecution,
+  withLabPermission({ calibration: ["execute"] }),
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
+
+    const result = await executeJob({
+      actor: {
+        kind: "user",
+        userId: session.user.id,
+        ipAddress: clientIp(c),
+      },
+      jobId: id,
+      organizationId: memberData.organizationId,
+      unitScope: memberData,
+      data: input.data,
+      clientResults: input.results,
+      performedAt: input.performedAt,
+      selectedStandardIds: input.selectedStandardIds,
+      environment: input.environment,
+      calibrationLocation: input.calibrationLocation,
+      calibrationPhases: input.calibrationPhases,
+      methodDeviations: input.methodDeviations,
+    });
+    if (result.status !== "ok") {
+      throw await jobExecutionRefusal(id, memberData.organizationId, result);
+    }
+
+    return {
+      message: "Dados salvos com sucesso",
+      data: result.job,
+      // Standards of the saved snapshot that went stale: the save is kept,
+      // the submit will refuse until they are replaced.
+      warnings: result.warnings,
+    };
+  },
+);
+
+// =========================================================================
+// POST /:id/approve - Approve job (manager only)
+// Enqueues certificate generation instead of directly approving. The
+// approval runs its own read / write transactions (`approveJob`): the
+// certificate images are read from object storage between them and a
+// failed dispatch is compensated after the commit, neither of which a
+// single `withOrg` transaction can express.
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.approve,
+  [...withLabPermission({ calibration: ["approve"] }), requireFreshSession],
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
+
+    const result = await approveJob({
+      jobId: id,
+      actor: { kind: "user", member: memberData },
+      values: input,
+      metadata: { ipAddress: clientIp(c) },
+      completion: {
+        kind: "generate_certificate_pdf",
+        sendServiceOrdersToFinance: (params) =>
+          sendServiceOrdersToFinance({
+            ...params,
+            scope: memberData,
+            env: c.env,
+          }),
+      },
+    });
+    if (result.status !== "approved") throw approvalRefusalError(result);
+
+    return {
+      message: "Gerando certificado...",
+      data: result.job,
+    };
+  },
+);
+
+// =========================================================================
+// POST /:id/reject - Reject job (manager only)
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.reject,
+  withLabPermission({ calibration: ["reject"] }),
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
+
+    const rejected = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const result = await requireJobCommandOk(
+          ctx.o,
+          id,
+          await rejectJobIn(ctx.o, {
+            actor: userJobActor(ctx.actor),
+            jobId: id,
+            organizationId: ctx.org,
+            unitScope: memberData,
+            reason: input.reason,
+          }),
+        );
+        // Send notification to technician
+        ctx.afterCommit(() =>
+          notifyJobRejected(id, ctx.actor.userId, input.reason),
+        );
+        return result.job;
+      },
+    );
+
+    return {
+      message: "Job rejeitado",
+      data: rejected,
+    };
+  },
+);
+
+// =========================================================================
+// POST /:id/retry-render - Render again the certificate of an approved job
+// whose render failed (RENDER_FAILED -> GENERATING_PDF, roadmap 2 C5)
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.retryRender,
+  withLabPermission({ calibration: ["approve"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+
+    const retried = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) =>
+        requireJobCommandOk(
+          ctx.o,
+          id,
+          await retryRenderIn(ctx, {
+            actor: userJobActor(ctx.actor),
+            jobId: id,
+            organizationId: ctx.org,
+            unitScope: memberData,
+          }),
+        ),
+    );
+
+    return {
+      message: "Emissão do certificado reenviada",
+      data: retried.job,
+    };
+  },
+);
+
+// =========================================================================
+// POST /:id/flag-oot - Flag an approved job as out-of-tolerance (as found):
+// opens a typed NC and generates the §7.10 customer notification (#426).
+// Never gates certificate issuance — it opens a quality workflow only.
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.flagOutOfTolerance,
+  withLabPermission({ non_conformance: ["create"] }),
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
+
+    // The unit-scope check, the NC and the customer notification are written
+    // in ONE transaction that names the laboratory (row-level security); the
+    // notification PDF job and the NC notification read what it wrote, so
+    // they run once it has committed.
+    const flagged = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        // Unit scope check here — the shared creator (also used by the
+        // desktop sync ingest) only scopes by organization.
+        const [scoped] = await ctx.o
+          .select({
+            id: calibrationJob.id,
+            asFoundConformity: calibrationJob.asFoundConformity,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, ctx.org),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1);
+
+        if (!scoped) throw jobNotFound();
+
+        const result = await flagJobOutOfTolerance(
+          {
+            organizationId: ctx.org,
+            actorUserId: ctx.actor.userId,
+            jobId: id,
+            description: input.description,
+            affectedScope: input.affectedScope,
+            notifyCustomer: input.notifyCustomer,
+            triggerSource:
+              scoped.asFoundConformity === "NON_CONFORMING"
+                ? "as_found_verdict"
+                : "manual",
+          },
+          ctx,
+        );
+        // A refusal comes back before anything is written.
+        if (!result.ok) {
+          throw new DomainError({
+            code: result.code,
+            status: result.status,
+            message: result.message,
           });
+        }
+        return result;
+      },
+    );
 
-          // The assignment notification waits for the commit: sending it from
-          // inside an open transaction that might still roll back would notify
-          // a technician about a job that never existed.
-          const { technicianId } = job;
-          if (technicianId) {
-            ctx.afterCommit(() =>
-              notifyJobAssigned(job.id, technicianId, ctx.actor.userId),
-            );
-          }
-          return job;
-        },
-      );
+    return {
+      message: "Nao conformidade registrada",
+      data: { nc: flagged.nc, notification: flagged.notification },
+    };
+  },
+);
 
-      return c.json(newJob satisfies ServerShape<JobCreateResponse>, 201);
-    },
-  )
+// =========================================================================
+// DELETE /:id - Cancel job (soft delete - sets status to CANCELED)
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.cancel,
+  withLabPermission({ calibration: ["delete"] }),
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
 
-  // =========================================================================
-  // PUT /:id - Update job (technician, due date)
-  // =========================================================================
-  .put(
-    "/:id",
-    ...withLabPermission({ calibration: ["update"] }),
-    zValidator("json", UpdateJobSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
+    const canceled = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) =>
+        requireJobCommandOk(
+          ctx.o,
+          id,
+          // The read and the compare-and-set write run on the context's one
+          // transaction; the write still matches on the status it read.
+          await cancelJob(ctx, {
+            actor: userJobActor(ctx.actor),
+            jobId: id,
+            organizationId: ctx.org,
+            unitScope: memberData,
+            reason: input.reason,
+          }),
+        ),
+    );
 
-      const job = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const result = await requireJobCommandOk(
-            ctx.o,
-            id,
-            await editJobIn(ctx.o, {
-              actor: userJobActor(ctx.actor),
-              jobId: id,
-              organizationId: ctx.org,
-              unitScope: memberData,
-              technicianId: input.technicianId,
-              dueDate: input.dueDate,
-            }),
-          );
-          // Notify the technician if it changed.
-          const { technicianId } = input;
-          if (result.changed.technician && technicianId) {
-            ctx.afterCommit(() =>
-              notifyJobAssigned(id, technicianId, ctx.actor.userId),
-            );
-          }
-          return result.job;
-        },
-      );
+    return {
+      message: "Job cancelado",
+      data: canceled.job,
+    };
+  },
+);
 
-      return c.json(job);
-    },
-  )
+// =========================================================================
+// POST /:id/amend - Create an amended version of an approved certificate
+// ISO 17025:2017 Clause 7.8.4.1 - Amendments to reports and certificates
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.amend,
+  [
+    ...withLabPermission({ calibration: ["approve"] }), // Only admin/owner can amend
+    zValidator("json", AmendJobSchema),
+  ],
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
 
-  // =========================================================================
-  // POST /:id/assign - Assign technician to job
-  // =========================================================================
-  .post(
-    "/:id/assign",
-    ...withLabPermission({ calibration: ["assign_technician"] }),
-    zValidator("json", AssignTechnicianSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
+    const { originalJob, amendedJob, amendmentNumber } = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const amended = await requireJobCommandOk(
+          ctx.o,
+          id,
+          await amendJob(ctx, {
+            actor: userJobActor(ctx.actor),
+            jobId: id,
+            organizationId: ctx.org,
+            unitScope: memberData,
+            reason: input.reason,
+          }),
+        );
 
-      const assigned = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const result = await requireJobCommandOk(
-            ctx.o,
-            id,
-            await assignJobIn(ctx.o, {
-              actor: userJobActor(ctx.actor),
-              jobId: id,
-              organizationId: ctx.org,
-              unitScope: memberData,
-              technicianId: input.technicianId,
-            }),
-          );
-          // Send notification to assigned technician
-          ctx.afterCommit(() =>
-            notifyJobAssigned(id, input.technicianId, ctx.actor.userId),
-          );
-          return result;
-        },
-      );
-
-      return c.json({
-        message: `Job atribuido a ${assigned.technicianName}`,
-        data: assigned.job,
-      } satisfies ServerShape<JobMutationResponse>);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/submit - Submit job for review (transition from DRAFT/IN_PROGRESS to REVIEW)
-  // Transport only: the policy is `submitJob` (modules/jobs/submit-job.ts).
-  // =========================================================================
-  .post(
-    "/:id/submit",
-    ...withLabPermission({ calibration: ["submit"] }),
-    zValidator("json", SubmitForReviewSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
-
-      const result = await submitJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        data: input.data,
-        clientResults: input.results,
-        performedAt: input.performedAt,
-        backdateReason: input.backdateReason,
-        selectedStandardIds: input.selectedStandardIds,
-        environment: input.environment,
-        calibrationLocation: input.calibrationLocation,
-        calibrationPhases: input.calibrationPhases,
-      });
-      if (result.status !== "ok") {
-        throw await jobExecutionRefusal(id, memberData.organizationId, result);
-      }
-
-      // Send notifications to admins/owners (fire and forget)
-      notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
-        console.error("[Jobs] Failed to send submit notification:", err);
-      });
-
-      return c.json({
-        message: "Job submetido para revisao",
-        data: result.job,
-      } satisfies ServerShape<JobMutationResponse>);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/execute - Save execution data (worksheet auto-save / manual save)
-  // Transport only: the policy is `executeJob` (modules/jobs/submit-job.ts).
-  // =========================================================================
-  .post(
-    "/:id/execute",
-    ...withLabPermission({ calibration: ["execute"] }),
-    zValidator("json", ExecuteJobSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
-
-      const result = await executeJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        data: input.data,
-        clientResults: input.results,
-        performedAt: input.performedAt,
-        selectedStandardIds: input.selectedStandardIds,
-        environment: input.environment,
-        calibrationLocation: input.calibrationLocation,
-        calibrationPhases: input.calibrationPhases,
-        methodDeviations: input.methodDeviations,
-      });
-      if (result.status !== "ok") {
-        throw await jobExecutionRefusal(id, memberData.organizationId, result);
-      }
-
-      return c.json({
-        message: "Dados salvos com sucesso",
-        data: result.job,
-        // Standards of the saved snapshot that went stale: the save is kept,
-        // the submit will refuse until they are replaced.
-        warnings: result.warnings,
-      } satisfies ServerShape<JobMutationResponse>);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/approve - Approve job (manager only)
-  // Enqueues certificate generation instead of directly approving. The
-  // approval runs its own read / write transactions (`approveJob`): the
-  // certificate images are read from object storage between them and a
-  // failed dispatch is compensated after the commit, neither of which a
-  // single `withOrg` transaction can express.
-  // =========================================================================
-  .post(
-    "/:id/approve",
-    ...withLabPermission({ calibration: ["approve"] }),
-    requireFreshSession,
-    zValidator("json", ApproveJobSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
-
-      const result = await approveJob({
-        jobId: id,
-        actor: { kind: "user", member: memberData },
-        values: input,
-        metadata: { ipAddress: clientIp(c) },
-        completion: {
-          kind: "generate_certificate_pdf",
-          sendServiceOrdersToFinance: (params) =>
-            sendServiceOrdersToFinance({
-              ...params,
-              scope: memberData,
-              env: c.env,
-            }),
-        },
-      });
-      if (result.status !== "approved") throw approvalRefusalError(result);
-
-      return c.json({
-        message: "Gerando certificado...",
-        data: result.job,
-      } satisfies ServerShape<JobMutationResponse>);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/reject - Reject job (manager only)
-  // =========================================================================
-  .post(
-    "/:id/reject",
-    ...withLabPermission({ calibration: ["reject"] }),
-    zValidator("json", RejectJobSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
-
-      const rejected = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const result = await requireJobCommandOk(
-            ctx.o,
-            id,
-            await rejectJobIn(ctx.o, {
-              actor: userJobActor(ctx.actor),
-              jobId: id,
-              organizationId: ctx.org,
-              unitScope: memberData,
-              reason: input.reason,
-            }),
-          );
-          // Send notification to technician
-          ctx.afterCommit(() =>
-            notifyJobRejected(id, ctx.actor.userId, input.reason),
-          );
-          return result.job;
-        },
-      );
-
-      return c.json({
-        message: "Job rejeitado",
-        data: rejected,
-      } satisfies ServerShape<JobMutationResponse>);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/retry-render - Render again the certificate of an approved job
-  // whose render failed (RENDER_FAILED -> GENERATING_PDF, roadmap 2 C5)
-  // =========================================================================
-  .post(
-    "/:id/retry-render",
-    ...withLabPermission({ calibration: ["approve"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-      const retried = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) =>
-          requireJobCommandOk(
-            ctx.o,
-            id,
-            await retryRenderIn(ctx, {
-              actor: userJobActor(ctx.actor),
-              jobId: id,
-              organizationId: ctx.org,
-              unitScope: memberData,
-            }),
+        // Reverse traceability (#426 Phase 1): the amendment clones the
+        // frozen standards snapshot verbatim, so mirror the links for the new
+        // job too. A derived index: after the commit, as the submit does.
+        ctx.afterCommit(() =>
+          syncJobStandardLinks(
+            amended.amendedJob.id,
+            amended.originalJob.standardsSnapshot,
+            amended.originalJob.performedAt,
+            ctx.org,
+            orgDb(ctx.org),
           ),
-      );
+        );
+        return amended;
+      },
+    );
 
-      return c.json({
-        message: "Emissão do certificado reenviada",
-        data: retried.job,
-      } satisfies ServerShape<JobMutationResponse>);
-    },
-  )
+    // The original stays APPROVED (the valid certificate) until the
+    // replacement is issued: the worker supersedes it in the issuance
+    // transaction and tells the customer then. Nothing is enqueued or sent
+    // for the original here.
 
-  // =========================================================================
-  // POST /:id/flag-oot - Flag an approved job as out-of-tolerance (as found):
-  // opens a typed NC and generates the §7.10 customer notification (#426).
-  // Never gates certificate issuance — it opens a quality workflow only.
-  // =========================================================================
-  .post(
-    "/:id/flag-oot",
-    ...withLabPermission({ non_conformance: ["create"] }),
-    zValidator("json", FlagJobOutOfToleranceSchema),
-    async (c) => {
-      const memberData = c.get("member");
+    return {
+      message: "Retificacao criada com sucesso",
+      originalJob: {
+        id: originalJob.id,
+        jobId: originalJob.jobId,
+        status: "APPROVED" as const,
+      },
+      amendedJob: {
+        id: amendedJob.id,
+        jobId: amendedJob.jobId,
+        status: "DRAFT" as const,
+        amendmentNumber,
+      },
+    };
+  },
+);
+
+// =========================================================================
+// POST /:id/certificate/withdraw - Withdraw an issued certificate
+// ISO 17025:2017 Clause 7.10 - Nonconforming work (e.g. after a recall)
+// The job keeps its status; the certificate lifecycle gets a WITHDRAWN event.
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.withdrawCertificate,
+  [
+    ...withLabPermission({ calibration: ["approve"] }),
+    requireRole(["admin", "owner"]), // Only admin/owner can withdraw
+    zValidator("json", WithdrawCertificateSchema),
+  ],
+  async (c, { params, body }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
+    const input = body;
+
+    const outcome = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) =>
+        requireJobCommandOk(
+          ctx.o,
+          id,
+          await withdrawCertificateIn(ctx.o, {
+            actor: userJobActor(ctx.actor),
+            jobId: id,
+            organizationId: ctx.org,
+            unitScope: memberData,
+            reason: input.reason,
+          }),
+        ),
+    );
+
+    return {
+      message: "Certificado retirado com sucesso",
+      job: {
+        id: outcome.jobId,
+        jobId: outcome.jobNumber,
+        status: outcome.jobStatus,
+      },
+      certificateStatus: "WITHDRAWN" as const,
+      withdrawnAt: outcome.withdrawnAt.toISOString(),
+    };
+  },
+);
+
+// =========================================================================
+// GET /:id/amendment-chain - Get the full amendment history for a job
+// ISO 17025:2017 Clause 7.8.4.1 - Traceability of amendments
+// =========================================================================
+jobsRouter.get(
+  "/:id/amendment-chain",
+  ...withLabPermission({ calibration: ["read"] }),
+  async (c) => {
+    const handlerStartedAt = performance.now();
+    const memberData = c.get("member");
+
+    try {
       const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
 
-      // The unit-scope check, the NC and the customer notification are written
-      // in ONE transaction that names the laboratory (row-level security); the
-      // notification PDF job and the NC notification read what it wrote, so
-      // they run once it has committed.
-      const flagged = await withOrg(
+      // Safety limit to prevent infinite loops from corrupted data
+      const MAX_CHAIN_LENGTH = 100;
+
+      const dbStartedAt = performance.now();
+      // The job check and the recursive chain read run in one transaction
+      // that names the laboratory (row-level security). The chain is raw SQL
+      // (a recursive CTE the handle cannot express): it takes the raw
+      // executor, and every table in it carries the organization predicate.
+      const chain = await withOrg(
         memberData.organizationId,
         requestActor(c),
-        async (ctx) => {
-          // Unit scope check here — the shared creator (also used by the
-          // desktop sync ingest) only scopes by organization.
-          const [scoped] = await ctx.o
-            .select({
-              id: calibrationJob.id,
-              asFoundConformity: calibrationJob.asFoundConformity,
-            })
+        async ({ o, tx }) => {
+          // Verify job exists and belongs to organization
+          const [job] = await o
+            .select({ id: calibrationJob.id })
             .from(calibrationJob)
             .where(
               and(
                 eq(calibrationJob.id, id),
-                eq(calibrationJob.organizationId, ctx.org),
+                eq(calibrationJob.organizationId, memberData.organizationId),
                 buildUnitScopeCondition(calibrationJob.unitId, memberData),
               ),
             )
             .limit(1);
 
-          if (!scoped) throw jobNotFound();
-
-          const result = await flagJobOutOfTolerance(
-            {
-              organizationId: ctx.org,
-              actorUserId: ctx.actor.userId,
-              jobId: id,
-              description: input.description,
-              affectedScope: input.affectedScope,
-              notifyCustomer: input.notifyCustomer,
-              triggerSource:
-                scoped.asFoundConformity === "NON_CONFORMING"
-                  ? "as_found_verdict"
-                  : "manual",
-            },
-            ctx,
-          );
-          // A refusal comes back before anything is written.
-          if (!result.ok) {
-            throw new DomainError({
-              code: result.code,
-              status: result.status,
-              message: result.message,
-            });
+          if (!job) {
+            return null;
           }
-          return result;
-        },
-      );
 
-      return c.json(
-        {
-          message: "Nao conformidade registrada",
-          data: { nc: flagged.nc, notification: flagged.notification },
-        } satisfies ServerShape<JobFlagOotResponse>,
-        201,
-      );
-    },
-  )
-
-  // =========================================================================
-  // DELETE /:id - Cancel job (soft delete - sets status to CANCELED)
-  // =========================================================================
-  .delete(
-    "/:id",
-    ...withLabPermission({ calibration: ["delete"] }),
-    zValidator("json", CancelJobSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
-
-      const canceled = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) =>
-          requireJobCommandOk(
-            ctx.o,
-            id,
-            // The read and the compare-and-set write run on the context's one
-            // transaction; the write still matches on the status it read.
-            await cancelJob(ctx, {
-              actor: userJobActor(ctx.actor),
-              jobId: id,
-              organizationId: ctx.org,
-              unitScope: memberData,
-              reason: input.reason,
-            }),
-          ),
-      );
-
-      return c.json({
-        message: "Job cancelado",
-        data: canceled.job,
-      } satisfies ServerShape<JobMutationResponse>);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/amend - Create an amended version of an approved certificate
-  // ISO 17025:2017 Clause 7.8.4.1 - Amendments to reports and certificates
-  // =========================================================================
-  .post(
-    "/:id/amend",
-    ...withLabPermission({ calibration: ["approve"] }), // Only admin/owner can amend
-    zValidator("json", AmendJobSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
-
-      const { originalJob, amendedJob, amendmentNumber } = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const amended = await requireJobCommandOk(
-            ctx.o,
-            id,
-            await amendJob(ctx, {
-              actor: userJobActor(ctx.actor),
-              jobId: id,
-              organizationId: ctx.org,
-              unitScope: memberData,
-              reason: input.reason,
-            }),
-          );
-
-          // Reverse traceability (#426 Phase 1): the amendment clones the
-          // frozen standards snapshot verbatim, so mirror the links for the new
-          // job too. A derived index: after the commit, as the submit does.
-          ctx.afterCommit(() =>
-            syncJobStandardLinks(
-              amended.amendedJob.id,
-              amended.originalJob.standardsSnapshot,
-              amended.originalJob.performedAt,
-              ctx.org,
-              orgDb(ctx.org),
-            ),
-          );
-          return amended;
-        },
-      );
-
-      // The original stays APPROVED (the valid certificate) until the
-      // replacement is issued: the worker supersedes it in the issuance
-      // transaction and tells the customer then. Nothing is enqueued or sent
-      // for the original here.
-
-      return c.json(
-        {
-          message: "Retificacao criada com sucesso",
-          originalJob: {
-            id: originalJob.id,
-            jobId: originalJob.jobId,
-            status: "APPROVED",
-          },
-          amendedJob: {
-            id: amendedJob.id,
-            jobId: amendedJob.jobId,
-            status: "DRAFT",
-            amendmentNumber,
-          },
-        } satisfies ServerShape<JobAmendResponse>,
-        201,
-      );
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/certificate/withdraw - Withdraw an issued certificate
-  // ISO 17025:2017 Clause 7.10 - Nonconforming work (e.g. after a recall)
-  // The job keeps its status; the certificate lifecycle gets a WITHDRAWN event.
-  // =========================================================================
-  .post(
-    "/:id/certificate/withdraw",
-    ...withLabPermission({ calibration: ["approve"] }),
-    requireRole(["admin", "owner"]), // Only admin/owner can withdraw
-    zValidator("json", WithdrawCertificateSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-      const input = c.req.valid("json");
-
-      const outcome = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) =>
-          requireJobCommandOk(
-            ctx.o,
-            id,
-            await withdrawCertificateIn(ctx.o, {
-              actor: userJobActor(ctx.actor),
-              jobId: id,
-              organizationId: ctx.org,
-              unitScope: memberData,
-              reason: input.reason,
-            }),
-          ),
-      );
-
-      return c.json({
-        message: "Certificado retirado com sucesso",
-        job: {
-          id: outcome.jobId,
-          jobId: outcome.jobNumber,
-          status: outcome.jobStatus,
-        },
-        certificateStatus: "WITHDRAWN",
-        withdrawnAt: outcome.withdrawnAt.toISOString(),
-      } satisfies ServerShape<JobWithdrawCertificateResponse>);
-    },
-  )
-
-  // =========================================================================
-  // GET /:id/amendment-chain - Get the full amendment history for a job
-  // ISO 17025:2017 Clause 7.8.4.1 - Traceability of amendments
-  // =========================================================================
-  .get(
-    "/:id/amendment-chain",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const handlerStartedAt = performance.now();
-      const memberData = c.get("member");
-
-      try {
-        const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-        // Safety limit to prevent infinite loops from corrupted data
-        const MAX_CHAIN_LENGTH = 100;
-
-        const dbStartedAt = performance.now();
-        // The job check and the recursive chain read run in one transaction
-        // that names the laboratory (row-level security). The chain is raw SQL
-        // (a recursive CTE the handle cannot express): it takes the raw
-        // executor, and every table in it carries the organization predicate.
-        const chain = await withOrg(
-          memberData.organizationId,
-          requestActor(c),
-          async ({ o, tx }) => {
-            // Verify job exists and belongs to organization
-            const [job] = await o
-              .select({ id: calibrationJob.id })
-              .from(calibrationJob)
-              .where(
-                and(
-                  eq(calibrationJob.id, id),
-                  eq(calibrationJob.organizationId, memberData.organizationId),
-                  buildUnitScopeCondition(calibrationJob.unitId, memberData),
-                ),
-              )
-              .limit(1);
-
-            if (!job) {
-              return null;
-            }
-
-            const chainResult = await tx.execute(sql`
+          const chainResult = await tx.execute(sql`
         WITH RECURSIVE ancestors AS (
           SELECT
             id,
@@ -1434,493 +1457,487 @@ export const jobsRouter = createRouter<{
         FROM chain
         ORDER BY depth ASC;
       `);
-            const chainRows = getExecuteRows<{
-              id: number;
-              job_id: string;
-              status: string;
-              amendment_number: number | null;
-              amendment_reason: string | null;
-              approved_at: Date | string | null;
-              superseded_at: Date | string | null;
-            }>(chainResult);
+          const chainRows = getExecuteRows<{
+            id: number;
+            job_id: string;
+            status: string;
+            amendment_number: number | null;
+            amendment_reason: string | null;
+            approved_at: Date | string | null;
+            superseded_at: Date | string | null;
+          }>(chainResult);
 
-            return chainRows.map((row) => ({
-              id: Number(row.id),
-              jobId: row.job_id,
-              status: row.status,
-              amendmentNumber:
-                row.amendment_number === null
-                  ? null
-                  : Number(row.amendment_number),
-              amendmentReason: row.amendment_reason,
-              approvedAt: row.approved_at ? new Date(row.approved_at) : null,
-              supersededAt: row.superseded_at
-                ? new Date(row.superseded_at)
-                : null,
-              isCurrent: Number(row.id) === job.id,
-            }));
-          },
-        );
-        addServerTiming(c, "amendment_chain_db", dbStartedAt);
-        if (chain === null) {
-          throw jobNotFound();
-        }
-
-        return c.json({
-          data: chain,
-          originalJobId: chain[0]?.id,
-          latestJobId: chain[chain.length - 1]?.id,
-          totalAmendments: chain.length - 1,
-        });
-      } finally {
-        addServerTiming(c, "amendment_chain_handler", handlerStartedAt);
-      }
-    },
-  )
-
-  // =========================================================================
-  // GET /:id/audit-log - Get audit log for a job
-  // =========================================================================
-  .get(
-    "/:id/audit-log",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-      const logs = await orgDb(memberData.organizationId).transaction(
-        async (o) => {
-          // Verify job exists and belongs to organization
-          const [existing] = await o
-            .select({ id: calibrationJob.id })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.id, id),
-                eq(calibrationJob.organizationId, memberData.organizationId),
-                buildUnitScopeCondition(calibrationJob.unitId, memberData),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) return null;
-
-          // Get audit logs with performer details
-          return o
-            .select({
-              id: jobAuditLog.id,
-              action: jobAuditLog.action,
-              changes: jobAuditLog.changes,
-              performedBy: jobAuditLog.performedBy,
-              performedAt: jobAuditLog.performedAt,
-              ipAddress: jobAuditLog.ipAddress,
-              reason: jobAuditLog.reason,
-              performerName: user.name,
-            })
-            .from(jobAuditLog)
-            .leftJoin(user, eq(jobAuditLog.performedBy, user.id))
-            .where(eq(jobAuditLog.jobId, id))
-            .orderBy(desc(jobAuditLog.performedAt));
+          return chainRows.map((row) => ({
+            id: Number(row.id),
+            jobId: row.job_id,
+            status: row.status,
+            amendmentNumber:
+              row.amendment_number === null
+                ? null
+                : Number(row.amendment_number),
+            amendmentReason: row.amendment_reason,
+            approvedAt: row.approved_at ? new Date(row.approved_at) : null,
+            supersededAt: row.superseded_at
+              ? new Date(row.superseded_at)
+              : null,
+            isCurrent: Number(row.id) === job.id,
+          }));
         },
       );
-
-      if (!logs) {
+      addServerTiming(c, "amendment_chain_db", dbStartedAt);
+      if (chain === null) {
         throw jobNotFound();
       }
 
-      return c.json({ data: logs });
-    },
-  )
+      return c.json({
+        data: chain,
+        originalJobId: chain[0]?.id,
+        latestJobId: chain[chain.length - 1]?.id,
+        totalAmendments: chain.length - 1,
+      });
+    } finally {
+      addServerTiming(c, "amendment_chain_handler", handlerStartedAt);
+    }
+  },
+);
 
-  // =========================================================================
-  // GET /technicians - Get list of technicians for assignment dropdown
-  // =========================================================================
-  .get(
-    "/technicians/list",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
+// =========================================================================
+// GET /:id/audit-log - Get audit log for a job
+// =========================================================================
+jobsRouter.get(
+  "/:id/audit-log",
+  ...withLabPermission({ calibration: ["read"] }),
+  async (c) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(c.req.param("id"), memberData);
 
-      const technicians = await orgDb(memberData.organizationId).transaction(
-        async (o) => {
-          const baseQuery = o
-            .select({
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: member.role,
-            })
-            .from(member)
-            .innerJoin(user, eq(member.userId, user.id));
+    const logs = await orgDb(memberData.organizationId).transaction(
+      async (o) => {
+        // Verify job exists and belongs to organization
+        const [existing] = await o
+          .select({ id: calibrationJob.id })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1);
 
-          return memberData.activeUnitId
-            ? baseQuery
-                .leftJoin(
-                  memberUnitAssignment,
-                  eq(memberUnitAssignment.memberId, member.id),
-                )
-                .where(
-                  and(
-                    eq(member.organizationId, memberData.organizationId),
-                    inArray(member.role, ["technician", "admin", "owner"]),
-                    or(
-                      inArray(member.role, ["admin", "owner"]),
-                      and(
-                        eq(
-                          memberUnitAssignment.unitId,
-                          memberData.activeUnitId,
-                        ),
-                        inArray(memberUnitAssignment.role, [
-                          "technician",
-                          "unit_admin",
-                        ]),
-                      ),
+        if (!existing) return null;
+
+        // Get audit logs with performer details
+        return o
+          .select({
+            id: jobAuditLog.id,
+            action: jobAuditLog.action,
+            changes: jobAuditLog.changes,
+            performedBy: jobAuditLog.performedBy,
+            performedAt: jobAuditLog.performedAt,
+            ipAddress: jobAuditLog.ipAddress,
+            reason: jobAuditLog.reason,
+            performerName: user.name,
+          })
+          .from(jobAuditLog)
+          .leftJoin(user, eq(jobAuditLog.performedBy, user.id))
+          .where(eq(jobAuditLog.jobId, id))
+          .orderBy(desc(jobAuditLog.performedAt));
+      },
+    );
+
+    if (!logs) {
+      throw jobNotFound();
+    }
+
+    return c.json({ data: logs });
+  },
+);
+
+// =========================================================================
+// GET /technicians - Get list of technicians for assignment dropdown
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.listTechnicians,
+  withLabPermission({ calibration: ["read"] }),
+  async (c) => {
+    const memberData = c.get("member");
+
+    const technicians = await orgDb(memberData.organizationId).transaction(
+      async (o) => {
+        const baseQuery = o
+          .select({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: member.role,
+          })
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id));
+
+        return memberData.activeUnitId
+          ? baseQuery
+              .leftJoin(
+                memberUnitAssignment,
+                eq(memberUnitAssignment.memberId, member.id),
+              )
+              .where(
+                and(
+                  eq(member.organizationId, memberData.organizationId),
+                  inArray(member.role, ["technician", "admin", "owner"]),
+                  or(
+                    inArray(member.role, ["admin", "owner"]),
+                    and(
+                      eq(memberUnitAssignment.unitId, memberData.activeUnitId),
+                      inArray(memberUnitAssignment.role, [
+                        "technician",
+                        "unit_admin",
+                      ]),
                     ),
                   ),
-                )
-                .orderBy(user.name)
-            : baseQuery
-                .where(
-                  and(
-                    eq(member.organizationId, memberData.organizationId),
-                    inArray(member.role, ["technician", "admin", "owner"]),
-                  ),
-                )
-                .orderBy(user.name);
-        },
-      );
+                ),
+              )
+              .orderBy(user.name)
+          : baseQuery
+              .where(
+                and(
+                  eq(member.organizationId, memberData.organizationId),
+                  inArray(member.role, ["technician", "admin", "owner"]),
+                ),
+              )
+              .orderBy(user.name);
+      },
+    );
 
-      return c.json({
-        data: technicians,
-      } satisfies ServerShape<JobTechniciansResponse>);
-    },
-  )
+    return {
+      data: technicians,
+    };
+  },
+);
 
-  // =========================================================================
-  // GET /:id/download - Generate presigned URL for certificate download
-  // =========================================================================
-  .get(
-    "/:id/download",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
+// =========================================================================
+// GET /:id/download - Generate presigned URL for certificate download
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.getCertificateDownloadUrl,
+  withLabPermission({ calibration: ["read"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
 
-      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .select({ certificateUrl: calibrationJob.certificateUrl })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1),
-      );
-
-      if (!job) {
-        throw jobNotFound();
-      }
-
-      if (!job.certificateUrl) {
-        throw invalid(
-          "certificate_not_ready",
-          "Certificado ainda nao foi gerado",
-        );
-      }
-
-      const env = r2EnvFromUnknown(c.env);
-      if (shouldUseLocalR2Download(env)) {
-        return c.json({
-          url: buildLocalJobFileUrl(
-            c.req.url,
-            c.req.param("id"),
-            "certificate",
-            env.API_URL,
+    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({ certificateUrl: calibrationJob.certificateUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
-        } satisfies JobDownloadUrlResponse);
-      }
+        )
+        .limit(1),
+    );
 
-      const key = extractKeyFromUrl(job.certificateUrl);
-      const client = createR2Client(env);
-      const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
+    if (!job) {
+      throw jobNotFound();
+    }
 
-      return c.json({ url } satisfies JobDownloadUrlResponse);
-    },
-  )
-
-  // =========================================================================
-  // GET /:id/file - Stream certificate from R2 during local dev
-  // =========================================================================
-  .get(
-    "/:id/file",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const env = r2EnvFromUnknown(c.env);
-      if (!shouldUseLocalR2Download(env)) {
-        throw notFound(
-          "not_found",
-          "Disponivel apenas em desenvolvimento local",
-        );
-      }
-
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .select({ certificateUrl: calibrationJob.certificateUrl })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1),
+    if (!job.certificateUrl) {
+      throw invalid(
+        "certificate_not_ready",
+        "Certificado ainda nao foi gerado",
       );
+    }
 
-      if (!job?.certificateUrl) {
-        throw invalid(
-          "certificate_not_ready",
-          "Certificado ainda nao foi gerado",
-        );
-      }
+    const env = r2EnvFromUnknown(c.env);
+    if (shouldUseLocalR2Download(env)) {
+      return {
+        url: buildLocalJobFileUrl(
+          c.req.url,
+          params.id,
+          "certificate",
+          env.API_URL,
+        ),
+      };
+    }
 
-      const key = extractKeyFromUrl(job.certificateUrl);
-      const object = await env.CERTIFICATES_BUCKET.get(key);
+    const key = extractKeyFromUrl(job.certificateUrl);
+    const client = createR2Client(env);
+    const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
 
-      if (!object) {
-        throw notFound("not_found", "Arquivo nao encontrado no R2 local");
-      }
+    return { url };
+  },
+);
 
-      return new Response(object.body, {
-        headers: {
-          "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
-          "Content-Disposition": 'inline; filename="certificado.pdf"',
-        },
-      });
-    },
-  )
+// =========================================================================
+// GET /:id/file - Stream certificate from R2 during local dev
+// =========================================================================
+jobsRouter.get(
+  "/:id/file",
+  ...withLabPermission({ calibration: ["read"] }),
+  async (c) => {
+    const env = r2EnvFromUnknown(c.env);
+    if (!shouldUseLocalR2Download(env)) {
+      throw notFound("not_found", "Disponivel apenas em desenvolvimento local");
+    }
 
-  // =========================================================================
-  // POST /:id/generate-label - Enqueue thermal label generation
-  // =========================================================================
-  .post(
-    "/:id/generate-label",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(c.req.param("id"), memberData);
 
-      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .select({
-            id: calibrationJob.id,
-            status: calibrationJob.status,
-            labelUrl: calibrationJob.labelUrl,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1),
-      );
-
-      if (!job) {
-        throw jobNotFound();
-      }
-
-      // Only approved jobs can have labels generated
-      if (job.status !== "APPROVED") {
-        throw invalid(
-          "invalid_request",
-          "Apenas jobs aprovados podem ter etiquetas geradas",
-        );
-      }
-
-      await enqueueBackgroundJob({
-        type: "LABEL",
-        jobId: id,
-        userId: session.user.id,
-      });
-
-      return c.json({
-        message: "Gerando etiqueta...",
-        jobId: id,
-      } satisfies ServerShape<JobGenerateLabelResponse>);
-    },
-  )
-
-  // =========================================================================
-  // GET /:id/download-label - Generate presigned URL for label download
-  // =========================================================================
-  .get(
-    "/:id/download-label",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .select({ labelUrl: calibrationJob.labelUrl })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1),
-      );
-
-      if (!job) {
-        throw jobNotFound();
-      }
-
-      if (!job.labelUrl) {
-        throw invalid("invalid_request", "Etiqueta ainda nao foi gerada");
-      }
-
-      const env = r2EnvFromUnknown(c.env);
-      if (shouldUseLocalR2Download(env)) {
-        return c.json({
-          url: buildLocalJobFileUrl(
-            c.req.url,
-            c.req.param("id"),
-            "label",
-            env.API_URL,
+    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({ certificateUrl: calibrationJob.certificateUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
-        } satisfies JobDownloadUrlResponse);
-      }
+        )
+        .limit(1),
+    );
 
-      const key = extractKeyFromUrl(job.labelUrl);
-      const client = createR2Client(env);
-      const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
-
-      return c.json({ url } satisfies JobDownloadUrlResponse);
-    },
-  )
-
-  // =========================================================================
-  // GET /:id/label-commands - Native printer commands for direct thermal printing
-  // =========================================================================
-  // Rendered server-side (the verification token isn't exposed in the general
-  // job DTO) in the requested language (?lang=zpl|tspl). The browser fetches
-  // this, then hands the commands to a transport (desktop local-server, Zebra
-  // Browser Print, WebUSB, or Web Serial).
-  .get(
-    "/:id/label-commands",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .select({
-            jobId: calibrationJob.jobId,
-            performedAt: calibrationJob.performedAt,
-            verificationToken: calibrationJob.verificationToken,
-            labName: organization.name,
-            assetTag: asset.tag,
-          })
-          .from(calibrationJob)
-          .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
-          .leftJoin(
-            organization,
-            eq(calibrationJob.organizationId, organization.id),
-          )
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1),
+    if (!job?.certificateUrl) {
+      throw invalid(
+        "certificate_not_ready",
+        "Certificado ainda nao foi gerado",
       );
+    }
 
-      if (!job) {
-        throw jobNotFound();
-      }
+    const key = extractKeyFromUrl(job.certificateUrl);
+    const object = await env.CERTIFICATES_BUCKET.get(key);
 
-      const dpi = c.req.query("dpi") === "300" ? 300 : 203;
-      const language = c.req.query("lang") === "tspl" ? "tspl" : "zpl";
-      const commands = renderLabel(
-        {
-          certNumber: job.jobId,
-          labName: job.labName ?? "Laboratório",
-          assetTag: job.assetTag ?? "-",
-          calibrationDate: job.performedAt,
-          // Same public verification URL the worker encodes into the PDF QR.
-          verifyUrl: certificateVerificationUrl(job.verificationToken),
-        },
-        defaultRenderOptions(language, dpi),
+    if (!object) {
+      throw notFound("not_found", "Arquivo nao encontrado no R2 local");
+    }
+
+    return new Response(object.body, {
+      headers: {
+        "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
+        "Content-Disposition": 'inline; filename="certificado.pdf"',
+      },
+    });
+  },
+);
+
+// =========================================================================
+// POST /:id/generate-label - Enqueue thermal label generation
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.generateLabel,
+  withLabPermission({ calibration: ["read"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
+    const id = await requireJobRouteId(params.id, memberData);
+
+    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({
+          id: calibrationJob.id,
+          status: calibrationJob.status,
+          labelUrl: calibrationJob.labelUrl,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1),
+    );
+
+    if (!job) {
+      throw jobNotFound();
+    }
+
+    // Only approved jobs can have labels generated
+    if (job.status !== "APPROVED") {
+      throw invalid(
+        "invalid_request",
+        "Apenas jobs aprovados podem ter etiquetas geradas",
       );
+    }
 
-      return c.text(commands);
-    },
-  )
+    await enqueueBackgroundJob({
+      type: "LABEL",
+      jobId: id,
+      userId: session.user.id,
+    });
 
-  // =========================================================================
-  // GET /:id/label-file - Stream label from R2 during local dev
-  // =========================================================================
-  .get(
-    "/:id/label-file",
-    ...withLabPermission({ calibration: ["read"] }),
-    async (c) => {
-      const env = r2EnvFromUnknown(c.env);
-      if (!shouldUseLocalR2Download(env)) {
-        throw notFound(
-          "not_found",
-          "Disponivel apenas em desenvolvimento local",
-        );
-      }
+    return {
+      message: "Gerando etiqueta...",
+      jobId: id,
+    };
+  },
+);
 
-      const memberData = c.get("member");
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
+// =========================================================================
+// GET /:id/download-label - Generate presigned URL for label download
+// =========================================================================
+mount(
+  jobsRouter,
+  PREFIX,
+  jobEndpoints.getLabelDownloadUrl,
+  withLabPermission({ calibration: ["read"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(params.id, memberData);
 
-      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .select({ labelUrl: calibrationJob.labelUrl })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1),
-      );
+    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({ labelUrl: calibrationJob.labelUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1),
+    );
 
-      if (!job?.labelUrl) {
-        throw invalid("invalid_request", "Etiqueta ainda nao foi gerada");
-      }
+    if (!job) {
+      throw jobNotFound();
+    }
 
-      const key = extractKeyFromUrl(job.labelUrl);
-      const object = await env.CERTIFICATES_BUCKET.get(key);
+    if (!job.labelUrl) {
+      throw invalid("invalid_request", "Etiqueta ainda nao foi gerada");
+    }
 
-      if (!object) {
-        throw notFound("not_found", "Arquivo nao encontrado no R2 local");
-      }
+    const env = r2EnvFromUnknown(c.env);
+    if (shouldUseLocalR2Download(env)) {
+      return {
+        url: buildLocalJobFileUrl(c.req.url, params.id, "label", env.API_URL),
+      };
+    }
 
-      return new Response(object.body, {
-        headers: {
-          "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
-          "Content-Disposition": 'inline; filename="etiqueta.pdf"',
-        },
-      });
-    },
-  );
+    const key = extractKeyFromUrl(job.labelUrl);
+    const client = createR2Client(env);
+    const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
+
+    return { url };
+  },
+);
+
+// =========================================================================
+// GET /:id/label-commands - Native printer commands for direct thermal printing
+// =========================================================================
+// Rendered server-side (the verification token isn't exposed in the general
+// job DTO) in the requested language (?lang=zpl|tspl). The browser fetches
+// this, then hands the commands to a transport (desktop local-server, Zebra
+// Browser Print, WebUSB, or Web Serial).
+jobsRouter.get(
+  "/:id/label-commands",
+  ...withLabPermission({ calibration: ["read"] }),
+  async (c) => {
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(c.req.param("id"), memberData);
+
+    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({
+          jobId: calibrationJob.jobId,
+          performedAt: calibrationJob.performedAt,
+          verificationToken: calibrationJob.verificationToken,
+          labName: organization.name,
+          assetTag: asset.tag,
+        })
+        .from(calibrationJob)
+        .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .leftJoin(
+          organization,
+          eq(calibrationJob.organizationId, organization.id),
+        )
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1),
+    );
+
+    if (!job) {
+      throw jobNotFound();
+    }
+
+    const dpi = c.req.query("dpi") === "300" ? 300 : 203;
+    const language = c.req.query("lang") === "tspl" ? "tspl" : "zpl";
+    const commands = renderLabel(
+      {
+        certNumber: job.jobId,
+        labName: job.labName ?? "Laboratório",
+        assetTag: job.assetTag ?? "-",
+        calibrationDate: job.performedAt,
+        // Same public verification URL the worker encodes into the PDF QR.
+        verifyUrl: certificateVerificationUrl(job.verificationToken),
+      },
+      defaultRenderOptions(language, dpi),
+    );
+
+    return c.text(commands);
+  },
+);
+
+// =========================================================================
+// GET /:id/label-file - Stream label from R2 during local dev
+// =========================================================================
+jobsRouter.get(
+  "/:id/label-file",
+  ...withLabPermission({ calibration: ["read"] }),
+  async (c) => {
+    const env = r2EnvFromUnknown(c.env);
+    if (!shouldUseLocalR2Download(env)) {
+      throw notFound("not_found", "Disponivel apenas em desenvolvimento local");
+    }
+
+    const memberData = c.get("member");
+    const id = await requireJobRouteId(c.req.param("id"), memberData);
+
+    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({ labelUrl: calibrationJob.labelUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1),
+    );
+
+    if (!job?.labelUrl) {
+      throw invalid("invalid_request", "Etiqueta ainda nao foi gerada");
+    }
+
+    const key = extractKeyFromUrl(job.labelUrl);
+    const object = await env.CERTIFICATES_BUCKET.get(key);
+
+    if (!object) {
+      throw notFound("not_found", "Arquivo nao encontrado no R2 local");
+    }
+
+    return new Response(object.body, {
+      headers: {
+        "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
+        "Content-Disposition": 'inline; filename="etiqueta.pdf"',
+      },
+    });
+  },
+);

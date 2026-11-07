@@ -149,11 +149,13 @@ export function customerJobsQueryOptions({
       }
 
       return calibraApi.jobs.list({
-        page,
-        limit,
-        customerId,
-        query: search || undefined,
-        status: statusFilter || undefined,
+        query: {
+          page,
+          limit,
+          customerId,
+          query: search || undefined,
+          status: statusFilter || undefined,
+        },
       })
     },
     placeholderData: keepPreviousDataInScope(['jobs', 'customer', customerId]),

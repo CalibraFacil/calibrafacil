@@ -831,7 +831,11 @@ function OotAmendCertificateDialog({
   )
 
   const amendMutation = useMutation({
-    mutationFn: () => calibraApi.jobs.amend(job.id, reason),
+    mutationFn: () =>
+      calibraApi.jobs.amend({
+        params: { id: job.id },
+        body: { reason: reason },
+      }),
     onSuccess: (result) => {
       toast.success(`Retificação criada: ${result.amendedJob.jobId}`)
       setOpen(false)

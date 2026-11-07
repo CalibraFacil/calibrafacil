@@ -133,8 +133,10 @@ export function nonConformanceJobsQueryOptions() {
     queryKey: ['jobs-for-nc'],
     queryFn: (): Promise<NewNonConformanceJobsData> =>
       calibraApi.jobs.list({
-        page: 1,
-        limit: 100,
+        query: {
+          page: 1,
+          limit: 100,
+        },
       }),
   })
 }

@@ -118,7 +118,8 @@ export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data: CreateJobInput) => calibraApi.jobs.create(data),
+    mutationFn: (data: CreateJobInput) =>
+      calibraApi.jobs.create({ body: data }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       toast.success(`Ordem ${data.jobId} criada com sucesso!`)

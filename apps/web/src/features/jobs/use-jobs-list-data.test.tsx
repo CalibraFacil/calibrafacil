@@ -79,8 +79,9 @@ describe('useJobsListData', () => {
 
   it('REQ-FE-LIST-001: keeps the previous page rows (no skeleton) while the next page loads', async () => {
     const nextPage = deferred<ReturnType<typeof pageOf>>()
-    listMock.mockImplementation(({ page }: { page: number }) =>
-      page === 1 ? Promise.resolve(pageOf(1, ['a', 'b'])) : nextPage.promise,
+    listMock.mockImplementation(
+      ({ query: { page } }: { query: { page: number } }) =>
+        page === 1 ? Promise.resolve(pageOf(1, ['a', 'b'])) : nextPage.promise,
     )
 
     const { result, rerender } = renderJobs({
@@ -109,8 +110,8 @@ describe('useJobsListData', () => {
 
   it('REQ-FE-LIST-002: keeps rows while a new search term loads', async () => {
     const searched = deferred<ReturnType<typeof pageOf>>()
-    listMock.mockImplementation(({ query }: { query?: string }) =>
-      query ? searched.promise : Promise.resolve(pageOf(1, ['a', 'b'])),
+    listMock.mockImplementation(({ query }: { query: { query?: string } }) =>
+      query.query ? searched.promise : Promise.resolve(pageOf(1, ['a', 'b'])),
     )
 
     const { result, rerender } = renderJobs({

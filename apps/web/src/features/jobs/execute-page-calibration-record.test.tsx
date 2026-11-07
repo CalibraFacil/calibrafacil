@@ -138,16 +138,16 @@ describe('ExecuteJobPage on a desktop-shaped job: the calibration record', () =>
     fireEvent.click(submit)
 
     await waitFor(() => {
-      expect(apiMocks.submitExecution).toHaveBeenCalledWith(
-        'CAL-0007',
-        expect.objectContaining({
+      expect(apiMocks.submitExecution).toHaveBeenCalledWith({
+        params: { id: 'CAL-0007' },
+        body: expect.objectContaining({
           calibrationLocation: {
             type: 'other',
             addressText: 'Rua do Cliente, 10',
             notes: null,
           },
         }),
-      )
+      })
     })
   })
 
@@ -182,16 +182,16 @@ describe('ExecuteJobPage on a desktop-shaped job: the calibration record', () =>
     fireEvent.click(submit)
 
     await waitFor(() => {
-      expect(apiMocks.submitExecution).toHaveBeenCalledWith(
-        'CAL-0007',
-        expect.objectContaining({
+      expect(apiMocks.submitExecution).toHaveBeenCalledWith({
+        params: { id: 'CAL-0007' },
+        body: expect.objectContaining({
           calibrationPhases: {
             blocks: {
               carga: { mode: 'not_performed', reason: 'Sem acesso ao ponto' },
             },
           },
         }),
-      )
+      })
     })
   })
 
@@ -210,16 +210,16 @@ describe('ExecuteJobPage on a desktop-shaped job: the calibration record', () =>
     fireEvent.click(screen.getByRole('button', { name: /salvar rascunho/i }))
 
     await waitFor(() => {
-      expect(apiMocks.saveExecution).toHaveBeenCalledWith(
-        'CAL-0007',
-        expect.objectContaining({
+      expect(apiMocks.saveExecution).toHaveBeenCalledWith({
+        params: { id: 'CAL-0007' },
+        body: expect.objectContaining({
           calibrationLocation: {
             type: 'other',
             addressText: 'Rua do Cliente, 10',
             notes: null,
           },
         }),
-      )
+      })
     })
   })
 })

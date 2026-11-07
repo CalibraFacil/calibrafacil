@@ -40,7 +40,7 @@ import { createAccreditedScopeApi } from "./modules/accredited-scope";
 import { createEnvironmentalLimitsApi } from "./modules/environmental-limits";
 import { createFinanceApi } from "./modules/finance";
 import { createIntegrationsApi } from "./modules/integrations";
-import { createJobsApi, type JobsRawCloudClient } from "./modules/jobs";
+import { createJobsApi } from "./modules/jobs";
 import { createLabSetupApi } from "./modules/lab-setup";
 import { createMethodsApi } from "./modules/methods";
 import { createNotificationsApi } from "./modules/notifications";
@@ -202,7 +202,6 @@ export function createCloudApiClient(
           }): Promise<Response>;
         };
       };
-      jobs: JobsRawCloudClient["api"]["jobs"];
       // Only `jobs.listStandards` (the jobs domain, not converted yet) reads
       // the standards list through the raw client; `standards` itself is an
       // endpoint group. Delete this when `listStandards` is converted.
@@ -266,7 +265,7 @@ export function createCloudApiClient(
     materials: createMaterialsApi(endpointTransport, options),
     methods: createMethodsApi(endpointTransport, options),
     standards: createStandardsApi(endpointTransport, options),
-    jobs: createJobsApi(rawCloudClient, options),
+    jobs: createJobsApi(endpointTransport, options),
     serviceOrders: createServiceOrdersApi(endpointTransport, options),
     sync: createCloudSyncApi(),
     attachments: createCloudAttachmentsApi(),

@@ -17,6 +17,7 @@ import { materialEndpoints } from "./materials";
 import { methodEndpoints } from "./methods";
 import { nonConformanceEndpoints } from "./non-conformances";
 import { portalDomainEndpoints } from "./portal-domains";
+import { jobEndpoints } from "./jobs";
 import { proficiencyTestEndpoints } from "./proficiency-tests";
 import { reportEndpoints } from "./reports";
 import { serviceOrderEndpoints } from "./service-orders";
@@ -47,6 +48,7 @@ export * from "./methods";
 export * from "./spc";
 export * from "./finance";
 export * from "./service-orders";
+export * from "./jobs";
 export * from "./dashboard";
 export * from "./entity-labels";
 export * from "./reports";
@@ -80,6 +82,7 @@ export const ENDPOINT_GROUPS = {
   spc: spcEndpoints,
   finance: financeEndpoints,
   serviceOrders: serviceOrderEndpoints,
+  jobs: jobEndpoints,
   dashboard: dashboardEndpoints,
   entityLabels: entityLabelEndpoints,
   reports: reportEndpoints,

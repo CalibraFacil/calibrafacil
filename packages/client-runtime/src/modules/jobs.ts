@@ -1,335 +1,130 @@
 import {
   effectiveEnvironmentalLimitsResponseSchema,
-  jobAmendResponseSchema,
-  jobCreateResponseSchema,
-  jobDetailSchema,
-  jobDownloadUrlResponseSchema,
-  jobFlagOotResponseSchema,
-  jobGenerateLabelResponseSchema,
-  jobMutationResponseSchema,
-  jobTechniciansResponseSchema,
-  jobWithdrawCertificateResponseSchema,
-  jobsListResponseSchema,
+  jobEndpoints,
   standardsListResponseSchema,
-  type JobStatus,
+  validateResponsePayload,
+  type EffectiveEnvironmentalLimitsResponse,
   type ResponseValidationOptions,
+  type StandardsListResponse,
 } from "@calibra-facil/contracts";
 
-import type { CreateJobInput, JobsApi, JobsListInput } from "../types";
-import type { JobExecutionPayload } from "../jobs";
 import { CalibraApiError } from "../transport/errors";
-import { createValidatedReader, readApiError } from "../transport/response";
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+import { readApiError, readJsonResponse } from "../transport/response";
 import { apiRouteParam } from "../transport/url";
 
-type JobIdParam = { param: { id: string } };
-type JobPostRoute<TInput> = { $post(input: TInput): Promise<Response> };
-
 /**
- * The slice of the raw Hono RPC client this module drives. Declared here (not
- * `any`) so a renamed route or a changed payload fails `check-types`.
+ * The jobs client is its endpoint group (`jobEndpoints` in
+ * `@calibra-facil/contracts`) plus three methods that are client-side logic:
+ * the label commands (plain text, not JSON) and the two reads of other domains'
+ * routes a worksheet needs (the active standards and the effective
+ * environmental limits).
  */
-export type JobsRawCloudClient = {
-  api: {
-    jobs: {
-      $post(input: { json: CreateJobInput }): Promise<Response>;
-      $get(input: {
-        query: {
-          page: string;
-          limit: string;
-          customerId?: string;
-          query?: string;
-          status?: JobStatus;
-        };
-      }): Promise<Response>;
-      technicians: { list: { $get(): Promise<Response> } };
-      ":id": {
-        $get(input: JobIdParam): Promise<Response>;
-        $delete(
-          input: JobIdParam & { json: { reason: string } },
-        ): Promise<Response>;
-        approve: JobPostRoute<
-          JobIdParam & {
-            json: {
-              reason?: string;
-              environmentalJustification?: string;
-              scopeOverrideJustification?: string;
-            };
-          }
-        >;
-        reject: JobPostRoute<JobIdParam & { json: { reason: string } }>;
-        "retry-render": JobPostRoute<JobIdParam>;
-        "flag-oot": JobPostRoute<
-          JobIdParam & {
-            json: {
-              description?: string;
-              affectedScope?: string;
-              notifyCustomer: boolean;
-            };
-          }
-        >;
-        assign: JobPostRoute<JobIdParam & { json: { technicianId: string } }>;
-        download: { $get(input: JobIdParam): Promise<Response> };
-        "generate-label": JobPostRoute<JobIdParam>;
-        "download-label": { $get(input: JobIdParam): Promise<Response> };
-        "label-commands": {
-          $get(
-            input: JobIdParam & { query: Record<string, string> },
-          ): Promise<Response>;
-        };
-        amend: JobPostRoute<JobIdParam & { json: { reason: string } }>;
-        certificate: {
-          withdraw: JobPostRoute<JobIdParam & { json: { reason: string } }>;
-        };
-        execute: JobPostRoute<JobIdParam & { json: JobExecutionPayload }>;
-        submit: JobPostRoute<JobIdParam & { json: JobExecutionPayload }>;
-      };
-    };
-    standards: {
-      $get(input: {
-        query: { status?: string; limit?: string };
-      }): Promise<Response>;
-    };
-    "environmental-limits": {
-      effective: {
-        ":assetTypeId": {
-          $get(input: {
-            param: { assetTypeId: string };
-            query?: { unitId?: string };
-          }): Promise<Response>;
-        };
-      };
-    };
-  };
+export type JobsApi = EndpointClient<typeof jobEndpoints> & {
+  /** The active reference standards a worksheet can pick from. */
+  listStandards(): Promise<StandardsListResponse>;
+  getEffectiveEnvironmentalLimits(
+    assetTypeId: string | number,
+    input?: { unitId?: string | number | null },
+  ): Promise<EffectiveEnvironmentalLimitsResponse>;
+  /** Native printer commands (ZPL/TSPL) for direct thermal printing (text). */
+  getLabelCommands(
+    jobId: string | number,
+    options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
+  ): Promise<string>;
 };
 
+const JOB_ID_SEGMENT = /^(\/api\/jobs\/)([^/]+)/;
+/** Static segments of `/api/jobs/...` that are not a job identifier. */
+const STATIC_JOB_SEGMENTS = new Set(["technicians"]);
+
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * A job is addressed by its numeric id or its job code ("R-0001/2026"), which
+ * the API reads from a doubly encoded segment. The endpoint client encodes a
+ * path parameter once, so the job identifier is normalised here, the way
+ * `apiRouteParam` always did (whether the caller holds the code decoded or
+ * already encoded).
+ */
+function withNormalizedJobIds(transport: EndpointTransport): EndpointTransport {
+  return (request) =>
+    transport({
+      ...request,
+      path: request.path.replace(JOB_ID_SEGMENT, (match, prefix, segment) =>
+        STATIC_JOB_SEGMENTS.has(segment)
+          ? match
+          : `${prefix}${apiRouteParam(safeDecode(segment))}`,
+      ),
+    });
+}
+
 export function createJobsApi(
-  rawCloudClient: JobsRawCloudClient,
+  transport: EndpointTransport,
   options: ResponseValidationOptions = {},
 ): JobsApi {
-  // Every contract-covered response below is checked against its
-  // `@calibra-facil/contracts` schema; see `validateResponsePayload` for the
-  // strict (dev/test) vs warn (production) behavior on a mismatch.
-  const validated = createValidatedReader(options);
+  const client = endpointClient(
+    jobEndpoints,
+    withNormalizedJobIds(transport),
+    options,
+  );
 
   return {
-    async list(input: JobsListInput) {
-      return validated(
-        await rawCloudClient.api.jobs.$get({
-          query: {
-            page: String(input.page),
-            limit: String(input.limit),
-            customerId: input.customerId ? String(input.customerId) : undefined,
-            query: input.query || undefined,
-            status: input.status || undefined,
-          },
-        }),
-        jobsListResponseSchema,
-        "GET /api/jobs",
-        "Falha ao carregar calibrações",
-      );
-    },
-    async create(input: CreateJobInput) {
-      return validated(
-        await rawCloudClient.api.jobs.$post({ json: input }),
-        jobCreateResponseSchema,
-        "POST /api/jobs",
-        "Erro ao criar ordem",
-      );
-    },
-    async get(jobId: string | number) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].$get({
-          param: { id: apiRouteParam(jobId) },
-        }),
-        jobDetailSchema,
-        "GET /api/jobs/:id",
-        "Falha ao carregar job",
-      );
-    },
-    async listTechnicians() {
-      return validated(
-        await rawCloudClient.api.jobs.technicians.list.$get(),
-        jobTechniciansResponseSchema,
-        "GET /api/jobs/technicians/list",
-        "Falha ao carregar técnicos",
-      );
-    },
-    async approve(
-      jobId: string | number,
-      // Mirrors ApproveJobSchema: reason is optional approval notes.
-      input: {
-        reason?: string;
-        environmentalJustification?: string;
-        scopeOverrideJustification?: string;
-      },
-    ) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].approve.$post({
-          param: { id: apiRouteParam(jobId) },
-          json: input,
-        }),
-        jobMutationResponseSchema,
-        "POST /api/jobs/:id/approve",
-        "Erro ao aprovar",
-      );
-    },
-    async reject(jobId: string | number, reason: string) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].reject.$post({
-          param: { id: apiRouteParam(jobId) },
-          json: { reason },
-        }),
-        jobMutationResponseSchema,
-        "POST /api/jobs/:id/reject",
-        "Erro ao rejeitar",
-      );
-    },
-    async retryRender(jobId: string | number) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"]["retry-render"].$post({
-          param: { id: apiRouteParam(jobId) },
-        }),
-        jobMutationResponseSchema,
-        "POST /api/jobs/:id/retry-render",
-        "Erro ao reemitir o certificado",
-      );
-    },
-    async flagOutOfTolerance(
-      jobId: string | number,
-      input: {
-        description?: string;
-        affectedScope?: string;
-        notifyCustomer: boolean;
-      },
-    ) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"]["flag-oot"].$post({
-          param: { id: apiRouteParam(jobId) },
-          json: input,
-        }),
-        jobFlagOotResponseSchema,
-        "POST /api/jobs/:id/flag-oot",
-        "Erro ao registrar fora de tolerância",
-      );
-    },
-    async cancel(jobId: string | number, reason: string) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].$delete({
-          param: { id: apiRouteParam(jobId) },
-          json: { reason },
-        }),
-        jobMutationResponseSchema,
-        "DELETE /api/jobs/:id",
-        "Erro ao cancelar",
-      );
-    },
-    async assign(jobId: string | number, technicianId: string) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].assign.$post({
-          param: { id: apiRouteParam(jobId) },
-          json: { technicianId },
-        }),
-        jobMutationResponseSchema,
-        "POST /api/jobs/:id/assign",
-        "Erro ao atribuir",
-      );
-    },
+    ...client,
     async listStandards() {
-      return validated(
-        await rawCloudClient.api.standards.$get({
-          query: { status: "ACTIVE", limit: "100" },
-        }),
+      const response = await transport({
+        method: "GET",
+        path: "/api/standards",
+        query: new URLSearchParams({ status: "ACTIVE", limit: "100" }),
+        body: undefined,
+      });
+      return validateResponsePayload(
         standardsListResponseSchema,
+        await readJsonResponse<unknown>(response, "Falha ao carregar padrões"),
         "GET /api/standards",
-        "Falha ao carregar padrões",
+        options,
       );
     },
-    async getEffectiveEnvironmentalLimits(
-      assetTypeId: string | number,
-      input: { unitId?: string | number | null } = {},
-    ) {
-      const response = await rawCloudClient.api[
-        "environmental-limits"
-      ].effective[":assetTypeId"].$get({
-        param: { assetTypeId: String(assetTypeId) },
-        query: input.unitId ? { unitId: String(input.unitId) } : undefined,
+    async getEffectiveEnvironmentalLimits(assetTypeId, input = {}) {
+      const query = new URLSearchParams();
+      if (input.unitId) query.set("unitId", String(input.unitId));
+      const response = await transport({
+        method: "GET",
+        path: `/api/environmental-limits/effective/${encodeURIComponent(String(assetTypeId))}`,
+        query,
+        body: undefined,
       });
 
       if (!response.ok) {
         return { limits: null, source: null };
       }
 
-      return validated(
-        response,
+      return validateResponsePayload(
         effectiveEnvironmentalLimitsResponseSchema,
+        await response.json(),
         "GET /api/environmental-limits/effective/:assetTypeId",
-        "Falha ao carregar limites ambientais",
+        options,
       );
     },
-    async saveExecution(jobId: string | number, input: JobExecutionPayload) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].execute.$post({
-          param: { id: apiRouteParam(jobId) },
-          json: input,
-        }),
-        jobMutationResponseSchema,
-        "POST /api/jobs/:id/execute",
-        "Erro ao salvar",
-      );
-    },
-    async submitExecution(jobId: string | number, input: JobExecutionPayload) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].submit.$post({
-          param: { id: apiRouteParam(jobId) },
-          json: input,
-        }),
-        jobMutationResponseSchema,
-        "POST /api/jobs/:id/submit",
-        "Erro ao submeter",
-      );
-    },
-    async getCertificateDownloadUrl(jobId: string | number) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].download.$get({
-          param: { id: apiRouteParam(jobId) },
-        }),
-        jobDownloadUrlResponseSchema,
-        "GET /api/jobs/:id/download",
-        "Falha ao gerar link",
-      );
-    },
-    async generateLabel(jobId: string | number) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"]["generate-label"].$post({
-          param: { id: apiRouteParam(jobId) },
-        }),
-        jobGenerateLabelResponseSchema,
-        "POST /api/jobs/:id/generate-label",
-        "Falha ao gerar etiqueta",
-      );
-    },
-    async getLabelDownloadUrl(jobId: string | number) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"]["download-label"].$get({
-          param: { id: apiRouteParam(jobId) },
-        }),
-        jobDownloadUrlResponseSchema,
-        "GET /api/jobs/:id/download-label",
-        "Falha ao gerar link",
-      );
-    },
-    async getLabelCommands(
-      jobId: string | number,
-      options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
-    ) {
-      const query: Record<string, string> = {};
-      if (options?.language) query.lang = options.language;
-      if (options?.dpi) query.dpi = String(options.dpi);
-      const response: Response = await rawCloudClient.api.jobs[":id"][
-        "label-commands"
-      ].$get({
-        param: { id: apiRouteParam(jobId) },
+    async getLabelCommands(jobId, labelOptions) {
+      const query = new URLSearchParams();
+      if (labelOptions?.language) query.set("lang", labelOptions.language);
+      if (labelOptions?.dpi) query.set("dpi", String(labelOptions.dpi));
+      const response = await transport({
+        method: "GET",
+        path: `/api/jobs/${apiRouteParam(jobId)}/label-commands`,
         query,
+        body: undefined,
       });
       if (!response.ok) {
         throw new CalibraApiError(
@@ -339,28 +134,6 @@ export function createJobsApi(
         );
       }
       return response.text();
-    },
-    async amend(jobId: string | number, reason: string) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].amend.$post({
-          param: { id: apiRouteParam(jobId) },
-          json: { reason },
-        }),
-        jobAmendResponseSchema,
-        "POST /api/jobs/:id/amend",
-        "Falha ao criar retificação",
-      );
-    },
-    async withdrawCertificate(jobId: string | number, reason: string) {
-      return validated(
-        await rawCloudClient.api.jobs[":id"].certificate.withdraw.$post({
-          param: { id: apiRouteParam(jobId) },
-          json: { reason },
-        }),
-        jobWithdrawCertificateResponseSchema,
-        "POST /api/jobs/:id/certificate/withdraw",
-        "Falha ao retirar o certificado",
-      );
     },
   };
 }
