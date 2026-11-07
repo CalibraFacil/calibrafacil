@@ -83,7 +83,8 @@
     "calibra/no-raw-palette-color-classes": "error",
     "calibra/no-app-ui-primitive-recreation": "error",
     "calibra/no-error-response-in-transaction": "error",
-    "calibra/no-features-import-from-low-layers": "error"
+    "calibra/no-features-import-from-low-layers": "error",
+    "calibra/no-literal-query-keys": "error"
   },
   "overrides": [
     {

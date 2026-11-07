@@ -21,6 +21,7 @@ import { Input } from '@calibra-facil/ui/input'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { settingsKeys } from '@/features/settings/keys'
 
 function statusVariant(
   status: PortalDomainResponse['statusSummary']['status'],
@@ -63,7 +64,7 @@ export function PortalDomainSettingsPage() {
   const { data: activeOrg } = useActiveOrganization()
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
+    await queryClient.invalidateQueries({ queryKey: settingsKeys.portalDomain })
   }
 
   const createMutation = useMutation({

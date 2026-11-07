@@ -25,6 +25,7 @@ import {
 } from '@calibra-facil/ui/select'
 import { toast } from 'sonner'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { financeKeys } from '@/features/finance/keys'
 
 type Scope = 'customer' | 'agreement' | 'service' | 'organization'
 
@@ -75,7 +76,7 @@ function isScope(
 
 function listRulesQueryOptions() {
   return queryOptions<{ data: RuleDTO[] }>({
-    queryKey: ['finance', 'automatic-send-rules'],
+    queryKey: financeKeys.automaticSendRules,
     queryFn: () => calibraApi.finance.listAutomaticSendRules(),
   })
 }
@@ -97,7 +98,7 @@ export function AutomaticSendSettingsPage() {
     onSuccess: () => {
       toast.success('Regra atualizada')
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'automatic-send-rules'],
+        queryKey: financeKeys.automaticSendRules,
       })
     },
     onError: (err) => {
@@ -117,7 +118,7 @@ export function AutomaticSendSettingsPage() {
     onSuccess: () => {
       toast.success('Exceção criada')
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'automatic-send-rules'],
+        queryKey: financeKeys.automaticSendRules,
       })
     },
     onError: (err) => {

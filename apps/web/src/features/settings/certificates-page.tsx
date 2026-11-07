@@ -66,6 +66,7 @@ import { cn } from '@calibra-facil/ui/utils'
 import { useSigningCertificatesData } from '@/features/settings/queries'
 import { formatInstant } from '@calibra-facil/shared/format'
 import { buildUnsignedIssuancePayload } from '@/features/settings/unsigned-issuance-form'
+import { settingsKeys } from '@/features/settings/keys'
 
 type Certificate = SigningCertificate
 
@@ -100,7 +101,7 @@ export function CertificatesSettingsPage({
       calibraApi.signingCertificates.setDefault({ params: { id: id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+        queryKey: settingsKeys.signingCertificates(selectedUnit?.id),
       })
       toast.success('Certificado definido como padrão')
     },
@@ -116,7 +117,7 @@ export function CertificatesSettingsPage({
       }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({
-        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+        queryKey: settingsKeys.signingCertificates(selectedUnit?.id),
       })
       toast.success(
         result.requireSignature
@@ -135,7 +136,7 @@ export function CertificatesSettingsPage({
     ) => calibraApi.signingCertificates.setUnsignedIssuance({ body: input }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({
-        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+        queryKey: settingsKeys.signingCertificates(selectedUnit?.id),
       })
       setUnsignedReasonDraft(null)
       toast.success(
@@ -163,7 +164,7 @@ export function CertificatesSettingsPage({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+        queryKey: settingsKeys.signingCertificates(selectedUnit?.id),
       })
       setCertToRevoke(null)
       toast.success('Certificado revogado')
@@ -361,7 +362,9 @@ export function CertificatesSettingsPage({
                     onSuccess={() => {
                       setIsUploadOpen(false)
                       queryClient.invalidateQueries({
-                        queryKey: ['signing-certificates', selectedUnit.id],
+                        queryKey: settingsKeys.signingCertificates(
+                          selectedUnit.id,
+                        ),
                       })
                     }}
                   />

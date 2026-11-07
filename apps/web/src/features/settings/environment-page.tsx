@@ -45,6 +45,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
+import { environmentalLimitKeys } from '@/features/settings/keys'
 
 interface LimitFormState {
   assetTypeId: number | null
@@ -112,7 +113,7 @@ export function EnvironmentSettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['environmental-limits', selectedUnit?.id ?? 'no-unit'],
+        queryKey: environmentalLimitKeys.all,
       })
       toast.success('Limites ambientais salvos')
       setDialogOpen(false)
@@ -131,7 +132,7 @@ export function EnvironmentSettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['environmental-limits', selectedUnit?.id ?? 'no-unit'],
+        queryKey: environmentalLimitKeys.all,
       })
       toast.success('Limites removidos')
     },

@@ -25,6 +25,7 @@ import {
 } from '@calibra-facil/ui/select'
 import { toast } from 'sonner'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { financeKeys } from '@/features/finance/keys'
 
 type Scope = 'customer' | 'agreement' | 'service' | 'organization'
 
@@ -79,7 +80,7 @@ const SCOPE_LABEL: Record<Scope, string> = {
 
 function listPoliciesQueryOptions() {
   return queryOptions<{ data: PolicyDTO[] }>({
-    queryKey: ['finance', 'certificate-release-policies'],
+    queryKey: financeKeys.certificateReleasePolicies,
     queryFn: () => calibraApi.finance.listCertificateReleasePolicies(),
   })
 }
@@ -101,7 +102,7 @@ export function CertificateReleasePolicyPage() {
     onSuccess: () => {
       toast.success('Política atualizada')
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'certificate-release-policies'],
+        queryKey: financeKeys.certificateReleasePolicies,
       })
     },
     onError: (err) => {
@@ -121,7 +122,7 @@ export function CertificateReleasePolicyPage() {
     onSuccess: () => {
       toast.success('Exceção criada')
       queryClient.invalidateQueries({
-        queryKey: ['finance', 'certificate-release-policies'],
+        queryKey: financeKeys.certificateReleasePolicies,
       })
     },
     onError: (err) => {

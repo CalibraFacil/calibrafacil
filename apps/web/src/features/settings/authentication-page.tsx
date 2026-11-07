@@ -41,6 +41,7 @@ import {
 } from '@calibra-facil/ui/alert-dialog'
 import { useApiKeysData, useSsoSettingsData } from '@/features/settings/queries'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { settingsKeys } from '@/features/settings/keys'
 
 type VerificationRecord = SsoVerificationRecord
 
@@ -122,7 +123,7 @@ function ApiKeysCard() {
       setLatestSecret(data.secret)
       setName('')
       toast.success('API key criada')
-      await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+      await queryClient.invalidateQueries({ queryKey: settingsKeys.apiKeys })
     },
     onError: (error) => {
       toast.error(
@@ -137,7 +138,7 @@ function ApiKeysCard() {
     onSuccess: async (data) => {
       setLatestSecret(data.secret)
       toast.success('API key rotacionada')
-      await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+      await queryClient.invalidateQueries({ queryKey: settingsKeys.apiKeys })
     },
     onError: (error) => {
       toast.error(
@@ -151,7 +152,7 @@ function ApiKeysCard() {
       calibraApi.apiKeys.revoke({ params: { id: id } }),
     onSuccess: async () => {
       toast.success('API key revogada')
-      await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+      await queryClient.invalidateQueries({ queryKey: settingsKeys.apiKeys })
     },
     onError: (error) => {
       toast.error(
@@ -376,7 +377,7 @@ function SsoSettingsCard({
       setClientSecret('')
       toast.success('Provedor SSO registrado')
       await queryClient.invalidateQueries({
-        queryKey: ['sso-settings', activeOrganizationKey ?? 'no-org'],
+        queryKey: settingsKeys.ssoSettings(activeOrganizationKey),
       })
     },
     onError: (error) => {
@@ -411,7 +412,7 @@ function SsoSettingsCard({
       setVerificationRecord(null)
       toast.success('Domínio verificado com sucesso')
       await queryClient.invalidateQueries({
-        queryKey: ['sso-settings', activeOrganizationKey ?? 'no-org'],
+        queryKey: settingsKeys.ssoSettings(activeOrganizationKey),
       })
     },
     onError: (error) => {
@@ -434,7 +435,7 @@ function SsoSettingsCard({
       setClientSecret('')
       toast.success('Provedor SSO removido')
       await queryClient.invalidateQueries({
-        queryKey: ['sso-settings', activeOrganizationKey ?? 'no-org'],
+        queryKey: settingsKeys.ssoSettings(activeOrganizationKey),
       })
     },
     onError: (error) => {

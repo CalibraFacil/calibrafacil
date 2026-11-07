@@ -28,10 +28,11 @@ import { Spinner } from '@calibra-facil/ui/spinner'
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { toast } from 'sonner'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { integrationKeys } from '@/features/settings/keys'
 
 function driftQueueQueryOptions() {
   return queryOptions({
-    queryKey: ['integrations', 'drift'],
+    queryKey: integrationKeys.drift,
     queryFn: () => calibraApi.integrations.listDrift({}),
   })
 }
@@ -58,7 +59,7 @@ function AcknowledgeDialog({ open, linkId, onClose }: AcknowledgeDialogProps) {
     },
     onSuccess: () => {
       toast.success('Divergência marcada como resolvida')
-      queryClient.invalidateQueries({ queryKey: ['integrations', 'drift'] })
+      queryClient.invalidateQueries({ queryKey: integrationKeys.drift })
       setReason('')
       onClose()
     },

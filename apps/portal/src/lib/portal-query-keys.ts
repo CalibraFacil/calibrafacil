@@ -10,6 +10,9 @@ import type { QueryClient } from "@tanstack/react-query";
 /** First segment shared by every key built with `portalQueryKey`. */
 const PORTAL_QUERY_ROOT = "portal";
 
+/** Prefix of every portal key, for cancelling or removing them all. */
+const PORTAL_ROOT_KEY = [PORTAL_QUERY_ROOT] as const;
+
 const NO_ORGANIZATION = "no-organization";
 
 export function portalQueryKey(
@@ -28,7 +31,7 @@ export type PortalQueryKeyBuilder = (
  * being left cannot land in the cache after the switch.
  */
 export function cancelPortalQueries(queryClient: QueryClient) {
-  return queryClient.cancelQueries({ queryKey: [PORTAL_QUERY_ROOT] });
+  return queryClient.cancelQueries({ queryKey: PORTAL_ROOT_KEY });
 }
 
 /**

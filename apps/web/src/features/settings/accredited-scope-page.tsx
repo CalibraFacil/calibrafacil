@@ -58,6 +58,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
+import { settingsKeys } from '@/features/settings/keys'
 
 export function AccreditedScopeSettingsPage() {
   const queryClient = useQueryClient()
@@ -78,7 +79,7 @@ export function AccreditedScopeSettingsPage() {
 
   const invalidate = () =>
     queryClient.invalidateQueries({
-      queryKey: ['accredited-scope', selectedUnit?.id ?? 'no-unit'],
+      queryKey: settingsKeys.accreditedScope(selectedUnit?.id),
     })
 
   const saveMutation = useMutation({
