@@ -1,5 +1,5 @@
 import { LOCAL_SERVER_DEFAULT_URL } from '@calibra-facil/config/local-server-defaults'
-import { runtimeEnv } from './runtime-env'
+import { runtimeEnv } from '@calibra-facil/shared/runtime-env'
 
 export const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 

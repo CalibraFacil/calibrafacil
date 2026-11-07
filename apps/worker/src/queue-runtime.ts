@@ -8,13 +8,7 @@ import {
   loadWorkerConfig,
   readJobsConfig,
   setProcessEnvDefault,
-  workerSigningEnv,
 } from "@calibra-facil/config";
-import {
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
 import {
   claimQueueJobs,
   completeQueueJob,
@@ -32,8 +26,8 @@ import {
   type QueueReceiptClaim,
   type QueueReceiptsMode,
 } from "@calibra-facil/db/queue-receipts";
-import { resolveS3EndpointConfig } from "@calibra-facil/shared/storage-endpoint";
 import { processBackgroundJob, type Env } from "@calibra-facil/jobs-core";
+import { createJobsEnv } from "@calibra-facil/jobs-core/runtime-env";
 
 export type WorkerEnv = Env;
 
@@ -64,88 +58,17 @@ export function readQueueConfig(): QueueRuntimeConfig {
   };
 }
 
-type StorageSettings = ReturnType<typeof loadWorkerConfig>["storage"];
-
-function createR2Bucket(storage: StorageSettings, bucket: string) {
-  const { endpoint, region, forcePathStyle } = resolveS3EndpointConfig({
-    R2_ACCOUNT_ID: storage.accountId,
-    R2_ENDPOINT: storage.endpoint,
-    R2_REGION: storage.region,
-  });
-  const client = new S3Client({
-    region,
-    endpoint,
-    forcePathStyle,
-    credentials: {
-      accessKeyId: storage.accessKeyId ?? "",
-      secretAccessKey: storage.secretAccessKey ?? "",
-    },
-  });
-
-  return {
-    async get(key: string) {
-      const response = await client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: key }),
-      );
-      if (!response.Body) return null;
-      const bytes = await response.Body.transformToByteArray();
-      return {
-        async arrayBuffer() {
-          const copy = new Uint8Array(bytes.byteLength);
-          copy.set(bytes);
-          return copy.buffer;
-        },
-      };
-    },
-    async put(
-      key: string,
-      body: Buffer | Uint8Array | ArrayBuffer,
-      options?: { contentType?: string },
-    ) {
-      await client.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: body instanceof ArrayBuffer ? new Uint8Array(body) : body,
-          ContentType: options?.contentType,
-        }),
-      );
-    },
-  };
-}
-
 /**
  * Builds the worker environment from the validated worker configuration: a
  * missing database, storage credential or key throws one aggregated error
- * listing every problem.
+ * listing every problem. The mapping itself is `createJobsEnv` (jobs-core), the
+ * same one the API's in-process runner uses.
  */
 export function createWorkerEnv(): WorkerEnv {
   const config = loadWorkerConfig();
-  const { storage } = config;
   setProcessEnvDefault("NODE_ENV", "production");
 
-  return {
-    DATABASE_URL: config.database.url ?? "",
-    DATABASE_OWNER_URL: config.database.ownerUrl,
-    DATABASE_RLS_MODE: config.database.rlsMode,
-    CERTIFICATES_BUCKET: createR2Bucket(storage, storage.bucketName ?? ""),
-    MEDIA_BUCKET: createR2Bucket(
-      storage,
-      storage.mediaBucketName ?? "calibrafacil-media-dev",
-    ),
-    GOTENBERG_URL: config.rendering.gotenbergUrl,
-    GOTENBERG_TOKEN: config.rendering.gotenbergToken,
-    // The master key and every SIGNING_TSA_* variable, shared with the API.
-    ...workerSigningEnv(config.signing),
-    INTEGRATIONS_MASTER_KEY: config.integrations.masterKey,
-    PUBLIC_API_MASTER_KEY: config.integrations.publicApiMasterKey,
-    RESEND_API_KEY: config.email.resendApiKey,
-    RESEND_FROM_EMAIL: config.email.resendFromEmail,
-    EMAIL_FROM: config.email.emailFrom,
-    EMAIL_LOGO_URL: config.email.emailLogoUrl,
-    WEB_URL: config.origins.webUrl,
-    APP_URL: config.origins.appUrl,
-  };
+  return createJobsEnv(config);
 }
 
 // Idempotency-ledger gate for one claimed row. The receipt key is
