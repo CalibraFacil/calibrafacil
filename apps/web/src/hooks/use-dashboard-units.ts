@@ -1,3 +1,5 @@
+import { roleNameFromUnknown } from '@calibra-facil/auth/access'
+import { useCurrentRole } from '@/hooks/use-current-role'
 import { useQuery } from '@tanstack/react-query'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
@@ -8,18 +10,12 @@ type ActiveOrganization = {
   id: string
   name: string
   slug: string
-  members?: Array<{ role?: string | null }>
-}
-
-function getCurrentOrganizationRole(activeOrg: ActiveOrganization | undefined) {
-  return typeof activeOrg?.members?.[0]?.role === 'string'
-    ? activeOrg.members[0].role
-    : 'member'
 }
 
 export function useDashboardUnits() {
   const isDesktop = isDesktopRuntime()
   const { data: cloudActiveOrg } = useActiveOrganization()
+  const cloudRole = useCurrentRole()
   const desktopSessionQuery = useQuery({
     queryKey: ['desktop-local-session'],
     enabled: isDesktop,
@@ -35,11 +31,6 @@ export function useDashboardUnits() {
         id: desktopSession.organization.id,
         name: desktopSession.organization.id,
         slug: desktopSession.organization.id,
-        members: [
-          {
-            role: desktopSession.permissions.role,
-          },
-        ],
       }
     : undefined
   const activeOrg = cloudActiveOrg ?? desktopActiveOrg
@@ -84,7 +75,9 @@ export function useDashboardUnits() {
           id: activeOrg.id,
           name: activeOrg.name,
           slug: activeOrg.slug,
-          role: getCurrentOrganizationRole(activeOrg),
+          role: desktopActiveOrg
+            ? roleNameFromUnknown(desktopSession?.permissions.role)
+            : cloudRole,
         }
       : null
   const isConsolidated = data?.selectedUnitScope === 'all'

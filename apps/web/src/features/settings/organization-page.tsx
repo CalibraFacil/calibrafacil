@@ -1,3 +1,4 @@
+import { useCurrentRole } from '@/hooks/use-current-role'
 import { Building06Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
@@ -9,7 +10,6 @@ import {
 import {
   canDeleteOrganization as canDeleteOrganizationForRole,
   canManageOrganizationSettings as canManageOrganizationSettingsForRole,
-  getCurrentOrganizationRole,
 } from '@/features/settings/organization-model'
 import type { ActiveOrganization } from '@/features/settings/organization/shared'
 import { OrganizationProfileSection } from '@/features/settings/organization/profile-section'
@@ -75,7 +75,7 @@ function OrganizationSettingsPage({
   activeOrg: ActiveOrganization
   section: OrganizationSection
 }) {
-  const currentOrgRole = getCurrentOrganizationRole(activeOrg)
+  const currentOrgRole = useCurrentRole()
   const canManageOrganizationSettings =
     canManageOrganizationSettingsForRole(currentOrgRole)
 

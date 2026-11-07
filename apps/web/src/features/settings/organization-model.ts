@@ -113,10 +113,6 @@ export type OrganizationIsoDraft = {
   technicalManagerTitle: string
 }
 
-export type OrganizationRoleSource = {
-  members?: Array<{ role?: string | null }> | null
-}
-
 export function isGlobalMemberRole(value: string): value is GlobalMemberRole {
   return GLOBAL_MEMBER_ROLE_SET.has(value)
 }
@@ -152,14 +148,6 @@ export function getUnitAssignmentRoleLabel(role: EditableUnitAssignmentRole) {
 function optionalTrimmed(value: string) {
   const trimmed = value.trim()
   return trimmed || undefined
-}
-
-export function getCurrentOrganizationRole(
-  organization: OrganizationRoleSource,
-) {
-  return typeof organization.members?.[0]?.role === 'string'
-    ? organization.members[0].role
-    : 'member'
 }
 
 export function canManageOrganizationSettings(role: string) {

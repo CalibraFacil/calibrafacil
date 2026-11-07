@@ -1,3 +1,4 @@
+import { roleNameFromUnknown } from "@calibra-facil/auth/access";
 import {
   member as memberTable,
   memberUnitAssignment,
@@ -10,20 +11,6 @@ import type { MemberData } from "../middleware/permission";
 import { isGlobalUnitManager, type ResolvedUnit } from "./units";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { inOrgTransaction } from "./org-transaction";
-
-function roleNameFromUnknown(value: unknown): RoleName {
-  if (
-    value === "owner" ||
-    value === "admin" ||
-    value === "technician" ||
-    value === "operator" ||
-    value === "member" ||
-    value === "client_user"
-  ) {
-    return value;
-  }
-  return "member";
-}
 
 /**
  * The accountable person behind an API-key approval: the key's creator, with
