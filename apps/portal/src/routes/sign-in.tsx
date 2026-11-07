@@ -1,24 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense, lazy, useState } from "react";
-import { portalAuthClient } from "@calibra-facil/auth/client";
-import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
-
-import { BrandLockup } from "@/components/brand";
-import { Button } from "@calibra-facil/ui/button";
-import { Input } from "@calibra-facil/ui/input";
-import { Label } from "@calibra-facil/ui/label";
-import { Spinner } from "@calibra-facil/ui/spinner";
-import { useIsLargeScreen } from "@/hooks/use-large-screen";
-import { sanitizePortalRedirect } from "@/lib/auth-redirect";
-
-// The WebGL mesh gradient (@paper-design/shaders-react + motion) is purely
-// decorative, so it loads after the form instead of inside the entry bundle.
-const SignInShaderPanel = lazy(() =>
-  import("@/components/sign-in-shader-panel").then((module) => ({
-    default: module.SignInShaderPanel,
-  })),
-);
+import { SignInPage } from "@/features/auth/sign-in-page";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -27,151 +9,11 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: searchSchema,
-  component: SignInPage,
+  component: SignInRoute,
 });
 
-function SignInPage() {
+function SignInRoute() {
   const { redirect, error: magicLinkError } = Route.useSearch();
-  // The shader panel is hidden below `lg`; don't even fetch it there.
-  const isLargeScreen = useIsLargeScreen();
 
-  const [email, setEmail] = useState("");
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const safeRedirect = sanitizePortalRedirect(redirect);
-
-  function getCallbackURL() {
-    if (typeof window === "undefined") return safeRedirect;
-
-    return new URL(safeRedirect, window.location.origin).toString();
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setIsLoading(true);
-
-    const normalizedEmail = email.trim().toLowerCase();
-    const { error } = await portalAuthClient.signIn.magicLink({
-      email: normalizedEmail,
-      callbackURL: getCallbackURL(),
-      errorCallbackURL:
-        typeof window !== "undefined"
-          ? `${window.location.origin}/sign-in?error=magic-link`
-          : undefined,
-    });
-
-    setIsLoading(false);
-
-    if (error) {
-      setError(
-        translateAuthErrorMessage(
-          error.message,
-          "Falha ao enviar link de acesso",
-        ),
-      );
-      return;
-    }
-
-    setSentTo(normalizedEmail);
-  }
-
-  return (
-    <div className="grid min-h-svh lg:grid-cols-2">
-      <div className="flex flex-col gap-4 p-6 md:p-10">
-        <div className="flex flex-1 items-center justify-center">
-          <form
-            onSubmit={handleSubmit}
-            className="flex w-full max-w-xs flex-col gap-6"
-          >
-            <div className="flex flex-col items-center gap-3 text-center">
-              <BrandLockup markClassName="h-16" textClassName="text-2xl" />
-              <h1 className="text-2xl font-bold">Portal do Cliente</h1>
-              <p className="text-muted-foreground text-sm text-balance">
-                Informe seu email para receber um link seguro de acesso.
-              </p>
-            </div>
-
-            {magicLinkError && !error && (
-              <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-                Link inválido ou expirado. Solicite um novo link de acesso.
-              </div>
-            )}
-
-            {error && (
-              <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-                {error}
-              </div>
-            )}
-
-            {sentTo ? (
-              <div className="bg-primary/10 text-primary rounded-md p-4 text-sm">
-                Enviamos um link de acesso para <strong>{sentTo}</strong>. Ele
-                expira em poucos minutos.
-              </div>
-            ) : null}
-
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="active:scale-[0.96] transition-transform"
-            >
-              {isLoading ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Enviando...
-                </>
-              ) : (
-                "Receber link de acesso"
-              )}
-            </Button>
-
-            {sentTo ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setSentTo(null);
-                  setError(null);
-                }}
-              >
-                Usar outro email
-              </Button>
-            ) : null}
-
-            <p className="text-center text-sm text-muted-foreground text-balance">
-              Não possui uma conta? Entre em contato com o laboratório para
-              receber um convite de acesso.
-            </p>
-          </form>
-        </div>
-      </div>
-
-      <div aria-hidden="true" className="hidden p-3 lg:block">
-        {isLargeScreen ? (
-          <Suspense
-            fallback={
-              <div className="size-full rounded-3xl bg-linear-to-br from-[#1447E6] via-[#2B6AF3] to-[#4F46E5]" />
-            }
-          >
-            <SignInShaderPanel />
-          </Suspense>
-        ) : null}
-      </div>
-    </div>
-  );
+  return <SignInPage redirect={redirect} magicLinkError={magicLinkError} />;
 }

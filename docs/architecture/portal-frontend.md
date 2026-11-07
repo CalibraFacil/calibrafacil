@@ -28,7 +28,7 @@ apps/portal/src/
     v/               # Public certificate verification (/v/$token)
     service-order-access/  # Public service-order view (/service-order-access/$token)
   features/          # Extracted domain modules (page + queries + types + components + tests)
-  components/        # App components: status-pill, timeline, command-menu…
+  components/        # App components: status-pill, timeline, page-header…
                      # (primitives and instrument-panel come from @calibra-facil/ui)
   lib/               # calibration-status, status-labels, format, platform, api-fetch (getApiBaseUrl)
   hooks/             # use-large-screen (use-mount-effect and use-mobile come from @calibra-facil/ui)
@@ -41,11 +41,18 @@ The portal is **partially feature-first**. The mature pattern — already used b
 TanStack Query hooks (`queries.ts`), view-model `types.ts`, and tests into a
 feature module, leaving the route file as a thin adapter.
 
-Several route files under `routes/_authenticated/` still hold their own data
-fetching and page UI inline. That is the current reality, not the target: when a
-page grows past a simple read (multiple queries, mutations, non-trivial parsing),
-extract it into `features/<domain>/` rather than expanding the route file. Do not
-add route-local `-components` folders.
+Every route file is a thin adapter: `createFileRoute`, `beforeLoad`/search
+validation, and a small wrapper that reads `Route.useParams()`/`useSearch()`/
+`useRouteContext()` and passes them to the page in `features/<domain>/` as props.
+Page UI, queries and mutations live in the feature module (the authenticated
+shell is `features/shell/portal-layout.tsx`, the sign-in pages are in
+`features/auth`, the invite page in `features/invitations`). Do not add
+route-local `-components` folders or grow a route file past an adapter.
+
+`components/`, `lib/`, `utils/` and `hooks/` are low layers and never import
+`features/*` (`calibra/no-features-import-from-low-layers`, empty baseline, same
+rule as the web app). The shell chrome (sidebar, header, nav, org switcher,
+command menu) is under `features/shell`; `Brand` is in `features/branding`.
 
 ## Design System: instrument-panel
 
@@ -135,7 +142,7 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
 ## Startup, Boundaries and Lists
 
 - **Startup is parallel.** `_authenticated`'s `beforeLoad` calls
-  `loadPortalStartup` (`lib/portal-startup.ts`), which starts the session read,
+  `loadPortalStartup` (`features/shell/portal-startup.ts`), which starts the session read,
   the client-organizations query (`ensureQueryData`, user-level key
   `["portal-organizations"]`) and the branding prefetch together. The active
   organization is read off the session, so the only dependent request is
@@ -188,7 +195,7 @@ breakpoints are declared in the `@theme` block.
 > Tailwind v4 `@theme` changes (new breakpoints, fonts) are **not** picked up by
 > HMR — restart the dev server after editing them.
 
-The authenticated shell lives in `routes/_authenticated/route.tsx`; `SidebarInset`
+The authenticated shell lives in `features/shell/portal-layout.tsx` (mounted by `routes/_authenticated/route.tsx`); `SidebarInset`
 carries `min-w-0 overflow-x-hidden` so the inset frame keeps its rounded corners.
 
 ## Repo Guards (apply here too)

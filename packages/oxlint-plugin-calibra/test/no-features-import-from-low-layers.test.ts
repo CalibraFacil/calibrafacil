@@ -14,6 +14,17 @@ describe("calibra/no-features-import-from-low-layers (real oxlint)", () => {
     },
   );
 
+  it("covers the portal app too", async () => {
+    await expectViolation(RULE, {
+      "apps/portal/src/components/brand.tsx":
+        'import { x } from "@/features/branding/branding-context";\nexport const y = x;\n',
+    });
+    await expectClean(RULE, {
+      "apps/portal/src/features/shell/portal-header.tsx":
+        'import { x } from "@/features/branding/branding-context";\nexport const y = x;\n',
+    });
+  });
+
   it("reports a relative import that resolves into features", async () => {
     await expectViolation(RULE, {
       "apps/web/src/components/nav/thing.tsx":
