@@ -69,12 +69,6 @@ async function requireChart(
   return chart;
 }
 
-function requireId(raw: string): number {
-  const id = parseInt(raw, 10);
-  if (isNaN(id)) throw invalid("invalid_request", "ID inválido");
-  return id;
-}
-
 /** A reference standard the caller can see (the unit scope applies), or a 404. */
 async function requireVisibleStandard(
   standardId: number,
@@ -233,7 +227,7 @@ mount(
   withLabPermission({ spc: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
     return await orgDb(member.organizationId).transaction(async (tx) => {
       const chart = await requireChart(id, member.organizationId, tx);
 
@@ -361,7 +355,7 @@ mount(
   withLabPermission({ spc: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
     const chart = await withOrg(
       member.organizationId,
       requestActor(c),
@@ -418,7 +412,7 @@ mount(
   withLabPermission({ spc: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
       const deleted = await ctx.o
         .delete(controlChart)
@@ -451,7 +445,7 @@ mount(
   withLabPermission({ spc: ["recalculate"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
     const chart = await withOrg(
       member.organizationId,
       requestActor(c),
@@ -490,7 +484,7 @@ mount(
   withLabPermission({ spc: ["escalate"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
     const result = await withOrg(
       member.organizationId,
       requestActor(c),
@@ -702,7 +696,7 @@ mount(
   withLabPermission({ spc: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
-    const id = requireId(params.id);
+    const id = params.id;
     await withOrg(member.organizationId, requestActor(c), async (ctx) => {
       const deleted = await ctx.o
         .delete(checkStandardReading)

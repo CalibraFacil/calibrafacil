@@ -18,6 +18,7 @@ import {
 } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { mount } from "../lib/endpoint-mount";
+import { requireRouteId } from "../lib/route-id";
 import { orgDb } from "../lib/org-db";
 import { conflict, forbidden, invalid } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
@@ -317,7 +318,7 @@ capaRouter.get(
   ...withLabPermission({ capa: ["read"] }),
   async (c) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      const capa = await requireLabCapa(o, c.req.param("id"));
+      const capa = await requireLabCapa(o, requireRouteId(c.req.param("id")));
       return c.json({ id: capa.id, label: capa.capaNumber });
     });
   },

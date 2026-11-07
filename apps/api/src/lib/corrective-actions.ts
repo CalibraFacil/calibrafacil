@@ -9,7 +9,7 @@ import {
   type RootCauseAnalysisMethod,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { invalid, notFound } from "./domain-errors";
+import { notFound } from "./domain-errors";
 import { insertWithSequentialNumber } from "./sequential-number";
 
 /**
@@ -104,15 +104,13 @@ export async function createCorrectiveActionRecord(
 }
 
 /**
- * The laboratory's CAPA a route parameter names. Throws 400 for an unreadable
- * id and 404 when no CAPA of this laboratory matches.
+ * The laboratory's CAPA with this id. Throws 404 when no CAPA of this laboratory
+ * matches.
  */
 export async function requireLabCapa(
   o: OrgDb,
-  routeId: string,
+  id: number,
 ): Promise<typeof correctiveAction.$inferSelect> {
-  const id = parseInt(routeId, 10);
-  if (Number.isNaN(id)) throw invalid("invalid_request", "ID invalido");
   const [found] = await o
     .select()
     .from(correctiveAction)
