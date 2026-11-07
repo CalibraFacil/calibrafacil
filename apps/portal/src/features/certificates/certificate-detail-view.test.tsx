@@ -253,8 +253,7 @@ describe("CertificateDetailView — amendment chain (§7.8.8)", () => {
 
 describe("CertificateDetailView: method name (REQ-TC-3)", () => {
   it("shows the method the API names in methodSnapshot.methodName", () => {
-    // The frozen snapshot carries `methodName`; the page used to read a
-    // `name` key the API never sends and always showed the placeholder.
+    // The frozen snapshot carries `methodName`, not `name`.
     render(
       <CertificateDetailView
         certificate={buildPortalCertificateDetail({

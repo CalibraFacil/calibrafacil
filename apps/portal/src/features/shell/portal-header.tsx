@@ -57,7 +57,6 @@ export function PortalHeader() {
   const breadcrumbs = useMemo(
     () =>
       routeCrumbs(pathname).map((crumb) =>
-        // The trailing crumb of an asset page is the instrument's name.
         assetName && crumb.path === `/assets/${assetParam}`
           ? { ...crumb, title: assetName }
           : crumb,

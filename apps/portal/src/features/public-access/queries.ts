@@ -31,7 +31,7 @@ export type PublicOrderResult =
   | { kind: "invalid" }
   /**
    * The server or the network failed (5xx, 429, offline): the link may well be
-   * good, so the page offers a retry instead of calling it expired (roadmap 2 F4).
+   * good, so the page offers a retry instead of calling it expired.
    */
   | { kind: "unavailable" };
 
