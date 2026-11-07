@@ -4,12 +4,6 @@ import type {
   CreateServiceInput,
   SoftDeleteOrganizationRequest,
   UpdateOrganizationProfileRequest,
-  MethodCompileDraftInput,
-  MethodFromTemplateInput,
-  MethodPreviewDraftInput,
-  MethodPublishDraftInput,
-  MethodRequestApprovalInput,
-  MethodWriteInput,
   StandardWriteInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
@@ -297,74 +291,6 @@ export function createCloudApiClient(
           };
         };
       };
-      methods: {
-        $get(input: {
-          query: {
-            page?: string;
-            limit?: string;
-            status?: string;
-            assetTypeId?: string;
-            query?: string;
-            includeArchived?: string;
-          };
-        }): Promise<Response>;
-        $post(input: { json: MethodWriteInput }): Promise<Response>;
-        templates: {
-          $get(): Promise<Response>;
-        };
-        "from-template": {
-          $post(input: { json: MethodFromTemplateInput }): Promise<Response>;
-        };
-        compile: {
-          $post(input: { json: MethodCompileDraftInput }): Promise<Response>;
-        };
-        preview: {
-          $post(input: { json: MethodPreviewDraftInput }): Promise<Response>;
-        };
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $put(input: {
-            param: { id: string };
-            json: MethodWriteInput;
-          }): Promise<Response>;
-          audit: {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-          archive: {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          "new-version": {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          "technical-review": {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          "quality-approve": {
-            $post(input: {
-              param: { id: string };
-              json: MethodWriteInput;
-            }): Promise<Response>;
-          };
-          "return-to-draft": {
-            $post(input: {
-              param: { id: string };
-              json: { reason: string };
-            }): Promise<Response>;
-          };
-          publish: {
-            $post(input: {
-              param: { id: string };
-              json: MethodPublishDraftInput;
-            }): Promise<Response>;
-          };
-          "request-approval": {
-            $post(input: {
-              param: { id: string };
-              json: MethodRequestApprovalInput;
-            }): Promise<Response>;
-          };
-        };
-      };
       standards: {
         $get(input: {
           query: {
@@ -446,7 +372,7 @@ export function createCloudApiClient(
     integrations: createIntegrationsApi(rawCloudClient),
     services: createServicesApi(rawCloudClient),
     materials: createMaterialsApi(endpointTransport, options),
-    methods: createMethodsApi(rawCloudClient),
+    methods: createMethodsApi(endpointTransport, options),
     standards: createStandardsApi(rawCloudClient, options),
     jobs: createJobsApi(rawCloudClient, options),
     serviceOrders: createServiceOrdersApi(endpointTransport, options),

@@ -130,7 +130,7 @@ export function FromTemplatePage({ search }: { search: FromTemplateSearch }) {
 
   const adopt = useMutation({
     mutationFn: (input: MethodFromTemplateInput) =>
-      calibraApi.methods.fromTemplate(input),
+      calibraApi.methods.fromTemplate({ body: input }),
     onSuccess: (method) => {
       toast.success('Rascunho criado a partir do modelo — pendente de revisão')
       navigate({

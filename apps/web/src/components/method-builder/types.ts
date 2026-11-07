@@ -23,7 +23,7 @@ export const methodDraftQuantityKinds = [
 
 export type MethodDraftQuantityKind = (typeof methodDraftQuantityKinds)[number]
 
-export interface MethodDraftTableColumn {
+export type MethodDraftTableColumn = {
   key: string
   label: string
   type: 'text' | 'number'
@@ -69,7 +69,7 @@ interface MethodDraftWeighingRangeResolverConfig {
   }
 }
 
-export interface MethodDraftInput {
+export type MethodDraftInput = {
   key: string
   label: string
   type: MethodDraftInputType
@@ -135,7 +135,7 @@ export type MethodDraftVariableBinding =
         | 'drift'
     }
 
-export interface MethodDraftFormula {
+export type MethodDraftFormula = {
   outputKey: string
   expression: string
   scope?: { kind: 'scalar' } | { kind: 'table_row'; tableKey: string }
@@ -156,7 +156,7 @@ export interface MethodDraftFormula {
   }
 }
 
-export interface MethodDraftValidation {
+export type MethodDraftValidation = {
   leftExpression: string
   operator: '<' | '<=' | '>' | '>=' | '==' | '!='
   rightExpression: string
@@ -164,7 +164,7 @@ export interface MethodDraftValidation {
   severity: 'error' | 'warning'
 }
 
-export interface MethodDraftUncertaintyComponent {
+export type MethodDraftUncertaintyComponent = {
   name: string
   value: number
   distribution: 'normal' | 'rectangular' | 'triangular' | 'u-shaped'
@@ -179,7 +179,7 @@ export type MethodDraftMeasurementModelSource =
   | { kind: 'table_column'; tableKey: string; columnKey: string }
   | { kind: 'constant'; value: string | number }
 
-export interface MethodDraftMeasurementModelQuantity {
+export type MethodDraftMeasurementModelQuantity = {
   symbol: string
   label?: string
   source: MethodDraftMeasurementModelSource
@@ -216,7 +216,7 @@ export interface MethodDraftMeasurementModelQuantity {
   sensitivity?: string | number
 }
 
-export interface MethodDraftMeasurementModel {
+export type MethodDraftMeasurementModel = {
   key: string
   label: string
   scope?: { kind: 'scalar' } | { kind: 'table_row'; tableKey: string }
@@ -239,7 +239,7 @@ export interface MethodDraftMeasurementModel {
   }
 }
 
-export interface MethodDraftCertificateContent {
+export type MethodDraftCertificateContent = {
   procedureCode?: string
   referenceStandards?: Array<string>
   certifiedValuesDisplay?: 'full' | 'hidden'

@@ -2,6 +2,7 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import type { MethodTemplateCatalogEntry } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
+import { isRecord } from '@calibra-facil/shared/record'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
   ensureRouteQueries,
@@ -51,10 +52,12 @@ export function methodsListQueryOptions(input: MethodsListQueryInput) {
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method list DTOs need schema-backed normalization before this status-narrowing cast can be removed.
       calibraApi.methods.list({
-        page: input.page,
-        limit: input.limit,
-        query: input.search || undefined,
-        status: input.statusFilter || undefined,
+        query: {
+          page: input.page,
+          limit: input.limit,
+          query: input.search || undefined,
+          status: input.statusFilter || undefined,
+        },
       }) as Promise<MethodsListData>,
     placeholderData: keepPreviousDataInScope(['methods', input.organizationId]),
   })
@@ -65,7 +68,7 @@ export function methodDetailQueryOptions(id: string) {
     queryKey: ['methods', id],
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method detail DTOs need schema-backed normalization before this view-model cast can be removed.
-      calibraApi.methods.get(id) as Promise<MethodDetail>,
+      calibraApi.methods.get({ params: { id } }) as Promise<MethodDetail>,
   })
 }
 
@@ -74,15 +77,25 @@ export function methodEditQueryOptions(id: string) {
     queryKey: ['methods', id],
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method edit DTOs need schema-backed normalization before this builder-model cast can be removed.
-      calibraApi.methods.get(id) as Promise<MethodEditData>,
+      calibraApi.methods.get({ params: { id } }) as Promise<MethodEditData>,
   })
 }
 
 export function methodAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['methods', id, 'audit'],
-    queryFn: (): Promise<MethodAuditLogData> =>
-      calibraApi.methods.audit<MethodAuditLogRecord>(id),
+    queryFn: async (): Promise<MethodAuditLogData> => {
+      const log = await calibraApi.methods.audit({ params: { id } })
+      return {
+        data: log.data.map(
+          (entry): MethodAuditLogRecord => ({
+            ...entry,
+            // The column is untyped JSON; the timeline reads it as a record.
+            changes: isRecord(entry.changes) ? entry.changes : null,
+          }),
+        ),
+      }
+    },
   })
 }
 

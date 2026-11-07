@@ -45,7 +45,7 @@ export function methodLabelQueryOptions(id: string) {
     queryKey: ['methods', id, 'label'],
     queryFn: async () => {
       try {
-        const method = await calibraApi.methods.get(id)
+        const method = await calibraApi.methods.get({ params: { id } })
         return method.name ?? null
       } catch {
         return null

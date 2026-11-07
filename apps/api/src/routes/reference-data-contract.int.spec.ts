@@ -13,12 +13,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
+  methodEndpoints,
   assetEndpoints,
   assetTypesResponseSchema,
   customerDetailSchema,
   customersListResponseSchema,
-  methodDetailSchema,
-  methodsListResponseSchema,
   serviceOrderEndpoints,
 } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
@@ -198,12 +197,12 @@ describe("reference-data endpoints: real responses honor the contract schemas (P
 
     const list = await parsedBody(
       await methodsRouter.request("/?status=PUBLISHED&limit=100"),
-      methodsListResponseSchema,
+      methodEndpoints.list.response,
     );
     expect(list.data.map((item) => item.name)).toEqual(["Erro de indicação"]);
     const detail = await parsedBody(
       await methodsRouter.request(`/${method?.id}`),
-      methodDetailSchema,
+      methodEndpoints.get.response,
     );
     expect(detail.assetTypeName).toBe("Balança");
   });

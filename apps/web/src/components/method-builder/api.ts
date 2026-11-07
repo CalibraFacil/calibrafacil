@@ -92,20 +92,12 @@ function normalizeFormulaList(value: unknown): Array<MethodNormalizedFormula> {
 export async function compileMethodDraft(
   draft: MethodDraft,
 ): Promise<MethodCompileResult> {
-  const result = await calibraApi.methods.compileDraft<{
-    diagnostics?: unknown
-    fingerprint?: string
-    normalizedFormulas?: unknown
-    formulas?: unknown
-    compiledMethod?: unknown
-  }>({ draft })
+  const result = await calibraApi.methods.compileDraft({ body: { draft } })
 
   return {
     diagnostics: normalizeDiagnostics(result.diagnostics),
-    fingerprint: result.fingerprint,
-    normalizedFormulas: normalizeFormulaList(
-      result.normalizedFormulas ?? result.formulas,
-    ),
+    fingerprint: result.fingerprint ?? undefined,
+    normalizedFormulas: normalizeFormulaList(result.normalizedFormulas),
     compiledMethod: result.compiledMethod,
   }
 }
@@ -114,17 +106,11 @@ export async function previewMethodDraft(params: {
   draft: MethodDraft
   sampleData: Record<string, unknown>
 }): Promise<MethodPreviewResult> {
-  const result = await calibraApi.methods.previewDraft<{
-    diagnostics?: unknown
-    results?: Record<string, unknown>
-    outputs?: Record<string, unknown>
-    normalizedData?: Record<string, unknown>
-  }>(params)
+  const result = await calibraApi.methods.previewDraft({ body: params })
 
   return {
     diagnostics: normalizeDiagnostics(result.diagnostics),
-    results: result.results ?? result.outputs ?? {},
-    normalizedData: result.normalizedData,
+    results: result.results ?? {},
   }
 }
 
@@ -133,9 +119,12 @@ export async function publishMethodDraft(params: {
   sampleData: Record<string, unknown>
   reasonForChange?: string
 }): Promise<unknown> {
-  return calibraApi.methods.publishDraft(params.methodId, {
-    sampleData: params.sampleData,
-    reasonForChange: params.reasonForChange,
+  return calibraApi.methods.publishDraft({
+    params: { id: params.methodId },
+    body: {
+      sampleData: params.sampleData,
+      reasonForChange: params.reasonForChange,
+    },
   })
 }
 
@@ -143,5 +132,8 @@ export async function requestMethodApproval(
   methodId: number,
   sampleData: Record<string, unknown>,
 ): Promise<unknown> {
-  return calibraApi.methods.requestApproval(methodId, { sampleData })
+  return calibraApi.methods.requestApproval({
+    params: { id: methodId },
+    body: { sampleData },
+  })
 }

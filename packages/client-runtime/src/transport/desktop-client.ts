@@ -3,6 +3,7 @@ import {
   assetEndpoints,
   customerEndpoints,
   ENDPOINT_GROUPS,
+  methodEndpoints,
   type EndpointDef,
   type EndpointGroups,
 } from "@calibra-facil/contracts";
@@ -28,8 +29,6 @@ import type {
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
   LocalSyncConflictsResponse,
-  MethodDetailData,
-  MethodsListData,
   NotificationPreferencesResponse,
   EmailDomainResponse,
   PortalDomainResponse,
@@ -170,18 +169,17 @@ export function createDesktopApiClient(
   options: CreateDesktopApiClientOptions,
 ): CalibraApi {
   const fetchImpl = options.fetch ?? fetch;
-  const localServiceOrders = createServiceOrdersApi(
-    createDesktopEndpointTransport(options),
-    options,
-  );
-  const localAssets = endpointClient(
-    assetEndpoints,
-    createDesktopEndpointTransport(options),
+  const desktopTransport = createDesktopEndpointTransport(options);
+  const localServiceOrders = createServiceOrdersApi(desktopTransport, options);
+  const localAssets = endpointClient(assetEndpoints, desktopTransport, options);
+  const localMethods = endpointClient(
+    methodEndpoints,
+    desktopTransport,
     options,
   );
   const localCustomers = endpointClient(
     customerEndpoints,
-    createDesktopEndpointTransport(options),
+    desktopTransport,
     options,
   );
   let localSessionCache: {
@@ -489,63 +487,11 @@ export function createDesktopApiClient(
       action: "Catálogo de serviços",
     }),
     methods: {
-      ...desktopCloudOnlyStubs("methods", {
-        action: "Métodos",
-        actionByMethod: {
-          compileDraft: "Compilação de método",
-          previewDraft: "Preview de método",
-          publishDraft: "Publicação de método",
-          requestApproval: "Solicitação de aprovação",
-          listMethodTemplates: "Catálogo de modelos de método",
-          fromTemplate: "Adoção de método a partir de modelo",
-        },
-      }),
-      async list(input = {}) {
-        const url = new URL("/api/methods", options.baseUrl);
-        url.searchParams.set("page", String(input.page ?? 1));
-        url.searchParams.set("limit", String(input.limit ?? 20));
-
-        if (input.status) {
-          url.searchParams.set("status", input.status);
-        }
-
-        if (input.assetTypeId) {
-          url.searchParams.set("assetTypeId", String(input.assetTypeId));
-        }
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar métodos");
-        }
-
-        return readDesktopJson<MethodsListData>(response);
-      },
-      async get(id) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/methods/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar método");
-        }
-
-        return readDesktopJson<MethodDetailData>(response);
-      },
+      ...desktopEndpointStubs("methods"),
+      // Read-through from the local mirror: the local server answers the
+      // definitions' own response schemas (`apps/local-server/src/contract.test.ts`).
+      list: localMethods.list,
+      get: localMethods.get,
     },
     standards: {
       ...desktopCloudOnlyStubs("standards", {

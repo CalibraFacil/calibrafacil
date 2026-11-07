@@ -25,7 +25,7 @@ export function NewMethodPage() {
   const createMutation = useMutation({
     mutationFn: async (draft: MethodDraft) => {
       const payload = draftToMethodSavePayload(draft)
-      return calibraApi.methods.create(payload)
+      return calibraApi.methods.create({ body: payload })
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })

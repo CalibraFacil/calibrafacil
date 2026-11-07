@@ -9,6 +9,7 @@ import { customerEndpoints } from "./customers";
 import { financeEndpoints } from "./finance";
 import { dashboardEndpoints } from "./dashboard";
 import { competenceEndpoints } from "./competences";
+import { methodEndpoints } from "./methods";
 import { nonConformanceEndpoints } from "./non-conformances";
 import { proficiencyTestEndpoints } from "./proficiency-tests";
 import { spcEndpoints } from "./spc";
@@ -30,6 +31,7 @@ export * from "./assets";
 export * from "./customers";
 export * from "./capa";
 export * from "./non-conformances";
+export * from "./methods";
 export * from "./spc";
 export * from "./finance";
 export * from "./service-orders";
@@ -54,6 +56,7 @@ export * from "./materials";
 export const ENDPOINT_GROUPS = {
   assets: assetEndpoints,
   customers: customerEndpoints,
+  methods: methodEndpoints,
   nonConformances: nonConformanceEndpoints,
   capas: capaEndpoints,
   spc: spcEndpoints,

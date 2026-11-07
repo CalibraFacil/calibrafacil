@@ -92,7 +92,7 @@ export function MethodsListPage({
 
   const archiveMutation = useMutation({
     mutationFn: async (id: number) => {
-      return calibraApi.methods.archive(id)
+      return calibraApi.methods.archive({ params: { id } })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
@@ -105,9 +105,14 @@ export function MethodsListPage({
 
   const newVersionMutation = useMutation({
     mutationFn: async (id: number): Promise<Method> => {
-      const result = await calibraApi.methods.createNewVersion(id)
+      const result = await calibraApi.methods.createNewVersion({
+        params: { id },
+      })
       return {
         ...result,
+        // The API answers with the bare stored row: no joined asset type name.
+        assetTypeName: null,
+        methodEngine: result.methodEngine ?? null,
         status: METHOD_STATUS.parse(result.status) ?? 'DRAFT',
       }
     },
