@@ -2673,29 +2673,29 @@ describe("entity labels runtime adapter", () => {
       const url = String(input);
 
       if (url.endsWith("/api/nc/10/label")) {
-        return Response.json({ label: "NC-2026-001" });
+        return Response.json({ id: 10, label: "NC-2026-001" });
       }
 
       if (url.endsWith("/api/capa/20/label")) {
-        return Response.json({ label: "CAPA-2026-001" });
+        return Response.json({ id: 20, label: "CAPA-2026-001" });
       }
 
-      return Response.json({ label: "Ana Silva" });
+      return Response.json({ id: 30, label: "Ana Silva" });
     };
     const client = createCloudApiClient({
       baseUrl: "https://api.example.test",
       fetch: fetchMock,
     });
 
-    await expect(client.entityLabels.getNonConformance(10)).resolves.toBe(
-      "NC-2026-001",
-    );
-    await expect(client.entityLabels.getCapa(20)).resolves.toBe(
-      "CAPA-2026-001",
-    );
-    await expect(client.entityLabels.getCompetence(30)).resolves.toBe(
-      "Ana Silva",
-    );
+    await expect(
+      client.entityLabels.getNonConformance({ params: { id: 10 } }),
+    ).resolves.toBe("NC-2026-001");
+    await expect(
+      client.entityLabels.getCapa({ params: { id: 20 } }),
+    ).resolves.toBe("CAPA-2026-001");
+    await expect(
+      client.entityLabels.getCompetence({ params: { id: 30 } }),
+    ).resolves.toBe("Ana Silva");
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/nc/10/label",
@@ -2716,13 +2716,17 @@ describe("entity labels runtime adapter", () => {
       },
     });
 
-    await expect(cloudClient.entityLabels.getCapa(404)).resolves.toBeNull();
     await expect(
-      desktopClient.entityLabels.getNonConformance(10),
+      cloudClient.entityLabels.getCapa({ params: { id: 404 } }),
     ).resolves.toBeNull();
-    await expect(desktopClient.entityLabels.getCapa(20)).resolves.toBeNull();
     await expect(
-      desktopClient.entityLabels.getCompetence(30),
+      desktopClient.entityLabels.getNonConformance({ params: { id: 10 } }),
+    ).resolves.toBeNull();
+    await expect(
+      desktopClient.entityLabels.getCapa({ params: { id: 20 } }),
+    ).resolves.toBeNull();
+    await expect(
+      desktopClient.entityLabels.getCompetence({ params: { id: 30 } }),
     ).resolves.toBeNull();
   });
 });
@@ -2999,6 +3003,12 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/assets/1") {
         return Response.json(buildAssetRecord());
       }
+      if (url.pathname === "/api/services") {
+        return Response.json({
+          data: [],
+          pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+        });
+      }
 
       return Response.json({ ok: true, data: { id: "cloud-1" } });
     };
@@ -3039,7 +3049,7 @@ describe("desktop hybrid runtime adapter", () => {
       body: { servicePerformed: "Execução", result: "repaired" },
     });
     await client.dashboard.getStats();
-    await client.services.list({ page: 1, limit: 20 });
+    await client.services.list({ query: { page: 1, limit: 20 } });
 
     expect(
       fetchCalls.every(

@@ -75,7 +75,7 @@ export function serviceLabelQueryOptions(id: string) {
     queryKey: ['services', id, 'label'],
     queryFn: async () => {
       try {
-        const service = await calibraApi.services.get(id)
+        const service = await calibraApi.services.get({ params: { id } })
         return service.name ?? null
       } catch {
         return null
@@ -120,7 +120,8 @@ export function standardLabelQueryOptions(id: string) {
 export function nonConformanceLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['non-conformance', id, 'label'],
-    queryFn: () => calibraApi.entityLabels.getNonConformance(id),
+    queryFn: () =>
+      calibraApi.entityLabels.getNonConformance({ params: { id } }),
     staleTime: LABEL_STALE_TIME,
   })
 }
@@ -128,7 +129,7 @@ export function nonConformanceLabelQueryOptions(id: string) {
 export function capaLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['capa', id, 'label'],
-    queryFn: () => calibraApi.entityLabels.getCapa(id),
+    queryFn: () => calibraApi.entityLabels.getCapa({ params: { id } }),
     staleTime: LABEL_STALE_TIME,
   })
 }
@@ -136,7 +137,7 @@ export function capaLabelQueryOptions(id: string) {
 export function competenceLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['competence', id, 'label'],
-    queryFn: () => calibraApi.entityLabels.getCompetence(id),
+    queryFn: () => calibraApi.entityLabels.getCompetence({ params: { id } }),
     staleTime: LABEL_STALE_TIME,
   })
 }

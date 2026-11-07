@@ -1,5 +1,8 @@
 import { createRouter } from "../server/router";
-import { competenceEndpoints } from "@calibra-facil/contracts";
+import {
+  competenceEndpoints,
+  entityLabelEndpoints,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
@@ -184,16 +187,14 @@ mount(
 // =========================================================================
 // GET /:id/label - Get competence label by ID
 // =========================================================================
-competencesRouter.get(
-  "/:id/label",
-  ...withLabPermission({ competence: ["read"] }),
-  async (c) => {
+mount(
+  competencesRouter,
+  PREFIX,
+  entityLabelEndpoints.getCompetence,
+  withLabPermission({ competence: ["read"] }),
+  async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
-
-    if (isNaN(id)) {
-      throw invalid("invalid_request", "ID inválido");
-    }
+    const { id } = params;
 
     return await orgDb(memberData.organizationId).transaction(async (tx) => {
       const [comp] = await tx
@@ -216,7 +217,7 @@ competencesRouter.get(
         throw notFound("not_found", "Competência não encontrada");
       }
 
-      return c.json(comp);
+      return comp;
     });
   },
 );

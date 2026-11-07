@@ -295,6 +295,8 @@ export function createDesktopApiClient(
       action: "Perfil do laboratório",
     }),
     entityLabels: {
+      ...desktopEndpointStubs("entityLabels"),
+      // No record labels offline: the links render without one.
       async getNonConformance() {
         return null;
       },
@@ -487,9 +489,7 @@ export function createDesktopApiClient(
         };
       },
     },
-    services: desktopCloudOnlyStubs("services", {
-      action: "Catálogo de serviços",
-    }),
+    services: desktopEndpointStubs("services"),
     methods: {
       ...desktopEndpointStubs("methods"),
       // Read-through from the local mirror: the local server answers the

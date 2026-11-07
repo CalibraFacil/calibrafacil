@@ -1,11 +1,9 @@
 import type {
   CalibraApi,
   CreateApiKeyInput,
-  CreateServiceInput,
   SoftDeleteOrganizationRequest,
   UpdateOrganizationProfileRequest,
   UpdateNotificationPreferencesInput,
-  UpdateServiceInput,
 } from "./types";
 import {
   createRawCloudClient,
@@ -133,27 +131,6 @@ export function createCloudApiClient(
           }): Promise<Response>;
         };
       };
-      nc: {
-        ":id": {
-          label: {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-        };
-      };
-      capa: {
-        ":id": {
-          label: {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-        };
-      };
-      competences: {
-        ":id": {
-          label: {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-        };
-      };
       integrations: {
         $get(): Promise<Response>;
         $post(input: { json: unknown }): Promise<Response>;
@@ -266,30 +243,6 @@ export function createCloudApiClient(
         };
       };
       jobs: JobsRawCloudClient["api"]["jobs"];
-      services: {
-        $get(input: {
-          query: {
-            page?: string;
-            limit?: string;
-            query?: string;
-            assetTypeId?: string;
-            methodId?: string;
-            isActive?: string;
-          };
-        }): Promise<Response>;
-        $post(input: { json: CreateServiceInput }): Promise<Response>;
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $put(input: {
-            param: { id: string };
-            json: UpdateServiceInput;
-          }): Promise<Response>;
-          $delete(input: { param: { id: string } }): Promise<Response>;
-          "audit-log": {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-        };
-      };
       // Only `jobs.listStandards` (the jobs domain, not converted yet) reads
       // the standards list through the raw client; `standards` itself is an
       // endpoint group. Delete this when `listStandards` is converted.
@@ -324,7 +277,7 @@ export function createCloudApiClient(
     apiKeys: createApiKeysApi(rawCloudClient),
     organizationLifecycle: createOrganizationLifecycleApi(rawCloudClient),
     organizationProfile: createOrganizationProfileApi(rawCloudClient),
-    entityLabels: createEntityLabelsApi(rawCloudClient),
+    entityLabels: createEntityLabelsApi(endpointTransport, options),
     certificateNumbering: createCertificateNumberingApi(
       endpointTransport,
       options,
@@ -349,7 +302,7 @@ export function createCloudApiClient(
     ),
     accreditedScope: createAccreditedScopeApi(endpointTransport, options),
     integrations: createIntegrationsApi(rawCloudClient),
-    services: createServicesApi(rawCloudClient),
+    services: createServicesApi(endpointTransport, options),
     materials: createMaterialsApi(endpointTransport, options),
     methods: createMethodsApi(endpointTransport, options),
     standards: createStandardsApi(endpointTransport, options),

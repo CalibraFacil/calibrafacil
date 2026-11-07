@@ -104,10 +104,12 @@ export function newJobServicesQueryOptions(assetTypeId: number | null) {
     queryKey: ['services', 'for-job', assetTypeId],
     queryFn: (): Promise<NewJobServicesData> =>
       calibraApi.services.list({
-        page: 1,
-        limit: 100,
-        isActive: true,
-        assetTypeId: assetTypeId ?? undefined,
+        query: {
+          page: 1,
+          limit: 100,
+          isActive: true,
+          assetTypeId: assetTypeId ?? undefined,
+        },
       }),
   })
 }

@@ -117,7 +117,10 @@ function EditServiceForm({
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateServiceInput) =>
-      calibraApi.services.update(serviceData.id, data),
+      calibraApi.services.update({
+        params: { id: serviceData.id },
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       queryClient.invalidateQueries({ queryKey: ['services', serviceData.id] })

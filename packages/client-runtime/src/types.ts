@@ -19,13 +19,11 @@ import type {
   CreateNonConformanceSchema,
   CreateServiceOrderSchema,
   FromTemplateSchema,
-  CreateServiceSchema,
   SoftDeleteOrganizationSchema,
   UpdateOrganizationProfileSchema,
   UpdateCustomerSchema,
   UpdateMaterialSchema,
   UpdateNotificationPreferencesSchema,
-  UpdateServiceSchema,
 } from "@calibra-facil/schemas";
 import type { AccreditedScopeApi } from "./modules/accredited-scope";
 import type { AssetsApi } from "./modules/assets";
@@ -34,6 +32,8 @@ import type { CapasApi } from "./modules/capa";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
 import type { CompetencesApi } from "./modules/competences";
 import type { CustomersApi } from "./modules/customers";
+import type { EntityLabelsApi } from "./modules/entity-labels";
+import type { ServicesApi } from "./modules/services";
 import type { DashboardApi } from "./modules/dashboard";
 import type { EnvironmentalLimitsApi } from "./modules/environmental-limits";
 import type { FinanceApi } from "./modules/finance";
@@ -70,17 +70,11 @@ export type CreateMaterialInput = z.input<typeof CreateMaterialSchema>;
 export type CreateNonConformanceInput = z.input<
   typeof CreateNonConformanceSchema
 >;
-export type CreateServiceInput = z.input<typeof CreateServiceSchema>;
 export type UpdateCustomerInput = z.input<typeof UpdateCustomerSchema>;
 export type UpdateMaterialInput = z.input<typeof UpdateMaterialSchema>;
 export type UpdateNotificationPreferencesInput = z.input<
   typeof UpdateNotificationPreferencesSchema
 >;
-export type UpdateServiceInput = z.input<typeof UpdateServiceSchema>;
-
-export type ServiceAuditLogData<TRecord = unknown> = {
-  data: TRecord[];
-};
 
 import type {
   PortalDomainResponse,
@@ -116,6 +110,9 @@ import type {
   MaterialsListResponse,
   SaveAccreditedScopeLineResponse as ContractSaveAccreditedScopeLineResponse,
   ScopeEnforcementMode as ContractScopeEnforcementMode,
+  ServiceAuditLogEntry,
+  ServiceRecord,
+  ServicesListResponse,
   EffectiveEnvironmentalLimitsResponse,
   JobAmendResponse,
   JobWithdrawCertificateResponse,
@@ -316,60 +313,12 @@ export interface AttachmentsApi {
   }): Promise<LocalAttachment>;
 }
 
-export type ServicesListInput = {
-  page?: number;
-  limit?: number;
-  query?: string;
-  assetTypeId?: number;
-  methodId?: number;
-  isActive?: boolean;
-};
-
-export type ServicesListData = {
-  data: Array<{
-    id: number;
-    name: string;
-    description: string | null;
-    methodId: number | null;
-    methodName: string | null;
-    methodVersion: number | null;
-    methodStatus: string | null;
-    assetTypeId: number | null;
-    assetTypeName: string | null;
-    price: number | null;
-    currency: string;
-    tat: number | null;
-    isActive: boolean;
-    createdAt: string | Date | null;
-    updatedAt: string | Date | null;
-  }>;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-export type ServiceDetailData = ServicesListData["data"][number] & {
-  methodVersion: number | null;
-  createdAt: string | Date | null;
-  updatedAt: string | Date | null;
-};
-
-export interface ServicesApi {
-  list(input?: ServicesListInput): Promise<ServicesListData>;
-  get(id: string | number): Promise<ServiceDetailData>;
-  auditLog<TRecord = unknown>(
-    id: string | number,
-  ): Promise<ServiceAuditLogData<TRecord>>;
-  create(input: CreateServiceInput): Promise<{ id: number }>;
-  update(
-    id: string | number,
-    input: UpdateServiceInput,
-  ): Promise<ServiceDetailData>;
-  deactivate(id: string | number): Promise<unknown>;
-}
+// SERVICES: the DTOs are the contract schemas' types
+// (`endpoints/services.ts`); the client is generated from the endpoint
+// definitions (`modules/services.ts`).
+export type ServicesListData = ServicesListResponse;
+export type ServiceDetailData = ServiceRecord;
+export type { ServiceAuditLogEntry, ServicesApi };
 
 // =============================================================================
 // MATERIALS, ENVIRONMENTAL LIMITS, ACCREDITED SCOPE: the DTOs are the contract
@@ -843,11 +792,7 @@ export interface OrganizationProfileApi {
   ): Promise<OrganizationProfileResponse>;
 }
 
-export interface EntityLabelsApi {
-  getNonConformance(id: string | number): Promise<string | null>;
-  getCapa(id: string | number): Promise<string | null>;
-  getCompetence(id: string | number): Promise<string | null>;
-}
+export type { EntityLabelsApi };
 
 // CERTIFICATE NUMBERING: the DTOs are the contract schemas' types
 // (`endpoints/certificate-numbering.ts`); the client is generated from the

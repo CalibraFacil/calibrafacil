@@ -67,7 +67,8 @@ export function ServicesListPage() {
   })
 
   const deactivateMutation = useMutation({
-    mutationFn: (id: number) => calibraApi.services.deactivate(id),
+    mutationFn: (id: number) =>
+      calibraApi.services.deactivate({ params: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       toast.success('Serviço desativado com sucesso')
@@ -79,7 +80,10 @@ export function ServicesListPage() {
 
   const reactivateMutation = useMutation({
     mutationFn: (id: number) =>
-      calibraApi.services.update(id, { isActive: true }),
+      calibraApi.services.update({
+        params: { id },
+        body: { isActive: true },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       toast.success('Serviço reativado com sucesso')
