@@ -2,7 +2,7 @@
   "name": "@calibra-facil/email-sender",
   "type": "module",
   "version": "1.0.0",
-  "description": "Platform e-mail transport (SMTP or Resend) plus lab-owned sender domains: key custody, domain wrapper, sender resolution and send-with-fallback",
+  "description": "Platform e-mail transport (SMTP or Resend) plus lab-owned sender domains: key custody, Resend domain wrapper, mail-header helpers and send-with-fallback. No database access: the tenant's sending-domain state lives in @calibra-facil/lab-email-domain",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -24,9 +24,8 @@
   "license": "MIT",
   "dependencies": {
     "@calibra-facil/config": "workspace:^",
-    "@calibra-facil/db": "workspace:*",
+    "@calibra-facil/shared": "workspace:^",
     "@react-email/render": "^2.0.8",
-    "drizzle-orm": "^0.45.2",
     "nodemailer": "^10.1.4",
     "resend": "^6.12.4"
   },

@@ -28,6 +28,7 @@ import {
   type PlatformEmailTransport,
 } from "@calibra-facil/config";
 import { classifyResendErrorName } from "./resend-domains";
+import { reportEmailError } from "./report";
 
 type Env = Record<string, string | undefined>;
 
@@ -63,7 +64,9 @@ export function isPlatformEmailConfigured(env?: Env): boolean {
   } catch (error) {
     if (!loggedConfigError) {
       loggedConfigError = true;
-      console.error("[Email] Transport misconfigured:", error);
+      reportEmailError("Transport misconfigured", error, {
+        event: "transport_misconfigured",
+      });
     }
     return false;
   }

@@ -230,7 +230,7 @@ compiler), `method-templates` (catalog of calibration methods), `certificate-dat
 `documents` (certificate/label data and templates), `signing` (PAdES / ICP-Brasil),
 `jobs-core` (background-job dispatcher + handlers, shared by `apps/api` and `apps/worker`),
 `label-rendering` (ZPL/TSPL thermal labels), `ui` (shared shadcn primitives,
-instrument-panel and status-tone for web and portal; see `docs/architecture/shared-ui-package.md`), `email` (React Email), `email-sender`,
+instrument-panel and status-tone for web and portal; see `docs/architecture/shared-ui-package.md`), `email` (React Email), `email-sender` (transport + mail-header helpers; no database), `lab-email-domain` (a lab's own sending-domain state and its audit),
 `notifications`, `interval-analysis` (calibration intervals), `local-db` (SQLite offline
 store), `shared` (domain vocabularies, units, public URLs, storage endpoints), `oxlint-plugin-calibra`
 (architecture lint rules).

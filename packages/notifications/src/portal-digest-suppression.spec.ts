@@ -39,8 +39,8 @@ vi.mock("@calibra-facil/db", () => ({ db: dbMock, systemDb: dbMock }));
 // row resolves with only RESEND_API_KEY), which would otherwise consume one
 // extra `db.select()` and shift the call-count routing below. Lab-sender
 // resolution has its own coverage in service-order-customer-email-lab-sender.spec.ts.
-vi.mock("@calibra-facil/email-sender", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@calibra-facil/email-sender")>()),
+vi.mock("@calibra-facil/lab-email-domain", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@calibra-facil/lab-email-domain")>()),
   resolveLabEmailSender: vi.fn().mockResolvedValue(undefined),
 }));
 

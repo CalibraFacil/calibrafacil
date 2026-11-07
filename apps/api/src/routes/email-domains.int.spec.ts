@@ -20,9 +20,11 @@ import {
 import {
   encryptResendApiKey,
   generateEmailDomainMasterKey,
-  resolveLabEmailSender,
-  getLabEmailCredential,
 } from "@calibra-facil/email-sender";
+import {
+  getLabEmailCredential,
+  resolveLabEmailSender,
+} from "@calibra-facil/lab-email-domain";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
