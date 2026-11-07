@@ -1,4 +1,4 @@
-// Rewrites an `.env` written before the role split (P2-18k) for `pnpm setup:dev`
+// Rewrites an `.env` written before the role split for `pnpm setup:dev`
 // (scripts/dev-setup.mjs): the owner was in DATABASE_URL and there was no
 // DATABASE_OWNER_URL, and the API now refuses that at start-up. Pure, so it is
 // tested (scripts/role-split.test.mjs).

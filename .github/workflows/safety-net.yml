@@ -193,7 +193,7 @@ jobs:
       # R2_ACCOUNT_ID). Every storage reader must accept that: the health probe
       # must really run (a skipped probe fails), a probe object must round-trip
       # through both buckets, and the certificate-drift cron must run instead
-      # of reporting a clean empty sweep (P0-3).
+      # of reporting a clean empty sweep.
       - name: Prove the object storage is wired
         working-directory: deploy
         run: docker compose exec -T api bun src/cli/check-storage.ts
@@ -218,7 +218,7 @@ jobs:
           STACK_LAB_EMAIL: admin@ci.example
         run: pnpm --dir apps/web test:stack --project sign-in
 
-      # Hardening of the compose file and the proxy (roadmap 2 G3): every
+      # Hardening of the compose file and the proxy: every
       # service that declares a healthcheck gets healthy, the pages carry a
       # Content-Security-Policy and the other browser security headers, the
       # scheduled-job endpoints are not reachable from outside, and the app

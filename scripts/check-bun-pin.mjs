@@ -1,7 +1,6 @@
 // The Bun the images ship (Dockerfile.*: FROM oven/bun:<version>-slim@sha256:...)
-// is the Bun CI runs (.bun-version), and every runtime stage is digest-pinned
-// (roadmap 2 G4). Dependabot bumps the Dockerfiles; this keeps .bun-version in
-// step with them.
+// is the Bun CI runs (.bun-version), and every runtime stage is digest-pinned.
+// Dependabot bumps the Dockerfiles; this keeps .bun-version in step with them.
 import { readFileSync, readdirSync } from "node:fs";
 
 const expected = readFileSync(".bun-version", "utf8").trim();

@@ -118,7 +118,7 @@ for (const [example, target] of [
   console.log(`  created ${target}`);
 }
 
-// An .env written before the role split (P2-18k) has the owner in DATABASE_URL
+// An .env written before the role split has the owner in DATABASE_URL
 // and no DATABASE_OWNER_URL; the API now refuses that at start-up (row-level
 // security is enforced). Rewrite just those two lines, keeping the old value as
 // the owner, when it is the development default role.
