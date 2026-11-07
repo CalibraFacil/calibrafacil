@@ -16,7 +16,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 /**
  * The calibration requests customers submit through the portal and the lab
  * triages. Response schemas are wire schemas written from what the handlers in
- * `apps/api/src/routes/calibration-requests.ts` return.
+ * `apps/api/src/domains/visits/routes/calibration-requests.ts` return.
  */
 
 const calibrationRequestStatusSchema = z.enum(CALIBRATION_REQUEST_STATUSES);

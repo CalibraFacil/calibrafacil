@@ -38,7 +38,7 @@ import {
 import { orgDb } from "../../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { withOrg } from "../../../lib/org-context";
-import { submitCalibrationRequest } from "../../../lib/calibration-request-submission";
+import { submitCalibrationRequest } from "../../visits";
 import { requestActor } from "../../../middleware/request-actor";
 import { requireRouteId } from "../../../lib/route-id";
 

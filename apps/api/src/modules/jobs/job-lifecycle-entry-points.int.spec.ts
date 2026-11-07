@@ -67,7 +67,7 @@ import {
 } from "../../../test/integration/job-cas";
 import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../domains/public-api/routes/public-api-v2";
-import { visitJobsRouter } from "../../routes/visits";
+import { visitJobsRouter } from "../../domains/visits/routes/visits";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // The requests below arrive as from behind one trusted reverse proxy (the Caddy of

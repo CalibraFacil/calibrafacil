@@ -4,12 +4,12 @@ import { apiKeysRouter } from "../routes/api-keys";
 import { assetTypesRouter } from "../routes/asset-types";
 import { assetsRouter } from "../routes/assets";
 import { onboardingRouter } from "../routes/onboarding";
-import { calibrationRequestsRouter } from "../routes/calibration-requests";
+import { calibrationRequestsRouter } from "../domains/visits/routes";
 import {
   visitJobsRouter,
   visitRescheduleRequestsRouter,
   visitsRouter,
-} from "../routes/visits";
+} from "../domains/visits/routes";
 import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
 import { proficiencyTestsRouter } from "../routes/proficiency-tests";

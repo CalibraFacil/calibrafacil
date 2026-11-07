@@ -1,4 +1,4 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { visitEndpoints } from "@calibra-facil/contracts";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -18,7 +18,7 @@ import {
   VISIT_RESCHEDULE_REQUEST_MACHINE,
   isVisitTerminal,
 } from "@calibra-facil/schemas/machines";
-import { conflict, invalid, notFound } from "../lib/domain-errors";
+import { conflict, invalid, notFound } from "../../../lib/domain-errors";
 import {
   asset,
   calibrationJob,
@@ -30,14 +30,14 @@ import {
 import {
   withLabPermission,
   type AuthVariables,
-} from "../middleware/permission";
-import { buildUnitScopeCondition } from "../lib/units";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
-import { withOrg } from "../lib/org-context";
-import { requestActor } from "../middleware/request-actor";
-import { requireScopedVisit } from "../lib/visit-access";
-import { isAssignableTechnician } from "../lib/tenant-refs";
+} from "../../../middleware/permission";
+import { buildUnitScopeCondition } from "../../../lib/units";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
+import { withOrg } from "../../../lib/org-context";
+import { requestActor } from "../../../middleware/request-actor";
+import { requireScopedVisit } from "../visit-access";
+import { isAssignableTechnician } from "../../../lib/tenant-refs";
 import {
   notifyVisitCancelled,
   notifyVisitConfirmed,
@@ -45,16 +45,19 @@ import {
   notifyVisitRescheduled,
   notifyVisitScheduled,
 } from "@calibra-facil/notifications";
-import { cancelJob } from "../modules/jobs/cancel-job";
-import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
-import { formatOnsiteAddressText } from "../lib/onsite-address";
-import { jobStatusConflict } from "../modules/jobs/job-status-transitions";
+import { cancelJob } from "../../../modules/jobs/cancel-job";
+import {
+  createCalibrationJob,
+  jobCreationClientErrors,
+} from "../../../lib/jobs";
+import { formatOnsiteAddressText } from "../onsite-address";
+import { jobStatusConflict } from "../../../modules/jobs/job-status-transitions";
 import {
   assertAssetBelongsToVisitCustomer,
   assertGuard,
   canAddJobToVisit,
   resolveVisitJobRemoval,
-} from "../lib/visit-jobs";
+} from "../visit-jobs";
 
 const technicianUser = alias(user, "calibrationVisitTechnician");
 

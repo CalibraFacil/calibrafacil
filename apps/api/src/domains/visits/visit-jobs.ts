@@ -1,6 +1,6 @@
 import type { ApiErrorCode } from "@calibra-facil/contracts";
 import type { JobStatus } from "@calibra-facil/db/schema";
-import { DomainError } from "./domain-errors";
+import { DomainError } from "../../lib/domain-errors";
 
 type VisitLike = {
   status: string;

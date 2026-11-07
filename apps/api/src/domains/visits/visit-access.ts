@@ -1,9 +1,9 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { calibrationVisit } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { notFound } from "./domain-errors";
-import { buildUnitScopeCondition } from "./units";
-import type { AuthVariables } from "../middleware/permission";
+import { notFound } from "../../lib/domain-errors";
+import { buildUnitScopeCondition } from "../../lib/units";
+import type { AuthVariables } from "../../middleware/permission";
 
 /**
  * The laboratory's visit scoped to the caller's organization and units. Throws

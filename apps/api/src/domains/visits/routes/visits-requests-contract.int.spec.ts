@@ -32,18 +32,18 @@ import {
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 import { calibrationRequestsRouter } from "./calibration-requests";
-import { signaturesRouter } from "./signatures";
+import { signaturesRouter } from "../../../routes/signatures";
 import {
   visitJobsRouter,
   visitRescheduleRequestsRouter,
   visitsRouter,
 } from "./visits";
-import { organizationOf } from "../../test/integration/organization-of";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedCustomer, seedOrg } from "../../test/integration/seed";
-import { seedExtraMember } from "../../test/integration/tenant-refs";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { organizationOf } from "../../../../test/integration/organization-of";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
+import { seedExtraMember } from "../../../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyCalibrationRequestApproved: vi.fn().mockResolvedValue(undefined),
@@ -58,7 +58,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyVisitRescheduleDeclined: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../lib/storage", () => ({
+vi.mock("../../../lib/storage", () => ({
   createR2Client: () => ({}),
   uploadToR2: () => Promise.resolve(),
   deleteFromR2: () => Promise.resolve(),

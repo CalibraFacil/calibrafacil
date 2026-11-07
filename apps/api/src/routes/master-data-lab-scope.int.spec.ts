@@ -52,13 +52,13 @@ import { organizationOf } from "../../test/integration/organization-of";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { assetsRouter } from "./assets";
-import { calibrationRequestsRouter } from "./calibration-requests";
+import { calibrationRequestsRouter } from "../domains/visits/routes/calibration-requests";
 import { customerGroupsRouter } from "../domains/customers/routes/customer-groups";
 import { customersRouter } from "../domains/customers/routes/customers";
 import { materialsRouter } from "../domains/catalog/routes/materials";
 import { unitsRouter } from "./units";
 import { servicesRouter } from "../domains/catalog/routes/services";
-import { visitJobsRouter } from "./visits";
+import { visitJobsRouter } from "../domains/visits/routes/visits";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The request-state notifications read what the transaction wrote and send

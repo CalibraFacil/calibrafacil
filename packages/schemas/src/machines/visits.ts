@@ -2,7 +2,7 @@
 //
 // A visit (calibração in loco: one technician trip, many instruments) is moved
 // by the lab and, for its progress, by its jobs:
-//   create      apps/api/src/routes/calibration-requests.ts (request → visit:
+//   create      apps/api/src/domains/visits/routes/calibration-requests.ts (request → visit:
 //                 CONFIRMED when the lab scheduled it, else PROPOSED)
 //   confirm     routes/visits.ts POST /:id/confirm: a proposed visit is
 //                 confirmed; on a confirmed or started visit it only updates the

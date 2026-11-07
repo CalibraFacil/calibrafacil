@@ -1,4 +1,4 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { calibrationRequestEndpoints } from "@calibra-facil/contracts";
 import { alias } from "drizzle-orm/pg-core";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -28,8 +28,11 @@ import { CALIBRATION_REQUEST_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   withLabPermission,
   type AuthVariables,
-} from "../middleware/permission";
-import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+} from "../../../middleware/permission";
+import {
+  createCalibrationJob,
+  jobCreationClientErrors,
+} from "../../../lib/jobs";
 import {
   notifyCalibrationRequestApproved,
   notifyCalibrationRequestConverted,
@@ -39,15 +42,15 @@ import {
   notifyVisitScheduled,
   notifyVisitConfirmed,
 } from "@calibra-facil/notifications";
-import { buildUnitScopeCondition } from "../lib/units";
-import { formatOnsiteAddressText } from "../lib/onsite-address";
-import { isAssignableTechnician } from "../lib/tenant-refs";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
-import { withOrg } from "../lib/org-context";
-import { requestActor } from "../middleware/request-actor";
-import { requireLockedLabRequest } from "../lib/calibration-request-access";
-import { conflict, invalid, notFound } from "../lib/domain-errors";
+import { buildUnitScopeCondition } from "../../../lib/units";
+import { formatOnsiteAddressText } from "../onsite-address";
+import { isAssignableTechnician } from "../../../lib/tenant-refs";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
+import { withOrg } from "../../../lib/org-context";
+import { requestActor } from "../../../middleware/request-actor";
+import { requireLockedLabRequest } from "../calibration-request-access";
+import { conflict, invalid, notFound } from "../../../lib/domain-errors";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");

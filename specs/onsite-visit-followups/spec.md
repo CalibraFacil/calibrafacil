@@ -25,7 +25,7 @@ location pre-frozen to the customer site. Two polish items remain:
 
 - **Reuse the RBAC layer, never add inline rules.** Add/remove endpoints reuse
   `withLabPermission({ request: ["update"] })` (`apps/api/src/middleware/permission.ts`),
-  identical to the existing visit mutation routes (`apps/api/src/routes/visits.ts`).
+  identical to the existing visit mutation routes (`apps/api/src/domains/visits/routes/visits.ts`).
 - **Preserve org + unit tenant scoping.** Load the visit via the existing
   `getScopedVisit` pattern (`eq(organizationId)` + `buildUnitScopeCondition(unitId, member)`).
   Never touch a row outside the caller's scope.
@@ -33,7 +33,7 @@ location pre-frozen to the customer site. Two polish items remain:
   goes through `createCalibrationJob` (`apps/api/src/lib/jobs.ts`) with `visitId` +
   `onsiteLocation` derived from the visit's `address` via the same
   `formatOnsiteAddressText` helper used at convert time
-  (`apps/api/src/routes/calibration-requests.ts`). `createCalibrationJob` already
+  (`apps/api/src/domains/visits/routes/calibration-requests.ts`). `createCalibrationJob` already
   validates org/unit/service-active/method-published/asset-type compatibility.
 - **No hard delete (ISO/IEC 17025 posture).** Removing an instrument soft-cancels
   the job (`status = 'CANCELED'`, the real `JobStatus` value — single L), never a
@@ -159,10 +159,10 @@ rescheduled, cancelled, reminder }`.
 > **loopable-with-verifier**; the HIGH RISK _criteria_ (state/scope guards) get the
 > verifier's strongest scrutiny.
 
-| Mini-spec                     | Layer (real path)                                                                                                                                                                     | Depends on | Risk                     | Mode                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ | ---------------------------------------------------------------- |
-| **1. Add/remove instruments** | `packages/schemas` (AddVisitJobSchema) + `apps/api/src/routes/visits.ts` + extracted guard helper + `packages/contracts` + `packages/client-runtime` + `apps/web/src/features/visits` | —          | med (state/scope guards) | loopable-with-verifier (max scrutiny on 003/004/005/007/008/010) |
-| **2. Visit email templates**  | `packages/email` (new template) + `packages/notifications/src/service.ts` (visit EmailContext + render branch + pass context)                                                         | —          | low                      | loopable-with-verifier                                           |
+| Mini-spec                     | Layer (real path)                                                                                                                                                                                    | Depends on | Risk                     | Mode                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ | ---------------------------------------------------------------- |
+| **1. Add/remove instruments** | `packages/schemas` (AddVisitJobSchema) + `apps/api/src/domains/visits/routes/visits.ts` + extracted guard helper + `packages/contracts` + `packages/client-runtime` + `apps/web/src/features/visits` | —          | med (state/scope guards) | loopable-with-verifier (max scrutiny on 003/004/005/007/008/010) |
+| **2. Visit email templates**  | `packages/email` (new template) + `packages/notifications/src/service.ts` (visit EmailContext + render branch + pass context)                                                                        | —          | low                      | loopable-with-verifier                                           |
 
 **Order:** the two minis are independent and can run in parallel worktrees. Each
 maker worktree base-syncs (`git fetch` + `git reset --hard

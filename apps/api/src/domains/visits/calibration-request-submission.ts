@@ -2,7 +2,7 @@ import {
   calibrationRequest,
   calibrationRequestItem,
 } from "@calibra-facil/db/schema";
-import type { OrgContext } from "./org-context";
+import type { OrgContext } from "../../lib/org-context";
 
 type NewCalibrationRequest = typeof calibrationRequest.$inferInsert;
 

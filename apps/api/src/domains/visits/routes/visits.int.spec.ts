@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { insertJobs } from "../../test/integration/job-fixtures";
-import { changeJobBeforeNextTransaction } from "../../test/integration/job-cas";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
+import { changeJobBeforeNextTransaction } from "../../../../test/integration/job-cas";
 import {
   visitJobsRouter,
   visitRescheduleRequestsRouter,
@@ -20,11 +20,11 @@ import {
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { seedExtraMember } from "../../test/integration/tenant-refs";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { seedExtraMember } from "../../../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the visits router.
 // Only the better-auth session is mocked (see test/integration/setup.ts);

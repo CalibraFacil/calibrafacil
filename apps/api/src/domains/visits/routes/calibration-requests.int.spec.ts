@@ -40,7 +40,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { organizationOf } from "../../test/integration/organization-of";
+import { organizationOf } from "../../../../test/integration/organization-of";
 import { calibrationRequestsRouter } from "./calibration-requests";
 import { db } from "@calibra-facil/db";
 import {
@@ -58,12 +58,12 @@ import {
   member,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { seedExtraMember } from "../../test/integration/tenant-refs";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { seedExtraMember } from "../../../../test/integration/tenant-refs";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Mock notification side-effects — no email/SMS during workflow tests.

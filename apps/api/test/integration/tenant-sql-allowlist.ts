@@ -394,7 +394,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "ownership-checked-in-code",
-    file: "apps/api/src/routes/calibration-requests.ts",
+    file: "apps/api/src/domains/visits/routes/calibration-requests.ts",
     tables: [
       "asset",
       "customer",
@@ -441,7 +441,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "pk-after-scoped-read",
-    file: "apps/api/src/routes/visits.ts",
+    file: "apps/api/src/domains/visits/routes/visits.ts",
     tables: ["calibration_job", "visit_reschedule_request"],
     kinds: ["select"],
     reason:
