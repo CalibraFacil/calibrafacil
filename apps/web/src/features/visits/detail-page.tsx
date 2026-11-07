@@ -172,10 +172,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const assignMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.visits.assign({
-        params: { id: visit.id },
-        body: { technicianId },
-      }),
+      calibraApi.visits.assign(visit.id, { technicianId }),
     onSuccess: async () => {
       await invalidate()
       toast.success('Técnico atribuído')
@@ -185,10 +182,10 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const rescheduleMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.visits.reschedule({
-        params: { id: visit.id },
-        body: buildVisitRescheduleInput(scheduledAt),
-      }),
+      calibraApi.visits.reschedule(
+        visit.id,
+        buildVisitRescheduleInput(scheduledAt),
+      ),
     onSuccess: async () => {
       await invalidate()
       toast.success('Visita reagendada')
@@ -198,10 +195,10 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const confirmMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.visits.confirm({
-        params: { id: visit.id },
-        body: buildVisitConfirmInput(scheduledAt, technicianId),
-      }),
+      calibraApi.visits.confirm(
+        visit.id,
+        buildVisitConfirmInput(scheduledAt, technicianId),
+      ),
     onSuccess: async () => {
       await invalidate()
       toast.success('Visita confirmada')
@@ -211,9 +208,8 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const cancelMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.visits.cancel({
-        params: { id: visit.id },
-        body: { reason: cancelReason.trim() || null },
+      calibraApi.visits.cancel(visit.id, {
+        reason: cancelReason.trim() || null,
       }),
     onSuccess: async () => {
       await invalidate()
@@ -223,8 +219,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   })
 
   const completeMutation = useMutation({
-    mutationFn: async () =>
-      calibraApi.visits.complete({ params: { id: visit.id } }),
+    mutationFn: async () => calibraApi.visits.complete(visit.id),
     onSuccess: async () => {
       await invalidate()
       toast.success('Visita concluída')
@@ -236,10 +231,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
     mutationFn: async () => {
       const assetId = parseInt(addAssetId, 10)
       const serviceId = parseInt(addServiceId, 10)
-      return calibraApi.visits.addJob({
-        params: { id: visit.id },
-        body: { assetId, serviceId },
-      })
+      return calibraApi.visits.addJob(visit.id, { assetId, serviceId })
     },
     onSuccess: async () => {
       setAddAssetId('')
@@ -252,7 +244,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const removeJobMutation = useMutation({
     mutationFn: async (jobId: number) =>
-      calibraApi.visits.removeJob({ params: { id: visit.id, jobId } }),
+      calibraApi.visits.removeJob(visit.id, jobId),
     onSuccess: async () => {
       await invalidate()
       toast.success('Instrumento removido da visita')
@@ -264,10 +256,11 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
     mutationFn: async (input: { requestId: number; acceptedDate: string }) => {
       const payload = buildVisitAcceptRescheduleInput(input.acceptedDate)
       if (!payload) throw new Error('Informe a nova data da visita')
-      return calibraApi.visits.acceptRescheduleRequest({
-        params: { id: visit.id, requestId: input.requestId },
-        body: payload,
-      })
+      return calibraApi.visits.acceptRescheduleRequest(
+        visit.id,
+        input.requestId,
+        payload,
+      )
     },
     onSuccess: async () => {
       await invalidate()
@@ -278,9 +271,8 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const declineRescheduleMutation = useMutation({
     mutationFn: async (input: { requestId: number; resolutionNote: string }) =>
-      calibraApi.visits.declineRescheduleRequest({
-        params: { id: visit.id, requestId: input.requestId },
-        body: { resolutionNote: input.resolutionNote.trim() || null },
+      calibraApi.visits.declineRescheduleRequest(visit.id, input.requestId, {
+        resolutionNote: input.resolutionNote.trim() || null,
       }),
     onSuccess: async () => {
       await invalidate()

@@ -1,37 +1,20 @@
-import type {
-  TrainingRecordCreateInput,
-  TrainingRecordsApi,
-  TrainingRecordsListInput,
-} from "../types";
-import { readJsonResponse } from "../transport/response";
+import {
+  trainingRecordEndpoints,
+  type ResponseValidationOptions,
+} from "@calibra-facil/contracts";
+
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The training-records client is its endpoint group (`trainingRecordEndpoints` in `@calibra-facil/contracts`). */
+export type TrainingRecordsApi = EndpointClient<typeof trainingRecordEndpoints>;
 
 export function createTrainingRecordsApi(
-  rawCloudClient: any,
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
 ): TrainingRecordsApi {
-  return {
-    async list<TResponse = unknown>(input: TrainingRecordsListInput) {
-      return readJsonResponse<TResponse>(
-        await rawCloudClient.api["training-records"].$get({
-          query: {
-            page: String(input.page),
-            limit: String(input.limit),
-            userId: input.userId || undefined,
-            competenceId:
-              input.competenceId === undefined
-                ? undefined
-                : String(input.competenceId),
-            status: input.status || undefined,
-            type: input.type || undefined,
-          },
-        }),
-        "Falha ao carregar treinamentos",
-      );
-    },
-    async create<TResponse = unknown>(input: TrainingRecordCreateInput) {
-      return readJsonResponse<TResponse>(
-        await rawCloudClient.api["training-records"].$post({ json: input }),
-        "Erro ao criar registro de treinamento",
-      );
-    },
-  };
+  return endpointClient(trainingRecordEndpoints, transport, options);
 }

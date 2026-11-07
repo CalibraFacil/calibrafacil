@@ -1,20 +1,20 @@
-import { calibrationRequestEndpoints } from "./calibration-requests";
 import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { customerEndpoints } from "./customers";
 import { dashboardEndpoints } from "./dashboard";
+import { competenceEndpoints } from "./competences";
+import { proficiencyTestEndpoints } from "./proficiency-tests";
+import { trainingRecordEndpoints } from "./training-records";
 import type { EndpointGroup, EndpointPaths } from "./define";
 import { reportEndpoints } from "./reports";
-import { signatureEndpoints } from "./signatures";
-import { visitEndpoints } from "./visits";
 
 export * from "./define";
 export * from "./customers";
 export * from "./dashboard";
 export * from "./reports";
 export * from "./certificate-numbering";
-export * from "./signatures";
-export * from "./visits";
-export * from "./calibration-requests";
+export * from "./competences";
+export * from "./proficiency-tests";
+export * from "./training-records";
 
 /**
  * Every converted domain, keyed by its `CalibraApi` namespace. This is the one
@@ -26,9 +26,9 @@ export const ENDPOINT_GROUPS = {
   dashboard: dashboardEndpoints,
   reports: reportEndpoints,
   certificateNumbering: certificateNumberingEndpoints,
-  signatures: signatureEndpoints,
-  visits: visitEndpoints,
-  calibrationRequests: calibrationRequestEndpoints,
+  competences: competenceEndpoints,
+  trainingRecords: trainingRecordEndpoints,
+  proficiencyTests: proficiencyTestEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

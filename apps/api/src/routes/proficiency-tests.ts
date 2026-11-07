@@ -1,5 +1,6 @@
 import { createRouter } from "../server/router";
-import { zValidator } from "@hono/zod-validator";
+import { proficiencyTestEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
@@ -12,15 +13,7 @@ import {
   type PtResultPoint,
   type PtScoreVerdict,
 } from "@calibra-facil/db/schema";
-import {
-  CreateProficiencyTestSchema,
-  UpdateProficiencyTestSchema,
-  RecordPtResultsSchema,
-  ListProficiencyTestsQuerySchema,
-  CreatePtPlanItemSchema,
-  UpdatePtPlanItemSchema,
-  type PtResultPointInput,
-} from "@calibra-facil/schemas";
+import { type PtResultPointInput } from "@calibra-facil/schemas";
 import {
   classifyScore,
   enScore,
@@ -159,311 +152,291 @@ async function requireLabStandard(
   }
 }
 
+const PREFIX = "/api/proficiency-tests";
+
 export const proficiencyTestsRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  // =========================================================================
-  // GET / - List PT rounds with pagination and filtering
-  // =========================================================================
-  .get(
-    "/",
-    ...withLabPermission({ proficiency_test: ["read"] }),
-    zValidator("query", ListProficiencyTestsQuerySchema),
-    async (c) => {
-      const member = c.get("member");
-      const { page, limit, query, status, activityType, scopePart } =
-        c.req.valid("query");
-      const offset = (page - 1) * limit;
+}>();
 
-      const conditions = [
-        eq(proficiencyTest.organizationId, member.organizationId),
-      ];
-      if (query) {
-        conditions.push(
-          or(
-            ilike(proficiencyTest.ptRound, `%${query}%`),
-            ilike(proficiencyTest.provider, `%${query}%`),
-            ilike(proficiencyTest.scopePart, `%${query}%`),
-          )!,
-        );
-      }
-      if (status) {
-        conditions.push(eq(proficiencyTest.overallStatus, status));
-      }
-      if (activityType) {
-        conditions.push(eq(proficiencyTest.activityType, activityType));
-      }
-      if (scopePart) {
-        conditions.push(eq(proficiencyTest.scopePart, scopePart));
-      }
-      const whereCondition = and(...conditions);
+// =========================================================================
+// GET / - List PT rounds with pagination and filtering
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.list,
+  withLabPermission({ proficiency_test: ["read"] }),
+  async (
+    c,
+    { query: { page, limit, query, status, activityType, scopePart } },
+  ) => {
+    const member = c.get("member");
+    const offset = (page - 1) * limit;
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [countResult] = await tx
-          .select({ total: count() })
-          .from(proficiencyTest)
-          .where(whereCondition);
+    const conditions = [
+      eq(proficiencyTest.organizationId, member.organizationId),
+    ];
+    if (query) {
+      conditions.push(
+        or(
+          ilike(proficiencyTest.ptRound, `%${query}%`),
+          ilike(proficiencyTest.provider, `%${query}%`),
+          ilike(proficiencyTest.scopePart, `%${query}%`),
+        )!,
+      );
+    }
+    if (status) {
+      conditions.push(eq(proficiencyTest.overallStatus, status));
+    }
+    if (activityType) {
+      conditions.push(eq(proficiencyTest.activityType, activityType));
+    }
+    if (scopePart) {
+      conditions.push(eq(proficiencyTest.scopePart, scopePart));
+    }
+    const whereCondition = and(...conditions);
 
-        const rounds = await tx
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const [countResult] = await tx
+        .select({ total: count() })
+        .from(proficiencyTest)
+        .where(whereCondition);
+
+      const rounds = await tx
+        .select({
+          id: proficiencyTest.id,
+          activityType: proficiencyTest.activityType,
+          provider: proficiencyTest.provider,
+          providerAccreditation: proficiencyTest.providerAccreditation,
+          ptRound: proficiencyTest.ptRound,
+          scopePart: proficiencyTest.scopePart,
+          metrologyKind: proficiencyTest.metrologyKind,
+          standardId: proficiencyTest.standardId,
+          standardName: referenceStandard.name,
+          registrationDate: proficiencyTest.registrationDate,
+          participationDate: proficiencyTest.participationDate,
+          resultReportedAt: proficiencyTest.resultReportedAt,
+          overallStatus: proficiencyTest.overallStatus,
+          capaId: proficiencyTest.capaId,
+          createdAt: proficiencyTest.createdAt,
+          updatedAt: proficiencyTest.updatedAt,
+        })
+        .from(proficiencyTest)
+        .leftJoin(
+          referenceStandard,
+          eq(proficiencyTest.standardId, referenceStandard.id),
+        )
+        .where(whereCondition)
+        .orderBy(desc(proficiencyTest.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      return {
+        data: rounds,
+        pagination: {
+          page,
+          limit,
+          total: countResult?.total ?? 0,
+          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+        },
+      };
+    });
+  },
+);
+
+// =========================================================================
+// GET /summary - Status counts + participation-plan compliance
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.summary,
+  withLabPermission({ proficiency_test: ["read"] }),
+  async (c) => {
+    const member = c.get("member");
+    const orgScope = eq(proficiencyTest.organizationId, member.organizationId);
+
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const [rows, planItems] = await Promise.all([
+        tx
           .select({
-            id: proficiencyTest.id,
-            activityType: proficiencyTest.activityType,
-            provider: proficiencyTest.provider,
-            providerAccreditation: proficiencyTest.providerAccreditation,
-            ptRound: proficiencyTest.ptRound,
-            scopePart: proficiencyTest.scopePart,
-            metrologyKind: proficiencyTest.metrologyKind,
-            standardId: proficiencyTest.standardId,
-            standardName: referenceStandard.name,
-            registrationDate: proficiencyTest.registrationDate,
-            participationDate: proficiencyTest.participationDate,
-            resultReportedAt: proficiencyTest.resultReportedAt,
             overallStatus: proficiencyTest.overallStatus,
-            capaId: proficiencyTest.capaId,
-            createdAt: proficiencyTest.createdAt,
-            updatedAt: proficiencyTest.updatedAt,
+            total: count(),
           })
           .from(proficiencyTest)
-          .leftJoin(
-            referenceStandard,
-            eq(proficiencyTest.standardId, referenceStandard.id),
-          )
-          .where(whereCondition)
-          .orderBy(desc(proficiencyTest.createdAt))
-          .limit(limit)
-          .offset(offset);
-
-        return c.json({
-          data: rounds,
-          pagination: {
-            page,
-            limit,
-            total: countResult?.total ?? 0,
-            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-          },
-        });
-      });
-    },
-  )
-
-  // =========================================================================
-  // GET /summary - Status counts + participation-plan compliance
-  // =========================================================================
-  .get(
-    "/summary",
-    ...withLabPermission({ proficiency_test: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const orgScope = eq(
-        proficiencyTest.organizationId,
-        member.organizationId,
-      );
-
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [rows, planItems] = await Promise.all([
-          tx
-            .select({
-              overallStatus: proficiencyTest.overallStatus,
-              total: count(),
-            })
-            .from(proficiencyTest)
-            .where(orgScope)
-            .groupBy(proficiencyTest.overallStatus),
-          tx
-            .select({
-              id: ptPlanItem.id,
-              nextDueAt: ptPlanItem.nextDueAt,
-            })
-            .from(ptPlanItem)
-            .where(eq(ptPlanItem.organizationId, member.organizationId)),
-        ]);
-
-        const byStatus: Record<string, number> = {};
-        for (const row of rows) {
-          byStatus[row.overallStatus] = row.total;
-        }
-        const now = new Date();
-        const soon = addMonths(now, 3);
-        let planOverdue = 0;
-        let planDueSoon = 0;
-        for (const item of planItems) {
-          if (!item.nextDueAt) continue;
-          if (item.nextDueAt < now) planOverdue += 1;
-          else if (item.nextDueAt <= soon) planDueSoon += 1;
-        }
-
-        return c.json({
-          total: rows.reduce((acc, row) => acc + row.total, 0),
-          pending: byStatus["pending"] ?? 0,
-          satisfactory: byStatus["satisfactory"] ?? 0,
-          questionable: byStatus["questionable"] ?? 0,
-          unsatisfactory: byStatus["unsatisfactory"] ?? 0,
-          planItems: planItems.length,
-          planOverdue,
-          planDueSoon,
-        });
-      });
-    },
-  )
-
-  // =========================================================================
-  // GET /plan - Participation plan (NIT-DICLA-026 §9.4)
-  // =========================================================================
-  .get(
-    "/plan",
-    ...withLabPermission({ proficiency_test: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const items = await tx
+          .where(orgScope)
+          .groupBy(proficiencyTest.overallStatus),
+        tx
           .select({
             id: ptPlanItem.id,
-            scopePart: ptPlanItem.scopePart,
-            riskJustification: ptPlanItem.riskJustification,
-            frequencyMonths: ptPlanItem.frequencyMonths,
-            lastSatisfactoryAt: ptPlanItem.lastSatisfactoryAt,
             nextDueAt: ptPlanItem.nextDueAt,
-            createdAt: ptPlanItem.createdAt,
-            updatedAt: ptPlanItem.updatedAt,
           })
           .from(ptPlanItem)
-          .where(eq(ptPlanItem.organizationId, member.organizationId))
-          .orderBy(asc(ptPlanItem.nextDueAt), asc(ptPlanItem.scopePart));
-        return c.json({ data: items });
-      });
-    },
-  )
+          .where(eq(ptPlanItem.organizationId, member.organizationId)),
+      ]);
 
-  // =========================================================================
-  // POST /plan - Create a plan item
-  // =========================================================================
-  .post(
-    "/plan",
-    ...withLabPermission({ proficiency_test: ["create"] }),
-    zValidator("json", CreatePtPlanItemSchema),
-    async (c) => {
-      const member = c.get("member");
-      const input = c.req.valid("json");
+      const byStatus: Record<string, number> = {};
+      for (const row of rows) {
+        byStatus[row.overallStatus] = row.total;
+      }
+      const now = new Date();
+      const soon = addMonths(now, 3);
+      let planOverdue = 0;
+      let planDueSoon = 0;
+      for (const item of planItems) {
+        if (!item.nextDueAt) continue;
+        if (item.nextDueAt < now) planOverdue += 1;
+        else if (item.nextDueAt <= soon) planDueSoon += 1;
+      }
 
-      // A body-supplied unit must be one the caller can access (403 otherwise).
-      const planUnitId =
-        input.unitId == null
-          ? null
-          : resolveAccessibleUnitContext(member, input.unitId).unitId;
+      return {
+        total: rows.reduce((acc, row) => acc + row.total, 0),
+        pending: byStatus["pending"] ?? 0,
+        satisfactory: byStatus["satisfactory"] ?? 0,
+        questionable: byStatus["questionable"] ?? 0,
+        unsatisfactory: byStatus["unsatisfactory"] ?? 0,
+        planItems: planItems.length,
+        planOverdue,
+        planDueSoon,
+      };
+    });
+  },
+);
 
-      const lastSatisfactoryAt = input.lastSatisfactoryAt
-        ? new Date(input.lastSatisfactoryAt)
-        : null;
-      const created = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [item] = await ctx.o
-            .insert(ptPlanItem)
-            .values({
-              organizationId: member.organizationId,
-              unitId: planUnitId,
-              scopePart: input.scopePart,
-              riskJustification: input.riskJustification ?? null,
-              frequencyMonths: input.frequencyMonths,
-              lastSatisfactoryAt,
-              nextDueAt: lastSatisfactoryAt
-                ? addMonths(lastSatisfactoryAt, input.frequencyMonths)
-                : new Date(),
-              createdBy: ctx.actor.userId,
-            })
-            .returning();
-          return item;
-        },
-      );
+// =========================================================================
+// GET /plan - Participation plan (NIT-DICLA-026 §9.4)
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.listPlan,
+  withLabPermission({ proficiency_test: ["read"] }),
+  async (c) => {
+    const member = c.get("member");
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const items = await tx
+        .select({
+          id: ptPlanItem.id,
+          scopePart: ptPlanItem.scopePart,
+          riskJustification: ptPlanItem.riskJustification,
+          frequencyMonths: ptPlanItem.frequencyMonths,
+          lastSatisfactoryAt: ptPlanItem.lastSatisfactoryAt,
+          nextDueAt: ptPlanItem.nextDueAt,
+          createdAt: ptPlanItem.createdAt,
+          updatedAt: ptPlanItem.updatedAt,
+        })
+        .from(ptPlanItem)
+        .where(eq(ptPlanItem.organizationId, member.organizationId))
+        .orderBy(asc(ptPlanItem.nextDueAt), asc(ptPlanItem.scopePart));
+      return { data: items };
+    });
+  },
+);
 
-      return c.json(created, 201);
-    },
-  )
+// =========================================================================
+// POST /plan - Create a plan item
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.createPlanItem,
+  withLabPermission({ proficiency_test: ["create"] }),
+  async (c, { body: input }) => {
+    const member = c.get("member");
 
-  // =========================================================================
-  // PUT /plan/:id - Update a plan item
-  // =========================================================================
-  .put(
-    "/plan/:id",
-    ...withLabPermission({ proficiency_test: ["update"] }),
-    zValidator("json", UpdatePtPlanItemSchema),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireId(c.req.param("id"));
-      const input = c.req.valid("json");
+    // A body-supplied unit must be one the caller can access (403 otherwise).
+    const planUnitId =
+      input.unitId == null
+        ? null
+        : resolveAccessibleUnitContext(member, input.unitId).unitId;
 
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [existing] = await ctx.o
-            .select()
-            .from(ptPlanItem)
-            .where(
-              and(
-                eq(ptPlanItem.id, id),
-                eq(ptPlanItem.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-          if (!existing) {
-            throw notFound(
-              "pt_plan_item_not_found",
-              "Item do plano não encontrado",
-            );
-          }
+    const lastSatisfactoryAt = input.lastSatisfactoryAt
+      ? new Date(input.lastSatisfactoryAt)
+      : null;
+    const created = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [item] = await ctx.o
+          .insert(ptPlanItem)
+          .values({
+            organizationId: member.organizationId,
+            unitId: planUnitId,
+            scopePart: input.scopePart,
+            riskJustification: input.riskJustification ?? null,
+            frequencyMonths: input.frequencyMonths,
+            lastSatisfactoryAt,
+            nextDueAt: lastSatisfactoryAt
+              ? addMonths(lastSatisfactoryAt, input.frequencyMonths)
+              : new Date(),
+            createdBy: ctx.actor.userId,
+          })
+          .returning();
+        return item;
+      },
+    );
 
-          const frequencyMonths =
-            input.frequencyMonths ?? existing.frequencyMonths;
-          const lastSatisfactoryAt =
-            input.lastSatisfactoryAt === undefined
-              ? existing.lastSatisfactoryAt
-              : input.lastSatisfactoryAt === null
-                ? null
-                : new Date(input.lastSatisfactoryAt);
+    if (!created) throw new Error("Falha ao criar item do plano");
+    return created;
+  },
+);
 
-          const [item] = await ctx.o
-            .update(ptPlanItem)
-            .set({
-              scopePart: input.scopePart ?? existing.scopePart,
-              riskJustification:
-                input.riskJustification === undefined
-                  ? existing.riskJustification
-                  : input.riskJustification,
-              frequencyMonths,
-              lastSatisfactoryAt,
-              nextDueAt: lastSatisfactoryAt
-                ? addMonths(lastSatisfactoryAt, frequencyMonths)
-                : existing.nextDueAt,
-            })
-            .where(
-              and(
-                eq(ptPlanItem.id, id),
-                eq(ptPlanItem.organizationId, member.organizationId),
-              ),
-            )
-            .returning();
-          return item;
-        },
-      );
+// =========================================================================
+// PUT /plan/:id - Update a plan item
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.updatePlanItem,
+  withLabPermission({ proficiency_test: ["update"] }),
+  async (c, { params, body: input }) => {
+    const member = c.get("member");
+    const id = requireId(params.id);
 
-      return c.json(updated);
-    },
-  )
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [existing] = await ctx.o
+          .select()
+          .from(ptPlanItem)
+          .where(
+            and(
+              eq(ptPlanItem.id, id),
+              eq(ptPlanItem.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          throw notFound(
+            "pt_plan_item_not_found",
+            "Item do plano não encontrado",
+          );
+        }
 
-  // =========================================================================
-  // DELETE /plan/:id - Remove a plan item
-  // =========================================================================
-  .delete(
-    "/plan/:id",
-    ...withLabPermission({ proficiency_test: ["delete"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireId(c.req.param("id"));
-      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
-        const deleted = await ctx.o
-          .delete(ptPlanItem)
+        const frequencyMonths =
+          input.frequencyMonths ?? existing.frequencyMonths;
+        const lastSatisfactoryAt =
+          input.lastSatisfactoryAt === undefined
+            ? existing.lastSatisfactoryAt
+            : input.lastSatisfactoryAt === null
+              ? null
+              : new Date(input.lastSatisfactoryAt);
+
+        const [item] = await ctx.o
+          .update(ptPlanItem)
+          .set({
+            scopePart: input.scopePart ?? existing.scopePart,
+            riskJustification:
+              input.riskJustification === undefined
+                ? existing.riskJustification
+                : input.riskJustification,
+            frequencyMonths,
+            lastSatisfactoryAt,
+            nextDueAt: lastSatisfactoryAt
+              ? addMonths(lastSatisfactoryAt, frequencyMonths)
+              : existing.nextDueAt,
+          })
           .where(
             and(
               eq(ptPlanItem.id, id),
@@ -471,403 +444,277 @@ export const proficiencyTestsRouter = createRouter<{
             ),
           )
           .returning();
-        if (deleted.length === 0) {
-          throw notFound(
-            "pt_plan_item_not_found",
-            "Item do plano não encontrado",
+        return item;
+      },
+    );
+
+    if (!updated)
+      throw notFound("pt_plan_item_not_found", "Item do plano não encontrado");
+    return updated;
+  },
+);
+
+// =========================================================================
+// DELETE /plan/:id - Remove a plan item
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.removePlanItem,
+  withLabPermission({ proficiency_test: ["delete"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const id = requireId(params.id);
+    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+      const deleted = await ctx.o
+        .delete(ptPlanItem)
+        .where(
+          and(
+            eq(ptPlanItem.id, id),
+            eq(ptPlanItem.organizationId, member.organizationId),
+          ),
+        )
+        .returning();
+      if (deleted.length === 0) {
+        throw notFound(
+          "pt_plan_item_not_found",
+          "Item do plano não encontrado",
+        );
+      }
+    });
+    return { message: "Item removido" };
+  },
+);
+
+// =========================================================================
+// GET /:id - PT round detail
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.get,
+  withLabPermission({ proficiency_test: ["read"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const id = requireId(params.id);
+
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const [round] = await tx
+        .select({
+          id: proficiencyTest.id,
+          activityType: proficiencyTest.activityType,
+          provider: proficiencyTest.provider,
+          providerAccreditation: proficiencyTest.providerAccreditation,
+          ptRound: proficiencyTest.ptRound,
+          scopePart: proficiencyTest.scopePart,
+          metrologyKind: proficiencyTest.metrologyKind,
+          standardId: proficiencyTest.standardId,
+          standardName: referenceStandard.name,
+          registrationDate: proficiencyTest.registrationDate,
+          participationDate: proficiencyTest.participationDate,
+          resultReportedAt: proficiencyTest.resultReportedAt,
+          results: proficiencyTest.results,
+          overallStatus: proficiencyTest.overallStatus,
+          capaId: proficiencyTest.capaId,
+          notes: proficiencyTest.notes,
+          createdBy: proficiencyTest.createdBy,
+          createdByName: user.name,
+          createdAt: proficiencyTest.createdAt,
+          updatedAt: proficiencyTest.updatedAt,
+        })
+        .from(proficiencyTest)
+        .leftJoin(
+          referenceStandard,
+          eq(proficiencyTest.standardId, referenceStandard.id),
+        )
+        .leftJoin(user, eq(proficiencyTest.createdBy, user.id))
+        .where(
+          and(
+            eq(proficiencyTest.id, id),
+            eq(proficiencyTest.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!round) {
+        throw notFound(
+          "proficiency_test_not_found",
+          "Ensaio de proficiência não encontrado",
+        );
+      }
+      return round;
+    });
+  },
+);
+
+// =========================================================================
+// GET /:id/audit-log
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.auditLog,
+  withLabPermission({ proficiency_test: ["read"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const id = requireId(params.id);
+
+    // Tenant check before exposing the (FK-less) audit trail
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      await requireProficiencyTest(id, member.organizationId, tx);
+
+      const entries = await tx
+        .select({
+          id: proficiencyTestAuditLog.id,
+          action: proficiencyTestAuditLog.action,
+          changes: proficiencyTestAuditLog.changes,
+          performedBy: proficiencyTestAuditLog.performedBy,
+          performedByName: user.name,
+          performedAt: proficiencyTestAuditLog.performedAt,
+          reason: proficiencyTestAuditLog.reason,
+        })
+        .from(proficiencyTestAuditLog)
+        .leftJoin(user, eq(proficiencyTestAuditLog.performedBy, user.id))
+        .where(eq(proficiencyTestAuditLog.proficiencyTestId, id))
+        .orderBy(desc(proficiencyTestAuditLog.performedAt));
+
+      return { data: entries };
+    });
+  },
+);
+
+// =========================================================================
+// POST / - Register a PT round
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.create,
+  withLabPermission({ proficiency_test: ["create"] }),
+  async (c, { body: input }) => {
+    const member = c.get("member");
+
+    const created = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        if (input.standardId) {
+          await requireLabStandard(
+            input.standardId,
+            member.organizationId,
+            ctx.o,
           );
         }
-      });
-      return c.json({ message: "Item removido" });
-    },
-  )
 
-  // =========================================================================
-  // GET /:id - PT round detail
-  // =========================================================================
-  .get(
-    "/:id",
-    ...withLabPermission({ proficiency_test: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireId(c.req.param("id"));
+        // A body-supplied unit must be one the caller can access (403 otherwise).
+        const testUnitId =
+          input.unitId == null
+            ? null
+            : resolveAccessibleUnitContext(member, input.unitId).unitId;
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [round] = await tx
-          .select({
-            id: proficiencyTest.id,
-            activityType: proficiencyTest.activityType,
-            provider: proficiencyTest.provider,
-            providerAccreditation: proficiencyTest.providerAccreditation,
-            ptRound: proficiencyTest.ptRound,
-            scopePart: proficiencyTest.scopePart,
-            metrologyKind: proficiencyTest.metrologyKind,
-            standardId: proficiencyTest.standardId,
-            standardName: referenceStandard.name,
-            registrationDate: proficiencyTest.registrationDate,
-            participationDate: proficiencyTest.participationDate,
-            resultReportedAt: proficiencyTest.resultReportedAt,
-            results: proficiencyTest.results,
-            overallStatus: proficiencyTest.overallStatus,
-            capaId: proficiencyTest.capaId,
-            notes: proficiencyTest.notes,
-            createdBy: proficiencyTest.createdBy,
-            createdByName: user.name,
-            createdAt: proficiencyTest.createdAt,
-            updatedAt: proficiencyTest.updatedAt,
+        const [round] = await ctx.o
+          .insert(proficiencyTest)
+          .values({
+            organizationId: member.organizationId,
+            unitId: testUnitId,
+            activityType: input.activityType,
+            provider: input.provider,
+            providerAccreditation: input.providerAccreditation ?? null,
+            ptRound: input.ptRound,
+            scopePart: input.scopePart,
+            metrologyKind: input.metrologyKind ?? null,
+            standardId: input.standardId ?? null,
+            registrationDate: input.registrationDate
+              ? new Date(input.registrationDate)
+              : null,
+            participationDate: input.participationDate
+              ? new Date(input.participationDate)
+              : null,
+            overallStatus: "pending",
+            notes: input.notes ?? null,
+            createdBy: ctx.actor.userId,
           })
-          .from(proficiencyTest)
-          .leftJoin(
-            referenceStandard,
-            eq(proficiencyTest.standardId, referenceStandard.id),
-          )
-          .leftJoin(user, eq(proficiencyTest.createdBy, user.id))
-          .where(
-            and(
-              eq(proficiencyTest.id, id),
-              eq(proficiencyTest.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+          .returning();
 
         if (!round) {
-          throw notFound(
-            "proficiency_test_not_found",
-            "Ensaio de proficiência não encontrado",
+          throw new Error("Falha ao registrar ensaio");
+        }
+
+        await ctx.audit("proficiencyTest", round.id, {
+          action: "create",
+          changes: { initial: input },
+        });
+
+        return round;
+      },
+    );
+    return created;
+  },
+);
+
+// =========================================================================
+// PUT /:id - Update a PT round (metadata only; results via /:id/results)
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.update,
+  withLabPermission({ proficiency_test: ["update"] }),
+  async (c, { params, body: input }) => {
+    const member = c.get("member");
+    const id = requireId(params.id);
+
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireProficiencyTest(
+          id,
+          member.organizationId,
+          ctx.o,
+        );
+
+        if (input.standardId) {
+          await requireLabStandard(
+            input.standardId,
+            member.organizationId,
+            ctx.o,
           );
         }
-        return c.json(round);
-      });
-    },
-  )
 
-  // =========================================================================
-  // GET /:id/audit-log
-  // =========================================================================
-  .get(
-    "/:id/audit-log",
-    ...withLabPermission({ proficiency_test: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireId(c.req.param("id"));
-
-      // Tenant check before exposing the (FK-less) audit trail
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        await requireProficiencyTest(id, member.organizationId, tx);
-
-        const entries = await tx
-          .select({
-            id: proficiencyTestAuditLog.id,
-            action: proficiencyTestAuditLog.action,
-            changes: proficiencyTestAuditLog.changes,
-            performedBy: proficiencyTestAuditLog.performedBy,
-            performedByName: user.name,
-            performedAt: proficiencyTestAuditLog.performedAt,
-            reason: proficiencyTestAuditLog.reason,
+        const [round] = await ctx.o
+          .update(proficiencyTest)
+          .set({
+            activityType: input.activityType ?? existing.activityType,
+            provider: input.provider ?? existing.provider,
+            providerAccreditation:
+              input.providerAccreditation === undefined
+                ? existing.providerAccreditation
+                : input.providerAccreditation,
+            ptRound: input.ptRound ?? existing.ptRound,
+            scopePart: input.scopePart ?? existing.scopePart,
+            metrologyKind:
+              input.metrologyKind === undefined
+                ? existing.metrologyKind
+                : input.metrologyKind,
+            standardId:
+              input.standardId === undefined
+                ? existing.standardId
+                : input.standardId,
+            registrationDate:
+              input.registrationDate === undefined
+                ? existing.registrationDate
+                : input.registrationDate === null
+                  ? null
+                  : new Date(input.registrationDate),
+            participationDate:
+              input.participationDate === undefined
+                ? existing.participationDate
+                : input.participationDate === null
+                  ? null
+                  : new Date(input.participationDate),
+            notes: input.notes === undefined ? existing.notes : input.notes,
           })
-          .from(proficiencyTestAuditLog)
-          .leftJoin(user, eq(proficiencyTestAuditLog.performedBy, user.id))
-          .where(eq(proficiencyTestAuditLog.proficiencyTestId, id))
-          .orderBy(desc(proficiencyTestAuditLog.performedAt));
-
-        return c.json({ data: entries });
-      });
-    },
-  )
-
-  // =========================================================================
-  // POST / - Register a PT round
-  // =========================================================================
-  .post(
-    "/",
-    ...withLabPermission({ proficiency_test: ["create"] }),
-    zValidator("json", CreateProficiencyTestSchema),
-    async (c) => {
-      const member = c.get("member");
-      const input = c.req.valid("json");
-
-      const created = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          if (input.standardId) {
-            await requireLabStandard(
-              input.standardId,
-              member.organizationId,
-              ctx.o,
-            );
-          }
-
-          // A body-supplied unit must be one the caller can access (403 otherwise).
-          const testUnitId =
-            input.unitId == null
-              ? null
-              : resolveAccessibleUnitContext(member, input.unitId).unitId;
-
-          const [round] = await ctx.o
-            .insert(proficiencyTest)
-            .values({
-              organizationId: member.organizationId,
-              unitId: testUnitId,
-              activityType: input.activityType,
-              provider: input.provider,
-              providerAccreditation: input.providerAccreditation ?? null,
-              ptRound: input.ptRound,
-              scopePart: input.scopePart,
-              metrologyKind: input.metrologyKind ?? null,
-              standardId: input.standardId ?? null,
-              registrationDate: input.registrationDate
-                ? new Date(input.registrationDate)
-                : null,
-              participationDate: input.participationDate
-                ? new Date(input.participationDate)
-                : null,
-              overallStatus: "pending",
-              notes: input.notes ?? null,
-              createdBy: ctx.actor.userId,
-            })
-            .returning();
-
-          if (!round) {
-            throw new Error("Falha ao registrar ensaio");
-          }
-
-          await ctx.audit("proficiencyTest", round.id, {
-            action: "create",
-            changes: { initial: input },
-          });
-
-          return round;
-        },
-      );
-      return c.json(created, 201);
-    },
-  )
-
-  // =========================================================================
-  // PUT /:id - Update a PT round (metadata only; results via /:id/results)
-  // =========================================================================
-  .put(
-    "/:id",
-    ...withLabPermission({ proficiency_test: ["update"] }),
-    zValidator("json", UpdateProficiencyTestSchema),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireId(c.req.param("id"));
-      const input = c.req.valid("json");
-
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireProficiencyTest(
-            id,
-            member.organizationId,
-            ctx.o,
-          );
-
-          if (input.standardId) {
-            await requireLabStandard(
-              input.standardId,
-              member.organizationId,
-              ctx.o,
-            );
-          }
-
-          const [round] = await ctx.o
-            .update(proficiencyTest)
-            .set({
-              activityType: input.activityType ?? existing.activityType,
-              provider: input.provider ?? existing.provider,
-              providerAccreditation:
-                input.providerAccreditation === undefined
-                  ? existing.providerAccreditation
-                  : input.providerAccreditation,
-              ptRound: input.ptRound ?? existing.ptRound,
-              scopePart: input.scopePart ?? existing.scopePart,
-              metrologyKind:
-                input.metrologyKind === undefined
-                  ? existing.metrologyKind
-                  : input.metrologyKind,
-              standardId:
-                input.standardId === undefined
-                  ? existing.standardId
-                  : input.standardId,
-              registrationDate:
-                input.registrationDate === undefined
-                  ? existing.registrationDate
-                  : input.registrationDate === null
-                    ? null
-                    : new Date(input.registrationDate),
-              participationDate:
-                input.participationDate === undefined
-                  ? existing.participationDate
-                  : input.participationDate === null
-                    ? null
-                    : new Date(input.participationDate),
-              notes: input.notes === undefined ? existing.notes : input.notes,
-            })
-            .where(
-              and(
-                eq(proficiencyTest.id, id),
-                eq(proficiencyTest.organizationId, member.organizationId),
-              ),
-            )
-            .returning();
-
-          await ctx.audit("proficiencyTest", id, {
-            action: "update",
-            changes: { input },
-          });
-
-          return round;
-        },
-      );
-      return c.json(updated);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/results - Enter the provider's final report.
-  // Scores + verdicts are computed server-side (ISO 13528); unsatisfactory
-  // results auto-open a CAPA (§7.7.3) and a satisfactory round advances the
-  // participation-plan clock for its scope part.
-  // =========================================================================
-  .post(
-    "/:id/results",
-    ...withLabPermission({ proficiency_test: ["record_results"] }),
-    zValidator("json", RecordPtResultsSchema),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireId(c.req.param("id"));
-      const input = c.req.valid("json");
-
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireProficiencyTest(
-            id,
-            member.organizationId,
-            ctx.o,
-          );
-
-          const results = input.results.map(computeResultPoint);
-          const overallStatus = overallStatusFromResults(results);
-          const resultReportedAt = new Date(input.resultReportedAt);
-
-          // §7.7.3 auto-escalation — guarded against double-escalation like the
-          // NC escalate-to-capa flow.
-          let capaId = existing.capaId;
-          if (overallStatus === "unsatisfactory" && !existing.capaId) {
-            const failedPoints = results
-              .filter((r) => r.verdict === "unsatisfactory")
-              .map(
-                (r) =>
-                  `${r.label}: ${r.scoreType} = ${r.score == null ? "n/d" : r.score.toFixed(2)}`,
-              )
-              .join("; ");
-            const newCapa = await createCorrectiveActionRecord(
-              {
-                organizationId: member.organizationId,
-                actorUserId: ctx.actor.userId,
-                source: "proficiency_test",
-                sourceReference: `${existing.ptRound} (${existing.provider})`,
-                title: `Resultado insatisfatório no EP ${existing.ptRound}`,
-                description: `Ensaio de proficiência "${existing.ptRound}" (${existing.provider}) com resultado insatisfatório no escopo "${existing.scopePart}". Pontos reprovados: ${failedPoints}.`,
-                detectionDate: resultReportedAt,
-                severity: "major",
-                category: "method",
-                ipAddress: ctx.actor.ipAddress,
-              },
-              ctx.o,
-            );
-            capaId = newCapa.id;
-          }
-
-          const [round] = await ctx.o
-            .update(proficiencyTest)
-            .set({
-              results,
-              overallStatus: PT_OVERALL_MACHINE.requireTransition(
-                existing.overallStatus,
-                "record_results",
-                overallStatus,
-              ),
-              resultReportedAt,
-              capaId,
-            })
-            .where(
-              and(
-                eq(proficiencyTest.id, id),
-                eq(proficiencyTest.organizationId, member.organizationId),
-                eq(proficiencyTest.overallStatus, existing.overallStatus),
-              ),
-            )
-            .returning();
-
-          await ctx.audit("proficiencyTest", id, {
-            action: capaId !== existing.capaId ? "escalate" : "record_results",
-            changes: {
-              overallStatus: {
-                old: existing.overallStatus,
-                new: overallStatus,
-              },
-              points: results.length,
-              ...(capaId !== existing.capaId ? { capaId } : {}),
-            },
-          });
-
-          // Advance the 4-year compliance clock for this scope part
-          if (overallStatus === "satisfactory") {
-            const [planItem] = await ctx.o
-              .select()
-              .from(ptPlanItem)
-              .where(
-                and(
-                  eq(ptPlanItem.organizationId, member.organizationId),
-                  eq(ptPlanItem.scopePart, existing.scopePart),
-                ),
-              )
-              .limit(1);
-            if (
-              planItem &&
-              (!planItem.lastSatisfactoryAt ||
-                planItem.lastSatisfactoryAt < resultReportedAt)
-            ) {
-              await ctx.o
-                .update(ptPlanItem)
-                .set({
-                  lastSatisfactoryAt: resultReportedAt,
-                  nextDueAt: addMonths(
-                    resultReportedAt,
-                    planItem.frequencyMonths,
-                  ),
-                })
-                .where(eq(ptPlanItem.id, planItem.id));
-            }
-          }
-
-          return round;
-        },
-      );
-      return c.json(updated);
-    },
-  )
-
-  // =========================================================================
-  // DELETE /:id - Remove a PT round
-  // =========================================================================
-  .delete(
-    "/:id",
-    ...withLabPermission({ proficiency_test: ["delete"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireId(c.req.param("id"));
-
-      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
-        const deleted = await ctx.o
-          .delete(proficiencyTest)
           .where(
             and(
               eq(proficiencyTest.id, id),
@@ -875,16 +722,189 @@ export const proficiencyTestsRouter = createRouter<{
             ),
           )
           .returning();
-        if (deleted.length === 0) {
-          throw notFound(
-            "proficiency_test_not_found",
-            "Ensaio de proficiência não encontrado",
+
+        await ctx.audit("proficiencyTest", id, {
+          action: "update",
+          changes: { input },
+        });
+
+        return round;
+      },
+    );
+    if (!updated)
+      throw notFound(
+        "proficiency_test_not_found",
+        "Ensaio de proficiência não encontrado",
+      );
+    return updated;
+  },
+);
+
+// =========================================================================
+// POST /:id/results - Enter the provider's final report.
+// Scores + verdicts are computed server-side (ISO 13528); unsatisfactory
+// results auto-open a CAPA (§7.7.3) and a satisfactory round advances the
+// participation-plan clock for its scope part.
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.recordResults,
+  withLabPermission({ proficiency_test: ["record_results"] }),
+  async (c, { params, body: input }) => {
+    const member = c.get("member");
+    const id = requireId(params.id);
+
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireProficiencyTest(
+          id,
+          member.organizationId,
+          ctx.o,
+        );
+
+        const results = input.results.map(computeResultPoint);
+        const overallStatus = overallStatusFromResults(results);
+        const resultReportedAt = new Date(input.resultReportedAt);
+
+        // §7.7.3 auto-escalation — guarded against double-escalation like the
+        // NC escalate-to-capa flow.
+        let capaId = existing.capaId;
+        if (overallStatus === "unsatisfactory" && !existing.capaId) {
+          const failedPoints = results
+            .filter((r) => r.verdict === "unsatisfactory")
+            .map(
+              (r) =>
+                `${r.label}: ${r.scoreType} = ${r.score == null ? "n/d" : r.score.toFixed(2)}`,
+            )
+            .join("; ");
+          const newCapa = await createCorrectiveActionRecord(
+            {
+              organizationId: member.organizationId,
+              actorUserId: ctx.actor.userId,
+              source: "proficiency_test",
+              sourceReference: `${existing.ptRound} (${existing.provider})`,
+              title: `Resultado insatisfatório no EP ${existing.ptRound}`,
+              description: `Ensaio de proficiência "${existing.ptRound}" (${existing.provider}) com resultado insatisfatório no escopo "${existing.scopePart}". Pontos reprovados: ${failedPoints}.`,
+              detectionDate: resultReportedAt,
+              severity: "major",
+              category: "method",
+              ipAddress: ctx.actor.ipAddress,
+            },
+            ctx.o,
           );
+          capaId = newCapa.id;
         }
 
-        // Audit rows are FK-less on purpose — the trail survives the delete.
-        await ctx.audit("proficiencyTest", id, { action: "delete" });
-      });
-      return c.json({ message: "Ensaio removido" });
-    },
-  );
+        const [round] = await ctx.o
+          .update(proficiencyTest)
+          .set({
+            results,
+            overallStatus: PT_OVERALL_MACHINE.requireTransition(
+              existing.overallStatus,
+              "record_results",
+              overallStatus,
+            ),
+            resultReportedAt,
+            capaId,
+          })
+          .where(
+            and(
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
+              eq(proficiencyTest.overallStatus, existing.overallStatus),
+            ),
+          )
+          .returning();
+
+        await ctx.audit("proficiencyTest", id, {
+          action: capaId !== existing.capaId ? "escalate" : "record_results",
+          changes: {
+            overallStatus: {
+              old: existing.overallStatus,
+              new: overallStatus,
+            },
+            points: results.length,
+            ...(capaId !== existing.capaId ? { capaId } : {}),
+          },
+        });
+
+        // Advance the 4-year compliance clock for this scope part
+        if (overallStatus === "satisfactory") {
+          const [planItem] = await ctx.o
+            .select()
+            .from(ptPlanItem)
+            .where(
+              and(
+                eq(ptPlanItem.organizationId, member.organizationId),
+                eq(ptPlanItem.scopePart, existing.scopePart),
+              ),
+            )
+            .limit(1);
+          if (
+            planItem &&
+            (!planItem.lastSatisfactoryAt ||
+              planItem.lastSatisfactoryAt < resultReportedAt)
+          ) {
+            await ctx.o
+              .update(ptPlanItem)
+              .set({
+                lastSatisfactoryAt: resultReportedAt,
+                nextDueAt: addMonths(
+                  resultReportedAt,
+                  planItem.frequencyMonths,
+                ),
+              })
+              .where(eq(ptPlanItem.id, planItem.id));
+          }
+        }
+
+        return round;
+      },
+    );
+    if (!updated)
+      throw notFound(
+        "proficiency_test_not_found",
+        "Ensaio de proficiência não encontrado",
+      );
+    return updated;
+  },
+);
+
+// =========================================================================
+// DELETE /:id - Remove a PT round
+// =========================================================================
+mount(
+  proficiencyTestsRouter,
+  PREFIX,
+  proficiencyTestEndpoints.remove,
+  withLabPermission({ proficiency_test: ["delete"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const id = requireId(params.id);
+
+    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+      const deleted = await ctx.o
+        .delete(proficiencyTest)
+        .where(
+          and(
+            eq(proficiencyTest.id, id),
+            eq(proficiencyTest.organizationId, member.organizationId),
+          ),
+        )
+        .returning();
+      if (deleted.length === 0) {
+        throw notFound(
+          "proficiency_test_not_found",
+          "Ensaio de proficiência não encontrado",
+        );
+      }
+
+      // Audit rows are FK-less on purpose — the trail survives the delete.
+      await ctx.audit("proficiencyTest", id, { action: "delete" });
+    });
+    return { message: "Ensaio removido" };
+  },
+);

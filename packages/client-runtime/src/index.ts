@@ -56,10 +56,8 @@ import { createOnboardingApi } from "./modules/onboarding";
 import { createCalibrationRequestsApi } from "./modules/calibration-requests";
 import { createVisitsApi } from "./modules/visits";
 import { createCapasApi } from "./modules/capa";
-import {
-  createProficiencyTestsApi,
-  createSpcApi,
-} from "./modules/proficiency-tests";
+import { createProficiencyTestsApi } from "./modules/proficiency-tests";
+import { createSpcApi } from "./modules/spc";
 import { createCertificateNumberingApi } from "./modules/certificate-numbering";
 import { createCompetencesApi } from "./modules/competences";
 import { createCustomersApi } from "./modules/customers";
@@ -286,6 +284,12 @@ export function createCloudApiClient(
           $put(input: {
             json: UpdateNotificationPreferencesInput;
           }): Promise<Response>;
+        };
+      };
+      signatures: {
+        "my-signature": {
+          $get(): Promise<Response>;
+          $delete(): Promise<Response>;
         };
       };
       signing: {
@@ -652,7 +656,7 @@ export function createCloudApiClient(
     portalDomains: createPortalDomainsApi(rawCloudClient),
     emailDomains: createEmailDomainsApi(rawCloudClient),
     notifications: createNotificationsApi(rawCloudClient),
-    signatures: createSignaturesApi(endpointTransport, options),
+    signatures: createSignaturesApi(rawCloudClient, options),
     profileMedia: createProfileMediaApi(options),
     organizationMedia: createOrganizationMediaApi(options),
     signingCertificates: createSigningCertificatesApi(rawCloudClient),
@@ -677,15 +681,12 @@ export function createCloudApiClient(
     labSetup: createLabSetupApi(rawCloudClient),
     nonConformances: createNonConformancesApi(rawCloudClient),
     capas: createCapasApi(rawCloudClient),
-    proficiencyTests: createProficiencyTestsApi(rawCloudClient),
+    proficiencyTests: createProficiencyTestsApi(endpointTransport, options),
     spc: createSpcApi(rawCloudClient),
-    competences: createCompetencesApi(rawCloudClient),
-    trainingRecords: createTrainingRecordsApi(rawCloudClient),
-    calibrationRequests: createCalibrationRequestsApi(
-      endpointTransport,
-      options,
-    ),
-    visits: createVisitsApi(endpointTransport, options),
+    competences: createCompetencesApi(endpointTransport, options),
+    trainingRecords: createTrainingRecordsApi(endpointTransport, options),
+    calibrationRequests: createCalibrationRequestsApi(rawCloudClient),
+    visits: createVisitsApi(rawCloudClient),
   };
 }
 

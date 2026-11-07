@@ -1,30 +1,20 @@
+import type {
+  CompetenceListItem,
+  CompetencesMatrixResponse,
+  TrainingRecordListItem,
+  TrainingType as ContractTrainingType,
+} from '@calibra-facil/contracts'
 import type { CompetenceStatus } from '@calibra-facil/schemas/machines'
 
 export type { CompetenceStatus }
 
-export type CompetenceRow = {
-  id: number
-  userId: string
-  userName: string
-  assetTypeId: number | null
-  assetTypeName: string | null
-  scopeDescription: string
-  status: CompetenceStatus
-  qualifiedAt: string | null
-  expiresAt: string | null
-  notes: string | null
-  createdAt: string
-}
-
-export type CompetencesListData = {
-  data: Array<CompetenceRow>
-  pagination: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
-  }
-}
+// The competence and training DTOs are the contract's
+// (`@calibra-facil/contracts`, `endpoints/competences.ts` and
+// `endpoints/training-records.ts`); the names below are the views the pages use.
+export type CompetenceRow = CompetenceListItem
+export type CompetencesMatrixData = CompetencesMatrixResponse
+export type TrainingType = ContractTrainingType
+export type AssignableTrainingRecord = TrainingRecordListItem
 
 export type CompetencesListQueryInput = {
   organizationId: string
@@ -32,87 +22,3 @@ export type CompetencesListQueryInput = {
   limit: number
   statusFilter: CompetenceStatus | ''
 }
-
-export type CompetencesMatrixData = {
-  technicians: Array<{ userId: string; userName: string; role: string }>
-  assetTypes: Array<{ id: number; name: string }>
-  competences: Array<{
-    id: number
-    userId: string
-    assetTypeId: number | null
-    status: CompetenceStatus
-    expiresAt: string | null
-  }>
-}
-
-export type TrainingType = 'internal' | 'external' | 'ojt' | 'proficiency_test'
-
-type CompetenceTrainingRecord = {
-  id: number
-  title: string
-  type: string
-  status: string
-  provider?: string | null
-  description?: string | null
-  startDate: string
-  endDate: string | null
-  hoursCompleted?: number | null
-  score?: number | null
-  passingScore?: number | null
-  passed?: boolean | null
-}
-
-export type CompetenceDetail = {
-  id: number
-  organizationId: string
-  userId: string
-  userName: string | null
-  userEmail: string | null
-  assetTypeId: number | null
-  assetTypeName: string | null
-  scopeDescription: string
-  status: CompetenceStatus
-  qualifiedAt: string | null
-  expiresAt: string | null
-  certificateR2Key: string | null
-  certificateFileName: string | null
-  notes: string | null
-  requestedBy: string
-  requestedByName: string | null
-  evaluatedBy: string | null
-  evaluatedByName: string | null
-  approvedBy: string | null
-  approvedByName: string | null
-  createdAt: string
-  updatedAt: string
-  trainingRecords: Array<CompetenceTrainingRecord>
-}
-
-export type AssignableTrainingRecord = {
-  id: number
-  userId: string
-  competenceId: number | null
-  title: string
-  type: TrainingType
-  status: string
-  provider: string | null
-  startDate: string
-  endDate: string | null
-  hoursCompleted: number | null
-}
-
-export type AssignableTrainingRecordsData = {
-  data: Array<AssignableTrainingRecord>
-}
-
-type CompetenceAuditLogRecord = {
-  id: number
-  action: string
-  changes: Record<string, unknown> | null
-  performedBy: string
-  performedByName: string
-  performedAt: string
-  reason: string | null
-}
-
-export type CompetenceAuditLogData = Array<CompetenceAuditLogRecord>

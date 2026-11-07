@@ -1,13 +1,33 @@
-import type { CalibrationRequestStatus } from '@calibra-facil/contracts'
+import type { Address } from '@calibra-facil/shared/address'
+import type { CalibrationRequestStatus } from '@calibra-facil/schemas/machines'
 
-// The calibration request DTOs are the contract's (`@calibra-facil/contracts`,
-// `endpoints/calibration-requests.ts`).
-export type {
-  CalibrationRequestDetail,
-  CalibrationRequestItem,
-  CalibrationRequestListItem,
-  CalibrationRequestStatus,
-} from '@calibra-facil/contracts'
+export type { CalibrationRequestStatus }
+
+export type CalibrationRequestListItem = {
+  id: number
+  status: CalibrationRequestStatus
+  observations: string | null
+  requestedDueDate: string | null
+  submittedAt: string
+  reviewedAt: string | null
+  approvedAt: string | null
+  rejectedAt: string | null
+  convertedAt: string | null
+  customerId: number
+  customerName: string
+  submittedByName: string | null
+  itemCount: number
+}
+
+export type CalibrationRequestsListData = {
+  data: Array<CalibrationRequestListItem>
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
 
 export type CalibrationRequestsListQueryInput = {
   organizationId: string
@@ -15,6 +35,52 @@ export type CalibrationRequestsListQueryInput = {
   limit: number
   search: string
   statusFilter: CalibrationRequestStatus | ''
+}
+
+export type CalibrationRequestItem = {
+  id: number
+  assetId: number
+  assetName: string
+  assetTag: string
+  assetSerialNumber: string
+  assetManufacturer: string | null
+  assetModel: string | null
+  assetTypeId: number | null
+  assetTypeName: string | null
+  convertedJobId: number | null
+  convertedJobCode: string | null
+  convertedJobStatus: string | null
+  convertedServiceName: string | null
+}
+
+export type CalibrationRequestDetail = {
+  id: number
+  status: CalibrationRequestStatus
+  observations: string | null
+  internalNotes: string | null
+  requestedDueDate: string | null
+  deliveryMethod: 'dropoff' | 'carrier' | 'onsite'
+  onsiteAddress: Address | null
+  preferredVisitDate: string | null
+  submittedAt: string
+  reviewedAt: string | null
+  approvedAt: string | null
+  rejectedAt: string | null
+  rejectionReason: string | null
+  convertedAt: string | null
+  customerId: number
+  customerName: string
+  submittedBy: string
+  submittedByName: string | null
+  reviewedBy: string | null
+  reviewedByName: string | null
+  approvedBy: string | null
+  approvedByName: string | null
+  rejectedBy: string | null
+  rejectedByName: string | null
+  convertedBy: string | null
+  convertedByName: string | null
+  items: Array<CalibrationRequestItem>
 }
 
 export type RequestConversionService = {

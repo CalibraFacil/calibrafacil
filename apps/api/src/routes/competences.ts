@@ -1,5 +1,7 @@
 import { createRouter } from "../server/router";
+import { competenceEndpoints } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { conflict, forbidden, invalid, notFound } from "../lib/domain-errors";
 import { requireLabCompetence } from "../lib/competence-access";
@@ -13,14 +15,7 @@ import {
   member,
   assetType,
 } from "@calibra-facil/db/schema";
-import {
-  CreateCompetenceRequestSchema,
-  UpdatePersonnelCompetenceSchema,
-  AssignTrainingSchema,
-  EvaluateCompetenceSchema,
-  CancelCompetenceSchema,
-  ListPersonnelCompetenceQuerySchema,
-} from "@calibra-facil/schemas";
+import { UpdatePersonnelCompetenceSchema } from "@calibra-facil/schemas";
 import {
   withLabPermission,
   type AuthVariables,
@@ -32,6 +27,8 @@ import {
 import { eq, and, isNull, desc, count, lte, gte, inArray } from "drizzle-orm";
 import { COMPETENCE_MACHINE } from "@calibra-facil/schemas/machines";
 
+const PREFIX = "/api/competences";
+
 /**
  * Competences Router - ISO 17025:2017 Clause 6.2.3 (Personnel Competence)
  *
@@ -39,96 +36,104 @@ import { COMPETENCE_MACHINE } from "@calibra-facil/schemas/machines";
  * REQUESTED/TRAINING_ASSIGNED/IN_TRAINING/PENDING_EVALUATION → CANCELLED
  * ACTIVE → SUSPENDED (manual) / EXPIRED (auto) → ACTIVE (renew)
  */
-export const competencesRouter = createRouter<{ Variables: AuthVariables }>()
-  // =========================================================================
-  // GET / - List competences with pagination and filtering
-  // =========================================================================
-  .get(
-    "/",
-    ...withLabPermission({ competence: ["read"] }),
-    zValidator("query", ListPersonnelCompetenceQuerySchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const { page, limit, userId, assetTypeId, status, expiringWithinDays } =
-        c.req.valid("query");
-      const offset = (page - 1) * limit;
+export const competencesRouter = createRouter<{ Variables: AuthVariables }>();
 
-      const conditions = [
-        eq(personnelCompetence.organizationId, memberData.organizationId),
-        isNull(personnelCompetence.deletedAt),
-      ];
+// =========================================================================
+// GET / - List competences with pagination and filtering
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.list,
+  withLabPermission({ competence: ["read"] }),
+  async (
+    c,
+    { query: { page, limit, userId, assetTypeId, status, expiringWithinDays } },
+  ) => {
+    const memberData = c.get("member");
+    const offset = (page - 1) * limit;
 
-      if (userId) {
-        conditions.push(eq(personnelCompetence.userId, userId));
-      }
-      if (assetTypeId) {
-        conditions.push(eq(personnelCompetence.assetTypeId, assetTypeId));
-      }
-      if (status) {
-        conditions.push(eq(personnelCompetence.status, status));
-      }
-      if (expiringWithinDays) {
-        const futureDate = new Date();
-        futureDate.setDate(futureDate.getDate() + expiringWithinDays);
-        conditions.push(
-          and(
-            eq(personnelCompetence.status, "ACTIVE"),
-            lte(personnelCompetence.expiresAt, futureDate),
-            gte(personnelCompetence.expiresAt, new Date()),
-          )!,
-        );
-      }
+    const conditions = [
+      eq(personnelCompetence.organizationId, memberData.organizationId),
+      isNull(personnelCompetence.deletedAt),
+    ];
 
-      const where = and(...conditions);
+    if (userId) {
+      conditions.push(eq(personnelCompetence.userId, userId));
+    }
+    if (assetTypeId) {
+      conditions.push(eq(personnelCompetence.assetTypeId, assetTypeId));
+    }
+    if (status) {
+      conditions.push(eq(personnelCompetence.status, status));
+    }
+    if (expiringWithinDays) {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + expiringWithinDays);
+      conditions.push(
+        and(
+          eq(personnelCompetence.status, "ACTIVE"),
+          lte(personnelCompetence.expiresAt, futureDate),
+          gte(personnelCompetence.expiresAt, new Date()),
+        )!,
+      );
+    }
 
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [data, [totalResult]] = await Promise.all([
-          tx
-            .select({
-              id: personnelCompetence.id,
-              userId: personnelCompetence.userId,
-              userName: user.name,
-              assetTypeId: personnelCompetence.assetTypeId,
-              assetTypeName: assetType.name,
-              scopeDescription: personnelCompetence.scopeDescription,
-              status: personnelCompetence.status,
-              qualifiedAt: personnelCompetence.qualifiedAt,
-              expiresAt: personnelCompetence.expiresAt,
-              notes: personnelCompetence.notes,
-              createdAt: personnelCompetence.createdAt,
-            })
-            .from(personnelCompetence)
-            .innerJoin(user, eq(personnelCompetence.userId, user.id))
-            .leftJoin(
-              assetType,
-              eq(personnelCompetence.assetTypeId, assetType.id),
-            )
-            .where(where)
-            .orderBy(desc(personnelCompetence.createdAt))
-            .limit(limit)
-            .offset(offset),
-          tx.select({ total: count() }).from(personnelCompetence).where(where),
-        ]);
+    const where = and(...conditions);
 
-        const total = totalResult?.total ?? 0;
+    return await orgDb(memberData.organizationId).transaction(async (tx) => {
+      const [data, [totalResult]] = await Promise.all([
+        tx
+          .select({
+            id: personnelCompetence.id,
+            userId: personnelCompetence.userId,
+            userName: user.name,
+            assetTypeId: personnelCompetence.assetTypeId,
+            assetTypeName: assetType.name,
+            scopeDescription: personnelCompetence.scopeDescription,
+            status: personnelCompetence.status,
+            qualifiedAt: personnelCompetence.qualifiedAt,
+            expiresAt: personnelCompetence.expiresAt,
+            notes: personnelCompetence.notes,
+            createdAt: personnelCompetence.createdAt,
+          })
+          .from(personnelCompetence)
+          .innerJoin(user, eq(personnelCompetence.userId, user.id))
+          .leftJoin(
+            assetType,
+            eq(personnelCompetence.assetTypeId, assetType.id),
+          )
+          .where(where)
+          .orderBy(desc(personnelCompetence.createdAt))
+          .limit(limit)
+          .offset(offset),
+        tx.select({ total: count() }).from(personnelCompetence).where(where),
+      ]);
 
-        return c.json({
-          data,
-          pagination: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-        });
-      });
-    },
-  )
+      const total = totalResult?.total ?? 0;
 
-  // =========================================================================
-  // GET /matrix - Competence matrix view (technicians × asset types)
-  // =========================================================================
-  .get("/matrix", ...withLabPermission({ competence: ["read"] }), async (c) => {
+      return {
+        data,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    });
+  },
+);
+
+// =========================================================================
+// GET /matrix - Competence matrix view (technicians × asset types)
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.matrix,
+  withLabPermission({ competence: ["read"] }),
+  async (c) => {
     const memberData = c.get("member");
 
     // Get all technician/admin/owner members
@@ -171,56 +176,62 @@ export const competencesRouter = createRouter<{ Variables: AuthVariables }>()
           ),
         );
 
-      return c.json({ technicians, assetTypes, competences });
+      return { technicians, assetTypes, competences };
     });
-  })
+  },
+);
 
-  // =========================================================================
-  // GET /:id/label - Get competence label by ID
-  // =========================================================================
-  .get(
-    "/:id/label",
-    ...withLabPermission({ competence: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [comp] = await tx
-          .select({
-            id: personnelCompetence.id,
-            label: user.name,
-          })
-          .from(personnelCompetence)
-          .innerJoin(user, eq(personnelCompetence.userId, user.id))
-          .where(
-            and(
-              eq(personnelCompetence.id, id),
-              eq(personnelCompetence.organizationId, memberData.organizationId),
-              isNull(personnelCompetence.deletedAt),
-            ),
-          )
-          .limit(1);
-
-        if (!comp) {
-          throw notFound("not_found", "Competência não encontrada");
-        }
-
-        return c.json(comp);
-      });
-    },
-  )
-
-  // =========================================================================
-  // GET /:id - Single competence with training records
-  // =========================================================================
-  .get("/:id", ...withLabPermission({ competence: ["read"] }), async (c) => {
+// =========================================================================
+// GET /:id/label - Get competence label by ID
+// =========================================================================
+competencesRouter.get(
+  "/:id/label",
+  ...withLabPermission({ competence: ["read"] }),
+  async (c) => {
     const memberData = c.get("member");
     const id = parseInt(c.req.param("id"), 10);
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    return await orgDb(memberData.organizationId).transaction(async (tx) => {
+      const [comp] = await tx
+        .select({
+          id: personnelCompetence.id,
+          label: user.name,
+        })
+        .from(personnelCompetence)
+        .innerJoin(user, eq(personnelCompetence.userId, user.id))
+        .where(
+          and(
+            eq(personnelCompetence.id, id),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
+            isNull(personnelCompetence.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!comp) {
+        throw notFound("not_found", "Competência não encontrada");
+      }
+
+      return c.json(comp);
+    });
+  },
+);
+
+// =========================================================================
+// GET /:id - Single competence with training records
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.get,
+  withLabPermission({ competence: ["read"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
 
     if (isNaN(id)) {
       throw invalid("invalid_request", "ID inválido");
@@ -311,7 +322,7 @@ export const competencesRouter = createRouter<{ Variables: AuthVariables }>()
         }
       }
 
-      return c.json({
+      return {
         ...comp,
         userName: userData?.name ?? null,
         userEmail: userData?.email ?? null,
@@ -324,748 +335,460 @@ export const competencesRouter = createRouter<{ Variables: AuthVariables }>()
           ? (userNames[comp.approvedBy] ?? null)
           : null,
         trainingRecords: trainings,
-      });
+      };
     });
-  })
+  },
+);
 
-  // =========================================================================
-  // POST / - Create competence request (status=REQUESTED)
-  // =========================================================================
-  .post(
-    "/",
-    ...withLabPermission({ competence: ["create"] }),
-    zValidator("json", CreateCompetenceRequestSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
+// =========================================================================
+// POST / - Create competence request (status=REQUESTED)
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.create,
+  withLabPermission({ competence: ["create"] }),
+  async (c, { body: input }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
 
-      // Validate user is a member of the org
-      const created = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [targetMember] = await ctx.o
-            .select()
-            .from(member)
+    // Validate user is a member of the org
+    const created = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [targetMember] = await ctx.o
+          .select()
+          .from(member)
+          .where(
+            and(
+              eq(member.userId, input.userId),
+              eq(member.organizationId, memberData.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!targetMember) {
+          throw invalid(
+            "invalid_request",
+            "Usuário não é membro desta organização",
+          );
+        }
+
+        const [row] = await ctx.o
+          .insert(personnelCompetence)
+          .values({
+            organizationId: memberData.organizationId,
+            userId: input.userId,
+            assetTypeId: input.assetTypeId ?? null,
+            scopeDescription: input.scopeDescription,
+            status: "REQUESTED",
+            requestedBy: session.user.id,
+            createdBy: session.user.id,
+          })
+          .returning();
+
+        if (!row) {
+          throw new Error("Falha ao criar solicitação");
+        }
+
+        // Audit log
+        await ctx.audit("competence", row.id, {
+          action: "create",
+          changes: {
+            initial: {
+              userId: input.userId,
+              assetTypeId: input.assetTypeId,
+              scopeDescription: input.scopeDescription,
+            },
+          },
+        });
+
+        // Notify admins, once the request is committed (the notification reads it).
+        ctx.afterCommit(() =>
+          notifyCompetenceRequested(
+            row.id,
+            memberData.organizationId,
+            session.user.id,
+          ),
+        );
+
+        return row;
+      },
+    );
+    return created;
+  },
+);
+
+// =========================================================================
+// PUT /:id - Update competence details
+// =========================================================================
+competencesRouter.put(
+  "/:id",
+  ...withLabPermission({ competence: ["update"] }),
+  zValidator("json", UpdatePersonnelCompetenceSchema),
+  async (c) => {
+    const memberData = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
+    const input = c.req.valid("json");
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    const result = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        await requireLabCompetence(id, memberData.organizationId, ctx.o);
+
+        const updateData: Record<string, unknown> = {};
+        if (input.scopeDescription !== undefined)
+          updateData.scopeDescription = input.scopeDescription;
+        if (input.notes !== undefined) updateData.notes = input.notes;
+        if (input.expiresAt !== undefined)
+          updateData.expiresAt = input.expiresAt
+            ? new Date(input.expiresAt)
+            : null;
+
+        const [updated] = await ctx.o
+          .update(personnelCompetence)
+          .set(updateData)
+          .where(eq(personnelCompetence.id, id))
+          .returning();
+
+        await ctx.audit("competence", id, {
+          action: "update",
+          changes: updateData,
+        });
+
+        return updated;
+      },
+    );
+
+    return c.json(result);
+  },
+);
+
+// =========================================================================
+// POST /:id/assign-training - REQUESTED → TRAINING_ASSIGNED
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.assignTraining,
+  withLabPermission({ competence: ["update"] }),
+  async (c, { params, body: input }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    const assigned = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabCompetence(
+          id,
+          memberData.organizationId,
+          ctx.o,
+        );
+
+        if (
+          !COMPETENCE_MACHINE.canTransition(existing.status, "assign_training")
+        ) {
+          throw invalid(
+            "invalid_request",
+            "Treinamento só pode ser atribuído no status REQUESTED ou PENDING_EVALUATION",
+          );
+        }
+
+        // userId is nullable since migration 0083. A live (non-soft-deleted)
+        // competence always has an owning user, but guard the type: a competence
+        // whose user was deleted cannot receive training assignments.
+        if (!existing.userId) {
+          throw invalid("invalid_request", "Competência sem usuário associado");
+        }
+
+        const existingUserId = existing.userId;
+
+        // Link training records to this competence (must be same org + same user)
+        for (const trId of input.trainingRecordIds) {
+          const result = await ctx.o
+            .update(trainingRecord)
+            .set({ competenceId: id })
             .where(
               and(
-                eq(member.userId, input.userId),
-                eq(member.organizationId, memberData.organizationId),
+                eq(trainingRecord.id, trId),
+                eq(trainingRecord.organizationId, memberData.organizationId),
+                eq(trainingRecord.userId, existingUserId),
+                isNull(trainingRecord.deletedAt),
               ),
             )
-            .limit(1);
+            .returning();
 
-          if (!targetMember) {
+          if (result.length === 0) {
+            // Thrown, not returned: a return would commit the records linked
+            // in the earlier iterations (roadmap 2 D4).
             throw invalid(
-              "invalid_request",
-              "Usuário não é membro desta organização",
+              "training_record_mismatch",
+              `Registro de treinamento ${trId} não encontrado ou não pertence ao mesmo técnico`,
             );
           }
+        }
 
-          const [row] = await ctx.o
-            .insert(personnelCompetence)
-            .values({
-              organizationId: memberData.organizationId,
-              userId: input.userId,
-              assetTypeId: input.assetTypeId ?? null,
-              scopeDescription: input.scopeDescription,
-              status: "REQUESTED",
-              requestedBy: session.user.id,
-              createdBy: session.user.id,
-            })
-            .returning();
-
-          if (!row) {
-            throw new Error("Falha ao criar solicitação");
-          }
-
-          // Audit log
-          await ctx.audit("competence", row.id, {
-            action: "create",
-            changes: {
-              initial: {
-                userId: input.userId,
-                assetTypeId: input.assetTypeId,
-                scopeDescription: input.scopeDescription,
-              },
-            },
-          });
-
-          // Notify admins, once the request is committed (the notification reads it).
-          ctx.afterCommit(() =>
-            notifyCompetenceRequested(
-              row.id,
-              memberData.organizationId,
-              session.user.id,
-            ),
-          );
-
-          return row;
-        },
-      );
-      return c.json(created, 201);
-    },
-  )
-
-  // =========================================================================
-  // PUT /:id - Update competence details
-  // =========================================================================
-  .put(
-    "/:id",
-    ...withLabPermission({ competence: ["update"] }),
-    zValidator("json", UpdatePersonnelCompetenceSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      const input = c.req.valid("json");
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const result = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          await requireLabCompetence(id, memberData.organizationId, ctx.o);
-
-          const updateData: Record<string, unknown> = {};
-          if (input.scopeDescription !== undefined)
-            updateData.scopeDescription = input.scopeDescription;
-          if (input.notes !== undefined) updateData.notes = input.notes;
-          if (input.expiresAt !== undefined)
-            updateData.expiresAt = input.expiresAt
-              ? new Date(input.expiresAt)
-              : null;
-
-          const [updated] = await ctx.o
-            .update(personnelCompetence)
-            .set(updateData)
-            .where(eq(personnelCompetence.id, id))
-            .returning();
-
-          await ctx.audit("competence", id, {
-            action: "update",
-            changes: updateData,
-          });
-
-          return updated;
-        },
-      );
-
-      return c.json(result);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/assign-training - REQUESTED → TRAINING_ASSIGNED
-  // =========================================================================
-  .post(
-    "/:id/assign-training",
-    ...withLabPermission({ competence: ["update"] }),
-    zValidator("json", AssignTrainingSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      const input = c.req.valid("json");
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const assigned = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabCompetence(
-            id,
-            memberData.organizationId,
-            ctx.o,
-          );
-
-          if (
-            !COMPETENCE_MACHINE.canTransition(
+        const [updated] = await ctx.o
+          .update(personnelCompetence)
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
               existing.status,
               "assign_training",
-            )
-          ) {
-            throw invalid(
-              "invalid_request",
-              "Treinamento só pode ser atribuído no status REQUESTED ou PENDING_EVALUATION",
-            );
-          }
-
-          // userId is nullable since migration 0083. A live (non-soft-deleted)
-          // competence always has an owning user, but guard the type: a competence
-          // whose user was deleted cannot receive training assignments.
-          if (!existing.userId) {
-            throw invalid(
-              "invalid_request",
-              "Competência sem usuário associado",
-            );
-          }
-
-          const existingUserId = existing.userId;
-
-          // Link training records to this competence (must be same org + same user)
-          for (const trId of input.trainingRecordIds) {
-            const result = await ctx.o
-              .update(trainingRecord)
-              .set({ competenceId: id })
-              .where(
-                and(
-                  eq(trainingRecord.id, trId),
-                  eq(trainingRecord.organizationId, memberData.organizationId),
-                  eq(trainingRecord.userId, existingUserId),
-                  isNull(trainingRecord.deletedAt),
-                ),
-              )
-              .returning();
-
-            if (result.length === 0) {
-              // Thrown, not returned: a return would commit the records linked
-              // in the earlier iterations (roadmap 2 D4).
-              throw invalid(
-                "training_record_mismatch",
-                `Registro de treinamento ${trId} não encontrado ou não pertence ao mesmo técnico`,
-              );
-            }
-          }
-
-          const [updated] = await ctx.o
-            .update(personnelCompetence)
-            .set({
-              status: COMPETENCE_MACHINE.requireTargetOf(
-                existing.status,
-                "assign_training",
-              ),
-            })
-            .where(
-              and(
-                eq(personnelCompetence.id, id),
-                eq(personnelCompetence.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!updated) {
-            // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
-            throw conflict(
-              "status_transition_conflict",
-              "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
-            );
-          }
-
-          await ctx.audit("competence", id, {
-            action: "assign_training",
-            changes: {
-              status: { old: existing.status, new: "TRAINING_ASSIGNED" },
-              trainingRecordIds: input.trainingRecordIds,
-            },
-          });
-
-          return updated;
-        },
-      );
-      return c.json(assigned);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/start-training - TRAINING_ASSIGNED → IN_TRAINING
-  // =========================================================================
-  .post(
-    "/:id/start-training",
-    ...withLabPermission({ competence: ["update"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const result = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabCompetence(
-            id,
-            memberData.organizationId,
-            ctx.o,
+            ),
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
           );
+        }
 
-          if (
-            !COMPETENCE_MACHINE.canTransition(existing.status, "start_training")
-          ) {
-            throw invalid(
-              "invalid_request",
-              "Treinamento só pode ser iniciado no status TRAINING_ASSIGNED",
-            );
-          }
+        await ctx.audit("competence", id, {
+          action: "assign_training",
+          changes: {
+            status: { old: existing.status, new: "TRAINING_ASSIGNED" },
+            trainingRecordIds: input.trainingRecordIds,
+          },
+        });
 
-          const [updated] = await ctx.o
-            .update(personnelCompetence)
-            .set({
-              status: COMPETENCE_MACHINE.requireTargetOf(
-                existing.status,
-                "start_training",
-              ),
-            })
-            .where(
-              and(
-                eq(personnelCompetence.id, id),
-                eq(personnelCompetence.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!updated) {
-            // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
-            throw conflict(
-              "status_transition_conflict",
-              "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
-            );
-          }
+        return updated;
+      },
+    );
+    return assigned;
+  },
+);
 
-          await ctx.audit("competence", id, {
-            action: "start_training",
-            changes: {
-              status: { old: "TRAINING_ASSIGNED", new: "IN_TRAINING" },
-            },
-          });
+// =========================================================================
+// POST /:id/start-training - TRAINING_ASSIGNED → IN_TRAINING
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.startTraining,
+  withLabPermission({ competence: ["update"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
 
-          return updated;
-        },
-      );
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
 
-      return c.json(result);
-    },
-  )
+    const result = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabCompetence(
+          id,
+          memberData.organizationId,
+          ctx.o,
+        );
 
-  // =========================================================================
-  // POST /:id/complete-training - IN_TRAINING → PENDING_EVALUATION
-  // =========================================================================
-  .post(
-    "/:id/complete-training",
-    ...withLabPermission({ competence: ["update"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const result = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabCompetence(
-            id,
-            memberData.organizationId,
-            ctx.o,
+        if (
+          !COMPETENCE_MACHINE.canTransition(existing.status, "start_training")
+        ) {
+          throw invalid(
+            "invalid_request",
+            "Treinamento só pode ser iniciado no status TRAINING_ASSIGNED",
           );
+        }
 
-          if (
-            !COMPETENCE_MACHINE.canTransition(
+        const [updated] = await ctx.o
+          .update(personnelCompetence)
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "start_training",
+            ),
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
+
+        await ctx.audit("competence", id, {
+          action: "start_training",
+          changes: {
+            status: { old: "TRAINING_ASSIGNED", new: "IN_TRAINING" },
+          },
+        });
+
+        return updated;
+      },
+    );
+
+    return result;
+  },
+);
+
+// =========================================================================
+// POST /:id/complete-training - IN_TRAINING → PENDING_EVALUATION
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.completeTraining,
+  withLabPermission({ competence: ["update"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    const result = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabCompetence(
+          id,
+          memberData.organizationId,
+          ctx.o,
+        );
+
+        if (
+          !COMPETENCE_MACHINE.canTransition(
+            existing.status,
+            "complete_training",
+          )
+        ) {
+          throw invalid(
+            "invalid_request",
+            "Treinamento só pode ser concluído no status IN_TRAINING",
+          );
+        }
+
+        const [updated] = await ctx.o
+          .update(personnelCompetence)
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
               existing.status,
               "complete_training",
-            )
-          ) {
-            throw invalid(
-              "invalid_request",
-              "Treinamento só pode ser concluído no status IN_TRAINING",
-            );
-          }
-
-          const [updated] = await ctx.o
-            .update(personnelCompetence)
-            .set({
-              status: COMPETENCE_MACHINE.requireTargetOf(
-                existing.status,
-                "complete_training",
-              ),
-            })
-            .where(
-              and(
-                eq(personnelCompetence.id, id),
-                eq(personnelCompetence.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!updated) {
-            // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
-            throw conflict(
-              "status_transition_conflict",
-              "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
-            );
-          }
-
-          await ctx.audit("competence", id, {
-            action: "complete_training",
-            changes: {
-              status: { old: "IN_TRAINING", new: "PENDING_EVALUATION" },
-            },
-          });
-
-          return updated;
-        },
-      );
-
-      return c.json(result);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/evaluate - PENDING_EVALUATION → ACTIVE or back to TRAINING_ASSIGNED
-  // =========================================================================
-  .post(
-    "/:id/evaluate",
-    ...withLabPermission({ competence: ["evaluate"] }),
-    zValidator("json", EvaluateCompetenceSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      const input = c.req.valid("json");
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const updated = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabCompetence(
-            id,
-            memberData.organizationId,
-            ctx.o,
+            ),
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
           );
+        }
 
-          if (!COMPETENCE_MACHINE.canTransition(existing.status, "evaluate")) {
-            throw invalid(
-              "invalid_request",
-              "Avaliação só pode ser feita no status PENDING_EVALUATION",
-            );
-          }
+        await ctx.audit("competence", id, {
+          action: "complete_training",
+          changes: {
+            status: { old: "IN_TRAINING", new: "PENDING_EVALUATION" },
+          },
+        });
 
-          // Separation of duties (ISO/IEC 17025 §6.2): nobody evaluates,
-          // approves or rejects their own competence. `userId` is the person
-          // being qualified; the evaluator must be someone else.
-          if (existing.userId === session.user.id) {
-            throw forbidden(
-              "self_approval_blocked",
-              "Separação de responsabilidades (ISO/IEC 17025): ninguém pode avaliar a própria competência. Solicite a avaliação a outro membro autorizado.",
-            );
-          }
+        return updated;
+      },
+    );
 
-          if (input.passed) {
-            // Approve → ACTIVE
-            const qualifiedAt = input.qualifiedAt
-              ? new Date(input.qualifiedAt)
-              : new Date();
-            const expiresAt = input.expiresAt
-              ? new Date(input.expiresAt)
-              : null;
+    return result;
+  },
+);
 
-            const [approved] = await ctx.o
-              .update(personnelCompetence)
-              .set({
-                status: COMPETENCE_MACHINE.requireTransition(
-                  existing.status,
-                  "evaluate",
-                  "ACTIVE",
-                ),
-                qualifiedAt,
-                expiresAt,
-                notes: input.notes ?? existing.notes,
-                evaluatedBy: session.user.id,
-                approvedBy: session.user.id,
-              })
-              .where(
-                and(
-                  eq(personnelCompetence.id, id),
-                  eq(personnelCompetence.status, existing.status),
-                ),
-              )
-              .returning();
-            if (!approved) {
-              // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
-              throw conflict(
-                "status_transition_conflict",
-                "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
-              );
-            }
+// =========================================================================
+// POST /:id/evaluate - PENDING_EVALUATION → ACTIVE or back to TRAINING_ASSIGNED
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.evaluate,
+  withLabPermission({ competence: ["evaluate"] }),
+  async (c, { params, body: input }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
+    const id = parseInt(params.id, 10);
 
-            await ctx.audit("competence", id, {
-              action: "approve",
-              changes: {
-                status: { old: "PENDING_EVALUATION", new: "ACTIVE" },
-                passed: true,
-                qualifiedAt: qualifiedAt.toISOString(),
-                expiresAt: expiresAt?.toISOString() ?? null,
-              },
-              reason: input.notes ?? null,
-            });
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
 
-            // Notify technician, once the approval is committed (the notification reads it).
-            ctx.afterCommit(() =>
-              notifyCompetenceApproved(
-                id,
-                memberData.organizationId,
-                session.user.id,
-              ),
-            );
+    const updated = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabCompetence(
+          id,
+          memberData.organizationId,
+          ctx.o,
+        );
 
-            return approved;
-          } else {
-            // Reject → back to TRAINING_ASSIGNED (needs more training)
-            const [rejected] = await ctx.o
-              .update(personnelCompetence)
-              .set({
-                status: COMPETENCE_MACHINE.requireTransition(
-                  existing.status,
-                  "evaluate",
-                  "TRAINING_ASSIGNED",
-                ),
-                notes: input.notes ?? existing.notes,
-                evaluatedBy: session.user.id,
-              })
-              .where(
-                and(
-                  eq(personnelCompetence.id, id),
-                  eq(personnelCompetence.status, existing.status),
-                ),
-              )
-              .returning();
-            if (!rejected) {
-              // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
-              throw conflict(
-                "status_transition_conflict",
-                "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
-              );
-            }
-
-            await ctx.audit("competence", id, {
-              action: "reject",
-              changes: {
-                status: {
-                  old: "PENDING_EVALUATION",
-                  new: "TRAINING_ASSIGNED",
-                },
-                passed: false,
-              },
-              reason: input.notes ?? null,
-            });
-
-            return rejected;
-          }
-        },
-      );
-      return c.json(updated);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/cancel - pre-active states → CANCELLED
-  // =========================================================================
-  .post(
-    "/:id/cancel",
-    ...withLabPermission({ competence: ["update"] }),
-    zValidator("json", CancelCompetenceSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      const input = c.req.valid("json");
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const result = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabCompetence(
-            id,
-            memberData.organizationId,
-            ctx.o,
+        if (!COMPETENCE_MACHINE.canTransition(existing.status, "evaluate")) {
+          throw invalid(
+            "invalid_request",
+            "Avaliação só pode ser feita no status PENDING_EVALUATION",
           );
+        }
 
-          if (!COMPETENCE_MACHINE.canTransition(existing.status, "cancel")) {
-            throw invalid(
-              "invalid_request",
-              "Só é possível cancelar competências em andamento antes da ativação",
-            );
-          }
-
-          const [updated] = await ctx.o
-            .update(personnelCompetence)
-            .set({
-              status: COMPETENCE_MACHINE.requireTargetOf(
-                existing.status,
-                "cancel",
-              ),
-              notes: input.notes ?? existing.notes,
-            })
-            .where(
-              and(
-                eq(personnelCompetence.id, id),
-                eq(personnelCompetence.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!updated) {
-            // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
-            throw conflict(
-              "status_transition_conflict",
-              "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
-            );
-          }
-
-          await ctx.audit("competence", id, {
-            action: "cancel",
-            changes: {
-              status: { old: existing.status, new: "CANCELLED" },
-            },
-            reason: input.notes ?? null,
-          });
-
-          return updated;
-        },
-      );
-
-      return c.json(result);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/suspend - ACTIVE → SUSPENDED
-  // =========================================================================
-  .post(
-    "/:id/suspend",
-    ...withLabPermission({ competence: ["update"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const result = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabCompetence(
-            id,
-            memberData.organizationId,
-            ctx.o,
+        // Separation of duties (ISO/IEC 17025 §6.2): nobody evaluates,
+        // approves or rejects their own competence. `userId` is the person
+        // being qualified; the evaluator must be someone else.
+        if (existing.userId === session.user.id) {
+          throw forbidden(
+            "self_approval_blocked",
+            "Separação de responsabilidades (ISO/IEC 17025): ninguém pode avaliar a própria competência. Solicite a avaliação a outro membro autorizado.",
           );
+        }
 
-          if (!COMPETENCE_MACHINE.canTransition(existing.status, "suspend")) {
-            throw invalid(
-              "invalid_request",
-              "Só é possível suspender competências ACTIVE",
-            );
-          }
-
-          const [updated] = await ctx.o
-            .update(personnelCompetence)
-            .set({
-              status: COMPETENCE_MACHINE.requireTargetOf(
-                existing.status,
-                "suspend",
-              ),
-            })
-            .where(
-              and(
-                eq(personnelCompetence.id, id),
-                eq(personnelCompetence.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!updated) {
-            // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
-            throw conflict(
-              "status_transition_conflict",
-              "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
-            );
-          }
-
-          await ctx.audit("competence", id, {
-            action: "suspend",
-            changes: { status: { old: "ACTIVE", new: "SUSPENDED" } },
-          });
-
-          return updated;
-        },
-      );
-
-      return c.json(result);
-    },
-  )
-
-  // =========================================================================
-  // POST /:id/renew - EXPIRED/SUSPENDED → ACTIVE (with new dates)
-  // =========================================================================
-  .post(
-    "/:id/renew",
-    ...withLabPermission({ competence: ["update"] }),
-    zValidator("json", EvaluateCompetenceSchema),
-    async (c) => {
-      const memberData = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      const input = c.req.valid("json");
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      const result = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabCompetence(
-            id,
-            memberData.organizationId,
-            ctx.o,
-          );
-
-          if (!COMPETENCE_MACHINE.canTransition(existing.status, "renew")) {
-            throw invalid(
-              "invalid_request",
-              "Só é possível renovar competências EXPIRED ou SUSPENDED",
-            );
-          }
-
-          // Separation of duties (ISO/IEC 17025 §6.2): renewing re-activates the
-          // competence and records the renewer as its approver, so the person
-          // being qualified cannot renew their own.
-          if (existing.userId === session.user.id) {
-            throw forbidden(
-              "self_approval_blocked",
-              "Separação de responsabilidades (ISO/IEC 17025): ninguém pode renovar a própria competência. Solicite a renovação a outro membro autorizado.",
-            );
-          }
-
+        if (input.passed) {
+          // Approve → ACTIVE
           const qualifiedAt = input.qualifiedAt
             ? new Date(input.qualifiedAt)
             : new Date();
           const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
 
-          const [updated] = await ctx.o
+          const [approved] = await ctx.o
             .update(personnelCompetence)
             .set({
-              status: COMPETENCE_MACHINE.requireTargetOf(
+              status: COMPETENCE_MACHINE.requireTransition(
                 existing.status,
-                "renew",
+                "evaluate",
+                "ACTIVE",
               ),
               qualifiedAt,
               expiresAt,
               notes: input.notes ?? existing.notes,
+              evaluatedBy: session.user.id,
               approvedBy: session.user.id,
             })
             .where(
@@ -1075,7 +798,7 @@ export const competencesRouter = createRouter<{ Variables: AuthVariables }>()
               ),
             )
             .returning();
-          if (!updated) {
+          if (!approved) {
             // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
             throw conflict(
               "status_transition_conflict",
@@ -1084,107 +807,396 @@ export const competencesRouter = createRouter<{ Variables: AuthVariables }>()
           }
 
           await ctx.audit("competence", id, {
-            action: "renew",
+            action: "approve",
             changes: {
-              status: { old: existing.status, new: "ACTIVE" },
+              status: { old: "PENDING_EVALUATION", new: "ACTIVE" },
+              passed: true,
               qualifiedAt: qualifiedAt.toISOString(),
               expiresAt: expiresAt?.toISOString() ?? null,
             },
             reason: input.notes ?? null,
           });
 
-          return updated;
-        },
-      );
+          // Notify technician, once the approval is committed (the notification reads it).
+          ctx.afterCommit(() =>
+            notifyCompetenceApproved(
+              id,
+              memberData.organizationId,
+              session.user.id,
+            ),
+          );
 
-      return c.json(result);
-    },
-  )
+          return approved;
+        } else {
+          // Reject → back to TRAINING_ASSIGNED (needs more training)
+          const [rejected] = await ctx.o
+            .update(personnelCompetence)
+            .set({
+              status: COMPETENCE_MACHINE.requireTransition(
+                existing.status,
+                "evaluate",
+                "TRAINING_ASSIGNED",
+              ),
+              notes: input.notes ?? existing.notes,
+              evaluatedBy: session.user.id,
+            })
+            .where(
+              and(
+                eq(personnelCompetence.id, id),
+                eq(personnelCompetence.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!rejected) {
+            // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
-  // =========================================================================
-  // DELETE /:id - Soft delete
-  // =========================================================================
-  .delete(
-    "/:id",
-    ...withLabPermission({ competence: ["delete"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+          await ctx.audit("competence", id, {
+            action: "reject",
+            changes: {
+              status: {
+                old: "PENDING_EVALUATION",
+                new: "TRAINING_ASSIGNED",
+              },
+              passed: false,
+            },
+            reason: input.notes ?? null,
+          });
 
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
+          return rejected;
+        }
+      },
+    );
+    return updated;
+  },
+);
 
-      await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
-        await requireLabCompetence(id, memberData.organizationId, ctx.o);
+// =========================================================================
+// POST /:id/cancel - pre-active states → CANCELLED
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.cancel,
+  withLabPermission({ competence: ["update"] }),
+  async (c, { params, body: input }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
 
-        await ctx.o
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    const result = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabCompetence(
+          id,
+          memberData.organizationId,
+          ctx.o,
+        );
+
+        if (!COMPETENCE_MACHINE.canTransition(existing.status, "cancel")) {
+          throw invalid(
+            "invalid_request",
+            "Só é possível cancelar competências em andamento antes da ativação",
+          );
+        }
+
+        const [updated] = await ctx.o
           .update(personnelCompetence)
-          .set({ deletedAt: new Date() })
-          .where(eq(personnelCompetence.id, id));
-
-        await ctx.audit("competence", id, {
-          action: "delete",
-          changes: { deletedAt: new Date().toISOString() },
-        });
-      });
-
-      return c.json({ message: "Competência removida" });
-    },
-  )
-
-  // =========================================================================
-  // GET /:id/audit-log - Audit log for a competence
-  // =========================================================================
-  .get(
-    "/:id/audit-log",
-    ...withLabPermission({ competence: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-
-      if (isNaN(id)) {
-        throw invalid("invalid_request", "ID inválido");
-      }
-
-      // Verify competence belongs to org
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [comp] = await tx
-          .select({ id: personnelCompetence.id })
-          .from(personnelCompetence)
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "cancel",
+            ),
+            notes: input.notes ?? existing.notes,
+          })
           .where(
             and(
               eq(personnelCompetence.id, id),
-              eq(personnelCompetence.organizationId, memberData.organizationId),
+              eq(personnelCompetence.status, existing.status),
             ),
           )
-          .limit(1);
-
-        if (!comp) {
-          throw notFound("not_found", "Competência não encontrada");
+          .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
         }
 
-        const logs = await tx
-          .select({
-            id: personnelCompetenceAuditLog.id,
-            action: personnelCompetenceAuditLog.action,
-            changes: personnelCompetenceAuditLog.changes,
-            performedBy: personnelCompetenceAuditLog.performedBy,
-            performedByName: user.name,
-            performedAt: personnelCompetenceAuditLog.performedAt,
-            reason: personnelCompetenceAuditLog.reason,
-          })
-          .from(personnelCompetenceAuditLog)
-          .leftJoin(user, eq(personnelCompetenceAuditLog.performedBy, user.id))
-          .where(eq(personnelCompetenceAuditLog.competenceId, id))
-          .orderBy(desc(personnelCompetenceAuditLog.performedAt));
+        await ctx.audit("competence", id, {
+          action: "cancel",
+          changes: {
+            status: { old: existing.status, new: "CANCELLED" },
+          },
+          reason: input.notes ?? null,
+        });
 
-        return c.json(
-          logs.map((log) => ({
-            ...log,
-            performedByName: log.performedByName ?? log.performedBy,
-          })),
+        return updated;
+      },
+    );
+
+    return result;
+  },
+);
+
+// =========================================================================
+// POST /:id/suspend - ACTIVE → SUSPENDED
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.suspend,
+  withLabPermission({ competence: ["update"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    const result = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabCompetence(
+          id,
+          memberData.organizationId,
+          ctx.o,
         );
+
+        if (!COMPETENCE_MACHINE.canTransition(existing.status, "suspend")) {
+          throw invalid(
+            "invalid_request",
+            "Só é possível suspender competências ACTIVE",
+          );
+        }
+
+        const [updated] = await ctx.o
+          .update(personnelCompetence)
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "suspend",
+            ),
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
+
+        await ctx.audit("competence", id, {
+          action: "suspend",
+          changes: { status: { old: "ACTIVE", new: "SUSPENDED" } },
+        });
+
+        return updated;
+      },
+    );
+
+    return result;
+  },
+);
+
+// =========================================================================
+// POST /:id/renew - EXPIRED/SUSPENDED → ACTIVE (with new dates)
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.renew,
+  withLabPermission({ competence: ["update"] }),
+  async (c, { params, body: input }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    const result = await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabCompetence(
+          id,
+          memberData.organizationId,
+          ctx.o,
+        );
+
+        if (!COMPETENCE_MACHINE.canTransition(existing.status, "renew")) {
+          throw invalid(
+            "invalid_request",
+            "Só é possível renovar competências EXPIRED ou SUSPENDED",
+          );
+        }
+
+        // Separation of duties (ISO/IEC 17025 §6.2): renewing re-activates the
+        // competence and records the renewer as its approver, so the person
+        // being qualified cannot renew their own.
+        if (existing.userId === session.user.id) {
+          throw forbidden(
+            "self_approval_blocked",
+            "Separação de responsabilidades (ISO/IEC 17025): ninguém pode renovar a própria competência. Solicite a renovação a outro membro autorizado.",
+          );
+        }
+
+        const qualifiedAt = input.qualifiedAt
+          ? new Date(input.qualifiedAt)
+          : new Date();
+        const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+
+        const [updated] = await ctx.o
+          .update(personnelCompetence)
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "renew",
+            ),
+            qualifiedAt,
+            expiresAt,
+            notes: input.notes ?? existing.notes,
+            approvedBy: session.user.id,
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
+
+        await ctx.audit("competence", id, {
+          action: "renew",
+          changes: {
+            status: { old: existing.status, new: "ACTIVE" },
+            qualifiedAt: qualifiedAt.toISOString(),
+            expiresAt: expiresAt?.toISOString() ?? null,
+          },
+          reason: input.notes ?? null,
+        });
+
+        return updated;
+      },
+    );
+
+    return result;
+  },
+);
+
+// =========================================================================
+// DELETE /:id - Soft delete
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.delete,
+  withLabPermission({ competence: ["delete"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+      await requireLabCompetence(id, memberData.organizationId, ctx.o);
+
+      await ctx.o
+        .update(personnelCompetence)
+        .set({ deletedAt: new Date() })
+        .where(eq(personnelCompetence.id, id));
+
+      await ctx.audit("competence", id, {
+        action: "delete",
+        changes: { deletedAt: new Date().toISOString() },
       });
-    },
-  );
+    });
+
+    return { message: "Competência removida" };
+  },
+);
+
+// =========================================================================
+// GET /:id/audit-log - Audit log for a competence
+// =========================================================================
+mount(
+  competencesRouter,
+  PREFIX,
+  competenceEndpoints.auditLog,
+  withLabPermission({ competence: ["read"] }),
+  async (c, { params }) => {
+    const memberData = c.get("member");
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      throw invalid("invalid_request", "ID inválido");
+    }
+
+    // Verify competence belongs to org
+    return await orgDb(memberData.organizationId).transaction(async (tx) => {
+      const [comp] = await tx
+        .select({ id: personnelCompetence.id })
+        .from(personnelCompetence)
+        .where(
+          and(
+            eq(personnelCompetence.id, id),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!comp) {
+        throw notFound("not_found", "Competência não encontrada");
+      }
+
+      const logs = await tx
+        .select({
+          id: personnelCompetenceAuditLog.id,
+          action: personnelCompetenceAuditLog.action,
+          changes: personnelCompetenceAuditLog.changes,
+          performedBy: personnelCompetenceAuditLog.performedBy,
+          performedByName: user.name,
+          performedAt: personnelCompetenceAuditLog.performedAt,
+          reason: personnelCompetenceAuditLog.reason,
+        })
+        .from(personnelCompetenceAuditLog)
+        .leftJoin(user, eq(personnelCompetenceAuditLog.performedBy, user.id))
+        .where(eq(personnelCompetenceAuditLog.competenceId, id))
+        .orderBy(desc(personnelCompetenceAuditLog.performedAt));
+
+      return logs.map((log) => ({
+        ...log,
+        performedByName: log.performedByName ?? log.performedBy,
+      }));
+    });
+  },
+);

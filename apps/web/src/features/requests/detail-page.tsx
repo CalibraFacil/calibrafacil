@@ -143,9 +143,8 @@ function CalibrationRequestTriagePanel({
 
   const reviewMutation = useMutation({
     mutationFn: async () => {
-      await calibraApi.calibrationRequests.review({
-        params: { id: requestId },
-        body: { internalNotes: internalNotes || undefined },
+      await calibraApi.calibrationRequests.review(requestId, {
+        internalNotes: internalNotes || undefined,
       })
     },
     onSuccess: async () => {
@@ -157,9 +156,8 @@ function CalibrationRequestTriagePanel({
 
   const approveMutation = useMutation({
     mutationFn: async () => {
-      await calibraApi.calibrationRequests.approve({
-        params: { id: requestId },
-        body: { internalNotes: internalNotes || undefined },
+      await calibraApi.calibrationRequests.approve(requestId, {
+        internalNotes: internalNotes || undefined,
       })
     },
     onSuccess: async () => {
@@ -171,12 +169,9 @@ function CalibrationRequestTriagePanel({
 
   const rejectMutation = useMutation({
     mutationFn: async () => {
-      await calibraApi.calibrationRequests.reject({
-        params: { id: requestId },
-        body: {
-          reason: rejectionReason,
-          internalNotes: internalNotes || undefined,
-        },
+      await calibraApi.calibrationRequests.reject(requestId, {
+        reason: rejectionReason,
+        internalNotes: internalNotes || undefined,
       })
     },
     onSuccess: async () => {
@@ -201,19 +196,16 @@ function CalibrationRequestTriagePanel({
         }
       })
 
-      await calibraApi.calibrationRequests.convert({
-        params: { id: requestId },
-        body: {
-          items: payload,
-          visit: isOnsiteRequest
-            ? {
-                scheduledAt: visitScheduledAt
-                  ? new Date(`${visitScheduledAt}T12:00:00`).toISOString()
-                  : null,
-                technicianId: visitTechnicianId || null,
-              }
-            : undefined,
-        },
+      await calibraApi.calibrationRequests.convert(requestId, {
+        items: payload,
+        visit: isOnsiteRequest
+          ? {
+              scheduledAt: visitScheduledAt
+                ? new Date(`${visitScheduledAt}T12:00:00`).toISOString()
+                : null,
+              technicianId: visitTechnicianId || null,
+            }
+          : undefined,
       })
     },
     onSuccess: async () => {
