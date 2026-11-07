@@ -44,7 +44,6 @@ export function GlobalSearchGroup({
   const isWaitingDebounce =
     hasMinimumQuery && debouncedSearch !== trimmedSearchValue
 
-  // Derive search mode from active page
   const searchMode = getSearchModeFromPage(activePage)
 
   const {

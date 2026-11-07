@@ -57,9 +57,9 @@ export function ApprovedJobRecord({
   const accreditationNumber = normalizeAccreditationNumber(
     orgAccreditation.accreditationNumber ?? '',
   )
-  // #647: vigência evaluated at the job's approval (emission) date.
+  // Vigência evaluated at the job's approval (emission) date.
   const approvedAtDate = job.approvedAt ? new Date(job.approvedAt) : undefined
-  // Q42: the seal is the decision frozen at approval (the server reads it from
+  // The seal is the decision frozen at approval (the server reads it from
   // the certificate input); only a record approved before it was frozen falls
   // back to the rule it was issued under, from the lab's current fields.
   const { accredited: certificateAccredited, withheldReason } =
@@ -73,7 +73,7 @@ export function ApprovedJobRecord({
           accreditationValidUntil: orgAccreditation.accreditationValidUntil,
         },
         methodAccreditedScope: methodSnapshot.accreditedScope ?? false,
-        // #427 Phase 1: an approval overridden past the CMC guard was
+        // An approval overridden past the CMC guard was
         // downgraded to non-accredited issuance.
         scopeOverrideJustification: job.scopeOverrideJustification,
         ...(approvedAtDate ? { atDate: approvedAtDate } : {}),

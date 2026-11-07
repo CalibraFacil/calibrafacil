@@ -229,7 +229,6 @@ export function buildJobTimelineEvents(job: {
 }): TimelineEvent[] {
   const events: TimelineEvent[] = []
 
-  // For amendments, show that this is a correction
   if (job.supersedesId) {
     events.push({
       id: 'amendment_created',

@@ -9,7 +9,7 @@ import {
 } from './forms'
 
 // Pure-logic coverage for the regime-form auto-fill from the legal-metrology regulation
-// catalog (deferred #3 of #423). REQ-CATALOG-004 (the patch populates the regime fields)
+// catalog. REQ-CATALOG-004 (the patch populates the regime fields)
 // + REQ-CATALOG-005 (a secondary entry surfaces the DOU caveat).
 
 const TAXIMETRO: LegalMetrologyRegulationCatalogEntry = {

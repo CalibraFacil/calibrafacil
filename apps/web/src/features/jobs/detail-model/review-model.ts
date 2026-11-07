@@ -23,7 +23,7 @@ import { buildJobVerdictModel, formatExpandedUncertainty } from './verdict'
  * One item per server finding when available, else a single generic warning
  * for the adverse status. A clean PASS or an absent status produces nothing;
  * every non-positive verdict (partial, not evaluated, no scope lines) says the
- * certificate will be issued without the accreditation seal (Q42).
+ * certificate will be issued without the accreditation seal.
  */
 export function buildScopeComplianceWarnings(
   job: ReviewJobDetailData | null | undefined,
@@ -45,7 +45,7 @@ export function buildScopeComplianceWarnings(
     ]
   }
 
-  // The unit has no accredited scope lines at all (Q42): nothing to compare,
+  // The unit has no accredited scope lines at all: nothing to compare,
   // never a positive verdict.
   if (status === 'NO_SCOPE_LINES') {
     return [
@@ -59,7 +59,7 @@ export function buildScopeComplianceWarnings(
     ]
   }
 
-  // Partially evaluated is never PASS (Q42): the findings below name the points
+  // Partially evaluated is never PASS: the findings below name the points
   // that could not be compared, and the seal is withheld.
   const sealNote =
     status === 'PARTIALLY_EVALUATED' ||
@@ -223,7 +223,7 @@ export function buildJobReviewModel(
           status: 'warning' as const,
         }
       : null
-  // Accredited-scope (CMC) guard (#427 Phase 0): the server classifies at
+  // Accredited-scope (CMC) guard: the server classifies at
   // submit/approve; here we only surface the frozen verdict to the signer.
   // Warn-only — never blocks the approval.
   const scopeComplianceWarnings = buildScopeComplianceWarnings(job)

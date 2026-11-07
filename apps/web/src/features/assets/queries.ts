@@ -132,7 +132,7 @@ export function assetTypesQueryOptions() {
   })
 }
 
-// The GLOBAL legal-metrology regulation catalog (deferred #3 of #423). Fetched with a raw
+// The GLOBAL legal-metrology regulation catalog. Fetched with a raw
 // same-origin request (NOT calibraApi) so the client-runtime data-policy snapshot is left
 // untouched. Suggestion-only reference data — if the fetch fails (e.g. offline desktop) the
 // regime form simply offers no catalog options and stays fully editable by hand.

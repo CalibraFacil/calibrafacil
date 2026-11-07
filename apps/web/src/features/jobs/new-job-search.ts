@@ -1,5 +1,5 @@
 /**
- * Search schema for the "Nova calibração" route (DOM-02, #655).
+ * Search schema for the "Nova calibração" route.
  *
  * REQ-DOM-REP-002: opening the new calibration from a repair OS pre-fills
  * customer + asset inherited from the OS. The OS detail page links to

@@ -369,7 +369,7 @@ function MethodActions({
   qualityApproveMutation: VoidMethodMutation
   returnToDraftMutation: ReturnToDraftMutation
 }) {
-  // The review workflow is online-only (Q13). This only disables the buttons
+  // The review workflow is online-only. This only disables the buttons
   // while the cloud is unreachable; who may press them is still decided by the
   // role gates below and by the API.
   const technicalReviewAvailability = useOperationAvailability(

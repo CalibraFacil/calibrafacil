@@ -263,10 +263,9 @@ export function classOfStandard(standard: {
 /**
  * Reconstitute the composition-profile buildup entries onto each standard's
  * certifiedValues from the normalized mass_composition_profile catalog (profiles
- * no longer live in certified_values). Each standard receives the catalog
- * profiles of its own class, in the legacy CertifiedValue shape — so
- * buildMassCompositionOptions and its standardIds aggregation stay byte-identical
- * to the pre-normalization behavior.
+ * are not stored in certified_values). Each standard receives the catalog
+ * profiles of its own class, in the CertifiedValue shape
+ * buildMassCompositionOptions and its standardIds aggregation read.
  */
 export function attachCompositionProfiles(
   standards: ReferenceStandard[],

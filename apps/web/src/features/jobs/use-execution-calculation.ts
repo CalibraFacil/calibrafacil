@@ -174,7 +174,6 @@ export function useExecutionCalculation({
     [calculationValidations, calibrationPhases],
   )
 
-  // Evaluate formulas
   const formulaResults = useMemo(
     () =>
       evaluateExecutionFormulaResults({
@@ -213,7 +212,6 @@ export function useExecutionCalculation({
     ],
   )
 
-  // Evaluate validations
   const validationResults = useMemo(
     (): ValidationResult[] =>
       evaluateExecutionValidationResults({
@@ -225,7 +223,6 @@ export function useExecutionCalculation({
     [activeCalculationValidations, context, engine, formulaResults],
   )
 
-  // Compute certified value options from all active standards
   const certifiedValueOptions = useMemo(
     (): CertifiedValueOption[] =>
       buildCertifiedValueOptions({

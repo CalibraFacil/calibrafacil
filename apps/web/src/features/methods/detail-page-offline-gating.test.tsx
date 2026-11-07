@@ -10,7 +10,7 @@ import {
 } from '@/runtime/desktop-connectivity-test-support'
 
 // The method review workflow (technical review, quality approval, return to
-// draft) is online-only since Q13, but the method detail page stays readable
+// draft) is online-only, but the method detail page stays readable
 // offline. On a disconnected desktop those buttons must be disabled instead of
 // failing with a network error. Only availability is under test: who may press
 // them stays with the role gates and the API, so the role gate is passed through.

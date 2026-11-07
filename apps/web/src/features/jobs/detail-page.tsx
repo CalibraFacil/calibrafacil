@@ -161,7 +161,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
     [queryClient],
   )
 
-  // Approve mutation
   const approveMutation = useMutation({
     mutationFn: async () => {
       return calibraApi.jobs.approve({
@@ -187,7 +186,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
     },
   })
 
-  // Reject mutation
   const rejectMutation = useMutation({
     mutationFn: async () => {
       return calibraApi.jobs.reject({
@@ -207,7 +205,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
     },
   })
 
-  // Retry the render of a certificate whose render failed (roadmap 2 C5)
   const retryRenderMutation = useMutation({
     mutationFn: async () => {
       return calibraApi.jobs.retryRender({ params: { id: apiJobId } })
@@ -223,7 +220,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
     },
   })
 
-  // Cancel mutation
   const cancelMutation = useMutation({
     mutationFn: async () => {
       return calibraApi.jobs.cancel({
@@ -244,7 +240,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
     },
   })
 
-  // Assign mutation
   const assignMutation = useMutation({
     mutationFn: async () => {
       return calibraApi.jobs.assign({
@@ -301,10 +296,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // what lets the desktop show the review evidence — and the reason — instead
   // of an empty panel.
   const inReview = job.status === 'REVIEW'
-  // The server says what this member may do (roadmap 2 F1: status machine,
-  // role, separation of duties); the desktop falls back to the status rules.
+  // The server says what this member may do (status machine, role,
+  // separation of duties); the desktop falls back to the status rules.
   const canApprove = serverAllows(job.allowedActions, 'approve', inReview)
-  // A failed render (roadmap 2 C5): the approval stands; a manager renders the
+  // A failed render: the approval stands; a manager renders the
   // certificate again or rejects the job back to rework.
   const renderFailed = job.status === 'RENDER_FAILED'
   const canReject = serverAllows(

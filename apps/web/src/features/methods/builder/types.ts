@@ -246,7 +246,7 @@ export type MethodDraftCertificateContent = {
   massCompositionDisplay?: 'full' | 'hidden'
   uncertaintyBudgetDisplay?: 'full' | 'hidden'
   decisionRuleStatement?: string
-  /** ISO/IEC 17025 7.8.6 / ILAC-G8 (roadmap 2 C4); absent: undeclared. */
+  /** ISO/IEC 17025 7.8.6 / ILAC-G8; absent: undeclared. */
   decisionRuleKind?: DecisionRuleKind
   sections?: Array<
     | {

@@ -1,6 +1,6 @@
 /**
- * Centralized finance mutation registry. Append-only: each revamp wave adds its
- * mutations here as named hooks so the cache-update strategy stays consistent
+ * Centralized finance mutation registry. Append-only: mutations are added
+ * here as named hooks so the cache-update strategy stays consistent
  * across the module (see docs/architecture/finance-revamp-specs.md).
  *
  * Strategy (mirrors features/settings/integrations/conta-azul-mutations.ts):

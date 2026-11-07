@@ -61,7 +61,7 @@ export function useApprovedRecordActions({
   const [isAmendDialogOpen, setIsAmendDialogOpen] = useState(false)
   const [amendmentReason, setAmendmentReason] = useState('')
   const [isAmending, setIsAmending] = useState(false)
-  // §7.10 out-of-tolerance NC state (#426)
+  // §7.10 out-of-tolerance NC state
   const isOutOfToleranceAsFound = job.asFoundConformity === 'NON_CONFORMING'
   // Both of these are cloud commands against an already-approved record, so
   // the job's own local queue cannot make them stale — connectivity is the
@@ -171,7 +171,6 @@ export function useApprovedRecordActions({
       setIsAmendDialogOpen(false)
       setAmendmentReason('')
 
-      // Navigate to the new amended job
       navigate({
         to: '/dashboard/jobs/$id',
         params: { id: result.amendedJob.jobId },
@@ -214,7 +213,7 @@ export function useApprovedRecordActions({
     }
   }
 
-  // §7.10 (#426): open a typed NC (and optional customer notification) for an
+  // §7.10: open a typed NC (and optional customer notification) for an
   // as-found out-of-tolerance result. Cloud-only — the button is hidden on desktop.
   const handleFlagOutOfTolerance = async () => {
     setIsFlaggingOot(true)

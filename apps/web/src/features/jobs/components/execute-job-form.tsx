@@ -94,7 +94,6 @@ export function ExecuteJobForm({
     convertCanonicalValueToDisplayUnit,
   } = useAssetUnitConversion(assetBaseMeasurementUnit)
 
-  // Form state
   const [formData, setFormData] = useState<Record<string, unknown>>(() => {
     return (
       denormalizeMethodDataForDisplay(
@@ -113,7 +112,7 @@ export function ExecuteJobForm({
         : [],
   )
   // What the last draft save answered about standards the job carries that are
-  // no longer valid (P1-11): the save went through, the submit will refuse.
+  // no longer valid: the save went through, the submit will refuse.
   const [standardWarnings, setStandardWarnings] = useState<
     JobExecutionWarning[]
   >([])
@@ -310,7 +309,6 @@ export function ExecuteJobForm({
     unsavedEdits: isDirty,
   })
 
-  // Update field
   const updateField = useCallback(
     (key: string, value: unknown) => {
       setFormData((prev) => ({ ...prev, [key]: value }))
@@ -367,7 +365,6 @@ export function ExecuteJobForm({
     selectedStandardIds,
   )
 
-  // Toggle standard selection
   const toggleStandard = (standardId: number) => {
     setSelectedStandardIds((prev) =>
       prev.includes(standardId)

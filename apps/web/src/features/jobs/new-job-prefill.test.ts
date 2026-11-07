@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseNewJobSearch } from './new-job-search'
 import { buildInitialJobFormData, parseJobForm } from './forms'
 
-// DOM-02 (#655) — REQ-DOM-REP-002: opening the new calibration from a repair OS
+// DOM-02 — REQ-DOM-REP-002: opening the new calibration from a repair OS
 // pre-fills customer + asset inherited from the OS. The wiring under test is the
 // pure chain the route adapter runs: raw search params -> parseNewJobSearch ->
 // buildInitialJobFormData -> the form's initial state. REQ-DOM-REP-003's client
