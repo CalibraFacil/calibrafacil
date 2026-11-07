@@ -264,7 +264,7 @@ allowBuilds:
   usb: true
   workerd: true
 
-# A version must be three days old before pnpm resolves it (roadmap 2 G4): the
+# A version must be three days old before pnpm resolves it: the
 # same cooldown as Dependabot (.github/dependabot.yml), long enough for most
 # compromised releases to be caught and pulled. A security fix that cannot wait
 # goes in minimumReleaseAgeExclude below, pinned exactly, with the advisory.
@@ -272,8 +272,8 @@ minimumReleaseAge: 4320
 
 minimumReleaseAgeExclude:
   # GHSA-965c-763c-88jm (critical): better-auth <1.7.7 lets an OAuth state be
-  # used as a magic link to sign in as another user. 1.7.13 and its siblings
-  # (#144); drop these once they are three days old.
+  # used as a magic link to sign in as another user. 1.7.13 and its siblings;
+  # drop these once they are three days old.
   - better-auth@1.7.13
   - "@better-auth/core@1.7.13"
   - "@better-auth/drizzle-adapter@1.7.13"

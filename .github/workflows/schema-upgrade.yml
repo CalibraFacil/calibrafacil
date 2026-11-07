@@ -1,12 +1,12 @@
 name: Schema upgrade
 
-# Roadmap 2 G4 (review 3.6): the upgrade path is tested, not only a fresh install.
+# The upgrade path is tested, not only a fresh install.
 #
 # A database bootstrapped by the previous release (N-1) is upgraded by this commit
 # (db:bootstrap on an existing database applies the pending migrations), and its
 # schema is compared with a database bootstrapped fresh by this commit (schema.ts +
-# sql/schema-extras.sql), object by object. Any difference (a migration that schema.ts or the extras
-# do not reproduce, or the reverse: a CHECK, trigger, grant, policy or index that
+# sql/schema-extras.sql), object by object. Any difference (a migration that schema.ts or the extras do
+# not reproduce, or the reverse: a CHECK, trigger, grant, policy or index that
 # exists on one side only) fails the job.
 on:
   pull_request:

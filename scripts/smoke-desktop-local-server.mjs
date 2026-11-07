@@ -213,7 +213,7 @@ async function waitForReadiness(url) {
 
 async function runOfflineWorkflowSmoke(baseUrl) {
   // Offline intake starts from a customer the device already has (seeded
-  // above as if synced): customer creation is online-only since Q13.
+  // above as if synced): customer creation is online-only.
   const customer = await getJson(baseUrl, "/api/customers/12345678000199");
   assert(customer.id === 123, "synced customer was not served from the cache");
 

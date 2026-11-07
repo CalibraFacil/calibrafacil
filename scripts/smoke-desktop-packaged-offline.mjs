@@ -206,8 +206,8 @@ try {
     "/api/jobs?page=1&limit=50",
     firstLocalHeaders,
   );
-  // Field capture runs on a job the cloud already assigned; offline mode no
-  // longer creates jobs (Q13).
+  // Field capture runs on a job the cloud already assigned; offline mode does
+  // not create jobs.
   const localJob = localJobs.data?.find(
     (job) => job.status === "DRAFT" || job.status === "IN_PROGRESS",
   );

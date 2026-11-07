@@ -60,8 +60,8 @@
     // and this repo does not run React Compiler, so keep it advisory instead
     // of failing the build on a library's design.
     "react/incompatible-library": "warn",
-    // Promoted from the advisory `suspicious` tier after the existing sites were
-    // fixed (#930): these read as real defects, not style.
+    // Promoted from the advisory `suspicious` tier: these read as real defects,
+    // not style.
     // `allowAsProps` keeps render props (DataTable `bulkActions`, Recharts
     // `formatter`) out of scope — the receiver calls them as functions, so they
     // are not unstable element types.

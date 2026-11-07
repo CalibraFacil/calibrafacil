@@ -37,7 +37,7 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Roadmap 2 G4: no image is published for a commit the post-merge Safety net
+  # No image is published for a commit the post-merge Safety net
   # has not passed. The release commit's own Safety net run starts with this
   # workflow (both on the push to main); wait for it, and stop on anything but
   # success.

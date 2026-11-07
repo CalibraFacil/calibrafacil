@@ -4,7 +4,7 @@ name: Docker images
 # arm64, tagged X.Y.Z, X.Y and latest. release.yml calls this for every
 # release; run it by hand to rebuild an existing version.
 #
-# Supply chain (roadmap 2 G4): every image carries a buildx SBOM and SLSA
+# Supply chain: every image carries a buildx SBOM and SLSA
 # provenance attestation; the multi-arch digest is signed keyless with cosign
 # (GitHub OIDC, no key to keep) and scanned with Trivy, which fails the release
 # on a CRITICAL vulnerability that has a fix. Verify an image with:
@@ -167,7 +167,7 @@ jobs:
       - name: Scan the image (CRITICAL with a fix fails the release)
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}@${{ steps.inspect.outputs.digest }}
-          # The packages are private until the owner publishes them (Q43).
+          # The packages are private until the owner publishes them.
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
