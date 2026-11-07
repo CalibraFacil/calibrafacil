@@ -1,5 +1,8 @@
 import { createRouter } from "../server/router";
-import { nonConformanceEndpoints } from "@calibra-facil/contracts";
+import {
+  entityLabelEndpoints,
+  nonConformanceEndpoints,
+} from "@calibra-facil/contracts";
 import {
   nonConformance,
   nonConformanceAuditLog,
@@ -24,7 +27,6 @@ import {
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { mount } from "../lib/endpoint-mount";
-import { requireRouteId } from "../lib/route-id";
 import { orgDb } from "../lib/org-db";
 import {
   and,
@@ -254,21 +256,17 @@ mount(
   },
 );
 
-// =========================================================================
 // GET /:id/label - Get NC label by ID
-// =========================================================================
-nonConformancesRouter.get(
-  "/:id/label",
-  ...withLabPermission({ non_conformance: ["read"] }),
-  async (c) => {
-    return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      const nc = await requireLabNonConformance(
-        o,
-        requireRouteId(c.req.param("id")),
-      );
-      return c.json({ id: nc.id, label: nc.ncNumber });
-    });
-  },
+mount(
+  nonConformancesRouter,
+  PREFIX,
+  entityLabelEndpoints.getNonConformance,
+  withLabPermission({ non_conformance: ["read"] }),
+  async (c, { params }) =>
+    orgDb(c.get("member").organizationId).transaction(async (o) => {
+      const nc = await requireLabNonConformance(o, params.id);
+      return { id: nc.id, label: nc.ncNumber };
+    }),
 );
 
 // =========================================================================

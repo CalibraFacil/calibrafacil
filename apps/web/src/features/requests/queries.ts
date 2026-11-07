@@ -80,9 +80,11 @@ export function requestConversionServicesQueryOptions(organizationId: string) {
     queryKey: ['services', organizationId, 'request-conversion'],
     queryFn: async (): Promise<{ data: RequestConversionService[] }> => {
       const firstPage = await calibraApi.services.list({
-        page: 1,
-        limit: 100,
-        isActive: true,
+        query: {
+          page: 1,
+          limit: 100,
+          isActive: true,
+        },
       })
 
       if ((firstPage.pagination?.totalPages ?? 1) <= 1) {
@@ -94,9 +96,11 @@ export function requestConversionServicesQueryOptions(organizationId: string) {
           { length: (firstPage.pagination?.totalPages ?? 1) - 1 },
           (_, index) =>
             calibraApi.services.list({
-              page: index + 2,
-              limit: 100,
-              isActive: true,
+              query: {
+                page: index + 2,
+                limit: 100,
+                isActive: true,
+              },
             }),
         ),
       )

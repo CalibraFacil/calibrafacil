@@ -114,11 +114,7 @@ export const calibraApiPolicyRegistry = {
   organizationProfile: {
     update: "cloud-only",
   },
-  entityLabels: {
-    getNonConformance: "cloud-only",
-    getCapa: "cloud-only",
-    getCompetence: "cloud-only",
-  },
+  entityLabels: endpointPolicies(ENDPOINT_GROUPS.entityLabels),
   certificateNumbering: endpointPolicies(ENDPOINT_GROUPS.certificateNumbering),
   portalDomains: endpointPolicies(ENDPOINT_GROUPS.portalDomains),
   emailDomains: {
@@ -165,14 +161,7 @@ export const calibraApiPolicyRegistry = {
   assetTypes: {
     list: "local-first-read-through-sync",
   },
-  services: {
-    list: "cloud-only",
-    get: "cloud-only",
-    auditLog: "cloud-only",
-    create: "cloud-only",
-    update: "cloud-only",
-    deactivate: "cloud-only",
-  },
+  services: endpointPolicies(ENDPOINT_GROUPS.services),
   // Material catalog is cloud-only in v1 (see the endpoint definitions).
   materials: endpointPolicies(ENDPOINT_GROUPS.materials),
   methods: endpointPolicies(ENDPOINT_GROUPS.methods),

@@ -1,5 +1,5 @@
 import { createRouter } from "../server/router";
-import { capaEndpoints } from "@calibra-facil/contracts";
+import { entityLabelEndpoints, capaEndpoints } from "@calibra-facil/contracts";
 import {
   correctiveAction,
   correctiveActionAuditLog,
@@ -18,7 +18,6 @@ import {
 } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { mount } from "../lib/endpoint-mount";
-import { requireRouteId } from "../lib/route-id";
 import { orgDb } from "../lib/org-db";
 import { conflict, forbidden, invalid } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
@@ -310,18 +309,17 @@ mount(
   },
 );
 
-// =========================================================================
 // GET /:id/label - Get CAPA label by ID
-// =========================================================================
-capaRouter.get(
-  "/:id/label",
-  ...withLabPermission({ capa: ["read"] }),
-  async (c) => {
-    return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      const capa = await requireLabCapa(o, requireRouteId(c.req.param("id")));
-      return c.json({ id: capa.id, label: capa.capaNumber });
-    });
-  },
+mount(
+  capaRouter,
+  PREFIX,
+  entityLabelEndpoints.getCapa,
+  withLabPermission({ capa: ["read"] }),
+  async (c, { params }) =>
+    orgDb(c.get("member").organizationId).transaction(async (o) => {
+      const capa = await requireLabCapa(o, params.id);
+      return { id: capa.id, label: capa.capaNumber };
+    }),
 );
 
 // =========================================================================

@@ -1,48 +1,49 @@
-import type { EntityLabelsApi } from "../types";
+import {
+  entityLabelEndpoints,
+  type EndpointClientInput,
+  type ResponseValidationOptions,
+} from "@calibra-facil/contracts";
 
-export function createEntityLabelsApi(rawCloudClient: any): EntityLabelsApi {
+import { CalibraApiError } from "../transport/errors";
+import {
+  endpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/**
+ * The entity-labels client is its endpoint group (`entityLabelEndpoints` in
+ * `@calibra-facil/contracts`) plus the client-side rule that a record that is
+ * not there (404) simply has no label: each method resolves to the label text
+ * or to null.
+ */
+export type EntityLabelsApi = {
+  [Name in keyof typeof entityLabelEndpoints]: (
+    input: EndpointClientInput<(typeof entityLabelEndpoints)[Name]>,
+  ) => Promise<string | null>;
+};
+
+export function createEntityLabelsApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): EntityLabelsApi {
+  const client = endpointClient(entityLabelEndpoints, transport, options);
+
   return {
-    async getNonConformance(id) {
-      return parseCloudEntityLabel(
-        await rawCloudClient.api.nc[":id"].label.$get({
-          param: { id: String(id) },
-        }),
-        "non-conformance",
-      );
-    },
-    async getCapa(id) {
-      return parseCloudEntityLabel(
-        await rawCloudClient.api.capa[":id"].label.$get({
-          param: { id: String(id) },
-        }),
-        "capa",
-      );
-    },
-    async getCompetence(id) {
-      return parseCloudEntityLabel(
-        await rawCloudClient.api.competences[":id"].label.$get({
-          param: { id: String(id) },
-        }),
-        "competence",
-      );
-    },
+    getNonConformance: (input) => labelOrNull(client.getNonConformance(input)),
+    getCapa: (input) => labelOrNull(client.getCapa(input)),
+    getCompetence: (input) => labelOrNull(client.getCompetence(input)),
   };
 }
 
-async function parseCloudEntityLabel(
-  response: Response,
-  entityName: string,
+async function labelOrNull(
+  request: Promise<{ label: string }>,
 ): Promise<string | null> {
-  if (response.status === 404) {
-    return null;
+  try {
+    return (await request).label;
+  } catch (error) {
+    if (error instanceof CalibraApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${entityName} label`);
-  }
-
-  const data: unknown = await response.json();
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const label = Object.fromEntries(Object.entries(data)).label;
-  return typeof label === "string" ? label : null;
 }

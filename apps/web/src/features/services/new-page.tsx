@@ -82,7 +82,8 @@ export function NewServicePage() {
   const selectedAssetTypeName = selectedAssetType?.name || ''
 
   const createMutation = useMutation({
-    mutationFn: (data: CreateServiceInput) => calibraApi.services.create(data),
+    mutationFn: (data: CreateServiceInput) =>
+      calibraApi.services.create({ body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       toast.success('Serviço criado com sucesso!')

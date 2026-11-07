@@ -6,6 +6,7 @@ import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { competenceEndpoints } from "./competences";
 import { customerEndpoints } from "./customers";
 import { dashboardEndpoints } from "./dashboard";
+import { entityLabelEndpoints } from "./entity-labels";
 import { environmentalLimitEndpoints } from "./environmental-limits";
 import { financeEndpoints } from "./finance";
 import { materialEndpoints } from "./materials";
@@ -15,9 +16,10 @@ import { portalDomainEndpoints } from "./portal-domains";
 import { proficiencyTestEndpoints } from "./proficiency-tests";
 import { reportEndpoints } from "./reports";
 import { serviceOrderEndpoints } from "./service-orders";
+import { serviceEndpoints } from "./services";
+import type { EndpointGroup, EndpointPaths } from "./define";
 import { signatureEndpoints } from "./signatures";
 import { signingCertificateEndpoints } from "./signing-certificates";
-import type { EndpointGroup, EndpointPaths } from "./define";
 import { spcEndpoints } from "./spc";
 import { ssoEndpoints } from "./sso";
 import { standardEndpoints } from "./standards";
@@ -37,8 +39,10 @@ export * from "./spc";
 export * from "./finance";
 export * from "./service-orders";
 export * from "./dashboard";
+export * from "./entity-labels";
 export * from "./reports";
 export * from "./standards";
+export * from "./services";
 export * from "./certificate-numbering";
 export * from "./competences";
 export * from "./proficiency-tests";
@@ -65,8 +69,10 @@ export const ENDPOINT_GROUPS = {
   finance: financeEndpoints,
   serviceOrders: serviceOrderEndpoints,
   dashboard: dashboardEndpoints,
+  entityLabels: entityLabelEndpoints,
   reports: reportEndpoints,
   standards: standardEndpoints,
+  services: serviceEndpoints,
   certificateNumbering: certificateNumberingEndpoints,
   competences: competenceEndpoints,
   trainingRecords: trainingRecordEndpoints,

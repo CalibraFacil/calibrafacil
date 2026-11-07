@@ -2,6 +2,7 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
+import { isRecord } from '@calibra-facil/shared/record'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -50,15 +51,17 @@ export function servicesListQueryOptions(input: ServicesListQueryInput) {
     ],
     queryFn: (): Promise<ServicesListData> =>
       calibraApi.services.list({
-        page: input.page,
-        limit: input.limit,
-        query: input.search || undefined,
-        isActive:
-          input.statusFilter === 'active'
-            ? true
-            : input.statusFilter === 'inactive'
-              ? false
-              : undefined,
+        query: {
+          page: input.page,
+          limit: input.limit,
+          query: input.search || undefined,
+          isActive:
+            input.statusFilter === 'active'
+              ? true
+              : input.statusFilter === 'inactive'
+                ? false
+                : undefined,
+        },
       }),
     placeholderData: keepPreviousDataInScope([
       'services',
@@ -70,15 +73,26 @@ export function servicesListQueryOptions(input: ServicesListQueryInput) {
 export function serviceDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['services', id],
-    queryFn: (): Promise<ServiceDetail> => calibraApi.services.get(id),
+    queryFn: (): Promise<ServiceDetail> =>
+      calibraApi.services.get({ params: { id } }),
   })
 }
 
 export function serviceAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['services', id, 'audit-log'],
-    queryFn: (): Promise<ServiceAuditLogData> =>
-      calibraApi.services.auditLog<ServiceAuditLogRecord>(id),
+    queryFn: async (): Promise<ServiceAuditLogData> => {
+      const log = await calibraApi.services.auditLog({ params: { id } })
+      return {
+        data: log.data.map(
+          (entry): ServiceAuditLogRecord => ({
+            ...entry,
+            // The column is untyped JSON; the timeline reads it as a record.
+            changes: isRecord(entry.changes) ? entry.changes : null,
+          }),
+        ),
+      }
+    },
   })
 }
 
