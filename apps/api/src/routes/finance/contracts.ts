@@ -23,7 +23,10 @@ import {
   servicesBelongToOrganization,
   unitsBelongToOrganization,
 } from "../../lib/tenant-refs";
+import { invalid, notFound } from "../../lib/domain-errors";
+import { withOrg } from "../../lib/org-context";
 import { orgDb } from "../../lib/org-db";
+import { requestActor } from "../../middleware/request-actor";
 
 const AgreementServiceTermSchema = z.object({
   id: z.number().int().optional(),
@@ -193,10 +196,10 @@ async function syncCustomerComplianceContract(
 /**
  * The units and services a contract names (scope + price terms) are body-supplied
  * ids: every one must belong to the caller's organization, otherwise the
- * agreement would price or scope another tenant's catalog. Returns the refusal
- * message, or null when all ids are in-org.
+ * agreement would price or scope another tenant's catalog. Throws 400 when one
+ * is not.
  */
-async function findForeignAgreementRef(
+async function assertAgreementRefsInOrganization(
   o: OrgDb,
   organizationId: string,
   input: z.infer<typeof CreateAgreementSchema>,
@@ -208,13 +211,52 @@ async function findForeignAgreementRef(
     ),
   ];
   if (!(await unitsBelongToOrganization(organizationId, unitIds, o))) {
-    return "Unidade invalida";
+    throw invalid("agreement_reference_invalid", "Unidade invalida");
   }
   const serviceIds = input.serviceTerms.map((term) => term.serviceId);
   if (!(await servicesBelongToOrganization(organizationId, serviceIds, o))) {
-    return "Servico invalido";
+    throw invalid("agreement_reference_invalid", "Servico invalido");
   }
-  return null;
+}
+
+/**
+ * The laboratory's commercial agreement with its unit scope and service terms.
+ * Throws 404 when none of this laboratory matches.
+ */
+async function requireLabAgreement(
+  o: OrgDb,
+  organizationId: string,
+  agreementId: number,
+) {
+  const agreement = await getAgreementById(o, organizationId, agreementId);
+  if (!agreement) {
+    throw notFound("agreement_not_found", "Contrato nao encontrado");
+  }
+  return agreement;
+}
+
+/** The numeric id of a contract route parameter; throws 400 when unreadable. */
+function requireAgreementRouteId(routeId: string): number {
+  const id = Number.parseInt(routeId, 10);
+  if (!Number.isInteger(id)) throw invalid("invalid_request", "ID invalido");
+  return id;
+}
+
+/** The laboratory's customer a contract names; throws 404 when it is not theirs. */
+async function requireOwnedCustomer(
+  o: OrgDb,
+  organizationId: string,
+  customerId: number,
+) {
+  const ownedCustomer = await customerBelongsToOrganization(
+    o,
+    organizationId,
+    customerId,
+  );
+  if (!ownedCustomer) {
+    throw notFound("customer_not_found", "Cliente nao encontrado");
+  }
+  return ownedCustomer;
 }
 
 export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -277,26 +319,24 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateAgreementSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const ownedCustomer = await customerBelongsToOrganization(
-            o,
+      const agreement = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          await requireOwnedCustomer(
+            ctx.o,
             member.organizationId,
             input.customerId,
           );
-          if (!ownedCustomer) return { status: "customer_not_found" as const };
-
-          const foreignRef = await findForeignAgreementRef(
-            o,
+          await assertAgreementRefsInOrganization(
+            ctx.o,
             member.organizationId,
             input,
           );
-          if (foreignRef) return { status: "foreign_ref" as const, foreignRef };
 
-          const [agreement] = await o
+          const [created] = await ctx.o
             .insert(commercialAgreement)
             .values({
               organizationId: member.organizationId,
@@ -312,29 +352,29 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
                 : null,
               defaultPaymentTermDays: input.defaultPaymentTermDays,
               notes: input.notes?.trim() || null,
-              createdBy: session.user.id,
-              updatedBy: session.user.id,
+              createdBy: ctx.actor.userId,
+              updatedBy: ctx.actor.userId,
             })
             .returning();
 
-          if (!agreement) {
+          if (!created) {
             throw new Error("Falha ao criar contrato comercial");
           }
 
           if (input.unitIds.length > 0) {
-            await o.insert(commercialAgreementUnitScope).values(
+            await ctx.o.insert(commercialAgreementUnitScope).values(
               input.unitIds.map((unitId) => ({
                 organizationId: member.organizationId,
-                agreementId: agreement.id,
+                agreementId: created.id,
                 unitId,
               })),
             );
           }
 
-          await o.insert(commercialAgreementServiceTerm).values(
+          await ctx.o.insert(commercialAgreementServiceTerm).values(
             input.serviceTerms.map((term) => ({
               organizationId: member.organizationId,
-              agreementId: agreement.id,
+              agreementId: created.id,
               serviceId: term.serviceId,
               unitId: term.unitId ?? null,
               priceCents: term.priceCents,
@@ -344,33 +384,20 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
             })),
           );
 
-          return { status: "ok" as const, agreement };
+          return created;
         },
       );
-      if (outcome.status === "customer_not_found") {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
-      }
-      if (outcome.status === "foreign_ref") {
-        return c.json({ error: outcome.foreignRef }, 400);
-      }
 
-      return c.json({ data: outcome.agreement }, 201);
+      return c.json({ data: agreement }, 201);
     },
   )
   .get("/:id", ...withLabPermission({ financial: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = Number.parseInt(c.req.param("id"), 10);
-
-    if (!Number.isInteger(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
+    const id = requireAgreementRouteId(c.req.param("id"));
 
     const agreement = await orgDb(member.organizationId).transaction((o) =>
-      getAgreementById(o, member.organizationId, id),
+      requireLabAgreement(o, member.organizationId, id),
     );
-    if (!agreement) {
-      return c.json({ error: "Contrato nao encontrado" }, 404);
-    }
 
     return c.json({ data: agreement });
   })
@@ -380,34 +407,30 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateAgreementSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const id = requireAgreementRouteId(c.req.param("id"));
       const input = c.req.valid("json");
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const existing = await getAgreementById(o, member.organizationId, id);
-          if (!existing) return { status: "agreement_not_found" as const };
-
-          const ownedCustomer = await customerBelongsToOrganization(
-            o,
+      const agreement = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabAgreement(
+            ctx.o,
+            member.organizationId,
+            id,
+          );
+          await requireOwnedCustomer(
+            ctx.o,
             member.organizationId,
             input.customerId,
           );
-          if (!ownedCustomer) return { status: "customer_not_found" as const };
-
-          const foreignRef = await findForeignAgreementRef(
-            o,
+          await assertAgreementRefsInOrganization(
+            ctx.o,
             member.organizationId,
             input,
           );
-          if (foreignRef) return { status: "foreign_ref" as const, foreignRef };
 
-          const [agreement] = await o
+          const [updated] = await ctx.o
             .update(commercialAgreement)
             .set({
               customerId: input.customerId,
@@ -429,7 +452,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
                 : null,
               defaultPaymentTermDays: input.defaultPaymentTermDays,
               notes: input.notes?.trim() || null,
-              updatedBy: session.user.id,
+              updatedBy: ctx.actor.userId,
               updatedAt: new Date(),
             })
             .where(
@@ -440,15 +463,15 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .returning();
 
-          await o
+          await ctx.o
             .delete(commercialAgreementUnitScope)
             .where(eq(commercialAgreementUnitScope.agreementId, id));
-          await o
+          await ctx.o
             .delete(commercialAgreementServiceTerm)
             .where(eq(commercialAgreementServiceTerm.agreementId, id));
 
           if (input.unitIds.length > 0) {
-            await o.insert(commercialAgreementUnitScope).values(
+            await ctx.o.insert(commercialAgreementUnitScope).values(
               input.unitIds.map((unitId) => ({
                 organizationId: member.organizationId,
                 agreementId: id,
@@ -457,7 +480,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          await o.insert(commercialAgreementServiceTerm).values(
+          await ctx.o.insert(commercialAgreementServiceTerm).values(
             input.serviceTerms.map((term) => ({
               organizationId: member.organizationId,
               agreementId: id,
@@ -480,27 +503,18 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
             ].sort((a, b) => a - b);
             for (const customerId of customerIdsToSync) {
               await syncCustomerComplianceContract(
-                o,
+                ctx.o,
                 member.organizationId,
                 customerId,
               );
             }
           }
 
-          return { status: "ok" as const, agreement };
+          return updated;
         },
       );
-      if (outcome.status === "agreement_not_found") {
-        return c.json({ error: "Contrato nao encontrado" }, 404);
-      }
-      if (outcome.status === "customer_not_found") {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
-      }
-      if (outcome.status === "foreign_ref") {
-        return c.json({ error: outcome.foreignRef }, 400);
-      }
 
-      return c.json({ data: outcome.agreement });
+      return c.json({ data: agreement });
     },
   )
   .post(
@@ -508,23 +522,26 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ financial: ["contract_update"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const id = requireAgreementRouteId(c.req.param("id"));
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const existing = await getAgreementById(o, member.organizationId, id);
-          if (!existing) return { status: "not_found" as const };
+      const agreement = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabAgreement(
+            ctx.o,
+            member.organizationId,
+            id,
+          );
 
           if (existing.serviceTerms.length === 0) {
-            return { status: "no_terms" as const };
+            throw invalid(
+              "agreement_terms_required",
+              "Contrato precisa ter pelo menos um termo de servico",
+            );
           }
 
-          const [updated] = await o
+          const [updated] = await ctx.o
             .update(commercialAgreement)
             .set({
               status: COMMERCIAL_AGREEMENT_MACHINE.requireTargetOf(
@@ -532,7 +549,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
                 "activate",
               ),
               updatedAt: new Date(),
-              updatedBy: session.user.id,
+              updatedBy: ctx.actor.userId,
             })
             .where(
               and(
@@ -543,25 +560,16 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
             .returning();
 
           await syncCustomerComplianceContract(
-            o,
+            ctx.o,
             member.organizationId,
             existing.customerId,
           );
 
-          return { status: "ok" as const, agreement: updated };
+          return updated;
         },
       );
-      if (outcome.status === "not_found") {
-        return c.json({ error: "Contrato nao encontrado" }, 404);
-      }
-      if (outcome.status === "no_terms") {
-        return c.json(
-          { error: "Contrato precisa ter pelo menos um termo de servico" },
-          400,
-        );
-      }
 
-      return c.json({ data: outcome.agreement });
+      return c.json({ data: agreement });
     },
   )
   .post(
@@ -569,22 +577,19 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ financial: ["contract_update"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const id = requireAgreementRouteId(c.req.param("id"));
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const updated = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const [agreement] = await o
+      const canceled = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [agreement] = await ctx.o
             .update(commercialAgreement)
             .set({
               // `cancel` of COMMERCIAL_AGREEMENT_MACHINE (from any status).
               status: "CANCELED",
               updatedAt: new Date(),
-              updatedBy: session.user.id,
+              updatedBy: ctx.actor.userId,
             })
             .where(
               and(
@@ -594,10 +599,12 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .returning();
 
-          if (!agreement) return null;
+          if (!agreement) {
+            throw notFound("agreement_not_found", "Contrato nao encontrado");
+          }
 
           await syncCustomerComplianceContract(
-            o,
+            ctx.o,
             member.organizationId,
             agreement.customerId,
           );
@@ -606,10 +613,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         },
       );
 
-      if (!updated) {
-        return c.json({ error: "Contrato nao encontrado" }, 404);
-      }
-
-      return c.json({ data: updated });
+      return c.json({ data: canceled });
     },
   );

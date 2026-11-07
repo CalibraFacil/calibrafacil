@@ -449,24 +449,17 @@ export interface ExceptionReleaseError {
   code: "JOB_NOT_FOUND" | "REASON_REQUIRED" | "NOT_APPROVED";
 }
 
+/**
+ * `o` is the org-bound handle of the caller's `withOrg` transaction: the release
+ * and its audit row commit with it.
+ */
 export async function releaseByException(
   input: ReleaseByExceptionInput,
-  // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  o: OrgDb,
 ): Promise<RecomputedCertificateRelease | ExceptionReleaseError> {
   const reason = input.reason?.trim?.() ?? "";
   if (!reason) return { code: "REASON_REQUIRED" };
 
-  return inOrgTransaction(input.organizationId, executor, (o) =>
-    releaseByExceptionOn(o, input, reason),
-  );
-}
-
-async function releaseByExceptionOn(
-  o: OrgDb,
-  input: ReleaseByExceptionInput,
-  reason: string,
-): Promise<RecomputedCertificateRelease | ExceptionReleaseError> {
   const [job] = await o
     .select({
       id: calibrationJob.id,

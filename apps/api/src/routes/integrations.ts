@@ -5,6 +5,18 @@ import { z } from "zod";
 import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
 import { INTEGRATION_MACHINE } from "@calibra-facil/schemas/machines";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
+import {
+  conflict,
+  DomainError,
+  invalid,
+  notFound,
+  unprocessable,
+} from "../lib/domain-errors";
+import {
+  requireLabContaAzulIntegration,
+  requireLabIntegration,
+} from "../lib/integration-access";
+import { withOrg } from "../lib/org-context";
 import { orgDb } from "../lib/org-db";
 import { orgTransactionWithExecutor } from "../lib/org-transaction";
 import {
@@ -117,6 +129,7 @@ import {
   requireOrgType,
   requireRole,
 } from "../middleware/permission";
+import { requestActor } from "../middleware/request-actor";
 
 const BaseUrlSchema = z
   .string()
@@ -866,13 +879,10 @@ export const integrationsRouter = new Hono<{
         redirectUri: resolveContaAzulRedirectUri(c.env),
       });
       if (check === "rejected") {
-        return c.json(
-          {
-            error:
-              "O Conta Azul recusou este Client ID e Client Secret. Copie os dois de novo do seu aplicativo no Portal do Desenvolvedor.",
-            check,
-          },
-          422,
+        throw unprocessable(
+          "conta_azul_app_rejected",
+          "O Conta Azul recusou este Client ID e Client Secret. Copie os dois de novo do seu aplicativo no Portal do Desenvolvedor.",
+          { legacyBody: { check } },
         );
       }
 
@@ -982,20 +992,16 @@ export const integrationsRouter = new Hono<{
         });
       } catch (error) {
         if (error instanceof ContaAzulAppMissingError) {
-          return c.json(
-            { error: error.message, code: "conta_azul_app_missing" },
-            409,
-          );
+          throw conflict("conta_azul_app_missing", error.message);
         }
-        return c.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Configuração OAuth da Conta Azul inválida",
-          },
-          503,
-        );
+        throw new DomainError({
+          code: "conta_azul_oauth_unavailable",
+          status: 503,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Configuração OAuth da Conta Azul inválida",
+        });
       }
 
       await writeOrganizationIntegrationEvent({
@@ -1118,9 +1124,9 @@ export const integrationsRouter = new Hono<{
       const mappingIssues = validateIntegrationMappings(config.mappings);
 
       if (mappingIssues.length > 0) {
-        return c.json(
-          { error: mappingIssues.map((issue) => issue.message).join(" ") },
-          400,
+        throw invalid(
+          "integration_mappings_invalid",
+          mappingIssues.map((issue) => issue.message).join(" "),
         );
       }
       const encrypted = encryptIntegrationSecret(input.authToken, c.env);
@@ -1129,7 +1135,7 @@ export const integrationsRouter = new Hono<{
 
       // The integration, its connection and the events that record them commit
       // together.
-      await orgDb(member.organizationId).transaction(async (o) => {
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o.insert(organizationIntegration).values({
           id: integrationId,
           organizationId: member.organizationId,
@@ -1200,16 +1206,12 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const id = c.req.param("id");
       const input = c.req.valid("json");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       if (record.integration.provider !== "generic_http") {
-        return c.json(
-          { error: "Use as rotas nativas da Conta Azul para esta integração" },
-          400,
+        throw invalid(
+          "integration_provider_mismatch",
+          "Use as rotas nativas da Conta Azul para esta integração",
         );
       }
 
@@ -1235,13 +1237,13 @@ export const integrationsRouter = new Hono<{
       const mappingIssues = validateIntegrationMappings(mergedConfig.mappings);
 
       if (mappingIssues.length > 0) {
-        return c.json(
-          { error: mappingIssues.map((issue) => issue.message).join(" ") },
-          400,
+        throw invalid(
+          "integration_mappings_invalid",
+          mappingIssues.map((issue) => issue.message).join(" "),
         );
       }
 
-      await orgDb(member.organizationId).transaction(async (o) => {
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o
           .update(organizationIntegration)
           .set({
@@ -1327,11 +1329,10 @@ export const integrationsRouter = new Hono<{
       const member = c.get("member");
       const session = c.get("session");
       const id = c.req.param("id");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record || record.integration.provider !== "conta_azul") {
-        return c.json({ error: "Integração Conta Azul não encontrada" }, 404);
-      }
+      const record = await requireLabContaAzulIntegration(
+        member.organizationId,
+        id,
+      );
 
       try {
         const tokenBundle = decryptContaAzulTokenBundle({
@@ -1358,7 +1359,7 @@ export const integrationsRouter = new Hono<{
           scopes: refreshed.scopes,
         });
 
-        await orgDb(member.organizationId).transaction(async (o) => {
+        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
           await o
             .update(integrationConnection)
             .set({
@@ -1414,7 +1415,7 @@ export const integrationsRouter = new Hono<{
       } catch (error) {
         const failure = buildContaAzulRefreshFailurePolicy(error);
 
-        await orgDb(member.organizationId).transaction(async (o) => {
+        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
           await o
             .update(organizationIntegration)
             .set({
@@ -1441,7 +1442,7 @@ export const integrationsRouter = new Hono<{
           );
         });
 
-        return c.json({ error: failure.message }, 400);
+        throw invalid("integration_request_failed", failure.message);
       }
     },
   )
@@ -1454,13 +1455,9 @@ export const integrationsRouter = new Hono<{
       const member = c.get("member");
       const session = c.get("session");
       const id = c.req.param("id");
-      const record = await getIntegrationRecord(member.organizationId, id);
+      await requireLabContaAzulIntegration(member.organizationId, id);
 
-      if (!record || record.integration.provider !== "conta_azul") {
-        return c.json({ error: "Integração Conta Azul não encontrada" }, 404);
-      }
-
-      await orgDb(member.organizationId).transaction(async (o) => {
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         // Clear remote-link state so a fresh reconnect cannot reuse stale
         // links that belong to the prior Conta Azul account.
         await o
@@ -1542,14 +1539,11 @@ export const integrationsRouter = new Hono<{
           }),
         );
       } catch (error) {
-        return c.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Falha ao carregar contas financeiras",
-          },
-          400,
+        throw invalid(
+          "integration_request_failed",
+          error instanceof Error
+            ? error.message
+            : "Falha ao carregar contas financeiras",
         );
       }
     },
@@ -1578,14 +1572,11 @@ export const integrationsRouter = new Hono<{
           }),
         );
       } catch (error) {
-        return c.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Falha ao carregar categorias",
-          },
-          400,
+        throw invalid(
+          "integration_request_failed",
+          error instanceof Error
+            ? error.message
+            : "Falha ao carregar categorias",
         );
       }
     },
@@ -1614,14 +1605,11 @@ export const integrationsRouter = new Hono<{
           }),
         );
       } catch (error) {
-        return c.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Falha ao carregar centros de custo",
-          },
-          400,
+        throw invalid(
+          "integration_request_failed",
+          error instanceof Error
+            ? error.message
+            : "Falha ao carregar centros de custo",
         );
       }
     },
@@ -1639,7 +1627,10 @@ export const integrationsRouter = new Hono<{
       );
 
       if (!parsedCatalog.success) {
-        return c.json({ error: "Catálogo Conta Azul inválido" }, 400);
+        throw invalid(
+          "integration_catalog_invalid",
+          "Catálogo Conta Azul inválido",
+        );
       }
 
       await assertActiveContaAzulIntegration({
@@ -1657,14 +1648,11 @@ export const integrationsRouter = new Hono<{
           }),
         );
       } catch (error) {
-        return c.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Falha ao carregar catálogo da Conta Azul",
-          },
-          400,
+        throw invalid(
+          "integration_request_failed",
+          error instanceof Error
+            ? error.message
+            : "Falha ao carregar catálogo da Conta Azul",
         );
       }
     },
@@ -1680,11 +1668,10 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const id = c.req.param("id");
       const input = c.req.valid("json");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record || record.integration.provider !== "conta_azul") {
-        return c.json({ error: "Integração Conta Azul não encontrada" }, 404);
-      }
+      const record = await requireLabContaAzulIntegration(
+        member.organizationId,
+        id,
+      );
 
       const currentConfig = normalizeContaAzulConnectionConfig(
         record.connection.config,
@@ -1748,7 +1735,7 @@ export const integrationsRouter = new Hono<{
           : currentConfig.enabledTargets,
       });
 
-      await orgDb(member.organizationId).transaction(async (o) => {
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o
           .update(integrationConnection)
           .set({
@@ -1845,7 +1832,7 @@ export const integrationsRouter = new Hono<{
           },
         });
 
-        return c.json({ error: message }, 400);
+        throw invalid("integration_request_failed", message);
       }
     },
   )
@@ -1905,7 +1892,7 @@ export const integrationsRouter = new Hono<{
           },
         });
 
-        return c.json({ error: message }, 400);
+        throw invalid("integration_request_failed", message);
       }
     },
   )
@@ -1965,7 +1952,7 @@ export const integrationsRouter = new Hono<{
           },
         });
 
-        return c.json({ error: message }, 400);
+        throw invalid("integration_request_failed", message);
       }
     },
   )
@@ -2031,7 +2018,7 @@ export const integrationsRouter = new Hono<{
           },
         });
 
-        return c.json({ error: message }, 400);
+        throw invalid("integration_request_failed", message);
       }
     },
   )
@@ -2091,7 +2078,7 @@ export const integrationsRouter = new Hono<{
           },
         });
 
-        return c.json({ error: message }, 400);
+        throw invalid("integration_request_failed", message);
       }
     },
   )
@@ -2151,7 +2138,7 @@ export const integrationsRouter = new Hono<{
           },
         });
 
-        return c.json({ error: message }, 400);
+        throw invalid("integration_request_failed", message);
       }
     },
   )
@@ -2164,11 +2151,7 @@ export const integrationsRouter = new Hono<{
       const member = c.get("member");
       const session = c.get("session");
       const id = c.req.param("id");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       try {
         if (record.integration.provider === "generic_http") {
@@ -2189,7 +2172,7 @@ export const integrationsRouter = new Hono<{
           });
         }
 
-        await orgDb(member.organizationId).transaction(async (o) => {
+        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
           await o
             .update(organizationIntegration)
             .set({
@@ -2242,7 +2225,7 @@ export const integrationsRouter = new Hono<{
         const message =
           error instanceof Error ? error.message : "Falha ao validar conexão";
 
-        await orgDb(member.organizationId).transaction(async (o) => {
+        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
           await o
             .update(organizationIntegration)
             .set({
@@ -2264,7 +2247,7 @@ export const integrationsRouter = new Hono<{
           );
         });
 
-        return c.json({ error: message }, 400);
+        throw invalid("integration_request_failed", message);
       }
     },
   )
@@ -2278,11 +2261,7 @@ export const integrationsRouter = new Hono<{
       const member = c.get("member");
       const id = c.req.param("id");
       const input = c.req.valid("json");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       assertProviderSupportsSyncTarget(
         record.integration.provider,
@@ -2310,11 +2289,7 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const id = c.req.param("id");
       const input = c.req.valid("json");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       assertProviderSupportsSyncTarget(
         record.integration.provider,
@@ -2322,7 +2297,7 @@ export const integrationsRouter = new Hono<{
       );
 
       if (record.integration.status !== "ACTIVE") {
-        return c.json({ error: "Integração desativada" }, 409);
+        throw conflict("integration_inactive", "Integração desativada");
       }
 
       const preview = await previewIntegrationSync({
@@ -2332,16 +2307,17 @@ export const integrationsRouter = new Hono<{
       });
 
       if (preview.blocked) {
-        return c.json(
+        throw conflict(
+          "integration_sync_blocked",
+          preview.warnings[0]?.message ??
+            "A integração ainda não está pronta para este alvo",
           {
-            error:
-              preview.warnings[0]?.message ??
-              "A integração ainda não está pronta para este alvo",
-            blocked: true,
-            warnings: preview.warnings,
-            coverage: preview.coverage,
+            legacyBody: {
+              blocked: true,
+              warnings: preview.warnings.map((warning) => ({ ...warning })),
+              coverage: { ...preview.coverage },
+            },
           },
-          409,
         );
       }
 
@@ -2352,19 +2328,19 @@ export const integrationsRouter = new Hono<{
       });
 
       if (activeRun) {
-        return c.json(
-          {
-            error: "Já existe uma sincronização em andamento para este alvo",
-            runId: activeRun.id,
-          },
-          409,
+        throw conflict(
+          "integration_sync_in_progress",
+          "Já existe uma sincronização em andamento para este alvo",
+          { legacyBody: { runId: activeRun.id } },
         );
       }
 
       // The run row and the event that requests it commit together; the
       // dispatch below (queue, remote calls) runs after.
-      const runId = await orgDb(member.organizationId).transaction(
-        async (o) => {
+      const runId = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async ({ o }) => {
           const created = await createSyncRun(
             {
               integrationId: id,
@@ -2409,11 +2385,14 @@ export const integrationsRouter = new Hono<{
           waitUntil: (promise) => c.executionCtx.waitUntil(promise),
         });
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao processar sincronização";
-        return c.json({ error: message }, 500);
+        throw new DomainError({
+          code: "integration_sync_dispatch_failed",
+          status: 500,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Falha ao processar sincronização",
+        });
       }
 
       return c.json({
@@ -2436,11 +2415,7 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const id = c.req.param("id");
       const input = c.req.valid("json");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       assertProviderSupportsSyncTarget(
         record.integration.provider,
@@ -2467,7 +2442,7 @@ export const integrationsRouter = new Hono<{
         lastScheduledRunAt: currentSchedule.lastScheduledRunAt,
       });
 
-      await orgDb(member.organizationId).transaction(async (o) => {
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o
           .update(integrationConnection)
           .set({
@@ -2531,11 +2506,7 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const id = c.req.param("id");
       const input = c.req.valid("json");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       // `enable` leaves DISABLED only; ACTION_REQUIRED must reconnect first.
       if (
@@ -2546,13 +2517,13 @@ export const integrationsRouter = new Hono<{
         ) &&
         record.integration.status !== "ACTIVE"
       ) {
-        return c.json(
-          { error: "Reconecte a integração antes de ativá-la" },
-          409,
+        throw conflict(
+          "integration_action_required",
+          "Reconecte a integração antes de ativá-la",
         );
       }
 
-      await orgDb(member.organizationId).transaction(async (o) => {
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o
           .update(organizationIntegration)
           .set({
@@ -2597,11 +2568,7 @@ export const integrationsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       return c.json({
         data: await buildIntegrationOverview(record),
@@ -2616,11 +2583,7 @@ export const integrationsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      await requireLabIntegration(member.organizationId, id);
 
       const runs = await orgDb(member.organizationId).transaction((o) =>
         o
@@ -2650,11 +2613,7 @@ export const integrationsRouter = new Hono<{
       const id = c.req.param("id");
       const runId = c.req.param("runId");
       const input = c.req.valid("query");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      await requireLabIntegration(member.organizationId, id);
 
       const found = await orgDb(member.organizationId).transaction(
         async (o) => {
@@ -2688,7 +2647,7 @@ export const integrationsRouter = new Hono<{
       );
 
       if (!found) {
-        return c.json({ error: "Execução não encontrada" }, 404);
+        throw notFound("integration_run_not_found", "Execução não encontrada");
       }
       const { run, items } = found;
       const statusCounts = items.reduce<Record<string, number>>((acc, item) => {
@@ -2717,11 +2676,7 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const id = c.req.param("id");
       const runId = c.req.param("runId");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      const record = await requireLabIntegration(member.organizationId, id);
 
       const [originalRun] = await orgDb(member.organizationId).transaction(
         (o) =>
@@ -2739,7 +2694,7 @@ export const integrationsRouter = new Hono<{
       );
 
       if (!originalRun) {
-        return c.json({ error: "Execução não encontrada" }, 404);
+        throw notFound("integration_run_not_found", "Execução não encontrada");
       }
 
       assertProviderSupportsSyncTarget(
@@ -2751,11 +2706,9 @@ export const integrationsRouter = new Hono<{
         originalRun.status === "PENDING" ||
         originalRun.status === "RUNNING"
       ) {
-        return c.json(
-          {
-            error: "Não é possível reprocessar uma execução ainda em andamento",
-          },
-          409,
+        throw conflict(
+          "integration_run_in_progress",
+          "Não é possível reprocessar uma execução ainda em andamento",
         );
       }
 
@@ -2766,12 +2719,10 @@ export const integrationsRouter = new Hono<{
       });
 
       if (activeRun) {
-        return c.json(
-          {
-            error: "Já existe uma sincronização em andamento para este alvo",
-            runId: activeRun.id,
-          },
-          409,
+        throw conflict(
+          "integration_sync_in_progress",
+          "Já existe uma sincronização em andamento para este alvo",
+          { legacyBody: { runId: activeRun.id } },
         );
       }
 
@@ -2806,15 +2757,13 @@ export const integrationsRouter = new Hono<{
           message,
         });
 
-        return c.json(
-          {
-            error: message,
+        throw conflict("integration_sync_blocked", message, {
+          legacyBody: {
             blocked: true,
-            warnings: preview.warnings,
+            warnings: preview.warnings.map((warning) => ({ ...warning })),
             runId: retryRunId,
           },
-          409,
-        );
+        });
       }
 
       await writeIntegrationEvent({
@@ -2844,11 +2793,14 @@ export const integrationsRouter = new Hono<{
           waitUntil: (promise) => c.executionCtx.waitUntil(promise),
         });
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao processar sincronização";
-        return c.json({ error: message }, 500);
+        throw new DomainError({
+          code: "integration_sync_dispatch_failed",
+          status: 500,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Falha ao processar sincronização",
+        });
       }
 
       return c.json({
@@ -2867,11 +2819,7 @@ export const integrationsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
-      const record = await getIntegrationRecord(member.organizationId, id);
-
-      if (!record) {
-        return c.json({ error: "Integração não encontrada" }, 404);
-      }
+      await requireLabIntegration(member.organizationId, id);
 
       const events = await orgDb(member.organizationId).transaction((o) =>
         o
@@ -2921,14 +2869,22 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const linkId = c.req.param("linkId");
       const { reason } = c.req.valid("json");
-      const result = await acknowledgeIntegrationDrift({
-        organizationId: member.organizationId,
-        linkId,
-        actorUserId: session.user.id,
-        reason,
-      });
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        ({ o }) =>
+          acknowledgeIntegrationDrift(
+            {
+              organizationId: member.organizationId,
+              linkId,
+              actorUserId: session.user.id,
+              reason,
+            },
+            o,
+          ),
+      );
       if (!result.ok) {
-        return c.json({ error: "Motivo é obrigatório" }, 400);
+        throw invalid("integration_reason_required", "Motivo é obrigatório");
       }
       return c.json({ data: { ok: true } });
     },

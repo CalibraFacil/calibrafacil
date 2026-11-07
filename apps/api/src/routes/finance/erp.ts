@@ -11,6 +11,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
+import { forbidden, invalid, notFound } from "../../lib/domain-errors";
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 
@@ -57,7 +58,7 @@ export const financeErpRouter = new Hono<{
       const documentId = Number.parseInt(c.req.param("id"), 10);
 
       if (!Number.isInteger(documentId)) {
-        return c.json({ error: "ID invalido" }, 400);
+        throw invalid("invalid_request", "ID invalido");
       }
 
       const payload = await loadBillingDocumentExportPayload(
@@ -65,16 +66,19 @@ export const financeErpRouter = new Hono<{
         documentId,
       );
       if (!payload) {
-        return c.json({ error: "Documento nao encontrado" }, 404);
+        throw notFound(
+          "billing_document_not_found",
+          "Documento nao encontrado",
+        );
       }
 
       if (
         member.selectedUnitScope !== "all" &&
         payload.unitId !== member.activeUnitId
       ) {
-        return c.json(
-          { error: "Documento fora do escopo da unidade ativa" },
-          403,
+        throw forbidden(
+          "billing_document_outside_unit_scope",
+          "Documento fora do escopo da unidade ativa",
         );
       }
 

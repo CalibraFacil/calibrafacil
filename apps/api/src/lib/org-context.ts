@@ -16,6 +16,7 @@ import {
   controlChartAuditLog,
   correctiveActionAuditLog,
   customerAuditLog,
+  financialAuditLog,
   methodAuditLog,
   nonConformanceAuditLog,
   personnelCompetenceAuditLog,
@@ -186,6 +187,27 @@ const AUDIT_WRITERS = {
     ctx.o
       .insert(accreditedScopeLineAuditLog)
       .values({ ...common(ctx, entry), scopeLineId: id }),
+  // The financial trail names the entity by type and a text id.
+  financialDocument: (ctx, id, entry) =>
+    ctx.o.insert(financialAuditLog).values({
+      organizationId: ctx.org,
+      entityType: "document",
+      entityId: String(id),
+      action: entry.action,
+      changes: entry.changes ?? null,
+      performedBy: ctx.actor.userId,
+      reason: entry.reason ?? null,
+    }),
+  financialReceipt: (ctx, id, entry) =>
+    ctx.o.insert(financialAuditLog).values({
+      organizationId: ctx.org,
+      entityType: "receipt",
+      entityId: String(id),
+      action: entry.action,
+      changes: entry.changes ?? null,
+      performedBy: ctx.actor.userId,
+      reason: entry.reason ?? null,
+    }),
 } satisfies Record<string, AuditWriter>;
 
 export type AuditedEntity = keyof typeof AUDIT_WRITERS;

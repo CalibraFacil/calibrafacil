@@ -18,8 +18,16 @@ import {
 } from "../../middleware/permission";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { agreementBelongsToOrganization } from "../../lib/tenant-refs";
+import {
+  conflict,
+  DomainError,
+  invalid,
+  notFound,
+} from "../../lib/domain-errors";
+import { withOrg } from "../../lib/org-context";
 import { orgDb } from "../../lib/org-db";
 import { isUniqueViolationOf } from "../../lib/db-errors";
+import { requestActor } from "../../middleware/request-actor";
 import {
   recomputeCertificateRelease,
   releaseByException,
@@ -213,14 +221,23 @@ export const financeCertificateReleaseRouter = new Hono<{
       const member = c.get("member");
       const { calibrationJobId } = c.req.valid("param");
 
-      const result = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const job = await loadJobInOrgScope(o, {
+      // Not read-only for the record: the release is recomputed (and its audit
+      // row written) in this transaction, so it is a write on the one door.
+      const dto = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const job = await loadJobInOrgScope(ctx.o, {
             organizationId: member.organizationId,
             calibrationJobId,
             scope: member,
           });
-          if (!job) return { status: "job_not_found" as const };
+          if (!job) {
+            throw notFound(
+              "certificate_not_found",
+              "Certificado não encontrado",
+            );
+          }
 
           // Recompute defensively so callers see fresh state without waiting
           // for the next reconciliation poll. Recompute is read-only with
@@ -232,21 +249,20 @@ export const financeCertificateReleaseRouter = new Hono<{
               source: "system_reconciliation",
               actorUserId: null,
             },
-            o,
+            ctx.o,
           );
 
-          const dto = await loadReleaseDto(o, calibrationJobId);
-          if (!dto) return { status: "not_calculated" as const };
-          return { status: "ok" as const, dto };
+          const loaded = await loadReleaseDto(ctx.o, calibrationJobId);
+          if (!loaded) {
+            throw notFound(
+              "release_not_calculated",
+              "Liberação ainda não calculada",
+            );
+          }
+          return loaded;
         },
       );
-      if (result.status === "job_not_found") {
-        return c.json({ error: "Certificado não encontrado" }, 404);
-      }
-      if (result.status === "not_calculated") {
-        return c.json({ error: "Liberação ainda não calculada" }, 404);
-      }
-      return c.json({ data: result.dto });
+      return c.json({ data: dto });
     },
   )
   // -------------------------------------------------------------------------
@@ -259,55 +275,64 @@ export const financeCertificateReleaseRouter = new Hono<{
     zValidator("json", ReleaseByExceptionSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { calibrationJobId } = c.req.valid("param");
       const { reason } = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const job = await loadJobInOrgScope(o, {
+      const dto = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const job = await loadJobInOrgScope(ctx.o, {
             organizationId: member.organizationId,
             calibrationJobId,
             scope: member,
           });
-          if (!job) return { status: "job_not_found" as const };
+          if (!job) {
+            throw notFound(
+              "certificate_not_found",
+              "Certificado não encontrado",
+            );
+          }
 
           const result = await releaseByException(
             {
               organizationId: member.organizationId,
               calibrationJobId,
-              actorUserId: session.user.id,
+              actorUserId: ctx.actor.userId,
               reason,
             },
-            o,
+            ctx.o,
           );
 
           if ("code" in result) {
-            return { status: "refused" as const, code: result.code };
+            if (result.code === "REASON_REQUIRED") {
+              throw invalid("release_reason_required", "Motivo é obrigatório");
+            }
+            if (result.code === "NOT_APPROVED") {
+              throw conflict(
+                "release_certificate_not_approved",
+                "Certificado ainda não aprovado",
+              );
+            }
+            throw notFound(
+              "certificate_not_found",
+              "Certificado não encontrado",
+            );
           }
 
-          const dto = await loadReleaseDto(o, calibrationJobId);
-          return { status: "released" as const, dto };
+          const loaded = await loadReleaseDto(ctx.o, calibrationJobId);
+          if (!loaded) {
+            throw new DomainError({
+              code: "release_unavailable",
+              status: 500,
+              message: "Liberação não disponível",
+            });
+          }
+          return loaded;
         },
       );
 
-      if (outcome.status === "job_not_found") {
-        return c.json({ error: "Certificado não encontrado" }, 404);
-      }
-      if (outcome.status === "refused") {
-        if (outcome.code === "REASON_REQUIRED") {
-          return c.json({ error: "Motivo é obrigatório" }, 400);
-        }
-        if (outcome.code === "NOT_APPROVED") {
-          return c.json({ error: "Certificado ainda não aprovado" }, 409);
-        }
-        return c.json({ error: "Certificado não encontrado" }, 404);
-      }
-
-      if (!outcome.dto) {
-        return c.json({ error: "Liberação não disponível" }, 500);
-      }
-      return c.json({ data: outcome.dto });
+      return c.json({ data: dto });
     },
   );
 
@@ -367,19 +392,20 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
     zValidator("json", CreatePolicySchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const body = c.req.valid("json");
 
       // The partial unique index is the authority: a second org-wide default
       // (customer, agreement and category all null) violates it, also when two
       // requests race. Map that one index to 409 instead of a 500. The violation
       // aborts the transaction, so it is caught outside it.
-      const outcome = await orgDb(member.organizationId)
-        .transaction(async (o) => {
+      const created = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
           // Restrict customer / agreement override creation to entities inside
           // the caller's organization (no cross-tenant leak via FK fishing).
           if (body.customerId != null) {
-            const [matched] = await o
+            const [matched] = await ctx.o
               .select({ id: customer.id })
               .from(customer)
               .where(
@@ -389,7 +415,9 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
                 ),
               )
               .limit(1);
-            if (!matched) return { status: "invalid_customer" as const };
+            if (!matched) {
+              throw invalid("rule_customer_invalid", "Cliente inválido");
+            }
           }
 
           // Same cross-tenant guard for the agreement the override is pinned to.
@@ -398,13 +426,13 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
             !(await agreementBelongsToOrganization(
               member.organizationId,
               body.commercialAgreementId,
-              o,
+              ctx.o,
             ))
           ) {
-            return { status: "invalid_agreement" as const };
+            throw invalid("rule_agreement_invalid", "Contrato inválido");
           }
 
-          const rows = await o
+          const [row] = await ctx.o
             .insert(certificateReleasePolicy)
             .values({
               organizationId: member.organizationId,
@@ -413,32 +441,21 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
               commercialAgreementId: body.commercialAgreementId ?? null,
               serviceCategory: body.serviceCategory ?? null,
               priority: body.priority ?? 0,
-              createdByUserId: session.user.id,
+              createdByUserId: ctx.actor.userId,
             })
             .returning();
-          return { status: "ok" as const, rows };
-        })
-        .catch((error: unknown) => {
-          if (isUniqueViolationOf(error, ORG_DEFAULT_POLICY_INDEX)) {
-            return { status: "duplicate_default" as const };
-          }
-          throw error;
-        });
-      if (outcome.status === "invalid_customer") {
-        return c.json({ error: "Cliente inválido" }, 400);
-      }
-      if (outcome.status === "invalid_agreement") {
-        return c.json({ error: "Contrato inválido" }, 400);
-      }
-      if (outcome.status === "duplicate_default") {
-        return c.json(
-          { error: "Já existe uma política padrão para a organização" },
-          409,
-        );
-      }
-
-      const created = outcome.rows[0];
-      if (!created) return c.json({ error: "Falha ao criar política" }, 500);
+          if (!row) throw new Error("Falha ao criar política");
+          return row;
+        },
+      ).catch((error: unknown) => {
+        if (isUniqueViolationOf(error, ORG_DEFAULT_POLICY_INDEX)) {
+          throw conflict(
+            "release_policy_default_exists",
+            "Já existe uma política padrão para a organização",
+          );
+        }
+        throw error;
+      });
 
       return c.json({
         data: {
@@ -468,62 +485,52 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
       const { id } = c.req.valid("param");
       const body = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const [existing] = await o
-            .select({
-              id: certificateReleasePolicy.id,
-              customerId: certificateReleasePolicy.customerId,
-              commercialAgreementId:
-                certificateReleasePolicy.commercialAgreementId,
-              serviceCategory: certificateReleasePolicy.serviceCategory,
-            })
-            .from(certificateReleasePolicy)
-            .where(
-              and(
-                eq(certificateReleasePolicy.id, id),
-                eq(
-                  certificateReleasePolicy.organizationId,
-                  member.organizationId,
-                ),
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const [existing] = await ctx.o
+          .select({
+            id: certificateReleasePolicy.id,
+            customerId: certificateReleasePolicy.customerId,
+            commercialAgreementId:
+              certificateReleasePolicy.commercialAgreementId,
+            serviceCategory: certificateReleasePolicy.serviceCategory,
+          })
+          .from(certificateReleasePolicy)
+          .where(
+            and(
+              eq(certificateReleasePolicy.id, id),
+              eq(
+                certificateReleasePolicy.organizationId,
+                member.organizationId,
               ),
-            )
-            .limit(1);
-          if (!existing) return { status: "not_found" as const };
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          throw notFound("release_policy_not_found", "Política não encontrada");
+        }
 
-          const isOrgDefault =
-            existing.customerId === null &&
-            existing.commercialAgreementId === null &&
-            existing.serviceCategory === null;
-          if (isOrgDefault && body.archived === true) {
-            return { status: "default_not_archivable" as const };
-          }
+        const isOrgDefault =
+          existing.customerId === null &&
+          existing.commercialAgreementId === null &&
+          existing.serviceCategory === null;
+        if (isOrgDefault && body.archived === true) {
+          throw invalid(
+            "release_policy_default_not_archivable",
+            "Política padrão da organização não pode ser arquivada",
+          );
+        }
 
-          await o
-            .update(certificateReleasePolicy)
-            .set({
-              ...(body.mode !== undefined ? { mode: body.mode } : {}),
-              ...(body.priority !== undefined
-                ? { priority: body.priority }
-                : {}),
-              ...(body.archived === true ? { archivedAt: new Date() } : {}),
-              ...(body.archived === false ? { archivedAt: null } : {}),
-              updatedAt: new Date(),
-            })
-            .where(eq(certificateReleasePolicy.id, id));
-
-          return { status: "ok" as const };
-        },
-      );
-      if (outcome.status === "not_found") {
-        return c.json({ error: "Política não encontrada" }, 404);
-      }
-      if (outcome.status === "default_not_archivable") {
-        return c.json(
-          { error: "Política padrão da organização não pode ser arquivada" },
-          400,
-        );
-      }
+        await ctx.o
+          .update(certificateReleasePolicy)
+          .set({
+            ...(body.mode !== undefined ? { mode: body.mode } : {}),
+            ...(body.priority !== undefined ? { priority: body.priority } : {}),
+            ...(body.archived === true ? { archivedAt: new Date() } : {}),
+            ...(body.archived === false ? { archivedAt: null } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(certificateReleasePolicy.id, id));
+      });
 
       return c.json({ data: { id } });
     },

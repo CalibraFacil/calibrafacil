@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { withErrorHandling } from "../../../test/integration/with-error-handling";
 import { financeTimelineRouter } from "../finance/timeline";
 import type { AuthVariables } from "../../middleware/permission";
 
@@ -56,7 +57,7 @@ function createTestApp() {
   });
   app.route("/api/finance", financeTimelineRouter);
 
-  return app;
+  return withErrorHandling(app);
 }
 
 describe("finance timeline routes", () => {
@@ -179,6 +180,7 @@ describe("finance timeline routes", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "Ordem de serviço não encontrada",
+      code: "service_order_not_found",
     });
   });
 
@@ -192,6 +194,7 @@ describe("finance timeline routes", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "Cliente não encontrado",
+      code: "customer_not_found",
     });
   });
 
@@ -205,6 +208,7 @@ describe("finance timeline routes", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "Cliente não encontrado",
+      code: "customer_not_found",
     });
     expect(mocks.buildCustomerFinancialTimeline).not.toHaveBeenCalled();
   });
@@ -226,6 +230,7 @@ describe("finance timeline routes", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: "Limite inválido",
+      code: "invalid_limit",
     });
     expect(mocks.buildCustomerFinancialTimeline).not.toHaveBeenCalled();
   });

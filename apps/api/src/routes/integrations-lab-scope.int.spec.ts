@@ -38,11 +38,14 @@ import {
   normalizeContaAzulConnectionConfig,
   normalizeGenericFinancialErpConfig,
 } from "@calibra-facil/shared";
-import { integrationsRouter } from "./integrations";
+import { integrationsRouter as bareIntegrationsRouter } from "./integrations";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, type SeededOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const integrationsRouter = withErrorHandling(bareIntegrationsRouter);
 
 const ENV = { INTEGRATIONS_MASTER_KEY: Buffer.alloc(32).toString("base64") };
 const JSON_HEADERS = { "content-type": "application/json" };
