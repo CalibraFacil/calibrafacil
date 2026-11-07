@@ -1,3 +1,5 @@
+import { foldText } from '@calibra-facil/shared/text'
+import { isWeighingScaleAssetType } from '@calibra-facil/shared/mass-units'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
@@ -68,7 +70,6 @@ import {
   EccentricityIndicator,
   type EccentricityIndicatorPosition,
   isEccentricityIndicatorPosition,
-  isWeighingScaleAssetType,
 } from '@/components/eccentricity-indicator'
 import { isMassAssetTypeDefinition, isMassUnit } from '@calibra-facil/shared'
 import {
@@ -116,14 +117,6 @@ const initialFormData: AssetFormData = {
   metrologyRegime: 'INDUSTRIAL',
   ...DEFAULT_REGULATED_FORM_FIELDS,
   specifications: {},
-}
-
-/** Accent-insensitive, case-insensitive text for the asset-type search. */
-function normalizeText(value: string | null | undefined) {
-  return (value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
 }
 
 /** DOM id of the input that owns a form field, so a failed submit can land on it. */
@@ -207,12 +200,12 @@ export function AssetCreateForm({
 
   const filteredAssetTypes = useMemo(() => {
     const all = assetTypesData?.data ?? []
-    const query = normalizeText(assetTypeSearch).trim()
+    const query = foldText(assetTypeSearch ?? '').trim()
     if (!query) return all
     return all.filter(
       (type) =>
-        normalizeText(type.name).includes(query) ||
-        normalizeText(type.slug).includes(query),
+        foldText(type.name ?? '').includes(query) ||
+        foldText(type.slug ?? '').includes(query),
     )
   }, [assetTypesData?.data, assetTypeSearch])
 

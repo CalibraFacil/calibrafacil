@@ -1,11 +1,9 @@
+import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
+import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { customer } from "@calibra-facil/db/schema";
 import { and, asc, eq, or } from "drizzle-orm";
 import { inOrgTransaction } from "./org-transaction";
-import {
-  parseLegacyNumericIdentifier,
-  slugifyRouteIdentifier,
-} from "./route-identifiers";
 
 const CUSTOMER_ROUTE_SLUG_SCAN_LIMIT = 500;
 
@@ -20,7 +18,7 @@ export async function resolveCustomerRouteId(
   executor?: OrgDb,
 ): Promise<number | null> {
   return inOrgTransaction(labOrganizationId, executor, async (o) => {
-    const legacyId = parseLegacyNumericIdentifier(identifier);
+    const legacyId = parseNumericRouteIdentifier(identifier);
     const directConditions = [eq(customer.taxId, identifier)];
 
     if (legacyId !== null) {

@@ -1,3 +1,4 @@
+import { slugify } from "@calibra-facil/shared/text";
 import {
   memberUnitAssignment,
   organizationUnit,
@@ -45,17 +46,7 @@ export type UnitGovernanceAccess = {
 
 const GLOBAL_MULTI_UNIT_ROLES = new Set<RoleName>(["owner", "admin"]);
 const DEFAULT_UNIT_NAME = "Matriz";
-const DEFAULT_UNIT_SLUG = slugifyUnitName(DEFAULT_UNIT_NAME);
-
-function slugifyUnitName(name: string) {
-  return name
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+const DEFAULT_UNIT_SLUG = slugify(DEFAULT_UNIT_NAME);
 
 function getDefaultUnitRole(role: RoleName): MemberUnitRole {
   if (role === "owner" || role === "admin") return "unit_admin";

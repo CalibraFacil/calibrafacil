@@ -16,7 +16,6 @@ import {
   orgPartition,
   safeR2Segment,
   serviceOrderDocKey,
-  slugify,
   standardCertificateKey,
   syncAttachmentKey,
 } from "@calibra-facil/shared/storage-keys";
@@ -49,24 +48,6 @@ describe("bucketFor", () => {
     ] as const) {
       expect(bucketFor(category)).toBe("media");
     }
-  });
-});
-
-describe("slugify", () => {
-  it("ascii-folds, lowercases and collapses separators", () => {
-    expect(slugify("Açaí & Cia Ltda")).toBe("acai-cia-ltda");
-    expect(slugify("Toledo do Brasil S/A")).toBe("toledo-do-brasil-s-a");
-    expect(slugify("  Balança 01  ")).toBe("balanca-01");
-  });
-
-  it("caps length and trims a dash left by the cut", () => {
-    expect(slugify("a".repeat(50), 40)).toBe("a".repeat(40));
-    // "ab-ab-..." cut at an odd boundary must not leave a trailing dash
-    expect(slugify("ab ".repeat(20), 5)).toBe("ab-ab");
-  });
-
-  it("returns empty string when nothing survives", () => {
-    expect(slugify("!!!")).toBe("");
   });
 });
 

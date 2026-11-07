@@ -7,17 +7,6 @@ import {
 } from './mass-composition-utils'
 
 /**
- * Accent- and case-insensitive normalization for option/search matching.
- * Shared by the weight grid filter and its tests.
- */
-export function normalizeSearchText(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-}
-
-/**
  * Builds a composition item from a selectable option, dropping the
  * display-only `optionLabel`. Mirrors the manual add flow in the cell.
  */

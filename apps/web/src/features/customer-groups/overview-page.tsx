@@ -1,3 +1,4 @@
+import { clientRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -33,7 +34,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
-import { clientRouteId } from '@/lib/route-identifiers'
 
 export function CustomerGroupOverviewTab({ groupId }: { groupId: number }) {
   const { data: group, isLoading } = useCustomerGroupDetailData(groupId)

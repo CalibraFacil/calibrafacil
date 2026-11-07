@@ -1,4 +1,5 @@
 import { toRecord } from "@calibra-facil/shared/record";
+import { slugify } from "@calibra-facil/shared/text";
 import { createHash } from "node:crypto";
 import { db, systemDb } from "@calibra-facil/db";
 import { customer, organization } from "@calibra-facil/db/schema";
@@ -23,14 +24,7 @@ export function desktopCustomerSlug(
   laboratoryId: string,
   eventId: string,
 ) {
-  const base = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .substring(0, 30)
-    .replace(/-+$/g, "");
+  const base = slugify(name, 30);
   const digest = createHash("sha256")
     .update(`${laboratoryId}:${eventId}`)
     .digest("hex")

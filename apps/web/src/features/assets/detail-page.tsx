@@ -1,3 +1,5 @@
+import { isWeighingScaleAssetType } from '@calibra-facil/shared/mass-units'
+import { clientRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -26,7 +28,6 @@ import {
   AuditTimeline,
   buildAuditTimelineEvents,
 } from '@/components/audit-timeline'
-import { clientRouteId } from '@/lib/route-identifiers'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'
@@ -48,7 +49,6 @@ import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   EccentricityIndicator,
   isEccentricityIndicatorPosition,
-  isWeighingScaleAssetType,
 } from '@/components/eccentricity-indicator'
 import { cn } from '@/lib/utils'
 

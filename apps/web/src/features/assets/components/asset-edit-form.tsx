@@ -1,3 +1,4 @@
+import { isWeighingScaleAssetType } from '@calibra-facil/shared/mass-units'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -43,7 +44,6 @@ import {
   EccentricityIndicator,
   type EccentricityIndicatorPosition,
   isEccentricityIndicatorPosition,
-  isWeighingScaleAssetType,
 } from '@/components/eccentricity-indicator'
 import { isMassAssetTypeDefinition } from '@calibra-facil/shared'
 import type { UpdateAssetInput } from '@calibra-facil/schemas'

@@ -42,7 +42,6 @@ const SURFACE = [
   'isExecutionEditable',
   'isPhaseActive',
   'normalizeExecutionFormData',
-  'normalizeText',
   'parsePastedReadings',
   'phaseBlockKey',
   'phaseBlockLabel',

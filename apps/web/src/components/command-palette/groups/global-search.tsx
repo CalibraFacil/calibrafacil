@@ -1,3 +1,8 @@
+import {
+  assetRouteId,
+  clientRouteId,
+  standardRouteId,
+} from '@calibra-facil/shared/route-identifiers'
 import { useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -19,12 +24,7 @@ import {
   useCommandSearchStandardsData,
 } from '@/features/command-palette/global-search'
 import { CommandGroup, CommandItem } from '@calibra-facil/ui/command'
-import {
-  assetRouteId,
-  clientRouteId,
-  jobRouteId,
-  standardRouteId,
-} from '@/lib/route-identifiers'
+import { jobRouteId } from '@/lib/route-identifiers'
 
 export function GlobalSearchGroup({
   searchValue,

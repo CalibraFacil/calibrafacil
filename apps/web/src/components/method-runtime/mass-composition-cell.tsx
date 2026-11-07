@@ -1,3 +1,4 @@
+import { foldText } from '@calibra-facil/shared/text'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -24,7 +25,6 @@ import {
 import {
   describeMassDelta,
   massCompositionItemFromOption,
-  normalizeSearchText,
   optionValueIn,
   parseQuickAdd,
   sortMassOptionsDesc,
@@ -110,7 +110,7 @@ function formatCompositionSummary(
 }
 
 function optionSearchText(option: MassCompositionOption): string {
-  return normalizeSearchText(
+  return foldText(
     [
       option.optionLabel,
       option.nominal,
@@ -205,7 +205,7 @@ export function MassCompositionCell({
   const { quantity: quickQuantity, query: quickQuery } = parseQuickAdd(search)
 
   const filteredOptions = useMemo(() => {
-    const needle = normalizeSearchText(quickQuery)
+    const needle = foldText(quickQuery)
     if (needle === '') return sortedOptions
     return sortedOptions.filter((option) =>
       optionSearchText(option).includes(needle),

@@ -36,7 +36,7 @@ import {
   withIdempotentMutation,
   withPreparedIdempotentMutation,
 } from "./idempotency";
-import { generateUniqueSlug } from "./helpers";
+import { uniqueSlug } from "../../lib/unique-slug";
 
 export const customerRoutes = new Hono<PublicApiV2Env>()
   .get(
@@ -187,7 +187,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
         () =>
           createClientOrganizationAsServiceOwner({
             name: input.name,
-            slug: generateUniqueSlug(input.name),
+            slug: uniqueSlug(input.name),
           }),
         async ({ o, tx, afterCommit }, orgResult) => {
           if (!orgResult?.id) {

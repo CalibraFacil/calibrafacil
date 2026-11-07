@@ -1,3 +1,7 @@
+import {
+  assetRouteId,
+  clientRouteId,
+} from '@calibra-facil/shared/route-identifiers'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState, type ReactNode } from 'react'
@@ -39,7 +43,6 @@ import {
   AssetEditSheetBody,
   CustomerEditSheetBody,
 } from '@/features/service-orders/components/entity-edit-sheet-bodies'
-import { assetRouteId, clientRouteId } from '@/lib/route-identifiers'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Input } from '@calibra-facil/ui/input'

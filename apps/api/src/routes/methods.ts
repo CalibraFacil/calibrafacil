@@ -1,3 +1,5 @@
+import { methodRouteId } from "@calibra-facil/shared/route-identifiers";
+import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { Hono } from "hono";
 import type {
   MethodDetail,
@@ -51,10 +53,6 @@ import {
   requireRole,
 } from "../middleware/permission";
 import { alias } from "drizzle-orm/pg-core";
-import {
-  buildMethodRouteIdentifier,
-  parseNumericRouteIdentifier,
-} from "../lib/route-identifiers";
 import { clientIp } from "../lib/client-ip";
 import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
@@ -1177,8 +1175,7 @@ async function resolveMethodRouteId(
     .where(eq(calibrationMethod.organizationId, organizationId));
 
   return (
-    methods.find((method) => buildMethodRouteIdentifier(method) === identifier)
-      ?.id ?? null
+    methods.find((method) => methodRouteId(method) === identifier)?.id ?? null
   );
 }
 

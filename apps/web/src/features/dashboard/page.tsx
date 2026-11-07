@@ -1,3 +1,4 @@
+import { standardRouteId } from '@calibra-facil/shared/route-identifiers'
 import { useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -38,7 +39,7 @@ import { ActivationChecklist } from '@/features/onboarding/activation-checklist'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { cn } from '@/lib/utils'
-import { jobRouteId, standardRouteId } from '@/lib/route-identifiers'
+import { jobRouteId } from '@/lib/route-identifiers'
 import {
   useDashboardIndexData,
   type DashboardJob,

@@ -1,3 +1,4 @@
+import { standardRouteId } from '@calibra-facil/shared/route-identifiers'
 import { type ColumnDef } from '@tanstack/react-table'
 import { REFERENCE_STANDARD_MACHINE } from '@calibra-facil/schemas/machines'
 import { Link } from '@tanstack/react-router'
@@ -27,7 +28,6 @@ import type {
 } from '@/features/standards/types'
 import { formatStandardDate } from '@/features/standards/dates'
 import { cn } from '@/lib/utils'
-import { standardRouteId } from '@/lib/route-identifiers'
 
 export type ReferenceStandard = StandardListItem
 

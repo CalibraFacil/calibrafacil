@@ -1,3 +1,4 @@
+import { slugify } from "@calibra-facil/shared/text";
 import type {
   JobDetail,
   JobsListResponse,
@@ -1439,14 +1440,7 @@ function buildDesktopUnitsResponse(
 }
 
 function slugifyUnitName(name: string, id: number) {
-  const slug = name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || `unit-${id}`;
+  return slugify(name) || `unit-${id}`;
 }
 
 function roleLabel(role: string) {

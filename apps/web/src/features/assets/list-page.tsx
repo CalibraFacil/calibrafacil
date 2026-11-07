@@ -1,3 +1,4 @@
+import { assetRouteId } from '@calibra-facil/shared/route-identifiers'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Cancel01Icon,
@@ -46,7 +47,6 @@ import {
   type AssetsTableMeta,
   assetsColumns,
 } from '@/features/assets/components/columns'
-import { assetRouteId } from '@/lib/route-identifiers'
 import { ASSETS_LIST_LIMIT, useAssetsListData } from '@/features/assets/queries'
 import { ASSET_STATUSES, type AssetStatus } from '@/features/assets/types'
 import { useCustomersSearchData } from '@/features/customers/queries'

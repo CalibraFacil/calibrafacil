@@ -1,3 +1,5 @@
+import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
+import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { Hono } from "hono";
 import type {
   AssetDetail,
@@ -34,10 +36,6 @@ import { isUniqueViolation } from "../lib/db-errors";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
-import {
-  parseLegacyNumericIdentifier,
-  slugifyRouteIdentifier,
-} from "../lib/route-identifiers";
 import {
   denormalizeAssetSpecificationsForResponse,
   normalizeAssetSpecificationsFromInput,
@@ -80,7 +78,7 @@ async function resolveAssetRouteId(
   member: MemberData,
 ): Promise<number | null> {
   return orgDb(member.organizationId).transaction(async (o) => {
-    const legacyId = parseLegacyNumericIdentifier(identifier);
+    const legacyId = parseNumericRouteIdentifier(identifier);
     const directConditions = [
       eq(asset.tag, identifier),
       eq(asset.serialNumber, identifier),

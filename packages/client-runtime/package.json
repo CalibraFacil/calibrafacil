@@ -16,6 +16,7 @@
   "dependencies": {
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
     "hono": "^4.13.7",
     "zod": "^4.6.6"
   },

@@ -1,3 +1,4 @@
+import { uniqueSlug } from "../lib/unique-slug";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
@@ -82,18 +83,6 @@ async function resolveLabGroupOrg(id: number, labOrganizationId: string) {
   return group ?? null;
 }
 
-function generateUniqueSlug(name: string): string {
-  const base = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .substring(0, 40);
-  const suffix = Math.random().toString(36).substring(2, 8);
-  return `grupo-${base}-${suffix}`;
-}
-
 /**
  * Customer groups (redes/grupos) — a lab models a multi-unit client as a group
  * whose branches are individual `customer` rows. The group is itself a CLIENT
@@ -115,7 +104,7 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
       try {
         const orgResult = await createClientOrganizationAsServiceOwner({
           name: input.name,
-          slug: generateUniqueSlug(input.name),
+          slug: `grupo-${uniqueSlug(input.name, 40)}`,
         });
 
         if (!orgResult?.id) {

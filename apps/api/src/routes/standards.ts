@@ -1,3 +1,5 @@
+import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
+import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { Hono } from "hono";
 import { createHash, randomUUID } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
@@ -74,10 +76,6 @@ import {
 } from "@calibra-facil/schemas/machines";
 import { buildUnitScopeCondition } from "../lib/units";
 import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
-import {
-  parseLegacyNumericIdentifier,
-  slugifyRouteIdentifier,
-} from "../lib/route-identifiers";
 import {
   createR2Client,
   generatePresignedUrl,
@@ -201,7 +199,7 @@ async function resolveStandardRouteId(
   executor: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const stableId =
-    parseLegacyNumericIdentifier(identifier) ??
+    parseNumericRouteIdentifier(identifier) ??
     parseTrailingNumericRouteIdentifier(identifier);
   const canMatchSerialNumber = !isPlaceholderSerialIdentifier(identifier);
 

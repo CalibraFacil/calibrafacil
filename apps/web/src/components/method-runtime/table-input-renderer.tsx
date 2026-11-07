@@ -1,3 +1,4 @@
+import { foldText } from '@calibra-facil/shared/text'
 import { type ClipboardEvent, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
@@ -127,20 +128,13 @@ const DEFAULT_ECCENTRICITY_LOAD_POINTS = {
   string[]
 >
 
-function normalizeColumnText(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-}
-
 function getMeasurementColumnGroup(
   column: TableColumn,
 ): MeasurementColumnGroup {
   if (column.phase === 'before') return 'before'
   if (column.phase === 'after') return 'after'
 
-  const text = normalizeColumnText(`${column.key} ${column.label}`)
+  const text = foldText(`${column.key} ${column.label}`)
 
   if (text.includes('antes') && text.includes('leitura')) {
     return 'before'
@@ -170,7 +164,7 @@ function getEccentricityPointColumn(field: MethodInputField) {
   if (configured) return configured
 
   return field.columns?.find((column) => {
-    const text = normalizeColumnText(`${column.key} ${column.label}`)
+    const text = foldText(`${column.key} ${column.label}`)
     return text.includes('posicao') || text.includes('ponto')
   })?.key
 }

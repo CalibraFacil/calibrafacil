@@ -1,3 +1,4 @@
+import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { standardDaysUntilExpiry } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
@@ -409,14 +410,4 @@ function getNumber(record: Record<string, unknown>, key: string) {
 
 function getNullableNumber(record: Record<string, unknown>, key: string) {
   return getNumber(record, key);
-}
-
-function slugifyRouteIdentifier(value: string): string {
-  const slug = value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return slug || "item";
 }

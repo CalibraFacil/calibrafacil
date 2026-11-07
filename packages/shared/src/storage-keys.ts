@@ -23,6 +23,8 @@
  *                     avatars/{userId}
  */
 
+import { slugify } from "./text";
+
 /** Logical storage buckets. Concrete names are resolved per-app from env. */
 export type StorageBucket = "documents" | "media";
 
@@ -103,20 +105,8 @@ export function safeR2Segment(value: string): string {
   return trimDashes(value.replace(/[^a-zA-Z0-9._-]+/g, "-")) || "local";
 }
 
-/**
- * Slugify a human-facing string for use inside a descriptive filename or the
- * readable org prefix (company name, asset tag, brand, org slug).
- */
-export function slugify(value: string, maxLength = 40): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, maxLength)
-    .replace(/-$/, "");
-}
+/** Readable key segments are slugs capped at 40 characters. */
+const KEY_SLUG_MAX = 40;
 
 type Dateish = Date | string | null | undefined;
 
@@ -177,7 +167,7 @@ export interface OrgRef {
  */
 export function orgPartition(org: OrgRef): string {
   const id = encodeKeyPart("orgId", org.id);
-  const slug = slugify(org.slug);
+  const slug = slugify(org.slug, KEY_SLUG_MAX);
   return slug ? `${slug}-${id}` : id;
 }
 
@@ -200,11 +190,13 @@ function descriptiveCertificateFilename(
   extension: "pdf" | "xlsx" | "html",
 ): string {
   const segments = [
-    slugify(descriptor.certNumber),
+    slugify(descriptor.certNumber, KEY_SLUG_MAX),
     String(descriptor.year),
-    descriptor.companyName ? slugify(descriptor.companyName) : null,
-    descriptor.assetTag ? slugify(descriptor.assetTag) : null,
-    descriptor.brand ? slugify(descriptor.brand) : null,
+    descriptor.companyName
+      ? slugify(descriptor.companyName, KEY_SLUG_MAX)
+      : null,
+    descriptor.assetTag ? slugify(descriptor.assetTag, KEY_SLUG_MAX) : null,
+    descriptor.brand ? slugify(descriptor.brand, KEY_SLUG_MAX) : null,
   ].filter((part): part is string => Boolean(part));
   const base = segments.join("-") || "certificado";
   return `${base}.${extension}`;
@@ -330,7 +322,7 @@ export function ootNotificationKey(
   const part = orgPartition(params.org);
   return {
     bucket: bucketFor("OOT_NOTIFICATION"),
-    key: `org/${part}/${params.year}/oot-notifications/${params.notificationId}/notificacao-7-10-${slugify(params.ncNumber)}.pdf`,
+    key: `org/${part}/${params.year}/oot-notifications/${params.notificationId}/notificacao-7-10-${slugify(params.ncNumber, KEY_SLUG_MAX)}.pdf`,
   };
 }
 
