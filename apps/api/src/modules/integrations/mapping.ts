@@ -1,5 +1,5 @@
 import { toRecord } from "@calibra-facil/shared/record";
-import { formatLabDayKey } from "@calibra-facil/documents";
+import { labCalendarDayKey } from "@calibra-facil/shared/calendar-date";
 import {
   applyIntegrationMappings,
   type IntegrationMappingValidationIssue,
@@ -70,9 +70,9 @@ function getServiceOrderCommercialDate(
   ]) {
     if (!candidate) continue;
     const instant = new Date(candidate);
-    if (!Number.isNaN(instant.getTime())) return formatLabDayKey(instant);
+    if (!Number.isNaN(instant.getTime())) return labCalendarDayKey(instant);
   }
-  return formatLabDayKey(new Date());
+  return labCalendarDayKey(new Date());
 }
 
 function getServiceOrderTotalCents(payload: IntegrationServiceOrderPayload) {

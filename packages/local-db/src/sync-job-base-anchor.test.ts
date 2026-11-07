@@ -1,14 +1,14 @@
+import {
+  SYNC_COMMAND_OPERATIONS,
+  SYNC_COMMAND_SUPPORT,
+  parseSyncCommand,
+} from "@calibra-facil/contracts/sync-protocol";
+import { SyncBootstrapResponse } from "@calibra-facil/contracts/sync";
 import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  SYNC_COMMAND_OPERATIONS,
-  SYNC_COMMAND_SUPPORT,
-  parseSyncCommand,
-  type SyncBootstrapResponse,
-} from "@calibra-facil/contracts";
 import {
   applySyncBootstrap,
   applySyncPushResult,

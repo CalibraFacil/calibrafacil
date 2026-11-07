@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { formatCalendarDate } from "./dates.js";
+import { formatCalendarDate } from "@calibra-facil/shared/format";
 
 // Types for label generation (standalone, does not depend on @calibra-facil/db)
 

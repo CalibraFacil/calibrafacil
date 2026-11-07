@@ -1,3 +1,11 @@
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
+import {
+  getDateOnlyDay,
+  getLabCalendarDay,
+} from "@calibra-facil/shared/calendar-date";
 /**
  * Fleet calibration-status report for the portal audit pack (#738).
  * A self-contained, print-optimized HTML snapshot of the customer's instrument
@@ -10,13 +18,6 @@
  * disclaimer as the interval-analysis report (§7.8.4.3: the calibration
  * interval is the customer's decision).
  */
-
-import {
-  formatCalendarDate,
-  formatInstant,
-  getDateOnlyDay,
-  getLabCalendarDay,
-} from "./dates.js";
 
 type FleetDueStatus = "OVERDUE" | "DUE_SOON" | "OK" | "UNSCHEDULED";
 

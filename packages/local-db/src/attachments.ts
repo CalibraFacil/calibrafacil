@@ -1,4 +1,4 @@
-import type { SyncCommandOperation } from "@calibra-facil/contracts";
+import { SyncCommandOperation } from "@calibra-facil/contracts/sync-protocol";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 

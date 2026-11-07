@@ -1,8 +1,8 @@
+import { isRegulatedOutboxOperation } from "@calibra-facil/contracts/outbox-rejections";
 import {
-  isRegulatedOutboxOperation,
+  LocalSyncConflict,
   localSyncConflictSchema,
-  type LocalSyncConflict,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/sync";
 import type { LocalDatabase } from "./database";
 import { rebaseQueuedJobEvents } from "./outbox";
 import {

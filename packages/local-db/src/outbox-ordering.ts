@@ -1,5 +1,5 @@
-import type { LocalBlockedOutboxEvent } from "@calibra-facil/contracts";
-import { isRegulatedOutboxOperation } from "@calibra-facil/contracts";
+import { LocalBlockedOutboxEvent } from "@calibra-facil/contracts/sync";
+import { isRegulatedOutboxOperation } from "@calibra-facil/contracts/outbox-rejections";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 

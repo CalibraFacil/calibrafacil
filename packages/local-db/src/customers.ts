@@ -1,5 +1,5 @@
 import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
-import type { SyncCommandOperation } from "@calibra-facil/contracts";
+import type { SyncCommandOperation } from "@calibra-facil/contracts/sync-protocol";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";

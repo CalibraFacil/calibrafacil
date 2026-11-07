@@ -1,4 +1,4 @@
-import { startOfLabMonth } from "@calibra-facil/documents";
+import { startOfLabMonth } from "@calibra-facil/shared/calendar-date";
 
 export type ReportPeriod = "7d" | "30d" | "90d" | "month";
 

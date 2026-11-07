@@ -1,4 +1,4 @@
-import { PERMANENT_OUTBOX_REJECTION_CODES } from "@calibra-facil/contracts";
+import { PERMANENT_OUTBOX_REJECTION_CODES } from "@calibra-facil/contracts/outbox-rejections";
 
 // Permanently refused events get their own outbox state (`dead`) instead of
 // staying `failed` with no next attempt, which kept them eligible on every

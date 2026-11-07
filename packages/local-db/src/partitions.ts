@@ -1,5 +1,5 @@
+import { LocalDatabasePartition } from "@calibra-facil/contracts/desktop";
 import { createHash } from "node:crypto";
-import type { LocalDatabasePartition } from "@calibra-facil/contracts";
 
 import type { LocalDatabase } from "./database";
 

@@ -1,8 +1,8 @@
+import { SyncBootstrapResponse } from "@calibra-facil/contracts/sync";
 import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import type { SyncBootstrapResponse } from "@calibra-facil/contracts";
 import {
   applySyncBootstrap,
   getLocalJobDetail,

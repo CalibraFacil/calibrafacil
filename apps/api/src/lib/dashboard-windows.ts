@@ -1,4 +1,4 @@
-import { startOfLabMonth } from "@calibra-facil/documents";
+import { startOfLabMonth } from "@calibra-facil/shared/calendar-date";
 import { endOfLabDay } from "./lab-day";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

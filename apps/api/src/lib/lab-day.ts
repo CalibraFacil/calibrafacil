@@ -1,4 +1,4 @@
-import { formatLabDayKey } from "@calibra-facil/documents";
+import { labCalendarDayKey } from "@calibra-facil/shared/calendar-date";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -11,12 +11,12 @@ const HOUR_MS = 60 * 60 * 1000;
  * different laboratory day (the zone's offsets are whole hours).
  */
 export function startOfLabDay(date: Date): Date {
-  const key = formatLabDayKey(date);
+  const key = labCalendarDayKey(date);
   let candidate = new Date(Math.floor(date.getTime() / HOUR_MS) * HOUR_MS);
   // The day is at most 25 hours long (a DST change); the bound guards the loop.
   for (let step = 0; step < 26; step += 1) {
     const earlier = new Date(candidate.getTime() - HOUR_MS);
-    if (formatLabDayKey(earlier) !== key) return candidate;
+    if (labCalendarDayKey(earlier) !== key) return candidate;
     candidate = earlier;
   }
   return candidate;

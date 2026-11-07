@@ -1,3 +1,4 @@
+import { formatInstant } from "@calibra-facil/shared/format";
 /**
  * Calibration-interval optimization report (Phase E2, REQ-ENGINE-REPORT-001/002).
  * A self-contained, print-optimized HTML report of the reliability analysis (ILAC-G24 /
@@ -8,8 +9,6 @@
  * no accreditation seal — it carries a §7.8.4.3 disclaimer instead. The interval is the
  * customer's decision; this is an indicative analysis only.
  */
-
-import { formatInstant } from "./dates.js";
 
 export type IntervalReportData = {
   assetName: string;

@@ -2,7 +2,7 @@ import {
   compareSyncChangePositions,
   formatSyncChangeCursor,
   parseSyncChangeCursor,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/sync-change-seq";
 import type { LocalDatabase } from "./database";
 
 /**
