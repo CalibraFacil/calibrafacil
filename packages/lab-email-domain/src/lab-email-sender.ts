@@ -1,5 +1,5 @@
 /**
- * Tenant sending-domain state for the lab-owned email domain (issue #584):
+ * Tenant sending-domain state for the lab-owned email domain:
  * resolve the sender and credential from `organization_email_domain`, and
  * record a key failure with its audit event. The transport (email-sender)
  * never touches these tables; it receives {@link labEmailSenderResolver}.

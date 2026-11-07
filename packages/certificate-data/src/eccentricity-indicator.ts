@@ -49,10 +49,9 @@ const ROAD_SCALE_ECCENTRICITY_INDICATOR_POSITIONS = new Set([
 const CIRCULAR_ECCENTRICITY_LOAD_POINTS = ["A", "B", "C", "D", "E"];
 /*
  * The diagram is embedded in the certificate body, so it has to be set in the
- * same face as the surrounding text. The old stack was Carlito-first, inherited
- * from the XLSX path where the SVG lived inside a Calibri-metric workbook; kept
- * as-is it would render the one graphic on the page in a Calibri clone while
- * everything around it is Arial. Same ordering rule as the accreditation symbol
+ * same face as the surrounding text. A Carlito-first stack would render the
+ * one graphic on the page in a Calibri clone while everything around it is
+ * Arial. Same ordering rule as the accreditation symbol
  * (see ACCREDITATION_SEAL_FONT_FAMILY): Arial first, Liberation Sans as the
  * metric-compatible substitute actually present in the Gotenberg container.
  */

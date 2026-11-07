@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { formatDecimalPtBr, fractionDigitsOf } from "./decimal-format.js";
 
 describe("fractionDigitsOf", () => {
-  // Locale-independent, exact. The original bug: for 5e-7,
-  // String(5e-7).split(".")[1] is undefined, so the old code used 1 decimal.
+  // Locale-independent, exact. Regression guard: for 5e-7,
+  // String(5e-7).split(".")[1] is undefined, so a naive count falls back to 1 decimal.
   it("counts fractional digits, correct for scientific notation", () => {
     expect(fractionDigitsOf(5e-7)).toBe(7);
     expect(fractionDigitsOf(1e-9)).toBe(9);

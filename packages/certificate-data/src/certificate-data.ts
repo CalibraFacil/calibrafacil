@@ -88,7 +88,7 @@ export type CertificateJobData = {
   methodSnapshot: MethodSnapshot;
   assetSnapshot?: AssetSnapshot | null;
   /**
-   * #427 Phase 1: frozen scope-violation override. Non-null means the
+   * Frozen scope-violation override. Non-null means the
    * approval was downgraded to non-accredited issuance (seal suppressed).
    */
   scopeOverrideJustification?: string | null;
@@ -632,11 +632,11 @@ function normalizeStandards(job: CertificateJobData) {
     type: standard.type,
     certificateNumber: standard.certificateNumber,
     /**
-     * The calibrating body, verbatim. This used to fall back to
-     * `certificateNumber.split("-")[0]` — guessing a laboratory's identity by
-     * string-splitting a certificate number, on a field that carries
-     * metrological traceability (§7.8.4.1 c). A guess is worse than a blank:
-     * null lets the layout omit the entry honestly.
+     * The calibrating body, verbatim. Never derived from the certificate
+     * number (e.g. `certificateNumber.split("-")[0]`): that would guess a
+     * laboratory's identity on a field that carries metrological traceability
+     * (§7.8.4.1 c). A guess is worse than a blank: null lets the layout omit
+     * the entry honestly.
      */
     issuer: standard.calibratedBy?.trim() || null,
     calibratedBy: standard.calibratedBy,
@@ -792,7 +792,7 @@ export function buildCertificateData(
   const calibrationResults = resultRows.filter(
     (row) => row.group === "calibration_result",
   );
-  // #647: vigência is evaluated at the EMISSION instant — outside the window
+  // Vigência is evaluated at the EMISSION instant — outside the window
   // the certificate is generated without the Cgcre seal (decided 2026-07-05).
   const certificateAccredited = isAccreditationSealEligible({
     lab: job.lab,
@@ -883,7 +883,7 @@ export function buildCertificateData(
       ),
       // Inmetro model approval / registration (Etiqueta de Reparo context).
       // Sourced from the asset-type blueprint spec (like "Portaria"); backs the
-      // `{{asset.inmetroRegistration}}` certificate token (previously empty).
+      // `{{asset.inmetroRegistration}}` certificate token.
       inmetroRegistration: assetSpecifications.inmetroRegistration,
     },
     certificate: {

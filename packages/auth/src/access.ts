@@ -337,10 +337,7 @@ const statements = {
 // ACCESS CONTROL INSTANCE
 // =============================================================================
 
-/**
- * Create the access control instance with our custom statements.
- * This is used to define roles and check permissions.
- */
+/** Access-control instance over the statements above; roles and permission checks are built from it. */
 export const ac = createAccessControl(statements);
 
 // =============================================================================

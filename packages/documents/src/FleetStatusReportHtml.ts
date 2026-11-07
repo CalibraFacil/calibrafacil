@@ -7,7 +7,7 @@ import {
   getLabCalendarDay,
 } from "@calibra-facil/shared/calendar-date";
 /**
- * Fleet calibration-status report for the portal audit pack (#738).
+ * Fleet calibration-status report for the portal audit pack.
  * A self-contained, print-optimized HTML snapshot of the customer's instrument
  * fleet at generation time: last/next calibration, customer-owned interval,
  * legal-verification track and due status. Plain string template (no React)

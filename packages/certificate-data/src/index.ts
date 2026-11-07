@@ -2,11 +2,9 @@
  * The projection from a frozen calibration job to the flat, presentation-ready
  * record a certificate is rendered from.
  *
- * This is renderer-agnostic on purpose. It used to live inside the
- * lab-authored XLSX template package, but never depended on it: it takes no
- * binding manifest and no workbook engine, and it is the one piece of that
- * package worth keeping. The fixed system layouts in
- * `@calibra-facil/documents` consume `buildCertificateData` directly.
+ * This is renderer-agnostic on purpose: it takes no binding manifest and no
+ * workbook engine. The fixed system layouts in `@calibra-facil/documents`
+ * consume `buildCertificateData` directly.
  */
 export {
   certificateImageContextFromJob,

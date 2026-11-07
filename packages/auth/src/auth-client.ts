@@ -94,7 +94,7 @@ const organizationPluginConfig = organizationClient({
           required: false,
           defaultValue: false,
         },
-        // #647: vigência window (nullable). "string" (ISO) to mirror the
+        // Vigência window (nullable). "string" (ISO) to mirror the
         // server plugin — Better Auth rejects `type: "date"` fields on JSON
         // bodies (z.date() vs. the serialized string), see auth.ts.
         accreditationValidFrom: {

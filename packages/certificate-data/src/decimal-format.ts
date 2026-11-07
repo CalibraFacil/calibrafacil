@@ -3,11 +3,10 @@ import { formatNumber } from "@calibra-facil/shared/format";
 /**
  * pt-BR decimal formatting for certificate values.
  *
- * The previous inline version derived the decimal count with
- * `String(value).split(".")[1]?.length`, which is wrong for
- * scientific-notation values — e.g. `5e-7` has no "." so it fell back to
- * 1 decimal and rendered as "0,0", silently dropping sub-microgram metrology
- * values (buoyancy, max error) on the certificate.
+ * The decimal count is not derived from `String(value).split(".")[1]?.length`:
+ * that is wrong for scientific-notation values — `5e-7` has no "." so it would
+ * fall back to 1 decimal and render as "0,0", silently dropping sub-microgram
+ * metrology values (buoyancy, max error) on the certificate.
  */
 
 /**
