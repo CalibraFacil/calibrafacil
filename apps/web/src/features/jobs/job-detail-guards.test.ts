@@ -63,7 +63,7 @@ describe('REQ-SPLIT-2 record guards', () => {
 })
 
 describe('REQ-SPLIT-2 job detail guards', () => {
-  it('REQ-SPLIT-2 toJobStatus passes every known status and defaults to DRAFT', () => {
+  it('REQ-SPLIT-2 toJobStatus passes every known status and throws on an unknown one', () => {
     for (const status of [
       'DRAFT',
       'IN_PROGRESS',
@@ -76,11 +76,11 @@ describe('REQ-SPLIT-2 job detail guards', () => {
     ]) {
       expect(toJobStatus(status)).toBe(status)
     }
-    expect(toJobStatus('ARCHIVED')).toBe('DRAFT')
-    expect(toJobStatus(undefined)).toBe('DRAFT')
+    expect(() => toJobStatus('ARCHIVED')).toThrow('Unknown status: ARCHIVED')
+    expect(() => toJobStatus(undefined)).toThrow('Unknown status')
   })
 
-  it('REQ-SPLIT-2 toFinancialStatus passes every known status and defaults to UNBILLED', () => {
+  it('REQ-SPLIT-2 toFinancialStatus passes every known status, reads an absent one as UNBILLED and throws on an unknown one', () => {
     for (const status of [
       'DRAFT',
       'ISSUED',
@@ -91,7 +91,10 @@ describe('REQ-SPLIT-2 job detail guards', () => {
     ]) {
       expect(toFinancialStatus(status)).toBe(status)
     }
-    expect(toFinancialStatus('REFUNDED')).toBe('UNBILLED')
+    expect(() => toFinancialStatus('REFUNDED')).toThrow(
+      'Unknown status: REFUNDED',
+    )
+    expect(toFinancialStatus(undefined)).toBe('UNBILLED')
     expect(toFinancialStatus(null)).toBe('UNBILLED')
   })
 

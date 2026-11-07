@@ -115,6 +115,65 @@ describe('dashboard session guard', () => {
     ).resolves.toBeUndefined()
     expect(locationReplace).not.toHaveBeenCalled()
   })
+
+  describe('portal handoff (/dashboard?organization=<id>)', () => {
+    afterEach(() => {
+      window.localStorage.clear()
+    })
+
+    it('stores the laboratory the portal named and drops the param', async () => {
+      const { dashboardBeforeLoad } = await loadDashboardSession({
+        session: labSession(),
+      })
+
+      await expect(
+        dashboardBeforeLoad({
+          location: {
+            pathname: '/dashboard',
+            searchStr: '?organization=lab-7',
+          },
+        }),
+      ).rejects.toEqual({ redirect: { to: '/dashboard', replace: true } })
+      expect(window.localStorage.getItem('dashboard-active-org')).toBe('lab-7')
+    })
+
+    it('carries the param through sign-in when there is no session yet', async () => {
+      const { dashboardBeforeLoad } = await loadDashboardSession({
+        session: null,
+      })
+
+      await expect(
+        dashboardBeforeLoad({
+          location: {
+            pathname: '/dashboard',
+            searchStr: '?organization=lab-7',
+          },
+        }),
+      ).rejects.toEqual({
+        redirect: {
+          to: '/sign-in',
+          search: { redirect: '/dashboard?organization=lab-7' },
+        },
+      })
+      expect(window.localStorage.getItem('dashboard-active-org')).toBeNull()
+    })
+
+    it('ignores the param off the dashboard home', async () => {
+      const { dashboardBeforeLoad } = await loadDashboardSession({
+        session: labSession(),
+      })
+
+      await expect(
+        dashboardBeforeLoad({
+          location: {
+            pathname: '/dashboard/jobs',
+            searchStr: '?organization=lab-7',
+          },
+        }),
+      ).resolves.toBeUndefined()
+      expect(window.localStorage.getItem('dashboard-active-org')).toBeNull()
+    })
+  })
 })
 
 function labSession(

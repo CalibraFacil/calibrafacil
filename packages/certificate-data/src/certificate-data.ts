@@ -25,6 +25,7 @@ import type {
   FrozenTraceability,
 } from "./frozen-content.js";
 import { toRecord } from "@calibra-facil/shared/record";
+import { parseNumericValue } from "@calibra-facil/shared/units";
 
 /**
  * The job snapshot a certificate is rendered from — every value that can land
@@ -418,21 +419,12 @@ function toIsoDateish(value: Dateish): string | null {
   return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString();
 }
 
-function asFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
 function formatMeasuredValue(
   value: unknown,
   unit: string,
   fractionDigits = 1,
 ): string {
-  const numeric = asFiniteNumber(value);
+  const numeric = parseNumericValue(value);
   return numeric === null
     ? ""
     : `${formatDecimalPtBr(numeric, fractionDigits)} ${unit}`;
@@ -445,7 +437,7 @@ function formatMethodValue(
 ): unknown {
   if (value === null || value === undefined || value === "") return "";
 
-  const numeric = asFiniteNumber(value);
+  const numeric = parseNumericValue(value);
   if (numeric === null) return value;
 
   if (isMassMeasurementUnit(unit) && isMassMeasurementUnit(targetUnit)) {
@@ -473,7 +465,7 @@ function formatEffectiveDegreesOfFreedom(value: unknown): unknown {
     return "infinito";
   }
 
-  const numeric = asFiniteNumber(value);
+  const numeric = parseNumericValue(value);
   if (numeric === null) return value;
   return numeric >= 1_000_000_000 ? "infinito" : formatDecimalPtBr(numeric, 0);
 }
@@ -483,7 +475,7 @@ function formatAssetMeasurement(
   value: unknown,
   sourceUnit: unknown,
 ): string {
-  const numeric = asFiniteNumber(value);
+  const numeric = parseNumericValue(value);
   if (numeric === null) return "";
 
   const targetUnit = job.assetSnapshot?.baseMeasurementUnit;

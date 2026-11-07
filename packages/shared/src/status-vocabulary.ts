@@ -35,6 +35,12 @@ export type StatusVocabulary<S extends string> = {
   /** The state a raw value names, or null (URL params, select values, untyped rows). */
   parse(value: unknown): S | null;
   is(value: unknown): value is S;
+  /**
+   * The state a raw value names; an unknown one throws instead of becoming a
+   * default state. For values the API already validated: a status this build
+   * does not know is version skew, and it must show, not read as "draft".
+   */
+  require(value: unknown): S;
   /** `{ value, label }` per state, in declaration order (select and filter options). */
   readonly options: ReadonlyArray<{ value: S; label: string }>;
 };
@@ -51,6 +57,10 @@ export function defineStatusVocabulary<S extends string>(
     label: (state) => presentation[state].label,
     tone: (state) => presentation[state].tone,
     parse: (value) => (is(value) ? value : null),
+    require: (value) => {
+      if (is(value)) return value;
+      throw new Error(`Unknown status: ${String(value)}`);
+    },
     is,
     options: states.map((value) => ({
       value,

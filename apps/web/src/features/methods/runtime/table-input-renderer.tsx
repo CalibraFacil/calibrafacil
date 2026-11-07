@@ -258,19 +258,10 @@ function setRangeTargetValue(
   row[targetKey] = value
 }
 
-function parseNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value.replace(',', '.'))
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
 function getAssetResolutionFallback(
   assetSpecifications: Record<string, unknown> | null | undefined,
 ): Pick<ResolvedWeighingRange, 'resolution' | 'resolutionUnit'> | null {
-  const resolution = parseNumber(assetSpecifications?.resolution)
+  const resolution = parseNumericValue(assetSpecifications?.resolution)
   const resolutionUnit = assetSpecifications?.resolutionUnit ?? 'g'
 
   if (

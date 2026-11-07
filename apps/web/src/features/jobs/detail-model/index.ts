@@ -21,7 +21,6 @@ export {
 export {
   arrayValueAt,
   jobCloudCommandTarget,
-  numberFromUnknown,
   numericValues,
 } from './job-values'
 export {

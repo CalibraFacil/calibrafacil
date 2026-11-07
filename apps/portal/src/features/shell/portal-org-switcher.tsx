@@ -3,10 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Building02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import {
-  DASHBOARD_ORG_KEY,
-  PORTAL_ORG_KEY,
-} from "@calibra-facil/shared/client-storage-keys";
+import { PORTAL_ORG_KEY } from "@calibra-facil/shared/client-storage-keys";
+import { labHandoffUrl } from "@calibra-facil/shared/lab-handoff";
 import {
   portalOrganization,
   usePortalActiveOrganization,
@@ -68,10 +66,10 @@ export function PortalOrgSwitcher() {
   };
 
   const handleGoToLab = (orgId: string) => {
-    // Set the org as active, store preference for dashboard, and redirect
+    // The lab keeps its active organization in its own origin's storage, out
+    // of the portal's reach: the choice goes in the URL and the lab stores it.
     portalOrganization.setActive({ organizationId: orgId }).then(() => {
-      localStorage.setItem(DASHBOARD_ORG_KEY, orgId);
-      window.location.href = `${getWebAppUrl()}/dashboard`;
+      window.location.href = labHandoffUrl(getWebAppUrl(), orgId);
     });
   };
 

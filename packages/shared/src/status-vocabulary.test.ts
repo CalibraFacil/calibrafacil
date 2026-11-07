@@ -14,6 +14,14 @@ describe("defineStatusVocabulary", () => {
     expect(vocabulary.parse(undefined)).toBeNull();
   });
 
+  it("requires a declared state and throws on anything else", () => {
+    expect(vocabulary.require("OPEN")).toBe("OPEN");
+    expect(() => vocabulary.require("ARCHIVED")).toThrow(
+      "Unknown status: ARCHIVED",
+    );
+    expect(() => vocabulary.require(undefined)).toThrow("Unknown status");
+  });
+
   it("lists options in declaration order", () => {
     expect(vocabulary.options).toEqual([
       { value: "OPEN", label: "Aberta" },

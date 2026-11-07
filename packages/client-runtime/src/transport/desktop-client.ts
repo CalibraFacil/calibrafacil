@@ -1,4 +1,5 @@
 import { slugify } from "@calibra-facil/shared/text";
+import { parseNumericValue } from "@calibra-facil/shared/units";
 import {
   assetEndpoints,
   assetTypeEndpoints,
@@ -1045,25 +1046,25 @@ function environmentalLimitFromUnknown(
   value: unknown,
 ): EnvironmentalLimit | null {
   if (!value || typeof value !== "object") return null;
-  const id = numberFromUnknown(Reflect.get(value, "id"));
-  const unitId = numberFromUnknown(Reflect.get(value, "unitId"));
+  const id = parseNumericValue(Reflect.get(value, "id"));
+  const unitId = parseNumericValue(Reflect.get(value, "unitId"));
 
   if (id === null || unitId === null) return null;
 
   return {
     id,
     unitId,
-    assetTypeId: numberFromUnknown(Reflect.get(value, "assetTypeId")),
+    assetTypeId: parseNumericValue(Reflect.get(value, "assetTypeId")),
     assetTypeName:
       typeof Reflect.get(value, "assetTypeName") === "string"
         ? Reflect.get(value, "assetTypeName")
         : null,
-    temperatureMin: numberFromUnknown(Reflect.get(value, "temperatureMin")),
-    temperatureMax: numberFromUnknown(Reflect.get(value, "temperatureMax")),
-    humidityMin: numberFromUnknown(Reflect.get(value, "humidityMin")),
-    humidityMax: numberFromUnknown(Reflect.get(value, "humidityMax")),
-    pressureMin: numberFromUnknown(Reflect.get(value, "pressureMin")),
-    pressureMax: numberFromUnknown(Reflect.get(value, "pressureMax")),
+    temperatureMin: parseNumericValue(Reflect.get(value, "temperatureMin")),
+    temperatureMax: parseNumericValue(Reflect.get(value, "temperatureMax")),
+    humidityMin: parseNumericValue(Reflect.get(value, "humidityMin")),
+    humidityMax: parseNumericValue(Reflect.get(value, "humidityMax")),
+    pressureMin: parseNumericValue(Reflect.get(value, "pressureMin")),
+    pressureMax: parseNumericValue(Reflect.get(value, "pressureMax")),
     createdAt:
       typeof Reflect.get(value, "createdAt") === "string"
         ? Reflect.get(value, "createdAt")
@@ -1073,15 +1074,6 @@ function environmentalLimitFromUnknown(
         ? Reflect.get(value, "updatedAt")
         : null,
   };
-}
-
-function numberFromUnknown(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }
 
 function desktopNotificationPreferences(): NotificationPreferencesResponse {

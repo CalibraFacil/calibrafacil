@@ -355,7 +355,7 @@ describe('ExecuteJobPage unsaved-changes guard', () => {
       expect(blockerReset).not.toHaveBeenCalled()
       // Written immediately, without waiting for the debounce.
       expect(readExecutionDraft(scope)?.values.formData).toEqual({
-        load: '12.75',
+        load: 12.75,
       })
     })
 
@@ -393,7 +393,7 @@ describe('ExecuteJobPage unsaved-changes guard', () => {
         vi.advanceTimersByTime(2)
       })
       expect(readExecutionDraft(scope)?.values.formData).toEqual({
-        load: '12.5',
+        load: 12.5,
       })
     })
 
@@ -414,7 +414,7 @@ describe('ExecuteJobPage unsaved-changes guard', () => {
         vi.advanceTimersByTime(200)
       })
       expect(readExecutionDraft(scope)?.values.formData).toEqual({
-        load: '11.5',
+        load: 11.5,
       })
     })
 
@@ -468,7 +468,7 @@ describe('ExecuteJobPage unsaved-changes guard', () => {
       })
 
       expect(wouldBlock()).toBe(true)
-      expect(readExecutionDraft(scope)?.values.formData).toEqual({ load: '14' })
+      expect(readExecutionDraft(scope)?.values.formData).toEqual({ load: 14 })
     })
 
     it('REQ-P07-3: the draft is cleared after a successful submit', async () => {
@@ -514,7 +514,7 @@ describe('ExecuteJobPage unsaved-changes guard', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /restaurar/i }))
 
-      expect(screen.getByDisplayValue('12.5')).toBeTruthy()
+      expect(screen.getByDisplayValue('12,5')).toBeTruthy()
       expect(screen.queryByText(/rascunho não salvo/i)).toBeNull()
       expect(wouldBlock()).toBe(true)
     })

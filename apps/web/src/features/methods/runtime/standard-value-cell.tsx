@@ -94,31 +94,17 @@ export function StandardValueCell({
 
   const handleChange = (raw: string) => {
     if (raw !== '' && !isPartialMeasurementInput(raw)) return
-    // The text stays as typed (pt-BR comma, roadmap 2 F3); parsing is shared.
-    const normalized = raw.replace(',', '.')
+    // The text stays as typed; `parseMeasurementInput` reads it.
     setDraft(raw)
-    if (normalized === '' || normalized === '-' || normalized === '.') {
-      onCommit(null)
-      return
-    }
-    const parsed = Number.parseFloat(normalized)
-    if (Number.isFinite(parsed)) {
-      onCommit(toCanonical(parsed))
-    }
+    const parsed = parseMeasurementInput(raw)
+    onCommit(parsed === null ? null : toCanonical(parsed))
   }
 
   const handleBlur = () => {
     setFocused(false)
     if (draft === focusSeed) return
-    const normalized = draft.replace(',', '.')
-    if (normalized === '' || normalized === '-' || normalized === '.') {
-      onCommit(null)
-      return
-    }
-    const parsed = Number.parseFloat(normalized)
-    if (Number.isFinite(parsed)) {
-      onCommit(toCanonical(parsed))
-    }
+    const parsed = parseMeasurementInput(draft)
+    onCommit(parsed === null ? null : toCanonical(parsed))
   }
 
   const handlePick = (option: StandardCertifiedValueOption) => {

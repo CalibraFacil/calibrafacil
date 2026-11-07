@@ -1,5 +1,7 @@
 import { toRecordArray } from '@calibra-facil/shared/record'
 import { Input } from '@calibra-facil/ui/input'
+import { parseNumericValue } from '@calibra-facil/shared/units'
+import { DecimalInput } from '@/components/decimal-input'
 import { Field, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Select,
@@ -217,30 +219,9 @@ export function renderExecuteMethodField(
           {field.required && <span className="text-red-500 ml-1">*</span>}
         </FieldLabel>
         <div className="flex">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={value != null ? String(value) : ''}
-            onChange={(e) => {
-              const val = e.target.value
-              // Allow empty, numbers, decimal points, and negative sign
-              // Keep as string to preserve trailing decimals during typing
-              if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
-                // Normalize comma to period for consistency
-                const normalized = val.replace(',', '.')
-                updateField(field.key, normalized)
-              }
-            }}
-            onBlur={(e) => {
-              // Parse to number on blur if valid
-              const val = e.target.value.replace(',', '.')
-              if (val !== '' && val !== '-' && val !== '.') {
-                const parsed = parseFloat(val)
-                if (!isNaN(parsed)) {
-                  updateField(field.key, parsed)
-                }
-              }
-            }}
+          <DecimalInput
+            value={parseNumericValue(value)}
+            onValueChange={(next) => updateField(field.key, next)}
             className={field.unit ? 'rounded-r-none' : ''}
           />
           {field.unit && (

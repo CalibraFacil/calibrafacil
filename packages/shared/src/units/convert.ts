@@ -11,6 +11,7 @@
  * so mass behaviour is byte-identical regardless of which is used.
  */
 
+import { parseMeasurementInput } from "../calibration-format";
 import { UNIT_REGISTRY, normalizeUnitToken } from "./registry";
 
 function offsetOf(unit: keyof typeof UNIT_REGISTRY): number {
@@ -78,19 +79,12 @@ export function convertUnitDelta(
 }
 
 /**
- * Parse a numeric value, accepting comma decimals (pt-BR). Returns `null` for
- * non-finite or empty input. Promoted from the private mass-units helper.
+ * A number from a stored or typed value: a finite number as is, a string through
+ * `parseMeasurementInput` (the one pt-BR text rule), anything else `null`.
  */
 export function parseNumericValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") return parseMeasurementInput(value);
   return null;
 }
 

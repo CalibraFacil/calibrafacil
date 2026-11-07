@@ -80,7 +80,7 @@ test.describe('execution unsaved-readings guard', () => {
     await dialog.getByRole('button', { name: 'Continuar editando' }).click()
     await expect(dialog).toBeHidden()
     await expect(page).toHaveURL(/\/execute$/)
-    await expect(loadInput(page)).toHaveValue('12.5')
+    await expect(loadInput(page)).toHaveValue('12,5')
 
     await jobsLink.click()
     await page
@@ -135,7 +135,7 @@ test.describe('execution unsaved-readings guard', () => {
       restore.getByText('Restaurar rascunho não salvo?'),
     ).toBeVisible()
     await restore.getByRole('button', { name: 'Restaurar' }).click()
-    await expect(loadInput(page)).toHaveValue('12.5')
+    await expect(loadInput(page)).toHaveValue('12,5')
 
     // Saving releases the guard and removes the draft.
     await page.getByRole('button', { name: 'Salvar Rascunho' }).click()

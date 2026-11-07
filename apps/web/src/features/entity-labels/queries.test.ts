@@ -1,4 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import {
+  QueryClient,
+  type FetchQueryOptions,
+  type QueryKey,
+} from '@tanstack/react-query'
+import { describe, expect, it, vi, type Mock } from 'vitest'
+
+const apiMock = vi.hoisted(() => ({
+  customers: { get: vi.fn() },
+  assets: { get: vi.fn() },
+  methods: { get: vi.fn() },
+  jobs: { get: vi.fn() },
+  services: { get: vi.fn() },
+  serviceOrders: { get: vi.fn() },
+  standards: { get: vi.fn() },
+}))
+vi.mock('@/utils/api', () => ({ calibraApi: apiMock }))
 
 import {
   assetLabelQueryOptions,
@@ -58,4 +74,43 @@ describe('entity label queries', () => {
       'label',
     ])
   })
+
+  it('does not cache a failed lookup as "no label"', async () => {
+    await expectFailureNotCached(
+      apiMock.customers.get,
+      customerLabelQueryOptions('1'),
+    )
+    await expectFailureNotCached(
+      apiMock.assets.get,
+      assetLabelQueryOptions('2'),
+    )
+    await expectFailureNotCached(
+      apiMock.methods.get,
+      methodLabelQueryOptions('3'),
+    )
+    await expectFailureNotCached(apiMock.jobs.get, jobLabelQueryOptions('4'))
+    await expectFailureNotCached(
+      apiMock.services.get,
+      serviceLabelQueryOptions('5'),
+    )
+    await expectFailureNotCached(
+      apiMock.serviceOrders.get,
+      serviceOrderLabelQueryOptions('6'),
+    )
+    await expectFailureNotCached(
+      apiMock.standards.get,
+      standardLabelQueryOptions('7'),
+    )
+  })
 })
+
+async function expectFailureNotCached<TKey extends QueryKey>(
+  get: Mock,
+  options: FetchQueryOptions<string, Error, string, TKey>,
+) {
+  get.mockRejectedValueOnce(new Error('network down'))
+  const queryClient = new QueryClient()
+
+  await expect(queryClient.fetchQuery(options)).rejects.toThrow('network down')
+  expect(queryClient.getQueryData(options.queryKey)).toBeUndefined()
+}

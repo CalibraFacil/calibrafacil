@@ -114,7 +114,7 @@ export function MethodsListPage({
         // The API answers with the bare stored row: no joined asset type name.
         assetTypeName: null,
         methodEngine: result.methodEngine ?? null,
-        status: METHOD_STATUS.parse(result.status) ?? 'DRAFT',
+        status: METHOD_STATUS.require(result.status),
       }
     },
     onSuccess: (data) => {

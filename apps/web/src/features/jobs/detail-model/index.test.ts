@@ -28,7 +28,6 @@ const SURFACE = [
   'formatReviewValue',
   'getApprovedReviewMeasurementFields',
   'jobCloudCommandTarget',
-  'numberFromUnknown',
   'numericValues',
   'reviewColumnDisplayLabel',
 ]
