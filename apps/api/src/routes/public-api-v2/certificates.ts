@@ -1,3 +1,4 @@
+import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -32,7 +33,7 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
       const offset = (page - 1) * limit;
       const conditions = [
         eq(calibrationJob.organizationId, apiKey.organizationId),
-        inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
         unitId ? eq(calibrationJob.unitId, unitId) : undefined,
         query ? ilike(calibrationJob.jobId, `%${query}%`) : undefined,
       ];
@@ -122,7 +123,7 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
             and(
               eq(calibrationJob.organizationId, apiKey.organizationId),
               eq(calibrationJob.jobId, jobId),
-              inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+              inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
             ),
           )
           .limit(1),
@@ -172,7 +173,7 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
             and(
               eq(calibrationJob.organizationId, apiKey.organizationId),
               eq(calibrationJob.jobId, jobId),
-              inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+              inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
             ),
           )
           .limit(1),

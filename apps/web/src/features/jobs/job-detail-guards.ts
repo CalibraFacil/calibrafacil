@@ -1,3 +1,4 @@
+import { JOB_STATUS } from '@calibra-facil/schemas'
 import { toRecord } from '@calibra-facil/shared/record'
 import { type FinancialStatus } from '@calibra-facil/shared'
 import {
@@ -29,20 +30,7 @@ export function isApprovedJobRecordData(
 }
 
 export function toJobStatus(value: unknown): JobStatus {
-  switch (value) {
-    case 'DRAFT':
-    case 'IN_PROGRESS':
-    case 'REVIEW':
-    case 'APPROVED':
-    case 'REJECTED':
-    case 'CANCELED':
-    case 'GENERATING_PDF':
-    case 'RENDER_FAILED':
-    case 'SUPERSEDED':
-      return value
-    default:
-      return 'DRAFT'
-  }
+  return JOB_STATUS.parse(value) ?? 'DRAFT'
 }
 
 export function toFinancialStatus(value: unknown): FinancialStatus {

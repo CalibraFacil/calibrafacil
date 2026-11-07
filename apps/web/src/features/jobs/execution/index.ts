@@ -1,5 +1,4 @@
 export {
-  JOB_STATUS_LABELS,
   formatAddress,
   formatLabAddress,
   phaseModeLabel,

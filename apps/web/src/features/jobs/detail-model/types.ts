@@ -2,16 +2,7 @@ import type { JobAllowedActions } from '@calibra-facil/contracts'
 import { type MeasurementUnit } from '@calibra-facil/shared/units'
 import type { MethodInputType } from '@/components/method-runtime/types'
 
-export type JobStatus =
-  | 'DRAFT'
-  | 'IN_PROGRESS'
-  | 'REVIEW'
-  | 'GENERATING_PDF'
-  | 'RENDER_FAILED'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'CANCELED'
-  | 'SUPERSEDED'
+export type { JobStatus } from '@calibra-facil/schemas'
 
 /**
  * §7.10 (#426): as-found conformity computed from the pre-adjustment margins.

@@ -8,8 +8,6 @@ export {
   getApprovedReviewMeasurementFields,
 } from './approved-record'
 export {
-  JOB_STATUS_LABELS,
-  JOB_STATUS_VARIANTS,
   PHASE_DISPLAY_LABELS,
   PRIORITY_REVIEW_FIELD_KEYS,
   PRIORITY_REVIEW_FORMULA_KEYS,

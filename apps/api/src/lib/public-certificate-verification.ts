@@ -1,3 +1,4 @@
+import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
 import { systemDb } from "@calibra-facil/db";
 import {
   asset,
@@ -28,7 +29,6 @@ import { orgDb } from "./org-db";
  */
 
 /** A certificate is publicly verifiable once it has been approved. */
-const PUBLICLY_VERIFIABLE = ["APPROVED", "SUPERSEDED"] as const;
 
 /** The certificate with its customer, asset, service and laboratory, by token. */
 export async function findCertificateByVerificationToken(token: string) {
@@ -77,7 +77,7 @@ export async function findCertificateByVerificationToken(token: string) {
     .where(
       and(
         eq(calibrationJob.verificationToken, token),
-        inArray(calibrationJob.status, [...PUBLICLY_VERIFIABLE]),
+        inArray(calibrationJob.status, [...CERTIFICATE_ISSUED_JOB_STATUSES]),
       ),
     )
     .limit(1);
@@ -107,7 +107,7 @@ export async function findPublicAmendmentLink(
       .where(
         and(
           eq(calibrationJob.id, jobId),
-          inArray(calibrationJob.status, [...PUBLICLY_VERIFIABLE]),
+          inArray(calibrationJob.status, [...CERTIFICATE_ISSUED_JOB_STATUSES]),
         ),
       )
       .limit(1),
@@ -127,7 +127,7 @@ export async function findCertificateSignatureByToken(token: string) {
     .where(
       and(
         eq(calibrationJob.verificationToken, token),
-        inArray(calibrationJob.status, [...PUBLICLY_VERIFIABLE]),
+        inArray(calibrationJob.status, [...CERTIFICATE_ISSUED_JOB_STATUSES]),
       ),
     )
     .limit(1);
@@ -149,7 +149,7 @@ export async function findCertificateIntegrityByToken(token: string) {
     .where(
       and(
         eq(calibrationJob.verificationToken, token),
-        inArray(calibrationJob.status, [...PUBLICLY_VERIFIABLE]),
+        inArray(calibrationJob.status, [...CERTIFICATE_ISSUED_JOB_STATUSES]),
       ),
     )
     .limit(1);
@@ -164,7 +164,7 @@ export async function findCertificateDownloadByToken(token: string) {
     .where(
       and(
         eq(calibrationJob.verificationToken, token),
-        inArray(calibrationJob.status, [...PUBLICLY_VERIFIABLE]),
+        inArray(calibrationJob.status, [...CERTIFICATE_ISSUED_JOB_STATUSES]),
       ),
     )
     .limit(1);

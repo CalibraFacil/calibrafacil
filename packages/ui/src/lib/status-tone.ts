@@ -20,15 +20,7 @@
  * (`tokens.css` registers the package as a source).
  */
 
-export type SignalTone = "ok" | "critical" | "warning" | "info" | "neutral";
-
-export const SIGNAL_TONES = [
-  "ok",
-  "critical",
-  "warning",
-  "info",
-  "neutral",
-] as const satisfies readonly SignalTone[];
+import type { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 
 export type StatusToneClasses = {
   /** Filled pill / chip: tinted background plus readable text. */

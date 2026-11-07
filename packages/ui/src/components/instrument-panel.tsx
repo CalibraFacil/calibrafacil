@@ -7,6 +7,7 @@
  * and tonal signal tiles that read like instrument indicators. Enter animations
  * are split into semantic chunks and staggered.
  */
+import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { motion, type Variants } from "motion/react";
 import type { ComponentProps, ReactNode } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -15,7 +16,7 @@ import { InformationCircleIcon } from "@hugeicons/core-free-icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 import { cn } from "../lib/utils";
 import { ACTION_BUTTON_CLASS, PANEL_CLASS } from "../lib/panel-styles";
-import { STATUS_TONE, type SignalTone } from "../lib/status-tone";
+import { STATUS_TONE } from "../lib/status-tone";
 
 export { ACTION_BUTTON_CLASS };
 export type { SignalTone };

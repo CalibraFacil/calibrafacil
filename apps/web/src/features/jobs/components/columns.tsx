@@ -1,3 +1,4 @@
+import { JobStatusBadge } from './job-status-badge'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
@@ -10,7 +11,6 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Badge } from '@calibra-facil/ui/badge'
-import { STATUS_TONE, type SignalTone } from '@calibra-facil/ui/status-tone'
 import { Button } from '@calibra-facil/ui/button'
 import { SyncStateBadge } from '@/components/sync-state-badge'
 import {
@@ -23,59 +23,8 @@ import { cn } from '@/lib/utils'
 import { getFinancialStatusLabel } from '@calibra-facil/shared'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
-import type { Job, JobStatus } from '@/features/jobs/types'
+import type { Job } from '@/features/jobs/types'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
-
-// Animated dots for loading states
-function LoadingDots() {
-  return (
-    <span className="inline-flex" aria-hidden="true">
-      <span
-        className="animate-[bounce_1s_ease-in-out_infinite]"
-        style={{ animationDelay: '0ms' }}
-      >
-        .
-      </span>
-      <span
-        className="animate-[bounce_1s_ease-in-out_infinite]"
-        style={{ animationDelay: '150ms' }}
-      >
-        .
-      </span>
-      <span
-        className="animate-[bounce_1s_ease-in-out_infinite]"
-        style={{ animationDelay: '300ms' }}
-      >
-        .
-      </span>
-    </span>
-  )
-}
-
-const statusLabels: Record<JobStatus, string> = {
-  DRAFT: 'Rascunho',
-  IN_PROGRESS: 'Em Execução',
-  REVIEW: 'Em Revisão',
-  GENERATING_PDF: 'Gerando PDF',
-  RENDER_FAILED: 'Falha na emissão',
-  APPROVED: 'Aprovado',
-  REJECTED: 'Rejeitado',
-  CANCELED: 'Cancelado',
-  SUPERSEDED: 'Retificado',
-}
-
-// One tone per stage, so "in execution" and "approved" never look alike.
-const STATUS_TONES: Record<JobStatus, SignalTone> = {
-  DRAFT: 'neutral',
-  IN_PROGRESS: 'info',
-  REVIEW: 'warning',
-  GENERATING_PDF: 'info',
-  RENDER_FAILED: 'critical',
-  APPROVED: 'ok',
-  REJECTED: 'critical',
-  CANCELED: 'neutral',
-  SUPERSEDED: 'neutral',
-}
 
 // A due date is a calendar date (a Postgres date): show the day it names.
 function getFinancialVariant(status: Job['financialStatus']) {
@@ -255,31 +204,9 @@ export const jobsColumns: ColumnDef<Job>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = row.original.status
-      const isGenerating = status === 'GENERATING_PDF'
-
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="outline"
-            className={cn(
-              'whitespace-nowrap border-transparent',
-              STATUS_TONE[STATUS_TONES[status]].surface,
-              isGenerating && 'animate-pulse',
-            )}
-          >
-            {isGenerating && (
-              <span className="inline-flex">
-                <span className="animate-[ellipsis_1.5s_infinite]">
-                  Gerando PDF
-                </span>
-                <span className="w-4 text-left">
-                  <LoadingDots />
-                </span>
-              </span>
-            )}
-            {!isGenerating && statusLabels[status]}
-          </Badge>
+          <JobStatusBadge status={row.original.status} />
           <SyncStateBadge syncState={row.original.syncState} />
         </div>
       )

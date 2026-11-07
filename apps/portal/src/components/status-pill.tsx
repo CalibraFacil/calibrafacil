@@ -1,7 +1,8 @@
+import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
-import { STATUS_TONE, type SignalTone } from "@calibra-facil/ui/status-tone";
+import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 
 /**
  * The portal's status vocabulary, in the canonical `SignalTone` language. One

@@ -1,3 +1,4 @@
+import { JOB_STATUS } from '@calibra-facil/schemas'
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -356,14 +357,6 @@ function RecallDraftWizard({
   )
 }
 
-const IN_FLIGHT_STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Rascunho',
-  IN_PROGRESS: 'Em execução',
-  REVIEW: 'Em revisão',
-  GENERATING_PDF: 'Gerando certificado',
-  RENDER_FAILED: 'Falha na emissão',
-}
-
 /**
  * Jobs that still use the recalled standard and have no certificate yet
  * (ISO/IEC 17025 §6.4, §7.10). The API refuses their submission and approval
@@ -409,7 +402,9 @@ function InFlightJobsTable({ rows }: { rows: InFlightRecallJob[] }) {
                 </td>
                 <td className="px-3 py-2.5">
                   <Badge variant="outline">
-                    {IN_FLIGHT_STATUS_LABELS[row.status] ?? row.status}
+                    {JOB_STATUS.is(row.status)
+                      ? JOB_STATUS.label(row.status)
+                      : row.status}
                   </Badge>
                 </td>
               </tr>

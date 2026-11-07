@@ -1,5 +1,5 @@
+import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { statusToneToSignal, type StatusTone } from "@/lib/calibration-status";
-import type { SignalTone } from "@calibra-facil/ui/status-tone";
 
 /**
  * Centralized pt-BR labels + tones for the two workflow status enums the portal

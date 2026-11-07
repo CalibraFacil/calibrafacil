@@ -1,3 +1,4 @@
+import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import {
   PORTAL_NOTIFICATION_TYPES,
   type PortalNotificationType,
@@ -13,8 +14,6 @@ import {
   ToolsIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
-
-import type { SignalTone } from "@calibra-facil/ui/status-tone";
 
 /**
  * The general in-app notification center (issue #741) — distinct from the

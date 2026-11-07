@@ -1,3 +1,4 @@
+import { JOB_STATUS } from '@calibra-facil/schemas'
 import { Link } from '@tanstack/react-router'
 import {
   parseAsInteger,
@@ -27,20 +28,9 @@ import {
 } from '@calibra-facil/ui/select'
 import { DataTable } from '@calibra-facil/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
-import { JOBS_LIST_STATUSES, type JobsListStatus } from '@/features/jobs/types'
+import { JOBS_LIST_STATUSES } from '@/features/jobs/types'
 import { useJobsListData } from '@/features/jobs/use-jobs-list-data'
 import { jobsColumns } from '@/features/jobs/components/columns'
-
-const statusLabels: Record<(typeof JOBS_LIST_STATUSES)[number], string> = {
-  DRAFT: 'Rascunho',
-  IN_PROGRESS: 'Em Execução',
-  REVIEW: 'Em Revisão',
-  GENERATING_PDF: 'Gerando PDF',
-  RENDER_FAILED: 'Falha na emissão',
-  APPROVED: 'Aprovado',
-  REJECTED: 'Rejeitado',
-  CANCELED: 'Cancelado',
-}
 
 export function JobsListPage() {
   const { activeOrganizationId, isContextSwitching } =
@@ -121,26 +111,23 @@ export function JobsListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to job list statuses.
-                setStatusFilter(v as JobsListStatus | '')
+                const next = JOB_STATUS.parse(v)
+                setStatusFilter(next && next !== 'SUPERSEDED' ? next : '')
                 setPage(1)
               }}
             >
               <SelectTrigger aria-label="Filtrar por status" className="w-40">
                 <span>
-                  {statusFilter ? statusLabels[statusFilter] : 'Todos'}
+                  {statusFilter ? JOB_STATUS.label(statusFilter) : 'Todos'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos</SelectItem>
-                <SelectItem value="DRAFT">Rascunho</SelectItem>
-                <SelectItem value="IN_PROGRESS">Em Execução</SelectItem>
-                <SelectItem value="REVIEW">Em Revisão</SelectItem>
-                <SelectItem value="GENERATING_PDF">Gerando PDF</SelectItem>
-                <SelectItem value="RENDER_FAILED">Falha na emissão</SelectItem>
-                <SelectItem value="APPROVED">Aprovado</SelectItem>
-                <SelectItem value="REJECTED">Rejeitado</SelectItem>
-                <SelectItem value="CANCELED">Cancelado</SelectItem>
+                {JOBS_LIST_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {JOB_STATUS.label(status)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button type="submit" variant="secondary">

@@ -1,3 +1,4 @@
+import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -208,7 +209,7 @@ export const publicApiRouter = new Hono<{
 
       const filters = [
         eq(calibrationJob.organizationId, apiKey.organizationId),
-        inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
       ];
 
       if (query) {
@@ -255,7 +256,7 @@ export const publicApiRouter = new Hono<{
             and(
               eq(calibrationJob.organizationId, apiKey.organizationId),
               eq(calibrationJob.jobId, jobId),
-              inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+              inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
             ),
           )
           .limit(1),

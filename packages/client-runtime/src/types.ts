@@ -1823,16 +1823,7 @@ export interface ServiceOrdersApi {
   getDeliveryDocumentPdf(id: string | number): Promise<ServiceOrderDocumentUrl>;
 }
 
-export type DashboardJobStatus =
-  | "DRAFT"
-  | "IN_PROGRESS"
-  | "REVIEW"
-  | "GENERATING_PDF"
-  | "RENDER_FAILED"
-  | "APPROVED"
-  | "REJECTED"
-  | "CANCELED"
-  | "SUPERSEDED";
+export type DashboardJobStatus = JobStatus;
 
 export type DashboardJob = {
   id: number;

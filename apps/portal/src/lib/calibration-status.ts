@@ -1,6 +1,5 @@
+import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { dateOnlyDaysBetween } from "./date-only";
-
-import type { SignalTone } from "@calibra-facil/ui/status-tone";
 
 /**
  * Single source of truth for an instrument's calibration status.

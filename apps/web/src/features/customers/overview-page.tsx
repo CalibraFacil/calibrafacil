@@ -1,3 +1,4 @@
+import { JobStatusBadge } from '@/features/jobs/components/job-status-badge'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -23,10 +24,7 @@ import {
   useCustomerJobsData,
   useCustomerMembersData,
 } from '@/features/customers/queries'
-import type {
-  CustomerCompliance,
-  CustomerJobStatus,
-} from '@/features/customers/types'
+import type { CustomerCompliance } from '@/features/customers/types'
 import {
   buildAssetCalibrationStatus,
   formatDate,
@@ -51,24 +49,6 @@ const QUALIFICATION: Record<
   pending: { label: 'Pendente', variant: 'secondary' },
   suspended: { label: 'Suspenso', variant: 'destructive' },
   expired: { label: 'Expirado', variant: 'destructive' },
-}
-
-const JOB_STATUS: Record<
-  CustomerJobStatus,
-  {
-    label: string
-    variant: 'default' | 'secondary' | 'destructive' | 'outline'
-  }
-> = {
-  DRAFT: { label: 'Rascunho', variant: 'secondary' },
-  IN_PROGRESS: { label: 'Em execução', variant: 'default' },
-  REVIEW: { label: 'Em revisão', variant: 'outline' },
-  GENERATING_PDF: { label: 'Gerando PDF', variant: 'outline' },
-  RENDER_FAILED: { label: 'Falha na emissão', variant: 'destructive' },
-  APPROVED: { label: 'Aprovado', variant: 'default' },
-  REJECTED: { label: 'Rejeitado', variant: 'destructive' },
-  CANCELED: { label: 'Cancelado', variant: 'secondary' },
-  SUPERSEDED: { label: 'Retificado', variant: 'outline' },
 }
 
 /** A right-aligned "see all" affordance for a panel header. */
@@ -395,7 +375,6 @@ export function ClientOverviewTab({ id }: { id: string }) {
           <div className="mt-4 overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
             <div className="divide-y divide-foreground/[0.07]">
               {recentJobs.map((job) => {
-                const status = JOB_STATUS[job.status]
                 return (
                   <Link
                     key={job.id}
@@ -418,9 +397,7 @@ export function ClientOverviewTab({ id }: { id: string }) {
                         </span>
                       )}
                     </span>
-                    <Badge variant={status.variant} className="shrink-0">
-                      {status.label}
-                    </Badge>
+                    <JobStatusBadge status={job.status} className="shrink-0" />
                     <span className="hidden w-20 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:inline">
                       {formatDate(
                         job.performedAt ?? job.approvedAt ?? job.createdAt,

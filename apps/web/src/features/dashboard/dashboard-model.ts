@@ -1,12 +1,9 @@
+import type { SignalTone } from '@calibra-facil/shared/status-vocabulary'
+import type { IN_FLIGHT_JOB_STATUSES } from '@calibra-facil/schemas'
 import { getLabCalendarDay } from '@calibra-facil/shared/calendar-date'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
-import type { SignalTone } from '@calibra-facil/ui/status-tone'
-import type {
-  DashboardJob,
-  DashboardJobStatus,
-  DashboardStats,
-} from '@/features/dashboard/queries'
+import type { DashboardJob, DashboardStats } from '@/features/dashboard/queries'
 import { dateOnlyDaysBetween } from '@/lib/date-only'
 
 /**
@@ -16,26 +13,9 @@ import { dateOnlyDaysBetween } from '@/lib/date-only'
  * lab reads as an `ok` zero rather than as a missing panel.
  */
 
-export const STATUS_LABEL: Record<DashboardJobStatus, string> = {
-  DRAFT: 'Preparação',
-  IN_PROGRESS: 'Em execução',
-  REVIEW: 'Revisão',
-  GENERATING_PDF: 'Emitindo',
-  RENDER_FAILED: 'Falha na emissão',
-  APPROVED: 'Aprovada',
-  REJECTED: 'Rejeitada',
-  CANCELED: 'Cancelada',
-  SUPERSEDED: 'Substituída',
-}
-
 // — Pipeline —
 
-type PipelineStageStatus =
-  | 'DRAFT'
-  | 'IN_PROGRESS'
-  | 'REVIEW'
-  | 'GENERATING_PDF'
-  | 'RENDER_FAILED'
+type PipelineStageStatus = (typeof IN_FLIGHT_JOB_STATUSES)[number]
 
 export type PipelineStage = {
   status: PipelineStageStatus

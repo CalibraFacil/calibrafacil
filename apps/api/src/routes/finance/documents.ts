@@ -1,3 +1,5 @@
+import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
+import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -314,7 +316,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       const conditions = [
         eq(calibrationJob.organizationId, member.organizationId),
         buildUnitScopeCondition(calibrationJob.unitId, member),
-        inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
       ];
 
       if (query.customerId) {
@@ -449,7 +451,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           const invalidJobs = jobs.filter(
-            (job) => !["APPROVED", "SUPERSEDED"].includes(job.status),
+            (job) => !isOneOf(CERTIFICATE_ISSUED_JOB_STATUSES, job.status),
           );
           if (invalidJobs.length > 0) {
             return { status: "jobs_not_billable" as const };

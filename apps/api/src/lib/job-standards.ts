@@ -1,3 +1,4 @@
+import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
 import { db } from "@calibra-facil/db";
 import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
@@ -133,7 +134,7 @@ export async function findImpactedCertificates(
       and(
         eq(jobStandard.standardId, input.standardId),
         eq(calibrationJob.organizationId, input.organizationId),
-        inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
         gte(calibrationJob.approvedAt, input.from),
         lte(calibrationJob.approvedAt, input.to),
       ),

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
+import { SIGNAL_TONES } from "@calibra-facil/shared/status-vocabulary";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { SIGNAL_TONES, STATUS_TONE } from "../lib/status-tone";
+import { STATUS_TONE } from "../lib/status-tone";
 import {
   BlueprintField,
   BlueprintGrid,

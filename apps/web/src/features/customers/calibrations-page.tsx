@@ -1,3 +1,6 @@
+import type { JobStatus } from '@calibra-facil/schemas'
+import { JOB_STATUS } from '@calibra-facil/schemas'
+import { JobStatusBadge } from '@/features/jobs/components/job-status-badge'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
@@ -14,10 +17,9 @@ import {
   useCustomerDetailData,
   useCustomerJobsData,
 } from '@/features/customers/queries'
-import type { CustomerJob, CustomerJobStatus } from '@/features/customers/types'
+import type { CustomerJob } from '@/features/customers/types'
 import { Button } from '@calibra-facil/ui/button'
 import { Input } from '@calibra-facil/ui/input'
-import { Badge } from '@calibra-facil/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,62 +50,10 @@ import {
 } from '@/features/customers/components/client-detail-ui'
 import { formatInstant } from '@calibra-facil/shared/format'
 
-const statusLabels: Record<CustomerJobStatus, string> = {
-  DRAFT: 'Rascunho',
-  IN_PROGRESS: 'Em Execução',
-  REVIEW: 'Em Revisão',
-  GENERATING_PDF: 'Gerando PDF',
-  RENDER_FAILED: 'Falha na emissão',
-  APPROVED: 'Aprovado',
-  REJECTED: 'Rejeitado',
-  CANCELED: 'Cancelado',
-  SUPERSEDED: 'Retificado',
-}
-
-const statusVariants: Record<
-  CustomerJobStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  DRAFT: 'secondary',
-  IN_PROGRESS: 'default',
-  REVIEW: 'outline',
-  GENERATING_PDF: 'outline',
-  RENDER_FAILED: 'destructive',
-  APPROVED: 'default',
-  REJECTED: 'destructive',
-  CANCELED: 'secondary',
-  SUPERSEDED: 'outline',
-}
-
 function formatJobDate(job: CustomerJob): string {
   return formatInstant(
     job.performedAt ?? job.approvedAt ?? job.createdAt,
     'date',
-  )
-}
-
-function LoadingDots() {
-  return (
-    <span className="inline-flex" aria-hidden="true">
-      <span
-        className="animate-[bounce_1s_ease-in-out_infinite]"
-        style={{ animationDelay: '0ms' }}
-      >
-        .
-      </span>
-      <span
-        className="animate-[bounce_1s_ease-in-out_infinite]"
-        style={{ animationDelay: '150ms' }}
-      >
-        .
-      </span>
-      <span
-        className="animate-[bounce_1s_ease-in-out_infinite]"
-        style={{ animationDelay: '300ms' }}
-      >
-        .
-      </span>
-    </span>
   )
 }
 
@@ -166,32 +116,7 @@ const calibrationColumns: ColumnDef<CustomerJob>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = row.original.status
-      const isGenerating = status === 'GENERATING_PDF'
-
-      return (
-        <Badge
-          variant={statusVariants[status]}
-          className={
-            isGenerating
-              ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
-              : ''
-          }
-        >
-          {isGenerating ? (
-            <span className="inline-flex">
-              <span className="animate-[ellipsis_1.5s_infinite]">
-                Gerando PDF
-              </span>
-              <span className="w-4 text-left">
-                <LoadingDots />
-              </span>
-            </span>
-          ) : (
-            statusLabels[status]
-          )}
-        </Badge>
-      )
+      return <JobStatusBadge status={row.original.status} />
     },
   },
   {
@@ -265,7 +190,7 @@ const calibrationColumns: ColumnDef<CustomerJob>[] = [
 export function ClientCalibrationsTab({ id }: { id: string }) {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<CustomerJobStatus | ''>('')
+  const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
 
   const limit = 20
 
@@ -310,27 +235,22 @@ export function ClientCalibrationsTab({ id }: { id: string }) {
             <Select
               value={statusFilter}
               onValueChange={(value) => {
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to customer job statuses.
-                setStatusFilter(value as CustomerJobStatus | '')
+                setStatusFilter(JOB_STATUS.parse(value) ?? '')
                 setPage(1)
               }}
             >
               <SelectTrigger aria-label="Filtrar por status" className="w-44">
                 <span>
-                  {statusFilter ? statusLabels[statusFilter] : 'Todos'}
+                  {statusFilter ? JOB_STATUS.label(statusFilter) : 'Todos'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos</SelectItem>
-                <SelectItem value="DRAFT">Rascunho</SelectItem>
-                <SelectItem value="IN_PROGRESS">Em Execução</SelectItem>
-                <SelectItem value="REVIEW">Em Revisão</SelectItem>
-                <SelectItem value="GENERATING_PDF">Gerando PDF</SelectItem>
-                <SelectItem value="RENDER_FAILED">Falha na emissão</SelectItem>
-                <SelectItem value="APPROVED">Aprovado</SelectItem>
-                <SelectItem value="REJECTED">Rejeitado</SelectItem>
-                <SelectItem value="CANCELED">Cancelado</SelectItem>
-                <SelectItem value="SUPERSEDED">Retificado</SelectItem>
+                {JOB_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button type="submit" variant="secondary">
