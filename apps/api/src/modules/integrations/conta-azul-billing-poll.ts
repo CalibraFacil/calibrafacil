@@ -14,6 +14,10 @@ import {
   type RemoteStatusPollResult,
 } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
+import {
+  BILLING_DOCUMENT_MACHINE,
+  RECEIVABLE_INSTALLMENT_MACHINE,
+} from "@calibra-facil/schemas/machines";
 import { type ContaAzulReceivableSearchResponse } from "../../lib/conta-azul-client";
 import {
   buildContaAzulReceivableInstallmentLinkMetadata,
@@ -247,6 +251,7 @@ export async function pollContaAzulBillingStatus(params: {
             id: receivableInstallment.id,
             documentId: receivableInstallment.documentId,
             amountCents: receivableInstallment.amountCents,
+            status: receivableInstallment.status,
             documentStatus: billingDocument.status,
           })
           .from(receivableInstallment)
@@ -286,7 +291,15 @@ export async function pollContaAzulBillingStatus(params: {
         await o
           .update(receivableInstallment)
           .set({
-            status: mapped.installmentStatus,
+            // `sync_remote` of RECEIVABLE_INSTALLMENT_MACHINE: the ERP's status.
+            status:
+              mapped.installmentStatus === localInstallment.status
+                ? localInstallment.status
+                : RECEIVABLE_INSTALLMENT_MACHINE.requireTransition(
+                    localInstallment.status,
+                    "sync_remote",
+                    mapped.installmentStatus,
+                  ),
             ...(dueDate ? { dueDate } : {}),
             paidAt,
             paymentMethod: receiptSummary?.paymentMethod ?? null,
@@ -316,11 +329,25 @@ export async function pollContaAzulBillingStatus(params: {
           localInstallment.documentId,
         );
 
-        if (localInstallment.documentStatus !== "VOID") {
+        // `sync_remote` of BILLING_DOCUMENT_MACHINE: never for a document the
+        // lab voided.
+        if (
+          BILLING_DOCUMENT_MACHINE.canTransition(
+            localInstallment.documentStatus,
+            "sync_remote",
+          )
+        ) {
           await o
             .update(billingDocument)
             .set({
-              status: documentStatus,
+              status:
+                documentStatus === localInstallment.documentStatus
+                  ? documentStatus
+                  : BILLING_DOCUMENT_MACHINE.requireTransition(
+                      localInstallment.documentStatus,
+                      "sync_remote",
+                      documentStatus,
+                    ),
               updatedAt: new Date(),
             })
             .where(eq(billingDocument.id, localInstallment.documentId));

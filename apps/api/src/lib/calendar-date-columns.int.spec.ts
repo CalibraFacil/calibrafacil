@@ -26,6 +26,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const CALENDAR_COLUMNS = [
   ["organization", "accreditation_valid_from"],
@@ -209,25 +210,27 @@ describe("calendar-date columns (migration 0116)", () => {
       name = "Padrao",
     ) {
       const org = await seedOrg({ orgId: "org-cal", userId: "user-cal" });
-      const [row] = await db
-        .insert(referenceStandard)
-        .values({
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          createdBy: org.userId,
-          name,
-          kind: "generic_scalar",
-          serialNumber: "SN-CAL",
-          certificateNumber: "CERT-CAL",
-          calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
-          nextCalibrationDate,
-          coverageFactor: 2,
-          distribution: "normal",
-          status: "ACTIVE",
-          referenceValue: 1,
-          uncertainty: 0.01,
-        })
-        .returning({ id: referenceStandard.id });
+      const [row] = await withStatusRepair((tx) =>
+        tx
+          .insert(referenceStandard)
+          .values({
+            organizationId: org.orgId,
+            unitId: org.unitId,
+            createdBy: org.userId,
+            name,
+            kind: "generic_scalar",
+            serialNumber: "SN-CAL",
+            certificateNumber: "CERT-CAL",
+            calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
+            nextCalibrationDate,
+            coverageFactor: 2,
+            distribution: "normal",
+            status: "ACTIVE",
+            referenceValue: 1,
+            uncertainty: 0.01,
+          })
+          .returning({ id: referenceStandard.id }),
+      );
       if (!row) throw new Error("insert failed");
       return { ...org, id: row.id };
     }
@@ -320,18 +323,20 @@ describe("calendar-date columns (migration 0116)", () => {
         .insert(assetType)
         .values({ name: "AT", slug: "at-guard", definition: [] })
         .returning({ id: assetType.id });
-      const [instrument] = await db
-        .insert(asset)
-        .values({
-          labOrganizationId: org.orgId,
-          unitId: org.unitId,
-          customerId,
-          assetTypeId: type?.id ?? 0,
-          name: "Instrumento",
-          serialNumber: "SN-G",
-          tag: "TAG-G",
-        })
-        .returning({ id: asset.id });
+      const [instrument] = await withStatusRepair((tx) =>
+        tx
+          .insert(asset)
+          .values({
+            labOrganizationId: org.orgId,
+            unitId: org.unitId,
+            customerId,
+            assetTypeId: type?.id ?? 0,
+            name: "Instrumento",
+            serialNumber: "SN-G",
+            tag: "TAG-G",
+          })
+          .returning({ id: asset.id }),
+      );
       const [svc] = await db
         .insert(service)
         .values({

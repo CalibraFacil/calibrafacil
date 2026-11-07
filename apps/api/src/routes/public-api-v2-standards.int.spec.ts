@@ -28,6 +28,7 @@ import { seedApiKey, seedCustomer, seedOrg } from "../../test/integration/seed";
 import { executableMethodSnapshot } from "../../test/integration/executable-method";
 import { jobsRouter } from "./jobs";
 import { publicApiV2Router } from "./public-api-v2";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -53,18 +54,20 @@ async function seedWorld(validThrough: Date) {
     .insert(assetType)
     .values({ name: "AT", slug: "at-papi", definition: [] })
     .returning({ id: assetType.id });
-  const [instrument] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: org.orgId,
-      unitId: org.unitId,
-      customerId,
-      assetTypeId: type?.id ?? 0,
-      name: "Instrumento",
-      serialNumber: "SN-PAPI",
-      tag: "TAG-PAPI",
-    })
-    .returning({ id: asset.id });
+  const [instrument] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: org.orgId,
+        unitId: org.unitId,
+        customerId,
+        assetTypeId: type?.id ?? 0,
+        name: "Instrumento",
+        serialNumber: "SN-PAPI",
+        tag: "TAG-PAPI",
+      })
+      .returning({ id: asset.id }),
+  );
   const [svc] = await db
     .insert(service)
     .values({
@@ -89,25 +92,27 @@ async function seedWorld(validThrough: Date) {
       certificateName: "CAL-PAPI-1",
     })
     .returning({ id: calibrationJob.id });
-  const [standard] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: org.orgId,
-      unitId: org.unitId,
-      createdBy: org.userId,
-      name: "Massa Padrao",
-      kind: "generic_scalar",
-      serialNumber: "SN-STD-PAPI",
-      certificateNumber: "CERT-PAPI",
-      calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-      nextCalibrationDate: validThrough,
-      coverageFactor: 2,
-      distribution: "normal",
-      status: "ACTIVE",
-      referenceValue: 1,
-      uncertainty: 0.01,
-    })
-    .returning({ id: referenceStandard.id });
+  const [standard] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: org.orgId,
+        unitId: org.unitId,
+        createdBy: org.userId,
+        name: "Massa Padrao",
+        kind: "generic_scalar",
+        serialNumber: "SN-STD-PAPI",
+        certificateNumber: "CERT-PAPI",
+        calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+        nextCalibrationDate: validThrough,
+        coverageFactor: 2,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+      })
+      .returning({ id: referenceStandard.id }),
+  );
   const { rawKey } = await seedApiKey({
     organizationId: org.orgId,
     createdBy: org.userId,

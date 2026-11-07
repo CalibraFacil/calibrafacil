@@ -42,6 +42,7 @@ import { jobRow } from "../../../test/integration/job-cas";
 import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { syncRouter } from "../../routes/sync";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 vi.mock("../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -97,29 +98,31 @@ async function addStandard(
   options: { name?: string; validThrough?: Date; status?: string } = {},
 ) {
   standardSequence += 1;
-  const [standard] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: ORG,
-      unitId: world.org.unitId,
-      createdBy: TECHNICIAN,
-      name: options.name ?? `Massa Padrao ${standardSequence}`,
-      kind: "generic_scalar",
-      serialNumber: `SN-STD-P111-${standardSequence}`,
-      certificateNumber: `CERT-P111-${standardSequence}`,
-      calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-      nextCalibrationDate:
-        options.validThrough ?? addCalendarDays(labToday(), 90),
-      coverageFactor: 2,
-      distribution: "normal",
-      status: options.status ?? "ACTIVE",
-      referenceValue: 1,
-      uncertainty: 0.01,
-    })
-    .returning({
-      id: referenceStandard.id,
-      name: referenceStandard.name,
-    });
+  const [standard] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: ORG,
+        unitId: world.org.unitId,
+        createdBy: TECHNICIAN,
+        name: options.name ?? `Massa Padrao ${standardSequence}`,
+        kind: "generic_scalar",
+        serialNumber: `SN-STD-P111-${standardSequence}`,
+        certificateNumber: `CERT-P111-${standardSequence}`,
+        calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+        nextCalibrationDate:
+          options.validThrough ?? addCalendarDays(labToday(), 90),
+        coverageFactor: 2,
+        distribution: "normal",
+        status: options.status ?? "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+      })
+      .returning({
+        id: referenceStandard.id,
+        name: referenceStandard.name,
+      }),
+  );
   if (!standard) throw new Error("addStandard failed");
   return standard;
 }
@@ -157,10 +160,12 @@ const STALE = {
 /** The ways a standard of the saved snapshot stops being reachable at all. */
 const UNREACHABLE = {
   "out of the unit scope": async (world: World, standard: Standard) => {
-    const [unit] = await db
-      .insert(organizationUnit)
-      .values({ organizationId: ORG, name: "Outra unidade", slug: "outra" })
-      .returning({ id: organizationUnit.id });
+    const [unit] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({ organizationId: ORG, name: "Outra unidade", slug: "outra" })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!unit) throw new Error("unit not created");
     await db
       .update(referenceStandard)

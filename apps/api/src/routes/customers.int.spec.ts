@@ -14,6 +14,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test. Only the better-auth session is mocked
 // (see test/integration/setup.ts); requireLabAuth -> requireOrganization ->
@@ -41,14 +42,16 @@ async function seedCustomer(params: {
   email?: string;
 }): Promise<SeededCustomer> {
   // Insert a minimal CLIENT org for the FK.
-  await db.insert(organization).values({
-    id: params.clientOrgId,
-    name: `Client Org ${params.clientOrgId}`,
-    slug: params.clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: params.clientOrgId,
+      name: `Client Org ${params.clientOrgId}`,
+      slug: params.clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
 
   const [row] = await db
     .insert(customer)
@@ -71,19 +74,21 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetTypeId: params.assetTypeId,
-      name: `Instrumento ${params.tag}`,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetTypeId: params.assetTypeId,
+        name: `Instrumento ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }

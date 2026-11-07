@@ -19,6 +19,7 @@ export const desktopIpcChannels = {
   publishNotifications: "calibra:notifications:publish",
   historyCommand: "calibra:history:command",
   activateLocalPartition: "calibra:local-partition:activate",
+  forgetOfflineAccess: "calibra:local-partition:forget",
   pickFile: "calibra:dialog:pick-file",
   pickFolder: "calibra:dialog:pick-folder",
   saveFile: "calibra:dialog:save-file",

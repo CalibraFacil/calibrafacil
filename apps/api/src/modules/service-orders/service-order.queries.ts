@@ -12,9 +12,13 @@ export async function getQuoteForAction(
   organizationId: string,
   // The caller's org-bound handle, when it is inside a transaction already.
   executor?: OrgDb,
+  // Lock the row for the caller's transaction: a lifecycle command reads the
+  // status, checks it against SERVICE_ORDER_QUOTE_MACHINE and writes, and a
+  // concurrent command waits instead of acting on the same stale status.
+  options: { lock?: boolean } = {},
 ) {
-  const [quote] = await inOrgTransaction(organizationId, executor, (o) =>
-    o
+  const [quote] = await inOrgTransaction(organizationId, executor, (o) => {
+    const query = o
       .select()
       .from(serviceOrderQuote)
       .where(
@@ -24,9 +28,35 @@ export async function getQuoteForAction(
           eq(serviceOrderQuote.organizationId, organizationId),
         ),
       )
-      .limit(1),
-  );
+      .limit(1);
+    return options.lock ? query.for("update") : query;
+  });
   return quote ?? null;
+}
+
+/**
+ * The order's status, read under a row lock for the caller's transaction: a
+ * lifecycle command checks it against SERVICE_ORDER_MACHINE and writes, and a
+ * concurrent command waits instead of acting on the same stale status. Lock the
+ * quote first when both are locked (every quote decision does).
+ */
+export async function lockServiceOrderStatus(
+  o: OrgDb,
+  serviceOrderId: number,
+  organizationId: string,
+) {
+  const [row] = await o
+    .select({ status: serviceOrder.status })
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, serviceOrderId),
+        eq(serviceOrder.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return row?.status ?? null;
 }
 
 export async function getScopedServiceOrder(
@@ -34,19 +64,26 @@ export async function getScopedServiceOrder(
   member: AuthVariables["member"],
   // The caller's org-bound handle, when it is inside a transaction already.
   executor?: OrgDb,
+  // Lock the row for the caller's transaction (see getQuoteForAction).
+  options: { lock?: boolean } = {},
 ) {
-  const [order] = await inOrgTransaction(member.organizationId, executor, (o) =>
-    o
-      .select()
-      .from(serviceOrder)
-      .where(
-        and(
-          eq(serviceOrder.id, id),
-          eq(serviceOrder.organizationId, member.organizationId),
-          buildUnitScopeCondition(serviceOrder.unitId, member),
-        ),
-      )
-      .limit(1),
+  const [order] = await inOrgTransaction(
+    member.organizationId,
+    executor,
+    (o) => {
+      const query = o
+        .select()
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
+        .limit(1);
+      return options.lock ? query.for("update") : query;
+    },
   );
 
   return order ?? null;

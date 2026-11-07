@@ -12,6 +12,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the assets router.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -60,14 +61,16 @@ const LEGAL_FROM_INSTALL = {
 /** Seed a CLIENT organization (required as customer.authOrganizationId). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
   const now = new Date("2026-01-01T00:00:00.000Z");
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client Org ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: now,
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client Org ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: now,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /** Seed a customer row linked to a LAB org. Returns the customer id. */
@@ -118,23 +121,25 @@ async function seedAsset(params: {
   tag: string;
   name?: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): asset now carries its lab org (== the customer's) so
-      // UNIQUE(lab_organization_id, tag) is enforced per org. Derive it from the
-      // seeded customer to hold the invariant asset.lab_org == customer.lab_org.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: params.name ?? "Test Asset",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): asset now carries its lab org (== the customer's) so
+        // UNIQUE(lab_organization_id, tag) is enforced per org. Derive it from the
+        // seeded customer to hold the invariant asset.lab_org == customer.lab_org.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: params.name ?? "Test Asset",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
 
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
@@ -289,17 +294,19 @@ describe("assetsRouter — real DB + real middleware", () => {
 
     // Seed a second unit within the same org
     const { organizationUnit } = await import("@calibra-facil/db/schema");
-    const [unitB] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: org.orgId,
-        name: "Branch",
-        slug: "branch",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: org.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [unitB] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: org.orgId,
+          name: "Branch",
+          slug: "branch",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: org.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
 
     if (!unitB) throw new Error("failed to seed unit B");
 

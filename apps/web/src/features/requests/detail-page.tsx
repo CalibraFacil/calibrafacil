@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
+import { CALIBRATION_REQUEST_MACHINE } from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
@@ -231,7 +232,8 @@ function CalibrationRequestTriagePanel({
   })
 
   const conversionBlockedReason = useMemo(() => {
-    if (request.status !== 'APPROVED') return null
+    if (!CALIBRATION_REQUEST_MACHINE.canTransition(request.status, 'convert'))
+      return null
     if (pendingConversionItems.length === 0) {
       return 'Todos os itens desta solicitação já foram convertidos.'
     }
@@ -265,7 +267,8 @@ function CalibrationRequestTriagePanel({
   ])
 
   const canConvert = useMemo(() => {
-    if (request.status !== 'APPROVED') return false
+    if (!CALIBRATION_REQUEST_MACHINE.canTransition(request.status, 'convert'))
+      return false
     return pendingConversionItems.length > 0 && !conversionBlockedReason
   }, [conversionBlockedReason, pendingConversionItems.length, request.status])
 
@@ -490,9 +493,10 @@ function CalibrationRequestTriagePanel({
             />
           </div>
 
-          {(request.status === 'PENDING' ||
-            request.status === 'UNDER_REVIEW' ||
-            request.status === 'APPROVED') && (
+          {CALIBRATION_REQUEST_MACHINE.canTransition(
+            request.status,
+            'reject',
+          ) && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Motivo da rejeição</label>
               <Textarea
@@ -504,8 +508,10 @@ function CalibrationRequestTriagePanel({
           )}
 
           <div className="flex flex-wrap gap-2">
-            {(request.status === 'PENDING' ||
-              request.status === 'UNDER_REVIEW') && (
+            {CALIBRATION_REQUEST_MACHINE.canTransition(
+              request.status,
+              'approve',
+            ) && (
               <>
                 <Button
                   variant="outline"
@@ -523,9 +529,10 @@ function CalibrationRequestTriagePanel({
               </>
             )}
 
-            {(request.status === 'PENDING' ||
-              request.status === 'UNDER_REVIEW' ||
-              request.status === 'APPROVED') && (
+            {CALIBRATION_REQUEST_MACHINE.canTransition(
+              request.status,
+              'reject',
+            ) && (
               <Button
                 variant="destructive"
                 onClick={() => rejectMutation.mutate()}

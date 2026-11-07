@@ -10,6 +10,7 @@ import {
   service,
   user,
 } from "@calibra-facil/db/schema";
+import { withStatusRepair } from "./state-fixtures";
 
 /**
  * Seed an EXTRA user + org member on top of `seedOrg` (which only seeds the
@@ -67,14 +68,16 @@ export async function seedJobForOrg(params: {
   createdBy: string;
 }): Promise<{ jobId: number; assetId: number; serviceId: number }> {
   const clientOrgId = `client-${params.orgId}-job`;
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
   const [cust] = await db
     .insert(customer)
     .values({
@@ -95,20 +98,22 @@ export async function seedJobForOrg(params: {
     .returning({ id: assetType.id });
   if (!type) throw new Error("seedJobForOrg: asset type insert failed");
 
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: cust.id,
-      labOrganizationId: params.orgId,
-      assetTypeId: type.id,
-      name: "Asset",
-      serialNumber: `SN-${params.orgId}-job`,
-      tag: `TAG-${params.orgId}-job`,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: cust.id,
+        labOrganizationId: params.orgId,
+        assetTypeId: type.id,
+        name: "Asset",
+        serialNumber: `SN-${params.orgId}-job`,
+        tag: `TAG-${params.orgId}-job`,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!assetRow) throw new Error("seedJobForOrg: asset insert failed");
 
   const [svc] = await db

@@ -31,6 +31,7 @@ import { capaRouter } from "./capa";
 import { nonConformancesRouter } from "./non-conformances";
 import { proficiencyTestsRouter } from "./proficiency-tests";
 import { spcRouter } from "./spc";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
@@ -105,17 +106,19 @@ const READING_BODY = (standardId: number) => ({
 
 async function seedLab() {
   const org = await seedOrg({ orgId: "org-a", role: "admin" });
-  const [otherUnit] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: org.orgId,
-      name: "Filial",
-      slug: "filial",
-      status: "ACTIVE",
-      isDefault: false,
-      createdBy: org.userId,
-    })
-    .returning({ id: organizationUnit.id });
+  const [otherUnit] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: org.orgId,
+        name: "Filial",
+        slug: "filial",
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: org.userId,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
   if (!otherUnit) throw new Error("unit seed failed");
   const technician = await seedExtraMember({
     orgId: org.orgId,

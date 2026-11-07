@@ -13,6 +13,7 @@ import { createLabAccountSetupToken } from "@calibra-facil/auth/lab-access";
 import { labSetupRouter } from "./lab-setup";
 import { loginAs, logout, sessionFor } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration test for the lab ONBOARDING / account-claim surface.
 //
@@ -51,14 +52,16 @@ async function seedClaimable(params: {
   const now = new Date("2026-01-01T00:00:00.000Z");
 
   await db.insert(user).values({ id: userId, name: `User ${userId}`, email });
-  await db.insert(organization).values({
-    id: orgId,
-    name: `Lab ${orgId}`,
-    slug: orgId,
-    createdAt: now,
-    type: "LAB",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: orgId,
+      name: `Lab ${orgId}`,
+      slug: orgId,
+      createdAt: now,
+      type: "LAB",
+      status: "ACTIVE",
+    }),
+  );
 
   if (params.withMembership) {
     await db.insert(member).values({
@@ -222,14 +225,16 @@ describe("labSetupRouter — real DB + token-bound authorization", () => {
     await db
       .insert(user)
       .values({ id: "inviter-1", name: "Inviter", email: "inviter@lab.test" });
-    await db.insert(organization).values({
-      id: orgId,
-      name: `Lab ${orgId}`,
-      slug: orgId,
-      createdAt: now,
-      type: "LAB",
-      status: "ACTIVE",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: orgId,
+        name: `Lab ${orgId}`,
+        slug: orgId,
+        createdAt: now,
+        type: "LAB",
+        status: "ACTIVE",
+      }),
+    );
 
     const invitationId = randomBytes(12).toString("hex");
     await db.insert(invitation).values({

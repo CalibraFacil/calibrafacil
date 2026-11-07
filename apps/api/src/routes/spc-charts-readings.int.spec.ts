@@ -26,6 +26,7 @@ import { spcRouter } from "./spc";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
@@ -40,17 +41,19 @@ async function seedLab(tag: "a" | "b") {
     unitId: org.unitId,
     createdBy: org.userId,
   });
-  const [chart] = await db
-    .insert(controlChart)
-    .values({
-      organizationId: org.orgId,
-      standardId,
-      parameter: "100 g",
-      chartType: "i_mr",
-      params: { baselineWindow: STABLE.length },
-      createdBy: org.userId,
-    })
-    .returning({ id: controlChart.id });
+  const [chart] = await withStatusRepair((tx) =>
+    tx
+      .insert(controlChart)
+      .values({
+        organizationId: org.orgId,
+        standardId,
+        parameter: "100 g",
+        chartType: "i_mr",
+        params: { baselineWindow: STABLE.length },
+        createdBy: org.userId,
+      })
+      .returning({ id: controlChart.id }),
+  );
   if (!chart) throw new Error("chart not seeded");
   const readings = await db
     .insert(checkStandardReading)

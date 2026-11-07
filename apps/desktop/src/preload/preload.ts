@@ -55,6 +55,8 @@ const calibraBridge: CalibraBridge = {
       desktopIpcChannels.activateLocalPartition,
       request,
     ),
+  forgetOfflineAccess: () =>
+    invoke<boolean>(desktopIpcChannels.forgetOfflineAccess),
   pickFile: () => invoke(desktopIpcChannels.pickFile),
   pickFolder: () => invoke(desktopIpcChannels.pickFolder),
   saveFile: () => invoke(desktopIpcChannels.saveFile),

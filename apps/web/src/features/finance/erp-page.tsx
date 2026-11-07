@@ -29,7 +29,7 @@ import type { ErpExportsResponse } from '@/features/finance/types'
 
 type ErpRow = ErpExportsResponse['data'][number]
 
-const PENDING_STATES = new Set(['NOT_EXPORTED', 'PENDING'])
+const PENDING_STATES = new Set(['NOT_EXPORTED'])
 
 const EXPORT_FACETS: FacetConfig[] = [
   {
@@ -37,7 +37,6 @@ const EXPORT_FACETS: FacetConfig[] = [
     title: 'Exportação',
     options: [
       { value: 'NOT_EXPORTED', label: 'Não exportado' },
-      { value: 'PENDING', label: 'Pendente' },
       { value: 'EXPORTED', label: 'Exportado' },
       { value: 'FAILED', label: 'Falhou' },
     ],

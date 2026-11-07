@@ -35,6 +35,7 @@ import {
   seedUser,
 } from "../../test/integration/identity-fixtures";
 import { syncRouter } from "./sync";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -56,17 +57,19 @@ const USER = "user-scope";
 /** A lab with two units, "Alfa" (sorts first: the desktop's active unit) and "Matriz". */
 async function seedTwoUnitLab(role: "member" | "operator") {
   const org = await seedOrg({ orgId: LAB, userId: USER, role });
-  const [alfa] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: LAB,
-      name: "Alfa",
-      slug: "alfa",
-      status: "ACTIVE",
-      isDefault: false,
-      createdBy: USER,
-    })
-    .returning({ id: organizationUnit.id });
+  const [alfa] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: LAB,
+        name: "Alfa",
+        slug: "alfa",
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: USER,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
   if (!alfa) throw new Error("seed: unit missing");
   const customerId = await seedCustomer({
     labOrganizationId: LAB,

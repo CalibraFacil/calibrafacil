@@ -21,7 +21,9 @@
     "./tenancy": "./src/tenancy.ts",
     "./testing": "./src/testing.ts",
     "./seed-asset-types": "./src/seed-asset-types.ts",
-    "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts"
+    "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts",
+    "./status-guard-sql": "./src/status-guard-sql.ts",
+    "./status-machines": "./src/status-machines.ts"
   },
   "description": "",
   "main": "index.js",
@@ -40,7 +42,8 @@
     "retention:inventory": "tsx ./scripts/records-retention-inventory.ts",
     "tenancy:doc": "tsx ./scripts/tenancy-doc.ts",
     "gen:job-transitions-sql": "tsx ./scripts/gen-job-transitions-sql.ts",
-    "gen:rls-sql": "tsx ./scripts/gen-rls-sql.ts"
+    "gen:rls-sql": "tsx ./scripts/gen-rls-sql.ts",
+    "gen:status-guards-sql": "tsx ./scripts/gen-status-guards-sql.ts"
   },
   "keywords": [],
   "author": "",

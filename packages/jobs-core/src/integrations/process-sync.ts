@@ -44,13 +44,17 @@ export async function processIntegrationSync(
   // that laboratory, each in a short transaction that names it (row-level
   // security). The remote HTTP push below never runs inside a transaction.
   await withOrgSession(env, message.organizationId, async (lab) => {
-    await lab.transaction((client) =>
+    const started = await lab.transaction((client) =>
       updateRun(client, {
         runId: message.runId,
+        command: "start",
         status: "RUNNING",
         startedAt: new Date(),
       }),
     );
+    // A redelivered message for a run that already finished (or was never
+    // created): nothing to do, and the finished run is not revived.
+    if (!started) return;
 
     try {
       // Read phase: one transaction for the runtime, the coverage and the
@@ -124,6 +128,7 @@ export async function processIntegrationSync(
 
           await updateRun(client, {
             runId: message.runId,
+            command: "fail",
             status: "FAILED",
             errorSummary: blockedMessage,
             summary: buildRunSummary({
@@ -222,6 +227,7 @@ export async function processIntegrationSync(
       await lab.transaction(async (client) => {
         await updateRun(client, {
           runId: message.runId,
+          command: "finish",
           status,
           processedCount,
           successCount,
@@ -264,6 +270,7 @@ export async function processIntegrationSync(
       await lab.transaction(async (client) => {
         await updateRun(client, {
           runId: message.runId,
+          command: "fail",
           status: "FAILED",
           errorSummary: messageText,
           summary: buildRunSummary({

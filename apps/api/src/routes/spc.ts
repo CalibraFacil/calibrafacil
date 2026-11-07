@@ -29,6 +29,7 @@ import { calibrationJobBelongsToOrganization } from "../lib/tenant-refs";
 import { buildUnitScopeCondition } from "../lib/units";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, asc, desc, count } from "drizzle-orm";
+import { SPC_MACHINE } from "@calibra-facil/schemas/machines";
 import { clientIp } from "../lib/client-ip";
 
 /**
@@ -97,7 +98,11 @@ export async function recomputeControlChart(
   await executor
     .update(controlChart)
     .set({
-      status: evaluation.status,
+      status: SPC_MACHINE.requireTransition(
+        chart.status,
+        "recompute",
+        evaluation.status,
+      ),
       lastEvaluation: evaluation,
       lastEvaluatedAt: new Date(),
     })

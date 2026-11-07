@@ -1,8 +1,6 @@
 import { serviceOrder, serviceOrderExecution } from "@calibra-facil/db/schema";
-import {
-  canTransitionServiceOrderStatus,
-  isServiceOrderFinalStatus,
-} from "@calibra-facil/shared";
+import { isServiceOrderFinalStatus } from "@calibra-facil/shared";
+import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { and, eq } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import { orgDb } from "../../lib/org-db";
@@ -30,16 +28,27 @@ export async function startServiceOrderExecution(input: {
     );
     if (!order) return { status: "not_found" as const };
 
-    // Consult the single source of truth (SERVICE_ORDER_ALLOWED_TRANSITIONS) before
-    // writing `status`, instead of forcing "repair_in_progress" unconditionally.
-    // Re-starting an order already in that status is a no-op (mirrors the generic
-    // updateServiceOrder guard), so idempotent re-invocation stays allowed.
-    if (
-      order.status !== "repair_in_progress" &&
-      !canTransitionServiceOrderStatus(order.status, "repair_in_progress")
-    ) {
+    // `start_repair` in SERVICE_ORDER_MACHINE: from an approved quote, or a
+    // no-op re-start of an order already under repair (idempotent re-invocation).
+    // The status moves first, as a compare-and-set, so losing a race writes
+    // nothing.
+    if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "start_repair")) {
       return { status: "invalid_transition" as const };
     }
+
+    const [moved] = await o
+      .update(serviceOrder)
+      .set({ status: "repair_in_progress", repairStartedAt: new Date() })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+          eq(serviceOrder.status, order.status),
+        ),
+      )
+      .returning({ id: serviceOrder.id });
+    if (!moved) return { status: "invalid_transition" as const };
 
     const [execution] = await o
       .insert(serviceOrderExecution)
@@ -51,17 +60,6 @@ export async function startServiceOrderExecution(input: {
       })
       .onConflictDoNothing({ target: serviceOrderExecution.serviceOrderId })
       .returning();
-
-    await o
-      .update(serviceOrder)
-      .set({ status: "repair_in_progress", repairStartedAt: new Date() })
-      .where(
-        and(
-          eq(serviceOrder.id, input.serviceOrderId),
-          eq(serviceOrder.organizationId, input.member.organizationId),
-          buildUnitScopeCondition(serviceOrder.unitId, input.member),
-        ),
-      );
 
     await recordServiceOrderEvent(
       {
@@ -203,11 +201,33 @@ export async function finishServiceOrderExecution(input: {
     // the item replacement below), so a forbidden finish leaves the order — and its
     // execution items — untouched. Same-status finishes stay a no-op.
     if (
-      order.status !== nextStatus &&
-      !canTransitionServiceOrderStatus(order.status, nextStatus)
+      !SERVICE_ORDER_MACHINE.canTransition(
+        order.status,
+        "finish_repair",
+        nextStatus,
+      )
     ) {
       return { status: "invalid_transition" as const };
     }
+
+    // The status moves first, as a compare-and-set on the status checked above,
+    // so a lost race leaves the execution and its items untouched.
+    const [moved] = await o
+      .update(serviceOrder)
+      .set({
+        status: nextStatus,
+        repairFinishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          eq(serviceOrder.status, order.status),
+        ),
+      )
+      .returning({ id: serviceOrder.id });
+    if (!moved) return { status: "invalid_transition" as const };
 
     if (input.values.items) {
       await replaceExecutionItems(
@@ -238,14 +258,6 @@ export async function finishServiceOrderExecution(input: {
           eq(serviceOrderExecution.organizationId, input.member.organizationId),
         ),
       );
-    await o
-      .update(serviceOrder)
-      .set({
-        status: nextStatus,
-        repairFinishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(serviceOrder.id, input.serviceOrderId));
     await recordServiceOrderEvent(
       {
         organizationId: order.organizationId,

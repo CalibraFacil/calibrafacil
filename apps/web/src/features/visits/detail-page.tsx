@@ -12,6 +12,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
+import { VISIT_MACHINE, isVisitTerminal } from '@calibra-facil/schemas/machines'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Input } from '@calibra-facil/ui/input'
@@ -139,8 +140,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   const [addServiceId, setAddServiceId] = useState<string>('')
 
   const isProposed = visit.status === 'PROPOSED'
-  const isTerminal =
-    visit.status === 'COMPLETED' || visit.status === 'CANCELLED'
+  const isTerminal = isVisitTerminal(visit.status)
 
   // Fetch customer assets when the visit is PROPOSED
   const { data: customerAssetsData } = useNewJobCustomerAssetsData({
@@ -289,8 +289,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
     acceptRescheduleMutation.isPending ||
     declineRescheduleMutation.isPending
 
-  const canComplete =
-    visit.status === 'CONFIRMED' || visit.status === 'IN_PROGRESS'
+  const canComplete = VISIT_MACHINE.canTransition(visit.status, 'complete')
 
   const addressText = formatVisitAddress(visit.address)
   const technicianChanged = (visit.technicianId ?? '') !== technicianId
@@ -399,7 +398,11 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {visit.status === 'PROPOSED' ? (
+            {VISIT_MACHINE.canTransition(
+              visit.status,
+              'confirm',
+              'CONFIRMED',
+            ) && visit.status !== 'CONFIRMED' ? (
               <Button
                 size="sm"
                 disabled={busy || !scheduledAt || !technicianId}

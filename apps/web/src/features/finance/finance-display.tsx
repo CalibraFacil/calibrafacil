@@ -40,7 +40,6 @@ const INSTALLMENT_TONE = {
 
 const EXPORT_STATUS_TONE = {
   NOT_EXPORTED: 'neutral',
-  PENDING: 'warning',
   EXPORTED: 'ok',
   FAILED: 'critical',
 } satisfies Record<BillingDocumentExportStatus, SignalTone>
@@ -119,7 +118,6 @@ function asInstallmentStatus(
 function asExportStatus(value: string): BillingDocumentExportStatus | null {
   switch (value) {
     case 'NOT_EXPORTED':
-    case 'PENDING':
     case 'EXPORTED':
     case 'FAILED':
       return value

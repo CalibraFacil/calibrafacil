@@ -20,6 +20,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { seedOrg, seedStandard } from "./seed";
 import { seedJobForOrg } from "./tenant-refs";
+import { withStatusRepair } from "./state-fixtures";
 
 export type Tenant = {
   orgId: string;
@@ -70,55 +71,63 @@ export async function seedTenant(orgId: string): Promise<Tenant> {
     createdBy: org.userId,
   });
 
-  const [document] = await db
-    .insert(billingDocument)
-    .values({
-      organizationId: orgId,
-      customerId: job.customerId,
-      unitId: org.unitId,
-      dueDate: new Date("2026-02-01T00:00:00.000Z"),
-      subtotalCents: 1000,
-      totalCents: 1000,
-      createdBy: org.userId,
-      updatedBy: org.userId,
-    })
-    .returning({ id: billingDocument.id });
+  const [document] = await withStatusRepair((tx) =>
+    tx
+      .insert(billingDocument)
+      .values({
+        organizationId: orgId,
+        customerId: job.customerId,
+        unitId: org.unitId,
+        dueDate: new Date("2026-02-01T00:00:00.000Z"),
+        subtotalCents: 1000,
+        totalCents: 1000,
+        createdBy: org.userId,
+        updatedBy: org.userId,
+      })
+      .returning({ id: billingDocument.id }),
+  );
   if (!document) throw new Error("document not seeded");
-  const [installment] = await db
-    .insert(receivableInstallment)
-    .values({
-      organizationId: orgId,
-      documentId: document.id,
-      dueDate: new Date("2026-02-01T00:00:00.000Z"),
-      amountCents: 1000,
-    })
-    .returning({ id: receivableInstallment.id });
+  const [installment] = await withStatusRepair((tx) =>
+    tx
+      .insert(receivableInstallment)
+      .values({
+        organizationId: orgId,
+        documentId: document.id,
+        dueDate: new Date("2026-02-01T00:00:00.000Z"),
+        amountCents: 1000,
+      })
+      .returning({ id: receivableInstallment.id }),
+  );
   if (!installment) throw new Error("installment not seeded");
 
-  const [order] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: orgId,
-      unitId: org.unitId,
-      serviceOrderNumber: `OS-${orgId}`,
-      customerId: job.customerId,
-      assetId,
-      openedByUserId: org.userId,
-      claimedDefect: "Nao liga",
-      intakeCondition: "Riscos",
-    })
-    .returning({ id: serviceOrder.id });
+  const [order] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: orgId,
+        unitId: org.unitId,
+        serviceOrderNumber: `OS-${orgId}`,
+        customerId: job.customerId,
+        assetId,
+        openedByUserId: org.userId,
+        claimedDefect: "Nao liga",
+        intakeCondition: "Riscos",
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!order) throw new Error("order not seeded");
-  const [quote] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId: orgId,
-      serviceOrderId: order.id,
-      quoteNumber: `ORC-${orgId}`,
-      version: 1,
-      createdByUserId: org.userId,
-    })
-    .returning({ id: serviceOrderQuote.id });
+  const [quote] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: orgId,
+        serviceOrderId: order.id,
+        quoteNumber: `ORC-${orgId}`,
+        version: 1,
+        createdByUserId: org.userId,
+      })
+      .returning({ id: serviceOrderQuote.id }),
+  );
   if (!quote) throw new Error("quote not seeded");
   const [execution] = await db
     .insert(serviceOrderExecution)

@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { markContaAzulReconnectRequired } from "../../modules/integrations";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // REQ-TENANT-SQL-001 (tenant SQL guard finding): markContaAzulReconnectRequired
 // takes an organizationId but used to update the integration by id alone, so a
@@ -16,16 +17,18 @@ import { seedOrg } from "../../../test/integration/seed";
 
 async function seedContaAzulIntegration(orgId: string, userId: string) {
   const id = `int-${orgId}`;
-  await db.insert(organizationIntegration).values({
-    id,
-    organizationId: orgId,
-    type: "financial_erp",
-    provider: "conta_azul",
-    name: "Conta Azul",
-    status: "ACTIVE",
-    createdBy: userId,
-    updatedBy: userId,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationIntegration).values({
+      id,
+      organizationId: orgId,
+      type: "financial_erp",
+      provider: "conta_azul",
+      name: "Conta Azul",
+      status: "ACTIVE",
+      createdBy: userId,
+      updatedBy: userId,
+    }),
+  );
   return id;
 }
 

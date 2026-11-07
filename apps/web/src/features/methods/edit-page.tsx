@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
+import { METHOD_MACHINE } from '@calibra-facil/schemas/machines'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense } from 'react'
 import { toast } from 'sonner'
@@ -62,7 +63,7 @@ export function EditMethodPage({ id }: { id: string }) {
     )
   }
 
-  if (method.status !== 'DRAFT') {
+  if (!METHOD_MACHINE.canTransition(method.status ?? null, 'edit')) {
     return (
       <Panel className="space-y-4 p-6 sm:p-8">
         <div className="space-y-1">

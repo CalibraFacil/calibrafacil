@@ -194,6 +194,9 @@ export async function processWebhookDelivery(
     }
     // A repeated message (lease reclaim, redelivery after the final attempt)
     // for a delivery that already ended: delivered, or given up on.
+    // WEBHOOK_DELIVERY_MACHINE: only a PENDING delivery is attempted, and every
+    // write below is a compare-and-set on PENDING (a concurrent worker that
+    // finished it first wins).
     if (row.status !== "PENDING") return;
 
     const isReplay = row.replay_of_delivery_id !== null;
@@ -210,7 +213,7 @@ export async function processWebhookDelivery(
         `update public_api_webhook_delivery
             set status = 'FAILED', failed_at = now(), next_attempt_at = null,
                 last_error = $3, updated_at = now()
-          where id = $1 and organization_id = $2`,
+          where id = $1 and organization_id = $2 and status = 'PENDING'`,
         [row.id, session.organizationId, "Webhook desativado antes da entrega"],
       );
       return;
@@ -234,7 +237,7 @@ export async function processWebhookDelivery(
                   response_status = $5, response_body = $6, delivered_at = now(),
                   failed_at = null, last_error = null, next_attempt_at = null,
                   updated_at = now()
-            where id = $1 and organization_id = $2`,
+            where id = $1 and organization_id = $2 and status = 'PENDING'`,
           [
             row.id,
             session.organizationId,
@@ -269,7 +272,7 @@ export async function processWebhookDelivery(
                 response_body = $6, last_error = $7,
                 next_attempt_at = now() + make_interval(secs => $8::double precision / 1000),
                 updated_at = now()
-          where id = $1 and organization_id = $2`,
+          where id = $1 and organization_id = $2 and status = 'PENDING'`,
         [
           row.id,
           session.organizationId,
@@ -291,7 +294,7 @@ export async function processWebhookDelivery(
             set status = 'FAILED', attempt_count = $3, attempts = $4::jsonb,
                 response_status = $5, response_body = $6, last_error = $7,
                 failed_at = now(), next_attempt_at = null, updated_at = now()
-          where id = $1 and organization_id = $2`,
+          where id = $1 and organization_id = $2 and status = 'PENDING'`,
         [
           row.id,
           session.organizationId,

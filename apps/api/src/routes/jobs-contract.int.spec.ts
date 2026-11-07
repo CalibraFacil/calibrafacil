@@ -54,6 +54,7 @@ import { jobsRouter } from "./jobs";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -170,19 +171,21 @@ async function seedLab() {
     .insert(assetType)
     .values({ name: "Balança", slug: "balanca-contract", definition: [] })
     .returning({ id: assetType.id });
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
-      assetTypeId: type?.id ?? 0,
-      name: "Balança analítica",
-      serialNumber: "SN-CONTRACT",
-      tag: "TAG-CONTRACT",
-      baseMeasurementUnit: "g",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
+        assetTypeId: type?.id ?? 0,
+        name: "Balança analítica",
+        serialNumber: "SN-CONTRACT",
+        tag: "TAG-CONTRACT",
+        baseMeasurementUnit: "g",
+      })
+      .returning({ id: asset.id }),
+  );
   const [serviceRow] = await db
     .insert(service)
     .values({
@@ -192,25 +195,27 @@ async function seedLab() {
       isActive: true,
     })
     .returning({ id: service.id });
-  const [standard] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: ORG,
-      unitId: org.unitId,
-      createdBy: TECHNICIAN,
-      name: "Massa padrão",
-      kind: "generic_scalar",
-      serialNumber: "SN-STD-CONTRACT",
-      certificateNumber: "CERT-CONTRACT",
-      calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-      nextCalibrationDate: addCalendarDays(labToday(), 90),
-      coverageFactor: 2,
-      distribution: "normal",
-      status: "ACTIVE",
-      referenceValue: 1,
-      uncertainty: 0.01,
-    })
-    .returning({ id: referenceStandard.id });
+  const [standard] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: ORG,
+        unitId: org.unitId,
+        createdBy: TECHNICIAN,
+        name: "Massa padrão",
+        kind: "generic_scalar",
+        serialNumber: "SN-STD-CONTRACT",
+        certificateNumber: "CERT-CONTRACT",
+        calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+        nextCalibrationDate: addCalendarDays(labToday(), 90),
+        coverageFactor: 2,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+      })
+      .returning({ id: referenceStandard.id }),
+  );
 
   return {
     unitId: org.unitId,
@@ -449,30 +454,32 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
     const lab = await seedLab();
     // A service with a PUBLISHED method: the snapshot the job freezes.
     const snapshot = executableMethodSnapshot();
-    const [method] = await db
-      .insert(calibrationMethod)
-      .values({
-        organizationId: ORG,
-        assetTypeId: lab.assetTypeId,
-        name: "Erro de indicação",
-        version: 1,
-        status: "PUBLISHED",
-        dataFields: [],
-        variableBindings: [],
-        formulas: [],
-        measurementModels: [],
-        validations: [],
-        uncertaintyParams: [],
-        methodFingerprint: snapshot.methodFingerprint,
-        compiledMethod: snapshot.compiledMethod,
-        methodEngine: {
-          version: snapshot.engineVersion,
-          optionsFingerprint: snapshot.engineOptionsFingerprint,
-        },
-        publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
-        createdBy: TECHNICIAN,
-      })
-      .returning({ id: calibrationMethod.id });
+    const [method] = await withStatusRepair((tx) =>
+      tx
+        .insert(calibrationMethod)
+        .values({
+          organizationId: ORG,
+          assetTypeId: lab.assetTypeId,
+          name: "Erro de indicação",
+          version: 1,
+          status: "PUBLISHED",
+          dataFields: [],
+          variableBindings: [],
+          formulas: [],
+          measurementModels: [],
+          validations: [],
+          uncertaintyParams: [],
+          methodFingerprint: snapshot.methodFingerprint,
+          compiledMethod: snapshot.compiledMethod,
+          methodEngine: {
+            version: snapshot.engineVersion,
+            optionsFingerprint: snapshot.engineOptionsFingerprint,
+          },
+          publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
+          createdBy: TECHNICIAN,
+        })
+        .returning({ id: calibrationMethod.id }),
+    );
     await db
       .update(service)
       .set({ methodId: method?.id })

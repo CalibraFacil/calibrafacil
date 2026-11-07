@@ -22,20 +22,23 @@ import { trainingRecordsRouter } from "./training-records";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 async function seedTrainingRecord(organizationId: string, userId: string) {
-  const [row] = await db
-    .insert(trainingRecord)
-    .values({
-      organizationId,
-      userId,
-      createdBy: userId,
-      title: "Treinamento GUM",
-      type: "internal",
-      status: "planned",
-      startDate: new Date("2026-01-01T00:00:00.000Z"),
-    })
-    .returning({ id: trainingRecord.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(trainingRecord)
+      .values({
+        organizationId,
+        userId,
+        createdBy: userId,
+        title: "Treinamento GUM",
+        type: "internal",
+        status: "planned",
+        startDate: new Date("2026-01-01T00:00:00.000Z"),
+      })
+      .returning({ id: trainingRecord.id }),
+  );
   if (!row) throw new Error("seedTrainingRecord: insert failed");
   return row.id;
 }

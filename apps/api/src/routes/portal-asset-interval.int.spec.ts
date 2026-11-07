@@ -9,6 +9,7 @@ import {
   seedPortalContext,
   seedPortalCustomer,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the customer-owned calibration interval
 // write endpoint (PUT /api/portal/assets/:id/interval). Spec:
@@ -44,23 +45,25 @@ async function seedAsset(params: {
   nextCalibrationDate?: Date;
   metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: `Ativo ${params.tag}`,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      lastCalibrationDate: params.lastCalibrationDate ?? null,
-      nextCalibrationDate: params.nextCalibrationDate ?? null,
-      metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: `Ativo ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        lastCalibrationDate: params.lastCalibrationDate ?? null,
+        nextCalibrationDate: params.nextCalibrationDate ?? null,
+        metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }

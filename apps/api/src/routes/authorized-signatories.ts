@@ -2,7 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { orgDb } from "../lib/org-db";
-import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
+import {
+  conflict,
+  domainErrorResponse,
+  invalid,
+  notFound,
+} from "../lib/domain-errors";
 import {
   authorizedSignatory,
   authorizedSignatoryAuditLog,
@@ -11,6 +16,7 @@ import {
   assetType,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { SIGNATORY_MACHINE } from "@calibra-facil/schemas/machines";
 
 import {
   withLabPermission,
@@ -251,11 +257,22 @@ export const authorizedSignatoriesRouter = new Hono<{
         if (!existing) {
           return c.json({ error: "Signatário não encontrado" }, 404);
         }
+        // `revoke` (SIGNATORY_MACHINE): only an active grant is revoked. A second
+        // revoke used to overwrite who revoked it and when.
+        if (!SIGNATORY_MACHINE.canTransition(existing.status, "revoke")) {
+          throw conflict(
+            "status_transition_conflict",
+            "Signatário já revogado",
+          );
+        }
 
         const [updated] = await tx
           .update(authorizedSignatory)
           .set({
-            status: "REVOKED",
+            status: SIGNATORY_MACHINE.requireTargetOf(
+              existing.status,
+              "revoke",
+            ),
             revokedBy: session.user.id,
             revokedAt: new Date(),
           })
@@ -266,9 +283,16 @@ export const authorizedSignatoriesRouter = new Hono<{
             and(
               eq(authorizedSignatory.id, id),
               eq(authorizedSignatory.organizationId, memberData.organizationId),
+              eq(authorizedSignatory.status, existing.status),
             ),
           )
           .returning();
+        if (!updated) {
+          throw conflict(
+            "status_transition_conflict",
+            "Signatário já revogado",
+          );
+        }
 
         await tx.insert(authorizedSignatoryAuditLog).values({
           organizationId: memberData.organizationId,

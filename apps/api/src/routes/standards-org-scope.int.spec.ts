@@ -44,6 +44,7 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
 import { setJobStatus } from "../../test/integration/job-fixtures";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -191,20 +192,22 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
 
   it("REQ-18D-STD-2: composition profiles are created, deduplicated, updated and soft-deleted; lab B's is a 404", async () => {
     const { a, b } = await twoLabs();
-    const [foreign] = await db
-      .insert(massCompositionProfile)
-      .values({
-        organizationId: b.orgId,
-        profileKey: "E2-200g",
-        profileClass: "E2",
-        nominal: "200 g",
-        nominalG: 200,
-        value: 200,
-        uncertainty: 0.0001,
-        unit: "g",
-        status: "ACTIVE",
-      })
-      .returning({ id: massCompositionProfile.id });
+    const [foreign] = await withStatusRepair((tx) =>
+      tx
+        .insert(massCompositionProfile)
+        .values({
+          organizationId: b.orgId,
+          profileKey: "E2-200g",
+          profileClass: "E2",
+          nominal: "200 g",
+          nominalG: 200,
+          value: 200,
+          uncertainty: 0.0001,
+          unit: "g",
+          status: "ACTIVE",
+        })
+        .returning({ id: massCompositionProfile.id }),
+    );
     if (!foreign) throw new Error("foreign profile not seeded");
 
     const created = await request("/composition-profiles", "POST", PROFILE);
@@ -259,10 +262,12 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
 
   it("REQ-18D-STD-3: renew writes the new certificate and the reason, and returns an OUT_OF_TOLERANCE standard to ACTIVE", async () => {
     const { standardA, standardB } = await twoLabs();
-    await db
-      .update(referenceStandard)
-      .set({ status: "OUT_OF_TOLERANCE" })
-      .where(eq(referenceStandard.id, standardA));
+    await withStatusRepair((tx) =>
+      tx
+        .update(referenceStandard)
+        .set({ status: "OUT_OF_TOLERANCE" })
+        .where(eq(referenceStandard.id, standardA)),
+    );
 
     const res = await request(`/${standardA}/renew`, "POST", {
       certificateNumber: "RBC-RENEWED-9",
@@ -457,15 +462,17 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
       createdBy: b.userId,
       standardId: standardB,
     });
-    await db
-      .update(referenceStandard)
-      .set({ status: "OUT_OF_TOLERANCE" })
-      .where(
-        and(
-          eq(referenceStandard.id, standardA),
-          eq(referenceStandard.organizationId, a.orgId),
+    await withStatusRepair((tx) =>
+      tx
+        .update(referenceStandard)
+        .set({ status: "OUT_OF_TOLERANCE" })
+        .where(
+          and(
+            eq(referenceStandard.id, standardA),
+            eq(referenceStandard.organizationId, a.orgId),
+          ),
         ),
-      );
+    );
 
     for (const [path, method, body] of [
       [`/${standardB}/impacted-certificates`, "GET", undefined],

@@ -8,6 +8,7 @@ import {
   CreateServiceOrderQuoteSchema,
   IssueServiceOrderDeliveryDocumentSchema,
 } from "@calibra-facil/schemas";
+import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { and, desc, eq } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { asRecord } from "./helpers";
@@ -217,7 +218,9 @@ export async function applyLocalServiceOrderExecutionNotes(
         buildUnitScopeCondition(serviceOrder.unitId, input.memberData),
       ),
     )
-    .limit(1);
+    .limit(1)
+    // Locked: the status decided below holds until the event's writes commit.
+    .for("update");
   if (!order) {
     return {
       ok: false,
@@ -327,26 +330,41 @@ export async function applyLocalServiceOrderExecutionNotes(
       ),
     )
     .returning();
+  // `start_repair` in SERVICE_ORDER_MACHINE, as the cloud start: an order with
+  // an approved quote moves to repair. Notes saved offline on an order at any
+  // other stage are kept without moving it (this apply used to force
+  // repair_in_progress, rewinding an order already past the repair).
+  const startsRepair =
+    order.status !== "repair_in_progress" &&
+    SERVICE_ORDER_MACHINE.canTransition(order.status, "start_repair");
+  const orderStatus = startsRepair
+    ? SERVICE_ORDER_MACHINE.requireTargetOf(order.status, "start_repair")
+    : order.status;
   await input.o
     .update(serviceOrder)
     .set({
-      status: "repair_in_progress",
-      repairStartedAt: order.repairStartedAt ?? new Date(),
+      status: orderStatus,
+      repairStartedAt: startsRepair
+        ? (order.repairStartedAt ?? new Date())
+        : order.repairStartedAt,
       updatedAt: new Date(),
     })
-    .where(eq(serviceOrder.id, order.id));
-  await recordServiceOrderEvent(
-    {
-      organizationId: order.organizationId,
-      unitId: order.unitId,
-      serviceOrderId: order.id,
-      actorType: "lab_user",
-      actorId: actorUserId,
-      eventType: "service_order.repair_started",
-      metadata: { source: "desktop_sync", executionId: current.id },
-    },
-    input.o,
-  );
+    .where(
+      and(eq(serviceOrder.id, order.id), eq(serviceOrder.status, order.status)),
+    );
+  if (startsRepair)
+    await recordServiceOrderEvent(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: order.id,
+        actorType: "lab_user",
+        actorId: actorUserId,
+        eventType: "service_order.repair_started",
+        metadata: { source: "desktop_sync", executionId: current.id },
+      },
+      input.o,
+    );
 
   const execution = updated ?? current;
 
@@ -360,7 +378,7 @@ export async function applyLocalServiceOrderExecutionNotes(
     remoteEntityId: execution.id,
     remoteEntity: {
       id: execution.id,
-      status: "repair_in_progress",
+      status: orderStatus,
       serviceOrderId: order.id,
       startedAt: execution.startedAt?.toISOString?.() ?? execution.startedAt,
       updatedAt: execution.updatedAt?.toISOString?.() ?? execution.updatedAt,

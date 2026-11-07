@@ -11,6 +11,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { and, asc, count, desc, eq, inArray, ne } from "drizzle-orm";
+import { ORGANIZATION_UNIT_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   type AuthVariables,
   type MemberData,
@@ -423,7 +424,12 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       if (input.status && input.status !== existing.status) {
-        updateData.status = input.status;
+        // `archive` / `reactivate` of ORGANIZATION_UNIT_MACHINE.
+        updateData.status = ORGANIZATION_UNIT_MACHINE.requireTransition(
+          existing.status,
+          input.status === "ARCHIVED" ? "archive" : "reactivate",
+          input.status,
+        );
         updateData.archivedAt = input.status === "ARCHIVED" ? new Date() : null;
       }
 
@@ -461,7 +467,13 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
               const rows = await o
                 .update(organizationUnit)
                 .set(updateData)
-                .where(eq(organizationUnit.id, id))
+                // Compare-and-set on the status the checks above read.
+                .where(
+                  and(
+                    eq(organizationUnit.id, id),
+                    eq(organizationUnit.status, existing.status),
+                  ),
+                )
                 .returning();
 
               await o.insert(organizationEventLog).values({

@@ -15,6 +15,7 @@ import { legalMetrologyRegulationsRouter } from "./legal-metrology-regulations";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedCustomer } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration tests for the legal-metrology regulation catalog (deferred #3 of
 // #423). Covers the GLOBAL seed (REQ-CATALOG-002), the read endpoint + auth gate
@@ -144,28 +145,30 @@ describe("legal-metrology regulation catalog — real DB", () => {
     if (!type) throw new Error("assetType insert failed");
 
     const installedAt = new Date("2020-03-01T00:00:00.000Z");
-    const [seededAsset] = await db
-      .insert(asset)
-      .values({
-        unitId: org.unitId,
-        customerId,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
-        assetTypeId: type.id,
-        name: "Hidrômetro do cliente",
-        serialNumber: "SN-CATALOG-1",
-        tag: "TAG-CATALOG-1",
-        metrologyRegime: "LEGAL",
-        installedAt,
-        regulatedInterval: {
-          kind: "max_months_from_install",
-          valueMonths: 60,
-          anchor: "install_year",
-          regulationReference: "Lab-typed reference (must not change)",
-          operationalizedByDelegate: true,
-        },
-      })
-      .returning();
+    const [seededAsset] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: org.unitId,
+          customerId,
+          // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+          labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
+          assetTypeId: type.id,
+          name: "Hidrômetro do cliente",
+          serialNumber: "SN-CATALOG-1",
+          tag: "TAG-CATALOG-1",
+          metrologyRegime: "LEGAL",
+          installedAt,
+          regulatedInterval: {
+            kind: "max_months_from_install",
+            valueMonths: 60,
+            anchor: "install_year",
+            regulationReference: "Lab-typed reference (must not change)",
+            operationalizedByDelegate: true,
+          },
+        })
+        .returning(),
+    );
     if (!seededAsset) throw new Error("asset insert failed");
 
     // First seed run.

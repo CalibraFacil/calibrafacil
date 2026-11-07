@@ -19,6 +19,7 @@ import {
   seedPortalContext,
   seedPortalCustomer,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration tests for the portal notification center (#741). Only
 // the portal better-auth getSession is mocked; requirePortalProtected and
@@ -43,19 +44,21 @@ async function seedNotification(params: {
   createdAt?: Date;
   expiresAt?: Date;
 }): Promise<number> {
-  const [row] = await db
-    .insert(notification)
-    .values({
-      recipientUserId: params.recipientUserId,
-      organizationId: params.organizationId,
-      type: params.type,
-      title: params.title ?? params.type,
-      message: `msg ${params.type}`,
-      status: params.status ?? "UNREAD",
-      ...(params.createdAt ? { createdAt: params.createdAt } : {}),
-      ...(params.expiresAt ? { expiresAt: params.expiresAt } : {}),
-    })
-    .returning({ id: notification.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(notification)
+      .values({
+        recipientUserId: params.recipientUserId,
+        organizationId: params.organizationId,
+        type: params.type,
+        title: params.title ?? params.type,
+        message: `msg ${params.type}`,
+        status: params.status ?? "UNREAD",
+        ...(params.createdAt ? { createdAt: params.createdAt } : {}),
+        ...(params.expiresAt ? { expiresAt: params.expiresAt } : {}),
+      })
+      .returning({ id: notification.id }),
+  );
   if (!row) throw new Error("seedNotification: insert failed");
   return row.id;
 }
@@ -145,14 +148,16 @@ describe("portalNotificationsRouter — real DB + real portal middleware", () =>
     const now = new Date("2026-01-01T00:00:00.000Z");
 
     // The group's own CLIENT org + portal user.
-    await db.insert(organization).values({
-      id: "portal-group-org",
-      name: "Group Org",
-      slug: "portal-group-org",
-      createdAt: now,
-      type: "CLIENT",
-      status: "ACTIVE",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: "portal-group-org",
+        name: "Group Org",
+        slug: "portal-group-org",
+        createdAt: now,
+        type: "CLIENT",
+        status: "ACTIVE",
+      }),
+    );
     await db.insert(user).values({
       id: "group-user",
       name: "Group QM",
@@ -178,14 +183,16 @@ describe("portalNotificationsRouter — real DB + real portal middleware", () =>
     // A branch customer with its own CLIENT org, member of the group. The
     // group user is NOT a member of the branch org — visibility must come
     // from the group expansion alone.
-    await db.insert(organization).values({
-      id: "portal-branch-org",
-      name: "Branch Org",
-      slug: "portal-branch-org",
-      createdAt: now,
-      type: "CLIENT",
-      status: "ACTIVE",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: "portal-branch-org",
+        name: "Branch Org",
+        slug: "portal-branch-org",
+        createdAt: now,
+        type: "CLIENT",
+        status: "ACTIVE",
+      }),
+    );
     await db.insert(customer).values({
       name: "Branch",
       authOrganizationId: "portal-branch-org",

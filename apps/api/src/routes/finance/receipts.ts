@@ -2,6 +2,10 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
+import {
+  BILLING_DOCUMENT_MACHINE,
+  RECEIVABLE_INSTALLMENT_MACHINE,
+} from "@calibra-facil/schemas/machines";
 
 import {
   billingDocument,
@@ -117,15 +121,28 @@ export const financeInstallmentsRouter = new Hono<{
               buildUnitScopeCondition(billingDocument.unitId, member),
             ),
           )
-          .limit(1);
+          .limit(1)
+          // Both rows locked: two receipts for one installment serialise, and
+          // the second sees it PAID.
+          .for("update");
 
         if (!installment) return { status: "not_found" as const };
 
-        if (!["OPEN", "OVERDUE"].includes(installment.status)) {
+        if (
+          !RECEIVABLE_INSTALLMENT_MACHINE.canTransition(
+            installment.status,
+            "pay",
+          )
+        ) {
           return { status: "not_receivable" as const };
         }
 
-        if (installment.documentStatus === "VOID") {
+        if (
+          !BILLING_DOCUMENT_MACHINE.canTransition(
+            installment.documentStatus,
+            "record_payment",
+          )
+        ) {
           return { status: "void_document" as const };
         }
 
@@ -150,7 +167,10 @@ export const financeInstallmentsRouter = new Hono<{
         await tx
           .update(receivableInstallment)
           .set({
-            status: "PAID",
+            status: RECEIVABLE_INSTALLMENT_MACHINE.requireTargetOf(
+              installment.status,
+              "pay",
+            ),
             paidAt: receivedAt,
             paymentMethod: input.paymentMethod,
             paymentReference: input.reference?.trim() || null,
@@ -161,7 +181,10 @@ export const financeInstallmentsRouter = new Hono<{
         await tx
           .update(billingDocument)
           .set({
-            status: "PAID",
+            status: BILLING_DOCUMENT_MACHINE.requireTargetOf(
+              installment.documentStatus,
+              "record_payment",
+            ),
             updatedAt: new Date(),
             updatedBy: session.user.id,
           })

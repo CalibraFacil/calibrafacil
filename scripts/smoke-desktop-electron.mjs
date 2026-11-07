@@ -18,6 +18,7 @@ const expectedBridgeKeys = [
   "deleteSecret",
   "downloadUpdate",
   "exportSupportBundle",
+  "forgetOfflineAccess",
   "getAppInfo",
   "getLocalEnvironmentBootstrap",
   "getSecretStatuses",

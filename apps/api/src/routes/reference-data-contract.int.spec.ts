@@ -36,6 +36,7 @@ import { serviceOrdersRouter } from "./service-orders";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -75,20 +76,22 @@ async function seedLab() {
       ],
     })
     .returning({ id: assetType.id });
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
-      assetTypeId: type?.id ?? 0,
-      name: "Balança analítica",
-      serialNumber: "SN-REF",
-      tag: "TAG-REF",
-      baseMeasurementUnit: "g",
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
+        assetTypeId: type?.id ?? 0,
+        name: "Balança analítica",
+        serialNumber: "SN-REF",
+        tag: "TAG-REF",
+        baseMeasurementUnit: "g",
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   return {
     org,
     customerId,
@@ -173,24 +176,26 @@ describe("reference-data endpoints: real responses honor the contract schemas (P
 
   it("REQ-TC-4: methods list and detail parse", async () => {
     const lab = await seedLab();
-    const [method] = await db
-      .insert(calibrationMethod)
-      .values({
-        organizationId: lab.org.orgId,
-        assetTypeId: lab.assetTypeId,
-        name: "Erro de indicação",
-        version: 1,
-        status: "PUBLISHED",
-        dataFields: [],
-        variableBindings: [],
-        formulas: [],
-        measurementModels: [],
-        validations: [],
-        uncertaintyParams: [],
-        createdBy: lab.org.userId,
-        publishedAt: new Date("2026-01-02T00:00:00.000Z"),
-      })
-      .returning({ id: calibrationMethod.id });
+    const [method] = await withStatusRepair((tx) =>
+      tx
+        .insert(calibrationMethod)
+        .values({
+          organizationId: lab.org.orgId,
+          assetTypeId: lab.assetTypeId,
+          name: "Erro de indicação",
+          version: 1,
+          status: "PUBLISHED",
+          dataFields: [],
+          variableBindings: [],
+          formulas: [],
+          measurementModels: [],
+          validations: [],
+          uncertaintyParams: [],
+          createdBy: lab.org.userId,
+          publishedAt: new Date("2026-01-02T00:00:00.000Z"),
+        })
+        .returning({ id: calibrationMethod.id }),
+    );
 
     const list = await parsedBody(
       await methodsRouter.request("/?status=PUBLISHED&limit=100"),

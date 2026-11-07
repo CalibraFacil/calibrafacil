@@ -59,6 +59,7 @@ import {
 import { seedApiKey } from "../../test/integration/seed";
 import { publicApiRouter } from "./public-api";
 import { publicApiV2Router } from "./public-api-v2";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const ENV = {
   PUBLIC_API_MASTER_KEY: Buffer.alloc(32).toString("base64"),
@@ -142,10 +143,12 @@ async function drainWebhookQueue() {
       maxAttempts: row.maxAttempts,
     });
     // oxlint-disable-next-line eslint/no-await-in-loop -- settles the row just run.
-    await db
-      .update(appQueueJob)
-      .set({ status: "COMPLETED" })
-      .where(eq(appQueueJob.id, row.id));
+    await withStatusRepair((tx) =>
+      tx
+        .update(appQueueJob)
+        .set({ status: "COMPLETED" })
+        .where(eq(appQueueJob.id, row.id)),
+    );
   }
   return rows.length;
 }
@@ -501,18 +504,20 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
     expect(updated.status).toBe(200);
     expect(dataOf(await jsonOf(updated)).externalId).toBe("ERP-ASSET-1");
 
-    const [sibling] = await db
-      .insert(asset)
-      .values({
-        unitId: w.a.unitId,
-        customerId: w.a.customerId,
-        labOrganizationId: w.a.orgId,
-        assetTypeId: w.a.assetTypeId,
-        name: "Segundo",
-        serialNumber: "SN-2",
-        tag: "TAG-SECOND",
-      })
-      .returning({ id: asset.id });
+    const [sibling] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: w.a.unitId,
+          customerId: w.a.customerId,
+          labOrganizationId: w.a.orgId,
+          assetTypeId: w.a.assetTypeId,
+          name: "Segundo",
+          serialNumber: "SN-2",
+          tag: "TAG-SECOND",
+        })
+        .returning({ id: asset.id }),
+    );
     if (!sibling) throw new Error("sibling asset not seeded");
     const before = await db
       .select({ id: assetAuditLog.id })
@@ -741,16 +746,18 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
     );
     expect(created.status).toBe(201);
     const hook = dataOf(await jsonOf(created));
-    await db.insert(publicApiWebhookDelivery).values({
-      id: "legacy-delivery",
-      subscriptionId: String(hook.id),
-      organizationId: w.a.orgId,
-      eventId: "evt",
-      eventType: "request.created",
-      requestUrl: "https://erp-a.example.com/hook",
-      requestBody: {},
-      responseBody: "x".repeat(5000),
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(publicApiWebhookDelivery).values({
+        id: "legacy-delivery",
+        subscriptionId: String(hook.id),
+        organizationId: w.a.orgId,
+        eventId: "evt",
+        eventType: "request.created",
+        requestUrl: "https://erp-a.example.com/hook",
+        requestBody: {},
+        responseBody: "x".repeat(5000),
+      }),
+    );
     const [delivery] = listOf(
       await jsonOf(
         await send(w.keyA, "GET", `/webhooks/${hook.id}/deliveries`),
@@ -784,15 +791,17 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
       "https://erp-a.example.com/hook",
       ["request.created"],
     );
-    await db
-      .update(publicApiWebhookSubscription)
-      .set({
-        status: "INACTIVE",
-        disabledAt: new Date(),
-        disabledReason: "consecutive_failures",
-        consecutiveFailures: 10,
-      })
-      .where(eq(publicApiWebhookSubscription.id, id));
+    await withStatusRepair((tx) =>
+      tx
+        .update(publicApiWebhookSubscription)
+        .set({
+          status: "INACTIVE",
+          disabledAt: new Date(),
+          disabledReason: "consecutive_failures",
+          consecutiveFailures: 10,
+        })
+        .where(eq(publicApiWebhookSubscription.id, id)),
+    );
 
     const listed = listOf(await jsonOf(await send(w.keyA, "GET", "/webhooks")));
     expect(listed[0]).toMatchObject({

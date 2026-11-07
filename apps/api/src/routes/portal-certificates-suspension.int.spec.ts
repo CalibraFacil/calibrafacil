@@ -11,6 +11,7 @@ import {
   seedPortalCustomer,
   seedService,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for SEC-05 (#640): the four portal
 // certificate routes (list + single + download + reference-standard download)
@@ -54,20 +55,22 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      assetTypeId: params.assetTypeId,
-      name: `Balança ${params.tag}`,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        assetTypeId: params.assetTypeId,
+        name: `Balança ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -151,10 +154,12 @@ describe("portalRouter certificate routes — SUSPENDED org gate (SEC-05)", () =
     });
 
     // Suspend the portal session's active (CLIENT) organization.
-    await db
-      .update(organization)
-      .set({ status: "SUSPENDED" })
-      .where(eq(organization.id, ctx.clientOrgId));
+    await withStatusRepair((tx) =>
+      tx
+        .update(organization)
+        .set({ status: "SUSPENDED" })
+        .where(eq(organization.id, ctx.clientOrgId)),
+    );
 
     loginAsPortal({
       userId: ctx.portalUserId,

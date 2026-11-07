@@ -10,6 +10,7 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the competences router.
 // Only the better-auth session is mocked (see test/integration/setup.ts).
@@ -39,17 +40,19 @@ async function seedCompetence(params: {
   scopeDescription?: string;
   status?: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(personnelCompetence)
-    .values({
-      organizationId: params.organizationId,
-      userId: params.userId,
-      requestedBy: params.requestedBy,
-      createdBy: params.createdBy,
-      scopeDescription: params.scopeDescription ?? "Calibração de manômetros",
-      status: "REQUESTED",
-    })
-    .returning({ id: personnelCompetence.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(personnelCompetence)
+      .values({
+        organizationId: params.organizationId,
+        userId: params.userId,
+        requestedBy: params.requestedBy,
+        createdBy: params.createdBy,
+        scopeDescription: params.scopeDescription ?? "Calibração de manômetros",
+        status: "REQUESTED",
+      })
+      .returning({ id: personnelCompetence.id }),
+  );
   if (!row) throw new Error("seedCompetence: insert failed");
   return row.id;
 }
@@ -338,17 +341,19 @@ describe("competencesRouter — real DB + real middleware", () => {
     const org = await seedOrg({ orgId: "org-a", role: "technician" });
 
     // Seed competence with PENDING_EVALUATION status directly
-    const [row] = await db
-      .insert(personnelCompetence)
-      .values({
-        organizationId: org.orgId,
-        userId: org.userId,
-        requestedBy: org.userId,
-        createdBy: org.userId,
-        scopeDescription: "Test evaluate scope",
-        status: "PENDING_EVALUATION",
-      })
-      .returning({ id: personnelCompetence.id });
+    const [row] = await withStatusRepair((tx) =>
+      tx
+        .insert(personnelCompetence)
+        .values({
+          organizationId: org.orgId,
+          userId: org.userId,
+          requestedBy: org.userId,
+          createdBy: org.userId,
+          scopeDescription: "Test evaluate scope",
+          status: "PENDING_EVALUATION",
+        })
+        .returning({ id: personnelCompetence.id }),
+    );
     if (!row) throw new Error("Failed to seed PENDING_EVALUATION competence");
     const compId = row.id;
 
@@ -372,17 +377,19 @@ describe("competencesRouter — real DB + real middleware", () => {
       role: "technician",
     });
 
-    const [row] = await db
-      .insert(personnelCompetence)
-      .values({
-        organizationId: org.orgId,
-        userId: subject.userId,
-        requestedBy: subject.userId,
-        createdBy: org.userId,
-        scopeDescription: "Evaluation scope",
-        status: "PENDING_EVALUATION",
-      })
-      .returning({ id: personnelCompetence.id });
+    const [row] = await withStatusRepair((tx) =>
+      tx
+        .insert(personnelCompetence)
+        .values({
+          organizationId: org.orgId,
+          userId: subject.userId,
+          requestedBy: subject.userId,
+          createdBy: org.userId,
+          scopeDescription: "Evaluation scope",
+          status: "PENDING_EVALUATION",
+        })
+        .returning({ id: personnelCompetence.id }),
+    );
     if (!row) throw new Error("Failed to seed PENDING_EVALUATION competence");
     const compId = row.id;
 
@@ -422,18 +429,20 @@ describe("competencesRouter — real DB + real middleware", () => {
       userId: "user-other-admin",
       role: "admin",
     });
-    const compId = await db
-      .insert(personnelCompetence)
-      .values({
-        organizationId: org.orgId,
-        userId: org.userId,
-        requestedBy: org.userId,
-        createdBy: org.userId,
-        scopeDescription: "Self evaluation scope",
-        status: "PENDING_EVALUATION",
-      })
-      .returning({ id: personnelCompetence.id })
-      .then((rows) => rows[0]?.id);
+    const compId = await withStatusRepair((tx) =>
+      tx
+        .insert(personnelCompetence)
+        .values({
+          organizationId: org.orgId,
+          userId: org.userId,
+          requestedBy: org.userId,
+          createdBy: org.userId,
+          scopeDescription: "Self evaluation scope",
+          status: "PENDING_EVALUATION",
+        })
+        .returning({ id: personnelCompetence.id })
+        .then((rows) => rows[0]?.id),
+    );
     if (!compId) throw new Error("seed failed");
 
     loginAs({ userId: org.userId, organizationId: org.orgId });

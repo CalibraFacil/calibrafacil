@@ -27,7 +27,6 @@ describe('finance status → SignalTone', () => {
   it('maps export status to the expected tone', () => {
     expect(exportStatusTone('EXPORTED')).toBe('ok')
     expect(exportStatusTone('FAILED')).toBe('critical')
-    expect(exportStatusTone('PENDING')).toBe('warning')
     expect(exportStatusTone('NOT_EXPORTED')).toBe('neutral')
   })
 

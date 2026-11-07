@@ -99,6 +99,7 @@ import {
 } from "../../test/integration/billing-fixtures";
 import { assertHarnessWorkerDb } from "../../test/integration/guard";
 import { seedStandard } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 async function asApp<T>(run: () => Promise<T>): Promise<T> {
   const url = process.env.DATABASE_URL;
@@ -342,16 +343,18 @@ describe("notifications, digests, drains and sweeps as calibra_app (P2-18h)", ()
     const a = await seedBillingLab("lab-a");
     const b = await seedBillingLab("lab-b");
     for (const lab of [a, b]) {
-      await db.insert(organizationIntegration).values({
-        id: `int-${lab.orgId}`,
-        organizationId: lab.orgId,
-        type: "financial_erp",
-        provider: "conta_azul",
-        name: "Conta Azul",
-        status: "ACTIVE",
-        createdBy: lab.userId,
-        updatedBy: lab.userId,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(organizationIntegration).values({
+          id: `int-${lab.orgId}`,
+          organizationId: lab.orgId,
+          type: "financial_erp",
+          provider: "conta_azul",
+          name: "Conta Azul",
+          status: "ACTIVE",
+          createdBy: lab.userId,
+          updatedBy: lab.userId,
+        }),
+      );
       await db.insert(integrationConnection).values({
         id: `conn-${lab.orgId}`,
         integrationId: `int-${lab.orgId}`,
@@ -448,16 +451,18 @@ describe("notifications, digests, drains and sweeps as calibra_app (P2-18h)", ()
       [a, true],
       [b, false],
     ] as const) {
-      await db.insert(organizationIntegration).values({
-        id: `int-${lab.orgId}`,
-        organizationId: lab.orgId,
-        type: "financial_erp",
-        provider: "conta_azul",
-        name: "Conta Azul",
-        status: "ACTIVE",
-        createdBy: lab.userId,
-        updatedBy: lab.userId,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(organizationIntegration).values({
+          id: `int-${lab.orgId}`,
+          organizationId: lab.orgId,
+          type: "financial_erp",
+          provider: "conta_azul",
+          name: "Conta Azul",
+          status: "ACTIVE",
+          createdBy: lab.userId,
+          updatedBy: lab.userId,
+        }),
+      );
       await db.insert(integrationConnection).values({
         id: `conn-${lab.orgId}`,
         integrationId: `int-${lab.orgId}`,

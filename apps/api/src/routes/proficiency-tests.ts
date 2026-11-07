@@ -34,6 +34,7 @@ import {
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, or, ilike, desc, asc, count } from "drizzle-orm";
+import { PT_OVERALL_MACHINE } from "@calibra-facil/schemas/machines";
 import { clientIp } from "../lib/client-ip";
 
 /**
@@ -791,7 +792,11 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
           .update(proficiencyTest)
           .set({
             results,
-            overallStatus,
+            overallStatus: PT_OVERALL_MACHINE.requireTransition(
+              existing.overallStatus,
+              "record_results",
+              overallStatus,
+            ),
             resultReportedAt,
             capaId,
           })
@@ -799,6 +804,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(proficiencyTest.id, id),
               eq(proficiencyTest.organizationId, member.organizationId),
+              eq(proficiencyTest.overallStatus, existing.overallStatus),
             ),
           )
           .returning();

@@ -17,6 +17,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for syncRouter.
 // Only the better-auth session is mocked (test/integration/setup.ts).
@@ -56,14 +57,16 @@ async function seedCustomerRow(params: {
   clientOrgId: string;
   name: string;
 }): Promise<number> {
-  await db.insert(organization).values({
-    id: params.clientOrgId,
-    name: `Client ${params.clientOrgId}`,
-    slug: params.clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: params.clientOrgId,
+      name: `Client ${params.clientOrgId}`,
+      slug: params.clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
 
   const [row] = await db
     .insert(customer)
@@ -376,31 +379,35 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     if (!type) throw new Error("assetType insert failed");
 
     // Org B already holds the target tag.
-    await db.insert(asset).values({
-      unitId: orgB.unitId,
-      customerId: customerB,
-      labOrganizationId: orgB.orgId,
-      assetTypeId: type.id,
-      name: "Ativo Org B",
-      serialNumber: "SN-ORGB-RENAME",
-      tag: "XORG-RENAME-TARGET",
-      status: "ACTIVE",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(asset).values({
+        unitId: orgB.unitId,
+        customerId: customerB,
+        labOrganizationId: orgB.orgId,
+        assetTypeId: type.id,
+        name: "Ativo Org B",
+        serialNumber: "SN-ORGB-RENAME",
+        tag: "XORG-RENAME-TARGET",
+        status: "ACTIVE",
+      }),
+    );
 
     // Org A's own asset, to be renamed.
-    const [ownAsset] = await db
-      .insert(asset)
-      .values({
-        unitId: orgA.unitId,
-        customerId: customerA,
-        labOrganizationId: orgA.orgId,
-        assetTypeId: type.id,
-        name: "Ativo Org A",
-        serialNumber: "SN-ORGA-RENAME",
-        tag: "ORGA-ORIGINAL-TAG",
-        status: "ACTIVE",
-      })
-      .returning({ id: asset.id });
+    const [ownAsset] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: orgA.unitId,
+          customerId: customerA,
+          labOrganizationId: orgA.orgId,
+          assetTypeId: type.id,
+          name: "Ativo Org A",
+          serialNumber: "SN-ORGA-RENAME",
+          tag: "ORGA-ORIGINAL-TAG",
+          status: "ACTIVE",
+        })
+        .returning({ id: asset.id }),
+    );
     if (!ownAsset) throw new Error("ownAsset insert failed");
 
     loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
@@ -467,30 +474,34 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     if (!type) throw new Error("assetType insert failed");
 
     // Another asset in the SAME org already holds the target tag.
-    await db.insert(asset).values({
-      unitId: org.unitId,
-      customerId,
-      labOrganizationId: org.orgId,
-      assetTypeId: type.id,
-      name: "Outro Ativo",
-      serialNumber: "SN-SAME-RENAME-OTHER",
-      tag: "SAME-ORG-TAKEN",
-      status: "ACTIVE",
-    });
-
-    const [ownAsset] = await db
-      .insert(asset)
-      .values({
+    await withStatusRepair((tx) =>
+      tx.insert(asset).values({
         unitId: org.unitId,
         customerId,
         labOrganizationId: org.orgId,
         assetTypeId: type.id,
-        name: "Ativo a renomear",
-        serialNumber: "SN-SAME-RENAME-SELF",
-        tag: "SAME-ORG-ORIGINAL",
+        name: "Outro Ativo",
+        serialNumber: "SN-SAME-RENAME-OTHER",
+        tag: "SAME-ORG-TAKEN",
         status: "ACTIVE",
-      })
-      .returning({ id: asset.id });
+      }),
+    );
+
+    const [ownAsset] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: org.unitId,
+          customerId,
+          labOrganizationId: org.orgId,
+          assetTypeId: type.id,
+          name: "Ativo a renomear",
+          serialNumber: "SN-SAME-RENAME-SELF",
+          tag: "SAME-ORG-ORIGINAL",
+          status: "ACTIVE",
+        })
+        .returning({ id: asset.id }),
+    );
     if (!ownAsset) throw new Error("ownAsset insert failed");
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
@@ -702,14 +713,16 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     updatedAt: Date;
   }) {
     const clientOrgId = `client-${params.name}`;
-    await db.insert(organization).values({
-      id: clientOrgId,
-      name: clientOrgId,
-      slug: clientOrgId,
-      type: "CLIENT",
-      status: "ACTIVE",
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: clientOrgId,
+        name: clientOrgId,
+        slug: clientOrgId,
+        type: "CLIENT",
+        status: "ACTIVE",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    );
     const [row] = await db
       .insert(customer)
       .values({
@@ -770,48 +783,54 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
       .returning({ id: assetType.id });
     if (!type) throw new Error("assetType insert failed");
     const deletedAt = new Date(Date.UTC(2026, 0, 2, 12, 0, 0));
-    const [deletedAsset] = await db
-      .insert(asset)
-      .values({
-        unitId: org.unitId,
-        customerId,
-        labOrganizationId: org.orgId,
-        assetTypeId: type.id,
-        name: "Apagado",
-        serialNumber: "SN-DEL",
-        tag: "TAG-DEL",
-        updatedAt: deletedAt,
-        deletedAt,
-      })
-      .returning({ id: asset.id });
-    const [liveAsset] = await db
-      .insert(asset)
-      .values({
-        unitId: org.unitId,
-        customerId,
-        labOrganizationId: org.orgId,
-        assetTypeId: type.id,
-        name: "Ativo",
-        serialNumber: "SN-LIVE",
-        tag: "TAG-LIVE",
-        updatedAt: new Date(Date.UTC(2026, 0, 2, 11, 0, 0)),
-      })
-      .returning({ id: asset.id });
-    const [deletedStandard] = await db
-      .insert(referenceStandard)
-      .values({
-        unitId: org.unitId,
-        organizationId: org.orgId,
-        name: "Padrão apagado",
-        serialNumber: "STD-DEL",
-        certificateNumber: "CERT-DEL",
-        calibrationDate: new Date(Date.UTC(2025, 0, 1)),
-        nextCalibrationDate: new Date(Date.UTC(2027, 0, 1)),
-        createdBy: org.userId,
-        updatedAt: deletedAt,
-        deletedAt,
-      })
-      .returning({ id: referenceStandard.id });
+    const [deletedAsset] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: org.unitId,
+          customerId,
+          labOrganizationId: org.orgId,
+          assetTypeId: type.id,
+          name: "Apagado",
+          serialNumber: "SN-DEL",
+          tag: "TAG-DEL",
+          updatedAt: deletedAt,
+          deletedAt,
+        })
+        .returning({ id: asset.id }),
+    );
+    const [liveAsset] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: org.unitId,
+          customerId,
+          labOrganizationId: org.orgId,
+          assetTypeId: type.id,
+          name: "Ativo",
+          serialNumber: "SN-LIVE",
+          tag: "TAG-LIVE",
+          updatedAt: new Date(Date.UTC(2026, 0, 2, 11, 0, 0)),
+        })
+        .returning({ id: asset.id }),
+    );
+    const [deletedStandard] = await withStatusRepair((tx) =>
+      tx
+        .insert(referenceStandard)
+        .values({
+          unitId: org.unitId,
+          organizationId: org.orgId,
+          name: "Padrão apagado",
+          serialNumber: "STD-DEL",
+          certificateNumber: "CERT-DEL",
+          calibrationDate: new Date(Date.UTC(2025, 0, 1)),
+          nextCalibrationDate: new Date(Date.UTC(2027, 0, 1)),
+          createdBy: org.userId,
+          updatedAt: deletedAt,
+          deletedAt,
+        })
+        .returning({ id: referenceStandard.id }),
+    );
     if (!deletedAsset || !liveAsset || !deletedStandard) {
       throw new Error("seed failed");
     }
@@ -1229,18 +1248,20 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     const org = await seedOrg({ orgId: "org-a", role: "operator" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const context = await seedAssetCreateContext(org.orgId, "diedlate");
-    const [existing] = await db
-      .insert(asset)
-      .values({
-        unitId: org.unitId,
-        customerId: context.customerId,
-        labOrganizationId: org.orgId,
-        assetTypeId: context.assetTypeId,
-        name: "Nome original",
-        serialNumber: "SN-DL",
-        tag: "DIEDLATE-1",
-      })
-      .returning({ id: asset.id });
+    const [existing] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: org.unitId,
+          customerId: context.customerId,
+          labOrganizationId: org.orgId,
+          assetTypeId: context.assetTypeId,
+          name: "Nome original",
+          serialNumber: "SN-DL",
+          tag: "DIEDLATE-1",
+        })
+        .returning({ id: asset.id }),
+    );
     if (!existing) throw new Error("seed failed");
     // An update that already applied and wrote its audit row (the last thing an
     // op does); the process died before marking the claim applied, and the

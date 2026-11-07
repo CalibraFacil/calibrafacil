@@ -42,7 +42,9 @@ import {
   METHOD_ENGINE_OPTIONS,
   normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
-import { eq, and, ilike, or, count, desc, ne } from "drizzle-orm";
+import { eq, and, ilike, or, count, desc, ne, inArray } from "drizzle-orm";
+import { conflict } from "../lib/domain-errors";
+import { METHOD_MACHINE, isMethodDraft } from "@calibra-facil/schemas/machines";
 import {
   withLabPermission,
   type AuthVariables,
@@ -1881,7 +1883,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           // Only DRAFT can be updated
-          if (existing.status !== "DRAFT") {
+          if (!METHOD_MACHINE.canTransition(existing.status, "edit")) {
             return c.json(
               { error: "Apenas métodos em rascunho podem ser editados" },
               400,
@@ -2019,8 +2021,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await tx
             .update(calibrationMethod)
             .set(updateData)
-            .where(eq(calibrationMethod.id, id))
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.status, existing.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            // The compare-and-set on the status matched no row: the method
+            // moved under the caller (METHOD_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "O método mudou de status durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
           // Audit log
           await tx.insert(methodAuditLog).values({
@@ -2077,7 +2092,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             return c.json({ error: "Método nao encontrado" }, 404);
           }
 
-          if (existing.status !== "DRAFT") {
+          if (
+            !METHOD_MACHINE.canTransition(existing.status, "request_approval")
+          ) {
             return c.json(
               { error: "Apenas rascunhos podem ser enviados para aprovacao" },
               400,
@@ -2137,7 +2154,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await tx
             .update(calibrationMethod)
             .set({
-              status: "PENDING_APPROVAL",
+              status: METHOD_MACHINE.requireTargetOf(
+                existing.status,
+                "request_approval",
+              ),
               technicalReviewedBy: null,
               approvedBy: null,
               publishedAt: null,
@@ -2154,8 +2174,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
                 compiledBy: session.user.id,
               }),
             })
-            .where(eq(calibrationMethod.id, id))
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.status, existing.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            // The compare-and-set on the status matched no row: the method
+            // moved under the caller (METHOD_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "O método mudou de status durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
           await tx.insert(methodAuditLog).values({
             organizationId: member.organizationId,
@@ -2218,7 +2251,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             return c.json({ error: "Método nao encontrado" }, 404);
           }
 
-          if (existing.status !== "PENDING_APPROVAL") {
+          if (
+            !METHOD_MACHINE.canTransition(existing.status, "technical_review")
+          ) {
             return c.json(
               { error: "Apenas métodos pendentes podem ser revisados" },
               400,
@@ -2228,11 +2263,27 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await tx
             .update(calibrationMethod)
             .set({
-              status: "TECHNICAL_REVIEWED",
+              status: METHOD_MACHINE.requireTargetOf(
+                existing.status,
+                "technical_review",
+              ),
               technicalReviewedBy: session.user.id,
             })
-            .where(eq(calibrationMethod.id, id))
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.status, existing.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            // The compare-and-set on the status matched no row: the method
+            // moved under the caller (METHOD_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "O método mudou de status durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
           await tx.insert(methodAuditLog).values({
             organizationId: member.organizationId,
@@ -2292,7 +2343,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             return c.json({ error: "Método nao encontrado" }, 404);
           }
 
-          if (existing.status !== "TECHNICAL_REVIEWED") {
+          if (!METHOD_MACHINE.canTransition(existing.status, "publish")) {
             return c.json(
               { error: "Apenas métodos revisados podem ser aprovados" },
               400,
@@ -2389,14 +2440,17 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           await tx
             .update(calibrationMethod)
             .set({
-              status: "ARCHIVED",
+              status: METHOD_MACHINE.requireTargetOf("PUBLISHED", "supersede"),
               archivedAt: new Date(),
             })
             .where(
               and(
                 eq(calibrationMethod.organizationId, member.organizationId),
                 eq(calibrationMethod.name, existing.name),
-                eq(calibrationMethod.status, "PUBLISHED"),
+                inArray(
+                  calibrationMethod.status,
+                  METHOD_MACHINE.allowedFrom("supersede"),
+                ),
                 ne(calibrationMethod.id, id),
               ),
             );
@@ -2404,7 +2458,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const [published] = await tx
             .update(calibrationMethod)
             .set({
-              status: "PUBLISHED",
+              status: METHOD_MACHINE.requireTargetOf(
+                existing.status,
+                "publish",
+              ),
               publishedAt: new Date(),
               publishedBy: session.user.id,
               approvedBy: session.user.id,
@@ -2414,8 +2471,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               methodCompiledAt: new Date(),
               publicationEvidence,
             })
-            .where(eq(calibrationMethod.id, id))
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.status, existing.status),
+              ),
+            )
             .returning();
+          if (!published) {
+            // The compare-and-set on the status matched no row: the method
+            // moved under the caller (METHOD_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "O método mudou de status durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
           await tx.insert(methodAuditLog).values({
             organizationId: member.organizationId,
@@ -2481,8 +2551,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           if (
-            existing.status !== "PENDING_APPROVAL" &&
-            existing.status !== "TECHNICAL_REVIEWED"
+            !METHOD_MACHINE.canTransition(existing.status, "return_to_draft")
           ) {
             return c.json(
               {
@@ -2495,7 +2564,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await tx
             .update(calibrationMethod)
             .set({
-              status: "DRAFT",
+              status: METHOD_MACHINE.requireTargetOf(
+                existing.status,
+                "return_to_draft",
+              ),
               technicalReviewedBy: null,
               approvedBy: null,
               publishedAt: null,
@@ -2506,8 +2578,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               methodCompiledAt: null,
               publicationEvidence: null,
             })
-            .where(eq(calibrationMethod.id, id))
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.status, existing.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            // The compare-and-set on the status matched no row: the method
+            // moved under the caller (METHOD_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "O método mudou de status durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
           await tx.insert(methodAuditLog).values({
             organizationId: member.organizationId,
@@ -2565,7 +2650,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             return c.json({ error: "Método nao encontrado" }, 404);
           }
 
-          if (existing.status !== "TECHNICAL_REVIEWED") {
+          if (!METHOD_MACHINE.canTransition(existing.status, "publish")) {
             return c.json(
               { error: "Apenas métodos revisados podem ser publicados" },
               400,
@@ -2662,14 +2747,17 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           await tx
             .update(calibrationMethod)
             .set({
-              status: "ARCHIVED",
+              status: METHOD_MACHINE.requireTargetOf("PUBLISHED", "supersede"),
               archivedAt: new Date(),
             })
             .where(
               and(
                 eq(calibrationMethod.organizationId, member.organizationId),
                 eq(calibrationMethod.name, existing.name),
-                eq(calibrationMethod.status, "PUBLISHED"),
+                inArray(
+                  calibrationMethod.status,
+                  METHOD_MACHINE.allowedFrom("supersede"),
+                ),
                 ne(calibrationMethod.id, id),
               ),
             );
@@ -2678,7 +2766,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const [published] = await tx
             .update(calibrationMethod)
             .set({
-              status: "PUBLISHED",
+              status: METHOD_MACHINE.requireTargetOf(
+                existing.status,
+                "publish",
+              ),
               publishedAt: new Date(),
               publishedBy: session.user.id,
               approvedBy: session.user.id,
@@ -2688,8 +2779,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               methodCompiledAt: new Date(),
               publicationEvidence,
             })
-            .where(eq(calibrationMethod.id, id))
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.status, existing.status),
+              ),
+            )
             .returning();
+          if (!published) {
+            // The compare-and-set on the status matched no row: the method
+            // moved under the caller (METHOD_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "O método mudou de status durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
           // Audit log
           await tx.insert(methodAuditLog).values({
@@ -2752,7 +2856,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             return c.json({ error: "Método nao encontrado" }, 404);
           }
 
-          if (existing.status !== "PUBLISHED") {
+          if (!METHOD_MACHINE.canTransition(existing.status, "archive")) {
             return c.json(
               { error: "Apenas métodos publicados podem ser arquivados" },
               400,
@@ -2762,11 +2866,27 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           const [archived] = await tx
             .update(calibrationMethod)
             .set({
-              status: "ARCHIVED",
+              status: METHOD_MACHINE.requireTargetOf(
+                existing.status,
+                "archive",
+              ),
               archivedAt: new Date(),
             })
-            .where(eq(calibrationMethod.id, id))
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.status, existing.status),
+              ),
+            )
             .returning();
+          if (!archived) {
+            // The compare-and-set on the status matched no row: the method
+            // moved under the caller (METHOD_MACHINE).
+            throw conflict(
+              "status_transition_conflict",
+              "O método mudou de status durante a operação. Recarregue e tente novamente.",
+            );
+          }
 
           // Audit log
           await tx.insert(methodAuditLog).values({
@@ -2957,7 +3077,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "DRAFT") {
+        if (!isMethodDraft(existing.status)) {
           return c.json(
             {
               error:

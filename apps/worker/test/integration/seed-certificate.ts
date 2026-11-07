@@ -10,6 +10,7 @@ import {
 import { insertJobs } from "./job-fixtures";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
+import { withStatusRepair } from "./state-fixtures";
 
 /**
  * Seeds the graph the fixed-layout certificate issuance reads, for one org,
@@ -153,22 +154,24 @@ export async function seedIssuableJob(params: {
   if (!assetTypeRow)
     throw new Error("seedIssuableJob: assetType insert failed");
 
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: customerRow.id,
-      // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
-      labOrganizationId: params.organizationId,
-      assetTypeId: assetTypeRow.id,
-      name: "Balança Analítica",
-      serialNumber: `SN-${jobNumber}`,
-      tag: `TAG-${jobNumber}`,
-      manufacturer: "Fabricante Teste",
-      model: "MOD-100",
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: customerRow.id,
+        // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
+        labOrganizationId: params.organizationId,
+        assetTypeId: assetTypeRow.id,
+        name: "Balança Analítica",
+        serialNumber: `SN-${jobNumber}`,
+        tag: `TAG-${jobNumber}`,
+        manufacturer: "Fabricante Teste",
+        model: "MOD-100",
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!assetRow) throw new Error("seedIssuableJob: asset insert failed");
 
   const [serviceRow] = await db
@@ -182,21 +185,23 @@ export async function seedIssuableJob(params: {
     .returning();
   if (!serviceRow) throw new Error("seedIssuableJob: service insert failed");
 
-  const [methodRow] = await db
-    .insert(calibrationMethod)
-    .values({
-      organizationId: params.organizationId,
-      assetTypeId: assetTypeRow.id,
-      name: `Método ${jobNumber}`,
-      version: 1,
-      status: "PUBLISHED",
-      accreditedScope: false,
-      dataFields: [],
-      createdBy: params.userId,
-      publishedAt: EPOCH,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [methodRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationMethod)
+      .values({
+        organizationId: params.organizationId,
+        assetTypeId: assetTypeRow.id,
+        name: `Método ${jobNumber}`,
+        version: 1,
+        status: "PUBLISHED",
+        accreditedScope: false,
+        dataFields: [],
+        createdBy: params.userId,
+        publishedAt: EPOCH,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!methodRow) throw new Error("seedIssuableJob: method insert failed");
 
   // Point the service at the method too (mirrors production job creation).

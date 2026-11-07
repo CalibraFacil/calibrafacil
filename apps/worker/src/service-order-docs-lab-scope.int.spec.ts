@@ -45,6 +45,7 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
 
@@ -253,34 +254,38 @@ describe("service-order documents as calibra_app (P2-18j)", () => {
         customerId: customerRow.customerId,
         jobNumber: `CAL-${org.orgId}-1`,
       });
-      const [nc] = await db
-        .insert(nonConformance)
-        .values({
-          ncNumber: `NC-${org.orgId}-1`,
-          organizationId: org.orgId,
-          type: "out_of_tolerance",
-          description: "Medição fora de tolerância",
-          detectedBy: org.userId,
-          detectedAt: new Date("2026-01-15T10:00:00.000Z"),
-          status: "open",
-          jobId: cert.jobId,
-          createdBy: org.userId,
-        })
-        .returning();
+      const [nc] = await withStatusRepair((tx) =>
+        tx
+          .insert(nonConformance)
+          .values({
+            ncNumber: `NC-${org.orgId}-1`,
+            organizationId: org.orgId,
+            type: "out_of_tolerance",
+            description: "Medição fora de tolerância",
+            detectedBy: org.userId,
+            detectedAt: new Date("2026-01-15T10:00:00.000Z"),
+            status: "open",
+            jobId: cert.jobId,
+            createdBy: org.userId,
+          })
+          .returning(),
+      );
       if (!nc) throw new Error("nc insert failed");
-      const [row] = await db
-        .insert(ootNotification)
-        .values({
-          organizationId: org.orgId,
-          ncId: nc.id,
-          jobId: cert.jobId,
-          certificateNumber: `CERT-${org.orgId}`,
-          recipientName: "Cliente",
-          recipientEmail: "cliente@example.test",
-          status: "PENDING",
-          approvedBy: org.userId,
-        })
-        .returning();
+      const [row] = await withStatusRepair((tx) =>
+        tx
+          .insert(ootNotification)
+          .values({
+            organizationId: org.orgId,
+            ncId: nc.id,
+            jobId: cert.jobId,
+            certificateNumber: `CERT-${org.orgId}`,
+            recipientName: "Cliente",
+            recipientEmail: "cliente@example.test",
+            status: "PENDING",
+            approvedBy: org.userId,
+          })
+          .returning(),
+      );
       if (!row) throw new Error("oot insert failed");
       notifications[org.orgId] = row.id;
     }

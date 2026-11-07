@@ -84,7 +84,8 @@ export function ApprovedJobRecord({
     isGeneratingLabel,
     isDownloadingLabel,
     labelPending,
-    setLabelPending,
+    labelReady,
+    finishLabelFlow,
     isAmendDialogOpen,
     setIsAmendDialogOpen,
     amendmentReason,
@@ -125,16 +126,16 @@ export function ApprovedJobRecord({
 
   return (
     <div className="space-y-6">
-      {labelPending && job.labelUrl ? (
+      {labelReady ? (
         <LabelReadyNotifier
           onReady={() => {
-            setLabelPending(false)
+            finishLabelFlow()
             toast.success('Etiqueta gerada com sucesso!')
           }}
         />
       ) : null}
-      {labelPending && !job.labelUrl ? (
-        <PendingLabelPoller onRefresh={onRefresh} />
+      {labelPending && !labelReady ? (
+        <PendingLabelPoller onRefresh={onRefresh} onGiveUp={finishLabelFlow} />
       ) : null}
       <ApprovedRecordToolbar
         job={job}

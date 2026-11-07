@@ -19,6 +19,7 @@ import {
   type Tenant,
 } from "../../test/integration/tenancy-fixture";
 import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-database proof of the row-level-security policies (migration 0123,
 // roadmap P2-3). The global `db` is the test superuser, which no policy binds
@@ -74,15 +75,17 @@ async function seedTwoTenants(): Promise<{ a: Tenant; b: Tenant }> {
   }
   // CLIENT organizations for the customers the tests insert as calibra_app
   // (a customer points at its portal organization). `organization` is global.
-  await db.insert(organization).values(
-    SPARE_CLIENTS.map((id) => ({
-      id,
-      name: id,
-      slug: id,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      type: "CLIENT" as const,
-      status: "ACTIVE" as const,
-    })),
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values(
+      SPARE_CLIENTS.map((id) => ({
+        id,
+        name: id,
+        slug: id,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        type: "CLIENT" as const,
+        status: "ACTIVE" as const,
+      })),
+    ),
   );
   return { a, b };
 }

@@ -623,6 +623,11 @@ function registerIpc(
       localPartitionActivationRequestSchema.parse(input),
     );
   });
+  // Sign-out ends the offline grant (the remembered partition), never the data.
+  handle(desktopIpcChannels.forgetOfflineAccess, async () => {
+    await localPartitionStore.forget();
+    return true;
+  });
   handle(desktopIpcChannels.deepLinkReady, () => {
     rendererReadyForDeepLinks = true;
     flushPendingDeepLink();

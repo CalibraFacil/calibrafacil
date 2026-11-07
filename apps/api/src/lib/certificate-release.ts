@@ -23,6 +23,7 @@ import type {
 } from "@calibra-facil/shared";
 import { deriveFinancialContinuityStatus } from "@calibra-facil/shared";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { CERTIFICATE_RELEASE_MACHINE } from "@calibra-facil/schemas/machines";
 import { inOrgTransaction } from "./org-transaction";
 
 // ---------------------------------------------------------------------------
@@ -328,7 +329,9 @@ async function recomputeOn(
     })
     .from(certificateRelease)
     .where(eq(certificateRelease.calibrationJobId, job.id))
-    .limit(1);
+    .limit(1)
+    // Locked: the evaluation below decides from this status and writes it.
+    .for("update");
 
   const hasExceptionRelease = existing?.status === "RELEASED_BY_EXCEPTION";
 
@@ -346,7 +349,11 @@ async function recomputeOn(
     await o
       .update(certificateRelease)
       .set({
-        status: nextStatus,
+        status: CERTIFICATE_RELEASE_MACHINE.requireTransition(
+          existing.status,
+          "evaluate",
+          nextStatus,
+        ),
         appliedPolicyId: hasExceptionRelease
           ? existing.appliedPolicyId
           : policy.id,
@@ -354,7 +361,13 @@ async function recomputeOn(
         paymentStateSnapshot: snapshotJson,
         updatedAt: now,
       })
-      .where(eq(certificateRelease.id, existing.id));
+      // Compare-and-set on the status this evaluation started from.
+      .where(
+        and(
+          eq(certificateRelease.id, existing.id),
+          eq(certificateRelease.status, existing.status),
+        ),
+      );
 
     if (changed) {
       await o.insert(certificateReleaseAuditLog).values({
@@ -383,7 +396,11 @@ async function recomputeOn(
     .values({
       organizationId: job.organizationId,
       calibrationJobId: job.id,
-      status: nextStatus,
+      status: CERTIFICATE_RELEASE_MACHINE.requireTransition(
+        null,
+        "create",
+        nextStatus,
+      ),
       appliedPolicyId: policy.id,
       lastEvaluatedAt: now,
       paymentStateSnapshot: snapshotJson,
@@ -484,7 +501,8 @@ async function releaseByExceptionOn(
     })
     .from(certificateRelease)
     .where(eq(certificateRelease.calibrationJobId, job.id))
-    .limit(1);
+    .limit(1)
+    .for("update");
 
   const now = new Date();
   const snapshotJson = paymentState.snapshot;
@@ -493,7 +511,10 @@ async function releaseByExceptionOn(
     await o
       .update(certificateRelease)
       .set({
-        status: "RELEASED_BY_EXCEPTION",
+        status: CERTIFICATE_RELEASE_MACHINE.requireTargetOf(
+          existing.status,
+          "release_by_exception",
+        ),
         releasedByUserId: input.actorUserId,
         releaseReason: reason,
         lastEvaluatedAt: now,

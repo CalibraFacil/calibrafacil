@@ -6,6 +6,7 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
+import { withStatusRepair } from "./state-fixtures";
 
 /**
  * Make the job's service carry an instrument type and give `competentUserId`
@@ -39,13 +40,15 @@ export async function requireCompetenceForJob(params: {
     .update(service)
     .set({ assetTypeId: row.assetTypeId })
     .where(eq(service.id, job.serviceId));
-  await db.insert(personnelCompetence).values({
-    organizationId: params.organizationId,
-    userId: params.competentUserId,
-    assetTypeId: row.assetTypeId,
-    scopeDescription: "Competência de teste",
-    status: "ACTIVE",
-    requestedBy: params.createdBy,
-    createdBy: params.createdBy,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(personnelCompetence).values({
+      organizationId: params.organizationId,
+      userId: params.competentUserId,
+      assetTypeId: row.assetTypeId,
+      scopeDescription: "Competência de teste",
+      status: "ACTIVE",
+      requestedBy: params.createdBy,
+      createdBy: params.createdBy,
+    }),
+  );
 }

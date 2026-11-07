@@ -227,8 +227,10 @@ export async function processOotNotification(
       httpMetadata: { contentType: "application/pdf" },
     });
 
-    // Record the artifact. Only PENDING advances to GENERATED — a re-render
-    // must never regress a notification already SENT/ACKNOWLEDGED.
+    // Record the artifact: `generate` in OOT_NOTIFICATION_MACHINE
+    // (@calibra-facil/schemas/machines). Only PENDING advances to GENERATED; a
+    // re-render keeps the state it reached and never regresses a notification
+    // already SENT/ACKNOWLEDGED (the database guard refuses a regression too).
     await withOrgDbClient(env, organizationId, (client) =>
       client.query(
         `

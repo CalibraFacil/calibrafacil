@@ -199,6 +199,13 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
   `pnpm --filter @calibra-facil/math-engine run engine:pin`. The engine is exact for formula
   evaluation, sensitivities and Type A sums, but propagation (`u_c`, `ν_eff`, `k`, `U`) runs in
   float64; see `packages/math-engine/README.md`.
+- **Every lifecycle is a state machine.** Status columns are owned by machines in
+  `packages/schemas/src/machines/` (`defineStateMachine`); writers name a command and compare-and-set
+  the status; Postgres triggers generated from the machines (`packages/db/src/status-machines.ts`,
+  `pnpm --filter @calibra-facil/db gen:status-guards-sql`) refuse any other move with SQLSTATE
+  `CF001`. Changing a machine needs a new migration with the regenerated guard
+  (`status-guard-sql.test.ts` enforces it). Fixtures that place rows mid-lifecycle use
+  `withStatusRepair`. See `docs/architecture/state-machines.md`.
 - **Row-level security is enforced.** Every tenant table has a `tenant_isolation` policy for
   `calibra_app`; the API and worker connect as that role (`DATABASE_URL`) and every application
   statement runs in an org-scoped transaction (`orgDb(lab).transaction` / `forOrg`) or on the named

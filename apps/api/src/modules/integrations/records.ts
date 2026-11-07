@@ -10,7 +10,8 @@ import {
   normalizeFinancialErpConnectionConfig,
   type IntegrationSyncTarget,
 } from "@calibra-facil/shared";
-import { and, desc, eq, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
+import { INTEGRATION_SYNC_RUN_MACHINE } from "@calibra-facil/schemas/machines";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import { type GenericConnectionRecord } from "./types";
 
@@ -196,7 +197,15 @@ export async function failIntegrationSyncRun(
         finishedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(integrationSyncRun.id, params.runId));
+      .where(
+        and(
+          eq(integrationSyncRun.id, params.runId),
+          inArray(
+            integrationSyncRun.status,
+            INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("fail"),
+          ),
+        ),
+      );
 
     await writeIntegrationEvent(
       {

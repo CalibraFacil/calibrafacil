@@ -79,6 +79,7 @@ import {
   runRecordsPurge,
 } from "./records-purge";
 import { cleanupFailedLabProvisioning } from "../services/lab-provisioning";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -139,14 +140,16 @@ async function seedLab(options: LabOptions): Promise<LabFixture> {
   const evidenceAt = options.evidenceAt ?? null;
   const org = await seedOrg({ orgId, userId: `user-${orgId}`, role: "admin" });
   const clientId = `client-${orgId}`;
-  await db.insert(organization).values({
-    id: clientId,
-    name: `Client ${orgId}`,
-    slug: clientId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientId,
+      name: `Client ${orgId}`,
+      slug: clientId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
   const [cust] = await db
     .insert(customer)
     .values({
@@ -160,18 +163,20 @@ async function seedLab(options: LabOptions): Promise<LabFixture> {
     .values({ name: `AT ${orgId}`, slug: `at-${orgId}`, definition: [] })
     .returning({ id: assetType.id });
   if (!cust || !type) throw new Error("seedLab: customer/type failed");
-  const [instrument] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: orgId,
-      unitId: org.unitId,
-      customerId: cust.id,
-      assetTypeId: type.id,
-      name: "Instrumento",
-      serialNumber: `SN-${orgId}`,
-      tag: `TAG-${orgId}`,
-    })
-    .returning({ id: asset.id });
+  const [instrument] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: orgId,
+        unitId: org.unitId,
+        customerId: cust.id,
+        assetTypeId: type.id,
+        name: "Instrumento",
+        serialNumber: `SN-${orgId}`,
+        tag: `TAG-${orgId}`,
+      })
+      .returning({ id: asset.id }),
+  );
   const [svc] = await db
     .insert(service)
     .values({
@@ -234,37 +239,41 @@ async function seedJob(
 }
 
 async function seedStandard(fixture: LabFixture, at: Date) {
-  const [standard] = await db
-    .insert(referenceStandard)
-    .values({
-      unitId: fixture.unitId,
-      organizationId: fixture.orgId,
-      name: "Padrão",
-      serialNumber: `STD-${fixture.orgId}`,
-      certificateNumber: "CERT-1",
-      calibrationDate: new Date("2025-01-01T00:00:00.000Z"),
-      nextCalibrationDate: new Date("2026-01-01T00:00:00.000Z"),
-      createdBy: fixture.userId,
-      createdAt: at,
-      updatedAt: at,
-    })
-    .returning({ id: referenceStandard.id });
+  const [standard] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        unitId: fixture.unitId,
+        organizationId: fixture.orgId,
+        name: "Padrão",
+        serialNumber: `STD-${fixture.orgId}`,
+        certificateNumber: "CERT-1",
+        calibrationDate: new Date("2025-01-01T00:00:00.000Z"),
+        nextCalibrationDate: new Date("2026-01-01T00:00:00.000Z"),
+        createdBy: fixture.userId,
+        createdAt: at,
+        updatedAt: at,
+      })
+      .returning({ id: referenceStandard.id }),
+  );
   if (!standard) throw new Error("seedStandard: insert failed");
   return standard.id;
 }
 
 async function seedNonConformance(fixture: LabFixture, at: Date) {
-  await db.insert(nonConformance).values({
-    ncNumber: `NC-${fixture.orgId}`,
-    organizationId: fixture.orgId,
-    type: "calibration",
-    description: "desvio",
-    detectedBy: fixture.userId,
-    detectedAt: at,
-    createdBy: fixture.userId,
-    createdAt: at,
-    updatedAt: at,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(nonConformance).values({
+      ncNumber: `NC-${fixture.orgId}`,
+      organizationId: fixture.orgId,
+      type: "calibration",
+      description: "desvio",
+      detectedBy: fixture.userId,
+      detectedAt: at,
+      createdBy: fixture.userId,
+      createdAt: at,
+      updatedAt: at,
+    }),
+  );
 }
 
 /** Every evidence family the purge scenarios look at, all dated `at`. */
@@ -308,18 +317,22 @@ async function markSoftDeleted(
   at: Date,
   extra: { retentionYears?: number; legalHold?: boolean } = {},
 ) {
-  await db
-    .update(organization)
-    .set({
-      deletedAt: at,
-      status: "SUSPENDED",
-      suspendedAt: at,
-      ...(extra.retentionYears === undefined
-        ? {}
-        : { retentionYears: extra.retentionYears }),
-      ...(extra.legalHold === undefined ? {} : { legalHold: extra.legalHold }),
-    })
-    .where(eq(organization.id, orgId));
+  await withStatusRepair((tx) =>
+    tx
+      .update(organization)
+      .set({
+        deletedAt: at,
+        status: "SUSPENDED",
+        suspendedAt: at,
+        ...(extra.retentionYears === undefined
+          ? {}
+          : { retentionYears: extra.retentionYears }),
+        ...(extra.legalHold === undefined
+          ? {}
+          : { legalHold: extra.legalHold }),
+      })
+      .where(eq(organization.id, orgId)),
+  );
 }
 
 async function organizationExists(id: string): Promise<boolean> {
@@ -452,13 +465,15 @@ describe("REQ-RET-2: evidence is never reached by a cascading foreign key", () =
   it("REQ-RET-2: deleting an asset with an OOT event is refused (the event used to cascade away)", async () => {
     const lab = await seedLab({ orgId: "org-oot" });
     const jobId = await seedJob(lab, new Date("2025-03-01T00:00:00.000Z"));
-    await db.insert(assetOotEvent).values({
-      jobId,
-      assetId: lab.assetId,
-      customerId: lab.customerId,
-      labOrganizationId: lab.orgId,
-      detectedAt: new Date("2025-03-01T00:00:00.000Z"),
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(assetOotEvent).values({
+        jobId,
+        assetId: lab.assetId,
+        customerId: lab.customerId,
+        labOrganizationId: lab.orgId,
+        detectedAt: new Date("2025-03-01T00:00:00.000Z"),
+      }),
+    );
 
     const failure = await failureOf(() =>
       db.delete(asset).where(eq(asset.id, lab.assetId)),
@@ -1416,10 +1431,12 @@ describe("REQ-RET-3: a suspended or soft-deleted laboratory's outward surfaces",
   it("REQ-RET-3 [HIGH RISK]: the API key of a SUSPENDED laboratory is refused with 403 organization_suspended, on v1 and v2", async () => {
     const lab = await seedOrg({ orgId: "org-key-susp" });
     const headers = await keyFor(lab.orgId, lab.userId);
-    await db
-      .update(organization)
-      .set({ status: "SUSPENDED", suspendedAt: new Date() })
-      .where(eq(organization.id, lab.orgId));
+    await withStatusRepair((tx) =>
+      tx
+        .update(organization)
+        .set({ status: "SUSPENDED", suspendedAt: new Date() })
+        .where(eq(organization.id, lab.orgId)),
+    );
 
     for (const [name, router] of [
       ["v1", publicApiRouter],

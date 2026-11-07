@@ -48,6 +48,7 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const notifications = vi.hoisted(() => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
@@ -70,21 +71,23 @@ async function seedNc(params: {
   capaId?: number | null;
 }): Promise<number> {
   ncSequence += 1;
-  const [row] = await db
-    .insert(nonConformance)
-    .values({
-      ncNumber: `NC-2026-${String(ncSequence).padStart(4, "0")}`,
-      organizationId: params.orgId,
-      type: params.type ?? "work",
-      description: "Medicao fora de tolerancia no ensaio de balanca",
-      detectedBy: params.userId,
-      detectedAt: new Date(DETECTED_AT),
-      status: params.status ?? "open",
-      jobId: params.jobId ?? null,
-      capaId: params.capaId ?? null,
-      createdBy: params.userId,
-    })
-    .returning({ id: nonConformance.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(nonConformance)
+      .values({
+        ncNumber: `NC-2026-${String(ncSequence).padStart(4, "0")}`,
+        organizationId: params.orgId,
+        type: params.type ?? "work",
+        description: "Medicao fora de tolerancia no ensaio de balanca",
+        detectedBy: params.userId,
+        detectedAt: new Date(DETECTED_AT),
+        status: params.status ?? "open",
+        jobId: params.jobId ?? null,
+        capaId: params.capaId ?? null,
+        createdBy: params.userId,
+      })
+      .returning({ id: nonConformance.id }),
+  );
   if (!row) throw new Error("seedNc: insert failed");
   return row.id;
 }
@@ -96,24 +99,26 @@ async function seedCapa(params: {
   userId: string;
 }): Promise<{ id: number; capaNumber: string }> {
   capaSequence += 1;
-  const [row] = await db
-    .insert(correctiveAction)
-    .values({
-      capaNumber: `CAPA-2026-${String(capaSequence).padStart(4, "0")}`,
-      organizationId: params.orgId,
-      source: "nc_detection",
-      title: "CAPA de teste",
-      description: "Inserida diretamente.",
-      type: "corrective",
-      severity: "minor",
-      category: "procedure",
-      status: "OPEN",
-      createdBy: params.userId,
-    })
-    .returning({
-      id: correctiveAction.id,
-      capaNumber: correctiveAction.capaNumber,
-    });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(correctiveAction)
+      .values({
+        capaNumber: `CAPA-2026-${String(capaSequence).padStart(4, "0")}`,
+        organizationId: params.orgId,
+        source: "nc_detection",
+        title: "CAPA de teste",
+        description: "Inserida diretamente.",
+        type: "corrective",
+        severity: "minor",
+        category: "procedure",
+        status: "OPEN",
+        createdBy: params.userId,
+      })
+      .returning({
+        id: correctiveAction.id,
+        capaNumber: correctiveAction.capaNumber,
+      }),
+  );
   if (!row) throw new Error("seedCapa: insert failed");
   return row;
 }
@@ -124,19 +129,24 @@ async function seedOotNotification(params: {
   ncId: number;
   jobId: number;
 }): Promise<{ id: number; ackToken: string }> {
-  const [row] = await db
-    .insert(ootNotification)
-    .values({
-      organizationId: params.orgId,
-      ncId: params.ncId,
-      jobId: params.jobId,
-      certificateNumber: "CERT-0001",
-      recipientName: "Cliente",
-      recipientEmail: "cliente@example.test",
-      status: "SENT",
-      approvedBy: params.userId,
-    })
-    .returning({ id: ootNotification.id, ackToken: ootNotification.ackToken });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(ootNotification)
+      .values({
+        organizationId: params.orgId,
+        ncId: params.ncId,
+        jobId: params.jobId,
+        certificateNumber: "CERT-0001",
+        recipientName: "Cliente",
+        recipientEmail: "cliente@example.test",
+        status: "SENT",
+        approvedBy: params.userId,
+      })
+      .returning({
+        id: ootNotification.id,
+        ackToken: ootNotification.ackToken,
+      }),
+  );
   if (!row) throw new Error("seedOotNotification: insert failed");
   return row;
 }

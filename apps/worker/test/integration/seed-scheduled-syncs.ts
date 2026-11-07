@@ -12,6 +12,7 @@ import type {
   IntegrationSyncTarget,
 } from "@calibra-facil/shared";
 import { TEST_INTEGRATIONS_MASTER_KEY } from "./env";
+import { withStatusRepair } from "./state-fixtures";
 
 // Seed helpers SPECIFIC to processScheduledIntegrationSyncs (the cron that scans
 // organization_integration, advances per-target schedules, and dispatches sync
@@ -86,18 +87,20 @@ export async function seedScheduledIntegration(params: {
     TEST_INTEGRATIONS_MASTER_KEY,
   );
 
-  await db.insert(organizationIntegration).values({
-    id: params.integrationId,
-    organizationId: params.organizationId,
-    type: "financial_erp",
-    provider: "generic_http",
-    name: "ERP Agendado de Teste",
-    status: "ACTIVE",
-    createdBy: params.createdBy,
-    lastValidatedAt: EPOCH,
-    lastValidationError: null,
-    createdAt: EPOCH,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationIntegration).values({
+      id: params.integrationId,
+      organizationId: params.organizationId,
+      type: "financial_erp",
+      provider: "generic_http",
+      name: "ERP Agendado de Teste",
+      status: "ACTIVE",
+      createdBy: params.createdBy,
+      lastValidatedAt: EPOCH,
+      lastValidationError: null,
+      createdAt: EPOCH,
+    }),
+  );
 
   await db.insert(integrationConnection).values({
     id: `conn-${params.integrationId}`,
@@ -128,15 +131,17 @@ export async function seedSyncRunWithStatus(params: {
   target: IntegrationSyncTarget;
   status: IntegrationSyncStatus;
 }): Promise<{ runId: string }> {
-  await db.insert(integrationSyncRun).values({
-    id: params.runId,
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    trigger: "scheduled",
-    target: params.target,
-    status: params.status,
-    createdAt: EPOCH,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(integrationSyncRun).values({
+      id: params.runId,
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      trigger: "scheduled",
+      target: params.target,
+      status: params.status,
+      createdAt: EPOCH,
+    }),
+  );
   return { runId: params.runId };
 }
 

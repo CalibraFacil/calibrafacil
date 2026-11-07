@@ -42,6 +42,7 @@ import { integrationsRouter } from "./integrations";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, type SeededOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const ENV = { INTEGRATIONS_MASTER_KEY: Buffer.alloc(32).toString("base64") };
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -67,16 +68,18 @@ async function seedIntegration(
   provider: "generic_http" | "conta_azul",
 ) {
   const integrationId = `int-${org.orgId}-${provider}`;
-  await db.insert(organizationIntegration).values({
-    id: integrationId,
-    organizationId: org.orgId,
-    type: "financial_erp",
-    provider,
-    name: `ERP ${org.orgId}`,
-    status: "ACTIVE",
-    createdBy: org.userId,
-    updatedBy: org.userId,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationIntegration).values({
+      id: integrationId,
+      organizationId: org.orgId,
+      type: "financial_erp",
+      provider,
+      name: `ERP ${org.orgId}`,
+      status: "ACTIVE",
+      createdBy: org.userId,
+      updatedBy: org.userId,
+    }),
+  );
   await db.insert(integrationConnection).values({
     id: `conn-${integrationId}`,
     integrationId,
@@ -218,25 +221,29 @@ describe("integration routes: laboratory scope (P2-18h)", () => {
       [a, integrationA],
       [b, integrationB],
     ] as const) {
-      await db.insert(integrationSyncRun).values({
-        id: `run-${org.orgId}`,
-        integrationId,
-        organizationId: org.orgId,
-        trigger: "manual",
-        target: "customer",
-        status: "COMPLETED",
-      });
-      await db.insert(integrationSyncItem).values({
-        id: `item-${org.orgId}`,
-        runId: `run-${org.orgId}`,
-        integrationId,
-        organizationId: org.orgId,
-        target: "customer",
-        localEntityId: `customer:${org.orgId}`,
-        operation: "upsert",
-        status: "SUCCEEDED",
-        attemptCount: 1,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(integrationSyncRun).values({
+          id: `run-${org.orgId}`,
+          integrationId,
+          organizationId: org.orgId,
+          trigger: "manual",
+          target: "customer",
+          status: "COMPLETED",
+        }),
+      );
+      await withStatusRepair((tx) =>
+        tx.insert(integrationSyncItem).values({
+          id: `item-${org.orgId}`,
+          runId: `run-${org.orgId}`,
+          integrationId,
+          organizationId: org.orgId,
+          target: "customer",
+          localEntityId: `customer:${org.orgId}`,
+          operation: "upsert",
+          status: "SUCCEEDED",
+          attemptCount: 1,
+        }),
+      );
       await db.insert(integrationEventLog).values({
         integrationId,
         organizationId: org.orgId,

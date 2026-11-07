@@ -24,6 +24,7 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the visits router.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -66,14 +67,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 
 /** Insert a minimal CLIENT org (required for customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /**
@@ -113,18 +116,20 @@ async function seedVisit(params: {
   scheduledAt?: Date;
   technicianId?: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationVisit)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      createdBy: params.createdBy,
-      status: params.status ?? "PROPOSED",
-      scheduledAt: params.scheduledAt ?? null,
-      technicianId: params.technicianId ?? null,
-    })
-    .returning({ id: calibrationVisit.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationVisit)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        createdBy: params.createdBy,
+        status: params.status ?? "PROPOSED",
+        scheduledAt: params.scheduledAt ?? null,
+        technicianId: params.technicianId ?? null,
+      })
+      .returning({ id: calibrationVisit.id }),
+  );
 
   if (!row) throw new Error("seedVisit: insert failed");
   return row.id;
@@ -468,19 +473,21 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Instrument",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Instrument",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -781,18 +788,20 @@ async function seedRescheduleRequest(params: {
   requestedBy: string;
   status?: "PENDING" | "ACCEPTED" | "DECLINED" | "SUPERSEDED";
 }): Promise<number> {
-  const [row] = await db
-    .insert(visitRescheduleRequest)
-    .values({
-      visitId: params.visitId,
-      organizationId: params.organizationId,
-      customerId: params.customerId,
-      requestedBy: params.requestedBy,
-      status: params.status ?? "PENDING",
-      preferredWindows: [{ date: "2026-08-10", period: "MORNING" }],
-      reason: "Planta parada",
-    })
-    .returning({ id: visitRescheduleRequest.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(visitRescheduleRequest)
+      .values({
+        visitId: params.visitId,
+        organizationId: params.organizationId,
+        customerId: params.customerId,
+        requestedBy: params.requestedBy,
+        status: params.status ?? "PENDING",
+        preferredWindows: [{ date: "2026-08-10", period: "MORNING" }],
+        reason: "Planta parada",
+      })
+      .returning({ id: visitRescheduleRequest.id }),
+  );
   if (!row) throw new Error("seedRescheduleRequest: insert failed");
   return row.id;
 }

@@ -13,6 +13,7 @@ import { sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the reportsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts).
@@ -39,14 +40,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 /** Seed a CLIENT organization (required as customer.authOrganizationId). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
   const now = new Date("2026-01-01T00:00:00.000Z");
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client Org ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: now,
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client Org ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: now,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /** Seed a customer linked to a LAB org. Returns the customer id. */
@@ -92,21 +95,23 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Asset",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Asset",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
 
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
@@ -304,17 +309,19 @@ describe("reportsRouter — real DB + real middleware", () => {
 
     // Seed a second unit within org A
     const { organizationUnit } = await import("@calibra-facil/db/schema");
-    const [unitB] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: org.orgId,
-        name: "Branch",
-        slug: "branch-rpt",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: org.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [unitB] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: org.orgId,
+          name: "Branch",
+          slug: "branch-rpt",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: org.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
 
     if (!unitB) throw new Error("seedUnitB: insert failed");
 

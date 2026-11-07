@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
 import { afterCommitQueue } from "../lib/after-commit";
 import {
+  conflict,
   DomainError,
   domainErrorResponse,
   forbidden,
@@ -43,6 +44,7 @@ import {
   gte,
   inArray,
 } from "drizzle-orm";
+import { COMPETENCE_MACHINE } from "@calibra-facil/schemas/machines";
 import { clientIp } from "../lib/client-ip";
 
 /**
@@ -535,8 +537,10 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             }
 
             if (
-              existing.status !== "REQUESTED" &&
-              existing.status !== "PENDING_EVALUATION"
+              !COMPETENCE_MACHINE.canTransition(
+                existing.status,
+                "assign_training",
+              )
             ) {
               return c.json(
                 {
@@ -589,9 +593,26 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
 
             const [updated] = await tx
               .update(personnelCompetence)
-              .set({ status: "TRAINING_ASSIGNED" })
-              .where(eq(personnelCompetence.id, id))
+              .set({
+                status: COMPETENCE_MACHINE.requireTargetOf(
+                  existing.status,
+                  "assign_training",
+                ),
+              })
+              .where(
+                and(
+                  eq(personnelCompetence.id, id),
+                  eq(personnelCompetence.status, existing.status),
+                ),
+              )
               .returning();
+            if (!updated) {
+              // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+              throw conflict(
+                "status_transition_conflict",
+                "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+              );
+            }
 
             await tx.insert(personnelCompetenceAuditLog).values({
               organizationId: memberData.organizationId,
@@ -647,7 +668,9 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Competência não encontrada" }, 404);
         }
 
-        if (existing.status !== "TRAINING_ASSIGNED") {
+        if (
+          !COMPETENCE_MACHINE.canTransition(existing.status, "start_training")
+        ) {
           return c.json(
             {
               error:
@@ -659,9 +682,26 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
 
         const [updated] = await tx
           .update(personnelCompetence)
-          .set({ status: "IN_TRAINING" })
-          .where(eq(personnelCompetence.id, id))
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "start_training",
+            ),
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
 
         await tx.insert(personnelCompetenceAuditLog).values({
           organizationId: memberData.organizationId,
@@ -711,7 +751,12 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Competência não encontrada" }, 404);
         }
 
-        if (existing.status !== "IN_TRAINING") {
+        if (
+          !COMPETENCE_MACHINE.canTransition(
+            existing.status,
+            "complete_training",
+          )
+        ) {
           return c.json(
             {
               error: "Treinamento só pode ser concluído no status IN_TRAINING",
@@ -722,9 +767,26 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
 
         const [updated] = await tx
           .update(personnelCompetence)
-          .set({ status: "PENDING_EVALUATION" })
-          .where(eq(personnelCompetence.id, id))
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "complete_training",
+            ),
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
 
         await tx.insert(personnelCompetenceAuditLog).values({
           organizationId: memberData.organizationId,
@@ -781,7 +843,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             return c.json({ error: "Competência não encontrada" }, 404);
           }
 
-          if (existing.status !== "PENDING_EVALUATION") {
+          if (!COMPETENCE_MACHINE.canTransition(existing.status, "evaluate")) {
             return c.json(
               {
                 error:
@@ -816,15 +878,31 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             const [updated] = await tx
               .update(personnelCompetence)
               .set({
-                status: "ACTIVE",
+                status: COMPETENCE_MACHINE.requireTransition(
+                  existing.status,
+                  "evaluate",
+                  "ACTIVE",
+                ),
                 qualifiedAt,
                 expiresAt,
                 notes: input.notes ?? existing.notes,
                 evaluatedBy: session.user.id,
                 approvedBy: session.user.id,
               })
-              .where(eq(personnelCompetence.id, id))
+              .where(
+                and(
+                  eq(personnelCompetence.id, id),
+                  eq(personnelCompetence.status, existing.status),
+                ),
+              )
               .returning();
+            if (!updated) {
+              // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+              throw conflict(
+                "status_transition_conflict",
+                "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+              );
+            }
 
             await tx.insert(personnelCompetenceAuditLog).values({
               organizationId: memberData.organizationId,
@@ -863,12 +941,28 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             const [updated] = await tx
               .update(personnelCompetence)
               .set({
-                status: "TRAINING_ASSIGNED",
+                status: COMPETENCE_MACHINE.requireTransition(
+                  existing.status,
+                  "evaluate",
+                  "TRAINING_ASSIGNED",
+                ),
                 notes: input.notes ?? existing.notes,
                 evaluatedBy: session.user.id,
               })
-              .where(eq(personnelCompetence.id, id))
+              .where(
+                and(
+                  eq(personnelCompetence.id, id),
+                  eq(personnelCompetence.status, existing.status),
+                ),
+              )
               .returning();
+            if (!updated) {
+              // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+              throw conflict(
+                "status_transition_conflict",
+                "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+              );
+            }
 
             await tx.insert(personnelCompetenceAuditLog).values({
               organizationId: memberData.organizationId,
@@ -929,12 +1023,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Competência não encontrada" }, 404);
         }
 
-        if (
-          existing.status !== "REQUESTED" &&
-          existing.status !== "TRAINING_ASSIGNED" &&
-          existing.status !== "IN_TRAINING" &&
-          existing.status !== "PENDING_EVALUATION"
-        ) {
+        if (!COMPETENCE_MACHINE.canTransition(existing.status, "cancel")) {
           return c.json(
             {
               error:
@@ -947,11 +1036,26 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         const [updated] = await tx
           .update(personnelCompetence)
           .set({
-            status: "CANCELLED",
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "cancel",
+            ),
             notes: input.notes ?? existing.notes,
           })
-          .where(eq(personnelCompetence.id, id))
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
 
         await tx.insert(personnelCompetenceAuditLog).values({
           organizationId: memberData.organizationId,
@@ -1002,7 +1106,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Competência não encontrada" }, 404);
         }
 
-        if (existing.status !== "ACTIVE") {
+        if (!COMPETENCE_MACHINE.canTransition(existing.status, "suspend")) {
           return c.json(
             { error: "Só é possível suspender competências ACTIVE" },
             400,
@@ -1011,9 +1115,26 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
 
         const [updated] = await tx
           .update(personnelCompetence)
-          .set({ status: "SUSPENDED" })
-          .where(eq(personnelCompetence.id, id))
+          .set({
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "suspend",
+            ),
+          })
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
 
         await tx.insert(personnelCompetenceAuditLog).values({
           organizationId: memberData.organizationId,
@@ -1063,7 +1184,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Competência não encontrada" }, 404);
         }
 
-        if (existing.status !== "EXPIRED" && existing.status !== "SUSPENDED") {
+        if (!COMPETENCE_MACHINE.canTransition(existing.status, "renew")) {
           return c.json(
             {
               error: "Só é possível renovar competências EXPIRED ou SUSPENDED",
@@ -1093,14 +1214,29 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         const [updated] = await tx
           .update(personnelCompetence)
           .set({
-            status: "ACTIVE",
+            status: COMPETENCE_MACHINE.requireTargetOf(
+              existing.status,
+              "renew",
+            ),
             qualifiedAt,
             expiresAt,
             notes: input.notes ?? existing.notes,
             approvedBy: session.user.id,
           })
-          .where(eq(personnelCompetence.id, id))
+          .where(
+            and(
+              eq(personnelCompetence.id, id),
+              eq(personnelCompetence.status, existing.status),
+            ),
+          )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row (COMPETENCE_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A competência mudou de situação durante a operação. Recarregue e tente novamente.",
+          );
+        }
 
         await tx.insert(personnelCompetenceAuditLog).values({
           organizationId: memberData.organizationId,

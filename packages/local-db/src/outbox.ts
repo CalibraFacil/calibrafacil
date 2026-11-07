@@ -7,6 +7,9 @@ import {
 import type { LocalDatabase } from "./database";
 import { resetAttachmentUpload } from "./attachments";
 import { releaseSettledSkippedRows } from "./skipped-rows";
+import { OUTBOX_MACHINE } from "./state-machines";
+
+type OutboxCommand = (typeof OUTBOX_MACHINE.commands)[number];
 import {
   baseExpectedVersion,
   recomputeBlockedOutbox,
@@ -40,6 +43,18 @@ export type PendingOutboxEvent = {
   /** Position in this database's own event sequence: the order the outbox is pushed in. */
   sequence: number;
 };
+
+/**
+ * The SQL predicate "the outbox row is in a state `command` leaves"
+ * (OUTBOX_MACHINE). A push result that arrives for an event already moved on
+ * (discarded by the user, dead) matches no row instead of being refused by the
+ * status trigger.
+ */
+function outboxStatusAllows(command: OutboxCommand): string {
+  return `status IN (${OUTBOX_MACHINE.allowedFrom(command)
+    .map((status) => `'${status}'`)
+    .join(", ")})`;
+}
 
 export function countPendingOutbox(database: LocalDatabase) {
   const row = database
@@ -591,7 +606,7 @@ SET status = 'failed',
   attempt_count = attempt_count + 1,
   last_error = @lastError,
   next_attempt_at = @nextAttemptAt
-WHERE event_id = @eventId
+WHERE event_id = @eventId AND ${outboxStatusAllows("fail")}
 `,
         )
         .run({
@@ -635,17 +650,18 @@ export function applySyncPushResult(
 
   database.transaction(() => {
     for (const [eventId, accepted] of acceptedById) {
-      database
+      const acceptedMove = database
         .prepare(
           `
 UPDATE outbox
 SET status = 'synced',
   last_error = NULL,
   next_attempt_at = NULL
-WHERE event_id = @eventId
+WHERE event_id = @eventId AND ${outboxStatusAllows("accept")}
 `,
         )
         .run({ eventId });
+      if (acceptedMove.changes === 0) continue;
       database
         .prepare(
           `
@@ -758,7 +774,7 @@ SET status = 'failed',
   last_error = @lastError,
   error_code = @errorCode,
   next_attempt_at = @nextAttemptAt
-WHERE event_id = @eventId
+WHERE event_id = @eventId AND ${outboxStatusAllows("fail")}
 `,
         )
         .run({
@@ -789,7 +805,7 @@ UPDATE outbox
 SET status = 'conflict',
   last_error = @lastError,
   next_attempt_at = NULL
-WHERE event_id = @eventId
+WHERE event_id = @eventId AND ${outboxStatusAllows("conflict")}
 `,
           )
           .run({

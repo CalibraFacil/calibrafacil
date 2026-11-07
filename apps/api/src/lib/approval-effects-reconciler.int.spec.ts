@@ -76,6 +76,7 @@ import {
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
 import { reconcileApprovalEffects } from "./approval-effects-reconciler";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 async function asApp<T>(run: () => Promise<T>): Promise<T> {
   const url = process.env.DATABASE_URL;
@@ -574,15 +575,17 @@ describe("approval effects reconciler (REQ-B2-RECON-1..3)", () => {
     await db
       .update(assetOotEvent)
       .set({ createdAt: new Date(Date.now() - 2 * HOUR) });
-    await db.insert(appQueueJob).values({
-      type: "ASSET_OOT_NOTIFICATION",
-      payload: {
+    await withStatusRepair((tx) =>
+      tx.insert(appQueueJob).values({
         type: "ASSET_OOT_NOTIFICATION",
-        eventId: queuedEvent.eventId,
-        organizationId: lab.orgId,
-        userId: lab.userId,
-      },
-    });
+        payload: {
+          type: "ASSET_OOT_NOTIFICATION",
+          eventId: queuedEvent.eventId,
+          organizationId: lab.orgId,
+          userId: lab.userId,
+        },
+      }),
+    );
     await db.insert(assetOotAuditLog).values({
       organizationId: lab.orgId,
       eventId: deliveredEvent.eventId,

@@ -1,4 +1,5 @@
 import type { SyncCommandOperation } from "@calibra-facil/contracts";
+import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
@@ -729,11 +730,21 @@ WHERE id = @id
       replaceLocalExecutionItems(database, executionId, items);
     }
 
-    updateServiceOrderStatus(database, {
-      id: serviceOrder.id,
-      status: "repair_in_progress",
-      updatedAt: now,
-    });
+    // `start_repair` in SERVICE_ORDER_MACHINE, as the cloud: only an order with
+    // an approved quote moves to repair; notes on an order at another stage keep
+    // its stage.
+    if (
+      SERVICE_ORDER_MACHINE.canTransition(serviceOrder.status, "start_repair")
+    ) {
+      updateServiceOrderStatus(database, {
+        id: serviceOrder.id,
+        status: SERVICE_ORDER_MACHINE.requireTargetOf(
+          serviceOrder.status,
+          "start_repair",
+        ),
+        updatedAt: now,
+      });
+    }
     appendLocalAudit(database, {
       entityType: "service_order_execution",
       entityId: executionId,

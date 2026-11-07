@@ -1112,8 +1112,8 @@ INSERT INTO outbox (
   'update_local_customer',
   @localPayloadJson,
   @idempotencyKey,
-  'conflict',
-  'concurrent_update: conflict requires review',
+  'pending',
+  NULL,
   @now
 )
 ON CONFLICT(id) DO NOTHING
@@ -1126,6 +1126,18 @@ ON CONFLICT(id) DO NOTHING
           idempotencyKey: `local:${eventId}`,
           now,
         });
+
+      // The outbox lifecycle (local-db state-machines.ts, migration 0026)
+      // creates every row pending; the push result moves it to conflict.
+      database
+        .prepare(
+          `
+UPDATE outbox
+SET status = 'conflict', last_error = 'concurrent_update: conflict requires review'
+WHERE id = @outboxId AND status = 'pending'
+`,
+        )
+        .run({ outboxId: `outbox:${eventId}` });
 
       database
         .prepare(

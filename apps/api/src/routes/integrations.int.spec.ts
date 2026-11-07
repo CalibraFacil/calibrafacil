@@ -11,6 +11,7 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { normalizeGenericFinancialErpConfig } from "@calibra-facil/shared";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for integrationsRouter.
 // Only the better-auth session is mocked (test/integration/setup.ts).
@@ -72,16 +73,18 @@ async function seedIntegration(params: {
   const integrationId = `int-${params.organizationId}-${Date.now()}`;
   const connectionId = `conn-${integrationId}`;
 
-  await db.insert(organizationIntegration).values({
-    id: integrationId,
-    organizationId: params.organizationId,
-    type: "financial_erp",
-    provider: "generic_http",
-    name: params.name ?? "Test ERP",
-    status: "ACTIVE",
-    createdBy: params.createdBy,
-    updatedBy: params.createdBy,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationIntegration).values({
+      id: integrationId,
+      organizationId: params.organizationId,
+      type: "financial_erp",
+      provider: "generic_http",
+      name: params.name ?? "Test ERP",
+      status: "ACTIVE",
+      createdBy: params.createdBy,
+      updatedBy: params.createdBy,
+    }),
+  );
 
   await db.insert(integrationConnection).values({
     id: connectionId,

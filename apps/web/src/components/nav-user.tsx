@@ -34,7 +34,10 @@ import {
 } from '@calibra-facil/ui/sidebar'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { startInterfaceTour } from '@/features/onboarding/interface-tour'
-import { markDesktopSignedOut } from '@/runtime/desktop-auth'
+import {
+  forgetDesktopOfflineAccess,
+  markDesktopSignedOut,
+} from '@/runtime/desktop-auth'
 
 export function NavUser() {
   const { isMobile } = useSidebar()
@@ -72,6 +75,7 @@ export function NavUser() {
 
     await signOut()
     markDesktopSignedOut()
+    await forgetDesktopOfflineAccess()
     // Nothing cached may outlive the session that fetched it.
     queryClient.clear()
     window.location.replace('/sign-in')

@@ -8,6 +8,7 @@ import { db } from "@calibra-facil/db";
 import { appQueueJob, cronRun } from "@calibra-facil/db/schema";
 import { truncateAll } from "../../test/integration/db";
 import { readHealthAlerts } from "./health-alerts";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const NOW = new Date("2026-10-27T12:00:00.000Z");
 
@@ -18,12 +19,14 @@ describe("readHealthAlerts (roadmap 2 G2)", () => {
   });
 
   it("is ok with fresh heartbeats and no dead letters", async () => {
-    await db.insert(cronRun).values({
-      job: "queue-backstop",
-      lastRunAt: new Date(NOW.getTime() - 5 * 60_000),
-      lastSuccessAt: new Date(NOW.getTime() - 5 * 60_000),
-      lastStatus: "ok",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(cronRun).values({
+        job: "queue-backstop",
+        lastRunAt: new Date(NOW.getTime() - 5 * 60_000),
+        lastSuccessAt: new Date(NOW.getTime() - 5 * 60_000),
+        lastStatus: "ok",
+      }),
+    );
 
     expect(await readHealthAlerts(NOW)).toEqual({
       ok: true,
@@ -34,26 +37,30 @@ describe("readHealthAlerts (roadmap 2 G2)", () => {
   });
 
   it("reports a stale job, a failing job and dead letters", async () => {
-    await db.insert(cronRun).values([
-      {
-        job: "queue-backstop",
-        lastRunAt: new Date(NOW.getTime() - 3 * 60 * 60_000),
-        lastSuccessAt: new Date(NOW.getTime() - 3 * 60 * 60_000),
-        lastStatus: "ok",
-      },
-      {
-        job: "certificate-drift",
-        lastRunAt: new Date(NOW.getTime() - 60_000),
-        lastSuccessAt: new Date(NOW.getTime() - 2 * 60 * 60_000),
-        lastStatus: "error",
-        consecutiveFailures: 3,
-      },
-    ]);
-    await db.insert(appQueueJob).values({
-      type: "PDF_GENERATION",
-      payload: { type: "PDF_GENERATION", jobId: 1 },
-      status: "FAILED",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(cronRun).values([
+        {
+          job: "queue-backstop",
+          lastRunAt: new Date(NOW.getTime() - 3 * 60 * 60_000),
+          lastSuccessAt: new Date(NOW.getTime() - 3 * 60 * 60_000),
+          lastStatus: "ok",
+        },
+        {
+          job: "certificate-drift",
+          lastRunAt: new Date(NOW.getTime() - 60_000),
+          lastSuccessAt: new Date(NOW.getTime() - 2 * 60 * 60_000),
+          lastStatus: "error",
+          consecutiveFailures: 3,
+        },
+      ]),
+    );
+    await withStatusRepair((tx) =>
+      tx.insert(appQueueJob).values({
+        type: "PDF_GENERATION",
+        payload: { type: "PDF_GENERATION", jobId: 1 },
+        status: "FAILED",
+      }),
+    );
 
     expect(await readHealthAlerts(NOW)).toEqual({
       ok: false,

@@ -4,7 +4,8 @@ import {
   ootNotification,
   organization,
 } from "@calibra-facil/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { OOT_NOTIFICATION_MACHINE } from "@calibra-facil/schemas/machines";
 import { orgDb } from "./org-db";
 
 /**
@@ -65,6 +66,10 @@ export async function stampOotAcknowledgementByLink(notification: {
           eq(ootNotification.ackToken, notification.token),
           eq(ootNotification.id, notification.id),
           isNull(ootNotification.acknowledgedAt),
+          inArray(
+            ootNotification.status,
+            OOT_NOTIFICATION_MACHINE.allowedFrom("acknowledge"),
+          ),
         ),
       )
       .returning({ id: ootNotification.id });

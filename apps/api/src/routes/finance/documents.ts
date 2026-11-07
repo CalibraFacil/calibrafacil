@@ -2,6 +2,10 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import {
+  BILLING_DOCUMENT_MACHINE,
+  RECEIVABLE_INSTALLMENT_MACHINE,
+} from "@calibra-facil/schemas/machines";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   billingDocument,
@@ -71,6 +75,17 @@ const UpdateDocumentSchema = z.object({
 const VoidDocumentSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
+
+/** The document's status under a row lock for the caller's transaction (BILLING_DOCUMENT_MACHINE). */
+async function lockBillingDocumentStatus(o: Pick<OrgDb, "select">, id: number) {
+  const [row] = await o
+    .select({ status: billingDocument.status })
+    .from(billingDocument)
+    .where(eq(billingDocument.id, id))
+    .limit(1)
+    .for("update");
+  return row?.status ?? null;
+}
 
 async function getDocumentById(
   o: OrgDb,
@@ -809,7 +824,13 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             return { status: "outside_unit_scope" as const };
           }
 
-          if (existing.status !== "DRAFT") {
+          // Locked: the number below is allocated only for a draft that stays
+          // a draft until this transaction commits.
+          const lockedStatus = await lockBillingDocumentStatus(o, id);
+          if (
+            !lockedStatus ||
+            !BILLING_DOCUMENT_MACHINE.canTransition(lockedStatus, "issue")
+          ) {
             return { status: "not_draft" as const };
           }
 
@@ -828,7 +849,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             .update(billingDocument)
             .set({
               documentNumber,
-              status: "ISSUED",
+              status: BILLING_DOCUMENT_MACHINE.requireTargetOf(
+                lockedStatus,
+                "issue",
+              ),
               issueDate,
               dueDate: effectiveDueDate,
               issuedBy: session.user.id,
@@ -914,14 +938,21 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             return { status: "outside_unit_scope" as const };
           }
 
-          if (existing.status === "VOID") {
+          const lockedStatus = await lockBillingDocumentStatus(o, id);
+          if (
+            !lockedStatus ||
+            !BILLING_DOCUMENT_MACHINE.canTransition(lockedStatus, "void")
+          ) {
             return { status: "already_void" as const };
           }
 
           await o
             .update(billingDocument)
             .set({
-              status: "VOID",
+              status: BILLING_DOCUMENT_MACHINE.requireTargetOf(
+                lockedStatus,
+                "void",
+              ),
               voidReason: input.reason,
               voidedBy: session.user.id,
               updatedAt: new Date(),
@@ -929,13 +960,23 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             })
             .where(eq(billingDocument.id, id));
 
+          // `void` of RECEIVABLE_INSTALLMENT_MACHINE: every installment goes
+          // with its document.
           await o
             .update(receivableInstallment)
             .set({
               status: "VOID",
               updatedAt: new Date(),
             })
-            .where(eq(receivableInstallment.documentId, id));
+            .where(
+              and(
+                eq(receivableInstallment.documentId, id),
+                inArray(
+                  receivableInstallment.status,
+                  RECEIVABLE_INSTALLMENT_MACHINE.allowedFrom("void"),
+                ),
+              ),
+            );
 
           await o.insert(financialAuditLog).values({
             organizationId: member.organizationId,

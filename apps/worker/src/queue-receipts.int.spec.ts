@@ -29,6 +29,7 @@ vi.mock("@calibra-facil/jobs-core", () => ({
 }));
 
 import { drainQueue } from "./queue-runtime";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 const CONFIG = {
   workerId: "int-test-worker",
@@ -220,11 +221,15 @@ describe("drainQueue under enforce mode (end-to-end duplicate delivery)", () => 
 
     // Simulate an at-least-once re-delivery: the SAME row reappears as PENDING
     // (crash-after-work-before-complete / stale reclaim of a slow worker).
-    await db.execute(sql`
-      update app_queue_job
-      set status = 'PENDING', locked_by = null, locked_at = null, available_at = now()
-      where id = ${jobId}
-    `);
+    // COMPLETED -> PENDING is not a move of APP_QUEUE_JOB_MACHINE: staging it
+    // is an audited repair (the status guard refuses it otherwise).
+    await withStatusRepair((tx) =>
+      tx.execute(sql`
+        update app_queue_job
+        set status = 'PENDING', locked_by = null, locked_at = null, available_at = now()
+        where id = ${jobId}
+      `),
+    );
 
     expect(await drainQueue(env, CONFIG)).toBe(1);
     // The duplicate settled the row via its COMPLETED receipt — no second run.

@@ -10,6 +10,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import { asApplicationRole } from "./application-role";
+import { withStatusRepair } from "./state-fixtures";
 
 // Fixtures of the identity specs that run the REAL Better Auth lab instance as
 // `calibra_app` (identity-lab-scope, identity-org-plugin-deny). The spec that
@@ -32,21 +33,23 @@ export async function seedLab(
   type: "LAB" | "CLIENT" = "LAB",
   deletedAt: Date | null = null,
 ) {
-  await db.insert(organization).values({
-    id: orgId,
-    name: `Lab ${orgId}`,
-    slug: orgId,
-    createdAt: NOW,
-    type,
-    status: deletedAt ? "SUSPENDED" : "ACTIVE",
-    ...(deletedAt
-      ? {
-          deletedAt,
-          suspendedAt: deletedAt,
-          suspensionReason: "test",
-        }
-      : {}),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: orgId,
+      name: `Lab ${orgId}`,
+      slug: orgId,
+      createdAt: NOW,
+      type,
+      status: deletedAt ? "SUSPENDED" : "ACTIVE",
+      ...(deletedAt
+        ? {
+            deletedAt,
+            suspendedAt: deletedAt,
+            suspensionReason: "test",
+          }
+        : {}),
+    }),
+  );
 }
 
 export async function seedMember(

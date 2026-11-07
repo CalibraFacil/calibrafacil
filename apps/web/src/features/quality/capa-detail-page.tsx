@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { CORRECTIVE_ACTION_MACHINE } from '@calibra-facil/schemas/machines'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -427,7 +428,7 @@ export function CAPADetailPage({ id }: { id: string }) {
       </div>
 
       {/* Workflow Actions */}
-      {capa.status !== 'CLOSED' && (
+      {CORRECTIVE_ACTION_MACHINE.canTransition(capa.status, 'edit') && (
         <Card>
           <CardHeader>
             <CardTitle>Ações do Fluxo de Trabalho</CardTitle>
@@ -441,9 +442,10 @@ export function CAPADetailPage({ id }: { id: string }) {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Implement action */}
-            {(capa.status === 'OPEN' ||
-              capa.status === 'INVESTIGATION' ||
-              capa.status === 'IMPLEMENTATION') &&
+            {CORRECTIVE_ACTION_MACHINE.canTransition(
+              capa.status,
+              'implement',
+            ) &&
               !capa.implementedAt && (
                 <>
                   <div className="space-y-2">
@@ -472,61 +474,62 @@ export function CAPADetailPage({ id }: { id: string }) {
               )}
 
             {/* Verify action */}
-            {capa.status === 'IMPLEMENTATION' && (
-              <>
-                <Separator />
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      checked={effectivenessConfirmed}
-                      onCheckedChange={setEffectivenessConfirmed}
-                    />
-                    <Label>Eficacia das acoes confirmada</Label>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Notas de Verificacao</Label>
-                    <Textarea
-                      value={verificationNotes}
-                      onChange={(e) => setVerificationNotes(e.target.value)}
-                      placeholder="Descreva como a eficácia foi verificada e os resultados observados..."
-                      rows={4}
-                    />
-                  </div>
-                  {waiverOffered && (
+            {CORRECTIVE_ACTION_MACHINE.canTransition(capa.status, 'verify') &&
+              capa.implementedAt && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={effectivenessConfirmed}
+                        onCheckedChange={setEffectivenessConfirmed}
+                      />
+                      <Label>Eficacia das acoes confirmada</Label>
+                    </div>
                     <div className="space-y-2">
-                      <Label>
-                        Justificativa para verificar sem independência
-                      </Label>
+                      <Label>Notas de Verificacao</Label>
                       <Textarea
-                        value={independenceJustification}
-                        onChange={(e) =>
-                          setIndependenceJustification(e.target.value)
-                        }
-                        placeholder="Você é o único verificador habilitado do laboratório. Explique por que a verificação é feita sem independência (mínimo de 30 caracteres)..."
-                        rows={3}
+                        value={verificationNotes}
+                        onChange={(e) => setVerificationNotes(e.target.value)}
+                        placeholder="Descreva como a eficácia foi verificada e os resultados observados..."
+                        rows={4}
                       />
                     </div>
-                  )}
-                  <Button
-                    onClick={() => verifyMutation.mutate()}
-                    disabled={
-                      verifyMutation.isPending ||
-                      verificationNotes.length < 10 ||
-                      (waiverOffered &&
-                        independenceJustification.trim().length < 30)
-                    }
-                    variant="secondary"
-                  >
-                    {verifyMutation.isPending
-                      ? 'Verificando...'
-                      : 'Registrar Verificação de Eficácia'}
-                  </Button>
-                </div>
-              </>
-            )}
+                    {waiverOffered && (
+                      <div className="space-y-2">
+                        <Label>
+                          Justificativa para verificar sem independência
+                        </Label>
+                        <Textarea
+                          value={independenceJustification}
+                          onChange={(e) =>
+                            setIndependenceJustification(e.target.value)
+                          }
+                          placeholder="Você é o único verificador habilitado do laboratório. Explique por que a verificação é feita sem independência (mínimo de 30 caracteres)..."
+                          rows={3}
+                        />
+                      </div>
+                    )}
+                    <Button
+                      onClick={() => verifyMutation.mutate()}
+                      disabled={
+                        verifyMutation.isPending ||
+                        verificationNotes.length < 10 ||
+                        (waiverOffered &&
+                          independenceJustification.trim().length < 30)
+                      }
+                      variant="secondary"
+                    >
+                      {verifyMutation.isPending
+                        ? 'Verificando...'
+                        : 'Registrar Verificação de Eficácia'}
+                    </Button>
+                  </div>
+                </>
+              )}
 
             {/* Close action */}
-            {capa.status === 'VERIFICATION' && (
+            {CORRECTIVE_ACTION_MACHINE.canTransition(capa.status, 'close') && (
               <>
                 <Separator />
                 <div className="space-y-4">

@@ -19,6 +19,7 @@ import {
   DriftAuditWriteError,
   runCertificateDriftCheck,
 } from "./certificate-drift";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration for the drift-detection cron (roadmap item 6, epic
 // backlog #1): seed a full issued-snapshot graph, then run the check with an
@@ -49,19 +50,21 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
       createdAt: EPOCH,
     })
     .returning();
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId,
-      customerId: customerRow!.id,
-      labOrganizationId: orgId,
-      assetTypeId: assetTypeRow!.id,
-      name: "Balança",
-      serialNumber: "SN-DRIFT",
-      tag: "TAG-DRIFT",
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId,
+        customerId: customerRow!.id,
+        labOrganizationId: orgId,
+        assetTypeId: assetTypeRow!.id,
+        name: "Balança",
+        serialNumber: "SN-DRIFT",
+        tag: "TAG-DRIFT",
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   const [serviceRow] = await db
     .insert(service)
     .values({

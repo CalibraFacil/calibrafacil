@@ -24,6 +24,7 @@ import { methodsRouter } from "./methods";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
@@ -36,30 +37,32 @@ async function seedMethod(params: {
   name: string;
   version?: number;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationMethod)
-    .values({
-      organizationId: params.orgId,
-      name: params.name,
-      description: "",
-      version: params.version ?? 1,
-      status: params.status,
-      dataFields: [
-        {
-          key: "x",
-          type: "number",
-          label: "Leitura X",
-          required: true,
-          unit: "mm",
-          defaultValue: 0,
-        },
-      ],
-      formulas: [],
-      validations: [],
-      accreditedScope: false,
-      createdBy: params.createdBy,
-    })
-    .returning({ id: calibrationMethod.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationMethod)
+      .values({
+        organizationId: params.orgId,
+        name: params.name,
+        description: "",
+        version: params.version ?? 1,
+        status: params.status,
+        dataFields: [
+          {
+            key: "x",
+            type: "number",
+            label: "Leitura X",
+            required: true,
+            unit: "mm",
+            defaultValue: 0,
+          },
+        ],
+        formulas: [],
+        validations: [],
+        accreditedScope: false,
+        createdBy: params.createdBy,
+      })
+      .returning({ id: calibrationMethod.id }),
+  );
   if (!row) throw new Error("seedMethod: insert failed");
   return row.id;
 }

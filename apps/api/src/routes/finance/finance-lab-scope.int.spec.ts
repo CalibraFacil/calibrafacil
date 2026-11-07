@@ -61,6 +61,7 @@ import {
 } from "../../lib/automatic-send";
 import { financeRouter } from "./index";
 import { settingsCertificateReleasePolicyRouter } from "./certificate-release";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
@@ -113,38 +114,45 @@ async function seedDocument(
   } = {},
 ): Promise<{ id: number; publicId: string; installmentId: number | null }> {
   const total = params.totalCents ?? 10_000;
-  const [row] = await db
-    .insert(billingDocument)
-    .values({
-      organizationId: lab.orgId,
-      unitId: lab.unitId,
-      customerId: lab.customerId,
-      status: params.status ?? "DRAFT",
-      documentNumber: params.documentNumber ?? null,
-      dueDate: params.dueDate ?? new Date("2026-12-31T00:00:00.000Z"),
-      currency: "BRL",
-      subtotalCents: total,
-      discountCents: 0,
-      totalCents: total,
-      createdBy: lab.userId,
-      updatedBy: lab.userId,
-    })
-    .returning({ id: billingDocument.id, publicId: billingDocument.publicId });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(billingDocument)
+      .values({
+        organizationId: lab.orgId,
+        unitId: lab.unitId,
+        customerId: lab.customerId,
+        status: params.status ?? "DRAFT",
+        documentNumber: params.documentNumber ?? null,
+        dueDate: params.dueDate ?? new Date("2026-12-31T00:00:00.000Z"),
+        currency: "BRL",
+        subtotalCents: total,
+        discountCents: 0,
+        totalCents: total,
+        createdBy: lab.userId,
+        updatedBy: lab.userId,
+      })
+      .returning({
+        id: billingDocument.id,
+        publicId: billingDocument.publicId,
+      }),
+  );
   if (!row) throw new Error("seedDocument: insert failed");
   let installmentId: number | null = null;
   if (params.withInstallment) {
-    const [installment] = await db
-      .insert(receivableInstallment)
-      .values({
-        organizationId: lab.orgId,
-        documentId: row.id,
-        installmentNumber: 1,
-        status: "OPEN",
-        dueDate: params.dueDate ?? new Date("2026-12-31T00:00:00.000Z"),
-        amountCents: total,
-        currency: "BRL",
-      })
-      .returning({ id: receivableInstallment.id });
+    const [installment] = await withStatusRepair((tx) =>
+      tx
+        .insert(receivableInstallment)
+        .values({
+          organizationId: lab.orgId,
+          documentId: row.id,
+          installmentNumber: 1,
+          status: "OPEN",
+          dueDate: params.dueDate ?? new Date("2026-12-31T00:00:00.000Z"),
+          amountCents: total,
+          currency: "BRL",
+        })
+        .returning({ id: receivableInstallment.id }),
+    );
     installmentId = installment?.id ?? null;
   }
   return { ...row, installmentId };
@@ -483,18 +491,20 @@ describe("finance routes — success paths and cross-laboratory negatives", () =
   // ===========================================================================
 
   async function seedAgreement(lab: BillingLab, title: string) {
-    const [agreement] = await db
-      .insert(commercialAgreement)
-      .values({
-        organizationId: lab.orgId,
-        customerId: lab.customerId,
-        title,
-        status: "DRAFT",
-        effectiveFrom: new Date("2020-01-01T00:00:00.000Z"),
-        createdBy: lab.userId,
-        updatedBy: lab.userId,
-      })
-      .returning({ id: commercialAgreement.id });
+    const [agreement] = await withStatusRepair((tx) =>
+      tx
+        .insert(commercialAgreement)
+        .values({
+          organizationId: lab.orgId,
+          customerId: lab.customerId,
+          title,
+          status: "DRAFT",
+          effectiveFrom: new Date("2020-01-01T00:00:00.000Z"),
+          createdBy: lab.userId,
+          updatedBy: lab.userId,
+        })
+        .returning({ id: commercialAgreement.id }),
+    );
     if (!agreement) throw new Error("seedAgreement: insert failed");
     await db.insert(commercialAgreementServiceTerm).values({
       organizationId: lab.orgId,
@@ -610,15 +620,17 @@ describe("finance routes — success paths and cross-laboratory negatives", () =
   /** A generic-HTTP financial ERP connection (its secret encrypted at rest). */
   async function seedErp(lab: BillingLab) {
     const integrationId = `erp-${lab.orgId}`;
-    await db.insert(organizationIntegration).values({
-      id: integrationId,
-      organizationId: lab.orgId,
-      type: "financial_erp",
-      provider: "generic_http",
-      name: "ERP de teste",
-      status: "ACTIVE",
-      createdBy: lab.userId,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organizationIntegration).values({
+        id: integrationId,
+        organizationId: lab.orgId,
+        type: "financial_erp",
+        provider: "generic_http",
+        name: "ERP de teste",
+        status: "ACTIVE",
+        createdBy: lab.userId,
+      }),
+    );
     const { encryptedPassword, iv } = encryptPassword("erp-secret", MASTER_KEY);
     await db.insert(integrationConnection).values({
       id: `conn-${lab.orgId}`,
@@ -947,15 +959,17 @@ describe("finance routes — success paths and cross-laboratory negatives", () =
 
   it("REQ-FINLAB-FCST-001: the cash forecast counts a standalone document's installment for a lab-wide viewer only; a unit-scoped viewer sees just the installments of their unit's orders", async () => {
     const { a } = await twoLabs();
-    const [other] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: a.orgId,
-        name: "Filial",
-        slug: "filial",
-        status: "ACTIVE",
-      })
-      .returning({ id: organizationUnit.id });
+    const [other] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: a.orgId,
+          name: "Filial",
+          slug: "filial",
+          status: "ACTIVE",
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!other) throw new Error("second unit insert failed");
     const soon = new Date();
     soon.setUTCDate(soon.getUTCDate() + 3);

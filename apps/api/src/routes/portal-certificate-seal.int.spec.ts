@@ -12,6 +12,7 @@ import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext, seedService } from "../../test/integration/seed";
 import { portalRouter } from "./portal";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Q42: the accreditation seal (and the number printed with it) the portal shows for an
 // ISSUED certificate is the decision FROZEN at approval (certificate_input), never
@@ -33,19 +34,21 @@ async function seedCertificate(options: {
     .values({ name: "Balança", slug: "balanca", definition: [] })
     .returning({ id: assetType.id });
   if (!type) throw new Error("asset type seed failed");
-  const [ast] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      assetTypeId: type.id,
-      name: "Balança EQ-1",
-      serialNumber: "SN-EQ-1",
-      tag: "EQ-1",
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [ast] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        assetTypeId: type.id,
+        name: "Balança EQ-1",
+        serialNumber: "SN-EQ-1",
+        tag: "EQ-1",
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!ast) throw new Error("asset seed failed");
   const serviceId = await seedService({
     organizationId: ctx.labOrgId,

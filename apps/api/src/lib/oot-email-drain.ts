@@ -29,7 +29,8 @@ import {
   isEmailSuppressed,
   sendOotCustomerEmail,
 } from "@calibra-facil/notifications";
-import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { OOT_NOTIFICATION_MACHINE } from "@calibra-facil/schemas/machines";
 import { isReleaseExhausting } from "./outbox-release";
 import { orgDb } from "./org-db";
 import { orgTransactionWithExecutor } from "./org-transaction";
@@ -329,6 +330,10 @@ export async function drainOotEmailOutbox(options?: {
                 and(
                   eq(ootNotification.id, notification.id),
                   isNull(ootNotification.acknowledgedAt),
+                  inArray(
+                    ootNotification.status,
+                    OOT_NOTIFICATION_MACHINE.allowedFrom("send"),
+                  ),
                 ),
               );
           });

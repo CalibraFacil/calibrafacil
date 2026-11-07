@@ -34,6 +34,7 @@ import {
   seedPortalCustomer,
   seedService,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = {
@@ -57,20 +58,22 @@ async function seedAsset(params: {
   tag: string;
   metrologyRegime?: "INDUSTRIAL" | "LEGAL";
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: `Ativo ${params.tag}`,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: `Ativo ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset failed");
   return row.id;
 }

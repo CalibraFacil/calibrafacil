@@ -23,7 +23,7 @@
  * be called by the commands. These helpers now live only in the drain.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 
 // =============================================================================
 // Hoisted mocks — declared before any module imports
@@ -142,7 +142,11 @@ vi.mock("@calibra-facil/db", () => {
         limit: async () => (dbQueue.length ? dbQueue.shift() : []),
       });
     };
-    b.limit = async () => (dbQueue.length ? dbQueue.shift() : []);
+    // `.limit(1).for("update")` (a locked read) resolves the same row.
+    b.limit = () => {
+      const p = Promise.resolve(dbQueue.length ? dbQueue.shift() : []);
+      return Object.assign(p, { for: () => p });
+    };
     b.returning = async () => (dbQueue.length ? dbQueue.shift() : []);
     b.execute = async () => (dbQueue.length ? dbQueue.shift() : []);
     b.update = () => b;
@@ -189,17 +193,21 @@ vi.mock("@calibra-facil/db/for-org", () => ({
 
 // Misc mocks for unrelated dependencies
 
+const SENT_QUOTE_FIXTURE = vi.hoisted(() => ({
+  id: 42,
+  serviceOrderId: 1,
+  status: "sent",
+  totalCents: 146000,
+  subtotalServicesCents: 100000,
+  subtotalPartsCents: 46000,
+  freightCents: 0,
+  discountCents: 0,
+}));
+
 vi.mock("./service-order.queries", () => ({
-  getQuoteForAction: vi.fn().mockResolvedValue({
-    id: 42,
-    serviceOrderId: 1,
-    status: "sent",
-    totalCents: 146000,
-    subtotalServicesCents: 100000,
-    subtotalPartsCents: 46000,
-    freightCents: 0,
-    discountCents: 0,
-  }),
+  getQuoteForAction: vi.fn().mockResolvedValue(SENT_QUOTE_FIXTURE),
+  // The order waits on the decision: approving/rejecting advances it.
+  lockServiceOrderStatus: vi.fn().mockResolvedValue("awaiting_quote_approval"),
 }));
 
 vi.mock("./service-order.read-model", () => ({
@@ -280,20 +288,11 @@ vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: vi.fn().mockReturnValue(undefined),
 }));
 
-// REQ-TST-SO-002: do NOT stub canTransitionServiceOrderStatus to `true`. The
-// state-machine guard must be the REAL implementation so a regression in the
-// transition graph cannot pass silently. We still stub the two quote-lifecycle
-// predicates because the fixtures use a "sent" quote (getQuoteForAction mock),
-// which the real canEditServiceOrderQuote would reject — those are orthogonal to
-// the status graph under test here.
-vi.mock("@calibra-facil/shared", async (importActual) => {
-  const actual = await importActual<typeof import("@calibra-facil/shared")>();
-  return {
-    ...actual,
-    canApproveServiceOrderQuote: vi.fn().mockReturnValue(true),
-    canEditServiceOrderQuote: vi.fn().mockReturnValue(true),
-  };
-});
+// REQ-TST-SO-002: the lifecycle guards are the REAL machines
+// (SERVICE_ORDER_MACHINE / SERVICE_ORDER_QUOTE_MACHINE in @calibra-facil/schemas),
+// never stubbed, so a regression in the transition table cannot pass silently.
+// The send specs hand getQuoteForAction a draft (only a draft is sent); the
+// decision specs keep the module mock's "sent" quote.
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ and: args }),
@@ -324,6 +323,7 @@ vi.mock("@calibra-facil/db/schema", () => ({
 // =============================================================================
 
 import { createServiceOrder } from "./service-order.commands";
+import { getQuoteForAction } from "./service-order.queries";
 import {
   sendServiceOrderQuote,
   approveServiceOrderQuoteManually,
@@ -521,6 +521,10 @@ describe("REQ-SOEMAIL-071 (B): createServiceOrder enqueues nova_os outbox row", 
 describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<quoteId> outbox row", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getQuoteForAction).mockResolvedValue({
+      ...SENT_QUOTE_FIXTURE,
+      status: "draft",
+    });
     dbQueue.length = 0;
     capturedTxExecutors.length = 0;
 
@@ -555,6 +559,9 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
         },
       ], // [4] customerRow SELECT
     );
+  });
+  afterEach(() => {
+    vi.mocked(getQuoteForAction).mockResolvedValue(SENT_QUOTE_FIXTURE);
   });
 
   it("REQ-SOEMAIL-071/C: enqueueServiceOrderEmail is called once with eventKey='orcamento_sent:42'", async () => {
@@ -862,7 +869,7 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteByPortalUser enqueues
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("REQ-SOEMAIL-071/D-approve-portal: payload contains customerName from linkedCustomer (REQ-075 tenant scope)", async () => {
@@ -945,7 +952,7 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteByPortalUser enqueues 
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("REQ-SOEMAIL-071/D-reject-portal: payload contains rejectionReason and customerName from linkedCustomer", async () => {

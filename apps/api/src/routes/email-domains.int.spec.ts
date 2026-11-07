@@ -31,6 +31,7 @@ import {
   saveManagedEmailDomain,
   removeEmailDomain,
 } from "../lib/email-domain-lifecycle";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const RAW_KEY = "re_legacy_test_key_1234";
 const PLATFORM_KEY = "re_platform_test_key_5678";
@@ -300,20 +301,22 @@ describe("emailDomainsRouter — managed lifecycle and legacy reads", () => {
   it("reads, verifies and sends legacy BYOK rows, and only unlinks them on deletion", async () => {
     const org = await setupOrg();
     const encrypted = encryptResendApiKey(RAW_KEY, MASTER_KEY);
-    await db.insert(organizationEmailDomain).values({
-      id: "legacy",
-      organizationId: org.orgId,
-      createdBy: org.userId,
-      mode: "byok",
-      hostname,
-      resendDomainId: "rd-legacy",
-      resendApiKeyEncrypted: encrypted.encrypted,
-      resendApiKeyIv: encrypted.iv,
-      resendApiKeyLast4: "1234",
-      fromAddress: `os@${hostname}`,
-      verifiedAt: new Date(),
-      isActive: true,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organizationEmailDomain).values({
+        id: "legacy",
+        organizationId: org.orgId,
+        createdBy: org.userId,
+        mode: "byok",
+        hostname,
+        resendDomainId: "rd-legacy",
+        resendApiKeyEncrypted: encrypted.encrypted,
+        resendApiKeyIv: encrypted.iv,
+        resendApiKeyLast4: "1234",
+        fromAddress: `os@${hostname}`,
+        verifiedAt: new Date(),
+        isActive: true,
+      }),
+    );
     expect(await resolveLabEmailSender(org.orgId)).toBeUndefined();
     vi.stubEnv("EMAIL_DOMAIN_MASTER_KEY", MASTER_KEY);
     expect(await resolveLabEmailSender(org.orgId)).toMatchObject({ hostname });

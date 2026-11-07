@@ -17,6 +17,7 @@ import { setTransactionOrganization } from "@calibra-facil/db/for-org";
 import { truncateAll } from "../../test/integration/db";
 import { seedTenant } from "../../test/integration/tenancy-fixture";
 import { sqlStateOf } from "../../test/integration/rls";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The proof that the application's role is NOT bound by row-level security while
 // DATABASE_RLS_MODE=shadow, the diagnosis mode (REQ-RLS-2), against a role that is a real table OWNER
@@ -172,14 +173,16 @@ describe("row-level security: who the policies bind", () => {
 
   describe("with the sync change log (migration 0122) next to the policies", () => {
     async function newClient(id: string): Promise<void> {
-      await db.insert(organization).values({
-        id,
-        name: id,
-        slug: id,
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        type: "CLIENT",
-        status: "ACTIVE",
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(organization).values({
+          id,
+          name: id,
+          slug: id,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          type: "CLIENT",
+          status: "ACTIVE",
+        }),
+      );
     }
 
     async function logged(lab: string): Promise<number> {

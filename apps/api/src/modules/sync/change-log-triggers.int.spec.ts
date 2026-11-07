@@ -35,6 +35,7 @@ import {
 import { seedJobForOrg } from "../../../test/integration/tenant-refs";
 import { getExecuteRows } from "../../lib/db";
 import { SYNC_ENTITY_SOURCES } from "./entity-sources";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 type Entry = {
   entity_type: string;
@@ -164,17 +165,19 @@ describe("sync change log triggers", () => {
 
   it("REQ-CS-2: an asset that moves to another unit leaves an entry for the unit it left and one for the unit it joined; a soft delete is an upsert entry (the pull resolves it to a delete)", async () => {
     const org = await seedOrg({ orgId: ORG });
-    const [second] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: org.orgId,
-        name: "Filial",
-        slug: "filial",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: org.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [second] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: org.orgId,
+          name: "Filial",
+          slug: "filial",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: org.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!second) throw new Error("unit seed failed");
     const { assetId } = await seedJobForOrg({
       orgId: org.orgId,
@@ -230,34 +233,36 @@ describe("sync change log triggers", () => {
       unitId: org.unitId,
       createdBy: org.userId,
     });
-    const [order] = await db
-      .insert(serviceOrder)
-      .values({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        customerId:
-          (
-            await db
-              .select({ id: calibrationJob.customerId })
-              .from(calibrationJob)
-              .where(eq(calibrationJob.id, jobId))
-          )[0]?.id ?? 0,
-        assetId,
-        openedByUserId: org.userId,
-        serviceOrderNumber: "OS-TRG-1",
-        status: "awaiting_tech_evaluation",
-        claimedDefect: "x",
-        intakeCondition: "y",
-        intakeType: "counter",
-        deliveryMethod: "pickup_at_lab",
-        priority: "normal",
-        totalQuotedCents: 0,
-        totalApprovedCents: 0,
-        evaluationFeeCents: 0,
-        evaluationFeeApplied: false,
-        isExternalService: false,
-      })
-      .returning({ id: serviceOrder.id });
+    const [order] = await withStatusRepair(async (tx) =>
+      tx
+        .insert(serviceOrder)
+        .values({
+          organizationId: org.orgId,
+          unitId: org.unitId,
+          customerId:
+            (
+              await db
+                .select({ id: calibrationJob.customerId })
+                .from(calibrationJob)
+                .where(eq(calibrationJob.id, jobId))
+            )[0]?.id ?? 0,
+          assetId,
+          openedByUserId: org.userId,
+          serviceOrderNumber: "OS-TRG-1",
+          status: "awaiting_tech_evaluation",
+          claimedDefect: "x",
+          intakeCondition: "y",
+          intakeType: "counter",
+          deliveryMethod: "pickup_at_lab",
+          priority: "normal",
+          totalQuotedCents: 0,
+          totalApprovedCents: 0,
+          evaluationFeeCents: 0,
+          evaluationFeeApplied: false,
+          isExternalService: false,
+        })
+        .returning({ id: serviceOrder.id }),
+    );
     if (!limit || !order) throw new Error("seed failed");
 
     const logged = shape(await entries(org.orgId));
@@ -322,39 +327,45 @@ describe("sync change log triggers", () => {
       .returning({ id: assetType.id });
     if (!type) throw new Error("seed failed");
     await clearLog();
-    const [method] = await db
-      .insert(calibrationMethod)
-      .values({
-        organizationId: org.orgId,
-        assetTypeId: type.id,
-        name: "Método",
-        version: 1,
-        status: "DRAFT",
-        dataFields: [],
-        variableBindings: [],
-        formulas: [],
-        measurementModels: [],
-        validations: [],
-        uncertaintyParams: [],
-        createdBy: org.userId,
-      })
-      .returning({ id: calibrationMethod.id });
+    const [method] = await withStatusRepair((tx) =>
+      tx
+        .insert(calibrationMethod)
+        .values({
+          organizationId: org.orgId,
+          assetTypeId: type.id,
+          name: "Método",
+          version: 1,
+          status: "DRAFT",
+          dataFields: [],
+          variableBindings: [],
+          formulas: [],
+          measurementModels: [],
+          validations: [],
+          uncertaintyParams: [],
+          createdBy: org.userId,
+        })
+        .returning({ id: calibrationMethod.id }),
+    );
     if (!method) throw new Error("seed failed");
     expect(await entries(org.orgId)).toEqual([]);
 
-    await db
-      .update(calibrationMethod)
-      .set({ status: "PUBLISHED" })
-      .where(eq(calibrationMethod.id, method.id));
+    await withStatusRepair((tx) =>
+      tx
+        .update(calibrationMethod)
+        .set({ status: "PUBLISHED" })
+        .where(eq(calibrationMethod.id, method.id)),
+    );
     expect(shape(await entries(org.orgId))).toEqual([
       `published_method:${method.id}:upsert:null`,
     ]);
 
     await clearLog();
-    await db
-      .update(calibrationMethod)
-      .set({ status: "ARCHIVED" })
-      .where(eq(calibrationMethod.id, method.id));
+    await withStatusRepair((tx) =>
+      tx
+        .update(calibrationMethod)
+        .set({ status: "ARCHIVED" })
+        .where(eq(calibrationMethod.id, method.id)),
+    );
     expect(shape(await entries(org.orgId))).toEqual([
       `published_method:${method.id}:delete:null`,
     ]);
@@ -368,25 +379,29 @@ describe("sync change log triggers", () => {
       unitId: org.unitId,
       name: "Calibração",
     });
-    await db.insert(massCompositionProfile).values({
-      organizationId: org.orgId,
-      profileKey: "1kg-M1",
-      profileClass: "M1",
-      nominalG: 1000,
-      nominal: "1 kg",
-      value: 1000,
-      uncertainty: 0.001,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(massCompositionProfile).values({
+        organizationId: org.orgId,
+        profileKey: "1kg-M1",
+        profileClass: "M1",
+        nominalG: 1000,
+        nominal: "1 kg",
+        value: 1000,
+        uncertainty: 0.001,
+      }),
+    );
     await db
       .insert(environmentalLimits)
       .values({ organizationId: org.orgId, unitId: org.unitId, limits: {} });
-    await db
-      .update(organization)
-      .set({
-        status: "SUSPENDED",
-        deletedAt: new Date("2000-01-01T00:00:00.000Z"),
-      })
-      .where(eq(organization.id, org.orgId));
+    await withStatusRepair((tx) =>
+      tx
+        .update(organization)
+        .set({
+          status: "SUSPENDED",
+          deletedAt: new Date("2000-01-01T00:00:00.000Z"),
+        })
+        .where(eq(organization.id, org.orgId)),
+    );
     expect((await entries(org.orgId)).length).toBeGreaterThan(0);
 
     await db.transaction(async (tx) => {
@@ -422,18 +437,20 @@ describe("sync change log triggers", () => {
   it("REQ-CS-1: a mass composition profile is logged", async () => {
     const org = await seedOrg({ orgId: ORG });
     await clearLog();
-    const [profile] = await db
-      .insert(massCompositionProfile)
-      .values({
-        organizationId: org.orgId,
-        profileKey: "1kg-M1",
-        profileClass: "M1",
-        nominalG: 1000,
-        nominal: "1 kg",
-        value: 1000,
-        uncertainty: 0.001,
-      })
-      .returning({ id: massCompositionProfile.id });
+    const [profile] = await withStatusRepair((tx) =>
+      tx
+        .insert(massCompositionProfile)
+        .values({
+          organizationId: org.orgId,
+          profileKey: "1kg-M1",
+          profileClass: "M1",
+          nominalG: 1000,
+          nominal: "1 kg",
+          value: 1000,
+          uncertainty: 0.001,
+        })
+        .returning({ id: massCompositionProfile.id }),
+    );
     if (!profile) throw new Error("seed failed");
     expect(shape(await entries(org.orgId))).toEqual([
       `mass_composition_profile:${profile.id}:upsert:null`,
@@ -443,14 +460,16 @@ describe("sync change log triggers", () => {
   it("REQ-CS-5: a change of the global asset type catalog is logged once for each laboratory (and for no client organization)", async () => {
     const a = await seedOrg({ orgId: "org-trg-a" });
     const b = await seedOrg({ orgId: "org-trg-b", userId: "user-trg-b" });
-    await db.insert(organization).values({
-      id: "client-trg",
-      name: "Client",
-      slug: "client-trg",
-      type: "CLIENT",
-      status: "ACTIVE",
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: "client-trg",
+        name: "Client",
+        slug: "client-trg",
+        type: "CLIENT",
+        status: "ACTIVE",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    );
     await clearLog();
     const [type] = await db
       .insert(assetType)

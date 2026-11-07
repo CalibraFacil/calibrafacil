@@ -40,6 +40,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -49,14 +50,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 
 /** Seed a CLIENT org (required as customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client Org ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client Org ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /** Seed a customer owned by a LAB org. Returns the customer.id. */
@@ -94,21 +97,23 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetTypeId: params.assetTypeId,
-      name: "Test Asset",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetTypeId: params.assetTypeId,
+        name: "Test Asset",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -123,28 +128,30 @@ async function seedServiceOrder(params: {
   serviceOrderNumber: string;
   claimedDefect: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      openedByUserId: params.openedByUserId,
-      serviceOrderNumber: params.serviceOrderNumber,
-      status: "awaiting_quote_approval",
-      claimedDefect: params.claimedDefect,
-      intakeCondition: "Test condition",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 0,
-      totalApprovedCents: 0,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    })
-    .returning({ id: serviceOrder.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetId: params.assetId,
+        openedByUserId: params.openedByUserId,
+        serviceOrderNumber: params.serviceOrderNumber,
+        status: "awaiting_quote_approval",
+        claimedDefect: params.claimedDefect,
+        intakeCondition: "Test condition",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 0,
+        totalApprovedCents: 0,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!row) throw new Error("seedServiceOrder: insert failed");
   return row.id;
 }

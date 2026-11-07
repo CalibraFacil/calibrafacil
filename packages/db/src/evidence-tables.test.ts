@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { STATUS_GUARDED_COLUMNS } from "./status-machines";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -226,7 +227,8 @@ describe("escape hatch is gated on role (migration 0130)", () => {
           .slice(Math.max(0, (use.index ?? 0) - 40), use.index)
           .includes("v_was text :="),
     );
-    expect(uses).toHaveLength(3);
+    // The three hand-written hatches plus one per generated status guard.
+    expect(uses).toHaveLength(3 + STATUS_GUARDED_COLUMNS.length);
     for (const use of uses) {
       const before = extras.slice(
         Math.max(0, (use.index ?? 0) - 260),

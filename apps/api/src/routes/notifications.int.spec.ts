@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the notifications router. Only the
 // better-auth lab session is mocked (see test/integration/setup.ts); the real
@@ -46,17 +47,19 @@ async function seedNotification(params: {
   type?: NotificationType;
   status?: "UNREAD" | "READ" | "ARCHIVED";
 }): Promise<number> {
-  const [row] = await db
-    .insert(notification)
-    .values({
-      recipientUserId: params.recipientUserId,
-      organizationId: params.organizationId,
-      type: params.type ?? "JOB_APPROVED",
-      title: params.title,
-      message: `${params.title} body`,
-      status: params.status ?? "UNREAD",
-    })
-    .returning({ id: notification.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(notification)
+      .values({
+        recipientUserId: params.recipientUserId,
+        organizationId: params.organizationId,
+        type: params.type ?? "JOB_APPROVED",
+        title: params.title,
+        message: `${params.title} body`,
+        status: params.status ?? "UNREAD",
+      })
+      .returning({ id: notification.id }),
+  );
   if (!row) throw new Error("seedNotification: insert failed");
   return row.id;
 }

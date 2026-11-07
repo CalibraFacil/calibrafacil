@@ -23,9 +23,15 @@ import {
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { orgDb } from "../lib/org-db";
-import { domainErrorResponse, forbidden } from "../lib/domain-errors";
+import {
+  conflict,
+  domainErrorResponse,
+  forbidden,
+  invalid,
+} from "../lib/domain-errors";
 import { assessCapaVerifierIndependence } from "../lib/capa-verification-independence";
 import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
+import { CORRECTIVE_ACTION_MACHINE } from "@calibra-facil/schemas/machines";
 import { clientIp } from "../lib/client-ip";
 
 /**
@@ -511,7 +517,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "CAPA nao encontrada" }, 404);
         }
 
-        if (existing.status === "CLOSED") {
+        if (!CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "edit")) {
           return c.json({ error: "CAPA fechada nao pode ser editada" }, 400);
         }
 
@@ -552,8 +558,17 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.preventiveMeasures = input.preventiveMeasures;
 
         // Auto-transition to INVESTIGATION when root cause is added
-        if (input.rootCauseAnalysis && existing.status === "OPEN") {
-          updateData.status = "INVESTIGATION";
+        if (
+          input.rootCauseAnalysis &&
+          CORRECTIVE_ACTION_MACHINE.canTransition(
+            existing.status,
+            "investigate",
+          )
+        ) {
+          updateData.status = CORRECTIVE_ACTION_MACHINE.requireTargetOf(
+            existing.status,
+            "investigate",
+          );
           updateData.investigationCompletedAt = new Date();
         }
 
@@ -567,9 +582,18 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(correctiveAction.id, id),
               eq(correctiveAction.organizationId, member.organizationId),
+              eq(correctiveAction.status, existing.status),
             ),
           )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row: the CAPA moved
+          // under the caller (CORRECTIVE_ACTION_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+          );
+        }
 
         // Audit log
         await o.insert(correctiveActionAuditLog).values({
@@ -620,9 +644,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         if (
-          existing.status !== "OPEN" &&
-          existing.status !== "INVESTIGATION" &&
-          existing.status !== "IMPLEMENTATION"
+          !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "implement")
         ) {
           return c.json(
             {
@@ -638,7 +660,10 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           .set({
             implementationEvidence: input.implementationEvidence,
             implementedAt: new Date(),
-            status: "IMPLEMENTATION",
+            status: CORRECTIVE_ACTION_MACHINE.requireTargetOf(
+              existing.status,
+              "implement",
+            ),
           })
           // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
@@ -647,9 +672,18 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(correctiveAction.id, id),
               eq(correctiveAction.organizationId, member.organizationId),
+              eq(correctiveAction.status, existing.status),
             ),
           )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row: the CAPA moved
+          // under the caller (CORRECTIVE_ACTION_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+          );
+        }
 
         // Audit log
         await o.insert(correctiveActionAuditLog).values({
@@ -705,13 +739,23 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "CAPA nao encontrada" }, 404);
         }
 
-        if (existing.status !== "IMPLEMENTATION") {
+        if (
+          !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "verify")
+        ) {
           return c.json(
             {
               error:
                 "CAPA deve estar em status IMPLEMENTATION para verificacao de eficacia",
             },
             400,
+          );
+        }
+        // After an ineffective verification the CAPA is back in implementation
+        // with no implementation recorded: a new one comes before a new check.
+        if (!existing.implementedAt) {
+          throw invalid(
+            "invalid_request",
+            "Registre a implementação das ações antes de verificar a eficácia",
           );
         }
 
@@ -752,6 +796,13 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           ? "waived_single_verifier"
           : "independent";
 
+        // `verify` (CORRECTIVE_ACTION_MACHINE): effective → VERIFICATION, not
+        // effective → back to IMPLEMENTATION (decision Q61).
+        const verifiedStatus = CORRECTIVE_ACTION_MACHINE.requireTransition(
+          existing.status,
+          "verify",
+          input.effectivenessConfirmed ? "VERIFICATION" : "IMPLEMENTATION",
+        );
         const [updated] = await o
           .update(correctiveAction)
           .set({
@@ -763,7 +814,12 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             verificationIndependenceJustification: waived
               ? (input.independenceJustification ?? null)
               : null,
-            status: "VERIFICATION",
+            status: verifiedStatus,
+            // Not effective: a new implementation cycle starts, so the previous
+            // implementation is cleared from the row (the audit log keeps it).
+            ...(input.effectivenessConfirmed
+              ? {}
+              : { implementedAt: null, implementationEvidence: null }),
           })
           // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
@@ -772,9 +828,18 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(correctiveAction.id, id),
               eq(correctiveAction.organizationId, member.organizationId),
+              eq(correctiveAction.status, existing.status),
             ),
           )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row: the CAPA moved
+          // under the caller (CORRECTIVE_ACTION_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+          );
+        }
 
         // Audit log
         await o.insert(correctiveActionAuditLog).values({
@@ -782,7 +847,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           capaId: id,
           action: "verify",
           changes: {
-            status: { old: existing.status, new: "VERIFICATION" },
+            status: { old: existing.status, new: verifiedStatus },
             effectivenessConfirmed: input.effectivenessConfirmed,
             verificationNotes: input.verificationNotes,
             verification_independence: verificationIndependence,
@@ -835,7 +900,9 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "CAPA nao encontrada" }, 404);
         }
 
-        if (existing.status !== "VERIFICATION") {
+        if (
+          !CORRECTIVE_ACTION_MACHINE.canTransition(existing.status, "close")
+        ) {
           return c.json(
             {
               error: "CAPA deve estar em status VERIFICATION para ser fechada",
@@ -847,7 +914,10 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
         const [updated] = await o
           .update(correctiveAction)
           .set({
-            status: "CLOSED",
+            status: CORRECTIVE_ACTION_MACHINE.requireTargetOf(
+              existing.status,
+              "close",
+            ),
             closedAt: new Date(),
             closedBy: session.user.id,
           })
@@ -858,9 +928,18 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(correctiveAction.id, id),
               eq(correctiveAction.organizationId, member.organizationId),
+              eq(correctiveAction.status, existing.status),
             ),
           )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row: the CAPA moved
+          // under the caller (CORRECTIVE_ACTION_MACHINE).
+          throw conflict(
+            "status_transition_conflict",
+            "A CAPA mudou de status durante a operacao. Recarregue e tente novamente.",
+          );
+        }
 
         // Audit log
         await o.insert(correctiveActionAuditLog).values({

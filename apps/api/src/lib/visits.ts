@@ -3,9 +3,15 @@ import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
   calibrationVisit,
+  visitRescheduleRequest,
   type VisitStatus,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  VISIT_MACHINE,
+  VISIT_RESCHEDULE_REQUEST_MACHINE,
+  isVisitTerminal,
+} from "@calibra-facil/schemas/machines";
+import { and, eq, inArray } from "drizzle-orm";
 
 /** Job states that mean the technician is done with that instrument. */
 const SETTLED_JOB_STATES = new Set(["APPROVED", "SUPERSEDED", "CANCELED"]);
@@ -33,7 +39,7 @@ export async function syncVisitStatusFromJobs(
     .limit(1);
 
   if (!visit) return;
-  if (visit.status === "CANCELLED" || visit.status === "COMPLETED") return;
+  if (isVisitTerminal(visit.status)) return;
 
   const jobs = await executor
     .select({ status: calibrationJob.status })
@@ -48,20 +54,39 @@ export async function syncVisitStatusFromJobs(
   );
   const anyStarted = jobs.some((job) => job.status !== "DRAFT");
 
-  let nextStatus: VisitStatus = visit.status;
-  if (allSettled && anyApproved) {
-    nextStatus = "COMPLETED";
-  } else if (
-    anyStarted &&
-    (visit.status === "PROPOSED" || visit.status === "CONFIRMED")
-  ) {
-    nextStatus = "IN_PROGRESS";
-  }
+  // `settle` / `start` in VISIT_MACHINE; a visit already past them is left alone.
+  const command =
+    allSettled && anyApproved ? "settle" : anyStarted ? "start" : null;
+  if (!command || !VISIT_MACHINE.canTransition(visit.status, command)) return;
+  const nextStatus: VisitStatus = VISIT_MACHINE.requireTargetOf(
+    visit.status,
+    command,
+  );
 
-  if (nextStatus !== visit.status) {
+  const moved = await executor
+    .update(calibrationVisit)
+    .set({ status: nextStatus })
+    .where(
+      and(
+        eq(calibrationVisit.id, visitId),
+        eq(calibrationVisit.status, visit.status),
+      ),
+    )
+    .returning({ id: calibrationVisit.id });
+  if (moved.length > 0 && command === "settle") {
+    // A finished trip has no date to move: its pending customer request is
+    // superseded with it.
     await executor
-      .update(calibrationVisit)
-      .set({ status: nextStatus })
-      .where(eq(calibrationVisit.id, visitId));
+      .update(visitRescheduleRequest)
+      .set({ status: "SUPERSEDED", resolvedAt: new Date() })
+      .where(
+        and(
+          eq(visitRescheduleRequest.visitId, visitId),
+          inArray(
+            visitRescheduleRequest.status,
+            VISIT_RESCHEDULE_REQUEST_MACHINE.allowedFrom("supersede"),
+          ),
+        ),
+      );
   }
 }

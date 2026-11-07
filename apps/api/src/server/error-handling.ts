@@ -1,4 +1,5 @@
 import type { ApiErrorCode } from "@calibra-facil/contracts";
+import { IllegalTransitionError } from "@calibra-facil/schemas/state-machine";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { extractPgErrorCode } from "../lib/db-errors";
@@ -82,6 +83,19 @@ export function applyErrorHandling(
       return c.json(domainErrorBody(error), error.status);
     }
 
+    // A command its state machine does not allow from the record's current
+    // state (`requireTransition` / `requireTargetOf`): the client asked for a
+    // move that does not exist, not a defect.
+    if (error instanceof IllegalTransitionError) {
+      return c.json(
+        {
+          error: `Operação não permitida na situação atual (${error.from ?? "nova"}).`,
+          code: "status_transition_conflict",
+        },
+        409,
+      );
+    }
+
     reportDefect();
     // Serverless: the function may freeze right after the response — give the
     // delivery a bounded window instead of losing the event.
@@ -95,6 +109,20 @@ export function applyErrorHandling(
         {
           error: "Registro emitido ou de auditoria não pode ser alterado",
           code: "record_immutable",
+        },
+        409,
+      );
+    }
+
+    // CF001 comes only from the status guards generated from the state machines
+    // (migrations 0119/0139/0140): a writer tried a move its machine does not
+    // list. Reported above as a defect; the client gets a conflict.
+    if (extractPgErrorCode(error) === "CF001") {
+      return c.json(
+        {
+          error:
+            "O registro mudou de situação durante a operação. Recarregue e tente novamente.",
+          code: "status_transition_conflict",
         },
         409,
       );

@@ -15,6 +15,7 @@ import { integrationsRouter } from "./integrations";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC tests for the bring-your-own Conta Azul application:
 // a laboratory saves its own Client ID/Secret, and the OAuth flow, the token
@@ -91,15 +92,17 @@ async function seedContaAzulConnection(params: {
   userId: string;
 }) {
   const integrationId = `caz-${params.organizationId}`;
-  await db.insert(organizationIntegration).values({
-    id: integrationId,
-    organizationId: params.organizationId,
-    type: "financial_erp",
-    provider: "conta_azul",
-    name: "Conta Azul",
-    status: "ACTIVE",
-    createdBy: params.userId,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationIntegration).values({
+      id: integrationId,
+      organizationId: params.organizationId,
+      type: "financial_erp",
+      provider: "conta_azul",
+      name: "Conta Azul",
+      status: "ACTIVE",
+      createdBy: params.userId,
+    }),
+  );
   await db.insert(integrationConnection).values({
     id: `conn-${integrationId}`,
     integrationId,
@@ -439,10 +442,12 @@ describe("Conta Azul application per laboratory — real DB", () => {
         "O aplicativo Conta Azul mudou. Reconecte a conta para continuar sincronizando.",
     });
 
-    await db
-      .update(organizationIntegration)
-      .set({ status: "ACTIVE", lastValidationError: null })
-      .where(eq(organizationIntegration.id, integrationId));
+    await withStatusRepair((tx) =>
+      tx
+        .update(organizationIntegration)
+        .set({ status: "ACTIVE", lastValidationError: null })
+        .where(eq(organizationIntegration.id, integrationId)),
+    );
     const removed = await integrationsRouter.request(
       "/conta-azul/app",
       { method: "DELETE", headers: JSON_HEADERS },

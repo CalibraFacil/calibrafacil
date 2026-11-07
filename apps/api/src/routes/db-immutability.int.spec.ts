@@ -69,6 +69,7 @@ import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { applyJobTimeline } from "../cli/seed-demo/timeline";
 import { jobsRouter } from "./jobs";
 import { publicApiV2Router } from "./public-api-v2";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -137,14 +138,16 @@ type Status =
 
 async function seedFixture(orgId = "org-imm", userId = "user-imm") {
   const org = await seedOrg({ orgId, userId, role: "admin" });
-  await db.insert(organization).values({
-    id: `client-${orgId}`,
-    name: `Client ${orgId}`,
-    slug: `client-${orgId}`,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: `client-${orgId}`,
+      name: `Client ${orgId}`,
+      slug: `client-${orgId}`,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
   const [cust] = await db
     .insert(customer)
     .values({
@@ -158,18 +161,20 @@ async function seedFixture(orgId = "org-imm", userId = "user-imm") {
     .values({ name: `AT ${orgId}`, slug: `at-${orgId}`, definition: [] })
     .returning({ id: assetType.id });
   if (!cust || !type) throw new Error("seedFixture: customer/type failed");
-  const [instrument] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: orgId,
-      unitId: org.unitId,
-      customerId: cust.id,
-      assetTypeId: type.id,
-      name: "Instrumento",
-      serialNumber: `SN-${orgId}`,
-      tag: `TAG-${orgId}`,
-    })
-    .returning({ id: asset.id });
+  const [instrument] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: orgId,
+        unitId: org.unitId,
+        customerId: cust.id,
+        assetTypeId: type.id,
+        name: "Instrumento",
+        serialNumber: `SN-${orgId}`,
+        tag: `TAG-${orgId}`,
+      })
+      .returning({ id: asset.id }),
+  );
   const [svc] = await db
     .insert(service)
     .values({
@@ -488,15 +493,17 @@ describe("calibration_job immutability trigger (migration 0115)", () => {
 
   it("REQ-DBIMM-002: deleting the visit nulls the job's visit link (FK SET NULL) but a direct UPDATE cannot", async () => {
     const fixture = await seedFixture();
-    const [visit] = await db
-      .insert(calibrationVisit)
-      .values({
-        organizationId: fixture.orgId,
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        createdBy: fixture.userId,
-      })
-      .returning({ id: calibrationVisit.id });
+    const [visit] = await withStatusRepair((tx) =>
+      tx
+        .insert(calibrationVisit)
+        .values({
+          organizationId: fixture.orgId,
+          unitId: fixture.unitId,
+          customerId: fixture.customerId,
+          createdBy: fixture.userId,
+        })
+        .returning({ id: calibrationVisit.id }),
+    );
     if (!visit) throw new Error("visit insert failed");
     const id = await seedJob(fixture, "APPROVED", {
       jobId: "CAL-VISIT",

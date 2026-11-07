@@ -11,6 +11,7 @@ import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the unitsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -52,17 +53,19 @@ async function seedUnit(params: {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  const [row] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: params.organizationId,
-      name: params.name,
-      slug,
-      status: "ACTIVE",
-      isDefault: false,
-      createdBy: params.createdBy,
-    })
-    .returning({ id: organizationUnit.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: params.organizationId,
+        name: params.name,
+        slug,
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: params.createdBy,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
 
   if (!row) throw new Error("seedUnit: insert failed");
   return row.id;

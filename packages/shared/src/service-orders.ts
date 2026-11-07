@@ -86,14 +86,13 @@ export const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
 export type ServiceOrderRecommendedAction =
   (typeof SERVICE_ORDER_RECOMMENDED_ACTIONS)[number];
 
+// The lifecycle (which command moves a quote where) is
+// SERVICE_ORDER_QUOTE_MACHINE in @calibra-facil/schemas.
 export const SERVICE_ORDER_QUOTE_STATUSES = [
   "draft",
   "sent",
   "approved",
   "rejected",
-  "expired",
-  "canceled",
-  "superseded",
 ] as const;
 export type ServiceOrderQuoteStatus =
   (typeof SERVICE_ORDER_QUOTE_STATUSES)[number];
@@ -219,78 +218,10 @@ export function isServiceOrderBillable(
   return !nonBillable.includes(closingReason);
 }
 
-export const SERVICE_ORDER_ALLOWED_TRANSITIONS: Record<
-  ServiceOrderStatus,
-  ServiceOrderStatus[]
-> = {
-  opened: ["awaiting_tech_evaluation", "canceled"],
-  awaiting_tech_evaluation: ["under_evaluation", "canceled"],
-  under_evaluation: [
-    "awaiting_quote_approval",
-    "awaiting_calibration",
-    "awaiting_final_review",
-    "ready_for_pickup",
-    "canceled",
-  ],
-  awaiting_quote_approval: ["quote_approved", "quote_rejected", "canceled"],
-  quote_approved: ["repair_in_progress", "awaiting_calibration"],
-  quote_rejected: ["ready_for_pickup", "canceled"],
-  repair_in_progress: ["awaiting_calibration", "awaiting_final_review"],
-  awaiting_calibration: ["calibration_in_progress", "awaiting_final_review"],
-  calibration_in_progress: ["awaiting_final_review"],
-  awaiting_final_review: ["ready_for_pickup"],
-  ready_for_pickup: ["delivered"],
-  delivered: ["closed"],
-  closed: [],
-  canceled: [],
-  warranty_return: ["awaiting_tech_evaluation", "under_evaluation", "canceled"],
-};
-
 export function isServiceOrderFinalStatus(status: ServiceOrderStatus) {
   const finalStatuses: readonly ServiceOrderStatus[] =
     SERVICE_ORDER_FINAL_STATUSES;
   return finalStatuses.includes(status);
-}
-
-export function canTransitionServiceOrderStatus(
-  from: ServiceOrderStatus,
-  to: ServiceOrderStatus,
-) {
-  return SERVICE_ORDER_ALLOWED_TRANSITIONS[from].includes(to);
-}
-
-/**
- * True only while the order is genuinely waiting on a quote decision.
- *
- * Approving or rejecting a quote advances the order ONLY from here. Anywhere
- * else the decision is late or out-of-band — a mid-job re-quote answered while
- * the instrument is on the bench, or a public link answered after the OS was
- * already delivered or closed — and moving the status would rewind real
- * progress. The quote's own status still records the customer's answer.
- *
- * Stated as "when may we advance?" rather than "which states must we protect?"
- * deliberately: the protect-list version silently missed ready_for_pickup,
- * delivered and closed, which a still-live public token can outlive.
- */
-export function isServiceOrderDecidingQuoteStatus(status: ServiceOrderStatus) {
-  return status === "awaiting_quote_approval";
-}
-
-/**
- * Statuses where the instrument is already on the bench. A quote sent from
- * here is a mid-job re-quote — the technician found an extra failed part — and
- * the physical work does not stop while the customer decides, so sending does
- * not rewind the order to "Aguardando aprovação".
- */
-const SERVICE_ORDER_WORK_IN_PROGRESS_STATUSES: readonly ServiceOrderStatus[] = [
-  "repair_in_progress",
-  "awaiting_calibration",
-  "calibration_in_progress",
-  "awaiting_final_review",
-];
-
-export function isServiceOrderWorkInProgressStatus(status: ServiceOrderStatus) {
-  return SERVICE_ORDER_WORK_IN_PROGRESS_STATUSES.includes(status);
 }
 
 /**
@@ -301,12 +232,4 @@ export function isServiceOrderStatus(
   value: unknown,
 ): value is ServiceOrderStatus {
   return SERVICE_ORDER_STATUSES.some((status) => status === value);
-}
-
-export function canEditServiceOrderQuote(status: ServiceOrderQuoteStatus) {
-  return status === "draft";
-}
-
-export function canApproveServiceOrderQuote(status: ServiceOrderQuoteStatus) {
-  return status === "sent";
 }

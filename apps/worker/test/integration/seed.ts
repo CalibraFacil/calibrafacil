@@ -12,6 +12,7 @@ import { encryptPassword } from "@calibra-facil/signing";
 import { normalizeGenericFinancialErpConfig } from "@calibra-facil/shared";
 import type { IntegrationSyncTarget } from "@calibra-facil/shared";
 import { TEST_INTEGRATIONS_MASTER_KEY } from "./env";
+import { withStatusRepair } from "./state-fixtures";
 
 export type SeededOrg = {
   orgId: string;
@@ -39,26 +40,30 @@ export async function seedOrg(params?: {
     email: `${userId}@lab.test`,
   });
 
-  await db.insert(organization).values({
-    id: orgId,
-    name: `Lab ${orgId}`,
-    slug: orgId,
-    createdAt: EPOCH,
-    type: "LAB",
-    status: "ACTIVE",
-  });
-
-  const [unit] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: orgId,
-      name: "Matriz",
-      slug: "matriz",
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: orgId,
+      name: `Lab ${orgId}`,
+      slug: orgId,
+      createdAt: EPOCH,
+      type: "LAB",
       status: "ACTIVE",
-      isDefault: true,
-      createdBy: userId,
-    })
-    .returning();
+    }),
+  );
+
+  const [unit] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: orgId,
+        name: "Matriz",
+        slug: "matriz",
+        status: "ACTIVE",
+        isDefault: true,
+        createdBy: userId,
+      })
+      .returning(),
+  );
 
   if (!unit) throw new Error("seedOrg: failed to create default unit");
   return { orgId, userId, unitId: unit.id };
@@ -84,18 +89,20 @@ export async function seedIntegration(params: {
     TEST_INTEGRATIONS_MASTER_KEY,
   );
 
-  await db.insert(organizationIntegration).values({
-    id: params.integrationId,
-    organizationId: params.organizationId,
-    type: "financial_erp",
-    provider: "generic_http",
-    name: "ERP de Teste",
-    status: "ACTIVE",
-    createdBy: params.createdBy,
-    lastValidatedAt: EPOCH,
-    lastValidationError: null,
-    createdAt: EPOCH,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationIntegration).values({
+      id: params.integrationId,
+      organizationId: params.organizationId,
+      type: "financial_erp",
+      provider: "generic_http",
+      name: "ERP de Teste",
+      status: "ACTIVE",
+      createdBy: params.createdBy,
+      lastValidatedAt: EPOCH,
+      lastValidationError: null,
+      createdAt: EPOCH,
+    }),
+  );
 
   await db.insert(integrationConnection).values({
     id: `conn-${params.integrationId}`,
@@ -147,14 +154,16 @@ export async function seedSyncRun(params: {
   organizationId: string;
   target: IntegrationSyncTarget;
 }): Promise<{ runId: string }> {
-  await db.insert(integrationSyncRun).values({
-    id: params.runId,
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    trigger: "manual",
-    target: params.target,
-    status: "PENDING",
-    createdAt: EPOCH,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(integrationSyncRun).values({
+      id: params.runId,
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      trigger: "manual",
+      target: params.target,
+      status: "PENDING",
+      createdAt: EPOCH,
+    }),
+  );
   return { runId: params.runId };
 }

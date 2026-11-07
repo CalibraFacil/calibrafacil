@@ -21,6 +21,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the serviceOrdersRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -60,14 +61,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 /** Seed a CLIENT org (required as customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
   const now = new Date("2026-01-01T00:00:00.000Z");
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client Org ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: now,
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client Org ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: now,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /**
@@ -111,21 +114,23 @@ async function seedAsset(params: {
   tag: string;
   name?: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: params.name ?? "Test Asset",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: params.name ?? "Test Asset",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -145,30 +150,32 @@ async function seedServiceOrder(params: {
   serviceOrderNumber?: string;
   status?: (typeof serviceOrder.$inferInsert)["status"];
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      openedByUserId: params.openedByUserId,
-      serviceOrderNumber:
-        params.serviceOrderNumber ??
-        `OS-${params.organizationId}-${Date.now()}`,
-      status: params.status ?? "awaiting_tech_evaluation",
-      claimedDefect: "Test defect",
-      intakeCondition: "Test condition",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 0,
-      totalApprovedCents: 0,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    })
-    .returning({ id: serviceOrder.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetId: params.assetId,
+        openedByUserId: params.openedByUserId,
+        serviceOrderNumber:
+          params.serviceOrderNumber ??
+          `OS-${params.organizationId}-${Date.now()}`,
+        status: params.status ?? "awaiting_tech_evaluation",
+        claimedDefect: "Test defect",
+        intakeCondition: "Test condition",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 0,
+        totalApprovedCents: 0,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!row) throw new Error("seedServiceOrder: insert failed");
   return row.id;
 }
@@ -418,17 +425,19 @@ describe("serviceOrdersRouter — real DB + real RBAC middleware", () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
 
     // Create a second unit in the same org
-    const [unitB] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: orgA.orgId,
-        name: "Unit B",
-        slug: "unit-b",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: orgA.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [unitB] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: orgA.orgId,
+          name: "Unit B",
+          slug: "unit-b",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: orgA.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!unitB) throw new Error("unit-B insert failed");
 
     const typeId = await seedAssetType("type-so-005");
@@ -940,15 +949,17 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
   ) {
     // quote_number and created_by_user_id are NOT NULL — omitting them fails
     // the insert before any assertion runs.
-    await db.insert(serviceOrderQuote).values({
-      organizationId: organizationOf("service_order", orderId),
-      serviceOrderId: orderId,
-      quoteNumber: `ORC-${orderId}-1`,
-      version: 1,
-      status,
-      totalCents: 10000,
-      createdByUserId,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(serviceOrderQuote).values({
+        organizationId: organizationOf("service_order", orderId),
+        serviceOrderId: orderId,
+        quoteNumber: `ORC-${orderId}-1`,
+        version: 1,
+        status,
+        totalCents: 10000,
+        createdByUserId,
+      }),
+    );
   }
 
   it("REQ-TST-SO-005: PATCH evaluation with only draft quotes → 200, no motivo needed", async () => {
@@ -1062,18 +1073,20 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
       "repair_in_progress",
       "tst-requote",
     );
-    const [quoteRow] = await db
-      .insert(serviceOrderQuote)
-      .values({
-        organizationId: organizationOf("service_order", orderId),
-        serviceOrderId: orderId,
-        quoteNumber: `ORC-${orderId}-2`,
-        version: 2,
-        status: "sent",
-        totalCents: 45000,
-        createdByUserId: org.userId,
-      })
-      .returning({ id: serviceOrderQuote.id });
+    const [quoteRow] = await withStatusRepair((tx) =>
+      tx
+        .insert(serviceOrderQuote)
+        .values({
+          organizationId: organizationOf("service_order", orderId),
+          serviceOrderId: orderId,
+          quoteNumber: `ORC-${orderId}-2`,
+          version: 2,
+          status: "sent",
+          totalCents: 45000,
+          createdByUserId: org.userId,
+        })
+        .returning({ id: serviceOrderQuote.id }),
+    );
     if (!quoteRow) throw new Error("quote insert failed");
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
@@ -1106,18 +1119,20 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
       "awaiting_quote_approval",
       "tst-requote-normal",
     );
-    const [quoteRow] = await db
-      .insert(serviceOrderQuote)
-      .values({
-        organizationId: organizationOf("service_order", orderId),
-        serviceOrderId: orderId,
-        quoteNumber: `ORC-${orderId}-1`,
-        version: 1,
-        status: "sent",
-        totalCents: 12000,
-        createdByUserId: org.userId,
-      })
-      .returning({ id: serviceOrderQuote.id });
+    const [quoteRow] = await withStatusRepair((tx) =>
+      tx
+        .insert(serviceOrderQuote)
+        .values({
+          organizationId: organizationOf("service_order", orderId),
+          serviceOrderId: orderId,
+          quoteNumber: `ORC-${orderId}-1`,
+          version: 1,
+          status: "sent",
+          totalCents: 12000,
+          createdByUserId: org.userId,
+        })
+        .returning({ id: serviceOrderQuote.id }),
+    );
     if (!quoteRow) throw new Error("quote insert failed");
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
