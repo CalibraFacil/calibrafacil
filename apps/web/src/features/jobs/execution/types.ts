@@ -1,3 +1,7 @@
+import type {
+  CalibrationLocationType,
+  CalibrationPhaseMode,
+} from '@calibra-facil/shared/calibration-record'
 import { type MeasurementUnit } from '@calibra-facil/shared/units'
 import type {
   MethodFormula,
@@ -127,7 +131,7 @@ export interface EnvironmentalSnapshotData {
   outOfLimitsJustification: string | null
 }
 
-export type CalibrationLocationType = 'customer_site' | 'lab' | 'other'
+export type { CalibrationLocationType, CalibrationPhaseMode }
 
 export interface CalibrationLocationSnapshot {
   type: CalibrationLocationType
@@ -136,12 +140,6 @@ export interface CalibrationLocationSnapshot {
   recordedAt?: string
   recordedBy?: string
 }
-
-export type CalibrationPhaseMode =
-  | 'before_and_after'
-  | 'before_only'
-  | 'after_only'
-  | 'not_performed'
 
 export type CalibrationPhase = 'before' | 'after'
 

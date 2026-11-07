@@ -1,3 +1,7 @@
+import type {
+  PairwiseCorrelation,
+  PairwiseCovariance,
+} from "@calibra-facil/math-engine";
 import { errorDiagnostic } from "./diagnostics";
 import type {
   CalculationEngineLike,
@@ -26,16 +30,20 @@ export function buildMeasurementModelInput(
   return pruneMeasurementModelInput({
     formula: model.expression,
     quantities,
-    correlations: model.correlations?.map((item) => [
-      item.symbols[0],
-      item.symbols[1],
-      item.coefficient,
-    ]),
-    covariances: model.covariances?.map((item) => [
-      item.symbols[0],
-      item.symbols[1],
-      item.covariance,
-    ]),
+    correlations: model.correlations?.map(
+      (item): PairwiseCorrelation => [
+        item.symbols[0],
+        item.symbols[1],
+        item.coefficient,
+      ],
+    ),
+    covariances: model.covariances?.map(
+      (item): PairwiseCovariance => [
+        item.symbols[0],
+        item.symbols[1],
+        item.covariance,
+      ],
+    ),
     coverageProbability: model.coverageProbability,
     coverageFactor: resolveOptionalNumericExpression(
       model.coverageFactor,

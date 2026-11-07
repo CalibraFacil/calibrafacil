@@ -1,36 +1,9 @@
-export type JobExecutionPayload = {
-  selectedStandardIds?: number[];
-  data: Record<string, unknown>;
-  results?: Record<string, unknown> | null;
-  environment?: {
-    temperature: number | null;
-    humidity: number | null;
-    pressure: number | null;
-  };
-  calibrationLocation?: {
-    type: "customer_site" | "lab" | "other";
-    addressText: string;
-    notes?: string | null;
-  };
-  calibrationPhases?: {
-    blocks: Record<
-      string,
-      {
-        mode:
-          | "before_and_after"
-          | "before_only"
-          | "after_only"
-          | "not_performed";
-        reason?: string | null;
-      }
-    >;
-  };
-  performedAt?: string;
+import type { ExecuteJobInput } from "@calibra-facil/schemas";
+
+/**
+ * The body of the execute (draft save) and submit calls: the schema the cloud
+ * validates the execute request with, plus the submit-only backdate reason.
+ */
+export type JobExecutionPayload = ExecuteJobInput & {
   backdateReason?: string;
-  /**
-   * ISO/IEC 17025 §7.8.2.1(n) — additions to, deviations from, or exclusions
-   * from the method as executed. Omit to leave the stored value untouched
-   * (the worksheet auto-saves); send null to clear it.
-   */
-  methodDeviations?: string | null;
 };

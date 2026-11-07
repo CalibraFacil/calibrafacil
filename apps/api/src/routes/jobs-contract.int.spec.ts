@@ -20,10 +20,9 @@ import type { z } from "zod";
 import {
   compileMethodDraft,
   fingerprintJson,
-  type CalculationEngineLike,
+  createMethodExecutionEngine,
 } from "@calibra-facil/method-definition";
 import {
-  createCalculationEngine,
   METHOD_ENGINE_OPTIONS,
   normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
@@ -77,10 +76,7 @@ const APPROVER = "user-contract-approver";
 /** A real compiled method, so execute/submit reach their status write. */
 function executableMethodSnapshot() {
   const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- same adapter cast as routes/jobs.ts: math-engine exposes a narrower concrete type than method-definition's engine interface.
-  const engine = createCalculationEngine(
-    METHOD_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
+  const engine = createMethodExecutionEngine();
   const optionsFingerprint = fingerprintJson(
     normalizedOptions,
     "engine-options",

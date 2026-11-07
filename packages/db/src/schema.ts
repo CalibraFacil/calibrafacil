@@ -1,4 +1,10 @@
 import type { NotificationType, QueueJobType } from "@calibra-facil/schemas";
+import type {
+  CalibrationLocationSnapshot,
+  CalibrationLocationType,
+  CalibrationPhaseMode,
+  CalibrationPhaseSnapshot,
+} from "@calibra-facil/shared/calibration-record";
 import { relations, sql } from "drizzle-orm";
 // State-machine state types (owned by @calibra-facil/schemas/machines).
 import type {
@@ -3901,32 +3907,11 @@ export type EnvironmentalSnapshot = {
   outOfLimitsJustification: string | null;
 };
 
-export type CalibrationLocationType = "customer_site" | "lab" | "other";
-
-export type CalibrationLocationSnapshot = {
-  type: CalibrationLocationType;
-  addressText: string;
-  notes?: string | null;
-  recordedAt: string;
-  recordedBy: string;
-};
-
-export type CalibrationPhaseMode =
-  | "before_and_after"
-  | "before_only"
-  | "after_only"
-  | "not_performed";
-
-export type CalibrationPhaseSnapshot = {
-  blocks: Record<
-    string,
-    {
-      mode: CalibrationPhaseMode;
-      reason?: string | null;
-    }
-  >;
-  recordedAt: string;
-  recordedBy: string;
+export type {
+  CalibrationLocationSnapshot,
+  CalibrationLocationType,
+  CalibrationPhaseMode,
+  CalibrationPhaseSnapshot,
 };
 
 /**

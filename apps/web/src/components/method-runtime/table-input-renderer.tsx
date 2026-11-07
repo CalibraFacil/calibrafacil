@@ -32,7 +32,11 @@ import {
   type WeighingRangeResolverTargetColumns,
 } from './weighing-range-utils'
 import { MeasurementNumberCell } from './measurement-number-cell'
-import { normalizeMassUnit, type MassUnit } from '@calibra-facil/shared'
+import {
+  normalizeMassUnit,
+  type CalibrationPhaseMode,
+  type MassUnit,
+} from '@calibra-facil/shared'
 import {
   convertUnitDelta,
   convertUnitValue,
@@ -67,11 +71,7 @@ interface TableInputRendererProps {
   assetSpecifications?: Record<string, unknown> | null
   /** Asset's base measurement unit; drives display/entry conversion of cells. */
   assetBaseMeasurementUnit?: string | null
-  phaseMode?:
-    | 'before_and_after'
-    | 'before_only'
-    | 'after_only'
-    | 'not_performed'
+  phaseMode?: CalibrationPhaseMode
 }
 
 /**

@@ -29,7 +29,7 @@ import {
   fingerprintJson,
   canonicalJson,
   parseMethodDraft,
-  type CalculationEngineLike,
+  createMethodExecutionEngine,
   type CompiledMethod,
   type DimensionalDiagnostic,
   type MethodDraft,
@@ -37,7 +37,6 @@ import {
   type MethodPreviewResult,
 } from "@calibra-facil/method-definition";
 import {
-  createCalculationEngine,
   METHOD_ENGINE_OPTIONS,
   normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
@@ -80,10 +79,7 @@ function compileDraftWithEngine(
   } = {},
 ) {
   const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine v0.3.0 has narrower input parameter types than method-definition's adapter interface, but the runtime method surface is compatible.
-  const engine = createCalculationEngine(
-    METHOD_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
+  const engine = createMethodExecutionEngine();
 
   return compileMethodDraft(draft, {
     engine,

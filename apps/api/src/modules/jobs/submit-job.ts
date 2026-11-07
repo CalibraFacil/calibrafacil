@@ -25,7 +25,12 @@ import {
 } from "@calibra-facil/schemas";
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
 import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
-import type { MethodDiagnostic } from "@calibra-facil/method-definition";
+import {
+  buildCalibrationLocationSnapshot,
+  buildCalibrationPhaseSnapshot,
+  createMethodExecutionEngine,
+  type MethodDiagnostic,
+} from "@calibra-facil/method-definition";
 import { and, eq, sql } from "drizzle-orm";
 import {
   invalid,
@@ -40,8 +45,6 @@ import { classifyJobScopeCompliance } from "../../lib/scope-compliance";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { syncVisitStatusFromJobs } from "../../lib/visits";
 import {
-  buildCalibrationLocationSnapshot,
-  buildCalibrationPhaseSnapshot,
   buildEnvironmentalSnapshot,
   buildStandardsSnapshot,
   replaceStaleFrozenStandards,
@@ -58,7 +61,6 @@ import {
 import { technicianHasCompetence } from "./technician-assignment";
 import { methodInputFieldsFromSnapshot, stripAssetSpecData } from "./helpers";
 import {
-  createMethodExecutionEngine,
   executeOfficialCompiledSnapshot,
   type CompiledSnapshotFailureKind,
 } from "./official-execution";

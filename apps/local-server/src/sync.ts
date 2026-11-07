@@ -41,6 +41,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { uploadAttachmentsBeforePush } from "./attachment-upload";
 import type { LocalServerConfig } from "./bootstrap";
+import { getLocalRequestContext } from "./request-context";
 
 /**
  * The cloud refused the desktop's session (HTTP 401): it expired or was revoked
@@ -112,7 +113,7 @@ export function createLocalSyncRuntime(
     pendingOutboxCount: countPendingOutbox(database),
     pendingForOtherUserCount: countPendingOutboxForOtherUsers(
       database,
-      getLocalSyncContext(config, database).userId,
+      getLocalRequestContext(config, database).userId,
     ),
     deferredOutboxCount: countDeferredOutbox(database),
     deadOutboxCount: countDeadOutbox(database),
@@ -608,7 +609,7 @@ async function pushPendingOutbox(
   recomputeBlockedOutbox(database);
   const pending = listPendingOutboxEvents(database, 50, {
     includeDeferred: options.includeDeferred,
-    actorUserId: getLocalSyncContext(config, database).userId,
+    actorUserId: getLocalRequestContext(config, database).userId,
   });
   if (pending.length === 0) return;
 
@@ -655,7 +656,7 @@ const MAX_PUSH_BODY_BYTES = 1_000_000;
  */
 const POISON_PUSH_STATUSES: readonly number[] = [400, 413, 414, 415, 422];
 
-type PushWireContext = ReturnType<typeof getLocalSyncContext>;
+type PushWireContext = ReturnType<typeof getLocalRequestContext>;
 
 function toWireEvent(
   config: LocalServerConfig,
@@ -691,7 +692,7 @@ function withinByteCap(
   database: LocalDatabase,
   events: ReturnType<typeof listPendingOutboxEvents>,
 ) {
-  const context = getLocalSyncContext(config, database);
+  const context = getLocalRequestContext(config, database);
   const taken: typeof events = [];
   let bytes = 0;
   for (const event of events) {
@@ -734,7 +735,7 @@ async function pushEventBatch(
   );
   if (sent.length === 0) return;
 
-  const context = getLocalSyncContext(config, database);
+  const context = getLocalRequestContext(config, database);
   const pushUrl = new URL("/api/sync/push", cloudApiUrl);
   const headers = new Headers({
     "Content-Type": "application/json",
@@ -914,40 +915,11 @@ async function isolatePoisonEvents(
   const restIds = new Set(events.slice(middle).map((event) => event.eventId));
   const rest = listPendingOutboxEvents(database, restIds.size + 500, {
     includeDeferred: true,
-    actorUserId: getLocalSyncContext(config, database).userId,
+    actorUserId: getLocalRequestContext(config, database).userId,
   }).filter((event) => restIds.has(event.eventId));
   if (rest.length === 0) return;
 
   await pushEventBatch(config, database, fetchImpl, rest, cloudApiUrl);
-}
-
-function getLocalSyncContext(
-  config: LocalServerConfig,
-  database: LocalDatabase,
-) {
-  const snapshot = database
-    .prepare<
-      [],
-      {
-        organization_id: string;
-        active_unit_id: number | null;
-        user_id: string;
-      }
-    >(
-      `
-SELECT organization_id, active_unit_id, user_id
-FROM tenant_snapshot
-ORDER BY pulled_at DESC
-LIMIT 1
-`,
-    )
-    .get();
-
-  return {
-    organizationId: config.organizationId ?? snapshot?.organization_id ?? null,
-    unitId: config.unitId ?? snapshot?.active_unit_id ?? null,
-    userId: config.userId ?? snapshot?.user_id ?? null,
-  };
 }
 
 function applyCloudAuthHeaders(config: LocalServerConfig, headers: Headers) {
@@ -972,7 +944,7 @@ function hasUnsentOwnChanges(
     countPendingOutbox(database) -
       countPendingOutboxForOtherUsers(
         database,
-        getLocalSyncContext(config, database).userId,
+        getLocalRequestContext(config, database).userId,
       ) >
     0
   );
@@ -988,7 +960,7 @@ function withLocalCounts(
     pendingOutboxCount: countPendingOutbox(database),
     pendingForOtherUserCount: countPendingOutboxForOtherUsers(
       database,
-      getLocalSyncContext(config, database).userId,
+      getLocalRequestContext(config, database).userId,
     ),
     deferredOutboxCount: countDeferredOutbox(database),
     deadOutboxCount: countDeadOutbox(database),

@@ -3,6 +3,7 @@ export * from "./criteria";
 export * from "./dimensional";
 export * from "./diagnostics";
 export * from "./execute";
+export * from "./execution-core";
 export * from "./fingerprint";
 export * from "./normalize";
 export * from "./preview";

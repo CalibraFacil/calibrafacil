@@ -5,6 +5,7 @@ export * from "./cnpj";
 export * from "./signup-email-policy";
 export * from "./public-api";
 export * from "./calibration-format";
+export * from "./calibration-record";
 // The kind-aware registry + value-conversion helpers are re-exported at the
 // root for convenience. The generic normalization helpers in `./units/normalize`
 // share function names with the mass-units wrappers below (same name, mass vs.

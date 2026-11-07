@@ -7,7 +7,10 @@ import {
   openLocalDatabase,
   upsertLocalJobProjection,
 } from "@calibra-facil/local-db";
-import { DESKTOP_EXECUTION_PAYLOAD_VERSION } from "@calibra-facil/schemas";
+import {
+  DESKTOP_EXECUTION_PAYLOAD_VERSION,
+  METHOD_DEVIATIONS_MAX_LENGTH,
+} from "@calibra-facil/schemas";
 import { createLocalServer } from "./server";
 import type { LocalServerConfig } from "./bootstrap";
 
@@ -127,9 +130,16 @@ describe("local server: the calibration record on execute and submit", () => {
     const blank = await post(app, "submit", {
       calibrationLocation: { type: "lab", addressText: "   " },
     });
+    // The cloud's request schema refuses a blank address before the record
+    // rule runs; the desktop answers the same way.
     expect(blank.status).toBe(400);
-    await expect(blank.json()).resolves.toEqual({
-      error: "Endereço/local da calibração é obrigatório",
+    await expect(blank.json()).resolves.toMatchObject({
+      issues: [
+        {
+          message: "Local da calibração é obrigatório",
+          path: ["calibrationLocation", "addressText"],
+        },
+      ],
     });
 
     const noReason = await post(app, "submit", {
@@ -180,6 +190,67 @@ describe("local server: the calibration record on execute and submit", () => {
       },
       executionPayloadVersion: DESKTOP_EXECUTION_PAYLOAD_VERSION,
     });
+    database.close();
+  });
+
+  // The execute/submit body is parsed with the cloud's own schemas
+  // (ExecuteJobSchema / SubmitForReviewSchema), so a payload the cloud refuses
+  // is refused here too instead of being cleaned up silently.
+  it.each([
+    ["a body without data", { data: undefined }],
+    [
+      "a location with an unknown type",
+      { calibrationLocation: { type: "moon", addressText: "A" } },
+    ],
+    [
+      "a phase block with an unknown mode",
+      { calibrationPhases: { blocks: { a: { mode: "sometimes" } } } },
+    ],
+    [
+      "a phase block without a mode",
+      { calibrationPhases: { blocks: { a: {} } } },
+    ],
+    ["an environment missing a reading", { environment: { temperature: 20 } }],
+    ["a non-numeric standard id", { selectedStandardIds: [1, "2"] }],
+    [
+      "deviations over the cloud limit",
+      { methodDeviations: "x".repeat(METHOD_DEVIATIONS_MAX_LENGTH + 1) },
+    ],
+    ["deviations that are not text", { methodDeviations: 42 }],
+    ["a performedAt that is not an ISO instant", { performedAt: "yesterday" }],
+    ["results that are not an object", { results: [1] }],
+  ])(
+    "REQ-EXEC-1: refuses %s with a 400 on execute and submit",
+    async (_label, body) => {
+      const { app, database } = createAppWithJob();
+
+      for (const action of ["execute", "submit"] as const) {
+        const response = await post(app, action, body);
+        expect(
+          response.status,
+          `${action}: ${await response.clone().text()}`,
+        ).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+          error: "Dados invalidos para execucao do job",
+        });
+      }
+      const job = await app.request("/api/jobs/123");
+      await expect(job.json()).resolves.toMatchObject({
+        status: "IN_PROGRESS",
+      });
+      expect(listPendingOutboxEvents(database, 50)).toEqual([]);
+      database.close();
+    },
+  );
+
+  it("REQ-EXEC-1: refuses a body that is not JSON", async () => {
+    const { app, database } = createAppWithJob();
+    const response = await app.request("/api/jobs/123/execute", {
+      method: "POST",
+      body: "not json",
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(response.status).toBe(400);
     database.close();
   });
 });

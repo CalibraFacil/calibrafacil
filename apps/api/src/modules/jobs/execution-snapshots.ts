@@ -6,8 +6,6 @@ import {
   referenceStandard,
   referenceStandardCertificateDocument,
   type AssetSnapshot,
-  type CalibrationLocationSnapshot,
-  type CalibrationPhaseSnapshot,
   type EnvironmentalLimitsSnapshot,
   type EnvironmentalSnapshot,
   type MethodSnapshot,
@@ -31,81 +29,11 @@ import {
 
 /**
  * The frozen records a calibration is recorded with (asset, reference
- * standards, environment, location, phases) and how the submit/execute command
- * builds each of them from what a caller sends. Moved verbatim from the cloud
- * job route so every entry point builds them the same way.
+ * standards, environment) and how the submit/execute command builds each of
+ * them from what a caller sends. The location and phase snapshots are built by
+ * the execution core (`@calibra-facil/method-definition`), shared with the
+ * desktop.
  */
-
-export function buildCalibrationLocationSnapshot(
-  input:
-    | {
-        type: "customer_site" | "lab" | "other";
-        addressText: string;
-        notes?: string | null;
-      }
-    | undefined,
-  existing: CalibrationLocationSnapshot | null | undefined,
-  actorUserId: string,
-): CalibrationLocationSnapshot | undefined {
-  if (!input) return existing ?? undefined;
-
-  return {
-    type: input.type,
-    addressText: input.addressText.trim(),
-    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
-    recordedAt: new Date().toISOString(),
-    recordedBy: actorUserId,
-  };
-}
-
-export function buildCalibrationPhaseSnapshot(
-  input:
-    | {
-        blocks: Record<
-          string,
-          {
-            mode:
-              | "before_and_after"
-              | "before_only"
-              | "after_only"
-              | "not_performed";
-            reason?: string | null;
-          }
-        >;
-      }
-    | undefined,
-  existing: CalibrationPhaseSnapshot | null | undefined,
-  actorUserId: string,
-): CalibrationPhaseSnapshot | undefined {
-  if (!input) return existing ?? undefined;
-
-  const blocks: CalibrationPhaseSnapshot["blocks"] = {};
-  for (const [key, block] of Object.entries(input.blocks ?? {})) {
-    if (!key.trim()) continue;
-    if (!isCalibrationPhaseMode(block.mode)) continue;
-    blocks[key] = {
-      mode: block.mode,
-      ...(block.reason?.trim() ? { reason: block.reason.trim() } : {}),
-    };
-  }
-
-  return {
-    blocks,
-    recordedAt: new Date().toISOString(),
-    recordedBy: actorUserId,
-  };
-}
-
-function isCalibrationPhaseMode(
-  mode: unknown,
-): mode is CalibrationPhaseSnapshot["blocks"][string]["mode"] {
-  return (
-    mode === "before_and_after" ||
-    mode === "before_only" ||
-    mode === "after_only" ||
-    mode === "not_performed"
-  );
-}
 
 function standardCertificateDocumentSnapshot(
   document: typeof referenceStandardCertificateDocument.$inferSelect,

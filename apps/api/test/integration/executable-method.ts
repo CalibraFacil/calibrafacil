@@ -1,10 +1,9 @@
 import {
   compileMethodDraft,
   fingerprintJson,
-  type CalculationEngineLike,
+  createMethodExecutionEngine,
 } from "@calibra-facil/method-definition";
 import {
-  createCalculationEngine,
   METHOD_ENGINE_OPTIONS,
   normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
@@ -32,10 +31,7 @@ export function minimalMethodSnapshot() {
  */
 export function executableMethodSnapshot() {
   const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- same adapter cast as routes/methods.ts and routes/jobs.ts: math-engine exposes a narrower concrete type than method-definition's engine interface.
-  const engine = createCalculationEngine(
-    METHOD_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
+  const engine = createMethodExecutionEngine();
   const engineVersion = normalizedOptions.engineVersion;
   const optionsFingerprint = fingerprintJson(
     normalizedOptions,

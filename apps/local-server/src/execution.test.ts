@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   compileMethodDraft,
   fingerprintJson,
+  createMethodExecutionEngine,
 } from "@calibra-facil/method-definition";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 
 import { executeLocalCompiledMethod } from "./execution";
-import { createMethodDefinitionEngine } from "./method-engine";
 
 /**
  * The desktop freezes a compiled method into every local job. A desktop release
@@ -15,7 +15,7 @@ import { createMethodDefinitionEngine } from "./method-engine";
  * of the same method is adopted in their place.
  */
 function compiledMethodWithEngineVersion(version: string, name = "Mass error") {
-  const engine = createMethodDefinitionEngine();
+  const engine = createMethodExecutionEngine();
   const result = compileMethodDraft(
     {
       id: "mass_error",

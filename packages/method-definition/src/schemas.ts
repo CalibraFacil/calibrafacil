@@ -1,3 +1,4 @@
+import { CALIBRATION_PHASE_MODES } from "@calibra-facil/shared/calibration-record";
 import { z } from "zod";
 
 const SafeKeySchema = z
@@ -373,12 +374,7 @@ const CalibrationPhaseSnapshotSchema = z
       z.string(),
       z
         .object({
-          mode: z.enum([
-            "before_and_after",
-            "before_only",
-            "after_only",
-            "not_performed",
-          ]),
+          mode: z.enum(CALIBRATION_PHASE_MODES),
           reason: z.string().trim().optional().nullable(),
         })
         .strict(),
