@@ -76,7 +76,7 @@ over another migration).
 - **Linter is oxlint, not ESLint.** Config in `.oxlintrc.json`. `correctness` is an error.
   Architectural boundaries are lint rules too: the custom `calibra/*` plugin
   (`packages/oxlint-plugin-calibra`) blocks `@calibra-facil/api` imports in frontends,
-  `hono/client` outside `client-runtime`, router coupling inside `apps/web/src/features`, `features/*` imports from the web low layers (`components`, `lib`, `utils`, `hooks`), app-local re-creations of `@calibra-facil/ui`
+  `hono/client` outside `client-runtime`, router coupling inside `apps/web/src/features`, `features/*` imports from the web/portal low layers (`components`, `lib`, `utils`, `hooks`), app-local re-creations of `@calibra-facil/ui`
   components, and new raw Tailwind palette colour classes (`text-red-500`...) in
   `apps/*/src/features` (a per-file ratchet that steers to `status-tone`).
 - **`as` type assertions are banned** (`consistent-type-assertions: never`). Use type guards,

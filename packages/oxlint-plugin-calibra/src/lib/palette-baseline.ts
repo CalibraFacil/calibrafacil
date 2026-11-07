@@ -8,6 +8,7 @@ export const PALETTE_BASELINE: Baseline = new Map<string, number>([
   ["apps/portal/src/features/reliability/drift-chart.tsx", 2],
   ["apps/portal/src/features/reliability/oot-assessment-panel.tsx", 4],
   ["apps/portal/src/features/service-orders/financial-summary-card.tsx", 1],
+  ["apps/portal/src/features/shell/portal-nav-main.tsx", 3],
   ["apps/portal/src/features/verification/verification-page.tsx", 6],
   ["apps/web/src/features/assets/components/asset-create-form.tsx", 2],
   ["apps/web/src/features/assets/components/metrology-regime-fields.tsx", 1],

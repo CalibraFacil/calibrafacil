@@ -1,0 +1,424 @@
+import { useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { type ColumnDef } from "@tanstack/react-table";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Cancel01Icon,
+  Download04Icon,
+  File01Icon,
+  Search01Icon,
+} from "@hugeicons/core-free-icons";
+import type { DateRange } from "react-day-picker";
+import { Badge } from "@calibra-facil/ui/badge";
+import { toast } from "sonner";
+import { PageHeader } from "@/components/page-header";
+import { StatusPill } from "@/components/status-pill";
+import { CertificateLifecyclePill } from "@/components/certificate-lifecycle-pill";
+import type { CertificateLifecycleStatus } from "@calibra-facil/schemas";
+import { Card, CardContent } from "@calibra-facil/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@calibra-facil/ui/empty";
+import { Input } from "@calibra-facil/ui/input";
+import { Button } from "@calibra-facil/ui/button";
+import { DateRangePicker } from "@calibra-facil/ui/date-range-picker";
+import { Spinner } from "@calibra-facil/ui/spinner";
+import { DataTable } from "@calibra-facil/ui/data-table";
+import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
+import {
+  portalCertificatesResponseSchema,
+  portalDownloadLinkResponseSchema,
+} from "@calibra-facil/contracts";
+import { fetchPortalJson } from "@/lib/api-fetch";
+import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { AuditPacksPanel } from "@/features/certificates/audit-packs";
+import { formatInstant } from "@calibra-facil/shared/format";
+
+type Certificate = {
+  id: number;
+  jobId: string;
+  status: string;
+  performedAt: string | null;
+  approvedAt: string | null;
+  certificateUrl: string | null;
+  verificationToken: string;
+  assetId: number;
+  assetName: string;
+  assetTag: string;
+  assetManufacturer: string | null;
+  assetModel: string | null;
+  assetSerialNumber: string;
+  serviceName: string;
+  labName: string;
+  /** Amendment chain (ISO 17025 §7.8.8) — see GET /api/portal/certificates. */
+  isSuperseded: boolean;
+  isAmendment: boolean;
+  amendmentNumber: number | null;
+  /** Lifecycle of the issued certificate (ISO 17025 §7.10): WITHDRAWN = do not rely on it. */
+  certificateStatus: CertificateLifecycleStatus;
+};
+
+type CertificatesResponse = {
+  data: Array<Certificate>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+function toDateParam(date: Date | undefined): string {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function DownloadButton({ certificate }: { certificate: Certificate }) {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (isDownloading || !certificate.certificateUrl) return;
+
+    setIsDownloading(true);
+    try {
+      const { url, filename } = await fetchPortalJson(
+        `/api/portal/certificates/${certificate.id}/download`,
+        portalDownloadLinkResponseSchema,
+        { errorMessage: "Falha ao baixar" },
+      );
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch {
+      toast.error("Não foi possível baixar o certificado.", {
+        description: "Tente novamente em instantes.",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  if (!certificate.certificateUrl) {
+    return (
+      <Badge variant="outline" className="whitespace-nowrap">
+        PDF em geração
+      </Badge>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      onClick={handleDownload}
+      disabled={isDownloading}
+    >
+      {isDownloading ? (
+        <Spinner className="size-4" />
+      ) : (
+        <HugeiconsIcon icon={Download04Icon} className="size-4" />
+      )}
+      <span className="sr-only">
+        Baixar PDF do certificado {certificate.jobId}
+      </span>
+    </Button>
+  );
+}
+
+// Module-level so the header/cell renderers are stable component types
+// instead of being re-created on every render of the page.
+const columns: ColumnDef<Certificate>[] = [
+  {
+    accessorKey: "jobId",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Certificado" />
+    ),
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+          <HugeiconsIcon icon={File01Icon} className="size-4 text-primary" />
+        </div>
+        <span className="font-medium whitespace-nowrap">
+          {row.original.jobId}
+        </span>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "assetName",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Instrumento" />
+    ),
+    cell: ({ row }) => (
+      <div>
+        <div className="font-medium">{row.original.assetName}</div>
+        <div className="text-xs text-muted-foreground">
+          {row.original.assetTag}
+          {row.original.assetManufacturer && (
+            <span> · {row.original.assetManufacturer}</span>
+          )}
+        </div>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "serviceName",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Serviço" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">{row.original.serviceName}</span>
+    ),
+  },
+  {
+    accessorKey: "approvedAt",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Data" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground tabular-nums">
+        {formatInstant(row.original.approvedAt, "date-medium")}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "status",
+    header: "Status",
+    // §7.8.8: a superseded original and its retificação must be
+    // distinguishable at a glance — same vocabulary as the public
+    // verification page.
+    cell: ({ row }) =>
+      row.original.certificateStatus === "WITHDRAWN" ? (
+        <CertificateLifecyclePill status="WITHDRAWN" />
+      ) : row.original.isSuperseded ? (
+        <CertificateLifecyclePill status="SUPERSEDED" />
+      ) : row.original.isAmendment ? (
+        <StatusPill tone="info">
+          Retificação nº {row.original.amendmentNumber ?? 1}
+        </StatusPill>
+      ) : (
+        <CertificateLifecyclePill status="ISSUED" />
+      ),
+  },
+  {
+    id: "actions",
+    header: () => <span className="sr-only">Ações</span>,
+    cell: ({ row }) => <DownloadButton certificate={row.original} />,
+  },
+];
+
+export function CertificatesPage({ assetId }: { assetId?: number }) {
+  const navigate = useNavigate();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const limit = 20;
+  const dateFrom = toDateParam(dateRange?.from);
+  const dateTo = toDateParam(dateRange?.to);
+  const hasFilters = Boolean(search || dateFrom || dateTo || assetId);
+
+  const key = usePortalQueryKey();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: key(
+      "portal-certificates",
+      page,
+      limit,
+      search,
+      dateFrom,
+      dateTo,
+      assetId ?? null,
+    ),
+    queryFn: async (): Promise<CertificatesResponse> => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+
+      if (search) {
+        params.set("query", search);
+      }
+
+      if (dateFrom) {
+        params.set("dateFrom", dateFrom);
+      }
+
+      if (dateTo) {
+        params.set("dateTo", dateTo);
+      }
+
+      if (assetId) {
+        params.set("assetId", String(assetId));
+      }
+
+      return fetchPortalJson(
+        `/api/portal/certificates?${params.toString()}`,
+        portalCertificatesResponseSchema,
+        { errorMessage: "Falha ao carregar certificados" },
+      );
+    },
+    placeholderData: keepPreviousDataInScope(key("portal-certificates")),
+  });
+
+  const handleRowClick = (certificate: Certificate) => {
+    navigate({
+      to: "/certificates/$id",
+      params: { id: certificate.jobId },
+    });
+  };
+
+  // When scoped to one instrument every row shares the asset, so the first
+  // page row labels the chip; fall back to a generic label on an empty page.
+  const assetFilterLabel = assetId
+    ? (data?.data?.[0]?.assetTag ?? "filtrado")
+    : null;
+
+  const clearAssetFilter = () => {
+    setPage(1);
+    void navigate({ to: "/certificates", search: {}, replace: true });
+  };
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setDateRange(undefined);
+    setPage(1);
+    if (assetId) {
+      void navigate({ to: "/certificates", search: {}, replace: true });
+    }
+  };
+
+  return (
+    <div className="portal-shell space-y-6">
+      <PageHeader
+        title="Certificados"
+        description="Acesse e baixe seus certificados de calibração."
+      />
+      <Card>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
+            <div className="relative min-w-50 flex-1 sm:max-w-sm">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                placeholder="Buscar por certificado, instrumento ou serviço..."
+                aria-label="Buscar por certificado, instrumento ou serviço"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                className="pl-9"
+              />
+            </div>
+
+            <DateRangePicker
+              value={dateRange}
+              onChange={(range) => {
+                setDateRange(range);
+                setPage(1);
+              }}
+              placeholder="Filtrar por período"
+              className="sm:w-64"
+            />
+
+            {assetFilterLabel ? (
+              <button
+                type="button"
+                onClick={clearAssetFilter}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-transparent bg-primary/10 px-3 text-xs font-medium text-primary transition-transform active:scale-[0.96]"
+              >
+                Instrumento:{" "}
+                <span className="font-mono tabular-nums">
+                  {assetFilterLabel}
+                </span>
+                <HugeiconsIcon icon={Cancel01Icon} className="size-3.5" />
+                <span className="sr-only">Remover filtro de instrumento</span>
+              </button>
+            ) : null}
+
+            {hasFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAllFilters}
+                className="h-9"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} className="mr-2 size-4" />
+                Limpar filtros
+              </Button>
+            )}
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+              Erro ao carregar certificados. Tente novamente.
+            </div>
+          )}
+
+          {!isLoading && !error && data?.data?.length === 0 && (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={File01Icon} />
+                </EmptyMedia>
+                <EmptyTitle>Nenhum certificado encontrado</EmptyTitle>
+                <EmptyDescription>
+                  {hasFilters
+                    ? "Nenhum certificado corresponde aos filtros aplicados."
+                    : "Seus certificados de calibração aparecerão aqui."}
+                </EmptyDescription>
+              </EmptyHeader>
+              {hasFilters && (
+                <EmptyContent>
+                  <Button variant="outline" onClick={clearAllFilters}>
+                    Limpar filtros
+                  </Button>
+                </EmptyContent>
+              )}
+            </Empty>
+          )}
+
+          {!error && (data?.data?.length ?? 0) > 0 && (
+            <DataTable
+              columns={columns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              onRowClick={handleRowClick}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+              itemName="certificados"
+            />
+          )}
+
+          {isLoading && !data && (
+            <DataTable columns={columns} data={[]} isLoading={true} />
+          )}
+        </CardContent>
+      </Card>
+
+      <AuditPacksPanel />
+    </div>
+  );
+}
