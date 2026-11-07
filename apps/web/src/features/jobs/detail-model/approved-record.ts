@@ -4,11 +4,11 @@ import {
   denormalizeSpecificationsForDisplay,
   resolveDisplayUnit,
 } from '@calibra-facil/shared/units'
-import { normalizeMethodValidations } from '@/components/method-runtime/math-runtime'
+import { normalizeMethodValidations } from '@/features/methods/runtime/math-runtime'
 import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
-} from '@/components/method-runtime/weighing-range-utils'
+} from '@/lib/weighing-range-utils'
 import {
   type ApprovedJobRecordData,
   type ReviewContextItem,

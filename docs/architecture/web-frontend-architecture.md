@@ -33,6 +33,17 @@ Routes import features. Features may import shared helpers, components, hooks,
 schemas, and client-runtime. Shared/app/runtime modules must not import feature
 modules unless they are explicitly composing the application shell.
 
+Layering is enforced: `components/`, `lib/`, `utils/` and `hooks/` are low layers
+that depend on nothing above them, so they never import `features/*`
+(`calibra/no-features-import-from-low-layers`, empty baseline). A piece that a
+low layer and several features share (the dashboard scope storage, the weighing
+range helpers) lives in the low layer. A file that needs a feature is part of
+that feature: the dashboard shell chrome (sidebar, header, user menu) is under
+`features/dashboard/components`, the command palette under `features/command-palette`,
+the method builder and method runtime under `features/methods/{builder,runtime}`,
+the finance status badges under `features/finance/components`. Route prewarm
+(`app/router/route-prewarm.ts`) is part of the route registry, not a helper.
+
 ## Thin Route Contract
 
 Files under `apps/web/src/routes` are navigation adapters. They may contain:
@@ -129,7 +140,7 @@ This includes:
 - dashboard localStorage keys
 
 Dashboard organization and unit storage is centralized in
-`apps/web/src/features/dashboard/dashboard-scope-storage.ts`. New code should not
+`apps/web/src/lib/dashboard-scope-storage.ts`. New code should not
 read or write `dashboard-active-org` or `dashboard-active-unit:*` directly.
 
 The `x-active-unit-id` header, route preloading, and dashboard shell should all

@@ -34,7 +34,7 @@ const apiMocks = vi.hoisted(() => ({
   withdrawCertificate: vi.fn(),
 }))
 
-vi.mock('@/components/method-runtime/math-runtime', () => ({
+vi.mock('@/features/methods/runtime/math-runtime', () => ({
   normalizeMethodValidations: (validations: unknown) =>
     Array.isArray(validations) ? validations : [],
 }))

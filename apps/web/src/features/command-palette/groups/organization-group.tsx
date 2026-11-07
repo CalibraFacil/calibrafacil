@@ -11,7 +11,7 @@ import {
   CommandGroup,
   CommandItem,
 } from '@calibra-facil/ui/command'
-import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
+import { setStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
 import { useCommandPalette } from '../command-context'
 
 export function OrganizationGroup() {

@@ -1,8 +1,8 @@
 import type { MethodsListData as ClientRuntimeMethodsListData } from '@calibra-facil/client-runtime'
 import type { MethodStatus } from '@calibra-facil/schemas/machines'
 
-import type { MethodRecordData } from '@/components/method-builder'
-import type { MethodData } from '@/components/method-runtime/types'
+import type { MethodRecordData } from '@/features/methods/builder'
+import type { MethodData } from '@/features/methods/runtime/types'
 
 export type { MethodStatus }
 

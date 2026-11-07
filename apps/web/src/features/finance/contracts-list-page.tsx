@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { COMMERCIAL_AGREEMENT_STATUS } from '@calibra-facil/shared'
 
-import { CommercialAgreementStatusBadge } from '@/components/finance-status-badges'
+import { CommercialAgreementStatusBadge } from '@/features/finance/components/finance-status-badges'
 import { formatFinanceDate } from '@/lib/finance-formatters'
 import {
   ACTION_BUTTON_CLASS,

@@ -34,9 +34,9 @@ import { convertUnitDelta, convertUnitValue } from '@calibra-facil/shared/units'
 import type {
   MethodInputField,
   MethodTableColumn,
-} from '@/components/method-runtime/types'
-import { createMethodCalculationEngine } from '@/components/method-runtime/math-runtime'
-import { applyStandardValueOption } from '@/components/method-runtime/standard-value-utils'
+} from '@/features/methods/runtime/types'
+import { createMethodCalculationEngine } from '@/features/methods/runtime/math-runtime'
+import { applyStandardValueOption } from '@/features/methods/runtime/standard-value-utils'
 
 import {
   buildCertifiedValueOptions,

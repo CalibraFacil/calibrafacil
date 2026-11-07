@@ -32,7 +32,7 @@ const toastMocks = vi.hoisted(() => ({
   success: vi.fn(),
 }))
 
-vi.mock('@/components/method-runtime/math-runtime', () => ({
+vi.mock('@/features/methods/runtime/math-runtime', () => ({
   buildFormulaContext: (
     _method: unknown,
     source: { data?: Record<string, unknown> },

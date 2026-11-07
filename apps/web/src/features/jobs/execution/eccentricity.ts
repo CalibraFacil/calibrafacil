@@ -1,5 +1,5 @@
 import { foldText } from '@calibra-facil/shared/text'
-import type { MethodInputField } from '@/components/method-runtime/types'
+import type { MethodInputField } from '@/features/methods/runtime/types'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   isEccentricityIndicatorPosition,

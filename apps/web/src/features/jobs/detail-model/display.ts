@@ -1,5 +1,5 @@
 import { formatCalibrationValue } from '@calibra-facil/shared'
-import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
+import { isMassCompositionValue } from '@/features/methods/runtime/mass-composition-utils'
 import { formatInstant } from '@calibra-facil/shared/format'
 import { type ReviewMethodColumn } from './types'
 

@@ -9,7 +9,7 @@ import type {
   MethodInputField,
   MethodValidation,
   MethodVariableBinding,
-} from '@/components/method-runtime/types'
+} from '@/features/methods/runtime/types'
 
 export interface ReferenceStandard {
   id: number

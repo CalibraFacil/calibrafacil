@@ -4,12 +4,12 @@ import type { FileRouteTypes } from '@/routeTree.gen'
  * The dashboard route registry: one declaration of what each dashboard route
  * is called and where it shows up. Everything else reads from here:
  *
- * - breadcrumb crumb      `title`            (components/dashboard-header.tsx)
+ * - breadcrumb crumb      `title`            (features/dashboard/components/dashboard-header.tsx)
  * - document (tab) title  `routeHead`        (each route file's `head`)
  * - sidebar               `nav`, `navTitle`  (route-meta.ts builds the sections)
  * - settings sidebar      `settingsNav`      (components/settings-nav.tsx)
  * - redirect target       `redirectTo`       (the redirecting route files)
- * - prewarm matching      the keys           (lib/route-prewarm.ts)
+ * - prewarm matching      the keys           (app/router/route-prewarm.ts)
  * - desktop availability  the keys           (runtime/desktop-offline-routes.ts)
  *
  * Ids are the router's `to` (an index route shares its parent's id). The

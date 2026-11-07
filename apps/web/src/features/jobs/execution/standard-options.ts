@@ -1,7 +1,7 @@
 import type { MassCompositionProfileDto } from '@calibra-facil/client-runtime'
-import { type CertifiedValueOption } from '@/components/method-runtime/table-input-renderer'
-import { type MassCompositionOption } from '@/components/method-runtime/mass-composition-utils'
-import type { StandardCertifiedValueOption } from '@/components/method-runtime/standard-value-utils'
+import { type CertifiedValueOption } from '@/features/methods/runtime/table-input-renderer'
+import { type MassCompositionOption } from '@/features/methods/runtime/mass-composition-utils'
+import type { StandardCertifiedValueOption } from '@/features/methods/runtime/standard-value-utils'
 import { type ReferenceStandard } from './types'
 
 export function buildCertifiedValueOptions({

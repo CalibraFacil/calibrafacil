@@ -20,7 +20,7 @@ import {
 import type {
   MethodFormula,
   ValidationResult,
-} from '@/components/method-runtime/types'
+} from '@/features/methods/runtime/types'
 import {
   buildExecutionFormulaContext,
   getDisplayedFormulaResults,

@@ -10,7 +10,7 @@ import {
 import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
-} from '@/components/finance-status-badges'
+} from '@/features/finance/components/finance-status-badges'
 import { formatFinanceDate } from '@/lib/finance-formatters'
 import {
   Money,

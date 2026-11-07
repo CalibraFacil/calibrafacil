@@ -6,11 +6,11 @@ import {
   useSession,
 } from '@calibra-facil/auth/client'
 
-import { AppSidebar } from '@/components/app-sidebar'
-import { CommandPalette } from '@/components/command-palette/command-palette'
-import { CommandPaletteProvider } from '@/components/command-palette/command-context'
-import { DashboardHeader } from '@/components/dashboard-header'
-import { SidebarMobileAutoClose } from '@/components/sidebar-mobile-autoclose'
+import { AppSidebar } from '@/features/dashboard/components/app-sidebar'
+import { CommandPalette } from '@/features/command-palette/command-palette'
+import { CommandPaletteProvider } from '@/features/command-palette/command-context'
+import { DashboardHeader } from '@/features/dashboard/components/dashboard-header'
+import { SidebarMobileAutoClose } from '@/features/dashboard/components/sidebar-mobile-autoclose'
 import { SidebarInset, SidebarProvider } from '@calibra-facil/ui/sidebar'
 import { DashboardContextStateContext } from '@/contexts/dashboard-context'
 import {
@@ -24,7 +24,7 @@ import {
   DashboardReadyMarker,
   PersistDashboardOrgSelection,
 } from './dashboard-org-bootstrap'
-import { getStoredDashboardOrganizationId } from './dashboard-scope-storage'
+import { getStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
 import {
   DashboardLocalPartitionBlockedState,
   DashboardOnboardingState,

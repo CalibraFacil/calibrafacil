@@ -6,7 +6,7 @@ import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
 import { SaveButton } from '@/components/ui/save-button'
 import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
-import type { MethodInputField } from '@/components/method-runtime/types'
+import type { MethodInputField } from '@/features/methods/runtime/types'
 import type { JobData } from '@/features/jobs/execution'
 import type { buildAssetSpecSummaryItems } from '../execute-page-helpers'
 

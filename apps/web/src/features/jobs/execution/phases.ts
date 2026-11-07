@@ -1,4 +1,4 @@
-import type { MethodInputField } from '@/components/method-runtime/types'
+import type { MethodInputField } from '@/features/methods/runtime/types'
 import {
   type CalibrationPhase,
   type CalibrationPhaseMode,

@@ -82,7 +82,8 @@
     "calibra/no-unparsed-portal-fetch": "error",
     "calibra/no-raw-palette-color-classes": "error",
     "calibra/no-app-ui-primitive-recreation": "error",
-    "calibra/no-error-response-in-transaction": "error"
+    "calibra/no-error-response-in-transaction": "error",
+    "calibra/no-features-import-from-low-layers": "error"
   },
   "overrides": [
     {

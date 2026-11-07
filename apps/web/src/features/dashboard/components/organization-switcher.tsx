@@ -38,7 +38,7 @@ import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   setStoredDashboardActiveUnitIdForOrganization,
   setStoredDashboardOrganizationId,
-} from '@/features/dashboard/dashboard-scope-storage'
+} from '@/lib/dashboard-scope-storage'
 import { switchScope } from '@/lib/switch-scope'
 
 export function OrganizationSwitcher() {

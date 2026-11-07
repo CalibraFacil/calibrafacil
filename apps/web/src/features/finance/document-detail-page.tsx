@@ -8,7 +8,7 @@ import { useFinanceAccess } from '@/hooks/use-finance-access'
 import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
-} from '@/components/finance-status-badges'
+} from '@/features/finance/components/finance-status-badges'
 import { dateOnlyToInputValue } from '@calibra-facil/shared/calendar-date'
 import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import {

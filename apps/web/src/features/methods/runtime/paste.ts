@@ -1,5 +1,5 @@
 import { parseNumericValue } from '@calibra-facil/shared/units'
-import type { MethodTableColumn } from '@/components/method-runtime/types'
+import type { MethodTableColumn } from './types'
 import { parseClipboardMatrix } from '@/lib/clipboard-table'
 
 export function isNumericString(value: string) {
