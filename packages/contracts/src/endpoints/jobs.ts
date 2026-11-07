@@ -37,8 +37,8 @@ import { endpoint, type EndpointGroup } from "./define";
  * normalizes the code before it reaches the URL (`modules/jobs.ts`).
  *
  * Not defined here, because the SDK does not call them as endpoints: the command
- * palette search, the label line, the amendment chain, the audit log, the file
- * and label-file downloads, and the job edit (`PUT /:id`). `GET /:id/label-commands`
+ * palette search, the label line, the amendment chain, the audit log, and the
+ * job edit (`PUT /:id`). `GET /:id/label-commands`
  * answers plain text (ZPL/TSPL), which the JSON endpoint client does not read:
  * the SDK method is hand-written.
  */

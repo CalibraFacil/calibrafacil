@@ -4,7 +4,7 @@ import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { toApiErrorJson } from "../lib/api-error-json";
-import { DomainError, invalid, notFound } from "../lib/domain-errors";
+import { DomainError, invalid } from "../lib/domain-errors";
 import {
   renderLabel,
   defaultRenderOptions,
@@ -112,10 +112,8 @@ import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
 import {
-  shouldUseLocalR2Download,
   r2EnvFromUnknown,
   methodSnapshotDisplay,
-  buildLocalJobFileUrl,
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
 import { approvalRefusalError } from "../modules/jobs/approval-refusals";
@@ -1655,74 +1653,12 @@ mount(
     }
 
     const env = r2EnvFromUnknown(c.env);
-    if (shouldUseLocalR2Download(env)) {
-      return {
-        url: buildLocalJobFileUrl(
-          c.req.url,
-          params.id,
-          "certificate",
-          env.API_URL,
-        ),
-      };
-    }
 
     const key = extractKeyFromUrl(job.certificateUrl);
     const client = createR2Client(env);
     const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
 
     return { url };
-  },
-);
-
-// =========================================================================
-// GET /:id/file - Stream certificate from R2 during local dev
-// =========================================================================
-jobsRouter.get(
-  "/:id/file",
-  ...withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const env = r2EnvFromUnknown(c.env);
-    if (!shouldUseLocalR2Download(env)) {
-      throw notFound("not_found", "Disponivel apenas em desenvolvimento local");
-    }
-
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-      o
-        .select({ certificateUrl: calibrationJob.certificateUrl })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1),
-    );
-
-    if (!job?.certificateUrl) {
-      throw invalid(
-        "certificate_not_ready",
-        "Certificado ainda nao foi gerado",
-      );
-    }
-
-    const key = extractKeyFromUrl(job.certificateUrl);
-    const object = await env.CERTIFICATES_BUCKET.get(key);
-
-    if (!object) {
-      throw notFound("not_found", "Arquivo nao encontrado no R2 local");
-    }
-
-    return new Response(object.body, {
-      headers: {
-        "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
-        "Content-Disposition": 'inline; filename="certificado.pdf"',
-      },
-    });
   },
 );
 
@@ -1817,11 +1753,6 @@ mount(
     }
 
     const env = r2EnvFromUnknown(c.env);
-    if (shouldUseLocalR2Download(env)) {
-      return {
-        url: buildLocalJobFileUrl(c.req.url, params.id, "label", env.API_URL),
-      };
-    }
 
     const key = extractKeyFromUrl(job.labelUrl);
     const client = createR2Client(env);
@@ -1889,54 +1820,5 @@ jobsRouter.get(
     );
 
     return c.text(commands);
-  },
-);
-
-// =========================================================================
-// GET /:id/label-file - Stream label from R2 during local dev
-// =========================================================================
-jobsRouter.get(
-  "/:id/label-file",
-  ...withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const env = r2EnvFromUnknown(c.env);
-    if (!shouldUseLocalR2Download(env)) {
-      throw notFound("not_found", "Disponivel apenas em desenvolvimento local");
-    }
-
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-      o
-        .select({ labelUrl: calibrationJob.labelUrl })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1),
-    );
-
-    if (!job?.labelUrl) {
-      throw invalid("invalid_request", "Etiqueta ainda nao foi gerada");
-    }
-
-    const key = extractKeyFromUrl(job.labelUrl);
-    const object = await env.CERTIFICATES_BUCKET.get(key);
-
-    if (!object) {
-      throw notFound("not_found", "Arquivo nao encontrado no R2 local");
-    }
-
-    return new Response(object.body, {
-      headers: {
-        "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
-        "Content-Disposition": 'inline; filename="etiqueta.pdf"',
-      },
-    });
   },
 );
