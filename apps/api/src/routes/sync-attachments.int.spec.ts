@@ -14,6 +14,7 @@
  *              unchanged blob; otherwise it is refused with a stable code, and an
  *              older protocol is refused for good
  */
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -238,6 +239,7 @@ async function push(
         deviceId: "device-att",
         clientBatchId: "batch-att",
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         protocolVersion,
         events: [event],
       }),

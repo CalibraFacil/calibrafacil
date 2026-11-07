@@ -1,3 +1,4 @@
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
 import { syncRouter } from "./sync";
@@ -231,6 +232,7 @@ async function pushEvent(
       deviceId: "device-resolution-1",
       clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       events: [event],
     }),
   });

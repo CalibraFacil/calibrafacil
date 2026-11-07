@@ -1,3 +1,4 @@
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
 import { syncRouter } from "./sync";
@@ -232,6 +233,7 @@ function buildPushBody(events: Record<string, unknown>[]): string {
     deviceId: "device-divergence-1",
     clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
     baseCursor: null,
+    ...CURRENT_DESKTOP_BUILD,
     events,
   });
 }

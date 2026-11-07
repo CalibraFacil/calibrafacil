@@ -16,6 +16,7 @@
  * getSession only); its getSession stays the harness mock.
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, like } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -94,6 +95,7 @@ async function push(org: Org, event: Record<string, unknown>) {
         deviceId: "device-conn",
         clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         events: [event],
       }),
     }),

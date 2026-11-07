@@ -9,6 +9,7 @@
  * organization, with a second laboratory seeded alongside so a mis-attribution would
  * show.
  */
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
@@ -241,6 +242,7 @@ async function push(
       deviceId: "device-org-1",
       clientBatchId: `batch-${eventId}`,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       events: [
         {
           ...event,

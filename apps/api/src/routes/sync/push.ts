@@ -1,20 +1,20 @@
 import { createRouter } from "../../server/router";
 import {
   LEGACY_SYNC_PROTOCOL_VERSION,
+  SYNC_MIN_PROTOCOL_VERSION,
   SYNC_PROTOCOL_VERSION,
   buildSyncProtocolUnsupportedResponse,
-  buildSyncUpdateRequiredResponse,
   evaluateDesktopVersionGate,
   parseSyncCommand,
   syncEventSchema,
   syncPushRequestEnvelopeSchema,
   syncPushResponseSchema,
 } from "@calibra-facil/contracts";
-import { readSyncConfig } from "@calibra-facil/config";
 import {
   buildDesktopSyncConflictId,
   buildSyncPushCursor,
 } from "@calibra-facil/contracts";
+import { readSyncConfig } from "@calibra-facil/config";
 import { domainErrorResponse, invalid } from "../../lib/domain-errors";
 import {
   requireLabProtected,
@@ -37,6 +37,10 @@ import {
 } from "../../modules/sync/desktop-sync-support";
 import { prepareDesktopEventSideEffects } from "../../modules/sync/side-effects";
 import { applyDesktopSyncEvent } from "../../modules/sync/apply-event";
+import {
+  minimumDesktopVersion,
+  updateRequiredBody,
+} from "../../modules/sync/minimum-desktop-version";
 import {
   authorizeSyncOperation,
   memberForEventUnit,
@@ -85,16 +89,20 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
       return c.json(buildSyncProtocolUnsupportedResponse(protocolVersion), 400);
     }
 
-    // Minimum desktop version (Q28). Answered before any event is looked at:
+    // The operator's own minimum ends the calibration-record exemption of events a
+    // build before the rule left in an outbox (Q28); the floor below does not.
+    const configuredMinimumDesktopVersion = readSyncConfig().minDesktopVersion;
+
+    // Minimum desktop version (Q28, Q69). Answered before any event is looked at:
     // nothing is applied, claimed or dead-lettered, so the queue survives the
-    // upgrade untouched.
-    const minimumDesktopVersion = readSyncConfig().minDesktopVersion;
+    // upgrade untouched. A push of a protocol the cloud no longer serves is the
+    // same refusal (a build that reports a version but not protocol 3).
     const versionGate = evaluateDesktopVersionGate({
-      minimumVersion: minimumDesktopVersion,
+      minimumVersion: minimumDesktopVersion(),
       desktopVersion: body.desktopVersion,
     });
-    if (!versionGate.ok) {
-      return c.json(buildSyncUpdateRequiredResponse(versionGate), 426);
+    if (!versionGate.ok || protocolVersion < SYNC_MIN_PROTOCOL_VERSION) {
+      return c.json(updateRequiredBody(body.desktopVersion ?? null), 426);
     }
 
     const accepted: Array<{
@@ -286,7 +294,7 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
               sessionUserId: session.user.id,
               deviceId: body.deviceId,
               clientBatchId: body.clientBatchId,
-              minimumDesktopVersion,
+              minimumDesktopVersion: configuredMinimumDesktopVersion,
               batch,
               prepared,
             }),

@@ -13,6 +13,7 @@
  * queue and the notifications are faked).
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -106,6 +107,7 @@ async function pushSubmit(world: World, payload: Record<string, unknown>) {
       deviceId: "device-p112",
       clientBatchId: `batch-${eventId}`,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       events: [
         {
           eventId,

@@ -7,6 +7,7 @@ import {
   fingerprintJson,
   createMethodExecutionEngine,
 } from "@calibra-facil/method-definition";
+import { buildJobRow } from "@calibra-facil/contracts/jobs-fixtures";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import {
   applySyncBootstrap,
@@ -575,6 +576,7 @@ INSERT INTO reference_standards (
               offlineCertificatePublication: false,
             },
             syncCursor: "cursor-after-bootstrap",
+            page: { nextToken: null, rowCount: 0 },
             publishedMethods: [],
             assetTypes: [],
             customers: [],
@@ -894,6 +896,7 @@ LIMIT 1
             offlineCertificatePublication: false,
           },
           syncCursor: "cursor-after-bootstrap",
+          page: { nextToken: null, rowCount: 0 },
           publishedMethods: [],
           assetTypes: [],
           customers: [],
@@ -1368,6 +1371,7 @@ WHERE service_order_number = 'OS-2026-0009'
           offlineCertificatePublication: false,
         },
         syncCursor: "cursor-after-bootstrap",
+        page: { nextToken: null, rowCount: 0 },
         publishedMethods: [],
         assetTypes: [],
         customers: [],
@@ -1628,6 +1632,7 @@ INSERT INTO sync_conflicts (
               offlineCertificatePublication: false,
             },
             syncCursor: "cursor-1",
+            page: { nextToken: null, rowCount: 0 },
             publishedMethods: [],
             assetTypes: [],
             customers: [
@@ -1797,6 +1802,7 @@ INSERT INTO sync_conflicts (
             offlineCertificatePublication: false,
           },
           syncCursor: "cursor-after-bootstrap",
+          page: { nextToken: null, rowCount: 0 },
           publishedMethods: [],
           assetTypes: [],
           customers: [],
@@ -1804,7 +1810,20 @@ INSERT INTO sync_conflicts (
           services: [],
           standards: [],
           environmentalLimits: [],
-          jobs: [],
+          // The cloud still has the job the desktop executed: a bootstrap that did not
+          // list it would remove its mirror.
+          jobs: [
+            buildJobRow({
+              id: 12345,
+              jobId: "CAL-2026-0001",
+              customerId: 123,
+              assetId: 789,
+              serviceId: 654,
+              status: "REVIEW",
+              data: null,
+              technicianId: "user-1",
+            }),
+          ],
         });
       },
     };
@@ -2359,14 +2378,14 @@ WHERE calibration_jobs.remote_id = @remoteId
         )
         .get({ remoteId: 12345 }),
     );
-    // The job was assigned by the cloud, so a push only drains the execution
-    // events. The row's sync state is refreshed by the next pull projection,
-    // not by the push acceptance (only offline creates adopt a remote entity).
+    // The job was assigned by the cloud, so the push only drains the execution
+    // events; the bootstrap that follows re-delivers the job (only offline creates
+    // adopt a remote entity).
     expect(syncedJob).toEqual({
       job_id: "CAL-2026-0001",
       status: "REVIEW",
       certificate_url: null,
-      sync_state: "local",
+      sync_state: "synced",
     });
 
     database.close();

@@ -10,7 +10,6 @@ import {
   syncProtocolUnsupportedResponseSchema,
   syncUpdateRequiredResponseSchema,
   syncPullResponseSchema,
-  syncBootstrapResponseSchema,
   syncPushResponseSchema,
   type SyncPushRequest,
   type SyncResyncRequiredResponse,
@@ -18,7 +17,6 @@ import {
 } from "@calibra-facil/contracts";
 import {
   applySyncPullResponse,
-  applySyncBootstrap,
   applySyncBootstrapPage,
   applySyncPushResult,
   countBlockedOutbox,
@@ -428,8 +426,7 @@ export async function notifyCloudConflictResolution(
 /**
  * The initial sync: the paged bootstrap of protocol 3, resuming at the page after the
  * last one that was applied when a previous run was cut short (the token is stored with
- * the page's rows, atomically). A cloud that predates protocol 3 ignores the request's
- * `protocolVersion` and answers the whole bootstrap at once, which is applied as before.
+ * the page's rows, atomically).
  */
 async function bootstrapFromCloud(
   config: LocalServerConfig,
@@ -469,26 +466,17 @@ async function bootstrapFromCloud(
       throw new Error(`Cloud bootstrap failed with HTTP ${response.status}`);
     }
 
-    const body: unknown = await response.json();
-    const paged = syncBootstrapPageResponseSchema.safeParse(body);
-    if (!paged.success) {
-      // Protocol 1/2 cloud: the whole thing in one response.
-      discardBootstrapProgress(database);
-      applySyncBootstrap(
-        database,
-        syncBootstrapResponseSchema.parse(body),
-        syncedAt,
-      );
-      return;
-    }
+    // A cloud that predates protocol 3 answers the whole bootstrap at once: not a page,
+    // so it fails here (a desktop of this build needs a cloud that serves pages).
+    const paged = syncBootstrapPageResponseSchema.parse(await response.json());
 
     applySyncBootstrapPage(
       database,
-      paged.data,
+      paged,
       { first: token === null },
       syncedAt,
     );
-    token = paged.data.page.nextToken;
+    token = paged.page.nextToken;
     if (token === null) return;
   }
 
@@ -542,8 +530,8 @@ async function pullCloudChanges(
   // cap (or a network failure) resumes where it stopped instead of restarting.
   for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
     const pullUrl = new URL("/api/sync/pull", config.cloudApiUrl);
-    // States the protocol this desktop pulls with: a cloud of protocol 3 or later serves
-    // the commit-ordered change log, an older one ignores it and serves `updatedAt`.
+    // States the protocol this desktop pulls with: the cloud serves the commit-ordered
+    // change log to protocol 3 or later and tells an older build to update.
     pullUrl.searchParams.set(
       SYNC_PULL_PROTOCOL_PARAM,
       String(SYNC_CHANGE_SEQ_PROTOCOL_VERSION),

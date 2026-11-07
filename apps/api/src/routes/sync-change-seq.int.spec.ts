@@ -5,16 +5,16 @@
  *
  *   REQ-CS-1  [HIGH RISK] the pull reads a server-side change log by position and only
  *             up to the oldest transaction still in flight: a row whose transaction
- *             commits after a later-written row was pulled is still pulled (RED on the
- *             old `updatedAt` cursor, which loses it: see the baseline test)
+ *             commits after a later-written row was pulled is still pulled
  *   REQ-CS-2  deletes, soft deletes and moves out of the desktop's unit scope are
  *             tombstones (`op = 'delete'`)
  *   REQ-CS-3  the bootstrap is paged: bounded pages, one cursor, nothing lost or repeated
- *   REQ-CS-4  protocol 1 and 2 desktops keep the `updatedAt` pull; a protocol 3 pull with
+ *   REQ-CS-4  protocol 1 and 2 desktops are told to update (Q69); a protocol 3 pull with
  *             a cursor of another protocol is told to bootstrap again
  *   REQ-CS-5  tenant-scoped log, retention purge, a cursor older than the purge horizon is
  *             told to bootstrap again
  */
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -29,10 +29,13 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import {
+  DESKTOP_UPDATE_REQUIRED_CODE,
+  SYNC_DESKTOP_VERSION_FLOOR,
   SYNC_RESYNC_REQUIRED_CODE,
   syncBootstrapPageResponseSchema,
   syncPullResponseSchema,
   syncResyncRequiredResponseSchema,
+  syncUpdateRequiredResponseSchema,
 } from "@calibra-facil/contracts";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -306,47 +309,6 @@ describe("sync change sequence (protocol 3)", () => {
     // Nothing is repeated once the log is drained.
     const drained = await pullSettled(org, { cursor: after.cursor });
     expect(drained.events).toEqual([]);
-  });
-
-  it("REQ-CS-1: the same scenario on the old updatedAt cursor LOSES the late-committing row (the hazard this replaces)", async () => {
-    const org = await seedOrg({ orgId: ORG, role: "admin" });
-    const clientA = await newClientOrg("client-old-a");
-    const clientB = await newClientOrg("client-old-b");
-
-    const slow = holdTransaction(async (tx) => {
-      await tx.insert(customer).values({
-        name: "Tardio",
-        authOrganizationId: clientA,
-        labOrganizationId: org.orgId,
-      });
-    });
-    await slow.ready;
-    // updatedAt is the transaction's start time: make B strictly later.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await db.insert(customer).values({
-      name: "Cedo",
-      authOrganizationId: clientB,
-      labOrganizationId: org.orgId,
-    });
-
-    loginAs({ userId: org.userId, organizationId: org.orgId });
-    const first = await syncRouter.request(
-      "/pull?cursor=1970-01-01T00%3A00%3A00.000Z",
-      { headers: scopeHeaders(org) },
-    );
-    const firstBody = syncPullResponseSchema.parse(await first.json());
-    expect(firstBody.events.map((event) => event.entityType)).toEqual([
-      "customer",
-    ]);
-
-    await slow.commit();
-    const second = await syncRouter.request(
-      `/pull?cursor=${encodeURIComponent(firstBody.cursor ?? "")}`,
-      { headers: scopeHeaders(org) },
-    );
-    const secondBody = syncPullResponseSchema.parse(await second.json());
-    // The row of transaction A never arrives: this is what the change log fixes.
-    expect(secondBody.events).toEqual([]);
   });
 
   it("REQ-CS-1: a transaction that rolls back leaves nothing in the log and does not hold later commits back", async () => {
@@ -711,21 +673,24 @@ describe("sync change sequence (protocol 3)", () => {
   // REQ-CS-4
   // -------------------------------------------------------------------------
 
-  it("REQ-CS-4: a pull without a protocol (desktops of protocol 1 and 2) keeps the updatedAt cursor and is marked deprecated", async () => {
+  it("REQ-CS-4 (Q69): a pull that states no protocol, or protocol 2, is told to update (426, typed); nothing is served", async () => {
     const org = await seedOrg({ orgId: ORG, role: "admin" });
-    const id = await seedCustomer({
-      labOrganizationId: org.orgId,
-      name: "Legado",
-    });
-    const response = await pull(org, {
-      cursor: "1970-01-01T00:00:00.000Z",
-      protocol: null,
-    });
-    expect(response.status).toBe(200);
-    expect(response.headers.get("deprecation")).toBe("true");
-    const body = syncPullResponseSchema.parse(await response.json());
-    expect(labels(body.events)).toContain(`customer:${id}:upsert`);
-    expect(body.cursor).not.toMatch(/^v3\|/);
+    await seedCustomer({ labOrganizationId: org.orgId, name: "Legado" });
+    for (const protocol of [null, 2]) {
+      const response = await pull(org, {
+        cursor: "1970-01-01T00:00:00.000Z",
+        protocol,
+      });
+      expect(response.status).toBe(426);
+      const body = syncUpdateRequiredResponseSchema.parse(
+        await response.json(),
+      );
+      expect(body).toMatchObject({
+        code: DESKTOP_UPDATE_REQUIRED_CODE,
+        minimumVersion: SYNC_DESKTOP_VERSION_FLOOR,
+        desktopVersion: null,
+      });
+    }
   });
 
   it("REQ-CS-4: a protocol 3 pull with an updatedAt cursor, or with none, is told to bootstrap again (typed)", async () => {
@@ -749,35 +714,24 @@ describe("sync change sequence (protocol 3)", () => {
   // REQ-CS-5
   // -------------------------------------------------------------------------
 
-  it("REQ-CS-4: a bootstrap without a body (protocol 1 and 2) is the one unpaginated response, marked deprecated", async () => {
+  it("REQ-CS-4 (Q69): a bootstrap without a protocol (a body-less request, or protocol 2) is told to update (426, typed); nothing is served", async () => {
     const org = await seedOrg({ orgId: ORG, role: "admin" });
-    const id = await seedCustomer({
-      labOrganizationId: org.orgId,
-      name: "Legado",
-    });
+    await seedCustomer({ labOrganizationId: org.orgId, name: "Legado" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
-    const response = await syncRouter.request("/bootstrap", {
-      method: "POST",
-      headers: scopeHeaders(org),
-    });
-    expect(response.status).toBe(200);
-    expect(response.headers.get("deprecation")).toBe("true");
-    const raw: unknown = await response.json();
-    expect(
-      Object.keys(z.record(z.string(), z.unknown()).parse(raw)),
-    ).not.toContain("page");
-    const body = z
-      .object({
-        customers: z.array(z.object({ id: z.number() })),
-        syncCursor: z.string().nullable(),
-      })
-      .parse(raw);
-    expect(body.customers.map((row) => row.id)).toEqual([id]);
-    // The legacy cursor stays an ISO timestamp: an old desktop can read it.
-    expect(Number.isNaN(Date.parse(body.syncCursor ?? ""))).toBe(false);
+    for (const body of [undefined, JSON.stringify({ protocolVersion: 2 })]) {
+      const response = await syncRouter.request("/bootstrap", {
+        method: "POST",
+        headers: scopeHeaders(org),
+        ...(body === undefined ? {} : { body }),
+      });
+      expect(response.status).toBe(426);
+      expect(
+        syncUpdateRequiredResponseSchema.parse(await response.json()).code,
+      ).toBe(DESKTOP_UPDATE_REQUIRED_CODE);
+    }
   });
 
-  it("REQ-CS-4: a push stating protocol 3 is accepted, a protocol newer than the cloud speaks is refused as before", async () => {
+  it("REQ-CS-4: a push stating protocol 3 is accepted, protocol 2 is told to update, a protocol newer than the cloud speaks is refused as before", async () => {
     const org = await seedOrg({ orgId: ORG, role: "admin" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const push = (protocolVersion: number) =>
@@ -788,12 +742,13 @@ describe("sync change sequence (protocol 3)", () => {
           deviceId: "device-cs",
           clientBatchId: "batch-cs",
           baseCursor: null,
+          ...CURRENT_DESKTOP_BUILD,
           protocolVersion,
           events: [],
         }),
       });
     expect((await push(3)).status).toBe(200);
-    expect((await push(2)).status).toBe(200);
+    expect((await push(2)).status).toBe(426);
     expect((await push(4)).status).toBe(200);
     expect((await push(5)).status).toBe(400);
   });

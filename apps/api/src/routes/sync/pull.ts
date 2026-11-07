@@ -1,6 +1,6 @@
 import { createRouter } from "../../server/router";
 import {
-  SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
+  SYNC_MIN_PROTOCOL_VERSION,
   SYNC_PULL_PROTOCOL_PARAM,
   buildSyncResyncRequiredResponse,
   syncAckRequestSchema,
@@ -10,46 +10,33 @@ import {
 import { withLabPermission } from "../../middleware/permission";
 import { pullChangeLog } from "../../modules/sync/change-log";
 import { parseSyncPullLimit } from "../../modules/sync/helpers";
-import { parseSyncPullPosition } from "../../modules/sync/pull-cursor";
+import { updateRequiredBody } from "../../modules/sync/minimum-desktop-version";
 import { type SyncRouterEnv, getMemberData } from "./env";
-import { loadCloudSyncEventsSince } from "../../modules/sync/cloud-events";
 
 export const pullRoutes = createRouter<SyncRouterEnv>()
   .get("/pull", ...withLabPermission({ calibration: ["read"] }), async (c) => {
     const limit = parseSyncPullLimit(c.req.query("limit"));
     const memberData = getMemberData(c);
 
-    // Protocol 3: the commit-ordered change log (modules/sync/change-log.ts).
+    // The commit-ordered change log (modules/sync/change-log.ts). A pull that does not
+    // state protocol 3 or later comes from a build that cannot read it (the `updatedAt`
+    // pull of protocols 1 and 2 is gone): it is told to update.
     const requestedProtocol = Number.parseInt(
       c.req.query(SYNC_PULL_PROTOCOL_PARAM) ?? "",
       10,
     );
-    if (requestedProtocol >= SYNC_CHANGE_SEQ_PROTOCOL_VERSION) {
-      const pull = await pullChangeLog({
-        scope: memberData,
-        cursor: c.req.query("cursor"),
-        limit,
-      });
-      if (pull.kind === "resync") {
-        return c.json(buildSyncResyncRequiredResponse(pull.reason), 409);
-      }
-      return c.json(
-        syncPullResponseSchema.parse({
-          cursor: pull.cursor,
-          hasMore: pull.hasMore,
-          events: pull.events,
-        }),
-      );
+    if (!(requestedProtocol >= SYNC_MIN_PROTOCOL_VERSION)) {
+      return c.json(updateRequiredBody(null), 426);
     }
 
-    // DEPRECATED (protocols 1 and 2): the `updatedAt` cursor. It cannot see a row whose
-    // transaction commits after a later-written row was pulled, and it never carries a
-    // hard delete. Kept so deployed desktops keep working until
-    // SYNC_MIN_DESKTOP_VERSION excludes them (DEPLOYMENT.md); delete it then.
-    const since = parseSyncPullPosition(c.req.query("cursor"));
-    const pull = await loadCloudSyncEventsSince(memberData, since, limit);
-    c.header("Deprecation", "true");
-
+    const pull = await pullChangeLog({
+      scope: memberData,
+      cursor: c.req.query("cursor"),
+      limit,
+    });
+    if (pull.kind === "resync") {
+      return c.json(buildSyncResyncRequiredResponse(pull.reason), 409);
+    }
     return c.json(
       syncPullResponseSchema.parse({
         cursor: pull.cursor,

@@ -1,7 +1,7 @@
 # The desktop change log (sync protocol 3)
 
-Roadmap P2-4b. Replaces the `updatedAt` pull cursor and the unpaginated bootstrap of sync protocols 1
-and 2. Code: `apps/api/src/modules/sync/{change-log,bootstrap-pages,entity-sources}.ts`,
+Roadmap P2-4b. Replaced the `updatedAt` pull cursor and the unpaginated bootstrap of sync protocols 1
+and 2 (retired, Q69). Code: `apps/api/src/modules/sync/{change-log,bootstrap-pages,entity-sources}.ts`,
 `packages/db/drizzle/0122_sync_change_log.sql`, `packages/contracts/src/sync-change-seq.ts`; on the
 desktop `packages/local-db/src/{sync,skipped-rows}.ts` and `apps/local-server/src/sync.ts`.
 
@@ -148,14 +148,17 @@ A fresh bootstrap's cursor is `(xmin, 0)`, above any horizon.
 
 ## Compatibility (REQ-CS-4)
 
-Protocol 1 and 2 desktops send neither `protocolVersion` on the bootstrap body nor on the pull: they get the
-old behaviour unchanged (`loadCloudSyncEventsSince`, the one-shot bootstrap), with a `Deprecation: true`
-header. A protocol 3 desktop against a cloud that predates it gets the old answers (the field is ignored)
-and reads them as before. The pull and the bootstrap state `SYNC_CHANGE_SEQ_PROTOCOL_VERSION` (3); the push states `SYNC_PROTOCOL_VERSION` (4 since the attachment upload leg, `sync-push-rbac-attachments.md`) and its wire format did not change, so when an
-older cloud refuses the push for its protocol number (`SYNC_PROTOCOL_UNSUPPORTED`) the desktop sends the same
-push once more with the protocol the cloud names (`apps/local-server/src/sync.ts`) and remembers it for
-that cloud. The legacy
-path is deleted once `SYNC_MIN_DESKTOP_VERSION` excludes the builds that need it (DEPLOYMENT.md).
+Protocols 1 and 2 are retired (Q69). A pull or bootstrap that does not state protocol 3 (a desktop
+below `SYNC_DESKTOP_VERSION_FLOOR`, 0.3.0) is answered `426 DESKTOP_UPDATE_REQUIRED` with the same body
+as the push refusal, and so is a push below the floor; nothing is applied and the desktop keeps its
+queue until the person updates. A desktop that upgrades from protocol 2 still holds an `updatedAt`
+cursor: its first protocol 3 pull is answered `SYNC_RESYNC_REQUIRED` (`cursor_format`) and it bootstraps
+again. The pull and the bootstrap state `SYNC_CHANGE_SEQ_PROTOCOL_VERSION` (3); the push states
+`SYNC_PROTOCOL_VERSION` (4 since the attachment upload leg, `sync-push-rbac-attachments.md`) and its wire
+format did not change, so when an older cloud refuses the push for its protocol number
+(`SYNC_PROTOCOL_UNSUPPORTED`) the desktop sends the same push once more with the protocol the cloud
+names (`apps/local-server/src/sync.ts`) and remembers it for that cloud. A cloud that predates protocol 3
+is not served by a desktop of this build: its one-response bootstrap is not read.
 
 ## Row-level security (P2-18i)
 

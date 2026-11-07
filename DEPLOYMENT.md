@@ -504,7 +504,7 @@ below are a summary.
 | `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                                              |
 | `RECORDS_PURGE_ENABLED`                                                                             | Optional, default `false`: enables the `records-purge` cron (see _Records retention_)                          |
 | `RECORDS_PURGE_MODE`                                                                                | Optional, default `dry-run`; only `execute` deletes (see _Records retention_)                                  |
-| `SYNC_MIN_DESKTOP_VERSION`                                                                          | Optional, default unset (no minimum): see _Minimum desktop version_                                            |
+| `SYNC_MIN_DESKTOP_VERSION`                                                                          | Optional, raises the built-in floor `0.3.0`: see _Minimum desktop version_                                     |
 | `SYNC_CHANGE_LOG_RETENTION_DAYS`                                                                    | Optional, default `90` (at least `7`): see _Desktop change log (sync protocol 3)_                              |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and

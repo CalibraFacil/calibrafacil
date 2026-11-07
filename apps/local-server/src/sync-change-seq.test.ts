@@ -289,7 +289,7 @@ describe("the paged bootstrap on the desktop", () => {
     database.close();
   });
 
-  it("REQ-CS-4: a cloud that predates protocol 3 answers the whole bootstrap at once, and the desktop applies it", async () => {
+  it("REQ-CS-4 (Q69): a cloud that predates protocol 3 answers the whole bootstrap at once; the desktop does not read it and applies nothing", async () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     const whole = {
       ...HEADER,
@@ -311,26 +311,19 @@ describe("the paged bootstrap on the desktop", () => {
           });
           if (url.pathname === "/api/sync/bootstrap")
             return Response.json(whole);
-          if (url.pathname === "/api/sync/pull") {
-            return Response.json({
-              cursor: "2026-01-15T10:00:00.000Z",
-              hasMore: false,
-              events: [],
-            });
-          }
           return Response.json({ accepted: [], rejected: [], conflicts: [] });
         },
       },
     );
 
-    await runtime.runInitialSync();
+    await expect(runtime.runInitialSync()).rejects.toThrow();
 
     expect(bootstrapRequests(requests).length).toBe(1);
     const customers = database
       .prepare<[], { total: number }>("SELECT COUNT(*) AS total FROM customers")
       .get();
-    expect(customers?.total).toBe(2);
-    expect(getSyncCursor(database)).toBe("2026-01-15T10:00:00.000Z");
+    expect(customers?.total).toBe(0);
+    expect(getSyncCursor(database)).toBeNull();
     database.close();
   });
 });
@@ -431,12 +424,12 @@ describe("a protocol 3 desktop against a cloud that predates protocol 3", () => 
           if (url.pathname === "/api/sync/push") {
             const body = JSON.parse(String(init?.body));
             pushedVersions.push(body.protocolVersion);
-            // A cloud of protocol 2 refuses what it does not know.
-            if (body.protocolVersion > 2) {
+            // A cloud of protocol 3 refuses what it does not know.
+            if (body.protocolVersion > 3) {
               return Response.json(
                 {
                   code: SYNC_PROTOCOL_UNSUPPORTED_CODE,
-                  supportedProtocolVersion: 2,
+                  supportedProtocolVersion: 3,
                   message: "newer than the cloud supports",
                 },
                 { status: 400 },
@@ -484,7 +477,7 @@ describe("a protocol 3 desktop against a cloud that predates protocol 3", () => 
 
     await runtime.runPushSync();
 
-    expect(pushedVersions).toEqual([SYNC_PROTOCOL_VERSION, 2]);
+    expect(pushedVersions).toEqual([SYNC_PROTOCOL_VERSION, 3]);
     expect(
       listPendingOutboxEvents(database, 50, { includeDeferred: true }).length,
     ).toBe(0);
@@ -500,7 +493,7 @@ describe("a protocol 3 desktop against a cloud that predates protocol 3", () => 
       deviceId: "device-test",
     });
     await runtime.runPushSync();
-    expect(pushedVersions).toEqual([SYNC_PROTOCOL_VERSION, 2, 2]);
+    expect(pushedVersions).toEqual([SYNC_PROTOCOL_VERSION, 3, 3]);
     database.close();
   });
 });

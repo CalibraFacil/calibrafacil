@@ -4,11 +4,13 @@ import {
   LEGACY_SYNC_PROTOCOL_VERSION,
   SYNC_COMMAND_OPERATIONS,
   SYNC_CREATE_OPERATIONS,
+  SYNC_DESKTOP_VERSION_FLOOR,
   SYNC_OPERATIONS,
   SYNC_PROTOCOL_VERSION,
   buildSyncUpdateRequiredResponse,
   compareDesktopVersions,
   desktopUpdateRequiredMessage,
+  effectiveMinimumDesktopVersion,
   evaluateDesktopVersionGate,
   isCreateSyncOperation,
   isRegulatedSyncOperation,
@@ -355,6 +357,24 @@ describe("minimum desktop version (REQ-SP-6)", () => {
     expect(gate("development")).toMatchObject({ ok: false });
     expect(gate("1.4.0")).toEqual({ ok: true });
     expect(gate("1.5.2")).toEqual({ ok: true });
+  });
+
+  it("REQ-SP-6 (Q69): the enforced minimum is the built-in floor, raised (never lowered) by the configured one", () => {
+    expect(effectiveMinimumDesktopVersion(undefined)).toBe(
+      SYNC_DESKTOP_VERSION_FLOOR,
+    );
+    expect(effectiveMinimumDesktopVersion("0.1.0")).toBe(
+      SYNC_DESKTOP_VERSION_FLOOR,
+    );
+    expect(effectiveMinimumDesktopVersion("0.3.0")).toBe("0.3.0");
+    expect(effectiveMinimumDesktopVersion("1.4.0")).toBe("1.4.0");
+    expect(effectiveMinimumDesktopVersion("0.3.0-rc.1")).toBe(
+      SYNC_DESKTOP_VERSION_FLOOR,
+    );
+    // An unreadable value cannot lower it either.
+    expect(effectiveMinimumDesktopVersion("soon")).toBe(
+      SYNC_DESKTOP_VERSION_FLOOR,
+    );
   });
 
   it("REQ-SP-6: the update-required answer is typed and its message is pt-BR", () => {

@@ -14,6 +14,7 @@ import {
   resolveSyncConflict,
   updateLocalCustomer,
 } from "@calibra-facil/local-db";
+import { asBootstrapPage } from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";
 import { createLocalSyncRuntime } from "./sync";
 
@@ -186,7 +187,9 @@ describe("createLocalSyncRuntime", () => {
         }
 
         if (url === "https://api.example.test/api/sync/bootstrap") {
-          return Response.json(syncBootstrap("org-1", 1, "user-1"));
+          return Response.json(
+            asBootstrapPage(syncBootstrap("org-1", 1, "user-1")),
+          );
         }
 
         if (url.startsWith("https://api.example.test/api/sync/pull")) {
@@ -281,7 +284,9 @@ describe("createLocalSyncRuntime", () => {
         }
 
         if (url === "https://api.example.test/api/sync/bootstrap") {
-          return Response.json(syncBootstrap("org-1", 1, "user-1"));
+          return Response.json(
+            asBootstrapPage(syncBootstrap("org-1", 1, "user-1")),
+          );
         }
 
         if (url.startsWith("https://api.example.test/api/sync/pull")) {

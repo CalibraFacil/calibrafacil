@@ -24,6 +24,7 @@
  *   REQ-APPROVAL-009  public API PATCH cannot move a job into an approval-side status
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../../test/integration/desktop-build";
 import { insertJobs } from "../../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@calibra-facil/db";
@@ -838,6 +839,7 @@ describe("approval policy — one policy across every entry point", () => {
           deviceId: "device-1",
           clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
           baseCursor: null,
+          ...CURRENT_DESKTOP_BUILD,
           events: [
             {
               eventId: `evt-${Math.random().toString(36).slice(2)}`,

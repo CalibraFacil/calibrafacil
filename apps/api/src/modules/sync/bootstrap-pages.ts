@@ -21,7 +21,7 @@ import { eq, sql } from "drizzle-orm";
 import { organization } from "@calibra-facil/db/schema";
 import {
   SYNC_BOOTSTRAP_DEFAULT_PAGE_SIZE,
-  SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
+  SYNC_MIN_PROTOCOL_VERSION,
   type SyncBootstrapPageRequest,
   type SyncBootstrapPageResponse,
   formatSyncChangeCursor,
@@ -180,7 +180,7 @@ async function loadBootstrapPageIn(
 
 /**
  * Whether a bootstrap request asks for pages: it states protocol 3 or later in its
- * body. A body that is absent or does not say so is a desktop of protocol 1 or 2.
+ * body. A body that is absent or does not say so is a build the cloud no longer serves.
  */
 export function wantsBootstrapPages(body: unknown): boolean {
   if (typeof body !== "object" || body === null) return false;
@@ -189,7 +189,7 @@ export function wantsBootstrapPages(body: unknown): boolean {
   ).protocolVersion;
   return (
     typeof protocolVersion === "number" &&
-    protocolVersion >= SYNC_CHANGE_SEQ_PROTOCOL_VERSION
+    protocolVersion >= SYNC_MIN_PROTOCOL_VERSION
   );
 }
 

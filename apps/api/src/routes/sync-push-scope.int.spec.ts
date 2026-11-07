@@ -9,6 +9,7 @@
  *   REQ-SYNC-RBAC-7  a retry of an event that was applied is acknowledged after a role
  *                    downgrade; a new event of the same operation is denied
  */
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -127,7 +128,7 @@ async function pushWithoutUnitHeader(events: Array<Record<string, unknown>>) {
       deviceId: "device-scope",
       clientBatchId: "batch-scope",
       baseCursor: null,
-      protocolVersion: 4,
+      ...CURRENT_DESKTOP_BUILD,
       events,
     }),
   });
@@ -245,6 +246,7 @@ describe("REQ-SYNC-RBAC-6: only a LAB organization's lab session may push", () =
         deviceId: "device-x",
         clientBatchId: "batch-x",
         baseCursor: null,
+        ...CURRENT_DESKTOP_BUILD,
         events: [],
       }),
     });

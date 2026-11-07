@@ -16,6 +16,7 @@
  *             recorded in the audit row of the job change it carries (roadmap 2 E2).
  */
 
+import { CURRENT_DESKTOP_BUILD } from "../../test/integration/desktop-build";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -172,6 +173,7 @@ async function push(
       deviceId: "device-e1",
       clientBatchId: batch,
       baseCursor: null,
+      ...CURRENT_DESKTOP_BUILD,
       ...(sentAt === undefined ? {} : { sentAt }),
       events,
     }),
