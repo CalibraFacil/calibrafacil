@@ -15,25 +15,31 @@ pnpm add @calibra-facil/notifications
 ## Usage
 
 ```typescript
-import {
-  notifyJobApproved,
-  notifyCertificateReady,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 
-// Notify on job approval
-await notifyJobApproved({
-  jobId: 123,
-  organizationId: "org_xxx",
-  approverName: "John Doe",
-});
-
-// Notify certificate is ready
-await notifyCertificateReady({
-  jobId: 123,
-  customerId: 456,
-  certificateUrl: "https://...",
-});
+// One path for every type: the payload is typed by the type.
+await notify("JOB_APPROVED", { jobId: 123, approvedByUserId: "user_xxx" });
+await notify("CERTIFICATE_READY", { jobId: 123 });
 ```
+
+The `notifyJobApproved(jobId, approvedByUserId)`-style functions are one-line
+wrappers over `notify`, kept for existing callers; prefer `notify`.
+
+## How a notification is delivered
+
+- `src/recipes/*.ts`: one recipe per type of the registry
+  (`packages/schemas/src/notification-types.ts`). A recipe loads what the
+  notification is about, decides who receives it and yields one row per
+  recipient (in-app title/message/link, e-mail context).
+- `src/recipes/types.ts`: `NotificationPayloads` (the arguments of each type) and
+  `NotificationRecipes`, which maps **every** registry type to its recipe. A new
+  type in the registry does not compile until it has a payload and a recipe.
+- `src/delivery.ts`: `sendNotification`, which applies the recipient's
+  preferences, inserts the in-app row and sends the e-mail.
+- `src/service.ts`: `notify`, which sends each row a recipe yields, and the wrappers.
+
+To add a notification type: add it to the registry, add its payload to
+`NotificationPayloads`, add its recipe to the domain file it belongs to.
 
 ## Notification Types
 
