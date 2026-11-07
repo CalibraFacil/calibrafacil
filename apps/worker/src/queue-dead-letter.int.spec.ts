@@ -18,7 +18,7 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
 const { workerQueue } = vi.hoisted(() => ({ workerQueue: vi.fn() }));
 
 vi.mock("@calibra-facil/jobs-core", () => ({
-  default: { queue: workerQueue },
+  processBackgroundJob: workerQueue,
 }));
 
 import { drainQueue } from "./queue-runtime";
@@ -141,11 +141,7 @@ describe("drainQueue dead-letters a worker crash on the final attempt", () => {
       userId: org.userId,
       attempts: 2,
     });
-    workerQueue.mockImplementation(
-      async (batch: { messages: Array<{ ack: () => void }> }) => {
-        for (const message of batch.messages) message.ack();
-      },
-    );
+    workerQueue.mockImplementation(async () => {});
 
     const processed = await drainQueue(makeTestEnv(), CONFIG);
 
@@ -229,14 +225,12 @@ describe("drainQueue claims one row at a time", () => {
     let secondWhileFirstRuns: Awaited<ReturnType<typeof queueRow>> | undefined;
 
     workerQueue
-      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+      .mockImplementationOnce(async () => {
         secondWhileFirstRuns = await queueRow(second.id);
-        for (const message of batch.messages) message.ack();
       })
-      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+      .mockImplementationOnce(async () => {
         // Its own turn: only now is the row claimed.
         expect((await queueRow(second.id)).status).toBe("PROCESSING");
-        for (const message of batch.messages) message.ack();
       });
 
     await drainQueue(makeTestEnv(), CONFIG);
@@ -266,16 +260,13 @@ describe("drainQueue claims one row at a time", () => {
     let waitingDuring: Awaited<ReturnType<typeof queueRow>> | undefined;
 
     workerQueue
-      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+      .mockImplementationOnce(async () => {
         // The first job is slow. Another drainer / the backstop cron reclaims
         // meanwhile, long after the whole batch would have been claimed.
         reclaimed = await releaseStaleQueueJobs(0);
         waitingDuring = await queueRow(waiting.id);
-        for (const message of batch.messages) message.ack();
       })
-      .mockImplementationOnce(async (batch: MessageBatchLike) => {
-        for (const message of batch.messages) message.ack();
-      });
+      .mockImplementationOnce(async () => {});
 
     await drainQueue(makeTestEnv(), CONFIG);
 

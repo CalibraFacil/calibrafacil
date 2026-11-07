@@ -25,7 +25,7 @@ import { makeTestEnv } from "../test/integration/env";
 const { workerQueue } = vi.hoisted(() => ({ workerQueue: vi.fn() }));
 
 vi.mock("@calibra-facil/jobs-core", () => ({
-  default: { queue: workerQueue },
+  processBackgroundJob: workerQueue,
 }));
 
 import { drainQueue } from "./queue-runtime";
@@ -210,11 +210,7 @@ describe("drainQueue under enforce mode (end-to-end duplicate delivery)", () => 
       userId: "user-1",
     });
 
-    workerQueue.mockImplementation(
-      async (batch: { messages: Array<{ ack: () => void }> }) => {
-        for (const message of batch.messages) message.ack();
-      },
-    );
+    workerQueue.mockImplementation(async () => {});
 
     expect(await drainQueue(env, CONFIG)).toBe(1);
     expect(workerQueue).toHaveBeenCalledTimes(1);
