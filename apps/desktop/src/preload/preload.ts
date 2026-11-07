@@ -1,76 +1,46 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type {
-  CalibraBridge,
-  DesktopNotificationsPublish,
-  LocalPartitionActivationRequest,
-  LocalPartitionActivationResult,
-  DesktopUpdateState,
-  SyncStatusSnapshot,
-  SyncTrigger,
-} from "@calibra-facil/contracts";
-import { desktopIpcChannels } from "../main/channels";
+import {
+  desktopBridge,
+  desktopBridgeMethods,
+  type CalibraBridge,
+} from "@calibra-facil/contracts/desktop-bridge";
 
-const invoke = async <T>(channel: string, ...args: unknown[]): Promise<T> =>
-  ipcRenderer.invoke(channel, ...args);
-
-function subscribe<T>(channel: string, listener: (value: T) => void) {
-  const handler = (_event: IpcRendererEvent, value: T) => {
+function subscribe(channel: string, listener: (value: unknown) => void) {
+  const handler = (_event: IpcRendererEvent, value: unknown) => {
     listener(value);
   };
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.removeListener(channel, handler);
 }
 
-const calibraBridge: CalibraBridge = {
-  authFetch: (request) => invoke(desktopIpcChannels.authFetch, request),
-  getAppInfo: () => invoke(desktopIpcChannels.getAppInfo),
-  getLocalEnvironmentBootstrap: () =>
-    invoke(desktopIpcChannels.getLocalEnvironmentBootstrap),
-  getSettings: () => invoke(desktopIpcChannels.getSettings),
-  setSettings: (patch) => invoke(desktopIpcChannels.setSettings, patch),
-  getSecretStatuses: () => invoke(desktopIpcChannels.getSecretStatuses),
-  deleteSecret: (name) => invoke(desktopIpcChannels.deleteSecret, name),
-  getSyncState: () => invoke(desktopIpcChannels.getSyncState),
-  getSyncStatus: () => invoke(desktopIpcChannels.getSyncStatus),
-  onSyncStatus: (listener) =>
-    subscribe<SyncStatusSnapshot>(
-      desktopIpcChannels.syncStatusChanged,
-      listener,
-    ),
-  startSync: () => invoke(desktopIpcChannels.startSync),
-  pauseSync: () => invoke(desktopIpcChannels.pauseSync),
-  resumeSync: () => invoke(desktopIpcChannels.resumeSync),
-  retrySync: () => invoke(desktopIpcChannels.retrySync),
-  wakeSync: (trigger: SyncTrigger) =>
-    invoke(desktopIpcChannels.wakeSync, trigger),
-  onDeepLink: (listener: (path: string) => void) =>
-    subscribe<string>(desktopIpcChannels.deepLinkRequested, listener),
-  notifyDeepLinkReady: () => invoke<boolean>(desktopIpcChannels.deepLinkReady),
-  publishNotifications: (payload: DesktopNotificationsPublish) =>
-    invoke<boolean>(desktopIpcChannels.publishNotifications, payload),
-  onHistoryCommand: (listener: (command: string) => void) =>
-    subscribe<string>(desktopIpcChannels.historyCommand, listener),
-  activateLocalPartition: (request: LocalPartitionActivationRequest) =>
-    invoke<LocalPartitionActivationResult>(
-      desktopIpcChannels.activateLocalPartition,
-      request,
-    ),
-  forgetOfflineAccess: () =>
-    invoke<boolean>(desktopIpcChannels.forgetOfflineAccess),
-  pickFile: () => invoke(desktopIpcChannels.pickFile),
-  pickFolder: () => invoke(desktopIpcChannels.pickFolder),
-  saveFile: () => invoke(desktopIpcChannels.saveFile),
-  openExternal: (url) => invoke(desktopIpcChannels.openExternal, url),
-  exportSupportBundle: () => invoke(desktopIpcChannels.exportSupportBundle),
-  getUpdateState: () => invoke(desktopIpcChannels.getUpdateState),
-  onUpdateState: (listener) =>
-    subscribe<DesktopUpdateState>(
-      desktopIpcChannels.updateStateChanged,
-      listener,
-    ),
-  checkForUpdate: () => invoke(desktopIpcChannels.checkForUpdate),
-  downloadUpdate: () => invoke(desktopIpcChannels.downloadUpdate),
-  installUpdate: () => invoke(desktopIpcChannels.installUpdate),
-};
+function isBridge(value: object): value is CalibraBridge {
+  return desktopBridgeMethods.every(
+    (method) => typeof Reflect.get(value, method) === "function",
+  );
+}
 
-contextBridge.exposeInMainWorld("calibraBridge", calibraBridge);
+/**
+ * The exposed bridge, built from the table in `@calibra-facil/contracts`: one
+ * member per row, `invoke` rows forwarding to their channel and `event` rows
+ * subscribing to theirs. The preload holds no list of its own.
+ */
+function createBridge(): CalibraBridge {
+  const members: Record<string, unknown> = {};
+
+  for (const method of desktopBridgeMethods) {
+    const row = desktopBridge[method];
+    members[method] =
+      row.kind === "invoke"
+        ? async (...args: unknown[]) => ipcRenderer.invoke(row.channel, ...args)
+        : (listener: (value: unknown) => void) =>
+            subscribe(row.channel, listener);
+  }
+
+  if (!isBridge(members)) {
+    throw new Error("The desktop bridge table did not produce a bridge.");
+  }
+
+  return members;
+}
+
+contextBridge.exposeInMainWorld("calibraBridge", createBridge());

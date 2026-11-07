@@ -1,4 +1,5 @@
 export * from "./desktop";
+export * from "./desktop-bridge";
 export * from "./sync";
 export * from "./sync-entities";
 export * from "./sync-protocol";

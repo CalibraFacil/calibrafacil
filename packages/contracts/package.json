@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./desktop": "./src/desktop.ts",
+    "./desktop-bridge": "./src/desktop-bridge.ts",
     "./jobs-fixtures": "./src/jobs.fixtures.ts",
     "./standards-fixtures": "./src/standards.fixtures.ts",
     "./customers-fixtures": "./src/endpoints/customers.fixtures.ts",

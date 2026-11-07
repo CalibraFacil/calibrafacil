@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CalibraBridge } from "@calibra-facil/contracts";
-import { desktopIpcChannels } from "../main/channels";
+import {
+  desktopBridge,
+  desktopBridgeMethods,
+} from "@calibra-facil/contracts/desktop-bridge";
 
 const mocks = vi.hoisted(() => ({
   exposeInMainWorld: vi.fn(),
@@ -19,40 +22,6 @@ vi.mock("electron", () => ({
     removeListener: mocks.removeListener,
   },
 }));
-
-const expectedBridgeKeys = [
-  "activateLocalPartition",
-  "authFetch",
-  "checkForUpdate",
-  "deleteSecret",
-  "downloadUpdate",
-  "exportSupportBundle",
-  "forgetOfflineAccess",
-  "getAppInfo",
-  "getLocalEnvironmentBootstrap",
-  "getSecretStatuses",
-  "getSettings",
-  "getSyncState",
-  "getSyncStatus",
-  "getUpdateState",
-  "installUpdate",
-  "notifyDeepLinkReady",
-  "onDeepLink",
-  "onHistoryCommand",
-  "onSyncStatus",
-  "onUpdateState",
-  "openExternal",
-  "pauseSync",
-  "pickFile",
-  "pickFolder",
-  "publishNotifications",
-  "resumeSync",
-  "retrySync",
-  "saveFile",
-  "setSettings",
-  "startSync",
-  "wakeSync",
-];
 
 async function importPreload() {
   await import("./preload");
@@ -77,7 +46,9 @@ describe("preload bridge", () => {
     const { name, bridge } = await importPreload();
 
     expect(name).toBe("calibraBridge");
-    expect(Object.keys(bridge).sort()).toEqual(expectedBridgeKeys);
+    expect(Object.keys(bridge).sort()).toEqual(
+      [...desktopBridgeMethods].sort(),
+    );
   });
 
   it("routes bridge calls through the canonical IPC channels", async () => {
@@ -91,11 +62,11 @@ describe("preload bridge", () => {
 
     expect(mocks.invoke).toHaveBeenNthCalledWith(
       1,
-      desktopIpcChannels.getAppInfo,
+      desktopBridge.getAppInfo.channel,
     );
     expect(mocks.invoke).toHaveBeenNthCalledWith(
       2,
-      desktopIpcChannels.setSettings,
+      desktopBridge.setSettings.channel,
       { autoStartSync: true },
     );
 
@@ -107,7 +78,7 @@ describe("preload bridge", () => {
     });
     expect(mocks.invoke).toHaveBeenNthCalledWith(
       3,
-      desktopIpcChannels.authFetch,
+      desktopBridge.authFetch.channel,
       {
         url: "https://api.calibrafacil.com/api/auth/lab/get-session",
         method: "GET",
@@ -119,7 +90,7 @@ describe("preload bridge", () => {
     await bridge.forgetOfflineAccess?.();
     expect(mocks.invoke).toHaveBeenNthCalledWith(
       4,
-      desktopIpcChannels.forgetOfflineAccess,
+      desktopBridge.forgetOfflineAccess.channel,
     );
   });
 
@@ -134,7 +105,7 @@ describe("preload bridge", () => {
         : undefined;
 
     expect(mocks.on).toHaveBeenCalledWith(
-      desktopIpcChannels.updateStateChanged,
+      desktopBridge.onUpdateState.channel,
       expect.any(Function),
     );
     handler?.({}, { status: "downloaded" });
@@ -142,7 +113,7 @@ describe("preload bridge", () => {
 
     unsubscribe();
     expect(mocks.removeListener).toHaveBeenCalledWith(
-      desktopIpcChannels.updateStateChanged,
+      desktopBridge.onUpdateState.channel,
       handler,
     );
   });
