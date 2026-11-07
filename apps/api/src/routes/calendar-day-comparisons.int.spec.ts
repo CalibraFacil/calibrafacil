@@ -34,10 +34,12 @@ import {
 } from "../../test/integration/seed";
 import { dashboardRouter } from "./dashboard";
 import { jobsRouter } from "./jobs";
-import { portalRouter } from "./portal";
+import { portalRouter as barePortalRouter } from "./portal";
 import { standardsRouter as bareStandardsRouter } from "./standards";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRouter = withErrorHandling(barePortalRouter);
 
 const standardsRouter = withErrorHandling(bareStandardsRouter);
 

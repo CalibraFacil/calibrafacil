@@ -19,11 +19,14 @@ import {
   serviceOrder,
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import { portalRouter } from "./portal";
+import { portalRouter as barePortalRouter } from "./portal";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const portalRouter = withErrorHandling(barePortalRouter);
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
 

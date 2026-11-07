@@ -21,6 +21,7 @@ import {
   requireApiScope,
 } from "../middleware/api-key-auth";
 import { orgDb } from "../lib/org-db";
+import { invalid, notFound } from "../lib/domain-errors";
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -193,7 +194,7 @@ export const publicApiRouter = new Hono<{
     );
 
     if (!data[0]) {
-      return c.json({ error: "Ordem de serviço não encontrada" }, 404);
+      throw notFound("job_not_found", "Ordem de serviço não encontrada");
     }
 
     return c.json({ data: data[0] });
@@ -263,11 +264,14 @@ export const publicApiRouter = new Hono<{
       );
 
       if (!job) {
-        return c.json({ error: "Certificado não encontrado" }, 404);
+        throw notFound("certificate_not_found", "Certificado não encontrado");
       }
 
       if (!job.certificateUrl) {
-        return c.json({ error: "Documento ainda não disponível" }, 400);
+        throw invalid(
+          "certificate_not_ready",
+          "Documento ainda não disponível",
+        );
       }
 
       const env = c.env;

@@ -39,11 +39,14 @@ import {
   seedJobForOrg,
 } from "../../../test/integration/tenant-refs";
 import { jobsRouter } from "../../routes/jobs";
-import { verifyRouter } from "../../routes/verify";
+import { verifyRouter as bareVerifyRouter } from "../../routes/verify";
 import type { JobLifecycleActor } from "./job-actor";
 import { amendJob } from "./amend-job";
 import { cancelJob } from "./cancel-job";
 import { withdrawCertificate } from "./withdraw-certificate";
+import { withErrorHandling } from "../../../test/integration/with-error-handling";
+
+const verifyRouter = withErrorHandling(bareVerifyRouter);
 
 vi.mock("../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

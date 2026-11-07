@@ -7,6 +7,7 @@ import {
   withdrawalOf,
 } from "../lib/certificate-lifecycle";
 import { orgDb } from "../lib/org-db";
+import { conflict, invalid, notFound } from "../lib/domain-errors";
 import {
   verifyPdf,
   getIcpBrasilTrustAnchors,
@@ -66,19 +67,15 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(token)) {
-      return c.json({ error: "Token invalido" }, 400);
+      throw invalid("invalid_verification_token", "Token invalido");
     }
 
     const job = await findCertificateByVerificationToken(token);
 
     if (!job) {
-      return c.json(
-        {
-          valid: false,
-          error: "Certificado nao encontrado",
-        },
-        404,
-      );
+      throw notFound("certificate_not_found", "Certificado nao encontrado", {
+        legacyBody: { valid: false },
+      });
     }
 
     // The certificate's lifecycle is the latest row of its append-only status
@@ -216,13 +213,13 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
   .get("/:token/signature", async (c) => {
     const token = c.req.param("token");
     if (!UUID_REGEX.test(token)) {
-      return c.json({ error: "Token invalido" }, 400);
+      throw invalid("invalid_verification_token", "Token invalido");
     }
 
     const job = await findCertificateSignatureByToken(token);
 
     if (!job) {
-      return c.json({ error: "Certificado nao encontrado" }, 404);
+      throw notFound("certificate_not_found", "Certificado nao encontrado");
     }
 
     // Unsigned certificate — nothing to verify cryptographically.
@@ -343,36 +340,37 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
   .post("/:token/match", async (c) => {
     const token = c.req.param("token");
     if (!UUID_REGEX.test(token)) {
-      return c.json({ error: "Token invalido" }, 400);
+      throw invalid("invalid_verification_token", "Token invalido");
     }
 
     const job = await findCertificateIntegrityByToken(token);
 
     if (!job) {
-      return c.json({ error: "Certificado nao encontrado" }, 404);
+      throw notFound("certificate_not_found", "Certificado nao encontrado");
     }
 
     const expectedSha256 =
       job.pdfSha256 ?? job.signatureMetadata?.pdfHash ?? null;
     if (!expectedSha256) {
-      return c.json({ error: "Certificado sem registro de integridade" }, 409);
+      throw conflict(
+        "certificate_integrity_record_missing",
+        "Certificado sem registro de integridade",
+      );
     }
 
     let file: FormDataEntryValue | null;
     try {
       file = (await c.req.formData()).get("file");
     } catch {
-      return c.json({ error: "Envio invalido" }, 400);
+      throw invalid("invalid_request", "Envio invalido");
     }
     if (!(file instanceof File)) {
-      return c.json({ error: "Arquivo nao enviado" }, 400);
+      throw invalid("invalid_request", "Arquivo nao enviado");
     }
     if (file.size === 0 || file.size > MAX_UPLOAD_BYTES) {
-      return c.json(
-        {
-          error: `Arquivo invalido ou maior que ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB.`,
-        },
-        400,
+      throw invalid(
+        "invalid_request",
+        `Arquivo invalido ou maior que ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB.`,
       );
     }
 
@@ -406,17 +404,17 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(token)) {
-      return c.json({ error: "Token invalido" }, 400);
+      throw invalid("invalid_verification_token", "Token invalido");
     }
 
     const job = await findCertificateDownloadByToken(token);
 
     if (!job) {
-      return c.json({ error: "Certificado nao encontrado" }, 404);
+      throw notFound("certificate_not_found", "Certificado nao encontrado");
     }
 
     if (!job.certificateUrl) {
-      return c.json({ error: "Documento ainda nao disponivel" }, 400);
+      throw invalid("certificate_not_ready", "Documento ainda nao disponivel");
     }
 
     const env = c.env;

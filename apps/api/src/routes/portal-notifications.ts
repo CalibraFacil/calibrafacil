@@ -31,7 +31,9 @@ import {
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalNotificationOrgIds } from "../lib/portal-customer-scope";
-import { orgDb, orgSetDb } from "../lib/org-db";
+import { orgSetDb } from "../lib/org-db";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 
 /**
  * Portal notification center (#741): the read surface for the IN_APP rows the
@@ -78,57 +80,52 @@ export const portalNotificationsRouter = new Hono<{
       const { cursor, limit, status } = c.req.valid("query");
       const portalLabScope = await requirePortalLabScope(c);
 
-      try {
-        const orgIds = await resolvePortalNotificationOrgIds({
-          userId: session.user.id,
-          labScope: portalLabScope,
-        });
-        if (orgIds.length === 0) {
-          return c.json({ data: [], nextCursor: null });
-        }
-
-        const now = new Date();
-        const conditions = [
-          ...portalNotificationConditions(session.user.id),
-          gt(notification.createdAt, windowStart()),
-          or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
-          status
-            ? eq(notification.status, status)
-            : ne(notification.status, "ARCHIVED"),
-        ];
-        if (cursor !== undefined) {
-          conditions.push(lt(notification.id, cursor));
-        }
-
-        const rows = await orgSetDb(orgIds)
-          .select({
-            id: notification.id,
-            type: notification.type,
-            priority: notification.priority,
-            status: notification.status,
-            title: notification.title,
-            message: notification.message,
-            actionUrl: notification.actionUrl,
-            createdAt: notification.createdAt,
-            readAt: notification.readAt,
-          })
-          .from(notification)
-          .where(and(...conditions))
-          .orderBy(desc(notification.id))
-          .limit(limit + 1);
-
-        const hasMore = rows.length > limit;
-        const data = hasMore ? rows.slice(0, limit) : rows;
-        const lastRow = data.at(-1);
-
-        return c.json({
-          data,
-          nextCursor: hasMore && lastRow ? lastRow.id : null,
-        } satisfies ServerShape<PortalNotificationFeedResponse>);
-      } catch (error) {
-        console.error("Error listing portal notifications:", error);
-        return c.json({ error: "Erro ao listar notificações" }, 500);
+      const orgIds = await resolvePortalNotificationOrgIds({
+        userId: session.user.id,
+        labScope: portalLabScope,
+      });
+      if (orgIds.length === 0) {
+        return c.json({ data: [], nextCursor: null });
       }
+
+      const now = new Date();
+      const conditions = [
+        ...portalNotificationConditions(session.user.id),
+        gt(notification.createdAt, windowStart()),
+        or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
+        status
+          ? eq(notification.status, status)
+          : ne(notification.status, "ARCHIVED"),
+      ];
+      if (cursor !== undefined) {
+        conditions.push(lt(notification.id, cursor));
+      }
+
+      const rows = await orgSetDb(orgIds)
+        .select({
+          id: notification.id,
+          type: notification.type,
+          priority: notification.priority,
+          status: notification.status,
+          title: notification.title,
+          message: notification.message,
+          actionUrl: notification.actionUrl,
+          createdAt: notification.createdAt,
+          readAt: notification.readAt,
+        })
+        .from(notification)
+        .where(and(...conditions))
+        .orderBy(desc(notification.id))
+        .limit(limit + 1);
+
+      const hasMore = rows.length > limit;
+      const data = hasMore ? rows.slice(0, limit) : rows;
+      const lastRow = data.at(-1);
+
+      return c.json({
+        data,
+        nextCursor: hasMore && lastRow ? lastRow.id : null,
+      } satisfies ServerShape<PortalNotificationFeedResponse>);
     },
   )
 
@@ -139,37 +136,32 @@ export const portalNotificationsRouter = new Hono<{
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
 
-    try {
-      const orgIds = await resolvePortalNotificationOrgIds({
-        userId: session.user.id,
-        labScope: portalLabScope,
-      });
-      if (orgIds.length === 0) {
-        return c.json({
-          count: 0,
-        } satisfies ServerShape<PortalNotificationCountResponse>);
-      }
-
-      const now = new Date();
-      const [result] = await orgSetDb(orgIds)
-        .select({ count: count() })
-        .from(notification)
-        .where(
-          and(
-            ...portalNotificationConditions(session.user.id),
-            eq(notification.status, "UNREAD"),
-            gt(notification.createdAt, windowStart()),
-            or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
-          ),
-        );
-
+    const orgIds = await resolvePortalNotificationOrgIds({
+      userId: session.user.id,
+      labScope: portalLabScope,
+    });
+    if (orgIds.length === 0) {
       return c.json({
-        count: result?.count ?? 0,
+        count: 0,
       } satisfies ServerShape<PortalNotificationCountResponse>);
-    } catch (error) {
-      console.error("Error counting portal notifications:", error);
-      return c.json({ error: "Erro ao contar notificações" }, 500);
     }
+
+    const now = new Date();
+    const [result] = await orgSetDb(orgIds)
+      .select({ count: count() })
+      .from(notification)
+      .where(
+        and(
+          ...portalNotificationConditions(session.user.id),
+          eq(notification.status, "UNREAD"),
+          gt(notification.createdAt, windowStart()),
+          or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
+        ),
+      );
+
+    return c.json({
+      count: result?.count ?? 0,
+    } satisfies ServerShape<PortalNotificationCountResponse>);
   })
 
   // =========================================================================
@@ -184,66 +176,61 @@ export const portalNotificationsRouter = new Hono<{
       const { notificationIds } = c.req.valid("json");
       const portalLabScope = await requirePortalLabScope(c);
 
-      try {
-        const orgIds = await resolvePortalNotificationOrgIds({
-          userId: session.user.id,
-          labScope: portalLabScope,
-        });
-        if (orgIds.length === 0) {
-          return c.json({
-            updatedIds: [],
-          } satisfies ServerShape<PortalNotificationMarkReadResponse>);
-        }
+      const orgIds = await resolvePortalNotificationOrgIds({
+        userId: session.user.id,
+        labScope: portalLabScope,
+      });
+      if (orgIds.length === 0) {
+        return c.json({
+          updatedIds: [],
+        } satisfies ServerShape<PortalNotificationMarkReadResponse>);
+      }
 
-        // The set handle only reads: find which organization each of the
-        // caller's unread rows belongs to, then write through a handle bound to
-        // exactly that organization.
-        const candidates = await orgSetDb(orgIds)
-          .select({
-            id: notification.id,
-            organizationId: notification.organizationId,
-          })
-          .from(notification)
-          .where(
-            and(
-              inArray(notification.id, notificationIds),
-              ...portalNotificationConditions(session.user.id),
-              eq(notification.status, "UNREAD"),
-            ),
-          );
-
-        const idsByOrganization = new Map<string, number[]>();
-        for (const row of candidates) {
-          const ids = idsByOrganization.get(row.organizationId) ?? [];
-          ids.push(row.id);
-          idsByOrganization.set(row.organizationId, ids);
-        }
-
-        const updatedPerOrganization = await Promise.all(
-          [...idsByOrganization].map(([organizationId, ids]) =>
-            orgDb(organizationId).transaction((o) =>
-              o
-                .update(notification)
-                .set({ status: "READ", readAt: new Date() })
-                .where(
-                  and(
-                    inArray(notification.id, ids),
-                    ...portalNotificationConditions(session.user.id),
-                    eq(notification.status, "UNREAD"),
-                  ),
-                )
-                .returning({ id: notification.id }),
-            ),
+      // The set handle only reads: find which organization each of the
+      // caller's unread rows belongs to, then write through a handle bound to
+      // exactly that organization.
+      const candidates = await orgSetDb(orgIds)
+        .select({
+          id: notification.id,
+          organizationId: notification.organizationId,
+        })
+        .from(notification)
+        .where(
+          and(
+            inArray(notification.id, notificationIds),
+            ...portalNotificationConditions(session.user.id),
+            eq(notification.status, "UNREAD"),
           ),
         );
 
-        return c.json({
-          updatedIds: updatedPerOrganization.flat().map((row) => row.id),
-        } satisfies ServerShape<PortalNotificationMarkReadResponse>);
-      } catch (error) {
-        console.error("Error marking portal notifications read:", error);
-        return c.json({ error: "Erro ao marcar notificações" }, 500);
+      const idsByOrganization = new Map<string, number[]>();
+      for (const row of candidates) {
+        const ids = idsByOrganization.get(row.organizationId) ?? [];
+        ids.push(row.id);
+        idsByOrganization.set(row.organizationId, ids);
       }
+
+      const updatedPerOrganization = await Promise.all(
+        [...idsByOrganization].map(([organizationId, ids]) =>
+          withOrg(organizationId, requestActor(c), (ctx) =>
+            ctx.o
+              .update(notification)
+              .set({ status: "READ", readAt: new Date() })
+              .where(
+                and(
+                  inArray(notification.id, ids),
+                  ...portalNotificationConditions(session.user.id),
+                  eq(notification.status, "UNREAD"),
+                ),
+              )
+              .returning({ id: notification.id }),
+          ),
+        ),
+      );
+
+      return c.json({
+        updatedIds: updatedPerOrganization.flat().map((row) => row.id),
+      } satisfies ServerShape<PortalNotificationMarkReadResponse>);
     },
   )
 
@@ -255,42 +242,37 @@ export const portalNotificationsRouter = new Hono<{
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
 
-    try {
-      const orgIds = await resolvePortalNotificationOrgIds({
-        userId: session.user.id,
-        labScope: portalLabScope,
-      });
-      if (orgIds.length === 0) {
-        return c.json({
-          count: 0,
-        } satisfies ServerShape<PortalNotificationCountResponse>);
-      }
-
-      // One write per organization, each through a handle bound to it (the
-      // set handle is read-only).
-      const updatedPerOrganization = await Promise.all(
-        orgIds.map((organizationId) =>
-          orgDb(organizationId).transaction((o) =>
-            o
-              .update(notification)
-              .set({ status: "READ", readAt: new Date() })
-              .where(
-                and(
-                  ...portalNotificationConditions(session.user.id),
-                  eq(notification.status, "UNREAD"),
-                ),
-              )
-              .returning({ id: notification.id }),
-          ),
-        ),
-      );
-      const updated = updatedPerOrganization.flat();
-
+    const orgIds = await resolvePortalNotificationOrgIds({
+      userId: session.user.id,
+      labScope: portalLabScope,
+    });
+    if (orgIds.length === 0) {
       return c.json({
-        count: updated.length,
+        count: 0,
       } satisfies ServerShape<PortalNotificationCountResponse>);
-    } catch (error) {
-      console.error("Error marking all portal notifications read:", error);
-      return c.json({ error: "Erro ao marcar notificações" }, 500);
     }
+
+    // One write per organization, each through a handle bound to it (the
+    // set handle is read-only).
+    const updatedPerOrganization = await Promise.all(
+      orgIds.map((organizationId) =>
+        withOrg(organizationId, requestActor(c), (ctx) =>
+          ctx.o
+            .update(notification)
+            .set({ status: "READ", readAt: new Date() })
+            .where(
+              and(
+                ...portalNotificationConditions(session.user.id),
+                eq(notification.status, "UNREAD"),
+              ),
+            )
+            .returning({ id: notification.id }),
+        ),
+      ),
+    );
+    const updated = updatedPerOrganization.flat();
+
+    return c.json({
+      count: updated.length,
+    } satisfies ServerShape<PortalNotificationCountResponse>);
   });
