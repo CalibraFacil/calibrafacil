@@ -7,7 +7,9 @@ import type { VisitStatus } from "@calibra-facil/db/schema";
 // syncVisitStatusFromJobs issues these DB calls in order:
 //   1. db.select().from().where().limit(1)   → visit row (or empty)
 //   2. db.select().from().where()             → jobs array
-//   3. db.update().set({status}).where()      → optional, only if status changed
+//   3. db.update().set({status}).where().returning() → optional, only if status changed
+//   4. on settle, db.update(visitRescheduleRequest).set(...).where() → supersedes
+//      the pending reschedule request (recorded on rescheduleSpy)
 //
 // The FIFO queue feeds (1) and (2). The setSpy captures the argument passed to
 // set() so each test can assert which status was written (or that none was).
@@ -16,11 +18,15 @@ import type { VisitStatus } from "@calibra-facil/db/schema";
 interface DbState {
   queue: Array<unknown>;
   setSpy: ReturnType<typeof vi.fn>;
+  rescheduleSpy: ReturnType<typeof vi.fn>;
 }
 
-const dbState = vi.hoisted((): DbState => ({ queue: [], setSpy: vi.fn() }));
+const dbState = vi.hoisted(
+  (): DbState => ({ queue: [], setSpy: vi.fn(), rescheduleSpy: vi.fn() }),
+);
 
-vi.mock("@calibra-facil/db", () => {
+vi.mock("@calibra-facil/db", async () => {
+  const { visitRescheduleRequest } = await import("@calibra-facil/db/schema");
   // Shared fluent builder — every method returns itself so chains work.
   // "then" makes the builder thenable: awaiting it drains the FIFO queue.
   const selectBuilder: Record<string, unknown> = {};
@@ -39,15 +45,16 @@ vi.mock("@calibra-facil/db", () => {
 
   // Update builder — set() is the spy under test; where() resolves to void.
   //
-  // The source calls: db.update(table).set({status}).where(eq(...))
+  // The source calls: db.update(table).set({status}).where(...).returning()
   // So: update() → setBuilder; set() records spy args + returns whereBuilder;
-  //     whereBuilder.where() returns a thenable that resolves to undefined.
+  //     where() returns a thenable whose returning() reports the row as moved.
   const thenableVoid: Record<string, unknown> = {};
   // oxlint-disable-next-line unicorn/no-thenable
   thenableVoid["then"] = (
     resolve: (value: unknown) => unknown,
     reject: (reason: unknown) => unknown,
   ) => Promise.resolve(undefined).then(resolve, reject);
+  thenableVoid["returning"] = () => Promise.resolve([{ id: 1 }]);
 
   const whereBuilder: Record<string, unknown> = {
     where: () => thenableVoid,
@@ -63,7 +70,15 @@ vi.mock("@calibra-facil/db", () => {
   return {
     db: {
       select: () => selectBuilder,
-      update: () => setBuilder,
+      update: (table: unknown) =>
+        table === visitRescheduleRequest
+          ? {
+              set: (args: unknown) => {
+                dbState.rescheduleSpy(args);
+                return whereBuilder;
+              },
+            }
+          : setBuilder,
     },
   };
 });
@@ -181,6 +196,10 @@ describe("REQ-VISIT-005: all settled with at least one approved", () => {
     await syncVisitStatusFromJobs(10);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "COMPLETED" });
+    // A settled visit supersedes its pending reschedule request.
+    expect(dbState.rescheduleSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "SUPERSEDED" }),
+    );
   });
 
   it("REQ-VISIT-005: mix of APPROVED and CANCELED (all settled, one approved) → COMPLETED", async () => {
@@ -229,6 +248,7 @@ describe("REQ-VISIT-006: all settled but all CANCELED", () => {
     await syncVisitStatusFromJobs(21);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "IN_PROGRESS" });
+    expect(dbState.rescheduleSpy).not.toHaveBeenCalled();
   });
 });
 

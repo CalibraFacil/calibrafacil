@@ -296,6 +296,7 @@ describe("unit_admin does not elevate on organization-wide resources (P0-11)", (
           severity: "minor",
           category: "procedure",
           status: "IMPLEMENTATION",
+          implementedAt: new Date("2026-01-10T10:00:00.000Z"),
           createdBy: org.userId,
         })
         .returning({ id: correctiveAction.id }),

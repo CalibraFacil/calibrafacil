@@ -57,10 +57,10 @@ v2 POST /requests zValidator(json:observations|requestedDueDate|deliveryMethod|i
 v2 POST /requests <anonymous> #0bc08b950f
 v2 PATCH /requests/:id requireApiScope(requests:write)
 v2 PATCH /requests/:id zValidator(json:observations|requestedDueDate)
-v2 PATCH /requests/:id <anonymous> #f780eb98aa
+v2 PATCH /requests/:id <anonymous> #23f34f353b
 v2 POST /requests/:id/cancel requireApiScope(requests:write)
 v2 POST /requests/:id/cancel zValidator(json:reason)
-v2 POST /requests/:id/cancel <anonymous> #9fdafb7681
+v2 POST /requests/:id/cancel <anonymous> #3ed4fd99cf
 v2 GET /jobs requireApiScope(jobs:read)
 v2 GET /jobs zValidator(query:page|limit|query|unitId|status|customerId|customerExternalId|assetExternalId|assetId|serviceId)
 v2 GET /jobs <anonymous> #2520653842

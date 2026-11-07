@@ -1,5 +1,5 @@
 -- Every lifecycle status column enforced in Postgres, generated from its state
--- machine (packages/schemas/src/machines, docs/implicit-state-machines.md).
+-- machine (packages/schemas/src/machines, docs/architecture/state-machines.md).
 --
 -- calibration_job.status was the only column whose transitions were declared
 -- once and enforced by the database (migrations 0119/0139). The other status

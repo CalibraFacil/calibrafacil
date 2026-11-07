@@ -551,14 +551,26 @@ INSERT INTO outbox (
   'submit_local_execution',
   '{"status":"REVIEW","data":{"readings":[]}}',
   'local:event-smoke-conflict',
-  'conflict',
-  'status_transition: conflict requires review',
+  'pending',
+  NULL,
   @now
 )
 ON CONFLICT(id) DO NOTHING
 `,
         )
         .run({ now });
+
+      // The outbox lifecycle (local-db state-machines.ts, migration 0026)
+      // creates every row pending; the push result moves it to conflict.
+      database
+        .prepare(
+          `
+UPDATE outbox
+SET status = 'conflict', last_error = 'status_transition: conflict requires review'
+WHERE id = 'outbox:event-smoke-conflict' AND status = 'pending'
+`,
+        )
+        .run();
 
       database
         .prepare(

@@ -1,4 +1,4 @@
--- Lifecycle invariants that are not a status column (docs/implicit-state-machines.md).
+-- Lifecycle invariants that are not a status column (docs/architecture/state-machines.md).
 --
 -- 1. integration_sync_item.status defaulted to PENDING, a value no code wrote:
 --    an item is recorded when its push starts. The default is now RUNNING, the

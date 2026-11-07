@@ -27,8 +27,8 @@ function createdIn<S extends string>(
 //                 desktop asset create (sync apply-job-draft-and-asset-create.ts)
 //   set_status  routes/assets.ts PUT, public-api-v2/assets-update.ts, the
 //                 desktop asset update (sync apply-asset-update.ts)
-// SCRAPPED is reversible by design today (an open question: docs/
-// implicit-state-machines.md).
+// SCRAPPED is reversible by design today (audit decision Q60: asset statuses
+// stay free classifications).
 export const ASSET_STATUSES = [
   "ACTIVE",
   "INACTIVE",
