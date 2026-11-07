@@ -30,14 +30,10 @@ import {
 // the network). The scheduler's own work is pure DB: read schedules, advance the
 // due target's config, INSERT the sync-run row, then hand the message to dispatch.
 
-// Drizzle's db.execute returns either a `{ rows }` shape (Neon-serverless) or a
-// bare row array (postgres-js). Normalize to a plain unknown[] without any `as`
-// assertion (banned by oxlint), then read fields through type-narrowing helpers.
+// Drizzle's db.execute (postgres-js) returns the rows as an array. Narrow it to a
+// plain unknown[] without any `as` assertion (banned by oxlint), then read fields
+// through type-narrowing helpers.
 function toRows(result: unknown): unknown[] {
-  if (result && typeof result === "object" && "rows" in result) {
-    const inner = Reflect.get(result, "rows");
-    return Array.isArray(inner) ? inner : [];
-  }
   return Array.isArray(result) ? result : [];
 }
 
