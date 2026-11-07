@@ -16,7 +16,7 @@ import {
 import type { IconSvgElement } from "@hugeicons/react";
 
 /**
- * The general in-app notification center (issue #741) — distinct from the
+ * The general in-app notification center, distinct from the
  * §7.10 out-of-tolerance acknowledgment feed in features/out-of-tolerance.
  *
  * Only PORTAL_NOTIFICATION_TYPES (@calibra-facil/schemas) are ever listed for a

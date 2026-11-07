@@ -1,5 +1,5 @@
 /**
- * The #740 reliability surface: fleet as-found analytics (EOPR, "confiabilidade
+ * The reliability surface: fleet as-found analytics (EOPR, "confiabilidade
  * observada"), per-asset drift series and the §7.1.5.2 out-of-tolerance
  * ("fora de tolerância na condição 'como recebido'") events. The types are the
  * contracts of `/api/portal/analytics/fleet`, `/assets/:id/drift-series` and

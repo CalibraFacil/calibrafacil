@@ -61,7 +61,7 @@ const EMPTY_WINDOW: WindowDraft = { date: "", period: "ANY" };
 const MAX_WINDOWS = 3;
 
 /**
- * #739: structured "this date doesn't work" request — reason + up to 3
+ * Structured "this date doesn't work" request — reason + up to 3
  * preferred windows. Does not move the visit; the lab resolves it.
  */
 function RescheduleDialog({

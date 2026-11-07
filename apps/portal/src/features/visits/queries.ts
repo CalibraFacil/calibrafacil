@@ -38,7 +38,7 @@ function useInvalidateVisits() {
   };
 }
 
-/** #739: one-tap "Confirmar presença" on a proposed/confirmed visit. */
+/** One-tap "Confirmar presença" on a proposed/confirmed visit. */
 export function useConfirmVisitPresence() {
   const invalidate = useInvalidateVisits();
   return useMutation({
@@ -58,7 +58,7 @@ export type RequestVisitRescheduleInput = {
   preferredWindows: Array<PortalVisitPreferredWindow>;
 };
 
-/** #739: "Solicitar reagendamento" — opens a request the lab resolves. */
+/** "Solicitar reagendamento" — opens a request the lab resolves. */
 export function useRequestVisitReschedule() {
   const invalidate = useInvalidateVisits();
   return useMutation({

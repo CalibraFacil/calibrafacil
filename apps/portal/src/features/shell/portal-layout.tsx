@@ -172,7 +172,6 @@ export function PortalLayout({
     );
   }
 
-  // No CLIENT access - show error page
   if (clientOrganizations.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">

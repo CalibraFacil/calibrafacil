@@ -17,12 +17,9 @@ const distDir = path.resolve(scriptDir, "..", "dist");
 // the portal response schemas and the request schemas of @calibra-facil/schemas)
 // 211 KiB, Better Auth's client 64 KiB, TanStack Router 48 KiB, TanStack Query's
 // core and React bindings, the app entry 35 KiB, clsx/tailwind-merge/cva 28 KiB, the rest small
-// route shells. History: route splitting + the vendor chunk policy took it from
-// 1799 to 520 KiB (it used to be a single 1.84 MB entry); response validation
-// against @calibra-facil/contracts then added Zod and the schemas, and importing
-// the contracts barrel instead of `@calibra-facil/contracts/portal-client` added
-// the lab app's own schemas on top (770 KiB, fixed: lint now forbids the
-// barrel here). A regression that pulls recharts, motion or the shader panel
+// route shells. Importing the contracts barrel instead of
+// `@calibra-facil/contracts/portal-client` would add the lab app's own schemas
+// (lint forbids the barrel here). A regression that pulls recharts, motion or the shader panel
 // back into the initial graph fails here, and so does a bundle that grows
 // past these numbers: raise them in the PR that adds the dependency, naming it.
 const initialJsBudget = Number(

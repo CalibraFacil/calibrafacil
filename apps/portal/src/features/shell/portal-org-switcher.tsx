@@ -43,7 +43,6 @@ export function PortalOrgSwitcher() {
     usePortalListOrganizations();
   const { data: activeOrg } = usePortalActiveOrganization();
 
-  // Separate organizations by type
   const { clientOrgs, labOrgs } = useMemo(() => {
     if (!allOrganizations) return { clientOrgs: [], labOrgs: [] };
 

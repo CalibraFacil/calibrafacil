@@ -15,7 +15,7 @@ import { usePortalKeys } from "@/lib/portal-keys";
 import { portalApi } from "@/lib/portal-api";
 
 /**
- * General in-app notification center (issue #741). The shapes are the
+ * General in-app notification center. The shapes are the
  * contracts of `/api/portal/notifications` and `/notification-preferences`.
  */
 
