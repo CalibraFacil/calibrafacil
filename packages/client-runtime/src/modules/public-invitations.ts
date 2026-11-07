@@ -1,27 +1,20 @@
-import type { PublicInvitationsApi } from "../types";
-import { readJsonResponse } from "../transport/response";
+import { publicInvitationEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
+
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The public invitations client is its endpoint group (`publicInvitationEndpoints` in `@calibra-facil/contracts`). */
+export type PublicInvitationsApi = EndpointClient<
+  typeof publicInvitationEndpoints
+>;
 
 export function createPublicInvitationsApi(
-  rawCloudClient: any,
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
 ): PublicInvitationsApi {
-  return {
-    async get<TResponse = unknown>(id: string) {
-      return readJsonResponse<TResponse>(
-        await rawCloudClient.api.invitations[":id"].$get({
-          param: { id },
-        }),
-        "Falha ao carregar o convite",
-      );
-    },
-    async requestSetupLink<TResponse = unknown>(id: string) {
-      return readJsonResponse<TResponse>(
-        await rawCloudClient.api.invitations[":id"]["request-setup-link"].$post(
-          {
-            param: { id },
-          },
-        ),
-        "Falha ao enviar link de acesso",
-      );
-    },
-  };
+  return endpointClient(publicInvitationEndpoints, transport, options);
 }

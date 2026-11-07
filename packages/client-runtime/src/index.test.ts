@@ -2108,7 +2108,7 @@ describe("public invitations runtime adapter", () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
     const fetchMock: typeof fetch = async (input, init) => {
       fetchCalls.push([input, init]);
-      return Response.json({ setupLinkRequested: true });
+      return Response.json({ setupLinkRequested: true, userCreated: false });
     };
     const client = createCloudApiClient({
       baseUrl: "https://api.example.test",
@@ -2116,8 +2116,11 @@ describe("public invitations runtime adapter", () => {
     });
 
     await expect(
-      client.publicInvitations.requestSetupLink("invite-1"),
-    ).resolves.toEqual({ setupLinkRequested: true });
+      client.publicInvitations.requestSetupLink({ params: { id: "invite-1" } }),
+    ).resolves.toEqual({
+      setupLinkRequested: true,
+      userCreated: false,
+    });
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/invitations/invite-1/request-setup-link",
     ]);

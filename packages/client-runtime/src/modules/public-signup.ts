@@ -1,17 +1,18 @@
-import type { PublicSignupApi, SelfServeSignupResponse } from "../types";
-import { readJsonResponse } from "../transport/response";
+import { publicSignupEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
 
-/**
- * Public, unauthenticated self-serve sign-up. Called before any session
- * exists, so it carries no identity — the API answers with a claim e-mail.
- */
-export function createPublicSignupApi(rawCloudClient: any): PublicSignupApi {
-  return {
-    async start<TInput = unknown>(input: TInput) {
-      return readJsonResponse<SelfServeSignupResponse>(
-        await rawCloudClient.api.public.signup.$post({ json: input }),
-        "Falha ao criar a conta",
-      );
-    },
-  };
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The public sign-up client is its endpoint group (`publicSignupEndpoints` in `@calibra-facil/contracts`). */
+export type PublicSignupApi = EndpointClient<typeof publicSignupEndpoints>;
+
+export function createPublicSignupApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): PublicSignupApi {
+  return endpointClient(publicSignupEndpoints, transport, options);
 }
