@@ -1,10 +1,15 @@
-import { Outlet, createRootRouteWithContext } from "@tanstack/react-router";
+import {
+  Outlet,
+  createRootRouteWithContext,
+  useRouterState,
+} from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import type { QueryClient } from "@tanstack/react-query";
 
 import { Toaster } from "@calibra-facil/ui/sonner";
 import { BrandingProvider } from "@/features/branding/branding-context";
+import { routeTitle } from "@/lib/route-registry";
 import {
   prefetchBranding,
   settleBrandingForFirstPaint,
@@ -26,10 +31,13 @@ export const Route = createRootRouteWithContext<{
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pageTitle = useRouterState({
+    select: (state) => routeTitle(state.location.pathname),
+  });
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrandingProvider>
+      <BrandingProvider pageTitle={pageTitle}>
         <Outlet />
         <Toaster richColors position="top-center" />
       </BrandingProvider>

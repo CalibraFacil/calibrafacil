@@ -42,11 +42,21 @@ function resolveBranding(data: PortalBranding | undefined): ResolvedBranding {
  * favicon). Branding is prefetched at startup but never awaited past a short
  * budget, so it can land after first render; the component is keyed on the
  * resolved identity (see BrandingProvider), so a mount-only sync re-runs
- * exactly when the brand changes.
+ * exactly when the brand or the page title changes. The tab reads
+ * "<page> | <brand>" on a page the route registry titles, else
+ * "<brand> | Portal do Cliente".
  */
-function BrandedDocument({ branding }: { branding: ResolvedBranding }) {
+function BrandedDocument({
+  branding,
+  pageTitle,
+}: {
+  branding: ResolvedBranding;
+  pageTitle: string | undefined;
+}) {
   useMountEffect(() => {
-    document.title = `${branding.name} | Portal do Cliente`;
+    document.title = pageTitle
+      ? `${pageTitle} | ${branding.name}`
+      : `${branding.name} | Portal do Cliente`;
 
     if (!branding.logo) return;
     const iconLink =
@@ -60,15 +70,23 @@ function BrandedDocument({ branding }: { branding: ResolvedBranding }) {
   return null;
 }
 
-export function BrandingProvider({ children }: { children: React.ReactNode }) {
+export function BrandingProvider({
+  children,
+  pageTitle,
+}: {
+  children: React.ReactNode;
+  /** The current page's title (the route registry's), if it has one. */
+  pageTitle?: string;
+}) {
   const { data } = useQuery(brandingQueryOptions());
   const branding = resolveBranding(data);
 
   return (
     <BrandingContext.Provider value={branding}>
       <BrandedDocument
-        key={`${branding.name}|${branding.logo ?? ""}`}
+        key={`${branding.name}|${branding.logo ?? ""}|${pageTitle ?? ""}`}
         branding={branding}
+        pageTitle={pageTitle}
       />
       {children}
     </BrandingContext.Provider>

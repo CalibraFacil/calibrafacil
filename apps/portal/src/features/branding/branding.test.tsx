@@ -20,10 +20,10 @@ function BrandName() {
   );
 }
 
-function renderProvider(queryClient: QueryClient) {
+function renderProvider(queryClient: QueryClient, pageTitle?: string) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <BrandingProvider>
+      <BrandingProvider pageTitle={pageTitle}>
         <BrandName />
       </BrandingProvider>
     </QueryClientProvider>,
@@ -112,5 +112,29 @@ describe("portal branding", () => {
       name: "Lab Metrologia",
       logo: null,
     });
+  });
+
+  it("titles the tab '<page> | <brand>' when the route has a title, and follows a page change", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ name: "Lab Metrologia", logo: null }), {
+        status: 200,
+      }),
+    );
+
+    const { rerender } = renderProvider(queryClient, "Certificados");
+    await waitFor(() =>
+      expect(document.title).toBe("Certificados | Lab Metrologia"),
+    );
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <BrandingProvider pageTitle="Equipamentos">
+          <BrandName />
+        </BrandingProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(document.title).toBe("Equipamentos | Lab Metrologia"),
+    );
   });
 });

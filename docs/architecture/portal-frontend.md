@@ -54,6 +54,28 @@ route-local `-components` folders or grow a route file past an adapter.
 rule as the web app). The shell chrome (sidebar, header, nav, org switcher,
 command menu) is under `features/shell`; `Brand` is in `features/branding`.
 
+## Route registry
+
+`lib/route-registry.ts` is the one declaration of what each portal route is
+called and where it shows up, keyed by the router's `to` (`portalRoutes`). It
+replaces the hand lists that used to restate the routes:
+
+| Reader           | Field / helper                                                             |
+| :--------------- | :------------------------------------------------------------------------- |
+| sidebar          | `nav` (`portalNavSections`, badges from `useOverview`)                     |
+| command palette  | `command` (`portalCommandRoutes`: "Ir para" pages and actions)             |
+| breadcrumb       | `title` (`routeCrumbs`)                                                    |
+| settings sidebar | `settingsNav` (`settingsNavRoutes`)                                        |
+| tab title        | `title` (`routeTitle`, read by `BrandingProvider`: "<page> \| <brand>")    |
+| sign-in redirect | `afterSignIn` (`portalRedirectPrefixes`, used by `sanitizePortalRedirect`) |
+
+The table is `satisfies Record<PortalRouteId, RouteDef>`, so a route added to the
+route tree does not compile until it is declared there. A new page therefore
+needs one entry (title, nav placement if it has one, `afterSignIn`) and no edit in
+the sidebar, the palette, the header or `auth-redirect.ts`. The module is in the
+initial bundle graph (the sign-in redirect reads it), so it imports no component:
+icons are ids, mapped to glyphs by `components/portal-icons.ts`.
+
 ## Design System: instrument-panel
 
 The portal's design system is the **instrument-panel** "metrology console" look,
