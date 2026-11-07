@@ -110,11 +110,8 @@ vi.mock("./lab-scope", () => ({
   findAuditPackLaboratory: async () => "org-1",
   listPortalDigestRecipients: vi.fn(),
 }));
-// These specs exercise the PLATFORM sender path. `resolveLabEmailSender` now
-// reads the email-domain row before checking any key (it must, so a managed
-// row resolves with only RESEND_API_KEY), which would otherwise consume one
-// extra `db.select()` and shift the call-count routing below. Lab-sender
-// resolution has its own coverage in service-order-customer-email-lab-sender.spec.ts.
+// These specs exercise the PLATFORM sender path (the lab sender is stubbed to none).
+// Lab-sender resolution has its own coverage in service-order-customer-email-lab-sender.spec.ts.
 vi.mock("@calibra-facil/lab-email-domain", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@calibra-facil/lab-email-domain")>()),
   resolveLabEmailSender: vi.fn().mockResolvedValue(undefined),
@@ -132,20 +129,48 @@ vi.mock("./suppression", () => ({
 import { sendNotification } from "./service";
 
 // ---------------------------------------------------------------------------
-// Chain builder
+// Database double
 // ---------------------------------------------------------------------------
-function makeChain(result: unknown[] = []) {
-  const c = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
-    leftJoin: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue(result),
-    values: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue(result),
+
+type Row = Record<string, unknown>;
+
+/** Whether a drizzle `where(...)` condition carries `value` (as a bound value). */
+function conditionMentions(condition: unknown, value: string): boolean {
+  if (condition === value) return true;
+  if (Array.isArray(condition)) {
+    return condition.some((part) => conditionMentions(part, value));
+  }
+  if (condition !== null && typeof condition === "object") {
+    return conditionMentions(Reflect.get(condition, "queryChunks"), value);
+  }
+  return false;
+}
+
+/**
+ * A query builder that answers when awaited (or at `.limit()`), with `rowsFor`
+ * given the `where(...)` condition it was built with.
+ */
+function makeChain(rowsFor: (condition: unknown) => unknown[] = () => []) {
+  let condition: unknown;
+  const chain = {
+    from: () => chain,
+    where: (value: unknown) => {
+      condition = value;
+      return chain;
+    },
+    innerJoin: () => chain,
+    leftJoin: () => chain,
+    limit: async () => rowsFor(condition),
+    values: () => chain,
+    set: () => chain,
+    returning: async () => rowsFor(condition),
+    // oxlint-disable-next-line unicorn/no-thenable -- stands in for a drizzle query, which is awaited
+    then: (
+      resolve: (rows: unknown[]) => unknown,
+      reject: (reason: unknown) => unknown,
+    ) => Promise.resolve(rowsFor(condition)).then(resolve, reject),
   };
-  return c;
+  return chain;
 }
 
 const USER_ROW = { email: "customer@example.com", name: "Maria Silva" };
@@ -187,136 +212,54 @@ const ORG_ROW = {
   website: null,
 };
 
+const TECHNICIAN_ROW = { email: "tech@lab.com", name: "João Técnico" };
+
 /**
- * A db.select mock that routes based on call count.
- * For direct sendNotification tests:
- *   call 1: getUserPreferences → [] (uses DEFAULT_PREFERENCES)
- *   call 2: user email → [USER_ROW]
- *   call N>2: → []
+ * The rows the database holds, answered by what a query selects and, for the
+ * user table, by whose id it asks for: the order of the queries does not
+ * matter. A notification preference row is never present (the registry's
+ * defaults apply).
  */
+function givenDatabase(world: { visit?: Row; users?: Record<string, Row> }) {
+  const users: Record<string, Row> = world.users ?? {};
+  dbMock.select.mockImplementation((fields?: Row) => {
+    const columns = Object.keys(fields ?? {});
+    if (columns.length === 0) return makeChain(); // notification_preference
+    if (columns.includes("scheduledAt")) {
+      return makeChain(() => (world.visit ? [world.visit] : []));
+    }
+    if (columns.includes("cnpj")) return makeChain(() => [ORG_ROW]);
+    // user lookups: the e-mail of a recipient, or the name of an actor
+    return makeChain((condition) => {
+      const entry = Object.entries(users).find(([id]) =>
+        conditionMentions(condition, id),
+      );
+      if (!entry) return [];
+      const [, row] = entry;
+      return [
+        columns.includes("email") ? row : { name: row["name"] ?? undefined },
+      ];
+    });
+  });
+  dbMock.insert.mockImplementation(() => makeChain(() => [{ id: 99 }]));
+  dbMock.update.mockImplementation(() => makeChain());
+}
+
+/** A direct `sendNotification` to a recipient with an address on file. */
 function setupDirectSend() {
-  let n = 0;
-  dbMock.select.mockImplementation(() => {
-    n++;
-    const chain = makeChain(n === 1 ? [] : n === 2 ? [USER_ROW] : []);
-    return chain;
-  });
-  dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
-  dbMock.update.mockImplementation(() => {
-    const c = {
-      set: vi.fn().mockReturnThis(),
-      where: vi.fn().mockResolvedValue([]),
-    };
-    return c;
-  });
+  givenDatabase({ users: { "user-123": USER_ROW } });
 }
 
-/**
- * For notifyVisitConfirmed (confirmed → 1 send to customer only):
- *   call 1: getVisitDetails → [VISIT_ROW]
- *   call 2: getLabEmailBrand (org query) → [ORG_ROW]
- *   call 3: getUserPreferences → []
- *   call 4: user email → [USER_ROW]
- */
-function setupVisitConfirmed() {
-  let n = 0;
-  dbMock.select.mockImplementation(() => {
-    n++;
-    const result =
-      n === 1
-        ? [VISIT_ROW]
-        : n === 2
-          ? [ORG_ROW]
-          : n === 3
-            ? []
-            : n === 4
-              ? [USER_ROW]
-              : [];
-    return makeChain(result);
+/** A visit whose customer is the request's submitter and whose technician has an address. */
+function setupVisit(visit: Row = VISIT_ROW) {
+  givenDatabase({
+    visit,
+    users: {
+      "tech-1": TECHNICIAN_ROW,
+      "customer-user-1": USER_ROW,
+      "lab-actor-user": { name: "Lab Actor" },
+    },
   });
-  dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
-  dbMock.update.mockImplementation(() => ({
-    set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue([]),
-  }));
-}
-
-/**
- * For functions with 2 sends (technician + customer).
- * Call sequence:
- *   1: getVisitDetails → [VISIT_ROW]
- *   --- technician send ---
- *   2: getUserPreferences(technicianId) → []
- *   3: user email lookup (tech) → [{ email: "tech@lab.com", name: "João" }]
- *   --- customer send ---
- *   4: getLabEmailBrand → [ORG_ROW]
- *   5: getUserPreferences(customer) → []
- *   6: user email lookup (customer) → [USER_ROW]
- */
-function setupVisitTwoSends() {
-  let n = 0;
-  dbMock.select.mockImplementation(() => {
-    n++;
-    const result =
-      n === 1
-        ? [VISIT_ROW]
-        : n === 2
-          ? [] // tech getUserPreferences → DEFAULT
-          : n === 3
-            ? [{ email: "tech@lab.com", name: "João Técnico" }]
-            : n === 4
-              ? [ORG_ROW] // getLabEmailBrand
-              : n === 5
-                ? [] // customer getUserPreferences → DEFAULT
-                : n === 6
-                  ? [USER_ROW] // customer email
-                  : [];
-    return makeChain(result);
-  });
-  dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
-  dbMock.update.mockImplementation(() => ({
-    set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue([]),
-  }));
-}
-
-/**
- * For notifyVisitReminder (no actor check — both tech + customer get notified):
- * Same pattern as setupVisitTwoSends.
- */
-function setupVisitReminder() {
-  setupVisitTwoSends();
-}
-
-/**
- * For notifyVisitScheduled (technician only, no email brand):
- *   1: getVisitDetails → [VISIT_ROW]
- *   2: notifySelfActions check (tech != actor, skip)
- *   3: getActorName → user → [{ name: "Actor" }]
- *   4: getUserPreferences(tech) → []
- *   5: user email (tech) → [tech email] — but no emailBrand so no visit email
- */
-function setupVisitScheduled() {
-  let n = 0;
-  dbMock.select.mockImplementation(() => {
-    n++;
-    const result =
-      n === 1
-        ? [VISIT_ROW]
-        : n === 2
-          ? [{ name: "Lab Actor" }] // getActorName
-          : n === 3
-            ? [] // getUserPreferences → DEFAULT
-            : n === 4
-              ? [{ email: "tech@lab.com", name: "João Técnico" }]
-              : [];
-    return makeChain(result);
-  });
-  dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
-  dbMock.update.mockImplementation(() => ({
-    set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue([]),
-  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -468,7 +411,7 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
   });
 
   it("notifyVisitConfirmed: VisitNotificationEmail called with variant:confirmed + customer data", async () => {
-    setupVisitConfirmed();
+    setupVisit();
     const { notifyVisitConfirmed } = await import("./service");
     await notifyVisitConfirmed(1, "lab-actor-user");
     expect(visitEmailSpy).toHaveBeenCalledTimes(1);
@@ -485,7 +428,7 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
   });
 
   it("notifyVisitRescheduled: customer branch calls VisitNotificationEmail with variant:rescheduled", async () => {
-    setupVisitTwoSends();
+    setupVisit();
     const { notifyVisitRescheduled } = await import("./service");
     await notifyVisitRescheduled(1, "lab-actor-user");
     const customerCall = visitEmailSpy.mock.calls.find(
@@ -502,26 +445,7 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
   });
 
   it("notifyVisitConfirmed: addressText is undefined when the visit has no address", async () => {
-    let n = 0;
-    dbMock.select.mockImplementation(() => {
-      n++;
-      const result =
-        n === 1
-          ? [{ ...VISIT_ROW, address: null }]
-          : n === 2
-            ? [ORG_ROW]
-            : n === 3
-              ? []
-              : n === 4
-                ? [USER_ROW]
-                : [];
-      return makeChain(result);
-    });
-    dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
-    dbMock.update.mockImplementation(() => ({
-      set: vi.fn().mockReturnThis(),
-      where: vi.fn().mockResolvedValue([]),
-    }));
+    setupVisit({ ...VISIT_ROW, address: null });
     const { notifyVisitConfirmed } = await import("./service");
     await notifyVisitConfirmed(1, "lab-actor-user");
     expect(visitEmailSpy).toHaveBeenCalledTimes(1);
@@ -529,7 +453,7 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
   });
 
   it("notifyVisitCancelled: customer branch calls VisitNotificationEmail with reason", async () => {
-    setupVisitTwoSends();
+    setupVisit();
     const { notifyVisitCancelled } = await import("./service");
     await notifyVisitCancelled(1, "lab-actor-user", "Laboratório indisponível");
     const customerCall = visitEmailSpy.mock.calls.find(
@@ -544,7 +468,7 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
   });
 
   it("notifyVisitReminder: customer branch calls VisitNotificationEmail with variant:reminder", async () => {
-    setupVisitReminder();
+    setupVisit();
     const { notifyVisitReminder } = await import("./service");
     await notifyVisitReminder(1);
     const customerCall = visitEmailSpy.mock.calls.find(
@@ -558,7 +482,7 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
   });
 
   it("notifyVisitScheduled: does NOT call VisitNotificationEmail (technician in-app only)", async () => {
-    setupVisitScheduled();
+    setupVisit();
     const { notifyVisitScheduled } = await import("./service");
     await notifyVisitScheduled(1, "lab-actor-user");
     expect(visitEmailSpy).not.toHaveBeenCalled();
