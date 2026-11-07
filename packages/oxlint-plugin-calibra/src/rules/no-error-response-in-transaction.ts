@@ -30,12 +30,10 @@ const TRANSACTION_FUNCTIONS = new Set([
 ]);
 
 const LEGACY_BASELINE: Baseline = new Map<string, number>([
-  ["apps/api/src/routes/assets.ts", 19],
+
   ["apps/api/src/routes/authorized-signatories.ts", 2],
   ["apps/api/src/routes/capa.ts", 20],
   ["apps/api/src/routes/competences.ts", 22],
-  ["apps/api/src/routes/customer-groups.ts", 4],
-  ["apps/api/src/routes/customers.ts", 3],
   ["apps/api/src/routes/dashboard.ts", 1],
   ["apps/api/src/routes/methods.ts", 61],
   ["apps/api/src/routes/non-conformances.ts", 36],

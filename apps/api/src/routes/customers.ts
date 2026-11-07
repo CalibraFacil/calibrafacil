@@ -17,7 +17,6 @@ import {
   user,
   customerAuditLog,
   asset,
-  assetAuditLog,
   assetOotEvent,
   assetOotImpactAssessment,
   calibrationJob,
@@ -40,8 +39,18 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { getLabCustomerById, requireLabCustomer } from "../lib/customer-access";
-import { invalid, conflict, domainErrorResponse } from "../lib/domain-errors";
+import {
+  requireLabCustomer,
+  requireLabCustomerId,
+} from "../lib/customer-access";
+import {
+  conflict,
+  DomainError,
+  forbidden,
+  invalid,
+  notFound,
+  unprocessable,
+} from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 import { isReferencedRowViolation } from "../lib/db-errors";
@@ -55,22 +64,15 @@ import {
   createClientOrganizationAsServiceOwner,
   createPortalInvitationAsService,
   enforceClientPortalMembershipBoundary,
-  PortalServiceAccountError,
   removePortalMemberAsService,
 } from "../lib/portal-service-account";
-import { resolveCustomerRouteId } from "../lib/customer-route-id";
 import { orgDb } from "../lib/org-db";
-import { clientIp } from "../lib/client-ip";
 import { toRecord } from "@calibra-facil/shared/record";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
   limit: z.coerce.number().min(1).max(10).default(5),
 });
-
-/**
- * Generate a URL-friendly slug from a string
- */
 
 function getStringProperty(value: unknown, key: string) {
   const property = toRecord(value)[key];
@@ -94,21 +96,6 @@ async function groupBelongsToLab(
     )
     .limit(1);
   return Boolean(group);
-}
-
-function portalErrorStatus(
-  error: PortalServiceAccountError,
-): 400 | 401 | 403 | 404 | 409 | 500 {
-  switch (error.status) {
-    case 400:
-    case 401:
-    case 403:
-    case 404:
-    case 409:
-      return error.status;
-    default:
-      return 500;
-  }
 }
 
 /**
@@ -137,43 +124,43 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateCustomerSchema),
     async (c) => {
       const input = c.req.valid("json");
+      const memberData = c.get("member");
 
-      try {
-        const memberData = c.get("member");
+      // Fail fast on an invalid group before provisioning the CLIENT org.
+      const { groupId } = input;
+      if (
+        groupId != null &&
+        !(await orgDb(memberData.organizationId).transaction((o) =>
+          groupBelongsToLab(groupId, memberData.organizationId, o),
+        ))
+      ) {
+        throw invalid("invalid_request", "Grupo invalido");
+      }
 
-        // Fail fast on an invalid group before provisioning the CLIENT org.
-        const { groupId } = input;
-        if (
-          groupId != null &&
-          !(await orgDb(memberData.organizationId).transaction((o) =>
-            groupBelongsToLab(groupId, memberData.organizationId, o),
-          ))
-        ) {
-          return c.json({ error: "Grupo invalido" }, 400);
-        }
+      // Step 1: Create CLIENT organization via service account (3B model)
+      const slug = uniqueSlug(input.name);
 
-        // Step 1: Create CLIENT organization via service account (3B model)
-        const slug = uniqueSlug(input.name);
+      const orgResult = await createClientOrganizationAsServiceOwner({
+        name: input.name,
+        slug,
+      });
 
-        const orgResult = await createClientOrganizationAsServiceOwner({
-          name: input.name,
-          slug,
+      if (!orgResult?.id) {
+        throw new DomainError({
+          code: "customer_create_failed",
+          status: 500,
+          message: "Falha ao criar organizacao do cliente",
         });
+      }
 
-        if (!orgResult?.id) {
-          return c.json(
-            { error: "Falha ao criar organizacao do cliente" },
-            500,
-          );
-        }
-
-        // Step 2: Insert customer record
-        // - authOrganizationId: The CLIENT org (for portal access)
-        // - labOrganizationId: The LAB org that manages this customer (current user's org)
-        const [newCustomer] = await orgDb(
-          memberData.organizationId,
-        ).transaction((o) =>
-          o
+      // Step 2: Insert customer record
+      // - authOrganizationId: The CLIENT org (for portal access)
+      // - labOrganizationId: The LAB org that manages this customer (current user's org)
+      const [newCustomer] = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        (ctx) =>
+          ctx.o
             .insert(customer)
             .values({
               name: input.name,
@@ -187,29 +174,25 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               groupId: input.groupId ?? null,
             })
             .returning(),
-        );
+      );
 
-        // Step 3: If email provided, create invitation for client portal access.
-        let invitationId: string | null = null;
-        if (input.email && input.email.trim() !== "") {
-          try {
-            const inviteResult = await createPortalInvitationAsService({
-              email: input.email,
-              role: PORTAL_MANAGEABLE_MEMBER_ROLES[0],
-              organizationId: orgResult.id,
-            });
-            invitationId = inviteResult?.id ?? null;
-          } catch (inviteError) {
-            // Log but don't fail - customer was created successfully
-            console.error("Failed to send invitation:", inviteError);
-          }
+      // Step 3: If email provided, create invitation for client portal access.
+      let invitationId: string | null = null;
+      if (input.email && input.email.trim() !== "") {
+        try {
+          const inviteResult = await createPortalInvitationAsService({
+            email: input.email,
+            role: PORTAL_MANAGEABLE_MEMBER_ROLES[0],
+            organizationId: orgResult.id,
+          });
+          invitationId = inviteResult?.id ?? null;
+        } catch (inviteError) {
+          // Log but don't fail - customer was created successfully
+          console.error("Failed to send invitation:", inviteError);
         }
-
-        return c.json({ ...newCustomer, invitationId }, 201);
-      } catch (error) {
-        console.error("Error creating customer:", error);
-        return c.json({ error: "Erro ao criar cliente" }, 500);
       }
+
+      return c.json({ ...newCustomer, invitationId }, 201);
     },
   )
 
@@ -224,32 +207,26 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const memberData = c.get("member");
       const { query, limit } = c.req.valid("query");
 
-      try {
-        const results = await orgDb(memberData.organizationId).transaction(
-          (o) =>
-            o
-              .select({
-                id: customer.id,
-                name: customer.name,
-                email: customer.email,
-                taxId: customer.taxId,
-              })
-              .from(customer)
-              .where(
-                and(
-                  eq(customer.labOrganizationId, memberData.organizationId),
-                  customerSearchCondition(query)!,
-                ),
-              )
-              .orderBy(customer.name)
-              .limit(limit),
-        );
+      const results = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            taxId: customer.taxId,
+          })
+          .from(customer)
+          .where(
+            and(
+              eq(customer.labOrganizationId, memberData.organizationId),
+              customerSearchCondition(query)!,
+            ),
+          )
+          .orderBy(customer.name)
+          .limit(limit),
+      );
 
-        return c.json(results);
-      } catch (error) {
-        console.error("Error searching customers:", error);
-        return c.json({ error: "Erro ao buscar clientes" }, 500);
-      }
+      return c.json(results);
     },
   )
 
@@ -268,13 +245,14 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         case "ok":
           return c.json(outcome.result);
         case "invalid":
-          return c.json({ error: "CNPJ invalido" }, 422);
+          throw unprocessable("cnpj_invalid", "CNPJ invalido");
         case "not-found":
-          return c.json(
-            { error: "CNPJ nao encontrado na Receita Federal" },
-            404,
+          throw notFound(
+            "cnpj_not_found",
+            "CNPJ nao encontrado na Receita Federal",
           );
         case "error":
+          // 502 is not a DomainError status (the registry is a mirror, not us).
           return c.json(
             {
               error:
@@ -297,89 +275,81 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const { page, limit, query } = c.req.valid("query");
       const memberData = c.get("member");
 
-      try {
-        const offset = (page - 1) * limit;
+      const offset = (page - 1) * limit;
 
-        // Build conditions - always filter by LAB organization
-        const conditions = [
-          eq(customer.labOrganizationId, memberData.organizationId),
+      // Build conditions - always filter by LAB organization
+      const conditions = [
+        eq(customer.labOrganizationId, memberData.organizationId),
+      ];
+
+      // Add search condition if query provided
+      if (query) {
+        const searchCondition = customerSearchCondition(query);
+        if (searchCondition) {
+          conditions.push(searchCondition);
+        }
+      }
+
+      return await orgDb(memberData.organizationId).transaction(async (o) => {
+        // Get customers with pagination (filtered by organization)
+        const customers = await o
+          .select()
+          .from(customer)
+          .where(and(...conditions))
+          .orderBy(customer.name)
+          .limit(limit)
+          .offset(offset);
+
+        // Get total count for pagination (filtered by organization)
+        const countResult = await o
+          .select({ total: count() })
+          .from(customer)
+          .where(and(...conditions));
+
+        const total = countResult[0]?.total ?? 0;
+
+        // Resolve group names for the rows on this page (batched single query).
+        const pageGroupIds = [
+          ...new Set(
+            customers
+              .map((row) => row.groupId)
+              .filter((groupId): groupId is number => groupId !== null),
+          ),
         ];
-
-        // Add search condition if query provided
-        if (query) {
-          const searchCondition = customerSearchCondition(query);
-          if (searchCondition) {
-            conditions.push(searchCondition);
+        const groupNameById = new Map<number, string>();
+        if (pageGroupIds.length > 0) {
+          const groups = await o
+            .select({ id: customerGroup.id, name: customerGroup.name })
+            .from(customerGroup)
+            .where(
+              and(
+                eq(customerGroup.labOrganizationId, memberData.organizationId),
+                inArray(customerGroup.id, pageGroupIds),
+              ),
+            );
+          for (const group of groups) {
+            groupNameById.set(group.id, group.name);
           }
         }
 
-        return await orgDb(memberData.organizationId).transaction(async (o) => {
-          // Get customers with pagination (filtered by organization)
-          const customers = await o
-            .select()
-            .from(customer)
-            .where(and(...conditions))
-            .orderBy(customer.name)
-            .limit(limit)
-            .offset(offset);
+        const data = customers.map((row) => ({
+          ...row,
+          groupName:
+            row.groupId === null
+              ? null
+              : (groupNameById.get(row.groupId) ?? null),
+        }));
 
-          // Get total count for pagination (filtered by organization)
-          const countResult = await o
-            .select({ total: count() })
-            .from(customer)
-            .where(and(...conditions));
-
-          const total = countResult[0]?.total ?? 0;
-
-          // Resolve group names for the rows on this page (batched single query).
-          const pageGroupIds = [
-            ...new Set(
-              customers
-                .map((row) => row.groupId)
-                .filter((groupId): groupId is number => groupId !== null),
-            ),
-          ];
-          const groupNameById = new Map<number, string>();
-          if (pageGroupIds.length > 0) {
-            const groups = await o
-              .select({ id: customerGroup.id, name: customerGroup.name })
-              .from(customerGroup)
-              .where(
-                and(
-                  eq(
-                    customerGroup.labOrganizationId,
-                    memberData.organizationId,
-                  ),
-                  inArray(customerGroup.id, pageGroupIds),
-                ),
-              );
-            for (const group of groups) {
-              groupNameById.set(group.id, group.name);
-            }
-          }
-
-          const data = customers.map((row) => ({
-            ...row,
-            groupName:
-              row.groupId === null
-                ? null
-                : (groupNameById.get(row.groupId) ?? null),
-          }));
-
-          return c.json({
-            data,
-            pagination: {
-              page,
-              limit,
-              total,
-              totalPages: Math.ceil(total / limit),
-            },
-          } satisfies ServerShape<CustomersListResponse>);
-        });
-      } catch (error) {
-        console.error("Error listing customers:", error);
-        return c.json({ error: "Erro ao listar clientes" }, 500);
-      }
+        return c.json({
+          data,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        } satisfies ServerShape<CustomersListResponse>);
+      });
     },
   )
 
@@ -388,14 +358,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id/label", ...withLabPermission({ client: ["read"] }), async (c) => {
     const memberData = c.get("member");
-    const id = await resolveCustomerRouteId(
+    const id = await requireLabCustomerId(
       c.req.param("id"),
       memberData.organizationId,
     );
-
-    if (id === null) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
 
     return await orgDb(memberData.organizationId).transaction(async (o) => {
       const [foundCustomer] = await o
@@ -413,7 +379,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         .limit(1);
 
       if (!foundCustomer) {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
+        throw notFound("customer_not_found", "Cliente nao encontrado");
       }
 
       return c.json(foundCustomer);
@@ -431,13 +397,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      const id = await requireLabCustomerId(
         c.req.param("id"),
         memberData.organizationId,
       );
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
 
       return await orgDb(memberData.organizationId).transaction(async (o) => {
         const [foundCustomer] = await o
@@ -451,7 +414,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .limit(1);
         if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
+          throw notFound("customer_not_found", "Cliente nao encontrado");
         }
 
         const events = await o
@@ -492,30 +455,12 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ client: ["read"] }), async (c) => {
     const memberData = c.get("member");
-    const id = await resolveCustomerRouteId(
+    const foundCustomer = await requireLabCustomer(
       c.req.param("id"),
       memberData.organizationId,
     );
 
-    if (id === null) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
-
-    try {
-      const foundCustomer = await getLabCustomerById(
-        id,
-        memberData.organizationId,
-      );
-
-      if (!foundCustomer) {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
-      }
-
-      return c.json(foundCustomer satisfies ServerShape<CustomerDetail>);
-    } catch (error) {
-      console.error("Error getting customer:", error);
-      return c.json({ error: "Erro ao buscar cliente" }, 500);
-    }
+    return c.json(foundCustomer satisfies ServerShape<CustomerDetail>);
   })
 
   // =========================================================================
@@ -527,7 +472,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateCustomerSchema),
     async (c) => {
       const input = c.req.valid("json");
-      const session = c.get("session");
       const memberData = c.get("member");
       const existingCustomer = await requireLabCustomer(
         c.req.param("id"),
@@ -586,105 +530,72 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // DELETE /:id - Delete customer
   // =========================================================================
   .delete("/:id", ...withLabPermission({ client: ["delete"] }), async (c) => {
-    const session = c.get("session");
     const memberData = c.get("member");
-    const id = await resolveCustomerRouteId(
+    const existingCustomer = await requireLabCustomer(
       c.req.param("id"),
       memberData.organizationId,
     );
+    const id = existingCustomer.id;
 
-    if (id === null) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
+    // TODO: Check for active calibrations before deleting
+    // For now, we allow deletion
 
+    // Retention (decision Q16): a customer that still has regulated records
+    // (jobs, certificates, service orders, billing documents, requests,
+    // visits, OOT events) cannot be deleted. Those foreign keys are RESTRICT, so
+    // Postgres refuses the DELETE; the audit rows below are written in the same
+    // transaction so a refused delete leaves no "delete" entry behind.
     try {
-      const existingCustomer = await getLabCustomerById(
-        id,
-        memberData.organizationId,
-      );
-
-      if (!existingCustomer) {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
-      }
-
-      // TODO: Check for active calibrations before deleting
-      // For now, we allow deletion
-
-      const ipAddress = clientIp(c);
-
-      // Retention (decision Q16): a customer that still has regulated records
-      // (jobs, certificates, service orders, billing documents, requests,
-      // visits, OOT events) cannot be deleted. Those foreign keys are RESTRICT, so
-      // Postgres refuses the DELETE; the audit rows below are written in the same
-      // transaction so a refused delete leaves no "delete" entry behind.
-      try {
-        await orgDb(memberData.organizationId).transaction(async (tx) => {
-          // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
-          // longer cascades (soft reference), so this row survives the delete below.
-          await tx.insert(customerAuditLog).values({
-            organizationId: memberData.organizationId,
-            customerId: id,
-            action: "delete",
-            changes: { customer: { old: existingCustomer, new: null } },
-            performedBy: session.user.id,
-            ipAddress,
-          });
-
-          // CMP-07 (#692): deleting the customer cascades its assets
-          // (asset.customer_id → customer, intentional). Record a 'delete' audit row
-          // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
-          // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
-          const customerAssets = await tx
-            .select()
-            .from(asset)
-            .where(eq(asset.customerId, id));
-          if (customerAssets.length > 0) {
-            await tx.insert(assetAuditLog).values(
-              customerAssets.map((assetRow) => ({
-                organizationId: memberData.organizationId,
-                assetId: assetRow.id,
-                action: "delete",
-                changes: { asset: { old: assetRow, new: null } },
-                performedBy: session.user.id,
-                ipAddress,
-                reason: "Cliente excluído",
-              })),
-            );
-          }
-
-          // Delete the customer (the asset/customer audit trail above survives)
-          await tx
-            .delete(customer)
-            .where(
-              and(
-                eq(customer.id, id),
-                eq(customer.labOrganizationId, memberData.organizationId),
-              ),
-            );
-
-          // Also delete the associated (CLIENT) organization
-          await tx
-            .delete(organization)
-            .where(eq(organization.id, existingCustomer.authOrganizationId));
+      await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+        // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
+        // longer cascades (soft reference), so this row survives the delete below.
+        await ctx.audit("customer", id, {
+          action: "delete",
+          changes: { customer: { old: existingCustomer, new: null } },
         });
-      } catch (error) {
-        if (isReferencedRowViolation(error)) {
-          return domainErrorResponse(
-            c,
-            conflict(
-              "customer_has_retained_records",
-              "Cliente possui registros regulados retidos (calibrações, ordens de serviço, documentos financeiros) e não pode ser excluído",
+
+        // CMP-07 (#692): deleting the customer cascades its assets
+        // (asset.customer_id → customer, intentional). Record a 'delete' audit row
+        // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
+        // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
+        const customerAssets = await ctx.o
+          .select()
+          .from(asset)
+          .where(eq(asset.customerId, id));
+        for (const assetRow of customerAssets) {
+          await ctx.audit("asset", assetRow.id, {
+            action: "delete",
+            changes: { asset: { old: assetRow, new: null } },
+            reason: "Cliente excluído",
+          });
+        }
+
+        // Delete the customer (the asset/customer audit trail above survives)
+        await ctx.o
+          .delete(customer)
+          .where(
+            and(
+              eq(customer.id, id),
+              eq(customer.labOrganizationId, memberData.organizationId),
             ),
           );
-        }
-        throw error;
-      }
 
-      return c.json({ success: true });
+        // Also delete the associated (CLIENT) organization
+        await ctx.o
+          .delete(organization)
+          .where(eq(organization.id, existingCustomer.authOrganizationId));
+      });
     } catch (error) {
-      console.error("Error deleting customer:", error);
-      return c.json({ error: "Erro ao excluir cliente" }, 500);
+      if (isReferencedRowViolation(error)) {
+        throw conflict(
+          "customer_has_retained_records",
+          "Cliente possui registros regulados retidos (calibrações, ordens de serviço, documentos financeiros) e não pode ser excluído",
+        );
+      }
+      throw error;
     }
+
+    return c.json({ success: true });
   })
 
   // =========================================================================
@@ -695,33 +606,18 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      // Get customer to find authOrganizationId
+      const foundCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      try {
-        // Get customer to find authOrganizationId
-        const foundCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
-        );
-
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        // Get members of the CLIENT organization with user details
-        // `member` rows of the CLIENT organization carry that organization as
-        // their tenant column: it is the one the transaction names (the lab
-        // already proved the customer is its own above).
-        const members = await orgDb(
-          foundCustomer.authOrganizationId,
-        ).transaction((o) =>
+      // Get members of the CLIENT organization with user details
+      // `member` rows of the CLIENT organization carry that organization as
+      // their tenant column: it is the one the transaction names (the lab
+      // already proved the customer is its own above).
+      const members = await orgDb(foundCustomer.authOrganizationId).transaction(
+        (o) =>
           o
             .select({
               id: member.id,
@@ -740,13 +636,9 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
                 inArray(member.role, PORTAL_VISIBLE_MEMBER_ROLES),
               ),
             ),
-        );
+      );
 
-        return c.json(members);
-      } catch (error) {
-        console.error("Error listing customer members:", error);
-        return c.json({ error: "Erro ao listar usuarios do portal" }, 500);
-      }
+      return c.json(members);
     },
   )
 
@@ -758,55 +650,37 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      // Get customer to find authOrganizationId
+      const foundCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      // Get invitations for the CLIENT organization
+      // The CLIENT organization's own invitation rows (see the members read).
+      const invitations = await orgDb(
+        foundCustomer.authOrganizationId,
+      ).transaction((o) =>
+        o
+          .select({
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            status: invitation.status,
+            expiresAt: invitation.expiresAt,
+            createdAt: invitation.createdAt,
+            inviterName: user.name,
+            inviterEmail: user.email,
+          })
+          .from(invitation)
+          .innerJoin(user, eq(invitation.inviterId, user.id))
+          .where(
+            eq(invitation.organizationId, foundCustomer.authOrganizationId),
+          )
+          .orderBy(desc(invitation.createdAt)),
+      );
 
-      try {
-        // Get customer to find authOrganizationId
-        const foundCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
-        );
-
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        // Get invitations for the CLIENT organization
-        // The CLIENT organization's own invitation rows (see the members read).
-        const invitations = await orgDb(
-          foundCustomer.authOrganizationId,
-        ).transaction((o) =>
-          o
-            .select({
-              id: invitation.id,
-              email: invitation.email,
-              role: invitation.role,
-              status: invitation.status,
-              expiresAt: invitation.expiresAt,
-              createdAt: invitation.createdAt,
-              inviterName: user.name,
-              inviterEmail: user.email,
-            })
-            .from(invitation)
-            .innerJoin(user, eq(invitation.inviterId, user.id))
-            .where(
-              eq(invitation.organizationId, foundCustomer.authOrganizationId),
-            )
-            .orderBy(desc(invitation.createdAt)),
-        );
-
-        return c.json(invitations);
-      } catch (error) {
-        console.error("Error listing customer invitations:", error);
-        return c.json({ error: "Erro ao listar convites" }, 500);
-      }
+      return c.json(invitations);
     },
   )
 
@@ -819,74 +693,45 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreatePortalInvitationSchema),
     async (c) => {
       const { email, role } = c.req.valid("json");
-      const session = c.get("session");
       const memberData = c.get("member");
       const portalRole = role || PORTAL_MANAGEABLE_MEMBER_ROLES[0];
-      const id = await resolveCustomerRouteId(
+      // Get customer to find authOrganizationId
+      const foundCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      await enforceClientPortalMembershipBoundary(
+        foundCustomer.authOrganizationId,
+      );
 
-      try {
-        // Get customer to find authOrganizationId
-        const foundCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
-        );
+      const inviteResult = await createPortalInvitationAsService({
+        email,
+        role: portalRole,
+        organizationId: foundCustomer.authOrganizationId,
+      });
 
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        await enforceClientPortalMembershipBoundary(
-          foundCustomer.authOrganizationId,
-        );
-
-        const inviteResult = await createPortalInvitationAsService({
-          email,
-          role: portalRole,
-          organizationId: foundCustomer.authOrganizationId,
+      if (!inviteResult?.id) {
+        throw new DomainError({
+          code: "portal_invitation_failed",
+          status: 500,
+          message: "Falha ao criar convite",
         });
-
-        if (!inviteResult?.id) {
-          return c.json({ error: "Falha ao criar convite" }, 500);
-        }
-
-        // Log audit entry
-        await orgDb(memberData.organizationId).transaction((o) =>
-          o.insert(customerAuditLog).values({
-            organizationId: memberData.organizationId,
-            customerId: id,
-            action: "user_invited",
-            changes: {
-              email,
-              role: portalRole,
-              invitationId: inviteResult.id,
-            },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
-          }),
-        );
-
-        return c.json({ id: inviteResult.id, email, role: portalRole }, 201);
-      } catch (error) {
-        console.error("Error creating invitation:", error);
-        if (error instanceof PortalServiceAccountError) {
-          return c.json(
-            {
-              error: error.message,
-              code: error.code,
-            },
-            portalErrorStatus(error),
-          );
-        }
-
-        return c.json({ error: "Erro ao criar convite" }, 500);
       }
+
+      // Log audit entry
+      await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
+        ctx.audit("customer", foundCustomer.id, {
+          action: "user_invited",
+          changes: {
+            email,
+            role: portalRole,
+            invitationId: inviteResult.id,
+          },
+        }),
+      );
+
+      return c.json({ id: inviteResult.id, email, role: portalRole }, 201);
     },
   )
 
@@ -899,85 +744,58 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const invId = c.req.param("invId");
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      // Get customer to verify ownership
+      const foundCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
+      // Get invitation to verify it belongs to this customer
+      const [foundInvitation] = await orgDb(
+        foundCustomer.authOrganizationId,
+      ).transaction((o) =>
+        o
+          .select()
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.id, invId),
+              eq(invitation.organizationId, foundCustomer.authOrganizationId),
+            ),
+          )
+          .limit(1),
+      );
+
+      if (!foundInvitation) {
+        throw notFound("portal_invitation_not_found", "Convite nao encontrado");
       }
 
-      try {
-        // Get customer to verify ownership
-        const foundCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
+      if (foundInvitation.status !== "pending") {
+        throw invalid(
+          "portal_invitation_not_pending",
+          "Apenas convites pendentes podem ser reenviados",
         );
-
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        // Get invitation to verify it belongs to this customer
-        const [foundInvitation] = await orgDb(
-          foundCustomer.authOrganizationId,
-        ).transaction((o) =>
-          o
-            .select()
-            .from(invitation)
-            .where(
-              and(
-                eq(invitation.id, invId),
-                eq(invitation.organizationId, foundCustomer.authOrganizationId),
-              ),
-            )
-            .limit(1),
-        );
-
-        if (!foundInvitation) {
-          return c.json({ error: "Convite nao encontrado" }, 404);
-        }
-
-        if (foundInvitation.status !== "pending") {
-          return c.json(
-            { error: "Apenas convites pendentes podem ser reenviados" },
-            400,
-          );
-        }
-
-        await enforceClientPortalMembershipBoundary(
-          foundCustomer.authOrganizationId,
-        );
-
-        await cancelPortalInvitationAsService({
-          invitationId: invId,
-          organizationId: foundCustomer.authOrganizationId,
-        });
-
-        const newInvite = await createPortalInvitationAsService({
-          email: foundInvitation.email,
-          role: foundInvitation.role || PORTAL_MANAGEABLE_MEMBER_ROLES[0],
-          organizationId: foundCustomer.authOrganizationId,
-        });
-
-        return c.json({
-          id: getStringProperty(newInvite, "id"),
-          email: foundInvitation.email,
-        });
-      } catch (error) {
-        console.error("Error resending invitation:", error);
-        if (error instanceof PortalServiceAccountError) {
-          return c.json(
-            {
-              error: error.message,
-              code: error.code,
-            },
-            portalErrorStatus(error),
-          );
-        }
-        return c.json({ error: "Erro ao reenviar convite" }, 500);
       }
+
+      await enforceClientPortalMembershipBoundary(
+        foundCustomer.authOrganizationId,
+      );
+
+      await cancelPortalInvitationAsService({
+        invitationId: invId,
+        organizationId: foundCustomer.authOrganizationId,
+      });
+
+      const newInvite = await createPortalInvitationAsService({
+        email: foundInvitation.email,
+        role: foundInvitation.role || PORTAL_MANAGEABLE_MEMBER_ROLES[0],
+        organizationId: foundCustomer.authOrganizationId,
+      });
+
+      return c.json({
+        id: getStringProperty(newInvite, "id"),
+        email: foundInvitation.email,
+      });
     },
   )
 
@@ -989,90 +807,58 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
       const invId = c.req.param("invId");
-      const session = c.get("session");
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      // Get customer to verify ownership
+      const foundCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
+      // Get invitation to verify it belongs to this customer
+      const [foundInvitation] = await orgDb(
+        foundCustomer.authOrganizationId,
+      ).transaction((o) =>
+        o
+          .select()
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.id, invId),
+              eq(invitation.organizationId, foundCustomer.authOrganizationId),
+            ),
+          )
+          .limit(1),
+      );
+
+      if (!foundInvitation) {
+        throw notFound("portal_invitation_not_found", "Convite nao encontrado");
       }
 
-      try {
-        // Get customer to verify ownership
-        const foundCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
+      if (foundInvitation.status !== "pending") {
+        throw invalid(
+          "portal_invitation_not_pending",
+          "Apenas convites pendentes podem ser cancelados",
         );
-
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        // Get invitation to verify it belongs to this customer
-        const [foundInvitation] = await orgDb(
-          foundCustomer.authOrganizationId,
-        ).transaction((o) =>
-          o
-            .select()
-            .from(invitation)
-            .where(
-              and(
-                eq(invitation.id, invId),
-                eq(invitation.organizationId, foundCustomer.authOrganizationId),
-              ),
-            )
-            .limit(1),
-        );
-
-        if (!foundInvitation) {
-          return c.json({ error: "Convite nao encontrado" }, 404);
-        }
-
-        if (foundInvitation.status !== "pending") {
-          return c.json(
-            { error: "Apenas convites pendentes podem ser cancelados" },
-            400,
-          );
-        }
-
-        await enforceClientPortalMembershipBoundary(
-          foundCustomer.authOrganizationId,
-        );
-
-        await cancelPortalInvitationAsService({
-          invitationId: invId,
-          organizationId: foundCustomer.authOrganizationId,
-        });
-
-        // Log audit entry
-        await orgDb(memberData.organizationId).transaction((o) =>
-          o.insert(customerAuditLog).values({
-            organizationId: memberData.organizationId,
-            customerId: id,
-            action: "invitation_canceled",
-            changes: { email: foundInvitation.email, invitationId: invId },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
-          }),
-        );
-
-        return c.json({ success: true });
-      } catch (error) {
-        console.error("Error canceling invitation:", error);
-        if (error instanceof PortalServiceAccountError) {
-          return c.json(
-            {
-              error: error.message,
-              code: error.code,
-            },
-            portalErrorStatus(error),
-          );
-        }
-        return c.json({ error: "Erro ao cancelar convite" }, 500);
       }
+
+      await enforceClientPortalMembershipBoundary(
+        foundCustomer.authOrganizationId,
+      );
+
+      await cancelPortalInvitationAsService({
+        invitationId: invId,
+        organizationId: foundCustomer.authOrganizationId,
+      });
+
+      // Log audit entry
+      await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
+        ctx.audit("customer", foundCustomer.id, {
+          action: "invitation_canceled",
+          changes: { email: foundInvitation.email, invitationId: invId },
+        }),
+      );
+
+      return c.json({ success: true });
     },
   )
 
@@ -1084,104 +870,69 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
       const memberId = c.req.param("memberId");
-      const session = c.get("session");
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      // Get customer to verify ownership
+      const foundCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
+      // Get member to verify it belongs to this customer's organization
+      const [foundMember] = await orgDb(
+        foundCustomer.authOrganizationId,
+      ).transaction((o) =>
+        o
+          .select({
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            userName: user.name,
+            userEmail: user.email,
+          })
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(
+            and(
+              eq(member.id, memberId),
+              eq(member.organizationId, foundCustomer.authOrganizationId),
+            ),
+          )
+          .limit(1),
+      );
+
+      if (!foundMember) {
+        throw notFound("portal_member_not_found", "Membro nao encontrado");
       }
 
-      try {
-        // Get customer to verify ownership
-        const foundCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
+      if (!isPortalManageableMemberRole(foundMember.role)) {
+        throw forbidden(
+          "portal_member_not_removable",
+          "Apenas usuarios externos do portal podem ser removidos por esta tela",
         );
-
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        // Get member to verify it belongs to this customer's organization
-        const [foundMember] = await orgDb(
-          foundCustomer.authOrganizationId,
-        ).transaction((o) =>
-          o
-            .select({
-              id: member.id,
-              userId: member.userId,
-              role: member.role,
-              userName: user.name,
-              userEmail: user.email,
-            })
-            .from(member)
-            .innerJoin(user, eq(member.userId, user.id))
-            .where(
-              and(
-                eq(member.id, memberId),
-                eq(member.organizationId, foundCustomer.authOrganizationId),
-              ),
-            )
-            .limit(1),
-        );
-
-        if (!foundMember) {
-          return c.json({ error: "Membro nao encontrado" }, 404);
-        }
-
-        if (!isPortalManageableMemberRole(foundMember.role)) {
-          return c.json(
-            {
-              error:
-                "Apenas usuarios externos do portal podem ser removidos por esta tela",
-            },
-            403,
-          );
-        }
-
-        await enforceClientPortalMembershipBoundary(
-          foundCustomer.authOrganizationId,
-        );
-
-        await removePortalMemberAsService({
-          memberId,
-          organizationId: foundCustomer.authOrganizationId,
-        });
-
-        // Log audit entry
-        await orgDb(memberData.organizationId).transaction((o) =>
-          o.insert(customerAuditLog).values({
-            organizationId: memberData.organizationId,
-            customerId: id,
-            action: "user_removed",
-            changes: {
-              email: foundMember.userEmail,
-              name: foundMember.userName,
-              memberId,
-            },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
-          }),
-        );
-
-        return c.json({ success: true });
-      } catch (error) {
-        console.error("Error removing member:", error);
-        if (error instanceof PortalServiceAccountError) {
-          return c.json(
-            {
-              error: error.message,
-              code: error.code,
-            },
-            portalErrorStatus(error),
-          );
-        }
-        return c.json({ error: "Erro ao remover membro" }, 500);
       }
+
+      await enforceClientPortalMembershipBoundary(
+        foundCustomer.authOrganizationId,
+      );
+
+      await removePortalMemberAsService({
+        memberId,
+        organizationId: foundCustomer.authOrganizationId,
+      });
+
+      // Log audit entry
+      await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
+        ctx.audit("customer", foundCustomer.id, {
+          action: "user_removed",
+          changes: {
+            email: foundMember.userEmail,
+            name: foundMember.userName,
+            memberId,
+          },
+        }),
+      );
+
+      return c.json({ success: true });
     },
   )
 
@@ -1274,68 +1025,51 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const { page, limit } = c.req.valid("query");
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      // Verify customer exists
+      const foundCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
+      const id = foundCustomer.id;
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const offset = (page - 1) * limit;
 
-      try {
-        // Verify customer exists
-        const foundCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
-        );
+      return await orgDb(memberData.organizationId).transaction(async (o) => {
+        // Get audit log entries with user details
+        const entries = await o
+          .select({
+            id: customerAuditLog.id,
+            action: customerAuditLog.action,
+            changes: customerAuditLog.changes,
+            performedAt: customerAuditLog.performedAt,
+            reason: customerAuditLog.reason,
+            performedByName: user.name,
+            performedByEmail: user.email,
+          })
+          .from(customerAuditLog)
+          .innerJoin(user, eq(customerAuditLog.performedBy, user.id))
+          .where(eq(customerAuditLog.customerId, id))
+          .orderBy(desc(customerAuditLog.performedAt))
+          .limit(limit)
+          .offset(offset);
 
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
+        // Get total count
+        const countResult = await o
+          .select({ total: count() })
+          .from(customerAuditLog)
+          .where(eq(customerAuditLog.customerId, id));
 
-        const offset = (page - 1) * limit;
+        const total = countResult[0]?.total ?? 0;
 
-        return await orgDb(memberData.organizationId).transaction(async (o) => {
-          // Get audit log entries with user details
-          const entries = await o
-            .select({
-              id: customerAuditLog.id,
-              action: customerAuditLog.action,
-              changes: customerAuditLog.changes,
-              performedAt: customerAuditLog.performedAt,
-              reason: customerAuditLog.reason,
-              performedByName: user.name,
-              performedByEmail: user.email,
-            })
-            .from(customerAuditLog)
-            .innerJoin(user, eq(customerAuditLog.performedBy, user.id))
-            .where(eq(customerAuditLog.customerId, id))
-            .orderBy(desc(customerAuditLog.performedAt))
-            .limit(limit)
-            .offset(offset);
-
-          // Get total count
-          const countResult = await o
-            .select({ total: count() })
-            .from(customerAuditLog)
-            .where(eq(customerAuditLog.customerId, id));
-
-          const total = countResult[0]?.total ?? 0;
-
-          return c.json({
-            data: entries,
-            pagination: {
-              page,
-              limit,
-              total,
-              totalPages: Math.ceil(total / limit),
-            },
-          });
+        return c.json({
+          data: entries,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
         });
-      } catch (error) {
-        console.error("Error getting audit log:", error);
-        return c.json({ error: "Erro ao buscar historico" }, 500);
-      }
+      });
     },
   );
