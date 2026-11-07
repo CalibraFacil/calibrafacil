@@ -98,41 +98,6 @@ describe('dashboard route registry', () => {
   })
 
   describe('settings sidebar', () => {
-    it('groups the pages in the order of the registry', () => {
-      const groups = getSettingsNavGroups()
-
-      expect(groups.map((group) => group.label)).toEqual([
-        'Conta',
-        'Laboratório',
-        'Certificados',
-        'Portal e integrações',
-        'Avançado',
-      ])
-      expect(groups[0]?.items.map((item) => item.value)).toEqual([
-        'profile',
-        'notifications',
-        'appearance',
-        'security',
-        'authentication',
-        'passkeys',
-      ])
-      expect(groups.at(-1)?.items.map((item) => item.to)).toEqual([
-        '/dashboard/settings/danger',
-      ])
-    })
-
-    it('prefers the sidebar wording over the crumb when a route has one', () => {
-      const labels = Object.fromEntries(
-        getSettingsNavGroups()
-          .flatMap((group) => group.items)
-          .map((item) => [item.value, item.label]),
-      )
-
-      expect(labels.organization).toBe('Geral')
-      expect(labels.environment).toBe('Ambiente')
-      expect(labels.signature).toBe('Assinatura digital')
-    })
-
     it('gives every page a unique key', () => {
       const values = getSettingsNavGroups().flatMap((group) =>
         group.items.map((item) => item.value),

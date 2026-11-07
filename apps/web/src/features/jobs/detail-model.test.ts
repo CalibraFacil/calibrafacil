@@ -32,8 +32,6 @@ import {
 } from './detail-model'
 
 describe('job detail model', () => {
-  it('keeps job status labels and badge variants in the feature layer', () => {})
-
   it('formats dates', () => {
     expect(formatDate(null)).toBe('-')
     expect(formatDate('2026-05-20T10:30:00.000Z')).toContain('20/05/2026')

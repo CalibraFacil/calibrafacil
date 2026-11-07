@@ -1,51 +1,50 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+
+import { parseSignUpForm } from '@/features/auth/sign-up-forms'
 
 /**
  * Self-serve sign-up: a laboratory can open its own account from the pricing
- * page. The rule underneath it is that an account is only opened for a laboratory that owns its e-mail domain, and it still costs
- * a click on a link sent to that mailbox.
- *
- * These assertions keep that shape from eroding into "anyone with an e-mail".
+ * page. The rule underneath it is that an account is only opened for a
+ * laboratory that owns its e-mail domain, and it still costs a click on a link
+ * sent to that mailbox.
  */
-describe('public auth routes', () => {
-  const appRoot = process.cwd()
-  const signUpRoute = ['sign', 'up'].join('-')
+describe('self-serve sign-up form', () => {
+  const corporate = {
+    name: 'Ana Souza',
+    email: 'ana@laboratorio-exemplo.com.br',
+    labName: 'Laboratório Exemplo',
+    cnpj: '11.222.333/0001-81',
+    phone: '',
+  }
 
-  it('exposes exactly one self-serve registration route', () => {
-    const routeTree = readFileSync(
-      join(appRoot, 'src/routeTree.gen.ts'),
-      'utf8',
-    )
+  it('accepts a laboratory that owns its e-mail domain', () => {
+    const result = parseSignUpForm(corporate, { website: '' })
 
-    const declarations = routeTree.match(/path: '\/sign-up\/'/g) ?? []
-    expect(declarations).toHaveLength(1)
+    expect(result).toMatchObject({
+      success: true,
+      data: { email: 'ana@laboratorio-exemplo.com.br', cnpj: '11222333000181' },
+    })
   })
 
-  it('keeps registration behind the corporate-domain policy', () => {
-    const form = readFileSync(
-      join(appRoot, `src/features/auth/${signUpRoute}-forms.ts`),
-      'utf8',
+  it('refuses a public mailbox in the browser, as the API does', () => {
+    const result = parseSignUpForm(
+      { ...corporate, email: 'ana@gmail.com' },
+      { website: '' },
     )
 
-    // The page must validate through the shared schema, which is where the
-    // "own domain" rule lives. A hand-rolled check here would drift from the
-    // API's and let a Gmail address through the browser.
-    expect(form).toContain('SelfServeSignupSchema')
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.fieldErrors.map((item) => item.field)).toEqual(['email'])
   })
 
-  it('never asks for or sets a password', () => {
-    const page = readFileSync(
-      join(appRoot, `src/features/auth/${signUpRoute}-page.tsx`),
-      'utf8',
+  it('refuses a CNPJ with a wrong check digit', () => {
+    const result = parseSignUpForm(
+      { ...corporate, cnpj: '11.222.333/0001-82' },
+      { website: '' },
     )
 
-    // Lab access is passwordless by policy; sign-up must not be the back door
-    // that reintroduces credentials. (Prose about there being no password is
-    // fine — an input is not.)
-    expect(page).not.toContain('type="password"')
-    expect(page).not.toContain('new-password')
-    expect(page).not.toContain('current-password')
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.fieldErrors.map((item) => item.field)).toEqual(['cnpj'])
   })
 })

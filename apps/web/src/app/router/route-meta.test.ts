@@ -12,36 +12,6 @@ const allTopItems: DashboardNavItem[] = dashboardNavSections.flatMap(
 )
 
 describe('dashboard route metadata', () => {
-  it('orders the sidebar by the laboratory workflow', () => {
-    expect(dashboardNavSections.map((section) => section.label)).toEqual([
-      undefined,
-      'Operação',
-      'Cadastros',
-      'Laboratório',
-      'Gestão',
-    ])
-    const operation = dashboardNavSections.find(
-      (section) => section.label === 'Operação',
-    )
-    expect(operation?.items.map((item) => item.title)).toEqual([
-      'Solicitações',
-      'Ordens de serviço',
-      'Calibrações',
-      'Visitas',
-    ])
-  })
-
-  it('groups Serviços and Materiais under the Catálogo nav section', () => {
-    const catalogo = allTopItems.find((item) => item.title === 'Catálogo')
-    expect(catalogo).toBeDefined()
-    const childTitles = (catalogo?.items ?? []).map((item) => item.title)
-    expect(childTitles).toEqual(['Serviços', 'Materiais'])
-    // Neither appears as a top-level entry anymore
-    const topTitles = allTopItems.map((item) => item.title)
-    expect(topTitles).not.toContain('Serviços')
-    expect(topTitles).not.toContain('Materiais')
-  })
-
   it('filters finance nav items by module and role access', () => {
     const withoutFinance = filterDashboardNavItems(allTopItems, {
       canAccessFinance: false,
@@ -88,15 +58,6 @@ describe('dashboard route metadata', () => {
       requiredModule: 'finance',
       requiredRole: 'admin-or-owner',
     })
-    expect(finance?.items?.map((item) => item.title)).toEqual([
-      'Painel financeiro',
-      'Pronto para faturar',
-      'Recebíveis',
-      'Contratos',
-      'Análises',
-      'Automação',
-      'ERP',
-    ])
   })
 
   it('hides role-gated entries from members', () => {

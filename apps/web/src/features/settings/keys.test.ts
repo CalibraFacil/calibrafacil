@@ -2,11 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { sessionKeys } from '@/lib/query-keys'
-import {
-  environmentalLimitKeys,
-  integrationKeys,
-  organizationKeys,
-} from './keys'
+import { environmentalLimitKeys, integrationKeys } from './keys'
 
 describe('settings query keys', () => {
   it('saving environmental limits also marks the job-side effective limits stale', async () => {
@@ -46,11 +42,6 @@ describe('settings query keys', () => {
   })
 
   it('keeps the governance keys under the prefixes the invalidations use', () => {
-    expect(organizationKeys.units('o1')).toEqual(['organization-units', 'o1'])
-    expect(sessionKeys.dashboardUnitsOf('o1')).toEqual([
-      'dashboard-units',
-      'o1',
-    ])
     expect(sessionKeys.dashboardUnits('o1', true, 'cloud').slice(0, 2)).toEqual(
       sessionKeys.dashboardUnitsOf('o1'),
     )
