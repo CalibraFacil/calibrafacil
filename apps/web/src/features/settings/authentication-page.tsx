@@ -359,12 +359,14 @@ function SsoSettingsCard({
         .filter(Boolean)
 
       return calibraApi.sso.createProvider({
-        providerId,
-        issuer,
-        domain,
-        clientId,
-        clientSecret,
-        scopes: parsedScopes,
+        body: {
+          providerId,
+          issuer,
+          domain,
+          clientId,
+          clientSecret,
+          scopes: parsedScopes,
+        },
       })
     },
     onSuccess: async (data) => {
@@ -386,7 +388,9 @@ function SsoSettingsCard({
 
   const requestVerificationMutation = useMutation({
     mutationFn: (targetProviderId: string) =>
-      calibraApi.sso.requestDomainVerification(targetProviderId),
+      calibraApi.sso.requestDomainVerification({
+        params: { providerId: targetProviderId },
+      }),
     onSuccess: (data) => {
       setVerificationRecord(data.verificationRecord)
       toast.success('Novo token DNS gerado')
@@ -400,7 +404,7 @@ function SsoSettingsCard({
 
   const verifyDomainMutation = useMutation({
     mutationFn: (targetProviderId: string) =>
-      calibraApi.sso.verifyDomain(targetProviderId),
+      calibraApi.sso.verifyDomain({ params: { providerId: targetProviderId } }),
     onSuccess: async () => {
       setVerificationRecord(null)
       toast.success('Domínio verificado com sucesso')
@@ -417,7 +421,9 @@ function SsoSettingsCard({
 
   const deleteProviderMutation = useMutation({
     mutationFn: (targetProviderId: string) =>
-      calibraApi.sso.deleteProvider(targetProviderId),
+      calibraApi.sso.deleteProvider({
+        params: { providerId: targetProviderId },
+      }),
     onSuccess: async () => {
       setVerificationRecord(null)
       setIssuer('')

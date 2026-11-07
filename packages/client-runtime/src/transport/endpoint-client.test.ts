@@ -1,5 +1,6 @@
 import {
   endpoint,
+  noContent,
   ResponseContractError,
   type EndpointGroup,
 } from "@calibra-facil/contracts";
@@ -33,6 +34,15 @@ const group = {
     body: z.object({ name: z.string() }),
     response: z.object({ id: z.number() }),
     failure: "Falha ao atualizar",
+    policy: "cloud-only",
+    desktopLabel: "Coisas",
+  }),
+  remove: endpoint({
+    method: "delete",
+    path: "/api/things/:id",
+    response: noContent,
+    status: 204,
+    failure: "Falha ao remover",
     policy: "cloud-only",
     desktopLabel: "Coisas",
   }),
@@ -167,6 +177,21 @@ describe("cloud endpoint client", () => {
     });
     await expect(lenient.list()).resolves.toEqual({ data: "nope" });
     expect(violations).toEqual(["GET /api/things"]);
+  });
+
+  it("resolves a 204 (no body) to undefined", async () => {
+    const { fetchImpl } = recordingFetch(
+      () => new Response(null, { status: 204 }),
+    );
+    const client = endpointClient(
+      group,
+      createCloudEndpointTransport({
+        baseUrl: "https://api.example.test",
+        fetch: fetchImpl,
+      }),
+    );
+
+    await expect(client.remove({ params: { id: 3 } })).resolves.toBeUndefined();
   });
 
   it("refuses a call that leaves out a path parameter", async () => {

@@ -38,9 +38,11 @@ export function SsoSignInForm({
 
     try {
       const data = await calibraApi.sso.start({
-        organizationSlug,
-        ...(ssoEmail ? { email: ssoEmail } : {}),
-        redirectPath: sanitizeLabRedirect(redirect),
+        body: {
+          organizationSlug,
+          ...(ssoEmail ? { email: ssoEmail } : {}),
+          redirectPath: sanitizeLabRedirect(redirect),
+        },
       })
       if (!data.url) {
         setAuthStatus({

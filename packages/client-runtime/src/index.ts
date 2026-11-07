@@ -2,7 +2,6 @@ import type {
   CalibraApi,
   CreateApiKeyInput,
   CreateServiceInput,
-  CreateSsoProviderInput,
   SoftDeleteOrganizationRequest,
   UpdateOrganizationProfileRequest,
   MethodCompileDraftInput,
@@ -12,10 +11,8 @@ import type {
   MethodRequestApprovalInput,
   MethodWriteInput,
   StandardWriteInput,
-  StartSsoInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
-  UploadSigningCertificateInput,
 } from "./types";
 import {
   createRawCloudClient,
@@ -119,30 +116,6 @@ export function createCloudApiClient(
           };
         };
       };
-      sso: {
-        start: {
-          $post(input: { json: StartSsoInput }): Promise<Response>;
-        };
-        providers: {
-          $get(): Promise<Response>;
-          $post(input: { json: CreateSsoProviderInput }): Promise<Response>;
-          ":providerId": {
-            $delete(input: {
-              param: { providerId: string };
-            }): Promise<Response>;
-            "request-domain-verification": {
-              $post(input: {
-                param: { providerId: string };
-              }): Promise<Response>;
-            };
-            "verify-domain": {
-              $post(input: {
-                param: { providerId: string };
-              }): Promise<Response>;
-            };
-          };
-        };
-      };
       "api-keys": {
         $get(): Promise<Response>;
         $post(input: { json: CreateApiKeyInput }): Promise<Response>;
@@ -186,17 +159,6 @@ export function createCloudApiClient(
           label: {
             $get(input: { param: { id: string } }): Promise<Response>;
           };
-        };
-      };
-      "portal-domains": {
-        $get(): Promise<Response>;
-        $post(input: { json: { hostname: string } }): Promise<Response>;
-        $delete(): Promise<Response>;
-        verify: {
-          $post(): Promise<Response>;
-        };
-        activate: {
-          $post(): Promise<Response>;
         };
       };
       integrations: {
@@ -268,23 +230,6 @@ export function createCloudApiClient(
           $put(input: {
             json: UpdateNotificationPreferencesInput;
           }): Promise<Response>;
-        };
-      };
-      signing: {
-        certificates: {
-          $get(): Promise<Response>;
-          $post(input: {
-            json: UploadSigningCertificateInput;
-          }): Promise<Response>;
-          ":id": {
-            $delete(input: {
-              param: { id: string };
-              json: { reason: string };
-            }): Promise<Response>;
-            "set-default": {
-              $post(input: { param: { id: string } }): Promise<Response>;
-            };
-          };
         };
       };
       units: {
@@ -470,7 +415,7 @@ export function createCloudApiClient(
     onboarding: createOnboardingApi(rawCloudClient),
     sessions: createSessionsApi(rawCloudClient),
     finance: createFinanceApi(endpointTransport, options),
-    sso: createSsoApi(rawCloudClient),
+    sso: createSsoApi(endpointTransport, options),
     apiKeys: createApiKeysApi(rawCloudClient),
     organizationLifecycle: createOrganizationLifecycleApi(rawCloudClient),
     organizationProfile: createOrganizationProfileApi(rawCloudClient),
@@ -479,13 +424,16 @@ export function createCloudApiClient(
       endpointTransport,
       options,
     ),
-    portalDomains: createPortalDomainsApi(rawCloudClient),
+    portalDomains: createPortalDomainsApi(endpointTransport, options),
     emailDomains: createEmailDomainsApi(rawCloudClient),
     notifications: createNotificationsApi(rawCloudClient),
     signatures: createSignaturesApi(endpointTransport, options),
     profileMedia: createProfileMediaApi(options),
     organizationMedia: createOrganizationMediaApi(options),
-    signingCertificates: createSigningCertificatesApi(rawCloudClient),
+    signingCertificates: createSigningCertificatesApi(
+      endpointTransport,
+      options,
+    ),
     customers: createCustomersApi(endpointTransport, options),
     customerGroups: createCustomerGroupsApi(rawCloudClient),
     assets: createAssetsApi(endpointTransport, options),

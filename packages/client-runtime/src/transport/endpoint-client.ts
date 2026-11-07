@@ -81,7 +81,11 @@ async function callEndpoint(
     query: toSearchParams(parts.query),
     body: parts.body,
   });
-  const payload = await readJsonResponse<unknown>(response, def.failure);
+  // A 204 has no body: the definition's response is `noContent`.
+  const payload =
+    response.status === 204
+      ? undefined
+      : await readJsonResponse<unknown>(response, def.failure);
   return validateResponsePayload(
     def.response,
     payload,

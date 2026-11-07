@@ -1,3 +1,6 @@
+import { signingCertificateEndpoints } from "./signing-certificates";
+import { ssoEndpoints } from "./sso";
+import { portalDomainEndpoints } from "./portal-domains";
 import { assetEndpoints } from "./assets";
 import { calibrationRequestEndpoints } from "./calibration-requests";
 import { certificateNumberingEndpoints } from "./certificate-numbering";
@@ -20,6 +23,9 @@ import { signatureEndpoints } from "./signatures";
 import { visitEndpoints } from "./visits";
 
 export * from "./define";
+export * from "./signing-certificates";
+export * from "./sso";
+export * from "./portal-domains";
 export * from "./assets";
 export * from "./customers";
 export * from "./capa";
@@ -65,6 +71,9 @@ export const ENDPOINT_GROUPS = {
   environmentalLimits: environmentalLimitEndpoints,
   accreditedScope: accreditedScopeEndpoints,
   materials: materialEndpoints,
+  portalDomains: portalDomainEndpoints,
+  sso: ssoEndpoints,
+  signingCertificates: signingCertificateEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

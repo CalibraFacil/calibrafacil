@@ -26,6 +26,9 @@ import type {
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
 import type { AccreditedScopeApi } from "./modules/accredited-scope";
+import type { PortalDomainsApi } from "./modules/portal-domains";
+import type { SigningCertificatesApi } from "./modules/signing-certificates";
+import type { SsoApi } from "./modules/sso";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { AssetsApi } from "./modules/assets";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
@@ -76,6 +79,12 @@ export type ServiceAuditLogData<TRecord = unknown> = {
 };
 
 import type {
+  PortalDomainResponse,
+  SigningCertificate,
+  SigningCertificatesListResponse,
+  SsoSettingsResponse,
+  SsoVerificationRecord,
+  UnsignedIssuanceSetting,
   AssetAuditLogEntry,
   AssetDetail,
   AssetsListResponse,
@@ -1010,90 +1019,9 @@ export type SelfServeSignupResponse = {
   code?: string;
 };
 
-export type StartSsoInput = {
-  organizationSlug: string;
-  email?: string;
-  redirectPath?: string;
-};
-
-export type StartSsoResponse = {
-  url: string;
-  redirect?: boolean;
-};
-
-export type SsoVerificationRecord = {
-  type: "TXT";
-  host: string;
-  value: string;
-};
-
-type SsoProviderSummary = {
-  id: string;
-  providerId: string;
-  issuer: string;
-  domain: string;
-  domainHost: string;
-  domainVerified: boolean;
-  organizationId: string | null;
-  type: string;
-  redirectURI: string;
-  oidcConfig: {
-    discoveryEndpoint: string | null;
-    authorizationEndpoint: string | null;
-    tokenEndpoint: string | null;
-    userInfoEndpoint: string | null;
-    jwksEndpoint: string | null;
-    scopes: string[];
-    pkce: boolean;
-    clientIdLastFour: string | null;
-    tokenEndpointAuthentication: string | null;
-  } | null;
-};
-
-export type SsoSettingsResponse = {
-  provider: SsoProviderSummary | null;
-  access: {
-    role: string;
-    canCreate: boolean;
-    canManage: boolean;
-    canDelete: boolean;
-  };
-};
-
-export type CreateSsoProviderInput = {
-  providerId: string;
-  issuer: string;
-  domain: string;
-  clientId: string;
-  clientSecret: string;
-  scopes?: string[];
-};
-
-export type CreateSsoProviderResponse = {
-  provider: SsoProviderSummary;
-  verificationRecord: SsoVerificationRecord | null;
-};
-
-export type RequestSsoDomainVerificationResponse = {
-  verificationRecord: SsoVerificationRecord;
-};
-
-export type VerifySsoDomainResponse = {
-  provider: SsoProviderSummary;
-};
-
-export interface SsoApi {
-  start(input: StartSsoInput): Promise<StartSsoResponse>;
-  getProviders(): Promise<SsoSettingsResponse>;
-  createProvider(
-    input: CreateSsoProviderInput,
-  ): Promise<CreateSsoProviderResponse>;
-  requestDomainVerification(
-    providerId: string,
-  ): Promise<RequestSsoDomainVerificationResponse>;
-  verifyDomain(providerId: string): Promise<VerifySsoDomainResponse>;
-  deleteProvider(providerId: string): Promise<void>;
-}
+// SSO: the DTOs are the contract schemas' types (`endpoints/sso.ts`); the client
+// is generated from the endpoint definitions (`modules/sso.ts`).
+export type { SsoApi, SsoSettingsResponse, SsoVerificationRecord };
 
 type ApiKeySummary = {
   id: string;
@@ -1205,51 +1133,10 @@ export type {
   UpdateCertificateNumberingProfileResponse,
 };
 
-type PortalDomainStatus =
-  | "not_configured"
-  | "waiting_dns"
-  | "token_mismatch"
-  | "ready_to_verify"
-  | "verified"
-  | "active";
-
-export type PortalDomainResponse = {
-  portalBaseUrl: string;
-  domain: {
-    id: string;
-    hostname: string;
-    verifiedAt: string | Date | null;
-    activatedAt: string | Date | null;
-    lastVerifiedAt: string | Date | null;
-    isActive: boolean;
-    verification: { type: "TXT"; host: string; value: string };
-  } | null;
-  statusSummary: {
-    status: PortalDomainStatus;
-    readiness: "not_ready" | "ready" | "active";
-    canActivate: boolean;
-    message: string;
-    diagnostics: {
-      host: string | null;
-      expectedValue: string | null;
-      observedValues: string[];
-    };
-  };
-};
-
-export type PortalDomainActionResponse =
-  | PortalDomainResponse
-  | {
-      message?: string;
-    };
-
-export interface PortalDomainsApi {
-  get(): Promise<PortalDomainResponse>;
-  create(input: { hostname: string }): Promise<PortalDomainActionResponse>;
-  verify(): Promise<PortalDomainActionResponse>;
-  activate(): Promise<PortalDomainActionResponse>;
-  delete(): Promise<void>;
-}
+// PORTAL DOMAINS: the DTOs are the contract schemas' types
+// (`endpoints/portal-domains.ts`); the client is generated from the endpoint
+// definitions (`modules/portal-domains.ts`).
+export type { PortalDomainResponse, PortalDomainsApi };
 
 type EmailDomainStatus =
   | "not_configured"
@@ -1399,91 +1286,15 @@ export interface OrganizationMediaApi {
   deleteLogo(): Promise<OrganizationLogoDeleteResponse>;
 }
 
-type SigningCertificateStatus =
-  | "valid"
-  | "expired"
-  | "not_yet_valid"
-  | "revoked";
-
-export type SigningCertificate = {
-  id: number;
-  unitId: number;
-  name: string;
-  serialNumber: string;
-  issuerCn: string;
-  subjectCn: string;
-  subjectCpfCnpj?: string | null;
-  validFrom: string | Date;
-  validUntil: string | Date;
-  isActive: boolean;
-  isDefault: boolean;
-  createdAt: string | Date;
-  createdByName: string | null;
-  revokedAt: string | Date | null;
-  revokedReason: string | null;
-  status: SigningCertificateStatus;
+// SIGNING CERTIFICATES: the DTOs are the contract schemas' types
+// (`endpoints/signing-certificates.ts`); the client is generated from the
+// endpoint definitions (`modules/signing-certificates.ts`).
+export type {
+  SigningCertificate,
+  SigningCertificatesApi,
+  SigningCertificatesListResponse,
+  UnsignedIssuanceSetting,
 };
-
-export type SigningCertificatesListResponse = {
-  certificates: SigningCertificate[];
-  unit?: unknown;
-  /** #644: the unit's "assinatura obrigatória" policy flag. */
-  requireSignature?: boolean;
-  /** Q51: the unit's explicit "emitir sem assinatura digital" setting. */
-  unsignedIssuance?: UnsignedIssuanceSetting;
-};
-
-/** Q51: issuing unsigned on purpose; `reason` is mandatory while enabled. */
-export type UnsignedIssuanceSetting = {
-  enabled: boolean;
-  reason: string | null;
-  setAt?: string | Date | null;
-  setByName?: string | null;
-};
-
-export type UploadSigningCertificateInput = {
-  name: string;
-  p12Base64: string;
-  password: string;
-  setAsDefault: boolean;
-};
-
-export type UploadSigningCertificateResponse = {
-  message: string;
-  certificate: {
-    id: number;
-    unitId: number;
-    name: string;
-    serialNumber: string;
-    issuerCn: string;
-    subjectCn: string;
-    validFrom: string | Date;
-    validUntil: string | Date;
-    isDefault: boolean;
-  };
-};
-
-export type SigningCertificateActionResponse = {
-  message: string;
-};
-
-export interface SigningCertificatesApi {
-  list(): Promise<SigningCertificatesListResponse>;
-  upload(
-    input: UploadSigningCertificateInput,
-  ): Promise<UploadSigningCertificateResponse>;
-  setDefault(id: string | number): Promise<SigningCertificateActionResponse>;
-  revoke(
-    id: string | number,
-    reason: string,
-  ): Promise<SigningCertificateActionResponse>;
-  /** #644: set the unit's "assinatura obrigatória" policy. */
-  setPolicy(requireSignature: boolean): Promise<{ requireSignature: boolean }>;
-  /** Q51: admin/owner only; enabling needs a reason (min 15 characters). */
-  setUnsignedIssuance(
-    input: { enabled: true; reason: string } | { enabled: false },
-  ): Promise<{ unsignedIssuance: UnsignedIssuanceSetting }>;
-}
 
 export interface PublicInvitationsApi {
   get<TResponse = unknown>(id: string): Promise<TResponse>;

@@ -101,14 +101,7 @@ export const calibraApiPolicyRegistry = {
     revoke: "cloud-only",
   },
   finance: endpointPolicies(ENDPOINT_GROUPS.finance),
-  sso: {
-    start: "cloud-only",
-    getProviders: "cloud-only",
-    createProvider: "cloud-only",
-    requestDomainVerification: "cloud-only",
-    verifyDomain: "cloud-only",
-    deleteProvider: "cloud-only",
-  },
+  sso: endpointPolicies(ENDPOINT_GROUPS.sso),
   apiKeys: {
     list: "cloud-only",
     create: "cloud-only",
@@ -127,13 +120,7 @@ export const calibraApiPolicyRegistry = {
     getCompetence: "cloud-only",
   },
   certificateNumbering: endpointPolicies(ENDPOINT_GROUPS.certificateNumbering),
-  portalDomains: {
-    get: "cloud-only",
-    create: "cloud-only",
-    verify: "cloud-only",
-    activate: "cloud-only",
-    delete: "cloud-only",
-  },
+  portalDomains: endpointPolicies(ENDPOINT_GROUPS.portalDomains),
   emailDomains: {
     get: "cloud-only",
     create: "cloud-only",
@@ -158,14 +145,7 @@ export const calibraApiPolicyRegistry = {
     uploadLogo: "cloud-only",
     deleteLogo: "cloud-only",
   },
-  signingCertificates: {
-    list: "cloud-only",
-    upload: "cloud-only",
-    setDefault: "cloud-only",
-    revoke: "cloud-only",
-    setPolicy: "cloud-only",
-    setUnsignedIssuance: "cloud-only",
-  },
+  signingCertificates: endpointPolicies(ENDPOINT_GROUPS.signingCertificates),
   // Derived from the endpoint definitions (`policy`), not listed here.
   customers: endpointPolicies(ENDPOINT_GROUPS.customers),
   customerGroups: {

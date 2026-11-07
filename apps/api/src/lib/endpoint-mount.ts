@@ -60,6 +60,7 @@ export function mount<TEnv extends Env, TDef extends EndpointDef>(
     const result = await handler(c, handlerInput<TDef>(c, def));
     if (result instanceof Response) return result;
     assertMatchesResponseSchema(c, def, result);
+    if (def.status === 204) return c.body(null, 204);
     return c.json(result, def.status ?? 200);
   };
 
@@ -128,7 +129,10 @@ function assertMatchesResponseSchema(
   body: unknown,
 ) {
   if (!shouldCheckResponses(c)) return;
-  const result = def.response.safeParse(JSON.parse(JSON.stringify(body)));
+  // A 204 answers no body (`noContent`): there is nothing to round-trip.
+  const wire =
+    body === undefined ? undefined : JSON.parse(JSON.stringify(body));
+  const result = def.response.safeParse(wire);
   if (result.success) return;
   const issues = result.error.issues
     .slice(0, 10)
