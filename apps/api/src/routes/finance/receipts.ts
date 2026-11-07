@@ -1,6 +1,6 @@
 import { createRouter } from "../../server/router";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { and, desc, eq } from "drizzle-orm";
 import {
   BILLING_DOCUMENT_MACHINE,
@@ -23,72 +23,69 @@ import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { requestActor } from "../../middleware/request-actor";
 
-const RecordReceiptSchema = z.object({
-  amountCents: z.number().int().positive(),
-  paymentMethod: z.enum([
-    "CREDIT_CARD",
-    "PIX",
-    "BOLETO",
-    "BANK_TRANSFER",
-    "CASH",
-    "OTHER",
-  ]),
-  receivedAt: z.string().datetime().optional(),
-  reference: z.string().trim().max(120).optional(),
-  notes: z.string().trim().max(5000).optional(),
-});
+const RECEIPTS_PREFIX = "/api/finance/receipts";
 
 export const financeReceiptsRouter = createRouter<{
   Variables: AuthVariables;
-}>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
-  const member = c.get("member");
+}>();
+mount(
+  financeReceiptsRouter,
+  RECEIPTS_PREFIX,
+  financeEndpoints.listReceipts,
+  withLabPermission({ financial: ["read"] }),
+  async (c) => {
+    const member = c.get("member");
 
-  const data = await orgDb(member.organizationId).transaction((o) =>
-    o
-      .select({
-        installmentId: receivableInstallment.id,
-        documentId: billingDocument.id,
-        documentNumber: billingDocument.documentNumber,
-        documentStatus: billingDocument.status,
-        customerName: customer.name,
-        dueDate: receivableInstallment.dueDate,
-        amountCents: receivableInstallment.amountCents,
-        installmentStatus: receivableInstallment.status,
-        paidAt: receivableInstallment.paidAt,
-        paymentMethod: receivableInstallment.paymentMethod,
-        paymentReference: receivableInstallment.paymentReference,
-      })
-      .from(receivableInstallment)
-      .innerJoin(
-        billingDocument,
-        eq(receivableInstallment.documentId, billingDocument.id),
-      )
-      .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-      .where(
-        and(
-          eq(billingDocument.organizationId, member.organizationId),
-          buildUnitScopeCondition(billingDocument.unitId, member),
+    const data = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select({
+          installmentId: receivableInstallment.id,
+          documentId: billingDocument.id,
+          documentNumber: billingDocument.documentNumber,
+          documentStatus: billingDocument.status,
+          customerName: customer.name,
+          dueDate: receivableInstallment.dueDate,
+          amountCents: receivableInstallment.amountCents,
+          installmentStatus: receivableInstallment.status,
+          paidAt: receivableInstallment.paidAt,
+          paymentMethod: receivableInstallment.paymentMethod,
+          paymentReference: receivableInstallment.paymentReference,
+        })
+        .from(receivableInstallment)
+        .innerJoin(
+          billingDocument,
+          eq(receivableInstallment.documentId, billingDocument.id),
+        )
+        .innerJoin(customer, eq(billingDocument.customerId, customer.id))
+        .where(
+          and(
+            eq(billingDocument.organizationId, member.organizationId),
+            buildUnitScopeCondition(billingDocument.unitId, member),
+          ),
+        )
+        .orderBy(
+          desc(receivableInstallment.dueDate),
+          desc(receivableInstallment.id),
         ),
-      )
-      .orderBy(
-        desc(receivableInstallment.dueDate),
-        desc(receivableInstallment.id),
-      ),
-  );
+    );
 
-  return c.json({ data });
-});
+    return { data };
+  },
+);
+
+const INSTALLMENTS_PREFIX = "/api/finance/installments";
 
 export const financeInstallmentsRouter = createRouter<{
   Variables: AuthVariables;
-}>().post(
-  "/:id/receive",
-  ...withLabPermission({ financial: ["receipt_record"] }),
-  zValidator("json", RecordReceiptSchema),
-  async (c) => {
+}>();
+mount(
+  financeInstallmentsRouter,
+  INSTALLMENTS_PREFIX,
+  financeEndpoints.receiveInstallment,
+  withLabPermission({ financial: ["receipt_record"] }),
+  async (c, { params, body: input }) => {
     const member = c.get("member");
-    const installmentId = Number.parseInt(c.req.param("id"), 10);
-    const input = c.req.valid("json");
+    const installmentId = Number.parseInt(params.id, 10);
 
     if (!Number.isInteger(installmentId)) {
       throw invalid("invalid_request", "ID invalido");
@@ -219,10 +216,11 @@ export const financeInstallmentsRouter = createRouter<{
           },
         );
 
+        if (!createdReceipt) throw new Error("Falha ao registrar recebimento");
         return createdReceipt;
       },
     );
 
-    return c.json({ data: receipt }, 201);
+    return { data: receipt };
   },
 );

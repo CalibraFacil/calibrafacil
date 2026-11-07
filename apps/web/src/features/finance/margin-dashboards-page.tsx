@@ -1,3 +1,4 @@
+import type { MarginEnvelope } from '@calibra-facil/contracts'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { AlertCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -24,11 +25,6 @@ interface MarginRow {
   marginCents: number
   marginPercent: number | null
   serviceOrderCount: number
-}
-
-interface MarginEnvelope {
-  byCustomer: MarginRow[]
-  byService: MarginRow[]
 }
 
 function marginTone(cents: number) {
@@ -131,7 +127,7 @@ const marginColumns: ColumnDef<MarginRow, unknown>[] = [
 function marginDashboardsQueryOptions() {
   return queryOptions<MarginEnvelope>({
     queryKey: ['finance', 'margin-dashboards'],
-    queryFn: () => calibraApi.finance.getMarginDashboards<MarginEnvelope>(),
+    queryFn: () => calibraApi.finance.getMarginDashboards(),
   })
 }
 

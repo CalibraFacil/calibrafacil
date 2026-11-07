@@ -13,7 +13,6 @@ import type {
   CustomerAssetsData,
   CustomerAuditLogData,
   CustomerJobsData,
-  CustomerFinancialTimelineResponse,
   CustomersListData,
   CustomersListQueryInput,
 } from './types'
@@ -87,9 +86,7 @@ export function customerFinancialTimelineQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer', id, 'financial-timeline'],
     queryFn: () =>
-      calibraApi.finance.getCustomerTimeline<CustomerFinancialTimelineResponse>(
-        id,
-      ),
+      calibraApi.finance.getCustomerTimeline({ params: { customerId: id } }),
   })
 }
 

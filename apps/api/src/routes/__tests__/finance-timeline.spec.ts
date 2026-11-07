@@ -69,9 +69,31 @@ describe("finance timeline routes", () => {
   });
 
   it("returns service-order financial status with integration evidence when entitled", async () => {
-    mocks.buildServiceOrderFinancialStatus.mockResolvedValue({
+    // A contract-valid status: the route checks the body against the endpoint's schema.
+    const status = {
       serviceOrderId: 42,
+      serviceOrderNumber: "OS-42",
+      status: "PAID",
       label: "Pago",
+      description: "Pagamento confirmado",
+      readinessStatus: null,
+      blockers: [],
+      amountCents: 10000,
+      currency: "BRL",
+      billingDocument: null,
+      installments: [],
+      installmentsSummary: {
+        total: 0,
+        totalCents: 0,
+        paidCents: 0,
+        openCents: 0,
+        overdueCents: 0,
+        paidCount: 0,
+        openCount: 0,
+        overdueCount: 0,
+        voidCount: 0,
+      },
+      receipts: [],
       fiscalDocument: {
         availability: "AVAILABLE",
         label: "Documento fiscal disponível",
@@ -82,12 +104,18 @@ describe("finance timeline routes", () => {
         consultationOnly: true,
         lastSyncedAt: "2026-05-21T00:00:00.000Z",
       },
+      freshness: {
+        status: "fresh",
+        lastSyncedAt: "2026-05-21T00:00:00.000Z",
+        label: "Atualizado",
+      },
       providerEvidence: {
         label: "Sincronizado via Conta Azul",
         integrationState: "connected",
         reconnectPath: null,
       },
-    });
+    };
+    mocks.buildServiceOrderFinancialStatus.mockResolvedValue(status);
 
     const response = await createTestApp().request(
       "/api/finance/service-orders/42/status",
@@ -95,27 +123,7 @@ describe("finance timeline routes", () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toEqual({
-      data: {
-        serviceOrderId: 42,
-        label: "Pago",
-        fiscalDocument: {
-          availability: "AVAILABLE",
-          label: "Documento fiscal disponível",
-          number: "NF-1",
-          issuedAt: "2026-05-21T00:00:00.000Z",
-          accessKey: "access-key-1",
-          xmlAvailable: true,
-          consultationOnly: true,
-          lastSyncedAt: "2026-05-21T00:00:00.000Z",
-        },
-        providerEvidence: {
-          label: "Sincronizado via Conta Azul",
-          integrationState: "connected",
-          reconnectPath: null,
-        },
-      },
-    });
+    expect(body).toEqual({ data: status });
     expect(JSON.stringify(body)).not.toMatch(
       /pessoa|cobrança|baixa|saleRemoteId|contractRemoteId|providerStatus/,
     );

@@ -3,16 +3,9 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
 import { ensureRouteQueries, prewarmRouteQueries } from '@/lib/route-data'
 import type {
-  BillingDocumentsListData,
-  BillingReadinessResponse,
-  ErpExportsResponse,
   FinanceBillingMode,
   FinanceContractCustomerOptionsData,
-  FinanceContractsListData,
   FinanceContractServiceOptionsData,
-  FinanceEligibleJobsData,
-  FinanceOverviewResponse,
-  FinanceReceiptsData,
   FinanceSearchQueryInput,
 } from './types'
 
@@ -29,7 +22,7 @@ export function financeSearchInputFromUrl(url?: URL) {
 export function financeOverviewQueryOptions() {
   return queryOptions({
     queryKey: ['finance', 'overview'],
-    queryFn: () => calibraApi.finance.getOverview<FinanceOverviewResponse>(),
+    queryFn: () => calibraApi.finance.getOverview(),
   })
 }
 
@@ -37,8 +30,8 @@ export function financeDocumentsQueryOptions(input: FinanceSearchQueryInput) {
   return queryOptions({
     queryKey: ['finance', 'documents', input.search],
     queryFn: () =>
-      calibraApi.finance.listDocuments<BillingDocumentsListData>({
-        query: input.search || undefined,
+      calibraApi.finance.listDocuments({
+        query: { query: input.search || undefined },
       }),
   })
 }
@@ -47,41 +40,37 @@ export function financeContractsQueryOptions(input: FinanceSearchQueryInput) {
   return queryOptions({
     queryKey: ['finance', 'contracts', input.search],
     queryFn: () =>
-      calibraApi.finance.listContracts<FinanceContractsListData>({
-        query: input.search || undefined,
+      calibraApi.finance.listContracts({
+        query: { query: input.search || undefined },
       }),
   })
 }
 
-export function financeDocumentDetailQueryOptions<
-  TResponse = { data: unknown },
->(id: string | number) {
+export function financeDocumentDetailQueryOptions(id: string | number) {
   return queryOptions({
     queryKey: ['finance', 'documents', String(id)],
-    queryFn: () => calibraApi.finance.getDocument<TResponse>(id),
+    queryFn: () => calibraApi.finance.getDocument({ params: { id } }),
   })
 }
 
-export function financeContractDetailQueryOptions<
-  TResponse = { data: unknown },
->(id: string | number) {
+export function financeContractDetailQueryOptions(id: string | number) {
   return queryOptions({
     queryKey: ['finance', 'contracts', String(id)],
-    queryFn: () => calibraApi.finance.getContract<TResponse>(id),
+    queryFn: () => calibraApi.finance.getContract({ params: { id } }),
   })
 }
 
 export function financeReceiptsQueryOptions() {
   return queryOptions({
     queryKey: ['finance', 'receipts'],
-    queryFn: () => calibraApi.finance.listReceipts<FinanceReceiptsData>(),
+    queryFn: () => calibraApi.finance.listReceipts(),
   })
 }
 
 export function financeErpQueryOptions() {
   return queryOptions({
     queryKey: ['finance', 'erp'],
-    queryFn: () => calibraApi.finance.listErpExports<ErpExportsResponse>(),
+    queryFn: () => calibraApi.finance.listErpExports(),
   })
 }
 
@@ -89,8 +78,8 @@ function financeBillingReadinessQueryOptions(input: { status?: string } = {}) {
   return queryOptions({
     queryKey: ['finance', 'billing-readiness', input.status ?? 'all'],
     queryFn: () =>
-      calibraApi.finance.listBillingReadiness<BillingReadinessResponse>({
-        status: input.status || undefined,
+      calibraApi.finance.listBillingReadiness({
+        query: { status: input.status || undefined },
       }),
   })
 }
@@ -105,10 +94,8 @@ export function financeEligibleJobsQueryOptions({
   return queryOptions({
     queryKey: ['finance', 'documents', 'eligible-jobs', mode, search],
     queryFn: () =>
-      calibraApi.finance.listEligibleJobs<FinanceEligibleJobsData>({
-        mode,
-        query: search || undefined,
-        limit: 100,
+      calibraApi.finance.listEligibleJobs({
+        query: { mode, query: search || undefined, limit: 100 },
       }),
   })
 }
@@ -247,16 +234,12 @@ export function useFinanceContractsData(input: FinanceSearchQueryInput) {
   return useQuery(financeContractsQueryOptions(input))
 }
 
-export function useFinanceDocumentDetailData<TResponse = { data: unknown }>(
-  id: string | number,
-) {
-  return useQuery(financeDocumentDetailQueryOptions<TResponse>(id))
+export function useFinanceDocumentDetailData(id: string | number) {
+  return useQuery(financeDocumentDetailQueryOptions(id))
 }
 
-export function useFinanceContractDetailData<TResponse = { data: unknown }>(
-  id: string | number,
-) {
-  return useQuery(financeContractDetailQueryOptions<TResponse>(id))
+export function useFinanceContractDetailData(id: string | number) {
+  return useQuery(financeContractDetailQueryOptions(id))
 }
 
 export function useFinanceReceiptsData() {

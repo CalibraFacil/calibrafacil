@@ -1,4 +1,6 @@
 import { createRouter } from "../../server/router";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { billingDocument, customer } from "@calibra-facil/db/schema";
@@ -15,11 +17,18 @@ import { forbidden, invalid, notFound } from "../../lib/domain-errors";
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 
+const PREFIX = "/api/finance/erp";
+
 export const financeErpRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
-}>()
-  .get("/exports", ...withLabPermission({ financial: ["read"] }), async (c) => {
+}>();
+mount(
+  financeErpRouter,
+  PREFIX,
+  financeEndpoints.listErpExports,
+  withLabPermission({ financial: ["read"] }),
+  async (c) => {
     const member = c.get("member");
     const documents = await orgDb(member.organizationId).transaction((o) =>
       o
@@ -48,57 +57,58 @@ export const financeErpRouter = createRouter<{
         .limit(50),
     );
 
-    return c.json({ data: documents });
-  })
-  .post(
-    "/documents/:id/export",
-    ...withLabPermission({ financial: ["export"] }),
-    async (c) => {
-      const member = c.get("member");
-      const documentId = Number.parseInt(c.req.param("id"), 10);
+    return { data: documents };
+  },
+);
+mount(
+  financeErpRouter,
+  PREFIX,
+  financeEndpoints.exportErpDocument,
+  withLabPermission({ financial: ["export"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const documentId = Number.parseInt(params.id, 10);
 
-      if (!Number.isInteger(documentId)) {
-        throw invalid("invalid_request", "ID invalido");
-      }
+    if (!Number.isInteger(documentId)) {
+      throw invalid("invalid_request", "ID invalido");
+    }
 
-      const payload = await orgDb(member.organizationId).transaction((o) =>
-        loadBillingDocumentExportPayload(member.organizationId, documentId, o),
+    const payload = await orgDb(member.organizationId).transaction((o) =>
+      loadBillingDocumentExportPayload(member.organizationId, documentId, o),
+    );
+    if (!payload) {
+      throw notFound("billing_document_not_found", "Documento nao encontrado");
+    }
+
+    if (
+      member.selectedUnitScope !== "all" &&
+      payload.unitId !== member.activeUnitId
+    ) {
+      throw forbidden(
+        "billing_document_outside_unit_scope",
+        "Documento fora do escopo da unidade ativa",
       );
-      if (!payload) {
-        throw notFound(
-          "billing_document_not_found",
-          "Documento nao encontrado",
-        );
-      }
+    }
 
-      if (
-        member.selectedUnitScope !== "all" &&
-        payload.unitId !== member.activeUnitId
-      ) {
-        throw forbidden(
-          "billing_document_outside_unit_scope",
-          "Documento fora do escopo da unidade ativa",
-        );
-      }
+    try {
+      const exported = await exportBillingDocumentToPrimaryIntegration({
+        organizationId: member.organizationId,
+        documentId,
+        env: c.env,
+      });
 
-      try {
-        const exported = await exportBillingDocumentToPrimaryIntegration({
-          organizationId: member.organizationId,
-          documentId,
-          env: c.env,
-        });
-
-        return c.json({ data: exported });
-      } catch (error) {
-        return c.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Falha ao exportar documento",
-          },
-          502,
-        );
-      }
-    },
-  );
+      return { data: exported };
+    } catch (error) {
+      // A status the definition does not describe: answered as a ready Response.
+      return c.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Falha ao exportar documento",
+        },
+        502,
+      );
+    }
+  },
+);

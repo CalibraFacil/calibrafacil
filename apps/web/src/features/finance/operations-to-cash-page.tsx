@@ -1,3 +1,4 @@
+import type { OperationsToCashEnvelope } from '@calibra-facil/contracts'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { AlertCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -46,43 +47,10 @@ const STAGE_TONE: Record<Stage, SignalTone> = {
   COLLECTED: 'ok',
 }
 
-interface StageBucket {
-  count: number
-  totalCents: number
-}
-
-interface OperationsToCashSummary {
-  stages: Record<Stage, StageBucket>
-  needsAttention: {
-    overdueCount: number
-    blockedCount: number
-    overdueCents: number
-    blockedCents: number
-  }
-}
-
-interface ClassifiedItem {
-  serviceOrderId: number
-  serviceOrderNumber: string
-  customer: { id: number; name: string }
-  unit: { id: number; name: string }
-  amountCents: number
-  currency: string
-  stage: Stage
-  isOverdue: boolean
-  isBlocked: boolean
-}
-
-interface OperationsToCashEnvelope {
-  summary: OperationsToCashSummary
-  items: ClassifiedItem[]
-}
-
 function operationsToCashQueryOptions() {
   return queryOptions<OperationsToCashEnvelope>({
     queryKey: ['finance', 'operations-to-cash'],
-    queryFn: () =>
-      calibraApi.finance.getOperationsToCash<OperationsToCashEnvelope>(),
+    queryFn: () => calibraApi.finance.getOperationsToCash(),
   })
 }
 

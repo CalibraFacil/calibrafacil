@@ -1,4 +1,6 @@
 import { createRouter } from "../../server/router";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { orgDb } from "../../lib/org-db";
 import {
   withLabPermission,
@@ -6,18 +8,27 @@ import {
 } from "../../middleware/permission";
 import { buildCashForecast } from "../../lib/cash-forecast";
 
+const PREFIX = "/api/finance/cash-forecast";
+
 export const financeCashForecastRouter = createRouter<{
   Variables: AuthVariables;
-}>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
-  const member = c.get("member");
-  const summary = await orgDb(member.organizationId).transaction((o) =>
-    buildCashForecast(
-      {
-        organizationId: member.organizationId,
-        scope: member,
-      },
-      o,
-    ),
-  );
-  return c.json(summary);
-});
+}>();
+mount(
+  financeCashForecastRouter,
+  PREFIX,
+  financeEndpoints.getCashForecast,
+  withLabPermission({ financial: ["read"] }),
+  async (c) => {
+    const member = c.get("member");
+    const summary = await orgDb(member.organizationId).transaction((o) =>
+      buildCashForecast(
+        {
+          organizationId: member.organizationId,
+          scope: member,
+        },
+        o,
+      ),
+    );
+    return summary;
+  },
+);

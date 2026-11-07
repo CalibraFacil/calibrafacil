@@ -73,12 +73,15 @@ export function useReceiveInstallmentMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ReceiveInstallmentInput) =>
-      calibraApi.finance.receiveInstallment(input.installmentId, {
-        amountCents: input.amountCents,
-        paymentMethod: input.paymentMethod,
-        reference: input.reference || undefined,
-        notes: input.notes || undefined,
-        receivedAt: input.receivedAt,
+      calibraApi.finance.receiveInstallment({
+        params: { id: input.installmentId },
+        body: {
+          amountCents: input.amountCents,
+          paymentMethod: input.paymentMethod,
+          reference: input.reference || undefined,
+          notes: input.notes || undefined,
+          receivedAt: input.receivedAt,
+        },
       }),
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: RECEIPTS_KEY })
@@ -112,7 +115,7 @@ export function useIssueDocumentMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (documentId: number | string) =>
-      calibraApi.finance.issueDocument(documentId),
+      calibraApi.finance.issueDocument({ params: { id: documentId } }),
     onSuccess: () => {
       reconcile(queryClient, [DOCUMENTS_KEY, OVERVIEW_KEY])
     },
@@ -136,10 +139,13 @@ export function useUpdateDocumentMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: UpdateDocumentInput) =>
-      calibraApi.finance.updateDocument(input.id, {
-        dueDate: input.dueDate,
-        notes: input.notes,
-        discountCents: input.discountCents,
+      calibraApi.finance.updateDocument({
+        params: { id: input.id },
+        body: {
+          dueDate: input.dueDate,
+          notes: input.notes,
+          discountCents: input.discountCents,
+        },
       }),
     onSuccess: () => {
       reconcile(queryClient, [DOCUMENTS_KEY, OVERVIEW_KEY])
@@ -157,7 +163,10 @@ export function useVoidDocumentMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: { id: number | string; reason: string }) =>
-      calibraApi.finance.voidDocument(input.id, { reason: input.reason }),
+      calibraApi.finance.voidDocument({
+        params: { id: input.id },
+        body: { reason: input.reason },
+      }),
     onSuccess: () => {
       reconcile(queryClient, [DOCUMENTS_KEY, RECEIPTS_KEY, OVERVIEW_KEY])
     },
@@ -174,7 +183,7 @@ export function useExportErpDocumentMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (documentId: number | string) =>
-      calibraApi.finance.exportErpDocument(documentId),
+      calibraApi.finance.exportErpDocument({ params: { id: documentId } }),
     onSuccess: () => {
       reconcile(queryClient, [DOCUMENTS_KEY, ERP_KEY, OVERVIEW_KEY])
     },
@@ -191,7 +200,7 @@ export function useActivateContractMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number | string) =>
-      calibraApi.finance.activateContract(id),
+      calibraApi.finance.activateContract({ params: { id } }),
     onSuccess: () => {
       reconcile(queryClient, [CONTRACTS_KEY, OVERVIEW_KEY])
     },
@@ -207,7 +216,8 @@ export function useActivateContractMutation() {
 export function useCancelContractMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number | string) => calibraApi.finance.cancelContract(id),
+    mutationFn: (id: number | string) =>
+      calibraApi.finance.cancelContract({ params: { id } }),
     onSuccess: () => {
       reconcile(queryClient, [CONTRACTS_KEY, OVERVIEW_KEY])
     },

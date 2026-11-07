@@ -76,8 +76,7 @@ function isScope(
 function listRulesQueryOptions() {
   return queryOptions<{ data: RuleDTO[] }>({
     queryKey: ['finance', 'automatic-send-rules'],
-    queryFn: () =>
-      calibraApi.finance.listAutomaticSendRules<{ data: RuleDTO[] }>(),
+    queryFn: () => calibraApi.finance.listAutomaticSendRules(),
   })
 }
 
@@ -91,9 +90,9 @@ export function AutomaticSendSettingsPage() {
       milestone?: AutomaticSendMilestone
       archived?: boolean
     }) =>
-      calibraApi.finance.updateAutomaticSendRule(input.id, {
-        milestone: input.milestone,
-        archived: input.archived,
+      calibraApi.finance.updateAutomaticSendRule({
+        params: { id: input.id },
+        body: { milestone: input.milestone, archived: input.archived },
       }),
     onSuccess: () => {
       toast.success('Regra atualizada')
@@ -114,7 +113,7 @@ export function AutomaticSendSettingsPage() {
       customerId?: number | null
       commercialAgreementId?: number | null
       serviceCategory?: string | null
-    }) => calibraApi.finance.createAutomaticSendRule(input),
+    }) => calibraApi.finance.createAutomaticSendRule({ body: input }),
     onSuccess: () => {
       toast.success('Exceção criada')
       queryClient.invalidateQueries({

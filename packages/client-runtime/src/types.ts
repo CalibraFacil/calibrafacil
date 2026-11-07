@@ -31,6 +31,7 @@ import type { CompetencesApi } from "./modules/competences";
 import type { CustomersApi } from "./modules/customers";
 import type { DashboardApi } from "./modules/dashboard";
 import type { NonConformancesApi } from "./modules/non-conformances";
+import type { FinanceApi } from "./modules/finance";
 import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
 import type { ReportsApi } from "./modules/reports";
 import type { SignaturesApi } from "./modules/signatures";
@@ -1164,97 +1165,9 @@ export interface AccessApi {
   getFinanceAccess(): Promise<FinanceAccessResponse>;
 }
 
-export interface FinanceApi {
-  getOverview<TResponse = unknown>(): Promise<TResponse>;
-  listDocuments<TResponse = unknown>(input?: {
-    query?: string;
-  }): Promise<TResponse>;
-  getDocument<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  updateDocument<TResponse = unknown>(
-    id: string | number,
-    input: unknown,
-  ): Promise<TResponse>;
-  issueDocument<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  voidDocument<TResponse = unknown>(
-    id: string | number,
-    input: { reason: string },
-  ): Promise<TResponse>;
-  listEligibleJobs<TResponse = unknown>(input: {
-    mode: string;
-    query?: string;
-    limit?: string | number;
-  }): Promise<TResponse>;
-  createDocument<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  listContracts<TResponse = unknown>(input?: {
-    query?: string;
-  }): Promise<TResponse>;
-  getContract<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  createContract<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  activateContract<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  cancelContract<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  listReceipts<TResponse = unknown>(): Promise<TResponse>;
-  receiveInstallment<TResponse = unknown>(
-    id: string | number,
-    input: unknown,
-  ): Promise<TResponse>;
-  listErpExports<TResponse = unknown>(): Promise<TResponse>;
-  exportErpDocument<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  listBillingReadiness<TResponse = unknown>(input?: {
-    status?: string;
-    customerId?: string | number;
-  }): Promise<TResponse>;
-  sendBillingReadiness<TResponse = unknown>(input: {
-    serviceOrderIds: number[];
-  }): Promise<TResponse>;
-  getServiceOrderStatus<TResponse = unknown>(
-    serviceOrderId: string | number,
-  ): Promise<TResponse>;
-  getCustomerTimeline<TResponse = unknown>(
-    customerId: string | number,
-    input?: { limit?: string | number },
-  ): Promise<TResponse>;
-  getCertificateRelease<TResponse = unknown>(
-    calibrationJobId: string | number,
-  ): Promise<TResponse>;
-  releaseCertificateByException<TResponse = unknown>(
-    calibrationJobId: string | number,
-    input: { reason: string },
-  ): Promise<TResponse>;
-  listCertificateReleasePolicies<TResponse = unknown>(): Promise<TResponse>;
-  createCertificateReleasePolicy<TResponse = unknown>(input: {
-    mode: string;
-    customerId?: number | null;
-    commercialAgreementId?: number | null;
-    serviceCategory?: string | null;
-    priority?: number;
-  }): Promise<TResponse>;
-  updateCertificateReleasePolicy<TResponse = unknown>(
-    id: string | number,
-    input: { mode?: string; archived?: boolean; priority?: number },
-  ): Promise<TResponse>;
-  listAutomaticSendRules<TResponse = unknown>(): Promise<TResponse>;
-  createAutomaticSendRule<TResponse = unknown>(input: {
-    milestone: string;
-    customerId?: number | null;
-    commercialAgreementId?: number | null;
-    serviceCategory?: string | null;
-    priority?: number;
-  }): Promise<TResponse>;
-  updateAutomaticSendRule<TResponse = unknown>(
-    id: string | number,
-    input: { milestone?: string; archived?: boolean; priority?: number },
-  ): Promise<TResponse>;
-  getOperationsToCash<TResponse = unknown>(input?: {
-    stage?: string;
-  }): Promise<TResponse>;
-  getRevenueLeakage<TResponse = unknown>(): Promise<TResponse>;
-  getCashForecast<TResponse = unknown>(): Promise<TResponse>;
-  getMarginDashboards<TResponse = unknown>(): Promise<TResponse>;
-}
+// FINANCE: the client is generated from the endpoint definitions
+// (`modules/finance.ts`); its DTOs are the contract's.
+export type { FinanceApi };
 
 export interface SessionsApi {
   revoke(sessionId: string): Promise<unknown>;

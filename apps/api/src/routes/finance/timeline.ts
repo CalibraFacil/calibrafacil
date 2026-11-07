@@ -1,4 +1,6 @@
 import { createRouter } from "../../server/router";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import {
   buildCustomerFinancialTimeline,
@@ -19,78 +21,80 @@ function parseStrictPositiveInt(value: string | undefined) {
 
 const CUSTOMER_TIMELINE_MAX_LIMIT = 50;
 
+const PREFIX = "/api/finance";
+
 export const financeTimelineRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  .get(
-    "/service-orders/:serviceOrderId/status",
-    ...withLabPermission({ financial: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const serviceOrderId = parseStrictPositiveInt(
-        c.req.param("serviceOrderId"),
+}>();
+mount(
+  financeTimelineRouter,
+  PREFIX,
+  financeEndpoints.getServiceOrderStatus,
+  withLabPermission({ financial: ["read"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const serviceOrderId = parseStrictPositiveInt(params.serviceOrderId);
+    if (!serviceOrderId) {
+      throw invalid("invalid_request", "ID da ordem de serviço inválido");
+    }
+
+    const data = await orgDb(member.organizationId).transaction((o) =>
+      buildServiceOrderFinancialStatus({
+        executor: o,
+        organizationId: member.organizationId,
+        scope: member,
+        serviceOrderId,
+        includeProviderEvidence: true,
+      }),
+    );
+
+    if (!data) {
+      throw notFound(
+        "service_order_not_found",
+        "Ordem de serviço não encontrada",
       );
-      if (!serviceOrderId) {
-        throw invalid("invalid_request", "ID da ordem de serviço inválido");
-      }
+    }
 
-      const data = await orgDb(member.organizationId).transaction((o) =>
-        buildServiceOrderFinancialStatus({
-          executor: o,
-          organizationId: member.organizationId,
-          scope: member,
-          serviceOrderId,
-          includeProviderEvidence: true,
-        }),
-      );
+    return { data };
+  },
+);
+mount(
+  financeTimelineRouter,
+  PREFIX,
+  financeEndpoints.getCustomerTimeline,
+  withLabPermission({ financial: ["read"] }),
+  async (c, { params, query }) => {
+    const member = c.get("member");
+    const customerRouteId = params.customerId;
+    const customerId = customerRouteId
+      ? await orgDb(member.organizationId).transaction((o) =>
+          resolveCustomerRouteId(customerRouteId, member.organizationId, o),
+        )
+      : null;
+    const limitParam = query.limit;
+    const limit = limitParam ? parseStrictPositiveInt(limitParam) : null;
+    if (!customerId) {
+      throw notFound("customer_not_found", "Cliente não encontrado");
+    }
+    if (limitParam && !limit) {
+      throw invalid("invalid_limit", "Limite inválido");
+    }
 
-      if (!data) {
-        throw notFound(
-          "service_order_not_found",
-          "Ordem de serviço não encontrada",
-        );
-      }
+    const timeline = await orgDb(member.organizationId).transaction((o) =>
+      buildCustomerFinancialTimeline({
+        executor: o,
+        organizationId: member.organizationId,
+        scope: member,
+        customerId,
+        limit: limit ? Math.min(limit, CUSTOMER_TIMELINE_MAX_LIMIT) : undefined,
+        includeProviderEvidence: true,
+      }),
+    );
 
-      return c.json({ data });
-    },
-  )
-  .get(
-    "/customers/:customerId/timeline",
-    ...withLabPermission({ financial: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const customerRouteId = c.req.param("customerId");
-      const customerId = customerRouteId
-        ? await orgDb(member.organizationId).transaction((o) =>
-            resolveCustomerRouteId(customerRouteId, member.organizationId, o),
-          )
-        : null;
-      const limitParam = c.req.query("limit");
-      const limit = limitParam ? parseStrictPositiveInt(limitParam) : null;
-      if (!customerId) {
-        throw notFound("customer_not_found", "Cliente não encontrado");
-      }
-      if (limitParam && !limit) {
-        throw invalid("invalid_limit", "Limite inválido");
-      }
+    if (!timeline) {
+      throw notFound("customer_not_found", "Cliente não encontrado");
+    }
 
-      const timeline = await orgDb(member.organizationId).transaction((o) =>
-        buildCustomerFinancialTimeline({
-          executor: o,
-          organizationId: member.organizationId,
-          scope: member,
-          customerId,
-          limit: limit
-            ? Math.min(limit, CUSTOMER_TIMELINE_MAX_LIMIT)
-            : undefined,
-          includeProviderEvidence: true,
-        }),
-      );
-
-      if (!timeline) {
-        throw notFound("customer_not_found", "Cliente não encontrado");
-      }
-
-      return c.json({ data: timeline });
-    },
-  );
+    return { data: timeline };
+  },
+);

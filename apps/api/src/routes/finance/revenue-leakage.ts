@@ -1,4 +1,6 @@
 import { createRouter } from "../../server/router";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { orgDb } from "../../lib/org-db";
 import {
   withLabPermission,
@@ -6,18 +8,27 @@ import {
 } from "../../middleware/permission";
 import { buildRevenueLeakage } from "../../lib/revenue-leakage";
 
+const PREFIX = "/api/finance/revenue-leakage";
+
 export const financeRevenueLeakageRouter = createRouter<{
   Variables: AuthVariables;
-}>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
-  const member = c.get("member");
-  const envelope = await orgDb(member.organizationId).transaction((o) =>
-    buildRevenueLeakage(
-      {
-        organizationId: member.organizationId,
-        scope: member,
-      },
-      o,
-    ),
-  );
-  return c.json(envelope);
-});
+}>();
+mount(
+  financeRevenueLeakageRouter,
+  PREFIX,
+  financeEndpoints.getRevenueLeakage,
+  withLabPermission({ financial: ["read"] }),
+  async (c) => {
+    const member = c.get("member");
+    const envelope = await orgDb(member.organizationId).transaction((o) =>
+      buildRevenueLeakage(
+        {
+          organizationId: member.organizationId,
+          scope: member,
+        },
+        o,
+      ),
+    );
+    return envelope;
+  },
+);

@@ -1,3 +1,4 @@
+import type { RevenueLeakageEnvelope } from '@calibra-facil/contracts'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { AlertCircleIcon } from '@hugeicons/core-free-icons'
@@ -63,14 +64,6 @@ interface AlertItem {
   currency: string
   classes: LeakageClass[]
   ageInDays: number | null
-}
-
-interface RevenueLeakageEnvelope {
-  summary: {
-    classes: Record<LeakageClass, { count: number; totalCents: number }>
-    totalAlerts: number
-  }
-  alerts: AlertItem[]
 }
 
 const LEAKAGE_FACETS: FacetConfig[] = [
@@ -161,8 +154,7 @@ const alertColumns: ColumnDef<AlertItem, unknown>[] = [
 function revenueLeakageQueryOptions() {
   return queryOptions<RevenueLeakageEnvelope>({
     queryKey: ['finance', 'revenue-leakage'],
-    queryFn: () =>
-      calibraApi.finance.getRevenueLeakage<RevenueLeakageEnvelope>(),
+    queryFn: () => calibraApi.finance.getRevenueLeakage(),
   })
 }
 
