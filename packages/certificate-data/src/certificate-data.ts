@@ -152,7 +152,7 @@ export type CustomerAddress = {
   state?: string;
 };
 
-export type MethodInputField = {
+type MethodInputField = {
   key: string;
   label: string;
   type: "text" | "number" | "select" | "table";
@@ -233,7 +233,7 @@ export type MethodInputField = {
   }>;
 };
 
-export type MethodFormulaReporting = {
+type MethodFormulaReporting = {
   includeInCertificate?: boolean;
   role?:
     | "primary_result"
@@ -262,7 +262,7 @@ export type MethodFormulaReporting = {
  * repeatability blocks: they are different tables, declared as such, not
  * guessed from the output key.
  */
-export type MethodFormulaScope =
+type MethodFormulaScope =
   | { kind: "scalar" }
   | { kind: "table_row"; tableKey: string };
 
@@ -275,7 +275,7 @@ export type MethodFormula = {
   reporting?: MethodFormulaReporting;
 };
 
-export type MethodCertificateContent = {
+type MethodCertificateContent = {
   procedureCode?: string;
   referenceStandards?: string[];
   certifiedValuesDisplay?: "full" | "hidden";
@@ -303,7 +303,7 @@ export type MethodSnapshot = {
   methodFingerprint?: string | null;
 };
 
-export type CertifiedValue = {
+type CertifiedValue = {
   nominal: string;
   authentication?: string | null;
   value: number;

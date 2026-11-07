@@ -20,7 +20,7 @@ import {
 } from '@calibra-facil/ui/sidebar'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 
-export type NavMainItem = {
+type NavMainItem = {
   title: string
   url: string
   /** `data-tour` value for the guided tour. */

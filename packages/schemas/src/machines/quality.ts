@@ -80,7 +80,7 @@ export const NON_CONFORMANCE_MACHINE = defineStateMachine({
 //             campaign)
 //   send    routes/standards.ts POST /:id/recall/send: the approval and the
 //             reviewed window are stamped, then the notifications are created
-export const STANDARD_RECALL_STATUSES = ["DRAFT", "SENT"] as const;
+const STANDARD_RECALL_STATUSES = ["DRAFT", "SENT"] as const;
 export type StandardRecallStatus = (typeof STANDARD_RECALL_STATUSES)[number];
 
 export const STANDARD_RECALL_MACHINE = defineStateMachine({
@@ -102,7 +102,7 @@ export const STANDARD_RECALL_MACHINE = defineStateMachine({
 //                  (routes/portal.ts) and a manual registration
 //                  (routes/non-conformances.ts); first acknowledgement wins
 //                  (Q34), from any state before it
-export const OOT_NOTIFICATION_STATUSES = [
+const OOT_NOTIFICATION_STATUSES = [
   "PENDING",
   "GENERATED",
   "SENT",
@@ -132,7 +132,7 @@ export const OOT_NOTIFICATION_MACHINE = defineStateMachine({
 // found; the customer records its impact assessment in the portal.
 //   create  apps/api/src/lib/asset-oot-events.ts (non-conforming as-found)
 //   assess  routes/portal.ts POST /fleet/oot-events/:id/assessment (one per event)
-export const ASSET_OOT_EVENT_STATUSES = ["OPEN", "ASSESSED"] as const;
+const ASSET_OOT_EVENT_STATUSES = ["OPEN", "ASSESSED"] as const;
 export type AssetOotEventStatus = (typeof ASSET_OOT_EVENT_STATUSES)[number];
 
 export const ASSET_OOT_EVENT_MACHINE = defineStateMachine({

@@ -29,7 +29,7 @@ import { resolveServiceOrderRecipient } from "@calibra-facil/notifications";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import type { buildUnitScopeCondition } from "../../lib/units";
 
-export type ServiceOrderCommunicationStatus =
+type ServiceOrderCommunicationStatus =
   | "sent"
   | "queued"
   | "retrying"

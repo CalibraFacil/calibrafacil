@@ -81,7 +81,7 @@ export function mergeViaCepAddress<TAddress extends EditableAddress>(
   })
 }
 
-export async function fetchViaCepAddress(
+async function fetchViaCepAddress(
   cep: string,
   signal?: AbortSignal,
 ): Promise<ViaCepAddress | null> {

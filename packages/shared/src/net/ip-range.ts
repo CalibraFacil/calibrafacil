@@ -12,7 +12,7 @@
  * IPv4 address it carries.
  */
 
-export type IpFamily = 4 | 6;
+type IpFamily = 4 | 6;
 
 export interface ParsedIp {
   readonly family: IpFamily;

@@ -420,7 +420,7 @@ async function loadOrCreateServiceOrderSettings(
   return concurrent;
 }
 
-export async function buildServiceOrderAssetSnapshot(
+async function buildServiceOrderAssetSnapshot(
   params: {
     assetId: number;
     organizationId: string;

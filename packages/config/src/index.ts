@@ -41,33 +41,17 @@ export function loadPortalConfig(env: EnvSource) {
 }
 
 export type ApiConfig = ReturnType<typeof loadApiConfig>;
-export type WorkerConfig = ReturnType<typeof loadWorkerConfig>;
-export type LocalServerConfigSettings = ReturnType<
-  typeof loadLocalServerConfig
->["localServer"];
 
-export {
-  ConfigError,
-  isProductionEnv,
-  varMetaOf,
-  groupMetaOf,
-  type ConfigIssue,
-  type EnvSource,
-  type RuntimeName,
-  type VarMeta,
-} from "./define";
+export { ConfigError, isProductionEnv, type EnvSource } from "./define";
 export type { PlatformEmailTransport } from "./groups/email";
 export {
   readAuthConfig,
   readDatabaseConfig,
   readEmailConfig,
-  readIntegrationsConfig,
   readJobsConfig,
-  readLocalServerSettings,
   readObservabilityConfig,
   readOutboundConfig,
   readOriginsConfig,
-  readRenderingConfig,
   readRetentionConfig,
   readRuntimeConfig,
   readSigningConfig,

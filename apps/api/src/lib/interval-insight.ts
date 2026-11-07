@@ -87,7 +87,7 @@ export function buildFamilyStats(
   return { populationN: collapsed.length, conformingS, meanTimeSinceCalMonths };
 }
 
-export type IntervalInsightPoint = {
+type IntervalInsightPoint = {
   approvedAt: string;
   conformity: CycleVerdict;
   /** Worst (minimum) as-found margin for the cycle, or null when none recorded. */

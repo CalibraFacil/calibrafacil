@@ -8,7 +8,7 @@ import type { QueryClient } from "@tanstack/react-query";
  */
 
 /** First segment shared by every key built with `portalQueryKey`. */
-export const PORTAL_QUERY_ROOT = "portal";
+const PORTAL_QUERY_ROOT = "portal";
 
 const NO_ORGANIZATION = "no-organization";
 

@@ -81,7 +81,7 @@ export function serviceOrderDetailQueryOptions(publicId: string) {
   })
 }
 
-export function serviceOrderCommunicationsQueryOptions(id: string) {
+function serviceOrderCommunicationsQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['service-order', id, 'communications'],
     queryFn: () => calibraApi.serviceOrders.listCommunications(id),
@@ -145,7 +145,7 @@ export function newServiceOrderAssetsQueryOptions({
   })
 }
 
-export const SERVICE_ORDER_MATERIAL_PICKER_LIMIT = 20
+const SERVICE_ORDER_MATERIAL_PICKER_LIMIT = 20
 
 // Typeahead over the active material catalog for the SO part-item picker.
 // Keyed on the typed query so the debounce is data-driven (no useEffect). On
@@ -188,7 +188,7 @@ export async function getServiceOrderDeliveryDocumentUrl(id: string) {
   return result.url
 }
 
-export async function getServiceOrdersIndexEssentialQueries(url?: URL) {
+async function getServiceOrdersIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

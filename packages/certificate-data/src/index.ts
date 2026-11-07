@@ -9,36 +9,16 @@
  * `@calibra-facil/documents` consume `buildCertificateData` directly.
  */
 export {
-  buildCertificateData,
   certificateImageContextFromJob,
-  type AssetSnapshot,
-  type BuildCertificateDataOptions,
-  type CalibrationLocationSnapshot,
-  type CalibrationPhaseSnapshot,
   type CertificateJobData,
-  type CertifiedValue,
-  type CustomerAddress,
-  type EnvironmentalSnapshot,
-  type MethodCertificateContent,
   type MethodFormula,
-  type MethodFormulaReporting,
-  type MethodFormulaScope,
-  type MethodInputField,
-  type MethodSnapshot,
   type StandardSnapshot,
 } from "./certificate-data.js";
-export {
-  ECCENTRICITY_INDICATOR_SPEC_KEY,
-  renderEccentricityIndicatorSvgMarkup,
-  type CertificateImageContext,
-} from "./eccentricity-indicator.js";
-export { formatValue, getPath } from "./formatters.js";
+export { renderEccentricityIndicatorSvgMarkup } from "./eccentricity-indicator.js";
 export { formatDecimalPtBr, fractionDigitsOf } from "./decimal-format.js";
 export {
   formatAtDecimals,
   roundMeasurementForReport,
-  UNCERTAINTY_SIGNIFICANT_FIGURES,
-  type RoundedMeasurement,
 } from "./reporting-rounding.js";
 export {
   assembleCertificateJobData,
@@ -50,12 +30,10 @@ export {
   certificateContentRulesFor,
   certificateInputSha256,
   imageDataUrl,
-  inferImageContentType,
   isCertificateInput,
   type CertificateContentRules,
   type CertificateInput,
   type CertificateJobSource,
-  type FrozenScopeEvaluation,
 } from "./certificate-input.js";
 export {
   calibratingBodyAddressText,
@@ -63,14 +41,5 @@ export {
   freezeSignatory,
   pickSignatoryRecord,
   resolveCalibratingBody,
-  TRACEABILITY_FAILURE_REASONS,
-  type CalibrationProviderFacts,
-  type CalibratingBodyAddress,
-  type CalibratingBodySource,
-  type FrozenCalibratingBody,
-  type FrozenSignatory,
-  type FrozenTraceability,
-  type SignatoryRecordCandidate,
-  type TraceabilityFailureReason,
   type TraceabilityStandard,
 } from "./frozen-content.js";

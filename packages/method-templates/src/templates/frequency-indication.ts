@@ -370,7 +370,7 @@ const certificateContent = {
 };
 
 // --- Product definition (single source for buildDraft + the route) -------------
-export const frequencyProductDefinition: TemplateProductDefinition = {
+const frequencyProductDefinition: TemplateProductDefinition = {
   assetTypeSlug: TACHOMETER_ASSET_TYPE_SLUG,
   name: METHOD_NAME,
   description: methodDescription,

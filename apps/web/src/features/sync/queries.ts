@@ -16,7 +16,7 @@ export function useOpenSyncConflictsData({ enabled }: { enabled: boolean }) {
   })
 }
 
-export function blockedSyncEventsQueryOptions() {
+function blockedSyncEventsQueryOptions() {
   return queryOptions({
     queryKey: ['desktop-sync-blocked-events'],
     queryFn: () => calibraApi.sync.listBlockedEvents(),

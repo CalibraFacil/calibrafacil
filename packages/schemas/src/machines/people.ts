@@ -111,7 +111,7 @@ export const TRAINING_MACHINE = defineStateMachine({
 //             account deletion of the signatory (packages/auth)
 // SUSPENDED and EXPIRED were declared once but never written: the expiry of a
 // grant is its `expiresAt`, read at approval time. They are not states.
-export const SIGNATORY_STATUSES = ["ACTIVE", "REVOKED"] as const;
+const SIGNATORY_STATUSES = ["ACTIVE", "REVOKED"] as const;
 export type SignatoryAuthorizationStatus = (typeof SIGNATORY_STATUSES)[number];
 
 export const SIGNATORY_MACHINE = defineStateMachine({

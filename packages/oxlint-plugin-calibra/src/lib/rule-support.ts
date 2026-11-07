@@ -14,7 +14,7 @@ export interface RuleContext {
   report(descriptor: { node: unknown; message: string }): void;
 }
 
-export type RuleVisitor = (node: unknown) => void;
+type RuleVisitor = (node: unknown) => void;
 
 export interface RuleModule {
   meta: {

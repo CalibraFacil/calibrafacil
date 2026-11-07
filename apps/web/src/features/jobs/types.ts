@@ -35,9 +35,7 @@ export type JobsListQueryInput = {
 
 export type JobTechniciansData = JobTechniciansResponse
 
-export type JobTechnician = JobTechniciansData['data'][number]
-
-export type NewJobCustomer = {
+type NewJobCustomer = {
   id: number
   name: string
   taxId?: string | null
@@ -50,7 +48,7 @@ export type NewJobCustomersData = {
   data: Array<NewJobCustomer>
 }
 
-export type NewJobAsset = {
+type NewJobAsset = {
   id: number
   name: string
   tag: string
@@ -63,7 +61,7 @@ export type NewJobAssetsData = {
   data: Array<NewJobAsset>
 }
 
-export type NewJobService = {
+type NewJobService = {
   id: number
   name: string
   description?: string | null

@@ -5,33 +5,28 @@ import { z } from "zod";
  * Regulated workflow → schema-first; web forms parse through these schemas.
  */
 
-export const PtActivityTypeSchema = z.enum([
+const PtActivityTypeSchema = z.enum([
   "proficiency_test",
   "interlab_comparison",
 ]);
-export type PtActivityType = z.infer<typeof PtActivityTypeSchema>;
 
-export const PtScoreTypeSchema = z.enum(["en", "z", "z_prime", "zeta"]);
-export type PtScoreType = z.infer<typeof PtScoreTypeSchema>;
+const PtScoreTypeSchema = z.enum(["en", "z", "z_prime", "zeta"]);
 
-export const PtOverallStatusSchema = z.enum([
+const PtOverallStatusSchema = z.enum([
   "pending",
   "satisfactory",
   "questionable",
   "unsatisfactory",
 ]);
-export type PtOverallStatus = z.infer<typeof PtOverallStatusSchema>;
 
-export const SpcChartTypeSchema = z.enum(["i_mr", "xbar_r", "cusum", "ewma"]);
-export type SpcChartType = z.infer<typeof SpcChartTypeSchema>;
+const SpcChartTypeSchema = z.enum(["i_mr", "xbar_r", "cusum", "ewma"]);
 
-export const SpcStatusSchema = z.enum([
+const SpcStatusSchema = z.enum([
   "insufficient_data",
   "in_control",
   "trending",
   "out_of_control",
 ]);
-export type SpcStatus = z.infer<typeof SpcStatusSchema>;
 
 function validIsoDate(message: string) {
   return z
@@ -74,15 +69,12 @@ export const UpdateProficiencyTestSchema = z.object({
     .nullable(),
   notes: z.string().trim().max(4000).optional().nullable(),
 });
-export type UpdateProficiencyTestInput = z.infer<
-  typeof UpdateProficiencyTestSchema
->;
 
 /**
  * One measured point of the provider's final report. The API computes the
  * score + verdict from these inputs (ISO 13528) — clients never send verdicts.
  */
-export const PtResultPointInputSchema = z
+const PtResultPointInputSchema = z
   .object({
     label: z.string().trim().min(1, "Ponto de medição é obrigatório").max(200),
     unit: z.string().trim().max(50).optional(),
@@ -143,9 +135,6 @@ export const ListProficiencyTestsQuerySchema = z.object({
   activityType: PtActivityTypeSchema.optional(),
   scopePart: z.string().trim().max(300).optional(),
 });
-export type ListProficiencyTestsQuery = z.infer<
-  typeof ListProficiencyTestsQuerySchema
->;
 
 // --- PT participation plan (NIT-DICLA-026 §9.4; default 4-year cycle) ---
 
@@ -169,7 +158,6 @@ export const UpdatePtPlanItemSchema = z.object({
   frequencyMonths: z.coerce.number().int().positive().max(120).optional(),
   lastSatisfactoryAt: validIsoDate("Data inválida").optional().nullable(),
 });
-export type UpdatePtPlanItemInput = z.infer<typeof UpdatePtPlanItemSchema>;
 
 // --- SPC: check-standard readings + control charts (17025 §7.7.1) ---
 
@@ -194,11 +182,8 @@ export const ListCheckStandardReadingsQuerySchema = z.object({
   parameter: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().positive().max(500).default(200),
 });
-export type ListCheckStandardReadingsQuery = z.infer<
-  typeof ListCheckStandardReadingsQuerySchema
->;
 
-export const SpcChartParamsSchema = z.object({
+const SpcChartParamsSchema = z.object({
   baselineWindow: z.coerce.number().int().min(4).max(200).optional(),
   centerline: z.coerce.number().optional(),
   sigma: z.coerce.number().positive().optional(),
@@ -209,7 +194,6 @@ export const SpcChartParamsSchema = z.object({
   ewmaK: z.coerce.number().positive().optional(),
   enabledRules: z.array(z.string().max(60)).max(20).optional(),
 });
-export type SpcChartParamsInput = z.infer<typeof SpcChartParamsSchema>;
 
 export const CreateControlChartSchema = z.object({
   standardId: z.coerce.number().int().positive(),
@@ -236,9 +220,6 @@ export const ListControlChartsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(50),
 });
-export type ListControlChartsQuery = z.infer<
-  typeof ListControlChartsQuerySchema
->;
 
 export const EscalateControlChartSchema = z.object({
   description: z
@@ -248,6 +229,3 @@ export const EscalateControlChartSchema = z.object({
     .max(4000)
     .optional(),
 });
-export type EscalateControlChartInput = z.infer<
-  typeof EscalateControlChartSchema
->;

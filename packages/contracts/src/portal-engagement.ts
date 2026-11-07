@@ -16,7 +16,7 @@ const jsonRecordSchema = z.record(z.string(), z.unknown());
 // Notifications
 // ---------------------------------------------------------------------------
 
-export const portalNotificationItemSchema = z.object({
+const portalNotificationItemSchema = z.object({
   id: z.number(),
   type: z.string(),
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
@@ -27,9 +27,6 @@ export const portalNotificationItemSchema = z.object({
   createdAt: z.string(),
   readAt: nullableString,
 });
-export type PortalNotificationItem = z.infer<
-  typeof portalNotificationItemSchema
->;
 
 /** GET /api/portal/notifications (cursor-paginated). */
 export const portalNotificationFeedResponseSchema = z.object({
@@ -75,7 +72,7 @@ export type PortalNotificationPreferencesResponse = z.infer<
 // Out-of-tolerance notices (ISO/IEC 17025 §7.10)
 // ---------------------------------------------------------------------------
 
-export const portalOotNotificationSchema = z.object({
+const portalOotNotificationSchema = z.object({
   /** Opaque acknowledgment token, never a numeric database id. */
   id: z.string(),
   ncNumber: z.string(),
@@ -90,7 +87,6 @@ export const portalOotNotificationSchema = z.object({
   assetTag: nullableString,
   unitName: nullableString,
 });
-export type PortalOotNotification = z.infer<typeof portalOotNotificationSchema>;
 
 /** GET /api/portal/oot-notifications */
 export const portalOotNotificationsResponseSchema = z.object({
@@ -192,7 +188,7 @@ export type PortalVisitRescheduleResponse = z.infer<
 // Calibration requests
 // ---------------------------------------------------------------------------
 
-export const portalRequestStatusValueSchema = z.enum([
+const portalRequestStatusValueSchema = z.enum([
   "PENDING",
   "UNDER_REVIEW",
   "APPROVED",
@@ -200,7 +196,7 @@ export const portalRequestStatusValueSchema = z.enum([
   "CONVERTED",
 ]);
 
-export const portalRequestListItemSchema = z.object({
+const portalRequestListItemSchema = z.object({
   id: z.number(),
   status: portalRequestStatusValueSchema,
   observations: nullableString,
@@ -212,7 +208,6 @@ export const portalRequestListItemSchema = z.object({
   customerName: z.string(),
   itemCount: z.number(),
 });
-export type PortalRequestListItem = z.infer<typeof portalRequestListItemSchema>;
 
 /** GET /api/portal/requests */
 export const portalRequestsResponseSchema = z.object({
@@ -291,7 +286,7 @@ export type PortalRequestBatchResponse = z.infer<
 
 const serviceOrderStatusValueSchema = z.string();
 
-export const portalServiceOrderListItemSchema = z.object({
+const portalServiceOrderListItemSchema = z.object({
   id: z.number(),
   publicId: z.string(),
   serviceOrderNumber: z.string(),
@@ -302,9 +297,6 @@ export const portalServiceOrderListItemSchema = z.object({
   assetName: z.string(),
   assetSerialNumber: nullableString,
 });
-export type PortalServiceOrderListItem = z.infer<
-  typeof portalServiceOrderListItemSchema
->;
 
 /** GET /api/portal/service-orders */
 export const portalServiceOrdersResponseSchema = z.object({

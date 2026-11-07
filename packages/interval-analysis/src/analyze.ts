@@ -18,7 +18,7 @@ import {
   type CycleVerdict,
 } from "./reliability.js";
 
-export const ENGINE_VERSION = "0.1.0";
+const ENGINE_VERSION = "0.1.0";
 
 export type IntervalCycle = {
   verdict: CycleVerdict;
@@ -50,7 +50,7 @@ export const DEFAULT_INTERVAL_CONFIG: IntervalConfig = {
   minFamilyN: 8,
 };
 
-export type Classification = "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING";
+type Classification = "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING";
 
 export type Recommendation = {
   action: "extend" | "keep" | "shorten";

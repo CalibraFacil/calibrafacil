@@ -33,7 +33,7 @@ export type SpecificationFieldLike = {
   unit?: string | null;
 };
 
-export type MethodTableColumnLike = {
+type MethodTableColumnLike = {
   key: string;
   type: "text" | "number";
   unit?: string | null;
@@ -54,15 +54,6 @@ export type MethodInputFieldLike = {
 export type MethodFormulaLike = {
   outputKey: string;
   unit?: string | null;
-};
-
-export type RangeSpecLike = {
-  label?: string | null;
-  min?: number | null;
-  max?: number | null;
-  rangeUnit?: string | null;
-  resolution?: number | null;
-  resolutionUnit?: string | null;
 };
 
 export type UnitConversionTrace = {
@@ -137,7 +128,7 @@ type ConvertMode = "absolute" | "delta";
  * while passing every value test. For every factor-only kind (everything except
  * temperature) absolute and delta coincide, so this is a no-op for mass et al.
  */
-export const DELTA_QUANTITY_KINDS: ReadonlySet<string> = new Set([
+const DELTA_QUANTITY_KINDS: ReadonlySet<string> = new Set([
   "correction",
   "error",
   "deviation",
@@ -154,7 +145,7 @@ export const DELTA_QUANTITY_KINDS: ReadonlySet<string> = new Set([
  * convert factor-only; measured/indicated/reference/nominal values, and any
  * unmarked field, convert as an absolute value (today's behaviour, mass-safe).
  */
-export function conversionModeForQuantityKind(
+function conversionModeForQuantityKind(
   quantityKind: string | null | undefined,
 ): ConvertMode {
   return quantityKind && DELTA_QUANTITY_KINDS.has(quantityKind)

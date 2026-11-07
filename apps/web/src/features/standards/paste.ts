@@ -31,7 +31,7 @@ import type { StandardCertifiedValueFormData } from './forms'
  */
 
 /** The certified-value columns, in the order the table renders them. */
-export const CERTIFIED_VALUE_PASTE_COLUMNS = [
+const CERTIFIED_VALUE_PASTE_COLUMNS = [
   'nominal',
   'authentication',
   'value',
@@ -43,8 +43,7 @@ export const CERTIFIED_VALUE_PASTE_COLUMNS = [
   'coverageFactor',
 ] as const satisfies readonly (keyof StandardCertifiedValueFormData)[]
 
-export type CertifiedValuePasteColumn =
-  (typeof CERTIFIED_VALUE_PASTE_COLUMNS)[number]
+type CertifiedValuePasteColumn = (typeof CERTIFIED_VALUE_PASTE_COLUMNS)[number]
 
 /** Rendered as number inputs, so they cannot hold a comma. */
 const NUMERIC_CERTIFIED_VALUE_COLUMNS: ReadonlySet<CertifiedValuePasteColumn> =

@@ -357,7 +357,7 @@ export async function failQueueJob(
  * a job that cannot succeed however often it runs (an unparseable payload).
  * Fenced like the other settlements; returns whether it applied.
  */
-export async function deadLetterQueueJob(
+async function deadLetterQueueJob(
   id: number,
   workerId: string,
   reason: string,

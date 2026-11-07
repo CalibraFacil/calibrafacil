@@ -52,15 +52,6 @@ const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
   "warranty_service",
   "external_service_required",
 ] as const;
-const SERVICE_ORDER_QUOTE_STATUSES = [
-  "draft",
-  "sent",
-  "approved",
-  "rejected",
-  "expired",
-  "canceled",
-  "superseded",
-] as const;
 const SERVICE_ORDER_ITEM_TYPES = [
   "service",
   "part",
@@ -77,12 +68,6 @@ const SERVICE_ORDER_EXECUTION_RESULTS = [
   "returned_without_service",
   "sent_to_third_party",
 ] as const;
-const SERVICE_ORDER_ACTOR_TYPES = [
-  "lab_user",
-  "portal_user",
-  "system",
-  "public_token",
-] as const;
 const SERVICE_ORDER_MANUAL_APPROVAL_EVIDENCE_TYPES = [
   "phone",
   "whatsapp",
@@ -98,35 +83,27 @@ const positiveQuantity = z.coerce.number().positive().max(999999);
 
 export const ServiceOrderStatusSchema = z.enum(SERVICE_ORDER_STATUSES);
 export const ServiceOrderPrioritySchema = z.enum(SERVICE_ORDER_PRIORITIES);
-export const ServiceOrderIntakeTypeSchema = z.enum(SERVICE_ORDER_INTAKE_TYPES);
-export const ServiceOrderDeliveryMethodSchema = z.enum(
-  SERVICE_ORDER_DELIVERY_METHODS,
-);
-export const ServiceOrderClosingReasonSchema = z.enum(
-  SERVICE_ORDER_CLOSING_REASONS,
-);
-export const ServiceOrderRecommendedActionSchema = z.enum(
+const ServiceOrderIntakeTypeSchema = z.enum(SERVICE_ORDER_INTAKE_TYPES);
+const ServiceOrderDeliveryMethodSchema = z.enum(SERVICE_ORDER_DELIVERY_METHODS);
+const ServiceOrderClosingReasonSchema = z.enum(SERVICE_ORDER_CLOSING_REASONS);
+const ServiceOrderRecommendedActionSchema = z.enum(
   SERVICE_ORDER_RECOMMENDED_ACTIONS,
 );
-export const ServiceOrderQuoteStatusSchema = z.enum(
-  SERVICE_ORDER_QUOTE_STATUSES,
-);
-export const ServiceOrderItemTypeSchema = z.enum(SERVICE_ORDER_ITEM_TYPES);
-export const ServiceOrderExecutionResultSchema = z.enum(
+const ServiceOrderItemTypeSchema = z.enum(SERVICE_ORDER_ITEM_TYPES);
+const ServiceOrderExecutionResultSchema = z.enum(
   SERVICE_ORDER_EXECUTION_RESULTS,
 );
-export const ServiceOrderActorTypeSchema = z.enum(SERVICE_ORDER_ACTOR_TYPES);
-export const ServiceOrderManualApprovalEvidenceTypeSchema = z.enum(
+const ServiceOrderManualApprovalEvidenceTypeSchema = z.enum(
   SERVICE_ORDER_MANUAL_APPROVAL_EVIDENCE_TYPES,
 );
 
-export const ServiceOrderSignatureDataSchema = z.object({
+const ServiceOrderSignatureDataSchema = z.object({
   signerName: z.string().trim().min(1).max(160),
   signedAt: z.string().datetime().optional(),
   dataUrl: z.string().trim().min(1).max(500000),
 });
 
-export const ServiceOrderAssetSnapshotInputSchema = z.object({
+const ServiceOrderAssetSnapshotInputSchema = z.object({
   observedIdentification: z.string().trim().max(500).optional(),
   photos: z.array(z.string().trim().min(1).max(2048)).default([]),
 });
@@ -239,7 +216,7 @@ export const UpdateServiceOrderEvaluationSchema =
     revisionReason: z.string().trim().min(1).max(2000).optional(),
   });
 
-export const ServiceOrderPricedItemSchema = z.object({
+const ServiceOrderPricedItemSchema = z.object({
   id: z.number().int().positive().optional(),
   type: ServiceOrderItemTypeSchema,
   description: z.string().trim().min(1).max(500),
@@ -436,10 +413,6 @@ export const ReopenServiceOrderSchema = z.object({
   reason: z.string().trim().min(3).max(5000),
 });
 
-export const LinkServiceOrderCertificateSchema = z.object({
-  certificateJobId: z.coerce.number().int().positive(),
-});
-
 export const UpdateServiceOrderSettingsSchema = z.object({
   numberingTemplate: z
     .string()
@@ -463,15 +436,3 @@ export const UpdateServiceOrderSettingsSchema = z.object({
   defaultQuoteValidityDays: z.coerce.number().int().min(1).max(365).default(15),
   defaultWarrantyTerms: nullableText,
 });
-
-export type CreateServiceOrderInput = z.infer<typeof CreateServiceOrderSchema>;
-export type UpdateServiceOrderInput = z.infer<typeof UpdateServiceOrderSchema>;
-export type ListServiceOrdersQuery = z.infer<
-  typeof ListServiceOrdersQuerySchema
->;
-export type CreateServiceOrderQuoteInput = z.infer<
-  typeof CreateServiceOrderQuoteSchema
->;
-export type ServiceOrderPricedItemInput = z.infer<
-  typeof ServiceOrderPricedItemSchema
->;

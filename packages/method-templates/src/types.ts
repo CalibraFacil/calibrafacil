@@ -55,7 +55,7 @@ export type TemplateProductDefinition = {
  *                 by the platform); NOT something a lab can "verify away" with a
  *                 checkbox.
  */
-export type VerificarSeverity = "info" | "action" | "platform";
+type VerificarSeverity = "info" | "action" | "platform";
 
 /**
  * Surfaceable metrology context for a template — promoted out of the source

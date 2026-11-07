@@ -38,7 +38,7 @@ export function openLocalDatabase(
   return database;
 }
 
-export function configureLocalDatabase(database: LocalDatabase) {
+function configureLocalDatabase(database: LocalDatabase) {
   database.pragma("journal_mode = WAL");
   database.pragma("foreign_keys = ON");
 }
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS local_schema_migrations (
   }
 }
 
-export function assertLocalSchemaCompatible(database: LocalDatabase) {
+function assertLocalSchemaCompatible(database: LocalDatabase) {
   const version = getLocalSchemaVersion(database);
   if (version > currentLocalDbSchemaVersion) {
     throw new LocalDatabaseVersionError(version, currentLocalDbSchemaVersion);

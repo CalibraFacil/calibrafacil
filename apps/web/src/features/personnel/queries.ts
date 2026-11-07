@@ -115,7 +115,7 @@ export function assignableTrainingRecordsQueryOptions(userId: string) {
   })
 }
 
-export async function getPersonnelIndexEssentialQueries(url?: URL) {
+async function getPersonnelIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

@@ -81,7 +81,7 @@ type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
  *   through key Y", not "in a session". Revoked keys never reach this point
  *   (API-key auth rejects them).
  */
-export type ApprovalActor =
+type ApprovalActor =
   | { kind: "user"; member: AuthVariables["member"] }
   | {
       kind: "api_key";
@@ -95,7 +95,7 @@ export type ApprovalActor =
  * signs) the certificate. No caller can hand `approveJob` PDF bytes or a
  * `certificateUrl`.
  */
-export type ApprovalCompletion = {
+type ApprovalCompletion = {
   /** REVIEW → GENERATING_PDF, the worker renders the certificate. */
   kind: "generate_certificate_pdf";
   /**
@@ -110,7 +110,7 @@ export type ApprovalCompletion = {
   }) => Promise<ReadonlyArray<FinanceSendResult>>;
 };
 
-export type FinanceSendResult = {
+type FinanceSendResult = {
   ok: boolean;
   billingDocumentId?: number | null;
   error?: string | null;

@@ -11,7 +11,7 @@ export const PASSKEY_NAME_MAX_LENGTH = 64
 type PasskeyNameField = 'name'
 const PASSKEY_NAME_FIELDS: readonly PasskeyNameField[] = ['name']
 
-export const passkeyNameSchema = z.object({
+const passkeyNameSchema = z.object({
   name: z
     .string()
     .trim()

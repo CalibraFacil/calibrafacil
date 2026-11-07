@@ -48,40 +48,40 @@ const id = z.number();
 const userId = z.string();
 
 /** Certificate render. `type` is omitted by the approval and amendment flows. */
-export const CertificateJobMessageSchema = z.object({
+const CertificateJobMessageSchema = z.object({
   type: z.literal("CERTIFICATE").optional(),
   jobId: id,
   userId,
 });
 
-export const LabelJobMessageSchema = z.object({
+const LabelJobMessageSchema = z.object({
   type: z.literal("LABEL"),
   jobId: id,
   userId,
 });
 
-export const ServiceOrderIntakeDocumentJobMessageSchema = z.object({
+const ServiceOrderIntakeDocumentJobMessageSchema = z.object({
   type: z.literal("SERVICE_ORDER_INTAKE_DOCUMENT"),
   serviceOrderId: id,
   documentId: id.optional(),
   userId,
 });
 
-export const ServiceOrderTagJobMessageSchema = z.object({
+const ServiceOrderTagJobMessageSchema = z.object({
   type: z.literal("SERVICE_ORDER_TAG"),
   serviceOrderId: id,
   tagId: id.optional(),
   userId,
 });
 
-export const ServiceOrderQuoteJobMessageSchema = z.object({
+const ServiceOrderQuoteJobMessageSchema = z.object({
   type: z.literal("SERVICE_ORDER_QUOTE"),
   serviceOrderId: id,
   quoteId: id.optional(),
   userId,
 });
 
-export const ServiceOrderDeliveryReceiptJobMessageSchema = z.object({
+const ServiceOrderDeliveryReceiptJobMessageSchema = z.object({
   type: z.literal("SERVICE_ORDER_DELIVERY_RECEIPT"),
   serviceOrderId: id,
   documentId: id.optional(),
@@ -92,7 +92,7 @@ export const ServiceOrderDeliveryReceiptJobMessageSchema = z.object({
  * §7.10 out-of-tolerance customer notification PDF (#426 Phase 0).
  * All context lives on the `oot_notification` row; the message points at it.
  */
-export const OotNotificationJobMessageSchema = z.object({
+const OotNotificationJobMessageSchema = z.object({
   type: z.literal("OOT_NOTIFICATION"),
   notificationId: id,
   userId,
@@ -104,7 +104,7 @@ export const OotNotificationJobMessageSchema = z.object({
  * so it is delivered after the commit with the queue's retries and never for an
  * approval that rolled back.
  */
-export const JobApprovedNotificationJobMessageSchema = z.object({
+const JobApprovedNotificationJobMessageSchema = z.object({
   type: z.literal("JOB_APPROVED_NOTIFICATION"),
   jobId: id,
   /** The approver. */
@@ -117,7 +117,7 @@ export const JobApprovedNotificationJobMessageSchema = z.object({
  * approval's transaction; this message only delivers the in-app notification
  * and the e-mail and records the `notify` audit entry. Idempotent per event.
  */
-export const AssetOotNotificationJobMessageSchema = z.object({
+const AssetOotNotificationJobMessageSchema = z.object({
   type: z.literal("ASSET_OOT_NOTIFICATION"),
   eventId: id,
   /** The laboratory that owns the event (the handler scopes its reads to it). */
@@ -126,7 +126,7 @@ export const AssetOotNotificationJobMessageSchema = z.object({
   userId,
 });
 
-export const IntegrationSyncJobMessageSchema = z.object({
+const IntegrationSyncJobMessageSchema = z.object({
   type: z.literal("INTEGRATION_SYNC"),
   provider: IntegrationProviderSchema.optional(),
   integrationId: z.string(),
@@ -143,7 +143,7 @@ export const IntegrationSyncJobMessageSchema = z.object({
  * subscription); the message points at it. The laboratory is named so the
  * handler can bind its transaction to it (row-level security).
  */
-export const WebhookDeliveryJobMessageSchema = z.object({
+const WebhookDeliveryJobMessageSchema = z.object({
   type: z.literal("WEBHOOK_DELIVERY"),
   deliveryId: z.string(),
   organizationId: z.string(),
@@ -154,7 +154,7 @@ export const WebhookDeliveryJobMessageSchema = z.object({
  * fleet-status report requested by a portal user. All request parameters live
  * on the `portal_export_job` row; the message only points at it.
  */
-export const AuditPackJobMessageSchema = z.object({
+const AuditPackJobMessageSchema = z.object({
   type: z.literal("AUDIT_PACK"),
   exportId: id,
   userId,
@@ -164,7 +164,7 @@ export const AuditPackJobMessageSchema = z.object({
  * Nightly timer that re-evaluates every SPC control chart against its stored
  * check-standard readings (ISO/IEC 17025 §7.7.1, issue #60). No payload.
  */
-export const SpcRecomputeJobMessageSchema = z.object({
+const SpcRecomputeJobMessageSchema = z.object({
   type: z.literal("SPC_RECOMPUTE"),
 });
 
@@ -172,12 +172,12 @@ export const SpcRecomputeJobMessageSchema = z.object({
  * Daily timer that re-polls Resend for every lab-owned email sending domain
  * (issue #584). No payload — the worker sweeps all organization_email_domain rows.
  */
-export const EmailDomainHealthJobMessageSchema = z.object({
+const EmailDomainHealthJobMessageSchema = z.object({
   type: z.literal("EMAIL_DOMAIN_HEALTH"),
 });
 
 /** Cron-only timer, never written to `app_queue_job`. No payload. */
-export const ScheduledNotificationsJobMessageSchema = z.object({
+const ScheduledNotificationsJobMessageSchema = z.object({
   type: z.literal("SCHEDULED_NOTIFICATIONS"),
 });
 
@@ -185,7 +185,7 @@ export const ScheduledNotificationsJobMessageSchema = z.object({
  * Cron-only daily timer that fans out the client-portal due-calibration digest
  * emails. No payload — the worker derives which frequencies fire from the date.
  */
-export const PortalDigestJobMessageSchema = z.object({
+const PortalDigestJobMessageSchema = z.object({
   type: z.literal("PORTAL_DIGEST"),
 });
 

@@ -3,27 +3,6 @@ import { isRegulatedOutboxOperation } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
-/**
- * Ordering and dependency rules of the outbox (roadmap 2 E1).
- *
- * - Order. Events are pushed by `domain_events.sequence` (a monotonic counter of this
- *   database, not the device clock), and a record's events leave strictly in that order:
- *   a later event of a record is never selected while an earlier one of the same record is
- *   not sendable (backing off, waiting for another user, blocked, in conflict, dead). The
- *   selection itself is in `outbox.ts`.
- * - Expected version. Each event carries the version of its record the cloud must be at
- *   (`expectedVersion`), so a stale write is a conflict and never a silent overwrite.
- * - Blocking. An event the cloud refused for good (`dead`) or that is in conflict needs a
- *   person. What depends on it must not be sent meanwhile, and must not be retried forever
- *   either: it is marked `blocked_by_event_id` and stays out of the selection until the
- *   blocker is resolved. Dependents are the later events of the same record and, when the
- *   blocker is the creation of a record, every event of a record that refers to it (the
- *   attachments of a record, a service order's customer and instrument, the notes of an
- *   order).
- */
-
-export type AggregateRef = { kind: string; id: string };
-
 function aggregateKey(kind: string, id: string) {
   return `${kind}\u0000${id}`;
 }

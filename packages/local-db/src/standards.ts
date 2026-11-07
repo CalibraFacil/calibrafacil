@@ -2,7 +2,7 @@ import { standardDaysUntilExpiry } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
-export type LocalStandardStatus =
+type LocalStandardStatus =
   | "ACTIVE"
   | "INACTIVE"
   | "OUT_OF_TOLERANCE"
@@ -15,7 +15,7 @@ export type LocalStandardsListInput = {
   status?: LocalStandardStatus;
 };
 
-export type LocalCertifiedValue = {
+type LocalCertifiedValue = {
   nominal: string;
   authentication?: string | null;
   value: number;

@@ -341,7 +341,7 @@ const certificateContent = {
   ],
 };
 
-export const volumeProductDefinition: TemplateProductDefinition = {
+const volumeProductDefinition: TemplateProductDefinition = {
   assetTypeSlug: VOLUME_ASSET_TYPE_SLUG,
   name: METHOD_NAME,
   description: methodDescription,

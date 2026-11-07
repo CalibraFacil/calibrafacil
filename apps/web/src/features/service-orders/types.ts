@@ -86,7 +86,7 @@ export type ServiceOrderQuoteItem = {
   materialId?: number | null
 }
 
-export type ServiceOrderQuote = {
+type ServiceOrderQuote = {
   id: number
   status: string
   totalCents: number
@@ -103,7 +103,7 @@ export type ServiceOrderQuote = {
   items: ServiceOrderQuoteItem[]
 }
 
-export type ServiceOrderEvaluation = {
+type ServiceOrderEvaluation = {
   id: number
   diagnosis: string
   detectedIssues?: string | null
@@ -116,7 +116,7 @@ export type ServiceOrderEvaluation = {
   evaluatedAt: string
 }
 
-export type ServiceOrderExecution = {
+type ServiceOrderExecution = {
   id: number
   startedAt: string
   finishedAt?: string | null
@@ -128,7 +128,7 @@ export type ServiceOrderExecution = {
   items: ServiceOrderQuoteItem[]
 }
 
-export type ServiceOrderDeliveryDocument = {
+type ServiceOrderDeliveryDocument = {
   id: number
   documentNumber: string
   version: number
@@ -230,7 +230,7 @@ export type NewServiceOrderCustomersData = {
   data: NewServiceOrderCustomer[]
 }
 
-export type NewServiceOrderAsset = {
+type NewServiceOrderAsset = {
   id: number
   customerId: number
   customerName: string

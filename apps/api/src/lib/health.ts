@@ -25,7 +25,7 @@ import { createR2Client, r2EnvFromSettings, type R2Env } from "./storage";
 
 const DEFAULT_CHECK_TIMEOUT_MS = 3_000;
 
-export type HealthCheck = {
+type HealthCheck = {
   ok: boolean;
   latencyMs: number;
   /** Structural error tag (error name or "timeout") — never a raw message. */

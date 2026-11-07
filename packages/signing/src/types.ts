@@ -108,4 +108,3 @@ export type SigningErrorCode =
 
 // Re-export node-forge types for internal use
 import type forge from "node-forge";
-export type { forge };

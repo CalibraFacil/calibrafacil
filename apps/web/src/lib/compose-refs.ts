@@ -63,4 +63,4 @@ function useComposedRefs<T>(...refs: PossibleRef<T>[]): RefCallback<T> {
   return useCallback(composeRefs(...refs), refs) // react-doctor-disable-line react-doctor/exhaustive-deps -- composeRefs is built from the spread refs, which are the dependency list by design
 }
 
-export { composeRefs, useComposedRefs }
+export { useComposedRefs }

@@ -13,10 +13,7 @@ import {
   useBrowserOnlineStatus,
   useOptionalSyncStatus,
 } from '@/runtime/sync-status'
-import {
-  buildRuntimeHealthSnapshot,
-  describeRuntimeHealth,
-} from '@/runtime/runtime-health'
+import { buildRuntimeHealthSnapshot } from '@/runtime/runtime-health'
 
 /**
  * The single place a feature asks "can the user do this right now, and if not
@@ -71,12 +68,6 @@ export function useRuntimeHealth(): RuntimeHealthSnapshot {
   )
 }
 
-export function useRuntimeHealthSummary() {
-  const health = useRuntimeHealth()
-
-  return useMemo(() => describeRuntimeHealth(health), [health])
-}
-
 export function useOperationAvailability<
   TNamespace extends CalibraApiNamespace,
 >(
@@ -101,24 +92,4 @@ export function useOperationAvailability<
       }),
     [health, method, namespace, targetPending, targetSynced],
   )
-}
-
-/**
- * Availability for a set of operations that a single control depends on — a
- * dialog that looks up technicians *and* assigns one, say. Reports the first
- * blocker so the UI has one reason to show, not a list.
- */
-export function useCombinedOperationAvailability(
-  evaluations: readonly OperationAvailability[],
-): OperationAvailability {
-  return useMemo(() => {
-    const blocked = evaluations.find((entry) => !entry.available)
-    return blocked ?? evaluations[0] ?? UNCONDITIONALLY_AVAILABLE
-  }, [evaluations])
-}
-
-const UNCONDITIONALLY_AVAILABLE: OperationAvailability = {
-  available: true,
-  source: 'cloud',
-  policy: 'cloud-only',
 }

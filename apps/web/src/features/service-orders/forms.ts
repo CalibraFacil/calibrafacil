@@ -7,14 +7,14 @@ import {
   type FeatureFormValidationResult,
 } from '@/shared/forms/validation'
 
-export type ServiceOrderIntakeType =
+type ServiceOrderIntakeType =
   | 'counter'
   | 'carrier'
   | 'third_party'
   | 'internal'
   | 'warranty_return'
-export type ServiceOrderPriority = 'normal' | 'urgent' | 'contract' | 'warranty'
-export type ServiceOrderDeliveryMethod =
+type ServiceOrderPriority = 'normal' | 'urgent' | 'contract' | 'warranty'
+type ServiceOrderDeliveryMethod =
   | 'pickup_at_lab'
   | 'ship_to_client'
   | 'third_party_pickup'

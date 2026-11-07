@@ -13,16 +13,12 @@ export const FleetAnalyticsQuerySchema = z.object({
   assetTypeId: z.coerce.number().int().positive().optional(),
   unitId: z.coerce.number().int().positive().optional(),
 });
-export type FleetAnalyticsQuery = z.infer<typeof FleetAnalyticsQuerySchema>;
 
-export const AssetOotImpactDecisionSchema = z.enum([
+const AssetOotImpactDecisionSchema = z.enum([
   "NO_IMPACT",
   "IMPACT_CONTAINED",
   "IMPACT_ESCALATED",
 ]);
-export type AssetOotImpactDecisionInput = z.infer<
-  typeof AssetOotImpactDecisionSchema
->;
 
 function validIsoDate(message: string) {
   return z
@@ -67,6 +63,3 @@ export const RecordOotImpactAssessmentSchema = z
       });
     }
   });
-export type RecordOotImpactAssessmentInput = z.infer<
-  typeof RecordOotImpactAssessmentSchema
->;

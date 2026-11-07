@@ -135,7 +135,7 @@ function toRequestConversionService(
   }
 }
 
-export async function getRequestsIndexEssentialQueries(url?: URL) {
+async function getRequestsIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 
@@ -166,7 +166,7 @@ export async function prewarmRequestsIndex(
   )
 }
 
-export async function getRequestDetailEssentialQueries(id: string | number) {
+async function getRequestDetailEssentialQueries(id: string | number) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

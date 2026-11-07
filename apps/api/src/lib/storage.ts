@@ -130,7 +130,7 @@ export function attachmentDisposition(filename: string): string {
   )}`;
 }
 
-export interface R2ObjectBodyLike {
+interface R2ObjectBodyLike {
   body: BodyInit | null;
   httpMetadata?: {
     contentType?: string;
@@ -148,7 +148,7 @@ type R2S3Client = S3Client & {
 };
 
 /** True if the object exists in the given bucket (HEAD returns 200). */
-export async function objectExists(
+async function objectExists(
   client: R2S3Client,
   bucket: string,
   key: string,
@@ -212,7 +212,7 @@ let publicPresignClient: { endpoint: string; client: R2S3Client } | undefined;
  * names the address browsers use instead. Signing is local: nothing is sent
  * to that address from here.
  */
-export function presignClientFor(client: R2S3Client): R2S3Client {
+function presignClientFor(client: R2S3Client): R2S3Client {
   const storage = readStorageConfig();
   const endpoint = storage.publicEndpoint?.replace(/\/+$/, "");
   const accessKeyId = storage.accessKeyId;

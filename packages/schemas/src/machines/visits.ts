@@ -25,7 +25,7 @@ export const VISIT_STATUSES = [
 ] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
-export const VISIT_COMMANDS = [
+const VISIT_COMMANDS = [
   "create",
   "confirm",
   "edit",
@@ -34,7 +34,6 @@ export const VISIT_COMMANDS = [
   "complete",
   "cancel",
 ] as const;
-export type VisitCommand = (typeof VISIT_COMMANDS)[number];
 
 export const VISIT_MACHINE = defineStateMachine({
   name: "calibration visit",
@@ -80,7 +79,7 @@ export function isVisitTerminal(status: string): boolean {
 //   accept     routes/visits.ts POST /:id/reschedule-requests/:requestId/accept
 //   decline    the same, /decline
 //   supersede  routes/visits.ts `supersedePendingRescheduleRequests`
-export const VISIT_RESCHEDULE_REQUEST_STATUSES = [
+const VISIT_RESCHEDULE_REQUEST_STATUSES = [
   "PENDING",
   "ACCEPTED",
   "DECLINED",

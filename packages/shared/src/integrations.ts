@@ -289,10 +289,7 @@ export type ContaAzulReferenceDomain =
   | "transfers"
   | "units";
 
-export type ContaAzulEnabledTargetsConfig = Record<
-  ContaAzulSyncDomain,
-  boolean
->;
+type ContaAzulEnabledTargetsConfig = Record<ContaAzulSyncDomain, boolean>;
 
 export const CONTA_AZUL_SYNC_DOMAINS = [
   "customers",
@@ -323,7 +320,7 @@ export const CONTA_AZUL_SYNC_DOMAINS = [
   "driftChecks",
 ] as const satisfies readonly ContaAzulSyncDomain[];
 
-export type IntegrationMappingValueMode = "source" | "constant";
+type IntegrationMappingValueMode = "source" | "constant";
 
 export type IntegrationMappingFormatter =
   | "none"
@@ -346,7 +343,7 @@ export type IntegrationDependencyWarningCode =
   | "REMOTE_CONFIG_MISSING"
   | "INTEGRATION_DISABLED";
 
-export const DEFAULT_GENERIC_ERP_PATHS = {
+const DEFAULT_GENERIC_ERP_PATHS = {
   health: "/health",
   customers: "/customers",
   serviceOrders: "/service-orders",
@@ -495,7 +492,7 @@ export interface IntegrationCustomerPayload {
   updatedAt: string | null;
 }
 
-export type IntegrationPessoaRole = "customer" | "supplier" | "transporter";
+type IntegrationPessoaRole = "customer" | "supplier" | "transporter";
 
 export interface IntegrationPessoaPayload extends IntegrationCustomerPayload {
   pessoaRole: IntegrationPessoaRole;
@@ -579,7 +576,7 @@ export interface IntegrationCommercialItemPayload {
   unitCostCents?: number | null;
 }
 
-export interface IntegrationPaymentInstallmentPayload {
+interface IntegrationPaymentInstallmentPayload {
   dueDate: string;
   amountCents: number;
   description: string | null;
@@ -645,12 +642,9 @@ export interface IntegrationPayablePayload {
   notes: string | null;
 }
 
-export type IntegrationFiscalDocumentType = "nfe" | "nfse";
+type IntegrationFiscalDocumentType = "nfe" | "nfse";
 
-export type IntegrationMdfeLinkStatus =
-  | "AUTORIZADO"
-  | "ENCERRADO"
-  | "CANCELADO";
+type IntegrationMdfeLinkStatus = "AUTORIZADO" | "ENCERRADO" | "CANCELADO";
 
 export interface IntegrationFiscalDocumentMetadata {
   fiscalDocumentType: IntegrationFiscalDocumentType;
@@ -866,16 +860,6 @@ export interface FinancialErpAdapter {
   setProductStock?(remoteEntityId: string, quantity: number): Promise<void>;
 }
 
-export interface FinancialErpAdapterContext {
-  integrationId: string;
-  organizationId: string;
-  config: FinancialErpConnectionConfig;
-}
-
-export interface FinancialErpAdapterFactory {
-  createAdapter(context: FinancialErpAdapterContext): FinancialErpAdapter;
-}
-
 export const INTEGRATION_CANONICAL_FIELDS: Record<
   IntegrationSyncTarget,
   readonly string[]
@@ -994,7 +978,7 @@ export const INTEGRATION_CANONICAL_FIELDS: Record<
   ],
 };
 
-export const INTEGRATION_REQUIRED_DESTINATION_FIELDS: Record<
+const INTEGRATION_REQUIRED_DESTINATION_FIELDS: Record<
   IntegrationSyncTarget,
   readonly string[]
 > = {

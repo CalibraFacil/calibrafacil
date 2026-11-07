@@ -112,7 +112,7 @@ export function normalizeSafeMetadata(
   return normalized;
 }
 
-export function normalizeSafeMetadataValue(
+function normalizeSafeMetadataValue(
   value: unknown,
   path: string,
 ): SafeMetadataValue {

@@ -54,7 +54,7 @@ export type DesktopEventOutcome =
  * conflict. The remote payload names the current version, which is what the desktop adopts
  * when its user keeps the local change.
  */
-export function staleExpectedVersionRefusal(input: {
+function staleExpectedVersionRefusal(input: {
   entityType: string;
   entityId: string;
   expectedVersion: number;

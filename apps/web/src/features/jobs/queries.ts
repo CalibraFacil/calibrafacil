@@ -21,9 +21,7 @@ import {
 
 const JOBS_LIST_LIMIT = 20
 
-export async function fetchJobsList(
-  input: JobsListQueryInput,
-): Promise<JobsListData> {
+async function fetchJobsList(input: JobsListQueryInput): Promise<JobsListData> {
   return calibraApi.jobs.list({
     page: input.page,
     limit: JOBS_LIST_LIMIT,
@@ -117,7 +115,7 @@ export function activeReferenceStandardsQueryOptions() {
   })
 }
 
-export function compositionProfilesQueryOptions() {
+function compositionProfilesQueryOptions() {
   return queryOptions({
     queryKey: ['standards', 'composition-profiles'],
     queryFn: () => calibraApi.standards.listCompositionProfiles(),
@@ -178,7 +176,7 @@ export function jobsListQueryInputFromUrl(organizationId: string, url?: URL) {
   } satisfies JobsListQueryInput
 }
 
-export async function getJobsIndexEssentialQueries(url?: URL) {
+async function getJobsIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

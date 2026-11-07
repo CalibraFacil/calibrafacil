@@ -21,7 +21,7 @@ import {
 } from "./chain-validation.js";
 import type { CertificateInfo } from "./types.js";
 
-export type CredentialRejectionCode =
+type CredentialRejectionCode =
   | "CERTIFICATE_EXPIRED"
   | "CERTIFICATE_NOT_YET_VALID"
   | "INVALID_KEY_USAGE"

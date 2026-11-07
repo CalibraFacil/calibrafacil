@@ -20,11 +20,7 @@ import {
   sendEmailWithLabSender,
   sendPlatformEmail,
 } from "@calibra-facil/email-sender";
-import type {
-  AuthenticationResponseJSON,
-  PublicKeyCredentialCreationOptionsJSON,
-  PublicKeyCredentialRequestOptionsJSON,
-} from "@simplewebauthn/server";
+import type {} from "@simplewebauthn/server";
 import {
   EmailConfirmationEmail,
   LabAccessLinkEmail,
@@ -49,11 +45,6 @@ import {
   normalizeLabAccessEmail,
   validateLabAccountSetupToken,
 } from "./lab-access";
-
-export type BetterAuthPasskeyPortableTypes =
-  | AuthenticationResponseJSON
-  | PublicKeyCredentialCreationOptionsJSON
-  | PublicKeyCredentialRequestOptionsJSON;
 
 let devFallbackAuthSecret: string | null = null;
 
@@ -2077,44 +2068,9 @@ export function createPortalAuth() {
 let _labAuth: ReturnType<typeof createLabAuth> | null = null;
 let _portalAuth: ReturnType<typeof createPortalAuth> | null = null;
 
-export function getLabAuth() {
+function getLabAuth() {
   if (!_labAuth) {
     _labAuth = createLabAuth();
   }
   return _labAuth;
 }
-
-export function getPortalAuth() {
-  if (!_portalAuth) {
-    _portalAuth = createPortalAuth();
-  }
-  return _portalAuth;
-}
-
-// Type definitions for auth instances with organization plugin
-export type LabAuth = ReturnType<typeof createLabAuth>;
-export type PortalAuth = ReturnType<typeof createPortalAuth>;
-
-// Legacy exports for backwards compatibility (lazy getters)
-export const labAuth: Pick<LabAuth, "api" | "handler"> = {
-  get api() {
-    return getLabAuth().api;
-  },
-  get handler() {
-    return getLabAuth().handler;
-  },
-};
-
-export const portalAuth: Pick<PortalAuth, "api" | "handler"> = {
-  get api() {
-    return getPortalAuth().api;
-  },
-  get handler() {
-    return getPortalAuth().handler;
-  },
-};
-
-export const auth = labAuth;
-
-export type Auth = LabAuth;
-export type Session = Auth["$Infer"]["Session"];

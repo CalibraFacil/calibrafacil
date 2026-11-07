@@ -58,7 +58,7 @@ export type StandardMetrologyChannelFormData = {
   points: Array<StandardMetrologyPointFormData>
 }
 
-export type StandardCompositionProfileFormData = {
+type StandardCompositionProfileFormData = {
   profileKey: string
   profileClass: string
   nominal: string
@@ -123,20 +123,19 @@ export type ParseStandardFormOptions = {
   isMultiValue?: boolean
 }
 
-export const INITIAL_STANDARD_CERTIFIED_VALUE: StandardCertifiedValueFormData =
-  {
-    nominal: '',
-    authentication: '',
-    value: '',
-    uncertainty: '',
-    unit: '',
-    maxError: '',
-    drift: '',
-    buoyancy: '',
-    coverageFactor: '',
-  }
+const INITIAL_STANDARD_CERTIFIED_VALUE: StandardCertifiedValueFormData = {
+  nominal: '',
+  authentication: '',
+  value: '',
+  uncertainty: '',
+  unit: '',
+  maxError: '',
+  drift: '',
+  buoyancy: '',
+  coverageFactor: '',
+}
 
-export const INITIAL_STANDARD_CHANNEL: StandardMetrologyChannelFormData = {
+const INITIAL_STANDARD_CHANNEL: StandardMetrologyChannelFormData = {
   key: '',
   label: '',
   quantity: '',
@@ -150,7 +149,7 @@ export const INITIAL_STANDARD_CHANNEL: StandardMetrologyChannelFormData = {
   points: [],
 }
 
-export const INITIAL_STANDARD_POINT: StandardMetrologyPointFormData = {
+const INITIAL_STANDARD_POINT: StandardMetrologyPointFormData = {
   reference: '',
   indication: '',
   meanReading: '',
@@ -163,7 +162,7 @@ export const INITIAL_STANDARD_POINT: StandardMetrologyPointFormData = {
   repeatability: '',
 }
 
-export const INITIAL_STANDARD_COMPOSITION_PROFILE: StandardCompositionProfileFormData =
+const INITIAL_STANDARD_COMPOSITION_PROFILE: StandardCompositionProfileFormData =
   {
     profileKey: '',
     profileClass: '',
@@ -178,7 +177,7 @@ export const INITIAL_STANDARD_COMPOSITION_PROFILE: StandardCompositionProfileFor
     quantityAvailable: '',
   }
 
-export const INITIAL_STANDARD_FORM_DATA: StandardFormData = {
+const INITIAL_STANDARD_FORM_DATA: StandardFormData = {
   name: '',
   kind: 'generic_scalar',
   type: '',
@@ -240,7 +239,7 @@ export function createStandardPointDraft(
   }
 }
 
-export function createStandardCompositionProfileDraft(
+function createStandardCompositionProfileDraft(
   value?: Partial<StandardCompositionProfileFormData>,
 ): StandardCompositionProfileFormData {
   return {
@@ -255,7 +254,7 @@ export function createChannelsForKind(kind: ReferenceStandardKind) {
   )
 }
 
-export function inferStandardKind(
+function inferStandardKind(
   standard?: Pick<
     StandardDetail,
     'kind' | 'name' | 'type' | 'certifiedValues' | 'referenceValue'

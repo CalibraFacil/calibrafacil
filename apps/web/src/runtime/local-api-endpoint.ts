@@ -25,7 +25,7 @@ export type LocalEndpointBridge = {
   getLocalEnvironmentBootstrap(): Promise<LocalEnvironmentBootstrap | null>
 }
 
-export type LocalApiEndpoint = {
+type LocalApiEndpoint = {
   baseUrl: string
   token: string | null
 }

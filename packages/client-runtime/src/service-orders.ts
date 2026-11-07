@@ -4,9 +4,9 @@ import type {
   UpdateServiceOrderSchema,
 } from "@calibra-facil/schemas";
 
-export type ServiceOrderStatus = string;
+type ServiceOrderStatus = string;
 
-export type ServiceOrderListItem = {
+type ServiceOrderListItem = {
   id: number;
   /** Opaque id the dashboard links with; the serial never reaches a URL. */
   publicId: string;
@@ -170,7 +170,7 @@ export type CreateServiceOrderResult = {
   };
 };
 
-export type ServiceOrderPricedItemInput = {
+type ServiceOrderPricedItemInput = {
   type: string;
   description: string;
   quantity: number;
@@ -250,7 +250,7 @@ export type ServiceOrderCommunicationStatus =
   | "failed"
   | "skipped";
 
-export type ServiceOrderCommunicationEntry = {
+type ServiceOrderCommunicationEntry = {
   eventKey: string;
   channel: "email";
   status: ServiceOrderCommunicationStatus;

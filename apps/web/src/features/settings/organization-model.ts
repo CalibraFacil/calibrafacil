@@ -15,7 +15,7 @@ import type {
 } from '@/features/settings/types'
 import { formatInstant } from '@calibra-facil/shared/format'
 
-export const GLOBAL_MEMBER_ROLES = [
+const GLOBAL_MEMBER_ROLES = [
   'member',
   'operator',
   'technician',

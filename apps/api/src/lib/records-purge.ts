@@ -39,7 +39,7 @@ import {
 } from "@calibra-facil/db/records-retention";
 import { getExecuteRows } from "./db";
 
-export type PurgeMode = "dry-run" | "execute";
+type PurgeMode = "dry-run" | "execute";
 
 export type PurgeConfig = { enabled: boolean; mode: PurgeMode };
 

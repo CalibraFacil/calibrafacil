@@ -16,7 +16,7 @@ import type { SeedContext, SeedRefs } from "./context";
  * GUM measurement models and cannot produce a certificate in this version, so a
  * demo job on them could never leave "issuing".
  */
-export const DEMO_METHODS = [
+const DEMO_METHODS = [
   { templateKey: "weighing-instrument", assetTypeSlug: "balanca-digital" },
   { templateKey: "electrical-indication", assetTypeSlug: "multimetro-digital" },
   { templateKey: "force-indication", assetTypeSlug: "dinamometro" },

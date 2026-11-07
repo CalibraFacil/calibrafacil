@@ -39,7 +39,7 @@ export function applyValidationErrorShape(app: Hono<{ Bindings: Env }>) {
 type Issue = { path: string; message: string };
 
 /** The issues of a zod failure result, or null for any other body. */
-export function zodIssuesOf(body: unknown): Issue[] | null {
+function zodIssuesOf(body: unknown): Issue[] | null {
   if (!isRecord(body) || body.success !== false) return null;
   const error = body.error;
   if (!isRecord(error)) return null;

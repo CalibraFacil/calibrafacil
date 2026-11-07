@@ -130,7 +130,7 @@ export const WORKFLOW_TABS = [
 
 export type WorkflowTabValue = (typeof WORKFLOW_TABS)[number]['value']
 
-export type WorkflowStageState = 'done' | 'current' | 'pending'
+type WorkflowStageState = 'done' | 'current' | 'pending'
 
 export type WorkflowStage = {
   value: WorkflowTabValue
@@ -307,39 +307,38 @@ export const STAGE_LOCKED_REASONS: Record<
 // `string` — adding an event type there now fails the build here until it has
 // a pt-BR label, instead of silently rendering the raw
 // "service_order.public_link_viewed" key in the timeline.
-export const SERVICE_ORDER_EVENT_LABELS: Record<ServiceOrderEventType, string> =
-  {
-    'service_order.created': 'OS criada',
-    'service_order.intake_document_issued': 'Comprovante emitido',
-    'service_order.tag_printed': 'Etiqueta gerada',
-    'service_order.status_changed': 'Status alterado',
-    'service_order.technician_assigned': 'Técnico atribuído',
-    'service_order.evaluation_started': 'Avaliação iniciada',
-    'service_order.evaluation_completed': 'Avaliação concluída',
-    'service_order.evaluation_updated': 'Avaliação alterada',
-    'service_order.quote_created': 'Orçamento criado',
-    'service_order.quote_sent': 'Orçamento enviado',
-    'service_order.quote_approved_by_client': 'Orçamento aprovado pelo cliente',
-    'service_order.quote_approved_manually': 'Orçamento aprovado manualmente',
-    'service_order.quote_rejected_by_client': 'Orçamento recusado pelo cliente',
-    'service_order.quote_rejected_manually': 'Orçamento recusado manualmente',
-    'service_order.repair_started': 'Execução iniciada',
-    'service_order.repair_finished': 'Execução finalizada',
-    'service_order.delivery_document_issued': 'Comprovante de entrega emitido',
-    'service_order.repair_mark_updated': 'Marca de Reparo atualizada',
-    'service_order.ready_for_pickup': 'Disponível para retirada',
-    'service_order.delivered': 'Entregue ao cliente',
-    'service_order.closed': 'OS encerrada',
-    'service_order.reopened': 'OS reaberta',
-    'service_order.canceled': 'OS cancelada',
-    'service_order.certificate_linked': 'Calibração vinculada',
-    'service_order.certificate_unlinked': 'Calibração desvinculada',
-    'service_order.sent_to_finance': 'Enviada ao financeiro',
-    'service_order.email_sent': 'E-mail enviado ao cliente',
-    'service_order.portal_viewed': 'Visualizada no portal do cliente',
-    'service_order.public_link_viewed': 'Link público acessado',
-    'service_order.public_code_redeemed': 'Código de acesso validado',
-  }
+const SERVICE_ORDER_EVENT_LABELS: Record<ServiceOrderEventType, string> = {
+  'service_order.created': 'OS criada',
+  'service_order.intake_document_issued': 'Comprovante emitido',
+  'service_order.tag_printed': 'Etiqueta gerada',
+  'service_order.status_changed': 'Status alterado',
+  'service_order.technician_assigned': 'Técnico atribuído',
+  'service_order.evaluation_started': 'Avaliação iniciada',
+  'service_order.evaluation_completed': 'Avaliação concluída',
+  'service_order.evaluation_updated': 'Avaliação alterada',
+  'service_order.quote_created': 'Orçamento criado',
+  'service_order.quote_sent': 'Orçamento enviado',
+  'service_order.quote_approved_by_client': 'Orçamento aprovado pelo cliente',
+  'service_order.quote_approved_manually': 'Orçamento aprovado manualmente',
+  'service_order.quote_rejected_by_client': 'Orçamento recusado pelo cliente',
+  'service_order.quote_rejected_manually': 'Orçamento recusado manualmente',
+  'service_order.repair_started': 'Execução iniciada',
+  'service_order.repair_finished': 'Execução finalizada',
+  'service_order.delivery_document_issued': 'Comprovante de entrega emitido',
+  'service_order.repair_mark_updated': 'Marca de Reparo atualizada',
+  'service_order.ready_for_pickup': 'Disponível para retirada',
+  'service_order.delivered': 'Entregue ao cliente',
+  'service_order.closed': 'OS encerrada',
+  'service_order.reopened': 'OS reaberta',
+  'service_order.canceled': 'OS cancelada',
+  'service_order.certificate_linked': 'Calibração vinculada',
+  'service_order.certificate_unlinked': 'Calibração desvinculada',
+  'service_order.sent_to_finance': 'Enviada ao financeiro',
+  'service_order.email_sent': 'E-mail enviado ao cliente',
+  'service_order.portal_viewed': 'Visualizada no portal do cliente',
+  'service_order.public_link_viewed': 'Link público acessado',
+  'service_order.public_code_redeemed': 'Código de acesso validado',
+}
 
 function isServiceOrderEventType(
   eventType: string,

@@ -69,7 +69,7 @@ function lastUseIsStale(
 }
 
 /** Whether the client address may use a key bound to `allowed` (none: any). */
-export function ipAllowed(
+function ipAllowed(
   address: string | null,
   allowed: readonly string[] | null,
 ): boolean {

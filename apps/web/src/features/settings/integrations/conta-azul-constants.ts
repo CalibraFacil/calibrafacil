@@ -340,17 +340,3 @@ export const contaAzulScheduleRows = [
     description: 'Mudanças remotas em registros vinculados.',
   },
 ] as const
-
-const contaAzulOptionLabels = new Map<string, string>(
-  [
-    ...contaAzulExportModeOptions,
-    ...contaAzulBudgetModeOptions,
-    ...contaAzulFiscalModeOptions,
-    ...contaAzulProtocolModeOptions,
-    ...contaAzulSaleTriggerOptions,
-  ].map((option) => [option.value, option.label]),
-)
-
-export function formatContaAzulOption(value: string) {
-  return contaAzulOptionLabels.get(value) ?? value
-}

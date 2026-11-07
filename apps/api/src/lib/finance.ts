@@ -1528,7 +1528,7 @@ export interface SendServiceOrderResult {
   error: string | null;
 }
 
-export async function sendServiceOrderToFinance(params: {
+async function sendServiceOrderToFinance(params: {
   organizationId: string;
   serviceOrderId: number;
   actorUserId: string;

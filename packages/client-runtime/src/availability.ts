@@ -60,7 +60,7 @@ export type OperationTargetState = {
   hasPendingLocalChanges?: boolean;
 };
 
-export type OperationUnavailableReason =
+type OperationUnavailableReason =
   | "cloud-unreachable"
   | "local-runtime-unavailable"
   | "initial-sync-required"
@@ -68,7 +68,7 @@ export type OperationUnavailableReason =
   | "entity-has-pending-changes";
 
 /** Where an available operation will actually execute. */
-export type OperationSource =
+type OperationSource =
   | "cloud"
   | "local-cache"
   | "local-queue"
@@ -103,12 +103,6 @@ const unavailableMessages = {
   "entity-has-pending-changes":
     "Há alterações locais deste registro aguardando envio. Sincronize antes de executar esta ação.",
 } as const satisfies Record<OperationUnavailableReason, string>;
-
-export function getOperationUnavailableMessage(
-  reason: OperationUnavailableReason,
-): string {
-  return unavailableMessages[reason];
-}
 
 const RESOLVABLE_BY_SYNC: readonly OperationUnavailableReason[] = [
   "initial-sync-required",

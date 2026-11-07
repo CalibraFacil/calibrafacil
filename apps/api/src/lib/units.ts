@@ -7,7 +7,7 @@ import type { RoleName } from "@calibra-facil/auth/access";
 import { orgDb } from "./org-db";
 import { and, asc, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
 
-export type UnitScopeMode = "all" | "unit";
+type UnitScopeMode = "all" | "unit";
 
 export type ResolvedUnit = {
   id: number;
@@ -57,7 +57,7 @@ function slugifyUnitName(name: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export function getDefaultUnitRole(role: RoleName): MemberUnitRole {
+function getDefaultUnitRole(role: RoleName): MemberUnitRole {
   if (role === "owner" || role === "admin") return "unit_admin";
   if (role === "technician") return "technician";
   return "member";
@@ -92,7 +92,7 @@ export function getUnitGovernanceAccess(
   };
 }
 
-export async function ensureDefaultUnitForOrganization(
+async function ensureDefaultUnitForOrganization(
   organizationId: string,
   userId?: string | null,
 ) {
@@ -148,7 +148,7 @@ export async function ensureDefaultUnitForOrganization(
   return existing;
 }
 
-export async function ensureDefaultUnitAssignment(params: {
+async function ensureDefaultUnitAssignment(params: {
   organizationId: string;
   memberId: string;
   memberRole: RoleName;

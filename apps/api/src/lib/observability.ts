@@ -13,7 +13,7 @@ import {
 
 let reporter: ErrorReporter | null = null;
 
-export function getErrorReporter(): ErrorReporter {
+function getErrorReporter(): ErrorReporter {
   const observability = readObservabilityConfig();
   reporter ??= createLogErrorReporter({
     service: "api",
@@ -23,7 +23,7 @@ export function getErrorReporter(): ErrorReporter {
   return reporter;
 }
 
-export const apiLogger: StructuredLogger = createLogger("API");
+const apiLogger: StructuredLogger = createLogger("API");
 
 /** Capture + structured log in one call; never throws. */
 export function reportServerError(

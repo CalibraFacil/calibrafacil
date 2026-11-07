@@ -179,7 +179,7 @@ export function accreditationBoundDay(
  * independent: a missing side imposes no constraint, so orgs that never filled
  * the window keep the pre-#647 behavior (REQ-CMP-VIG-004).
  */
-export function isWithinAccreditationWindow(
+function isWithinAccreditationWindow(
   profile: AccreditationProfile,
   atDate: Date,
 ): boolean {

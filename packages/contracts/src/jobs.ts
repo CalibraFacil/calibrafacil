@@ -62,10 +62,10 @@ const nullableTimestamp = z.string().nullable();
 const nullableString = z.string().nullable();
 const nullableNumber = z.number().nullable();
 
-export const jobStatusSchema = JobStatusSchema;
+const jobStatusSchema = JobStatusSchema;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 
-export const financialStatusSchema = z.enum([
+const financialStatusSchema = z.enum([
   "UNBILLED",
   "DRAFT",
   "ISSUED",
@@ -383,7 +383,6 @@ export const jobMethodSnapshotSchema = z.object({
   certificateContent: methodCertificateContentSchema.nullable().optional(),
   accreditedScope: z.boolean().optional(),
 });
-export type JobMethodSnapshot = z.infer<typeof jobMethodSnapshotSchema>;
 
 export const certifiedValueSchema = z.object({
   nominal: z.string(),
@@ -452,7 +451,7 @@ export const metrologyDataSchema = z.object({
 });
 
 /** One reference standard frozen at execution time (traceability, §6.5). */
-export const jobStandardSnapshotSchema = z.object({
+const jobStandardSnapshotSchema = z.object({
   id: z.number(),
   name: z.string(),
   type: nullableString.optional(),
@@ -490,11 +489,10 @@ export const jobStandardSnapshotSchema = z.object({
     .nullable()
     .optional(),
 });
-export type JobStandardSnapshot = z.infer<typeof jobStandardSnapshotSchema>;
 
 const limitRangeSchema = z.object({ min: z.number(), max: z.number() });
 
-export const jobEnvironmentalSnapshotSchema = z.object({
+const jobEnvironmentalSnapshotSchema = z.object({
   temperature: nullableNumber,
   humidity: nullableNumber,
   pressure: nullableNumber,
@@ -510,22 +508,16 @@ export const jobEnvironmentalSnapshotSchema = z.object({
   withinLimits: z.boolean(),
   outOfLimitsJustification: nullableString,
 });
-export type JobEnvironmentalSnapshot = z.infer<
-  typeof jobEnvironmentalSnapshotSchema
->;
 
-export const jobCalibrationLocationSnapshotSchema = z.object({
+const jobCalibrationLocationSnapshotSchema = z.object({
   type: z.enum(["customer_site", "lab", "other"]),
   addressText: z.string(),
   notes: nullableString.optional(),
   recordedAt: isoTimestamp,
   recordedBy: z.string(),
 });
-export type JobCalibrationLocationSnapshot = z.infer<
-  typeof jobCalibrationLocationSnapshotSchema
->;
 
-export const jobCalibrationPhaseSnapshotSchema = z.object({
+const jobCalibrationPhaseSnapshotSchema = z.object({
   blocks: z.record(
     z.string(),
     z.object({
@@ -541,11 +533,8 @@ export const jobCalibrationPhaseSnapshotSchema = z.object({
   recordedAt: isoTimestamp,
   recordedBy: z.string(),
 });
-export type JobCalibrationPhaseSnapshot = z.infer<
-  typeof jobCalibrationPhaseSnapshotSchema
->;
 
-export const jobAssetSnapshotSchema = z.object({
+const jobAssetSnapshotSchema = z.object({
   assetId: z.number(),
   assetTypeId: z.number(),
   assetTypeName: z.string(),
@@ -559,9 +548,8 @@ export const jobAssetSnapshotSchema = z.object({
   specifications: z.record(z.string(), z.unknown()).nullable(),
   capturedAt: isoTimestamp,
 });
-export type JobAssetSnapshot = z.infer<typeof jobAssetSnapshotSchema>;
 
-export const scopeComplianceStatusSchema = z.enum([
+const scopeComplianceStatusSchema = z.enum([
   "PASS",
   "OUT_OF_SCOPE",
   "U_BELOW_CMC",
@@ -577,12 +565,11 @@ export const scopeComplianceStatusSchema = z.enum([
  * `@calibra-facil/shared`). Null until the job is approved, and for records
  * approved before the decision was frozen.
  */
-export const jobAccreditationSealSchema = z.object({
+const jobAccreditationSealSchema = z.object({
   accredited: z.boolean(),
   withheldReason: nullableString,
   evaluatedAt: z.string(),
 });
-export type JobAccreditationSeal = z.infer<typeof jobAccreditationSealSchema>;
 
 const scopeComplianceFindingSchema = z.object({
   kind: z.enum(["out_of_scope", "u_below_cmc", "not_evaluated"]),
@@ -607,7 +594,7 @@ const jsonRecordSchema = z.record(z.string(), z.unknown());
 // GET /api/jobs
 // ---------------------------------------------------------------------------
 
-export const jobListItemSchema = z.object({
+const jobListItemSchema = z.object({
   id: z.number(),
   jobId: z.string(),
   certificateName: nullableString,
@@ -653,7 +640,7 @@ export type JobsListResponse = z.infer<typeof jobsListResponseSchema>;
 // GET /api/jobs/:id
 // ---------------------------------------------------------------------------
 
-export const JOB_ACTIONS = [
+const JOB_ACTIONS = [
   "approve",
   "reject",
   "cancel",
@@ -664,7 +651,7 @@ export const JOB_ACTIONS = [
 ] as const;
 export type JobAction = (typeof JOB_ACTIONS)[number];
 
-export const jobActionVerdictSchema = z.union([
+const jobActionVerdictSchema = z.union([
   z.object({ allowed: z.literal(true) }),
   z.object({
     allowed: z.literal(false),
@@ -680,7 +667,7 @@ export const jobActionVerdictSchema = z.union([
 ]);
 export type JobActionVerdict = z.infer<typeof jobActionVerdictSchema>;
 
-export const jobAllowedActionsSchema = z.object({
+const jobAllowedActionsSchema = z.object({
   approve: jobActionVerdictSchema,
   reject: jobActionVerdictSchema,
   cancel: jobActionVerdictSchema,
@@ -692,34 +679,25 @@ export const jobAllowedActionsSchema = z.object({
 });
 export type JobAllowedActions = z.infer<typeof jobAllowedActionsSchema>;
 
-export const certificateLifecycleStatusSchema = z.enum([
+const certificateLifecycleStatusSchema = z.enum([
   "ISSUED",
   "SUPERSEDED",
   "WITHDRAWN",
 ]);
-export type CertificateLifecycleStatusValue = z.infer<
-  typeof certificateLifecycleStatusSchema
->;
 
-export const jobCertificateLifecycleSchema = z.object({
+const jobCertificateLifecycleSchema = z.object({
   status: certificateLifecycleStatusSchema,
   /** When the latest status event happened; null for a certificate with no event. */
   changedAt: nullableTimestamp,
   /** The written reason of the latest event (a withdrawal always has one). */
   reason: nullableString,
 });
-export type JobCertificateLifecycle = z.infer<
-  typeof jobCertificateLifecycleSchema
->;
 
-export const jobAmendmentInProgressSchema = z.object({
+const jobAmendmentInProgressSchema = z.object({
   id: z.number(),
   jobId: z.string(),
   status: jobStatusSchema,
 });
-export type JobAmendmentInProgress = z.infer<
-  typeof jobAmendmentInProgressSchema
->;
 
 export const jobDetailSchema = z.object({
   id: z.number(),
@@ -1007,7 +985,7 @@ export const jobCreateResponseSchema = jobRowSchema;
 export type JobCreateResponse = z.infer<typeof jobCreateResponseSchema>;
 
 /** The out-of-tolerance non-conformance a flag opens (or finds already open). */
-export const jobOotNonConformanceSchema = z.object({
+const jobOotNonConformanceSchema = z.object({
   id: z.number(),
   ncNumber: z.string(),
   organizationId: z.string(),
@@ -1025,10 +1003,9 @@ export const jobOotNonConformanceSchema = z.object({
   createdAt: isoTimestamp,
   updatedAt: isoTimestamp,
 });
-export type JobOotNonConformance = z.infer<typeof jobOotNonConformanceSchema>;
 
 /** The §7.10 customer notification record created with the flag. */
-export const jobOotNotificationSchema = z.object({
+const jobOotNotificationSchema = z.object({
   id: z.number(),
   organizationId: z.string(),
   ncId: z.number(),
@@ -1045,7 +1022,6 @@ export const jobOotNotificationSchema = z.object({
   createdAt: isoTimestamp,
   updatedAt: isoTimestamp,
 });
-export type JobOotNotification = z.infer<typeof jobOotNotificationSchema>;
 
 /** POST /:id/flag-oot (201). `notification` is null when the lab chose not to notify. */
 export const jobFlagOotResponseSchema = z.object({

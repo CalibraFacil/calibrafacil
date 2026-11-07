@@ -21,7 +21,7 @@ import { db } from "@calibra-facil/db";
 import { publicCodeRedeemThrottle } from "@calibra-facil/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 
-export const CODE_REDEEM_WINDOW_MS = 15 * 60_000;
+const CODE_REDEEM_WINDOW_MS = 15 * 60_000;
 export const CODE_REDEEM_MAX_FAILURES = 10;
 
 /** Fixed-window bucket start for a given instant. */

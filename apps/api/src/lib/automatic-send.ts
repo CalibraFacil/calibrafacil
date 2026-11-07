@@ -185,13 +185,13 @@ export function evaluateMilestone(
   return { shouldSend: true, outcome: "sent" };
 }
 
-export interface AutomaticSendEvent {
+interface AutomaticSendEvent {
   event: AutomaticSendMilestone;
   serviceOrderId: number;
   organizationId: string;
 }
 
-export type AutomaticSendInvoker = (params: {
+type AutomaticSendInvoker = (params: {
   organizationId: string;
   serviceOrderId: number;
   actorUserId: string;

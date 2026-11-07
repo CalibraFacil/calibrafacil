@@ -42,17 +42,6 @@ export const OPERATIONS_TO_CASH_STAGES: ReadonlyArray<OperationsToCashStage> = [
   "COLLECTED",
 ];
 
-export const OPERATIONS_TO_CASH_STAGE_LABEL: Record<
-  OperationsToCashStage,
-  string
-> = {
-  READY_TO_BILL: "Pronto para faturar",
-  SENT_TO_FINANCE: "Enviado ao financeiro",
-  INVOICED: "Faturado",
-  PARTIALLY_COLLECTED: "Recebimento parcial",
-  COLLECTED: "Recebido",
-};
-
 export interface OperationsToCashClassifierInput {
   hasBillingDocument: boolean;
   billingDocumentStatus: BillingDocumentStatus | null;
@@ -120,7 +109,7 @@ export function classifyServiceOrder(
   return { stage, isOverdue, isBlocked };
 }
 
-export interface OperationsToCashStageBucket {
+interface OperationsToCashStageBucket {
   count: number;
   totalCents: number;
 }

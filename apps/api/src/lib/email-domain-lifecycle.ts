@@ -19,7 +19,7 @@ import { orgTransactionWithExecutor } from "./org-transaction";
 
 type Actor = { organizationId: string; userId: string; memberId: string };
 
-export function emailDomainError(
+function emailDomainError(
   message: string,
   status: 400 | 409 | 500 | 502,
 ): never {
@@ -28,7 +28,7 @@ export function emailDomainError(
   });
 }
 
-export function emailProviderError(failureClass: ResendFailureClass): never {
+function emailProviderError(failureClass: ResendFailureClass): never {
   if (failureClass === "invalid_key") {
     return emailDomainError(
       "O serviço de envio precisa de uma atualização de acesso. Contate o suporte.",

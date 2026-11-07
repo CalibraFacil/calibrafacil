@@ -24,7 +24,7 @@ export function canonicalJson(value: unknown): string {
 // fingerprints share one cryptographic hash. For finite JSON data the canonical
 // form above is byte-identical to the engine's canonicalJson (V8 number formatting
 // equals the shortest round-trip form), keeping the two families consistent.
-export function fingerprintText(text: string, prefix = "cf-sha256"): string {
+function fingerprintText(text: string, prefix = "cf-sha256"): string {
   return `${prefix}:${stableHash(text)}`;
 }
 

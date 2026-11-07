@@ -14,7 +14,7 @@
  * metrology decision, not a presentation one, so it happens upstream.
  */
 
-export type CertificateLabIdentity = {
+type CertificateLabIdentity = {
   name: string;
   cnpj?: string | null;
   addressText?: string | null;
@@ -32,19 +32,19 @@ export type CertificateLabIdentity = {
  * with the certificate input (roadmap 2 C2); absent on certificates issued
  * before it was modelled, which then print as they always did.
  */
-export type CertificateCalibratingBody = {
+type CertificateCalibratingBody = {
   legalName: string;
   cnpj?: string | null;
   addressText?: string | null;
 };
 
-export type CertificateCustomer = {
+type CertificateCustomer = {
   name: string;
   taxId?: string | null;
   addressText?: string | null;
 };
 
-export type CertificateItem = {
+type CertificateItem = {
   description: string;
   manufacturer?: string | null;
   model?: string | null;
@@ -59,7 +59,7 @@ export type CertificateItem = {
   accessories?: string | null;
 };
 
-export type CertificateDates = {
+type CertificateDates = {
   /** §7.8.2.1(h). Null for in-loco work or an item handed straight over. */
   receivedAtText?: string | null;
   /** §7.8.2.1(i). */
@@ -68,14 +68,14 @@ export type CertificateDates = {
   issuedAtText: string;
 };
 
-export type CertificateMethod = {
+type CertificateMethod = {
   name: string;
   version?: number | null;
   procedureCode?: string | null;
   referenceStandards?: string[];
 };
 
-export type CertificateEnvironment = {
+type CertificateEnvironment = {
   temperatureText?: string | null;
   humidityText?: string | null;
   pressureText?: string | null;
@@ -159,7 +159,7 @@ export type CertificateStandard = {
 };
 
 /** §7.8.6.2 — only rendered when the method actually declares all of it. */
-export type CertificateConformity = {
+type CertificateConformity = {
   /** (a) which results the statement applies to. */
   appliesTo: string;
   /** (b) which specification is met or not. */
@@ -169,7 +169,7 @@ export type CertificateConformity = {
   verdict: string;
 };
 
-export type CertificateSignatory = {
+type CertificateSignatory = {
   name: string;
   role?: string | null;
   /** Place and date line, e.g. "Canoas/RS, 25 de junho de 2026". */

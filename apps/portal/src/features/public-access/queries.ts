@@ -51,7 +51,7 @@ async function fetchOrNull(
   }
 }
 
-export async function fetchPublicServiceOrder(
+async function fetchPublicServiceOrder(
   token: string,
 ): Promise<PublicOrderResult> {
   const response = await fetchOrNull(

@@ -56,7 +56,7 @@ export function isFinancialSummary(
   );
 }
 
-export function financialSummaryLabel(state: PortalFinancialSummary["state"]) {
+function financialSummaryLabel(state: PortalFinancialSummary["state"]) {
   switch (state) {
     case "INVOICE_AVAILABLE":
       return "Fatura disponível";
@@ -71,7 +71,7 @@ export function financialSummaryLabel(state: PortalFinancialSummary["state"]) {
   }
 }
 
-export function financialSummaryDescription(summary: PortalFinancialSummary) {
+function financialSummaryDescription(summary: PortalFinancialSummary) {
   // The due day is a calendar date (stored at UTC midnight); paid and
   // available-at are real moments, shown on the laboratory's day.
   const dueDate = formatCalendarDate(summary.dueDate, "date-long", {

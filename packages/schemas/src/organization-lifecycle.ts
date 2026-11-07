@@ -9,7 +9,7 @@ import { z } from "zod";
  * because the schema cannot know it.
  */
 export const SOFT_DELETE_REASON_MIN_LENGTH = 10;
-export const SOFT_DELETE_REASON_MAX_LENGTH = 500;
+const SOFT_DELETE_REASON_MAX_LENGTH = 500;
 
 export const SoftDeleteOrganizationSchema = z.object({
   confirmName: z.string().trim().min(1).max(200),

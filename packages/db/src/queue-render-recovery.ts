@@ -38,7 +38,7 @@ const RENDERING_STATUS = "GENERATING_PDF";
  */
 export type { RenderRejectionTrigger };
 
-export const RENDER_REJECTION_SOURCE = "queue-backstop";
+const RENDER_REJECTION_SOURCE = "queue-backstop";
 
 /** Human-readable (pt-BR) reason a dead-lettered render was rejected. */
 const DEAD_LETTER_REASON =

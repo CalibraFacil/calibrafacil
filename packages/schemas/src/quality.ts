@@ -7,12 +7,6 @@ export const NonConformanceTypeSchema = z.enum([
   "out_of_tolerance",
 ]);
 
-export const NonConformanceTriggerSourceSchema = z.enum([
-  "manual",
-  "as_found_verdict",
-  "standard_recall",
-]);
-
 export const CreateNonConformanceSchema = z.object({
   type: NonConformanceTypeSchema,
   description: z
@@ -46,10 +40,6 @@ export const FlagJobOutOfToleranceSchema = z.object({
   notifyCustomer: z.boolean().default(true),
 });
 
-export type FlagJobOutOfToleranceInput = z.infer<
-  typeof FlagJobOutOfToleranceSchema
->;
-
 /**
  * Reverse-traceability impact query (#426 Phase 1): certificates issued using
  * a reference standard between dates. Both bounds optional — the API defaults
@@ -69,10 +59,6 @@ export const ImpactedCertificatesQuerySchema = z.object({
     })
     .optional(),
 });
-
-export type ImpactedCertificatesQuery = z.infer<
-  typeof ImpactedCertificatesQuerySchema
->;
 
 /**
  * Approval-gated batch send of a standard recall (#426 Phase 1). The reviewed
@@ -97,21 +83,19 @@ export const SendStandardRecallSchema = z.object({
     .optional(),
 });
 
-export type SendStandardRecallInput = z.infer<typeof SendStandardRecallSchema>;
-
 /**
  * Guided §7.10 impact assessment (#426 Phase 2): structured evaluation of an
  * out-of-tolerance event's effect on the customer's measurements. Regulated
  * workflow → schema-first; the web form parses through this schema.
  */
-export const OotImpactItemDispositionSchema = z.enum([
+const OotImpactItemDispositionSchema = z.enum([
   "no_impact",
   "recheck",
   "notify_downstream",
   "other",
 ]);
 
-export const OotImpactAssessmentItemSchema = z.object({
+const OotImpactAssessmentItemSchema = z.object({
   description: z
     .string()
     .trim()
@@ -121,7 +105,7 @@ export const OotImpactAssessmentItemSchema = z.object({
   note: z.string().trim().max(1000).optional(),
 });
 
-export const OotImpactConclusionSchema = z.enum([
+const OotImpactConclusionSchema = z.enum([
   "no_significant_impact",
   "impact_confirmed",
   "inconclusive",
@@ -171,11 +155,7 @@ export const RegisterOotAcknowledgementSchema = z.object({
     .max(2000),
 });
 
-export type RegisterOotAcknowledgementInput = z.infer<
-  typeof RegisterOotAcknowledgementSchema
->;
-
-export const CapaSourceSchema = z.enum([
+const CapaSourceSchema = z.enum([
   "internal_audit",
   "customer_complaint",
   "nc_detection",
@@ -185,11 +165,11 @@ export const CapaSourceSchema = z.enum([
   "spc_signal",
 ]);
 
-export const CapaTypeSchema = z.enum(["corrective", "preventive"]);
+const CapaTypeSchema = z.enum(["corrective", "preventive"]);
 
-export const CapaSeveritySchema = z.enum(["minor", "major", "critical"]);
+const CapaSeveritySchema = z.enum(["minor", "major", "critical"]);
 
-export const CapaCategorySchema = z.enum([
+const CapaCategorySchema = z.enum([
   "method",
   "equipment",
   "personnel",
@@ -198,7 +178,7 @@ export const CapaCategorySchema = z.enum([
   "other",
 ]);
 
-export const CapaRootCauseAnalysisMethodSchema = z.enum([
+const CapaRootCauseAnalysisMethodSchema = z.enum([
   "5_whys",
   "fishbone",
   "pareto",

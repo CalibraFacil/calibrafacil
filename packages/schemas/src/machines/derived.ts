@@ -17,7 +17,7 @@ function moves<S extends string, C extends string>(
 //   create          POST / : pending (no results yet)
 //   record_results  POST /:id/results: the worst point verdict; recording again
 //                     replaces the results and re-derives
-export const PT_OVERALL_STATUSES = [
+const PT_OVERALL_STATUSES = [
   "pending",
   "satisfactory",
   "questionable",
@@ -42,7 +42,7 @@ export const PT_OVERALL_MACHINE = defineStateMachine({
 //   recompute  routes/spc.ts (readings added or removed, limits edited,
 //                recalculate) and the nightly sweep (packages/jobs-core
 //                spc-recompute.ts): any status to any status
-export const SPC_STATUSES = [
+const SPC_STATUSES = [
   "insufficient_data",
   "in_control",
   "trending",

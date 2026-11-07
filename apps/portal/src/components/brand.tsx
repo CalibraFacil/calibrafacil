@@ -11,7 +11,7 @@ interface BrandLockupProps extends React.ComponentProps<"div"> {
 // The mark is sized by HEIGHT with auto width, so a lab's white-label logo
 // (often a wider-than-tall wordmark) fills the available height instead of
 // being shrunk into a square box. Callers pass a height class (e.g. `h-12`).
-export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
+function BrandMark({ alt, className, ...props }: BrandMarkProps) {
   const branding = useBranding();
   // Preserve an explicitly-empty alt (decorative usage); otherwise default to
   // the resolved brand name.

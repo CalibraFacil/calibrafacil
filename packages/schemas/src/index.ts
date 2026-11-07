@@ -34,18 +34,6 @@ export * from "./reference-standard-kind";
 export * from "./reference-standard-kind-map";
 export * from "./service-orders";
 
-export const TaskSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().min(3, "Title must be at least 3 characters"),
-  status: z.enum(["pending", "completed"]).default("pending"),
-});
-
-export type Task = z.infer<typeof TaskSchema>;
-
-export const GetTasksQuerySchema = z.object({
-  status: z.string().optional(),
-});
-
 // =============================================================================
 // CUSTOMER SCHEMAS
 // =============================================================================
@@ -53,7 +41,7 @@ export const GetTasksQuerySchema = z.object({
 /**
  * Address schema for customer addresses (Brazilian format)
  */
-export const AddressSchema = z.object({
+const AddressSchema = z.object({
   cep: z.string().optional(),
   number: z.string().optional(),
   street: z.string().optional(),
@@ -62,8 +50,6 @@ export const AddressSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
 });
-
-export type Address = z.infer<typeof AddressSchema>;
 
 /**
  * Schema for creating a new customer
@@ -89,10 +75,6 @@ export const CreateCustomerGroupSchema = z.object({
   email: z.string().email("Email inválido").optional().or(z.literal("")),
 });
 
-export type CreateCustomerGroupInput = z.infer<
-  typeof CreateCustomerGroupSchema
->;
-
 export const AssignCustomerGroupBranchSchema = z.object({
   customerId: z.number().int().positive(),
 });
@@ -104,8 +86,6 @@ export type CreateCustomerInput = z.infer<typeof CreateCustomerSchema>;
  */
 export const UpdateCustomerSchema = CreateCustomerSchema.partial();
 
-export type UpdateCustomerInput = z.infer<typeof UpdateCustomerSchema>;
-
 /**
  * Schema for listing customers with pagination and search
  */
@@ -114,8 +94,6 @@ export const ListCustomersQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   query: z.string().optional(),
 });
-
-export type ListCustomersQuery = z.infer<typeof ListCustomersQuerySchema>;
 
 // =============================================================================
 // PORTAL USER MANAGEMENT SCHEMAS
@@ -129,19 +107,6 @@ export const CreatePortalInvitationSchema = z.object({
   role: z.enum(["client_user"]).default("client_user"),
 });
 
-export type CreatePortalInvitationInput = z.infer<
-  typeof CreatePortalInvitationSchema
->;
-
-/**
- * Schema for updating a portal member's role
- */
-export const UpdateMemberRoleSchema = z.object({
-  role: z.enum(["client_user"]),
-});
-
-export type UpdateMemberRoleInput = z.infer<typeof UpdateMemberRoleSchema>;
-
 // =============================================================================
 // COMPLIANCE SCHEMAS - ISO 17025:2017
 // =============================================================================
@@ -149,19 +114,17 @@ export type UpdateMemberRoleInput = z.infer<typeof UpdateMemberRoleSchema>;
 /**
  * Qualification status values for ISO 17025 compliance
  */
-export const QualificationStatusSchema = z.enum([
+const QualificationStatusSchema = z.enum([
   "pending",
   "qualified",
   "suspended",
   "expired",
 ]);
 
-export type QualificationStatus = z.infer<typeof QualificationStatusSchema>;
-
 /**
  * Schema for customer compliance data
  */
-export const CustomerComplianceSchema = z.object({
+const CustomerComplianceSchema = z.object({
   qualificationStatus: QualificationStatusSchema.optional(),
   qualificationDate: z.string().optional(),
   qualificationExpiresAt: z.string().optional(),
@@ -172,8 +135,6 @@ export const CustomerComplianceSchema = z.object({
   qualityRequirementsAcknowledged: z.boolean().optional(),
   notes: z.string().optional(),
 });
-
-export type CustomerComplianceInput = z.infer<typeof CustomerComplianceSchema>;
 
 /**
  * Schema for updating compliance data
@@ -186,8 +147,6 @@ export const UpdateComplianceSchema = z.object({
     .min(1, "Motivo e obrigatorio para alteracoes de conformidade"),
 });
 
-export type UpdateComplianceInput = z.infer<typeof UpdateComplianceSchema>;
-
 /**
  * Schema for audit log query with pagination
  */
@@ -196,13 +155,11 @@ export const AuditLogQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(50),
 });
 
-export type AuditLogQuery = z.infer<typeof AuditLogQuerySchema>;
-
 // =============================================================================
 // CERTIFICATE NUMBERING SCHEMAS
 // =============================================================================
 
-export const CertificateSequenceResetScopeSchema = z.enum([
+const CertificateSequenceResetScopeSchema = z.enum([
   "never",
   "year",
   "month",
@@ -260,16 +217,6 @@ export const UpdateCertificateNumberingProfileSchema = z.object({
   config: CertificateNumberingConfigSchema,
 });
 
-export type CertificateSequenceResetScope = z.infer<
-  typeof CertificateSequenceResetScopeSchema
->;
-export type CertificateNumberingConfig = z.infer<
-  typeof CertificateNumberingConfigSchema
->;
-export type UpdateCertificateNumberingProfileInput = z.infer<
-  typeof UpdateCertificateNumberingProfileSchema
->;
-
 // =============================================================================
 // ASSET TYPE SCHEMAS - Dynamic Instrument Classification
 // =============================================================================
@@ -286,43 +233,12 @@ export const AssetTypeFieldSchema = z.object({
   required: z.boolean().optional(),
 });
 
-export type AssetTypeField = z.infer<typeof AssetTypeFieldSchema>;
-
-/**
- * Schema for creating a new asset type
- */
-export const CreateAssetTypeSchema = z.object({
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  slug: z
-    .string()
-    .min(2, "Slug deve ter pelo menos 2 caracteres")
-    .regex(
-      /^[a-z0-9-]+$/,
-      "Slug deve conter apenas letras minúsculas, números e hífens",
-    ),
-  description: z.string().optional(),
-  definition: z
-    .array(AssetTypeFieldSchema)
-    .min(1, "Defina pelo menos um campo de especificação"),
-});
-
-export type CreateAssetTypeInput = z.infer<typeof CreateAssetTypeSchema>;
-
-/**
- * Schema for updating an asset type
- */
-export const UpdateAssetTypeSchema = CreateAssetTypeSchema.partial();
-
-export type UpdateAssetTypeInput = z.infer<typeof UpdateAssetTypeSchema>;
-
 /**
  * Schema for listing asset types
  */
 export const ListAssetTypesQuerySchema = z.object({
   query: z.string().optional(),
 });
-
-export type ListAssetTypesQuery = z.infer<typeof ListAssetTypesQuerySchema>;
 
 // =============================================================================
 // ASSET SCHEMAS - Equipment/Instruments
@@ -334,8 +250,6 @@ export type ListAssetTypesQuery = z.infer<typeof ListAssetTypesQuerySchema>;
 export const AssetStatusSchema = z.enum(ASSET_STATUSES);
 
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
-export const MassUnitSchema = z.enum(["mg", "g", "kg"]);
-export type MassUnit = z.infer<typeof MassUnitSchema>;
 
 /**
  * Every measurement unit token understood by the kind-aware unit registry
@@ -466,8 +380,6 @@ export const ListAssetsQuerySchema = z.object({
   query: z.string().optional(), // Search by name, tag, serialNumber
 });
 
-export type ListAssetsQuery = z.infer<typeof ListAssetsQuerySchema>;
-
 /**
  * Customer-set calibration interval (portal). The interval/periodicity is the
  * equipment owner's decision, not the lab's (ISO/IEC 17025:2017 §7.8.4.3 +
@@ -487,10 +399,6 @@ export const SetCalibrationIntervalSchema = z.object({
   // reliability-engine suggestion → interval_set_by='engine_applied'). Spec REQ-ENGINE-APPLY-001.
   source: z.enum(["customer", "engine"]).default("customer"),
 });
-
-export type SetCalibrationIntervalInput = z.infer<
-  typeof SetCalibrationIntervalSchema
->;
 
 /**
  * Legal-metrology regime of an instrument. An instrument under Brazilian legal
@@ -572,10 +480,6 @@ export const CalibrationRequestStatusSchema = z.enum(
   CALIBRATION_REQUEST_STATUSES,
 );
 
-export type CalibrationRequestStatus = z.infer<
-  typeof CalibrationRequestStatusSchema
->;
-
 export const CreateCalibrationRequestSchema = z.object({
   assetIds: z
     .array(z.coerce.number().min(1, "Ativo inválido"))
@@ -627,10 +531,6 @@ export const CreateCalibrationRequestSchema = z.object({
     .nullable(),
 });
 
-export type CreateCalibrationRequestInput = z.infer<
-  typeof CreateCalibrationRequestSchema
->;
-
 export const ListCalibrationRequestsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
@@ -651,36 +551,20 @@ export const ListCalibrationRequestsQuerySchema = z.object({
     .optional(),
 });
 
-export type ListCalibrationRequestsQuery = z.infer<
-  typeof ListCalibrationRequestsQuerySchema
->;
-
 export const ReviewCalibrationRequestSchema = z.object({
   internalNotes: z.string().trim().max(2000).optional(),
 });
 
-export type ReviewCalibrationRequestInput = z.infer<
-  typeof ReviewCalibrationRequestSchema
->;
-
 export const ApproveCalibrationRequestSchema = z.object({
   internalNotes: z.string().trim().max(2000).optional(),
 });
-
-export type ApproveCalibrationRequestInput = z.infer<
-  typeof ApproveCalibrationRequestSchema
->;
 
 export const RejectCalibrationRequestSchema = z.object({
   reason: z.string().trim().min(3, "Motivo e obrigatorio"),
   internalNotes: z.string().trim().max(2000).optional(),
 });
 
-export type RejectCalibrationRequestInput = z.infer<
-  typeof RejectCalibrationRequestSchema
->;
-
-export const ConvertCalibrationRequestItemSchema = z.object({
+const ConvertCalibrationRequestItemSchema = z.object({
   itemId: z.coerce.number().min(1, "Item invalido"),
   serviceId: z.coerce.number().min(1, "Servico e obrigatorio"),
   technicianId: z.string().optional().nullable(),
@@ -722,16 +606,11 @@ export const ConvertCalibrationRequestSchema = z.object({
     .nullable(),
 });
 
-export type ConvertCalibrationRequestInput = z.infer<
-  typeof ConvertCalibrationRequestSchema
->;
-
 // =============================================================================
 // CALIBRATION VISIT SCHEMAS (on-site / calibração in loco)
 // =============================================================================
 
-export const VisitStatusSchema = z.enum(VISIT_STATUSES);
-export type VisitStatusValue = z.infer<typeof VisitStatusSchema>;
+const VisitStatusSchema = z.enum(VISIT_STATUSES);
 
 const isValidDateString = (value: string) =>
   !Number.isNaN(new Date(value).getTime());
@@ -750,7 +629,6 @@ export const RescheduleVisitSchema = z.object({
   address: AddressSchema.optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
 });
-export type RescheduleVisitInput = z.infer<typeof RescheduleVisitSchema>;
 
 export const ConfirmVisitSchema = z.object({
   scheduledAt: z
@@ -782,13 +660,13 @@ export const ListVisitsQuerySchema = z.object({
 
 // #739: portal two-way visit scheduling ------------------------------------
 
-export const VisitReschedulePreferredPeriodSchema = z.enum([
+const VisitReschedulePreferredPeriodSchema = z.enum([
   "MORNING",
   "AFTERNOON",
   "ANY",
 ]);
 
-export const VisitReschedulePreferredWindowSchema = z.object({
+const VisitReschedulePreferredWindowSchema = z.object({
   date: z
     .string()
     .refine(isValidDateString, { message: "Data preferida invalida" }),
@@ -804,9 +682,6 @@ export const PortalVisitRescheduleRequestSchema = z.object({
     .max(3, "Informe no maximo 3 janelas preferidas")
     .default([]),
 });
-export type PortalVisitRescheduleRequestInput = z.infer<
-  typeof PortalVisitRescheduleRequestSchema
->;
 
 /** Lab accepts a reschedule request: the new date the visit moves to. */
 export const AcceptVisitRescheduleRequestSchema = z.object({
@@ -820,16 +695,10 @@ export const AcceptVisitRescheduleRequestSchema = z.object({
     .nullable(),
   resolutionNote: z.string().trim().max(1000).optional().nullable(),
 });
-export type AcceptVisitRescheduleRequestInput = z.infer<
-  typeof AcceptVisitRescheduleRequestSchema
->;
 
 export const DeclineVisitRescheduleRequestSchema = z.object({
   resolutionNote: z.string().trim().max(1000).optional().nullable(),
 });
-export type DeclineVisitRescheduleRequestInput = z.infer<
-  typeof DeclineVisitRescheduleRequestSchema
->;
 
 /** REQ-VISITJOB-011: Add a calibration job (instrument) to an on-site visit. */
 export const AddVisitJobSchema = z.object({
@@ -844,19 +713,17 @@ export const AddVisitJobSchema = z.object({
 /**
  * Method status values
  */
-export const MethodStatusSchema = z.enum(METHOD_STATUSES);
-export type MethodStatus = z.infer<typeof MethodStatusSchema>;
+const MethodStatusSchema = z.enum(METHOD_STATUSES);
 
 /**
  * Table column definition for table-type inputs
  */
-export const MethodTableColumnRoleSchema = z.enum([
+const MethodTableColumnRoleSchema = z.enum([
   "standard_value",
   "mass_standard_composition",
 ]);
-export type MethodTableColumnRole = z.infer<typeof MethodTableColumnRoleSchema>;
 
-export const MassCompositionConfigSchema = z.object({
+const MassCompositionConfigSchema = z.object({
   targetUnit: z.enum(["mg", "g", "kg"]).optional(),
   optionSource: z.enum(["certified_values", "composition_profiles"]).optional(),
   targetColumns: z
@@ -874,7 +741,6 @@ export const MassCompositionConfigSchema = z.object({
     .enum(["linear_per_item_then_rss", "profile_linear"])
     .optional(),
 });
-export type MassCompositionConfig = z.infer<typeof MassCompositionConfigSchema>;
 
 /**
  * Discipline-agnostic per-row certified-value binding for `standard_value`
@@ -882,7 +748,7 @@ export type MassCompositionConfig = z.infer<typeof MassCompositionConfigSchema>;
  * each row to a reference standard's certifiedValue by nominal and fills the
  * named target columns. No composition profiles / buoyancy / mass-unit model.
  */
-export const StandardValueConfigSchema = z.object({
+const StandardValueConfigSchema = z.object({
   matchBy: z.enum(["nominal"]).optional(),
   targetColumns: z
     .object({
@@ -893,9 +759,8 @@ export const StandardValueConfigSchema = z.object({
     })
     .optional(),
 });
-export type StandardValueConfig = z.infer<typeof StandardValueConfigSchema>;
 
-export const MethodTableColumnSchema = z.object({
+const MethodTableColumnSchema = z.object({
   key: z
     .string()
     .min(1, "Chave é obrigatória")
@@ -916,27 +781,18 @@ export const MethodTableColumnSchema = z.object({
   standardValue: StandardValueConfigSchema.optional(),
 });
 
-export type MethodTableColumn = z.infer<typeof MethodTableColumnSchema>;
+const MethodInputSourceSchema = z.enum(["manual", "asset_spec"]);
 
-export const MethodInputSourceSchema = z.enum(["manual", "asset_spec"]);
-export type MethodInputSource = z.infer<typeof MethodInputSourceSchema>;
-
-export const EccentricityIndicatorVariantSchema = z.enum([
+const EccentricityIndicatorVariantSchema = z.enum([
   "circular_platform",
   "road_scale",
 ]);
-export type EccentricityIndicatorVariant = z.infer<
-  typeof EccentricityIndicatorVariantSchema
->;
 
-export const EccentricityIndicatorConfigSchema = z.object({
+const EccentricityIndicatorConfigSchema = z.object({
   enabled: z.boolean().optional().default(true),
   variant:
     EccentricityIndicatorVariantSchema.optional().default("circular_platform"),
 });
-export type EccentricityIndicatorConfig = z.infer<
-  typeof EccentricityIndicatorConfigSchema
->;
 
 export const WeighingRangeResolverConfigSchema = z.object({
   enabled: z.boolean().optional().default(true),
@@ -954,9 +810,6 @@ export const WeighingRangeResolverConfigSchema = z.object({
     })
     .optional(),
 });
-export type WeighingRangeResolverConfig = z.infer<
-  typeof WeighingRangeResolverConfigSchema
->;
 
 /**
  * Input field definition for method data collection
@@ -1041,7 +894,7 @@ export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
 /**
  * Formula definition for computed values
  */
-export const MethodFormulaReportingSchema = z.object({
+const MethodFormulaReportingSchema = z.object({
   includeInCertificate: z.boolean().optional(),
   role: z
     .enum([
@@ -1058,10 +911,6 @@ export const MethodFormulaReportingSchema = z.object({
     .enum(["calibration_result", "uncertainty_budget", "raw_calculation"])
     .optional(),
 });
-
-export type MethodFormulaReporting = z.infer<
-  typeof MethodFormulaReportingSchema
->;
 
 export const MethodFormulaSchema = z.object({
   outputKey: z
@@ -1128,7 +977,7 @@ export type MethodMeasurementModel = z.infer<
 /**
  * Validation rule for pass/fail criteria
  */
-export const MethodValidationOperatorSchema = z.enum([
+const MethodValidationOperatorSchema = z.enum([
   "<",
   "<=",
   ">",
@@ -1136,9 +985,7 @@ export const MethodValidationOperatorSchema = z.enum([
   "==",
   "!=",
 ]);
-export type MethodValidationOperator = z.infer<
-  typeof MethodValidationOperatorSchema
->;
+type MethodValidationOperator = z.infer<typeof MethodValidationOperatorSchema>;
 
 const StructuredMethodValidationSchema = z.object({
   leftExpression: z.string().min(1, "Expressão esquerda é obrigatória"),
@@ -1162,12 +1009,12 @@ const LegacyMethodValidationSchema = z
     normalizeLegacyMethodValidationExpression(validation),
   );
 
-export const MethodValidationSchema = z.union([
+const MethodValidationSchema = z.union([
   StructuredMethodValidationSchema,
   LegacyMethodValidationSchema,
 ]);
 
-export const MethodVariableBindingSchema = z.discriminatedUnion("source", [
+const MethodVariableBindingSchema = z.discriminatedUnion("source", [
   z.object({
     key: z
       .string()
@@ -1255,9 +1102,7 @@ export const MethodVariableBindingSchema = z.discriminatedUnion("source", [
 ]);
 export type MethodVariableBinding = z.infer<typeof MethodVariableBindingSchema>;
 
-export function normalizeMethodValidationInput(
-  validation: unknown,
-): MethodValidation {
+function normalizeMethodValidationInput(validation: unknown): MethodValidation {
   return MethodValidationSchema.parse(validation);
 }
 
@@ -1308,7 +1153,7 @@ function parseMethodValidationOperator(
 /**
  * Type B uncertainty component for method defaults
  */
-export const MethodTypeBComponentSchema = z.object({
+const MethodTypeBComponentSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   value: z.number().positive("Valor deve ser positivo"),
   distribution: z.enum(["normal", "rectangular", "triangular", "u-shaped"]),
@@ -1319,33 +1164,30 @@ export const MethodTypeBComponentSchema = z.object({
 
 export type MethodTypeBComponent = z.infer<typeof MethodTypeBComponentSchema>;
 
-export const MethodCertificateContentSectionSchema = z.discriminatedUnion(
-  "kind",
-  [
-    z.object({
-      kind: z.literal("paragraphs"),
-      title: z.string().trim(),
-      paragraphs: z.array(z.string().trim()).default([]),
-    }),
-    z.object({
-      kind: z.literal("definition_list"),
-      title: z.string().trim(),
-      items: z
-        .array(
-          z.object({
-            term: z.string().trim(),
-            definition: z.string().trim(),
-          }),
-        )
-        .default([]),
-    }),
-    z.object({
-      kind: z.literal("bullets"),
-      title: z.string().trim().optional(),
-      items: z.array(z.string().trim()).default([]),
-    }),
-  ],
-);
+const MethodCertificateContentSectionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("paragraphs"),
+    title: z.string().trim(),
+    paragraphs: z.array(z.string().trim()).default([]),
+  }),
+  z.object({
+    kind: z.literal("definition_list"),
+    title: z.string().trim(),
+    items: z
+      .array(
+        z.object({
+          term: z.string().trim(),
+          definition: z.string().trim(),
+        }),
+      )
+      .default([]),
+  }),
+  z.object({
+    kind: z.literal("bullets"),
+    title: z.string().trim().optional(),
+    items: z.array(z.string().trim()).default([]),
+  }),
+]);
 
 export const MethodCertificateContentSchema = z.object({
   procedureCode: z.string().trim().optional(),
@@ -1388,8 +1230,6 @@ export const CreateMethodSchema = z.object({
   accreditedScope: z.boolean().optional(),
 });
 
-export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
-
 /**
  * Schema for updating a method (only DRAFT status)
  */
@@ -1420,10 +1260,6 @@ export const FromTemplateSchema = z.object({
   }),
 });
 
-export type FromTemplateInput = z.infer<typeof FromTemplateSchema>;
-
-export type UpdateMethodInput = z.infer<typeof UpdateMethodSchema>;
-
 /**
  * Schema for listing methods with pagination and filtering
  */
@@ -1436,18 +1272,12 @@ export const ListMethodsQuerySchema = z.object({
   includeArchived: z.coerce.boolean().optional().default(false),
 });
 
-export type ListMethodsQuery = z.infer<typeof ListMethodsQuerySchema>;
-
 /**
  * Schema for returning a method to draft with optional reason
  */
 export const ReturnMethodToDraftSchema = z.object({
   reason: z.string().trim().min(3, "Motivo é obrigatório"),
 });
-
-export type ReturnMethodToDraftInput = z.infer<
-  typeof ReturnMethodToDraftSchema
->;
 
 // =============================================================================
 // SERVICE SCHEMAS - Commercial Service Catalog (Product Registry)
@@ -1506,8 +1336,6 @@ export const ListServicesQuerySchema = z.object({
       return undefined;
     }),
 });
-
-export type ListServicesQuery = z.infer<typeof ListServicesQuerySchema>;
 
 // =============================================================================
 // MATERIAL CATALOG SCHEMAS - Peças e materiais (parts consumed on OS)
@@ -1579,8 +1407,6 @@ export const ListMaterialsQuerySchema = z.object({
     }),
 });
 
-export type ListMaterialsQuery = z.infer<typeof ListMaterialsQuerySchema>;
-
 /**
  * Schema for the manual stock adjust (entrada/ajuste): sets the ERP
  * product's absolute on-hand quantity for a catalog-linked material.
@@ -1591,10 +1417,6 @@ export const AdjustMaterialStockSchema = z.object({
     .min(0, "Quantidade não pode ser negativa")
     .finite(),
 });
-
-export type AdjustMaterialStockInput = z.infer<
-  typeof AdjustMaterialStockSchema
->;
 
 // =============================================================================
 // REFERENCE STANDARD SCHEMAS - Lab Equipment Registry (ISO 17025 Clause 6.4)
@@ -1620,7 +1442,7 @@ export type UncertaintyDistribution = z.infer<
   typeof UncertaintyDistributionSchema
 >;
 
-export const ReferenceStandardMetrologyPointSchema = z.object({
+const ReferenceStandardMetrologyPointSchema = z.object({
   reference: z.coerce.number().nullable().optional(),
   indication: z.coerce.number().nullable().optional(),
   meanReading: z.coerce.number().nullable().optional(),
@@ -1636,7 +1458,7 @@ export const ReferenceStandardMetrologyPointSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const ReferenceStandardMetrologyChannelSchema = z.object({
+const ReferenceStandardMetrologyChannelSchema = z.object({
   key: z.string().min(1, "Canal é obrigatório"),
   label: z.string().min(1, "Nome do canal é obrigatório"),
   quantity: z.string().min(1, "Grandeza é obrigatória"),
@@ -1650,7 +1472,7 @@ export const ReferenceStandardMetrologyChannelSchema = z.object({
   points: z.array(ReferenceStandardMetrologyPointSchema).default([]),
 });
 
-export const ReferenceStandardMassValueSchema = z.object({
+const ReferenceStandardMassValueSchema = z.object({
   nominal: z.string().min(1, "Valor nominal é obrigatório"),
   authentication: z.string().nullable().optional(),
   value: z.coerce.number({ message: "Valor certificado é obrigatório" }),
@@ -1662,7 +1484,7 @@ export const ReferenceStandardMassValueSchema = z.object({
   coverageFactor: z.coerce.number().positive().nullable().optional(),
 });
 
-export const ReferenceStandardCompositionProfileSchema = z.object({
+const ReferenceStandardCompositionProfileSchema = z.object({
   profileKey: z.string().min(1, "Perfil é obrigatório"),
   profileClass: z.string().nullable().optional(),
   nominal: z.string().min(1, "Valor nominal é obrigatório"),
@@ -1700,17 +1522,11 @@ export const MassCompositionProfileCreateSchema = z.object({
     .nullable()
     .optional(),
 });
-export type MassCompositionProfileCreateInput = z.infer<
-  typeof MassCompositionProfileCreateSchema
->;
 
 export const MassCompositionProfileUpdateSchema =
   MassCompositionProfileCreateSchema.partial();
-export type MassCompositionProfileUpdateInput = z.infer<
-  typeof MassCompositionProfileUpdateSchema
->;
 
-export const ReferenceStandardMetrologyDataSchema = z
+const ReferenceStandardMetrologyDataSchema = z
   .object({
     version: z.literal(1).default(1),
     channels: z.array(ReferenceStandardMetrologyChannelSchema).default([]),
@@ -1727,11 +1543,7 @@ export const ReferenceStandardMetrologyDataSchema = z
     compositionProfiles: [],
   });
 
-export type ReferenceStandardMetrologyData = z.infer<
-  typeof ReferenceStandardMetrologyDataSchema
->;
-
-export const ReferenceStandardCertificateDocumentSchema = z.object({
+const ReferenceStandardCertificateDocumentSchema = z.object({
   documentId: z.number(),
   r2Key: z.string(),
   fileName: z.string(),
@@ -1743,15 +1555,11 @@ export const ReferenceStandardCertificateDocumentSchema = z.object({
   nextCalibrationDate: z.string().or(z.date()),
 });
 
-export type ReferenceStandardCertificateDocument = z.infer<
-  typeof ReferenceStandardCertificateDocumentSchema
->;
-
 /**
  * Certified value for multi-value standards (e.g., weight sets, gauge block sets)
  * Each entry represents one value from the calibration certificate
  */
-export const CertifiedValueSchema = z.object({
+const CertifiedValueSchema = z.object({
   nominal: z.string().min(1, "Valor nominal e obrigatorio"),
   authentication: z.string().nullable().optional(),
   value: z.coerce.number({ message: "Valor certificado e obrigatorio" }),
@@ -1766,8 +1574,6 @@ export const CertifiedValueSchema = z.object({
   profileClass: z.string().nullable().optional(),
   profileQuantityAvailable: z.coerce.number().nullable().optional(),
 });
-
-export type CertifiedValue = z.infer<typeof CertifiedValueSchema>;
 
 /**
  * Roadmap 2 C2: who calibrated the standard, as evidence for the SI-traceability
@@ -1962,10 +1768,6 @@ export const ListReferenceStandardsQuerySchema = z.object({
   expiringWithinDays: z.coerce.number().optional(), // Filter by upcoming calibration due date
 });
 
-export type ListReferenceStandardsQuery = z.infer<
-  typeof ListReferenceStandardsQuerySchema
->;
-
 // =============================================================================
 // CALIBRATION JOB SCHEMAS - Work Order (ISO 17025 Operational Layer)
 // =============================================================================
@@ -1975,32 +1777,6 @@ export type ListReferenceStandardsQuery = z.infer<
  * - SUPERSEDED: Certificate was amended and replaced (ISO 17025 Clause 7.8.4.1)
  */
 export { JobStatusSchema, type JobStatus } from "./job-status";
-
-/**
- * Method Snapshot schema - Frozen copy of method at job creation
- * This is read-only after job creation (never modified)
- */
-export const MethodSnapshotSchema = z.object({
-  methodId: z.number(),
-  methodName: z.string(),
-  methodVersion: z.number(),
-  compiledMethod: z.unknown().optional(),
-  methodFingerprint: z.string().nullable().optional(),
-  engineVersion: z.string().nullable().optional(),
-  engineOptionsFingerprint: z.string().nullable().optional(),
-  normalizedMethodJson: z.string().nullable().optional(),
-  publicationEvidence: z.unknown().optional(),
-  dataFields: z.array(MethodInputFieldSchema),
-  variableBindings: z.array(MethodVariableBindingSchema).default([]),
-  formulas: z.array(MethodFormulaSchema),
-  measurementModels: z.array(MethodMeasurementModelSchema).default([]),
-  validations: z.array(MethodValidationSchema),
-  uncertaintyParams: z.array(MethodTypeBComponentSchema),
-  certificateContent: MethodCertificateContentSchema.nullable().optional(),
-  accreditedScope: z.boolean().optional(),
-});
-
-export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;
 
 /**
  * Schema for creating a new calibration job
@@ -2035,8 +1811,6 @@ export const UpdateJobSchema = z.object({
   status: JobStatusSchema.optional(),
 });
 
-export type UpdateJobInput = z.infer<typeof UpdateJobSchema>;
-
 /**
  * Schema for assigning a technician to a job
  */
@@ -2044,23 +1818,11 @@ export const AssignTechnicianSchema = z.object({
   technicianId: z.string().min(1, "Tecnico e obrigatorio"),
 });
 
-export type AssignTechnicianInput = z.infer<typeof AssignTechnicianSchema>;
-
-/**
- * Schema for submitting job data (execution by technician)
- * The data structure matches the method's dataFields definition
- */
-export const SubmitJobDataSchema = z.object({
-  data: z.record(z.string(), z.unknown()),
-});
-
-export type SubmitJobDataInput = z.infer<typeof SubmitJobDataSchema>;
-
 /**
  * Environmental data input - ISO 17025:2017 Clause 7.1.2
  * Captured during job execution for environmental conditions monitoring
  */
-export const EnvironmentalDataSchema = z.object({
+const EnvironmentalDataSchema = z.object({
   temperature: z.number().nullable(),
   humidity: z.number().nullable(),
   pressure: z.number().nullable(),
@@ -2068,13 +1830,9 @@ export const EnvironmentalDataSchema = z.object({
 
 export type EnvironmentalDataInput = z.infer<typeof EnvironmentalDataSchema>;
 
-export const CalibrationLocationTypeSchema = z.enum([
-  "customer_site",
-  "lab",
-  "other",
-]);
+const CalibrationLocationTypeSchema = z.enum(["customer_site", "lab", "other"]);
 
-export const CalibrationLocationInputSchema = z.object({
+const CalibrationLocationInputSchema = z.object({
   type: CalibrationLocationTypeSchema,
   addressText: z.string().trim().min(1, "Local da calibração é obrigatório"),
   notes: z.string().trim().optional().nullable(),
@@ -2084,14 +1842,14 @@ export type CalibrationLocationInput = z.infer<
   typeof CalibrationLocationInputSchema
 >;
 
-export const CalibrationPhaseModeSchema = z.enum([
+const CalibrationPhaseModeSchema = z.enum([
   "before_and_after",
   "before_only",
   "after_only",
   "not_performed",
 ]);
 
-export const CalibrationPhaseInputSchema = z.object({
+const CalibrationPhaseInputSchema = z.object({
   blocks: z.record(
     z.string(),
     z.object({
@@ -2117,8 +1875,6 @@ export const SubmitForReviewSchema = z.object({
   calibrationPhases: CalibrationPhaseInputSchema.optional(),
 });
 
-export type SubmitForReviewInput = z.infer<typeof SubmitForReviewSchema>;
-
 /**
  * Schema for approving a job
  */
@@ -2131,8 +1887,6 @@ export const ApproveJobSchema = z.object({
   scopeOverrideJustification: z.string().max(1000).optional(),
 });
 
-export type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
-
 /**
  * Schema for rejecting a job
  */
@@ -2140,16 +1894,12 @@ export const RejectJobSchema = z.object({
   reason: z.string().min(1, "Motivo da rejeição é obrigatório"),
 });
 
-export type RejectJobInput = z.infer<typeof RejectJobSchema>;
-
 /**
  * Schema for canceling a job
  */
 export const CancelJobSchema = z.object({
   reason: z.string().min(1, "Motivo do cancelamento é obrigatório"),
 });
-
-export type CancelJobInput = z.infer<typeof CancelJobSchema>;
 
 /**
  * Schema for amending a job (ISO 17025 Clause 7.8.4.1)
@@ -2160,8 +1910,6 @@ export const AmendJobSchema = z.object({
     .string()
     .min(10, "Motivo da retificação deve ter pelo menos 10 caracteres"),
 });
-
-export type AmendJobInput = z.infer<typeof AmendJobSchema>;
 
 /**
  * Standard Snapshot schema - Frozen copy of reference standard at execution
@@ -2187,8 +1935,6 @@ export const StandardSnapshotSchema = z.object({
     ReferenceStandardCertificateDocumentSchema.nullable().optional(),
 });
 
-export type StandardSnapshot = z.infer<typeof StandardSnapshotSchema>;
-
 /**
  * Environmental limits configuration - per org or per asset type
  */
@@ -2201,10 +1947,6 @@ export const EnvironmentalLimitsSchema = z.object({
   pressureMin: z.number().nullable(),
   pressureMax: z.number().nullable(),
 });
-
-export type EnvironmentalLimitsInput = z.infer<
-  typeof EnvironmentalLimitsSchema
->;
 
 /**
  * Quantity kinds understood by the kind-aware unit registry
@@ -2262,10 +2004,6 @@ export const AccreditedScopeLineSchema = z
     path: ["cmcA"],
   });
 
-export type AccreditedScopeLineInput = z.infer<
-  typeof AccreditedScopeLineSchema
->;
-
 /**
  * Schema for executing a job (saving worksheet data)
  * Includes selected reference standards for ISO 17025 traceability
@@ -2305,8 +2043,6 @@ export const ExecuteJobSchema = z.object({
     .nullable(),
 });
 
-export type ExecuteJobInput = z.infer<typeof ExecuteJobSchema>;
-
 /**
  * Schema for listing jobs with pagination and filtering
  */
@@ -2325,8 +2061,6 @@ export const ListJobsQuerySchema = z.object({
   overdue: z.coerce.boolean().optional(), // Filter overdue jobs
 });
 
-export type ListJobsQuery = z.infer<typeof ListJobsQuerySchema>;
-
 // =============================================================================
 // NOTIFICATION SCHEMAS - In-App & Email Notifications (ISO 17025 Compliance)
 // =============================================================================
@@ -2334,7 +2068,7 @@ export type ListJobsQuery = z.infer<typeof ListJobsQuerySchema>;
 /**
  * Notification type enum
  */
-export const NotificationTypeSchema = z.enum([
+const NotificationTypeSchema = z.enum([
   "JOB_SUBMITTED_FOR_REVIEW",
   "JOB_APPROVED",
   "JOB_REJECTED",
@@ -2367,21 +2101,15 @@ export const NotificationTypeSchema = z.enum([
   "VISIT_RESCHEDULE_DECLINED", // Customer-bound (#739): lab declined the reschedule request
 ]);
 
-export type NotificationType = z.infer<typeof NotificationTypeSchema>;
-
 /**
  * Notification status values
  */
-export const NotificationStatusSchema = z.enum(NOTIFICATION_STATUSES);
-
-export type NotificationStatus = z.infer<typeof NotificationStatusSchema>;
+const NotificationStatusSchema = z.enum(NOTIFICATION_STATUSES);
 
 /**
  * Notification priority levels
  */
-export const NotificationPrioritySchema = z.enum(["HIGH", "MEDIUM", "LOW"]);
-
-export type NotificationPriority = z.infer<typeof NotificationPrioritySchema>;
+const NotificationPrioritySchema = z.enum(["HIGH", "MEDIUM", "LOW"]);
 
 /**
  * Schema for listing notifications with pagination and filters
@@ -2394,10 +2122,6 @@ export const ListNotificationsQuerySchema = z.object({
   priority: NotificationPrioritySchema.optional(),
 });
 
-export type ListNotificationsQuery = z.infer<
-  typeof ListNotificationsQuerySchema
->;
-
 /**
  * Schema for marking notifications as read
  */
@@ -2407,42 +2131,28 @@ export const MarkNotificationsReadSchema = z.object({
     .min(1, "Selecione ao menos uma notificação"),
 });
 
-export type MarkNotificationsReadInput = z.infer<
-  typeof MarkNotificationsReadSchema
->;
-
 /**
  * Individual notification channel preference
  */
-export const NotificationChannelPreferenceSchema = z.object({
+const NotificationChannelPreferenceSchema = z.object({
   inApp: z.boolean().default(true),
   email: z.boolean().default(true),
 });
-
-export type NotificationChannelPreference = z.infer<
-  typeof NotificationChannelPreferenceSchema
->;
 
 /**
  * Full notification preferences map
  * Note: Using z.string() for keys to avoid z.record(enum, ...) validation issues
  * The application layer handles unknown keys gracefully
  */
-export const NotificationPreferencesMapSchema = z.record(
+const NotificationPreferencesMapSchema = z.record(
   z.string(),
   NotificationChannelPreferenceSchema,
 );
 
-export type NotificationPreferencesMap = z.infer<
-  typeof NotificationPreferencesMapSchema
->;
-
 /**
  * Digest frequency options
  */
-export const DigestFrequencySchema = z.enum(["NONE", "DAILY", "WEEKLY"]);
-
-export type DigestFrequency = z.infer<typeof DigestFrequencySchema>;
+const DigestFrequencySchema = z.enum(["NONE", "DAILY", "WEEKLY"]);
 
 /**
  * Schema for updating notification preferences
@@ -2453,10 +2163,6 @@ export const UpdateNotificationPreferencesSchema = z.object({
   notifySelfActions: z.boolean().optional(),
   digestFrequency: DigestFrequencySchema.optional(),
 });
-
-export type UpdateNotificationPreferencesInput = z.infer<
-  typeof UpdateNotificationPreferencesSchema
->;
 
 /**
  * Customer-facing notification types: the only types the portal notification
@@ -2482,12 +2188,6 @@ export const PORTAL_NOTIFICATION_TYPES = [
   "ASSET_FOUND_OUT_OF_TOLERANCE",
 ] as const;
 
-export const PortalNotificationTypeSchema = z.enum(PORTAL_NOTIFICATION_TYPES);
-
-export type PortalNotificationType = z.infer<
-  typeof PortalNotificationTypeSchema
->;
-
 const PORTAL_NOTIFICATION_TYPE_SET: ReadonlySet<string> = new Set(
   PORTAL_NOTIFICATION_TYPES,
 );
@@ -2511,10 +2211,6 @@ export const PortalUpdateNotificationPreferencesSchema = z.object({
   digestFrequency: DigestFrequencySchema.optional(),
 });
 
-export type PortalUpdateNotificationPreferencesInput = z.infer<
-  typeof PortalUpdateNotificationPreferencesSchema
->;
-
 /**
  * Query for the portal notification center list. Cursor = the last row's id
  * (serial, descending order), so pagination is stable under new inserts.
@@ -2524,10 +2220,6 @@ export const PortalListNotificationsQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(50).default(20),
   status: NotificationStatusSchema.optional(),
 });
-
-export type PortalListNotificationsQuery = z.infer<
-  typeof PortalListNotificationsQuerySchema
->;
 
 // =============================================================================
 // NON-CONFORMANCE SCHEMAS - ISO 17025:2017 Clause 8.7
@@ -2544,28 +2236,20 @@ export const NonConformanceTypeSchema = z.enum([
   "out_of_tolerance",
 ]);
 
-export type NonConformanceType = z.infer<typeof NonConformanceTypeSchema>;
-
 /**
  * NC disposition values
  */
-export const NonConformanceDispositionSchema = z.enum([
+const NonConformanceDispositionSchema = z.enum([
   "rework",
   "scrap",
   "use_as_is",
   "concession",
 ]);
 
-export type NonConformanceDisposition = z.infer<
-  typeof NonConformanceDispositionSchema
->;
-
 /**
  * NC status values
  */
 export const NonConformanceStatusSchema = z.enum(NON_CONFORMANCE_STATUSES);
-
-export type NonConformanceStatus = z.infer<typeof NonConformanceStatusSchema>;
 
 /**
  * Schema for creating a new non-conformance
@@ -2578,10 +2262,6 @@ export const CreateNonConformanceSchema = z.object({
     .min(10, "Descrição deve ter pelo menos 10 caracteres"),
   detectedAt: z.string().min(1, "Data de detecção é obrigatória"),
 });
-
-export type CreateNonConformanceInput = z.infer<
-  typeof CreateNonConformanceSchema
->;
 
 /**
  * Schema for setting disposition on an NC
@@ -2609,8 +2289,6 @@ export const SetDispositionSchema = z
     },
   );
 
-export type SetDispositionInput = z.infer<typeof SetDispositionSchema>;
-
 /**
  * Schema for resolving an NC
  */
@@ -2619,10 +2297,6 @@ export const ResolveNonConformanceSchema = z.object({
     .string()
     .min(10, "Correção tomada deve ter pelo menos 10 caracteres"),
 });
-
-export type ResolveNonConformanceInput = z.infer<
-  typeof ResolveNonConformanceSchema
->;
 
 /**
  * Schema for escalating NC to CAPA
@@ -2633,8 +2307,6 @@ export const EscalateToCapaSchema = z.object({
   dueDate: z.string().optional().nullable(),
   responsibleId: z.string().optional().nullable(),
 });
-
-export type EscalateToCapaInput = z.infer<typeof EscalateToCapaSchema>;
 
 /**
  * Schema for listing NCs with pagination and filtering
@@ -2650,10 +2322,6 @@ export const ListNonConformancesQuerySchema = z.object({
   dateTo: z.string().optional(),
 });
 
-export type ListNonConformancesQuery = z.infer<
-  typeof ListNonConformancesQuerySchema
->;
-
 // =============================================================================
 // CORRECTIVE ACTION (CAPA) SCHEMAS - ISO 17025:2017 Clause 8.7 / 8.9
 // =============================================================================
@@ -2661,16 +2329,12 @@ export type ListNonConformancesQuery = z.infer<
 /**
  * CAPA status values
  */
-export const CorrectiveActionStatusSchema = z.enum(CORRECTIVE_ACTION_STATUSES);
-
-export type CorrectiveActionStatus = z.infer<
-  typeof CorrectiveActionStatusSchema
->;
+const CorrectiveActionStatusSchema = z.enum(CORRECTIVE_ACTION_STATUSES);
 
 /**
  * CAPA source - where the CAPA originated from
  */
-export const CorrectiveActionSourceSchema = z.enum([
+const CorrectiveActionSourceSchema = z.enum([
   "internal_audit",
   "customer_complaint",
   "nc_detection",
@@ -2680,34 +2344,20 @@ export const CorrectiveActionSourceSchema = z.enum([
   "spc_signal",
 ]);
 
-export type CorrectiveActionSource = z.infer<
-  typeof CorrectiveActionSourceSchema
->;
-
 /**
  * CAPA type - corrective vs preventive
  */
-export const CorrectiveActionTypeSchema = z.enum(["corrective", "preventive"]);
-
-export type CorrectiveActionType = z.infer<typeof CorrectiveActionTypeSchema>;
+const CorrectiveActionTypeSchema = z.enum(["corrective", "preventive"]);
 
 /**
  * CAPA severity classification
  */
-export const CorrectiveActionSeveritySchema = z.enum([
-  "minor",
-  "major",
-  "critical",
-]);
-
-export type CorrectiveActionSeverity = z.infer<
-  typeof CorrectiveActionSeveritySchema
->;
+const CorrectiveActionSeveritySchema = z.enum(["minor", "major", "critical"]);
 
 /**
  * CAPA category - affected area
  */
-export const CorrectiveActionCategorySchema = z.enum([
+const CorrectiveActionCategorySchema = z.enum([
   "method",
   "equipment",
   "personnel",
@@ -2716,23 +2366,15 @@ export const CorrectiveActionCategorySchema = z.enum([
   "other",
 ]);
 
-export type CorrectiveActionCategory = z.infer<
-  typeof CorrectiveActionCategorySchema
->;
-
 /**
  * Root cause analysis method
  */
-export const RootCauseAnalysisMethodSchema = z.enum([
+const RootCauseAnalysisMethodSchema = z.enum([
   "5_whys",
   "fishbone",
   "pareto",
   "other",
 ]);
-
-export type RootCauseAnalysisMethod = z.infer<
-  typeof RootCauseAnalysisMethodSchema
->;
 
 /**
  * Schema for creating a new CAPA
@@ -2758,10 +2400,6 @@ export const CreateCorrectiveActionSchema = z.object({
   preventiveMeasures: z.string().optional().nullable(),
 });
 
-export type CreateCorrectiveActionInput = z.infer<
-  typeof CreateCorrectiveActionSchema
->;
-
 /**
  * Schema for updating a CAPA
  */
@@ -2781,10 +2419,6 @@ export const UpdateCorrectiveActionSchema = z.object({
   preventiveMeasures: z.string().optional().nullable(),
 });
 
-export type UpdateCorrectiveActionInput = z.infer<
-  typeof UpdateCorrectiveActionSchema
->;
-
 /**
  * Schema for marking a CAPA as implemented
  */
@@ -2794,15 +2428,11 @@ export const ImplementCorrectiveActionSchema = z.object({
     .min(10, "Evidencia de implementação deve ter pelo menos 10 caracteres"),
 });
 
-export type ImplementCorrectiveActionInput = z.infer<
-  typeof ImplementCorrectiveActionSchema
->;
-
 /**
  * Schema for verifying CAPA effectiveness
  */
 export const CAPA_INDEPENDENCE_JUSTIFICATION_MIN_LENGTH = 30;
-export const CAPA_INDEPENDENCE_JUSTIFICATION_MAX_LENGTH = 1000;
+const CAPA_INDEPENDENCE_JUSTIFICATION_MAX_LENGTH = 1000;
 
 export const VerifyCorrectiveActionSchema = z.object({
   effectivenessConfirmed: z.boolean(),
@@ -2825,20 +2455,12 @@ export const VerifyCorrectiveActionSchema = z.object({
     .optional(),
 });
 
-export type VerifyCorrectiveActionInput = z.infer<
-  typeof VerifyCorrectiveActionSchema
->;
-
 /**
  * Schema for closing a CAPA
  */
 export const CloseCorrectiveActionSchema = z.object({
   reason: z.string().optional(),
 });
-
-export type CloseCorrectiveActionInput = z.infer<
-  typeof CloseCorrectiveActionSchema
->;
 
 /**
  * Schema for listing CAPAs with pagination and filtering
@@ -2856,10 +2478,6 @@ export const ListCorrectiveActionsQuerySchema = z.object({
   overdue: z.coerce.boolean().optional(),
 });
 
-export type ListCorrectiveActionsQuery = z.infer<
-  typeof ListCorrectiveActionsQuerySchema
->;
-
 // =============================================================================
 // PERSONNEL COMPETENCE SCHEMAS - ISO 17025:2017 Clause 6.2.3
 // =============================================================================
@@ -2867,28 +2485,22 @@ export type ListCorrectiveActionsQuery = z.infer<
 /**
  * Competence workflow status values
  */
-export const CompetenceStatusSchema = z.enum(COMPETENCE_STATUSES);
-
-export type CompetenceStatus = z.infer<typeof CompetenceStatusSchema>;
+const CompetenceStatusSchema = z.enum(COMPETENCE_STATUSES);
 
 /**
  * Training type values
  */
-export const TrainingTypeSchema = z.enum([
+const TrainingTypeSchema = z.enum([
   "internal",
   "external",
   "ojt",
   "proficiency_test",
 ]);
 
-export type TrainingType = z.infer<typeof TrainingTypeSchema>;
-
 /**
  * Training status values
  */
-export const TrainingStatusSchema = z.enum(TRAINING_STATUSES);
-
-export type TrainingStatus = z.infer<typeof TrainingStatusSchema>;
+const TrainingStatusSchema = z.enum(TRAINING_STATUSES);
 
 /**
  * Schema for creating a new competence request
@@ -2901,10 +2513,6 @@ export const CreateCompetenceRequestSchema = z.object({
     .min(5, "Descrição do escopo deve ter pelo menos 5 caracteres"),
 });
 
-export type CreateCompetenceRequestInput = z.infer<
-  typeof CreateCompetenceRequestSchema
->;
-
 /**
  * Schema for updating a personnel competence record
  */
@@ -2914,10 +2522,6 @@ export const UpdatePersonnelCompetenceSchema = z.object({
   expiresAt: z.string().optional().nullable(),
 });
 
-export type UpdatePersonnelCompetenceInput = z.infer<
-  typeof UpdatePersonnelCompetenceSchema
->;
-
 /**
  * Schema for assigning training to a competence record
  */
@@ -2926,8 +2530,6 @@ export const AssignTrainingSchema = z.object({
     .array(z.number())
     .min(1, "Selecione pelo menos um treinamento"),
 });
-
-export type AssignTrainingInput = z.infer<typeof AssignTrainingSchema>;
 
 /**
  * Schema for evaluating a competence
@@ -2939,16 +2541,12 @@ export const EvaluateCompetenceSchema = z.object({
   expiresAt: z.string().optional().nullable(),
 });
 
-export type EvaluateCompetenceInput = z.infer<typeof EvaluateCompetenceSchema>;
-
 /**
  * Schema for cancelling a competence workflow
  */
 export const CancelCompetenceSchema = z.object({
   notes: z.string().optional().nullable(),
 });
-
-export type CancelCompetenceInput = z.infer<typeof CancelCompetenceSchema>;
 
 /**
  * Schema for listing personnel competences with filters
@@ -2961,10 +2559,6 @@ export const ListPersonnelCompetenceQuerySchema = z.object({
   status: CompetenceStatusSchema.optional(),
   expiringWithinDays: z.coerce.number().optional(),
 });
-
-export type ListPersonnelCompetenceQuery = z.infer<
-  typeof ListPersonnelCompetenceQuerySchema
->;
 
 // =============================================================================
 // TRAINING RECORD SCHEMAS - ISO 17025:2017 Clause 6.2.3
@@ -2988,10 +2582,6 @@ export const CreateTrainingRecordSchema = z.object({
   passed: z.boolean().optional().nullable(),
 });
 
-export type CreateTrainingRecordInput = z.infer<
-  typeof CreateTrainingRecordSchema
->;
-
 /**
  * Schema for updating a training record
  */
@@ -3008,10 +2598,6 @@ export const UpdateTrainingRecordSchema = z.object({
   passingScore: z.coerce.number().optional().nullable(),
   passed: z.boolean().optional().nullable(),
 });
-
-export type UpdateTrainingRecordInput = z.infer<
-  typeof UpdateTrainingRecordSchema
->;
 
 /**
  * Schema for listing training records with filters

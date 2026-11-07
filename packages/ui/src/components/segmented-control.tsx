@@ -1,6 +1,6 @@
 import { cn } from "../lib/utils";
 
-export type SegmentedControlOption<TValue extends string> = {
+type SegmentedControlOption<TValue extends string> = {
   value: TValue;
   label: string;
 };

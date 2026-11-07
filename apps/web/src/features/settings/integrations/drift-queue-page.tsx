@@ -29,7 +29,7 @@ import { Textarea } from '@calibra-facil/ui/textarea'
 import { toast } from 'sonner'
 import { formatInstant } from '@calibra-facil/shared/format'
 
-export interface IntegrationDriftRow {
+interface IntegrationDriftRow {
   linkId: string
   integrationId: string
   providerLabel: string

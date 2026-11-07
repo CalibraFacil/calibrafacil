@@ -109,7 +109,7 @@ export function portalDomainQueryOptions() {
   })
 }
 
-export function emailDomainQueryOptions() {
+function emailDomainQueryOptions() {
   return queryOptions({
     queryKey: ['email-domain'],
     queryFn: () =>
@@ -127,7 +127,7 @@ export function environmentalLimitsQueryOptions(unitId: number | null) {
   })
 }
 
-export function accreditedScopeQueryOptions(unitId: number | null) {
+function accreditedScopeQueryOptions(unitId: number | null) {
   return queryOptions({
     queryKey: ['accredited-scope', unitId ?? 'no-unit'],
     queryFn: () =>

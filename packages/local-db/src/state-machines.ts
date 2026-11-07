@@ -18,7 +18,7 @@ import {
 //              keeping the local change
 //   discard  an audited give-up: a dead event, a held dependent, or a conflict
 //              discarded by the user (the trace stays in domain_events)
-export const OUTBOX_STATUSES = [
+const OUTBOX_STATUSES = [
   "pending",
   "failed",
   "synced",
@@ -26,7 +26,6 @@ export const OUTBOX_STATUSES = [
   "conflict",
   "discarded",
 ] as const;
-export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 
 export const OUTBOX_MACHINE = defineStateMachine({
   name: "outbox event",
@@ -66,14 +65,13 @@ export const OUTBOX_MACHINE = defineStateMachine({
 //              regulated record)
 // `ignored` is history only: older builds wrote it and marked the change synced
 // although the cloud never received it; no code writes it now.
-export const SYNC_CONFLICT_STATUSES = [
+const SYNC_CONFLICT_STATUSES = [
   "open",
   "resolved",
   "discarded_by_user",
 ] as const;
-export type SyncConflictStatus = (typeof SYNC_CONFLICT_STATUSES)[number];
 
-export const SYNC_CONFLICT_MACHINE = defineStateMachine({
+const SYNC_CONFLICT_MACHINE = defineStateMachine({
   name: "sync conflict",
   states: SYNC_CONFLICT_STATUSES,
   commands: ["create", "resolve", "discard"],
@@ -90,16 +88,14 @@ export const SYNC_CONFLICT_MACHINE = defineStateMachine({
 //   link    the cloud linked it to its record (synced)
 //   retry   back to pending for another upload (also a dead one, by the user)
 //   kill    the upload or its event was refused for good
-export const ATTACHMENT_UPLOAD_STATUSES = [
+const ATTACHMENT_UPLOAD_STATUSES = [
   "pending",
   "uploaded",
   "synced",
   "dead",
 ] as const;
-export type AttachmentUploadStatus =
-  (typeof ATTACHMENT_UPLOAD_STATUSES)[number];
 
-export const ATTACHMENT_UPLOAD_MACHINE = defineStateMachine({
+const ATTACHMENT_UPLOAD_MACHINE = defineStateMachine({
   name: "attachment upload",
   states: ATTACHMENT_UPLOAD_STATUSES,
   commands: ["create", "upload", "link", "retry", "kill"],
@@ -127,7 +123,7 @@ type GuardedLocalColumn = {
   history?: readonly string[];
 };
 
-export const LOCAL_GUARDED_COLUMNS: readonly GuardedLocalColumn[] = [
+const LOCAL_GUARDED_COLUMNS: readonly GuardedLocalColumn[] = [
   { table: "outbox", column: "status", machine: OUTBOX_MACHINE },
   {
     table: "sync_conflicts",
@@ -147,7 +143,7 @@ function literal(value: string): string {
 }
 
 /** The SQLite triggers of one column: creation states on INSERT, listed moves on UPDATE. */
-export function sqliteStatusGuardSql(guarded: GuardedLocalColumn): string {
+function sqliteStatusGuardSql(guarded: GuardedLocalColumn): string {
   const { table, column, machine } = guarded;
   const created = machine.creationStates().map(literal).join(", ");
   const pairs = machine

@@ -16,7 +16,6 @@ import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
@@ -38,7 +37,7 @@ function standardIdFromUrl(url?: URL): number | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
-export function spcChartListInputFromUrl(organizationId: string, url?: URL) {
+function spcChartListInputFromUrl(organizationId: string, url?: URL) {
   return {
     organizationId,
     page: pageFromUrl(url),
@@ -47,7 +46,7 @@ export function spcChartListInputFromUrl(organizationId: string, url?: URL) {
   } satisfies SpcChartListQueryInput
 }
 
-export function spcChartListQueryOptions(input: SpcChartListQueryInput) {
+function spcChartListQueryOptions(input: SpcChartListQueryInput) {
   return queryOptions({
     queryKey: [
       'spc-charts',
@@ -74,7 +73,7 @@ export function spcChartListQueryOptions(input: SpcChartListQueryInput) {
  * Unfiltered first page used for the overview status tiles — the API has no
  * dedicated summary endpoint, so tiles count the (bounded) chart population.
  */
-export function spcChartStatusSummaryQueryOptions(organizationId: string) {
+function spcChartStatusSummaryQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['spc-charts-summary', organizationId],
     queryFn: () =>
@@ -85,7 +84,7 @@ export function spcChartStatusSummaryQueryOptions(organizationId: string) {
   })
 }
 
-export function spcStandardChartsQueryOptions(standardId: number) {
+function spcStandardChartsQueryOptions(standardId: number) {
   return queryOptions({
     queryKey: ['spc-charts', 'by-standard', standardId],
     queryFn: () =>
@@ -97,14 +96,14 @@ export function spcStandardChartsQueryOptions(standardId: number) {
   })
 }
 
-export function spcChartDetailQueryOptions(id: string) {
+function spcChartDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['spc-chart', id],
     queryFn: () => calibraApi.spc.getChart<SpcChartDetail>(id),
   })
 }
 
-export function spcStandardOptionsQueryOptions() {
+function spcStandardOptionsQueryOptions() {
   return queryOptions({
     queryKey: ['spc-standard-options'],
     queryFn: (): Promise<SpcStandardOptionsData> =>
@@ -115,7 +114,7 @@ export function spcStandardOptionsQueryOptions() {
   })
 }
 
-export async function getSpcIndexEssentialQueries(url?: URL) {
+async function getSpcIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 
@@ -127,17 +126,6 @@ export async function getSpcIndexEssentialQueries(url?: URL) {
 
 export async function loadSpcIndexData(queryClient: QueryClient, url?: URL) {
   await ensureRouteQueries(queryClient, await getSpcIndexEssentialQueries(url))
-}
-
-export async function prewarmSpcIndex(queryClient: QueryClient, url?: URL) {
-  await prewarmRouteQueries(queryClient, await getSpcIndexEssentialQueries(url))
-}
-
-export async function prewarmSpcChartDetail(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await prewarmRouteQueries(queryClient, [spcChartDetailQueryOptions(id)])
 }
 
 export function useSpcChartListData({
@@ -229,16 +217,6 @@ export function useUpdateSpcChart(id: string) {
       calibraApi.spc.updateChart<SpcChart>(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['spc-chart', id] })
-      invalidateSpcCollections(queryClient)
-    },
-  })
-}
-
-export function useRemoveSpcChart() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => calibraApi.spc.removeChart(id),
-    onSuccess: () => {
       invalidateSpcCollections(queryClient)
     },
   })

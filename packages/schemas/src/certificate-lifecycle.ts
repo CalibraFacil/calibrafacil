@@ -13,21 +13,21 @@ import { z } from "zod";
 // workflow and is frozen by the database. A withdrawal never changes it, the
 // events carry it.
 
-export const CERTIFICATE_STATUS_EVENT_TYPES = [
+const CERTIFICATE_STATUS_EVENT_TYPES = [
   "ISSUED",
   "SUPERSEDED",
   "WITHDRAWN",
   "REINSTATED",
 ] as const;
-export type CertificateStatusEventType =
+type CertificateStatusEventType =
   (typeof CERTIFICATE_STATUS_EVENT_TYPES)[number];
 
-export const CERTIFICATE_LIFECYCLE_STATUSES = [
+const CERTIFICATE_LIFECYCLE_STATUSES = [
   "ISSUED",
   "SUPERSEDED",
   "WITHDRAWN",
 ] as const;
-export type CertificateLifecycleStatus =
+type CertificateLifecycleStatus =
   (typeof CERTIFICATE_LIFECYCLE_STATUSES)[number];
 
 /** The fields of a stored status event the derivation reads. */
@@ -83,6 +83,3 @@ export const WithdrawCertificateSchema = z.object({
     .min(10, "Motivo da retirada deve ter pelo menos 10 caracteres")
     .max(2000, "Motivo da retirada deve ter no máximo 2000 caracteres"),
 });
-export type WithdrawCertificateInput = z.infer<
-  typeof WithdrawCertificateSchema
->;

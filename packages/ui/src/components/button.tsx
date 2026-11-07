@@ -49,4 +49,4 @@ const Button = forwardRef<ComponentRef<typeof ButtonPrimitive>, ButtonProps>(
 Button.displayName = "Button";
 
 export { Button };
-export type { ButtonProps, IconButtonSize, TextButtonSize };
+export type { TextButtonSize };

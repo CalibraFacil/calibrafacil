@@ -438,7 +438,7 @@ const certificateContent = {
   ],
 };
 
-export const weighingProductDefinition: TemplateProductDefinition = {
+const weighingProductDefinition: TemplateProductDefinition = {
   assetTypeSlug: BALANCE_ASSET_TYPE_SLUG,
   name: METHOD_NAME,
   description: methodDescription,

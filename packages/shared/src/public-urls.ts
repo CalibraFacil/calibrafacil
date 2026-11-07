@@ -78,7 +78,7 @@ export function certificateVerificationUrl(
  * presigned URLs, never through this address, so its host uses the reserved
  * `.invalid` TLD: nothing can resolve it by accident.
  */
-export const STORED_OBJECT_URL_BASE = "https://storage.invalid";
+const STORED_OBJECT_URL_BASE = "https://storage.invalid";
 
 export function storedObjectUrl(key: string): string {
   return `${STORED_OBJECT_URL_BASE}/${key.replace(/^\/+/, "")}`;

@@ -13,7 +13,7 @@ declare global {
  * Elsewhere that file is an empty default and the value baked in at build time
  * (`buildTimeValue`, always an `import.meta.env.VITE_*` read) applies.
  */
-export function runtimeEnv(
+function runtimeEnv(
   name: string,
   buildTimeValue: string | undefined,
 ): string | undefined {

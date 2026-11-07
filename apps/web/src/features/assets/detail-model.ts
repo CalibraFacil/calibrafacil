@@ -19,7 +19,7 @@ export type AssetCalibrationLevel =
   | 'retired'
 
 /** Within this window the calibration is flagged as expiring soon. */
-export const DUE_SOON_DAYS = 30
+const DUE_SOON_DAYS = 30
 
 /** A calibration date is a calendar date (a Postgres date): show its day. */
 export function formatDate(date: string | Date | null | undefined): string {

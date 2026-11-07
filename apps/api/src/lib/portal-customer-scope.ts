@@ -31,7 +31,7 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
  * cross-organization on purpose (see tenant-sql-allowlist.ts, portal-cross-org).
  */
 
-export type PortalScopeCustomer = {
+type PortalScopeCustomer = {
   id: number;
   name: string;
   labOrganizationId: string;

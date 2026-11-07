@@ -33,7 +33,7 @@ export type CapaFormData = {
   preventiveMeasures: string
 }
 
-export type ImpactAssessmentItemFormData = {
+type ImpactAssessmentItemFormData = {
   description: string
   disposition: string
   note: string

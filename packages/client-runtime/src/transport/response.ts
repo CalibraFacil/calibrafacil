@@ -80,7 +80,7 @@ export async function readMutationResponse<TResponse>(
  * `@calibra-facil/contracts` schema (see `validateResponsePayload` for the
  * strict vs warn behavior).
  */
-export async function readValidatedJsonResponse<TSchema extends z.ZodType>(
+async function readValidatedJsonResponse<TSchema extends z.ZodType>(
   response: Response,
   schema: TSchema,
   context: { endpoint: string; fallback: string } & ResponseValidationOptions,

@@ -31,10 +31,7 @@ import {
   type CertificateJobData,
   type MethodFormula,
 } from "@calibra-facil/certificate-data";
-import {
-  formatAccreditationNumber,
-  isAccreditationSealEligible,
-} from "@calibra-facil/shared";
+import { isAccreditationSealEligible } from "@calibra-facil/shared";
 import {
   formatCalendarDate,
   formatInstant,
@@ -1007,4 +1004,3 @@ function formatBlockValue(value: unknown): string | null {
 }
 
 /** Re-exported so the worker does not need a second import for the QR. */
-export { formatAccreditationNumber };

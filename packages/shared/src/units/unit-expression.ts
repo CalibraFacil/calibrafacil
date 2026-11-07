@@ -458,5 +458,3 @@ export function parseUnitExpression(input: unknown): UnitParseResult {
     throw error;
   }
 }
-
-export { BASE_ATOMS, SI_PREFIXES };

@@ -30,8 +30,6 @@ export const defaultIntegrationDraft = {
   billingDocumentPath: '/billing-documents',
 }
 
-export type IntegrationConfigDraft = typeof defaultIntegrationDraft
-
 export type IntegrationMappingDrafts = Record<string, IntegrationMappingsConfig>
 
 export type IntegrationMemberSource = {
@@ -528,12 +526,10 @@ export function validateIntegrationBaseUrl(baseUrl: string) {
  * the connection first"). We surface these once instead of repeating them on
  * each pipeline.
  */
-export const GLOBAL_INTEGRATION_WARNING_CODES: ReadonlySet<IntegrationDependencyWarningCode> =
+const GLOBAL_INTEGRATION_WARNING_CODES: ReadonlySet<IntegrationDependencyWarningCode> =
   new Set(['VALIDATION_REQUIRED', 'INTEGRATION_DISABLED'])
 
-export function isGlobalIntegrationWarning(
-  warning: IntegrationDependencyWarning,
-) {
+function isGlobalIntegrationWarning(warning: IntegrationDependencyWarning) {
   return GLOBAL_INTEGRATION_WARNING_CODES.has(warning.code)
 }
 

@@ -93,34 +93,6 @@ export function formatCatalogItemLabel(item: ContaAzulCatalogItem) {
   return `${code}${item.name}${suffix}`
 }
 
-export function resolveCatalogValueLabel(
-  value: string | null,
-  items: ContaAzulCatalogItem[] | undefined,
-) {
-  if (!value) {
-    return 'Não configurado'
-  }
-
-  const match = items?.find((item) => item.id === value)
-  return match ? formatCatalogItemLabel(match) : value
-}
-
-export function formatCatalogQueryCount(query: ContaAzulCatalogQuery) {
-  if (query.isError) return 'Falha'
-  if (query.isLoading) return '—'
-  return String(query.data?.items.length ?? 0)
-}
-
-/** "linked/total" style counter pair for two catalog queries. */
-export function formatCatalogQueryPair(
-  a: ContaAzulCatalogQuery,
-  b: ContaAzulCatalogQuery,
-) {
-  if (a.isError || b.isError) return 'Falha'
-  if (a.isLoading || b.isLoading) return '—'
-  return `${a.data?.items.length ?? 0}/${b.data?.items.length ?? 0}`
-}
-
 export function getFiscalTaxonomyValue(
   metadata: Record<string, unknown> | null,
   key: string,

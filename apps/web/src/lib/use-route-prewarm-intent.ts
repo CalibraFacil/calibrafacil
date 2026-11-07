@@ -51,7 +51,7 @@ export function createRoutePrewarmIntent(
   return { schedule, cancel }
 }
 
-export function useRoutePrewarmIntent(
+function useRoutePrewarmIntent(
   prewarmFn: PrewarmFn,
   options: UseRoutePrewarmIntentOptions = {},
 ): RoutePrewarmIntentHandlers {

@@ -1,8 +1,8 @@
 import { DEFAULT_CONTA_AZUL_SCOPES } from "@calibra-facil/shared";
 
-export const CONTA_AZUL_AUTHORIZATION_URL = "https://auth.contaazul.com/login";
+const CONTA_AZUL_AUTHORIZATION_URL = "https://auth.contaazul.com/login";
 
-export const CONTA_AZUL_TOKEN_URL = "https://auth.contaazul.com/oauth2/token";
+const CONTA_AZUL_TOKEN_URL = "https://auth.contaazul.com/oauth2/token";
 
 export interface ContaAzulOAuthEnv {
   API_URL?: string;
@@ -13,7 +13,7 @@ export interface ContaAzulOAuthEnv {
 }
 
 /** Where Conta Azul sends the browser back after the laboratory approves. */
-export const CONTA_AZUL_OAUTH_CALLBACK_PATH =
+const CONTA_AZUL_OAUTH_CALLBACK_PATH =
   "/api/integrations/conta-azul/oauth/callback";
 
 export interface ContaAzulAppCredentials {
@@ -136,7 +136,7 @@ export function isContaAzulInvalidGrantError(error: unknown) {
   return error instanceof ContaAzulOAuthError && error.code === "invalid_grant";
 }
 
-export type ContaAzulRefreshFailureReason =
+type ContaAzulRefreshFailureReason =
   | "invalid_grant"
   | "app_missing"
   | "refresh_failed";
@@ -348,7 +348,7 @@ function randomStateNonce() {
   return base64UrlEncode(bytes);
 }
 
-export async function createContaAzulOAuthState(params: {
+async function createContaAzulOAuthState(params: {
   organizationId: string;
   userId: string;
   sessionId: string;

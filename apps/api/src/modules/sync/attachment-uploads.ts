@@ -34,7 +34,7 @@ import { asRecord } from "./helpers";
  * through the still-valid presigned URL after the check.
  */
 
-export const SYNC_ATTACHMENT_UPLOAD_COMPLETED_ACTION =
+const SYNC_ATTACHMENT_UPLOAD_COMPLETED_ACTION =
   "sync_attachment.upload_completed";
 
 /** What the desktop declares about the bytes it uploads. */

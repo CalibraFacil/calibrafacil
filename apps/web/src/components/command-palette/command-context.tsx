@@ -12,7 +12,7 @@ import {
 } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { useMountEffect } from '@/hooks/use-mount-effect'
-export type CommandAction = {
+type CommandAction = {
   id: string
   label: string
   icon?: ReactNode

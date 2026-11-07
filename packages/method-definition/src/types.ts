@@ -3,7 +3,7 @@ export const METHOD_ENGINE_PACKAGE_NAME = "@calibra-facil/math-engine";
 
 export type NumericInput = string | number;
 
-export type FormulaEvaluationResultLike = {
+type FormulaEvaluationResultLike = {
   value: string | number;
   valueText?: string;
   diagnostics?: readonly unknown[];
@@ -100,13 +100,13 @@ export type SafeMetadataValue = string | number | boolean | null;
 export type SafeMetadata = Record<string, SafeMetadataValue>;
 
 export type CalibrationPhase = "before" | "after";
-export type CalibrationPhaseMode =
+type CalibrationPhaseMode =
   | "before_and_after"
   | "before_only"
   | "after_only"
   | "not_performed";
 
-export type CalibrationPhaseBlockSnapshot = {
+type CalibrationPhaseBlockSnapshot = {
   mode: CalibrationPhaseMode;
   reason?: string | null;
 };
@@ -136,13 +136,13 @@ export type MethodDiagnostic = {
   details?: Record<string, SafeMetadataValue>;
 };
 
-export type NumericConstraints = {
+type NumericConstraints = {
   min?: number;
   max?: number;
   integer?: boolean;
 };
 
-export type ScalarInput = {
+type ScalarInput = {
   kind: "scalar";
   key: string;
   label: string;
@@ -163,7 +163,7 @@ export type ScalarInput = {
   metadata?: SafeMetadata;
 };
 
-export type RepeatedObservationInput = {
+type RepeatedObservationInput = {
   kind: "repeated_observation";
   key: string;
   label: string;
@@ -178,7 +178,7 @@ export type RepeatedObservationInput = {
   metadata?: SafeMetadata;
 };
 
-export type TableColumn = {
+type TableColumn = {
   key: string;
   label: string;
   type: "text" | "number";
@@ -239,7 +239,7 @@ export type TableInput = {
   metadata?: SafeMetadata;
 };
 
-export type SelectInput = {
+type SelectInput = {
   kind: "select";
   key: string;
   label: string;
@@ -249,7 +249,7 @@ export type SelectInput = {
   metadata?: SafeMetadata;
 };
 
-export type BooleanInput = {
+type BooleanInput = {
   kind: "boolean";
   key: string;
   label: string;
@@ -258,7 +258,7 @@ export type BooleanInput = {
   metadata?: SafeMetadata;
 };
 
-export type TextInput = {
+type TextInput = {
   kind: "text";
   key: string;
   label: string;
@@ -315,18 +315,18 @@ export type MethodFormula = {
   metadata?: SafeMetadata;
 };
 
-export type FormulaScope =
+type FormulaScope =
   | { kind: "scalar" }
   | { kind: "table_row"; tableKey: string };
 
-export type TypeAUncertaintySource = {
+type TypeAUncertaintySource = {
   kind: "type_a";
   observationsInputKey?: string;
   observations?: QuantitySource[];
   minDegreesOfFreedom?: number;
 };
 
-export type TypeBUncertaintySource = {
+type TypeBUncertaintySource = {
   kind: "type_b";
   distribution: "normal" | "rectangular" | "triangular" | "u_shaped" | "custom";
   standardUncertainty?: string | number;
@@ -341,7 +341,7 @@ export type TypeBUncertaintySource = {
   degreesOfFreedom?: number;
 };
 
-export type DirectStandardUncertaintySource = {
+type DirectStandardUncertaintySource = {
   kind: "direct_standard_uncertainty";
   standardUncertainty: string | number;
   degreesOfFreedom?: number | "Infinity";
@@ -366,12 +366,12 @@ export type QuantitySource =
   | { kind: "table_column"; tableKey: string; columnKey: string }
   | { kind: "constant"; value: string | number };
 
-export type MethodCorrelation = {
+type MethodCorrelation = {
   symbols: [string, string];
   coefficient: string | number;
 };
 
-export type MethodCovariance = {
+type MethodCovariance = {
   symbols: [string, string];
   covariance: string | number;
 };
@@ -429,7 +429,7 @@ export type MethodPreviewScenario = {
   expectFailure?: boolean;
 };
 
-export type MethodMetadata = SafeMetadata & {
+type MethodMetadata = SafeMetadata & {
   validationStatus?: "pending_revalidation" | "validated" | "not_validated";
 };
 
@@ -449,8 +449,8 @@ export type MethodDraft = {
   metadata: MethodMetadata;
 };
 
-export type NormalizedMethodInput = MethodInput;
-export type NormalizedQuantity = MethodQuantity;
+type NormalizedMethodInput = MethodInput;
+type NormalizedQuantity = MethodQuantity;
 export type NormalizedAcceptanceCriterion = MethodAcceptanceCriterion & {
   normalizedFormula: string;
   variables: string[];
@@ -513,12 +513,12 @@ export type FormulaPreviewResult = {
   formulaFingerprint: string;
 };
 
-export type MeasurementModelPreviewResult = {
+type MeasurementModelPreviewResult = {
   key: string;
   result: MeasurementModelResultLike | readonly MeasurementModelResultLike[];
 };
 
-export type AcceptanceCriterionPreviewResult = {
+type AcceptanceCriterionPreviewResult = {
   key: string;
   passed: boolean;
   severity: MethodAcceptanceCriterion["severity"];

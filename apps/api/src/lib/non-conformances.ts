@@ -20,7 +20,7 @@ import { isUniqueViolation } from "./db-errors";
 
 const MAX_SEQ_RETRIES = 3;
 
-export async function generateNcNumber(
+async function generateNcNumber(
   organizationId: string,
   executor: Pick<OrgExecutor, "select"> = db,
 ): Promise<string> {

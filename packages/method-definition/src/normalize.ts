@@ -15,7 +15,7 @@ export function parseMethodDraft(value: unknown): MethodDraft {
   return normalizeMethodDraft(MethodDraftSchema.parse(value));
 }
 
-export function normalizeMethodDraft(draft: MethodDraft): MethodDraft {
+function normalizeMethodDraft(draft: MethodDraft): MethodDraft {
   return {
     id: draft.id.trim(),
     version: draft.version,
@@ -237,6 +237,6 @@ function normalizePreviewScenario(
   };
 }
 
-export function normalizeExpression(expression: string): string {
+function normalizeExpression(expression: string): string {
   return expression.trim().replace(/\s+/g, " ");
 }

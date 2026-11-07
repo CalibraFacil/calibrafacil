@@ -33,10 +33,7 @@ type UnitScope = Parameters<typeof buildUnitScopeCondition>[1];
 
 const MAX_QUEUE_ROWS = 200;
 
-export {
-  evaluateOrderBlockers,
-  resolveServiceOrderBillingDocumentLinks,
-} from "./finance";
+export { evaluateOrderBlockers } from "./finance";
 
 /**
  * Resolve whether the org has a usable financial provider connection. This is a

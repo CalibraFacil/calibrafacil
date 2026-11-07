@@ -209,7 +209,7 @@ export async function findImpactedCertificates(
  * listed so the laboratory can stop or amend it, not because approval can still
  * refuse it; RENDER_FAILED likewise (its render is retried or the job rejected).
  */
-export const IN_FLIGHT_JOB_STATUSES = [
+const IN_FLIGHT_JOB_STATUSES = [
   "DRAFT",
   "IN_PROGRESS",
   "REVIEW",

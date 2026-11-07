@@ -10,7 +10,7 @@ import type {
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { inOrgTransaction } from "./org-transaction";
 
-export type IntegrationDriftStatus = "REMOTE_MISSING";
+type IntegrationDriftStatus = "REMOTE_MISSING";
 
 export interface IntegrationDriftRow {
   linkId: string;
@@ -172,33 +172,4 @@ export async function acknowledgeIntegrationDrift(
   });
 
   return { ok: true };
-}
-
-/**
- * Clear an acknowledgement (when an operator wants to bring the link back
- * into the drift queue). Not exposed as a route in slice 3; reserved for
- * future bulk-repair tooling.
- */
-export async function resetIntegrationDriftAcknowledgement(
-  params: {
-    organizationId: string;
-    linkId: string;
-  },
-  executor?: OrgDb,
-): Promise<void> {
-  await inOrgTransaction(params.organizationId, executor, async (o) => {
-    await o
-      .update(integrationObjectLink)
-      .set({
-        driftAcknowledgedAt: null,
-        driftAcknowledgedByUserId: null,
-        driftAcknowledgedReason: null,
-      })
-      .where(
-        and(
-          eq(integrationObjectLink.id, params.linkId),
-          eq(integrationObjectLink.organizationId, params.organizationId),
-        ),
-      );
-  });
 }

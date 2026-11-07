@@ -1,4 +1,4 @@
-export type FiscalEventKind = "issued" | "rejected" | "cancelled";
+type FiscalEventKind = "issued" | "rejected" | "cancelled";
 
 export interface FiscalEventInput {
   /** ISO date string when the fiscal event happened (issuance / rejection / cancellation). */

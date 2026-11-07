@@ -11,7 +11,7 @@ import {
   type ActivateLocalPartitionOutcome,
 } from '@/runtime/local-partition'
 
-export const LOCAL_PARTITION_QUERY_ROOT = 'local-partition'
+const LOCAL_PARTITION_QUERY_ROOT = 'local-partition'
 
 /**
  * Opens the local database for the account and organization on screen, and

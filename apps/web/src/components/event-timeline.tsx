@@ -32,7 +32,7 @@ type BadgeVariant =
   | 'ghost'
   | 'link'
 
-export type EventTimelineBadge = {
+type EventTimelineBadge = {
   label: string
   variant?: BadgeVariant
 }

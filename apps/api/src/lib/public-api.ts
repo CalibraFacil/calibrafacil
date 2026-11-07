@@ -59,11 +59,6 @@ export function buildListMeta(params: {
   };
 }
 
-export function normalizeExternalId(value?: string | null) {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
 export function getIdempotencyKey(headers: Headers) {
   return headers.get("idempotency-key")?.trim() ?? null;
 }
@@ -210,8 +205,8 @@ export async function upsertResourceExternalId(
  * crash) expires after `IDEMPOTENCY_RESERVATION_TTL_MS`, when the next request
  * with the key takes it over.
  */
-export const IDEMPOTENCY_IN_PROGRESS_STATUS = 0;
-export const IDEMPOTENCY_RESERVATION_TTL_MS = 5 * 60 * 1000;
+const IDEMPOTENCY_IN_PROGRESS_STATUS = 0;
+const IDEMPOTENCY_RESERVATION_TTL_MS = 5 * 60 * 1000;
 
 export type IdempotencyKeyScope = {
   organizationId: string;
@@ -394,10 +389,7 @@ export async function releaseIdempotencyReservation(params: {
   );
 }
 
-export async function listAccessibleUnits(
-  organizationId: string,
-  executor?: OrgDb,
-) {
+async function listAccessibleUnits(organizationId: string, executor?: OrgDb) {
   return inOrgTransaction(organizationId, executor, (o) =>
     o
       .select({

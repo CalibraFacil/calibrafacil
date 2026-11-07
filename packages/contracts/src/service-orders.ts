@@ -16,10 +16,10 @@ import { nullableString, paginationSchema } from "./common";
 const jsonRecordSchema = z.record(z.string(), z.unknown());
 
 export const serviceOrderStatusSchema = ServiceOrderStatusSchema;
-export const serviceOrderPrioritySchema = ServiceOrderPrioritySchema;
+const serviceOrderPrioritySchema = ServiceOrderPrioritySchema;
 
 /** One row of GET /api/service-orders. */
-export const serviceOrderListItemSchema = z.object({
+const serviceOrderListItemSchema = z.object({
   id: z.number(),
   /** Opaque id the dashboard links with; the serial never reaches a URL. */
   publicId: z.string(),
@@ -38,7 +38,6 @@ export const serviceOrderListItemSchema = z.object({
   totalQuotedCents: z.number(),
   unitName: nullableString,
 });
-export type ServiceOrderListItem = z.infer<typeof serviceOrderListItemSchema>;
 
 /** GET /api/service-orders */
 export const serviceOrdersListResponseSchema = z.object({
@@ -80,7 +79,7 @@ const serviceOrderQuoteSchema = z.object({
 });
 
 /** The order as GET /api/service-orders/:id returns it (the `data` of the response). */
-export const serviceOrderDetailSchema = z.object({
+const serviceOrderDetailSchema = z.object({
   id: z.number(),
   publicId: z.string(),
   serviceOrderNumber: z.string(),
@@ -120,7 +119,6 @@ export const serviceOrderDetailSchema = z.object({
     }),
   ),
 });
-export type ServiceOrderDetail = z.infer<typeof serviceOrderDetailSchema>;
 
 /** GET /api/service-orders/:id */
 export const serviceOrderDetailResponseSchema = z.object({

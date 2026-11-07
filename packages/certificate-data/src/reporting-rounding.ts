@@ -27,7 +27,7 @@ import { roundToSignificantDigits } from "@calibra-facil/shared";
 import { formatDecimalPtBr, fractionDigitsOf } from "./decimal-format.js";
 
 /** A.6.3 says "no more than two"; two is the universal practice. */
-export const UNCERTAINTY_SIGNIFICANT_FIGURES = 2;
+const UNCERTAINTY_SIGNIFICANT_FIGURES = 2;
 
 /**
  * When there is no usable uncertainty there is no rule to apply, so the value

@@ -27,7 +27,7 @@ export type CustomerAddress = {
   state?: string
 }
 
-export type CustomerFinancialSummary = {
+type CustomerFinancialSummary = {
   openDocumentsCount: number
   overdueDocumentsCount: number
   openBalanceCents: number
@@ -52,7 +52,7 @@ export type CustomerCompliance = {
   notes?: string
 }
 
-export type ActiveCommercialAgreement = {
+type ActiveCommercialAgreement = {
   id: number
   title: string
   agreementCode: string | null
@@ -83,7 +83,7 @@ export type CustomerAssetStatus =
   | 'MAINTENANCE'
   | 'SCRAPPED'
 
-export type CustomerAsset = {
+type CustomerAsset = {
   id: number
   name: string
   tag: string

@@ -28,7 +28,7 @@ export type VerifiedIdentity = {
   verified: boolean
 }
 
-export type SessionReadResult = {
+type SessionReadResult = {
   data?: {
     user?: { id?: string | null } | null
     session?: { activeOrganizationId?: string | null } | null

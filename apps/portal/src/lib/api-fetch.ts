@@ -89,7 +89,7 @@ export function fetchPortalResponse(
 }
 
 /** Checks a successful response's JSON body against its contract schema. */
-export async function readPortalJson<TSchema extends z.ZodType>(
+async function readPortalJson<TSchema extends z.ZodType>(
   response: Response,
   schema: TSchema,
   endpoint: string,
@@ -122,7 +122,7 @@ export async function readPortalJsonResult<TSchema extends z.ZodType>(
 }
 
 /** Throws the HTTP error for a non-OK response. */
-export async function throwPortalApiError(
+async function throwPortalApiError(
   response: Response,
   errorMessage: string,
   serverErrorMessage = false,

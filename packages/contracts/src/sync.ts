@@ -121,7 +121,7 @@ export const localSessionSnapshotResponseSchema = z.object({
   data: syncBootstrapResponseSchema.nullable(),
 });
 
-export const cloudSyncEntityTypeSchema = z.enum([
+const cloudSyncEntityTypeSchema = z.enum([
   "asset_type",
   "customer",
   "asset",
@@ -221,7 +221,7 @@ export const syncAttachmentDownloadResponseSchema = z.object({
  *   change `synced` although the cloud never received it. Rows with this status are
  *   kept as history and never written by this build.
  */
-export const localSyncConflictStatusSchema = z.enum([
+const localSyncConflictStatusSchema = z.enum([
   "open",
   "resolved",
   "discarded_by_user",
@@ -288,7 +288,7 @@ export const localDeadOutboxEventSchema = z.object({
  * edit of the same record, or the record's parent) was refused or is in
  * conflict. It leaves the queue on its own once that change is resolved.
  */
-export const localBlockedOutboxEventSchema = z.object({
+const localBlockedOutboxEventSchema = z.object({
   eventId: z.string(),
   entityType: z.string(),
   entityId: z.string(),
@@ -335,23 +335,6 @@ export type LocalSessionSnapshotResponse = z.infer<
 >;
 export type CloudSyncEvent = z.infer<typeof cloudSyncEventSchema>;
 export type SyncPullResponse = z.infer<typeof syncPullResponseSchema>;
-export type SyncAckRequest = z.infer<typeof syncAckRequestSchema>;
-export type SyncAckResponse = z.infer<typeof syncAckResponseSchema>;
-export type SyncAttachmentInitUploadRequest = z.infer<
-  typeof syncAttachmentInitUploadRequestSchema
->;
-export type SyncAttachmentInitUploadResponse = z.infer<
-  typeof syncAttachmentInitUploadResponseSchema
->;
-export type SyncAttachmentCompleteUploadRequest = z.infer<
-  typeof syncAttachmentCompleteUploadRequestSchema
->;
-export type SyncAttachmentCompleteUploadResponse = z.infer<
-  typeof syncAttachmentCompleteUploadResponseSchema
->;
-export type SyncAttachmentDownloadResponse = z.infer<
-  typeof syncAttachmentDownloadResponseSchema
->;
 export type LocalBlockedOutboxEvent = z.infer<
   typeof localBlockedOutboxEventSchema
 >;
@@ -365,15 +348,6 @@ export type LocalSyncConflictsResponse = z.infer<
 export type LocalDeadOutboxEvent = z.infer<typeof localDeadOutboxEventSchema>;
 export type LocalDeadOutboxEventsResponse = z.infer<
   typeof localDeadOutboxEventsResponseSchema
->;
-export type LocalSyncConflictResolution = z.infer<
-  typeof localSyncConflictResolutionSchema
->;
-export type SyncConflictResolutionRequest = z.infer<
-  typeof syncConflictResolutionRequestSchema
->;
-export type SyncConflictResolutionResponse = z.infer<
-  typeof syncConflictResolutionResponseSchema
 >;
 
 // ---------------------------------------------------------------------------

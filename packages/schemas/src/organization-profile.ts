@@ -96,10 +96,3 @@ export const UpdateOrganizationProfileSchema = z
       path: ["accreditationValidUntil"],
     },
   );
-
-export type UpdateOrganizationProfileInput = z.input<
-  typeof UpdateOrganizationProfileSchema
->;
-export type ParsedOrganizationProfile = z.output<
-  typeof UpdateOrganizationProfileSchema
->;

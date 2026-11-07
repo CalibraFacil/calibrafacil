@@ -11,7 +11,7 @@ export type LegacyAppliedEvent = {
 // How long a claim without `applied_at` blocks other pushes of the same op. A
 // claim only outlives its request if the process died mid-apply; after the
 // lease the op is taken over instead of stuck forever.
-export const SYNC_EVENT_CLAIM_LEASE_SECONDS = 300;
+const SYNC_EVENT_CLAIM_LEASE_SECONDS = 300;
 
 export type DesktopSyncClaim =
   | { state: "claimed"; claimId: number }

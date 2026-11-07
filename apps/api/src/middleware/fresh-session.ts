@@ -46,7 +46,7 @@ export const requireFreshSession = createMiddleware<{
   await next();
 });
 
-export function isBanned(
+function isBanned(
   account: { banned: boolean; banExpires: Date | null },
   now: Date,
 ): boolean {

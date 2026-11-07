@@ -1,4 +1,4 @@
-export function slugifyRouteIdentifier(value: string): string {
+function slugifyRouteIdentifier(value: string): string {
   const slug = value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')

@@ -11,7 +11,7 @@ import { defineStateMachine } from "../state-machine";
 //   dead_letter    the lease holder gives up at once (a permanent error)
 //   reclaim_stale  a lease that expired: PENDING again, or FAILED when exhausted
 //   settle_inline  the demo seed runs a queued job inline and marks it done
-export const APP_QUEUE_JOB_STATUSES = [
+const APP_QUEUE_JOB_STATUSES = [
   "PENDING",
   "PROCESSING",
   "COMPLETED",
@@ -49,7 +49,7 @@ export const APP_QUEUE_JOB_MACHINE = defineStateMachine({
 // RUNNING receipt, claimed again by the next delivery.
 //   claim     insert RUNNING, or re-lease a RUNNING one whose lease expired
 //   complete  the consumer finished: COMPLETED, never claimed again
-export const QUEUE_JOB_RECEIPT_STATUSES = ["RUNNING", "COMPLETED"] as const;
+const QUEUE_JOB_RECEIPT_STATUSES = ["RUNNING", "COMPLETED"] as const;
 export type QueueJobReceiptStatus = (typeof QUEUE_JOB_RECEIPT_STATUSES)[number];
 
 export const QUEUE_JOB_RECEIPT_MACHINE = defineStateMachine({
@@ -69,7 +69,7 @@ export const QUEUE_JOB_RECEIPT_MACHINE = defineStateMachine({
 //               PROCESSING one)
 //   complete  the pack was stored
 //   fail      the build failed; a finished export is never overwritten
-export const PORTAL_EXPORT_JOB_STATUSES = [
+const PORTAL_EXPORT_JOB_STATUSES = [
   "PENDING",
   "PROCESSING",
   "COMPLETED",
@@ -93,8 +93,7 @@ export const PORTAL_EXPORT_JOB_MACHINE = defineStateMachine({
 
 // cron_run.last_status: the outcome of a cron's last run (apps/api/src/cron/
 // cron-run.ts). NULL until the first outcome is recorded.
-export const CRON_RUN_STATUSES = ["ok", "error"] as const;
-export type CronRunStatus = (typeof CRON_RUN_STATUSES)[number];
+const CRON_RUN_STATUSES = ["ok", "error"] as const;
 
 export const CRON_RUN_MACHINE = defineStateMachine({
   name: "cron run",

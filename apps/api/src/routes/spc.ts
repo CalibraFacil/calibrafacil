@@ -63,7 +63,7 @@ async function loadChartScoped(
  * Shared by the manual recalculate endpoint, reading ingestion and the
  * nightly cron sweep.
  */
-export async function recomputeControlChart(
+async function recomputeControlChart(
   chart: typeof controlChart.$inferSelect,
   executor: Pick<OrgExecutor, "select" | "update">,
 ): Promise<SpcEvaluation> {

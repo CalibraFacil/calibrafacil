@@ -57,8 +57,8 @@ describe("no client-rendered certificate publish path", () => {
       "utf8",
     );
     const union = text.slice(
-      text.indexOf("export type ApprovalCompletion"),
-      text.indexOf("export type FinanceSendResult"),
+      text.indexOf("type ApprovalCompletion"),
+      text.indexOf("type FinanceSendResult"),
     );
 
     expect(

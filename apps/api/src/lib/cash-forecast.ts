@@ -20,7 +20,7 @@ export type CashForecastBucket =
   | "IN_60_DAYS"
   | "IN_90_DAYS";
 
-export const CASH_FORECAST_BUCKETS: ReadonlyArray<CashForecastBucket> = [
+const CASH_FORECAST_BUCKETS: ReadonlyArray<CashForecastBucket> = [
   "OVERDUE",
   "THIS_WEEK",
   "NEXT_WEEK",
@@ -28,15 +28,6 @@ export const CASH_FORECAST_BUCKETS: ReadonlyArray<CashForecastBucket> = [
   "IN_60_DAYS",
   "IN_90_DAYS",
 ];
-
-export const CASH_FORECAST_BUCKET_LABEL: Record<CashForecastBucket, string> = {
-  OVERDUE: "Vencidos",
-  THIS_WEEK: "Esta semana",
-  NEXT_WEEK: "Próxima semana",
-  IN_30_DAYS: "Em 30 dias",
-  IN_60_DAYS: "Em 60 dias",
-  IN_90_DAYS: "Em 90 dias",
-};
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -92,7 +83,7 @@ export function bucketByDueDate(
   return result;
 }
 
-export interface CashForecastBucketSummary {
+interface CashForecastBucketSummary {
   confirmedCents: number;
   projectedCents: number;
   confirmedCount: number;

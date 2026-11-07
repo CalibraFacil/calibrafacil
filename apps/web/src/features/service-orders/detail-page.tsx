@@ -421,7 +421,7 @@ export function ServiceOrderFinancialStatusBlock({
 // #343 — per-OS customer notification log. Answers "we told customer X on
 // date Y via channel Z" from the email ledger/outbox; printable via the
 // browser as the dispute-proof trail.
-export function ServiceOrderCommunicationsBlock({ id }: { id: string }) {
+function ServiceOrderCommunicationsBlock({ id }: { id: string }) {
   // The ledger lives in the cloud, so this is unavailable when the cloud is —
   // not when the app happens to be Electron. A connected desktop reads it.
   const availability = useOperationAvailability(

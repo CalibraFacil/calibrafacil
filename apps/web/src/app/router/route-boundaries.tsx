@@ -24,7 +24,7 @@ const BOUNDARY_WRAPPER_CLASS =
  * blanking the app. Reporting happens in `defaultOnCatch` (below), not here,
  * so it needs no effect and fires once per caught error.
  */
-export function RouteErrorFallback({ reset }: ErrorComponentProps) {
+function RouteErrorFallback({ reset }: ErrorComponentProps) {
   const router = useRouter()
 
   return (
@@ -76,7 +76,7 @@ export function RoutePendingFallback() {
   )
 }
 
-export function RouteNotFoundFallback() {
+function RouteNotFoundFallback() {
   return (
     <div className={BOUNDARY_WRAPPER_CLASS}>
       <Empty className="max-w-md border">

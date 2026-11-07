@@ -71,7 +71,7 @@ const verdictSignerSchema = z.object({
   certificateSerial: nullableString,
 });
 
-export const signatureVerdictSchema = z.object({
+const signatureVerdictSchema = z.object({
   hashMatch: z.boolean().nullable(),
   signatureCryptographicallyValid: z.boolean(),
   chainValid: z.boolean(),

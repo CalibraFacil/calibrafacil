@@ -46,7 +46,7 @@ function uniqueValues<T>(values: readonly T[]): T[] {
 }
 
 /** The caller's org membership row for `userId`, or null (also null cross-tenant). */
-export function findOrganizationMember(
+function findOrganizationMember(
   organizationId: string,
   userId: string,
   executor?: TenantRefsExecutor,

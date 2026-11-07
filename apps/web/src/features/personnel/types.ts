@@ -56,7 +56,7 @@ export type CompetencesMatrixData = {
 
 export type TrainingType = 'internal' | 'external' | 'ojt' | 'proficiency_test'
 
-export type CompetenceTrainingRecord = {
+type CompetenceTrainingRecord = {
   id: number
   title: string
   type: string
@@ -114,7 +114,7 @@ export type AssignableTrainingRecordsData = {
   data: Array<AssignableTrainingRecord>
 }
 
-export type CompetenceAuditLogRecord = {
+type CompetenceAuditLogRecord = {
   id: number
   action: string
   changes: Record<string, unknown> | null

@@ -73,7 +73,7 @@ export type MethodSpec = {
   } | null
 }
 
-export function hasCertificateContent(method: MethodSpec): boolean {
+function hasCertificateContent(method: MethodSpec): boolean {
   const content = method.certificateContent
   if (!content) return false
   return Boolean(

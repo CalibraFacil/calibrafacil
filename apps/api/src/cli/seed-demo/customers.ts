@@ -138,7 +138,7 @@ export const DEMO_CUSTOMERS: readonly DemoCustomer[] = [
   },
 ];
 
-export function customerCnpj(entry: DemoCustomer): string {
+function customerCnpj(entry: DemoCustomer): string {
   return makeCnpj(entry.cnpjRoot);
 }
 

@@ -3,13 +3,7 @@ import {
   checkRolePermission,
   useActiveOrganization,
 } from '@calibra-facil/auth/client'
-import { canPerformCalibrationAction } from '@calibra-facil/auth/access'
-import type {
-  CalibrationAction,
-  CalibrationState,
-  PermissionCheck,
-  RoleName,
-} from '@calibra-facil/auth/access'
+import type { PermissionCheck, RoleName } from '@calibra-facil/auth/access'
 
 // =============================================================================
 // HOOKS
@@ -26,7 +20,7 @@ import type {
  *   // Show admin features
  * }
  */
-export function useRole(): RoleName {
+function useRole(): RoleName {
   const { data: activeOrg } = useActiveOrganization()
 
   // Get the current user's member record from the active organization
@@ -62,103 +56,6 @@ export function useHasPermission(permissions: PermissionCheck): boolean {
   return checkRolePermission(role, permissions)
 }
 
-/**
- * Hook to check if the current user can perform a calibration action.
- * Takes into account both the role and the calibration's current state.
- *
- * @param action - The action to check (edit, delete, submit, approve, reject)
- * @param state - The current state of the calibration
- * @returns True if the user can perform the action
- *
- * @example
- * const canApprove = useCanPerformCalibrationAction("approve", calibration.state);
- * const canEdit = useCanPerformCalibrationAction("edit", "draft");
- */
-export function useCanPerformCalibrationAction(
-  action: CalibrationAction,
-  state: CalibrationState,
-): boolean {
-  const role = useRole()
-  return canPerformCalibrationAction(role, state, action)
-}
-
-/**
- * Hook to get all allowed calibration actions for the current user.
- *
- * @param state - The current state of the calibration
- * @returns Array of actions the user can perform
- *
- * @example
- * const allowedActions = useAllowedCalibrationActions("draft");
- * // For technician: ["edit", "delete", "submit"]
- * // For admin: ["edit", "delete", "submit"]
- */
-const CALIBRATION_ACTIONS: Array<CalibrationAction> = [
-  'edit',
-  'delete',
-  'submit',
-  'approve',
-  'reject',
-]
-
-export function useAllowedCalibrationActions(
-  state: CalibrationState,
-): Array<CalibrationAction> {
-  const role = useRole()
-  return CALIBRATION_ACTIONS.filter((action) =>
-    canPerformCalibrationAction(role, state, action),
-  )
-}
-
-// =============================================================================
-// COMPONENTS
-// =============================================================================
-
-interface PermissionGateProps {
-  /**
-   * The permissions required to render the children
-   */
-  permissions: PermissionCheck
-  /**
-   * Content to render when the user has the required permissions
-   */
-  children: ReactNode
-  /**
-   * Optional content to render when the user lacks permissions
-   */
-  fallback?: ReactNode
-}
-
-/**
- * Conditionally renders children based on current user's permissions.
- *
- * @example
- * <PermissionGate permissions={{ calibration: ["approve"] }}>
- *   <ApproveButton />
- * </PermissionGate>
- *
- * @example
- * <PermissionGate
- *   permissions={{ calibration: ["create"] }}
- *   fallback={<p>You don't have permission to create calibrations.</p>}
- * >
- *   <CreateCalibrationForm />
- * </PermissionGate>
- */
-export function PermissionGate({
-  permissions,
-  children,
-  fallback = null,
-}: PermissionGateProps) {
-  const hasPermission = useHasPermission(permissions)
-
-  if (!hasPermission) {
-    return <>{fallback}</>
-  }
-
-  return <>{children}</>
-}
-
 interface RoleGateProps {
   /**
    * The roles allowed to view the content
@@ -191,54 +88,6 @@ export function RoleGate({ roles, children, fallback = null }: RoleGateProps) {
   const currentRole = useRole()
 
   if (!roles.includes(currentRole)) {
-    return <>{fallback}</>
-  }
-
-  return <>{children}</>
-}
-
-interface CalibrationActionGateProps {
-  /**
-   * The workflow action to check
-   */
-  action: CalibrationAction
-  /**
-   * The current state of the calibration
-   */
-  state: CalibrationState
-  /**
-   * Content to render when the user can perform the action
-   */
-  children: ReactNode
-  /**
-   * Optional content to render when the user cannot perform the action
-   */
-  fallback?: ReactNode
-}
-
-/**
- * Conditionally renders children based on calibration workflow permissions.
- * Enforces ISO 17025 separation of duties.
- *
- * @example
- * <CalibrationActionGate action="approve" state={calibration.state}>
- *   <ApproveButton onClick={handleApprove} />
- * </CalibrationActionGate>
- *
- * @example
- * <CalibrationActionGate action="edit" state="approved">
- *   <EditButton /> {// Will not render - approved calibrations are immutable}
- * </CalibrationActionGate>
- */
-export function CalibrationActionGate({
-  action,
-  state,
-  children,
-  fallback = null,
-}: CalibrationActionGateProps) {
-  const canPerform = useCanPerformCalibrationAction(action, state)
-
-  if (!canPerform) {
     return <>{fallback}</>
   }
 
@@ -306,50 +155,4 @@ export function HideFromRole({ role, children }: HideFromRoleProps) {
   }
 
   return <>{children}</>
-}
-
-interface CanProps {
-  /**
-   * Resource to check permission for
-   */
-  resource: keyof PermissionCheck
-  /**
-   * Action to check permission for
-   */
-  action: string
-  /**
-   * Content to render when the user has permission
-   */
-  children: ReactNode
-  /**
-   * Optional content to render when permission is denied
-   */
-  fallback?: ReactNode
-}
-
-/**
- * Shorthand component for checking a single permission.
- *
- * @example
- * <Can resource="calibration" action="create">
- *   <NewCalibrationButton />
- * </Can>
- *
- * @example
- * <Can
- *   resource="billing"
- *   action="update"
- *   fallback={<p>Contact the owner to update billing.</p>}
- * >
- *   <UpdatePaymentMethodForm />
- * </Can>
- */
-export function Can({ resource, action, children, fallback = null }: CanProps) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- computed permission resource/action pairs cannot be represented precisely from runtime props.
-  const permissions = { [resource]: [action] } as PermissionCheck
-  return (
-    <PermissionGate permissions={permissions} fallback={fallback}>
-      {children}
-    </PermissionGate>
-  )
 }

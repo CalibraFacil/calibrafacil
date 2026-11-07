@@ -32,7 +32,7 @@ import {
 } from "@calibra-facil/shared";
 import { defineStateMachine, type Transition } from "../state-machine";
 
-export const SERVICE_ORDER_COMMANDS = [
+const SERVICE_ORDER_COMMANDS = [
   "create",
   "set_status",
   "evaluate",
@@ -76,7 +76,7 @@ const STATUS_GRAPH: Record<ServiceOrderStatus, ServiceOrderStatus[]> = {
 };
 
 /** Stages before the technical evaluation: where an evaluation may be recorded. */
-export const SERVICE_ORDER_EVALUABLE_STATUSES = [
+const SERVICE_ORDER_EVALUABLE_STATUSES = [
   "opened",
   "awaiting_tech_evaluation",
   "under_evaluation",
@@ -84,14 +84,14 @@ export const SERVICE_ORDER_EVALUABLE_STATUSES = [
 ] as const satisfies readonly ServiceOrderStatus[];
 
 /** Where an evaluation sends the order (quote needed / calibration / nothing to do). */
-export const SERVICE_ORDER_EVALUATION_OUTCOMES = [
+const SERVICE_ORDER_EVALUATION_OUTCOMES = [
   "awaiting_quote_approval",
   "awaiting_calibration",
   "ready_for_pickup",
 ] as const satisfies readonly ServiceOrderStatus[];
 
 /** On the bench: a quote sent from here does not rewind the order. */
-export const SERVICE_ORDER_WORK_IN_PROGRESS_STATUSES = [
+const SERVICE_ORDER_WORK_IN_PROGRESS_STATUSES = [
   "repair_in_progress",
   "awaiting_calibration",
   "calibration_in_progress",

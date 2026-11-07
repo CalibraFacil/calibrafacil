@@ -15,7 +15,7 @@ import type {
 } from '@calibra-facil/client-runtime'
 import type { PortalInvitation, PortalMember } from '@/features/customers/types'
 
-export function customerGroupsListQueryOptions(organizationId: string) {
+function customerGroupsListQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['customer-groups', organizationId],
     queryFn: (): Promise<CustomerGroupsListData> =>
@@ -35,7 +35,7 @@ export function useCustomerGroupsList(
 
 // Detail keyed on groupId only so route loaders can prefetch without the
 // dashboard org in context. Invalidating ['customer-group'] matches any group.
-export function customerGroupDetailQueryOptions(groupId: number) {
+function customerGroupDetailQueryOptions(groupId: number) {
   return queryOptions({
     queryKey: ['customer-group', groupId],
     queryFn: (): Promise<CustomerGroupDetailData> =>
@@ -56,14 +56,14 @@ export function useCustomerGroupDetailData(groupId: number) {
   return useQuery(customerGroupDetailQueryOptions(groupId))
 }
 
-export function customerGroupMembersQueryOptions(groupId: number) {
+function customerGroupMembersQueryOptions(groupId: number) {
   return queryOptions({
     queryKey: ['customer-group-members', groupId],
     queryFn: () => calibraApi.customerGroups.listMembers<PortalMember>(groupId),
   })
 }
 
-export function customerGroupInvitationsQueryOptions(groupId: number) {
+function customerGroupInvitationsQueryOptions(groupId: number) {
   return queryOptions({
     queryKey: ['customer-group-invitations', groupId],
     queryFn: () =>

@@ -5,7 +5,7 @@ export const SPC_STATUSES = [
   'out_of_control',
 ] as const
 
-export const SPC_CHART_TYPES = ['i_mr', 'xbar_r', 'cusum', 'ewma'] as const
+const SPC_CHART_TYPES = ['i_mr', 'xbar_r', 'cusum', 'ewma'] as const
 
 export type SpcStatus = (typeof SPC_STATUSES)[number]
 export type SpcChartType = (typeof SPC_CHART_TYPES)[number]
@@ -25,7 +25,7 @@ export const SPC_CHART_TYPE_LABELS: Record<SpcChartType, string> = {
   ewma: 'EWMA',
 }
 
-export type SpcChartParams = {
+type SpcChartParams = {
   baselineWindow?: number
   centerline?: number
   sigma?: number
@@ -37,14 +37,14 @@ export type SpcChartParams = {
   enabledRules?: string[]
 }
 
-export type SpcRuleHit = {
+type SpcRuleHit = {
   rule: string
   severity: SpcRuleSeverity
   pointIndices: number[]
   description: string
 }
 
-export type SpcEvaluationLimits = {
+type SpcEvaluationLimits = {
   centerline: number
   sigma: number
   ucl: number
@@ -53,7 +53,7 @@ export type SpcEvaluationLimits = {
   secondaryLcl?: number | null
 }
 
-export type SpcEvaluation = {
+type SpcEvaluation = {
   engineVersion: string
   fingerprint: string
   status: SpcStatus
@@ -96,7 +96,7 @@ export type SpcChartListQueryInput = {
   statusFilter: SpcStatus | ''
 }
 
-export type SpcChartReading = {
+type SpcChartReading = {
   id: number
   value: number
   uncertainty: number | null
@@ -109,23 +109,6 @@ export type SpcChartDetail = SpcChart & {
   readings: SpcChartReading[]
 }
 
-export type SpcReading = {
-  id: number
-  standardId: number
-  parameter: string
-  value: number
-  uncertainty: number | null
-  measuredAt: string
-  sourceJobId: number | null
-  createdBy: string
-  createdByName: string | null
-  createdAt: string
-}
-
-export type SpcReadingsListData = {
-  data: SpcReading[]
-}
-
 export type SpcEscalateResult = {
   message: string
   data: {
@@ -135,7 +118,7 @@ export type SpcEscalateResult = {
 }
 
 /** Minimal reference-standard option list for the create-chart form. */
-export type SpcStandardOption = {
+type SpcStandardOption = {
   id: number
   name: string
   serialNumber: string

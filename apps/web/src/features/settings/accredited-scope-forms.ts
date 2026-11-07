@@ -67,14 +67,6 @@ function boundToPickerDate(value: string | Date | null): Date | undefined {
   return new Date(year, month - 1, date)
 }
 
-export function toDateOrUndefined(
-  value: string | Date | null,
-): Date | undefined {
-  if (value == null) return undefined
-  const date = value instanceof Date ? value : new Date(value)
-  return Number.isNaN(date.getTime()) ? undefined : date
-}
-
 export function canSaveScopeLine(form: ScopeLineFormState): boolean {
   return (
     numberFromForm(form.rangeMin) !== null &&

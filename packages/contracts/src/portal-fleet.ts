@@ -163,7 +163,7 @@ export const portalRegulatedIntervalSchema = z.object({
 });
 
 /** GET /api/portal/assets/:id (`data`): the instrument with its newest certificates. */
-export const portalAssetDetailSchema = portalFleetAssetSchema
+const portalAssetDetailSchema = portalFleetAssetSchema
   .omit({ lastCertificate: true })
   .extend({
     // Track 1: the customer-owned calibration interval (§7.8.4.3, ILAC-G24).

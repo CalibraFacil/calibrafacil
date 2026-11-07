@@ -34,7 +34,7 @@ export type StatusEmailDescriptor = {
  * REQ-SOEMAIL-061: canceled → "OS cancelada"
  * REQ-SOEMAIL-062: warranty_return → "retorno em garantia"
  */
-export const STATUS_EMAIL_MAP = {
+const STATUS_EMAIL_MAP = {
   repair_in_progress: {
     eventKey: "status_email:repair_in_progress",
     emailType: "service_started",
@@ -81,7 +81,7 @@ export const STATUS_EMAIL_MAP = {
   },
 } satisfies Partial<Record<ServiceOrderStatus, StatusEmailDescriptor>>;
 
-export type TriggerStatus = keyof typeof STATUS_EMAIL_MAP;
+type TriggerStatus = keyof typeof STATUS_EMAIL_MAP;
 
 /** Type guard: narrows a `string` to a `TriggerStatus`. */
 function isTriggerStatus(status: string): status is TriggerStatus {

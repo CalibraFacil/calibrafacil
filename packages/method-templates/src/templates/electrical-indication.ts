@@ -327,7 +327,7 @@ const certificateContent = {
   ],
 };
 
-export const electricalProductDefinition: TemplateProductDefinition = {
+const electricalProductDefinition: TemplateProductDefinition = {
   assetTypeSlug: DMM_ASSET_TYPE_SLUG,
   name: METHOD_NAME,
   description: methodDescription,

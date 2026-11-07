@@ -1,13 +1,3 @@
-/**
- * Finance display conventions — the single source of truth for how monetary
- * values render and how finance status enums map onto the instrument-panel
- * `SignalTone` system. Keeping this here (rather than scattering Tailwind
- * classes across pages) is what lets every finance surface read the same way:
- * mono tabular numerics, and a consistent ok/critical/warning/info/neutral
- * signal language for documents, installments, exports, agreements and the
- * billing-readiness queue.
- */
-import type { ReactNode } from 'react'
 import type {
   BillingDocumentExportStatus,
   BillingDocumentStatus,
@@ -179,32 +169,5 @@ export function Money({
     >
       {formatFinanceMoney(cents, currency)}
     </span>
-  )
-}
-
-/** A label + Money pair for dense key/value blocks. */
-export function MoneyStat({
-  label,
-  cents,
-  currency,
-  tone,
-}: {
-  label: ReactNode
-  cents: number
-  currency?: string
-  tone?: SignalTone
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-        {label}
-      </p>
-      <Money
-        cents={cents}
-        currency={currency}
-        tone={tone}
-        className="text-sm"
-      />
-    </div>
   )
 }

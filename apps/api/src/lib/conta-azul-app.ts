@@ -20,7 +20,7 @@ import {
 // and CONTA_AZUL_CLIENT_SECRET supplies one for every laboratory instead; a
 // laboratory's own application takes precedence over it.
 
-export type ContaAzulAppSource = "organization" | "server";
+type ContaAzulAppSource = "organization" | "server";
 
 export interface ContaAzulAppSummary {
   source: ContaAzulAppSource | null;
@@ -45,7 +45,7 @@ function organizationAppCondition(organizationId: string) {
   );
 }
 
-export async function resolveContaAzulAppCredentials(
+async function resolveContaAzulAppCredentials(
   params: {
     organizationId: string;
     env: ContaAzulOAuthEnv;

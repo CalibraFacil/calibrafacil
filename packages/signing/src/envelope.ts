@@ -46,7 +46,7 @@ export const CREDENTIAL_FORMAT_ENVELOPE = 2;
 export const ENVELOPE_PASSWORD_IV_PLACEHOLDER = "envelope:v2";
 
 /** The id of the current KEK when `SIGNING_MASTER_KEY_ID` is not set. */
-export const DEFAULT_KEK_ID = "k1";
+const DEFAULT_KEK_ID = "k1";
 
 const KEK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 

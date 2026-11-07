@@ -31,8 +31,6 @@ import type { QuoteEmailItem } from "@calibra-facil/email";
 // Types
 // ---------------------------------------------------------------------------
 
-export type { QuoteEmailItem };
-
 /**
  * All fields needed to dispatch the "Novo Orçamento" customer email.
  *

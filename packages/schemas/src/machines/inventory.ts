@@ -97,7 +97,7 @@ export const REFERENCE_STANDARD_MACHINE = defineStateMachine({
 //   create      routes/standards.ts PUT /mass-profiles (new row)
 //   reactivate  the same, on a deleted row
 //   retire      routes/standards.ts DELETE /mass-profiles/:id
-export const MASS_PROFILE_STATUSES = ["ACTIVE", "INACTIVE"] as const;
+const MASS_PROFILE_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 export type MassProfileStatus = (typeof MASS_PROFILE_STATUSES)[number];
 
 export const MASS_PROFILE_MACHINE = defineStateMachine({

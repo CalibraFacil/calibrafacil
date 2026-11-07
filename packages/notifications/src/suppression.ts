@@ -7,11 +7,7 @@ import type {
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
-export type {
-  EmailSuppressionScope,
-  EmailSuppressionReason,
-  EmailSuppressionSource,
-};
+export type { EmailSuppressionScope };
 
 export interface SuppressEmailInput {
   email: string;

@@ -10,7 +10,7 @@ import { nullableNumber, nullableString, unitContextSchema } from "./common";
  */
 
 /** One configured limit row (a unit default, or an asset-type override). */
-export const environmentalLimitRowSchema = z.object({
+const environmentalLimitRowSchema = z.object({
   id: z.number(),
   unitId: z.number(),
   /** `null` = the unit default; otherwise the override for that asset type. */
@@ -27,7 +27,7 @@ export const environmentalLimitRowSchema = z.object({
 export type EnvironmentalLimitRow = z.infer<typeof environmentalLimitRowSchema>;
 
 /** A row as the settings list shows it, with the asset type's name joined in. */
-export const environmentalLimitSchema = environmentalLimitRowSchema.extend({
+const environmentalLimitSchema = environmentalLimitRowSchema.extend({
   assetTypeName: nullableString,
 });
 export type EnvironmentalLimit = z.infer<typeof environmentalLimitSchema>;
@@ -42,11 +42,7 @@ export type EnvironmentalLimitsResponse = z.infer<
 >;
 
 /** Which row won the lookup: the asset-type override or the unit default. */
-export const effectiveLimitsSourceSchema = z.enum([
-  "asset_type",
-  "unit_default",
-]);
-export type EffectiveLimitsSource = z.infer<typeof effectiveLimitsSourceSchema>;
+const effectiveLimitsSourceSchema = z.enum(["asset_type", "unit_default"]);
 
 /**
  * GET /api/environmental-limits/effective/:assetTypeId. `limits` and `source`

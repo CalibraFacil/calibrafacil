@@ -103,10 +103,7 @@ export function readOutboundPolicy(): OutboundPolicy {
 }
 
 /** Whether the operator allowed this host name (or IP literal) outright. */
-export function isHostAllowed(
-  policy: OutboundPolicy,
-  hostname: string,
-): boolean {
+function isHostAllowed(policy: OutboundPolicy, hostname: string): boolean {
   const host = normalizeHostname(hostname);
   if (policy.allowedHosts.includes(host)) return true;
   if (policy.allowedHostSuffixes.some((suffix) => host.endsWith(suffix))) {

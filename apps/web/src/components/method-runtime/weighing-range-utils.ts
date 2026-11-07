@@ -36,14 +36,6 @@ export type WeighingRangeResolverTargetColumns = {
   resolutionUnit?: string
 }
 
-export type WeighingRangeResolverConfig = {
-  enabled?: boolean
-  assetSpecKey?: string
-  pointColumn?: string
-  pointUnit?: string
-  targetColumns?: WeighingRangeResolverTargetColumns
-}
-
 /** Whether two unit tokens belong to the same (recognized) quantity kind. */
 function sameKind(a: unknown, b: unknown): boolean {
   const kindA = unitKind(a)
@@ -124,7 +116,7 @@ export function resolveWeighingRange(
   return null
 }
 
-export function buildFallbackRangeLabel(range: WeighingRangeSpec): string {
+function buildFallbackRangeLabel(range: WeighingRangeSpec): string {
   const unit = unitKind(range.rangeUnit) != null ? range.rangeUnit : ''
   const min = range.min == null ? '0' : String(range.min)
   const max = range.max == null ? 'acima' : String(range.max)

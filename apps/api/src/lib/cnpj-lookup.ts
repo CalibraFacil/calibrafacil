@@ -17,7 +17,7 @@ import {
  * The mapping functions are pure (and unit-tested); only `fetchCnpjRegistration` does I/O.
  */
 
-export type CnpjAddress = {
+type CnpjAddress = {
   cep: string | null;
   street: string | null;
   number: string | null;

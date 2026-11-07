@@ -15,7 +15,7 @@ import { fetchPortalJson } from "@/lib/api-fetch";
  * one the user should land on, and that is skipped in the common case.
  */
 
-export const PORTAL_ORG_KEY = "portal-active-org";
+const PORTAL_ORG_KEY = "portal-active-org";
 
 export type PortalOrganization = {
   id: string;

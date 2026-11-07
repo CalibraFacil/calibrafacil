@@ -89,7 +89,7 @@ export type JudgedStandardFacts = {
   inScope: boolean;
 };
 
-export const STANDARDS_JUDGEMENT_REFUSAL_CODES = [
+const STANDARDS_JUDGEMENT_REFUSAL_CODES = [
   "standard_not_found",
   "standard_deleted",
   "standard_inactive",
@@ -210,13 +210,13 @@ export function judgeExecutionStandards(
 }
 
 /** Why a standard the job already carries is no longer fit to be used. */
-export const STANDARDS_DRAFT_WARNING_REASONS = [
+const STANDARDS_DRAFT_WARNING_REASONS = [
   "standard_deleted",
   "standard_inactive",
   "standard_expired",
 ] as const satisfies readonly StandardsJudgementRefusalCode[];
 
-export type StandardsDraftWarningReason =
+type StandardsDraftWarningReason =
   (typeof STANDARDS_DRAFT_WARNING_REASONS)[number];
 
 /**

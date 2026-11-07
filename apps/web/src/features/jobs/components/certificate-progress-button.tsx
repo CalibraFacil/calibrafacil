@@ -221,4 +221,3 @@ function CertificateProgressButton({
 }
 
 export { CertificateProgressButton }
-export type { CertificateProgressButtonProps, ProgressStep }

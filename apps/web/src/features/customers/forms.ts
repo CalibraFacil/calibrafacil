@@ -17,7 +17,7 @@ export type CustomerFormData = {
   address: CustomerAddressFormData
 }
 
-export type CustomerAddressFormData = {
+type CustomerAddressFormData = {
   cep: string
   street: string
   number: string

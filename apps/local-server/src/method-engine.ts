@@ -11,7 +11,7 @@ import type {
 
 // The shared numeric contract — must match the cloud API's engine so a method
 // executed offline produces the same certificate values as the cloud path.
-export const localMethodEngineOptions = METHOD_ENGINE_OPTIONS;
+const localMethodEngineOptions = METHOD_ENGINE_OPTIONS;
 
 export function createMethodDefinitionEngine(
   options: CalculationEngineOptions = localMethodEngineOptions,

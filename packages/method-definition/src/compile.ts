@@ -27,11 +27,6 @@ import {
 import { runMethodPreview } from "./preview";
 import { calculationErrorDiagnostic } from "./measurement-model-input";
 
-export {
-  buildMeasurementModelInput,
-  inputIsNumeric,
-} from "./measurement-model-input";
-
 type FormulaCompileEntry = {
   formula: MethodFormula;
   compiled: CompiledFormulaLike;

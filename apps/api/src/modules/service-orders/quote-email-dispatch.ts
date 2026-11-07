@@ -28,7 +28,7 @@ import { orgDb } from "../../lib/org-db";
  * Common order fields needed to build both email payloads.
  * Extracted from the post-commit order row in each command.
  */
-export interface QuoteEmailOrderContext {
+interface QuoteEmailOrderContext {
   organizationId: string;
   serviceOrderNumber: string;
   publicId: string;

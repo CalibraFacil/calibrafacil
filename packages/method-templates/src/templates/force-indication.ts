@@ -360,7 +360,7 @@ const certificateContent = {
 };
 
 // --- Product definition (single source for buildDraft + the route) -------------
-export const forceProductDefinition: TemplateProductDefinition = {
+const forceProductDefinition: TemplateProductDefinition = {
   assetTypeSlug: FORCE_ASSET_TYPE_SLUG,
   name: METHOD_NAME,
   description: methodDescription,

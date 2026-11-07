@@ -48,7 +48,7 @@ import {
  * - Lab operations (custom)
  * - Client portal (custom)
  */
-export const statements = {
+const statements = {
   // ---------------------------------------------------------------------------
   // Default Better Auth statements (organization, member, invitation)
   // ---------------------------------------------------------------------------
@@ -349,7 +349,7 @@ export const ac = createAccessControl(statements);
  * - Cannot create, edit, or delete anything
  * - Cannot access billing or sensitive settings
  */
-export const member = ac.newRole({
+const member = ac.newRole({
   // Inherit default member permissions for organization management
   ...memberAc.statements,
 
@@ -390,7 +390,7 @@ export const member = ac.newRole({
  * - Can triage intake requests, open/operate service orders, and manage clients/assets
  * - Cannot approve/reject calibrations, delete jobs, or manage technical master data
  */
-export const operator = ac.newRole({
+const operator = ac.newRole({
   // Inherit default member permissions for organization management
   ...memberAc.statements,
 
@@ -428,7 +428,7 @@ export const operator = ac.newRole({
  * - Cannot modify templates or standards
  * - Can manage equipment and clients
  */
-export const technician = ac.newRole({
+const technician = ac.newRole({
   // Inherit default member permissions for organization management
   ...memberAc.statements,
 
@@ -506,7 +506,7 @@ export const technician = ac.newRole({
  * - Can manage organization members
  * - Cannot delete organization or manage billing
  */
-export const admin = ac.newRole({
+const admin = ac.newRole({
   // Inherit default admin permissions for organization management
   ...adminAc.statements,
 
@@ -618,7 +618,7 @@ export const admin = ac.newRole({
  * - Can manage billing and subscription
  * - Can transfer ownership
  */
-export const owner = ac.newRole({
+const owner = ac.newRole({
   // Inherit default owner permissions for organization management
   ...ownerAc.statements,
 
@@ -730,7 +730,7 @@ export const owner = ac.newRole({
  * - Can view calibration status and download certificates
  * - Can view invoices
  */
-export const client_user = ac.newRole({
+const client_user = ac.newRole({
   // Note: No organization management permissions needed for external clients
   // They simply exist within their organization context
 
@@ -863,20 +863,6 @@ export const roleLabels: Record<RoleName, string> = {
 };
 
 /**
- * Role descriptions for UI display (Portuguese)
- */
-export const roleDescriptions: Record<RoleName, string> = {
-  member: "Acesso somente leitura aos dados do laboratório",
-  operator:
-    "Cria jobs, atribui técnicos e lança dados de calibração para revisão",
-  technician: "Executa calibrações e gerencia ativos e clientes",
-  admin: "Controle operacional completo, aprova e rejeita calibrações",
-  owner: "Controle total incluindo faturamento e exclusão da organização",
-  client_user:
-    "Acesso ao portal do cliente para visualizar ativos, certificados e solicitações",
-};
-
-/**
  * Get the hierarchy level of a role (0 = lowest, 4 = highest)
  */
 export function getRoleLevel(role: RoleName): number {
@@ -900,13 +886,12 @@ export function hasEqualOrHigherRole(
 /**
  * All available resources in the permission system
  */
-export type Resource = keyof typeof statements;
+type Resource = keyof typeof statements;
 
 /**
  * Actions available for each resource
  */
-export type ActionForResource<R extends Resource> =
-  (typeof statements)[R][number];
+type ActionForResource<R extends Resource> = (typeof statements)[R][number];
 
 /**
  * Permission object type for hasPermission checks
@@ -1045,23 +1030,23 @@ export function getAllowedCalibrationActions(
 // roles only unlock the admin plugin's user-management endpoints. The plugin
 // itself stays because the API creates accounts through it (`createUser`).
 
-export const platformStatements = {
+const platformStatements = {
   ...platformDefaultStatements,
 } as const;
 
 export const platformAc = createAccessControl(platformStatements);
 
-export const platformUser = platformAc.newRole({
+const platformUser = platformAc.newRole({
   ...platformUserAc.statements,
 });
 
-export const platformOperator = platformAc.newRole({
+const platformOperator = platformAc.newRole({
   ...platformUserAc.statements,
   user: ["list", "impersonate"],
   session: ["list", "revoke"],
 });
 
-export const platformAdmin = platformAc.newRole({
+const platformAdmin = platformAc.newRole({
   ...platformAdminAc.statements,
 });
 
@@ -1070,5 +1055,3 @@ export const platformRoles = {
   platform_operator: platformOperator,
   platform_admin: platformAdmin,
 } as const;
-
-export type PlatformRole = keyof typeof platformRoles;

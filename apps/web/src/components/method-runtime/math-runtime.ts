@@ -6,14 +6,13 @@ import {
 } from '@calibra-facil/math-engine'
 
 import type {
-  MethodData,
   MethodInputField,
   MethodValidation,
   MethodVariableBinding,
 } from './types'
 
 export type FormulaScalar = number | string
-export type FormulaValue = FormulaScalar | FormulaScalar[]
+type FormulaValue = FormulaScalar | FormulaScalar[]
 export type FormulaContext = Record<string, FormulaValue>
 
 interface StandardLike {
@@ -70,7 +69,7 @@ export function createMethodCalculationEngine(): CalculationEngine {
   })
 }
 
-export function buildDefaultVariableBindings(
+function buildDefaultVariableBindings(
   dataFields: MethodInputField[],
 ): MethodVariableBinding[] {
   const bindings: MethodVariableBinding[] = []
@@ -169,16 +168,6 @@ export function effectiveVariableBindings(method: {
   return bindings
 }
 
-export function normalizeMethodVariableBindings(
-  method: MethodData,
-): MethodData {
-  return {
-    ...method,
-    variableBindings: effectiveVariableBindings(method),
-    validations: normalizeMethodValidations(method.validations),
-  }
-}
-
 export function normalizeMethodValidations(
   validations: unknown,
 ): MethodValidation[] {
@@ -186,9 +175,7 @@ export function normalizeMethodValidations(
   return validations.map(normalizeMethodValidation)
 }
 
-export function normalizeMethodValidation(
-  validation: unknown,
-): MethodValidation {
+function normalizeMethodValidation(validation: unknown): MethodValidation {
   if (!validation || typeof validation !== 'object') {
     return validationFallback('')
   }

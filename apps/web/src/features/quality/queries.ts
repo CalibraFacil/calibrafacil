@@ -97,7 +97,7 @@ export function nonConformanceListQueryOptions(
   })
 }
 
-export function nonConformanceSummaryQueryOptions(organizationId: string) {
+function nonConformanceSummaryQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['non-conformances-summary', organizationId],
     queryFn: () =>
@@ -120,7 +120,7 @@ export function nonConformanceAuditLogQueryOptions(id: string) {
   })
 }
 
-export function ootNotificationQueryOptions(id: string) {
+function ootNotificationQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['non-conformance-oot-notification', id],
     queryFn: () =>
@@ -130,7 +130,7 @@ export function ootNotificationQueryOptions(id: string) {
   })
 }
 
-export function ootImpactAssessmentQueryOptions(id: string) {
+function ootImpactAssessmentQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['non-conformance-impact-assessment', id],
     queryFn: () =>
@@ -175,7 +175,7 @@ export function capaListQueryOptions(input: CapaListQueryInput) {
   })
 }
 
-export function capaSummaryQueryOptions(organizationId: string) {
+function capaSummaryQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['capas-summary', organizationId],
     queryFn: () => calibraApi.capas.summary<CapaSummaryData>(),
@@ -204,7 +204,7 @@ export function capaResponsibleMembersQueryOptions() {
   })
 }
 
-export async function getNonConformancesIndexEssentialQueries(url?: URL) {
+async function getNonConformancesIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 
@@ -250,7 +250,7 @@ export async function prewarmNonConformanceDetail(
   ])
 }
 
-export async function getCapasIndexEssentialQueries(url?: URL) {
+async function getCapasIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
 

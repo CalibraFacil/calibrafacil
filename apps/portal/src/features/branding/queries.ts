@@ -17,7 +17,7 @@ const DEFAULT_BRANDING: PortalBranding = { name: null, logo: null };
  * the request Origin (the custom domain). Never throws — any failure degrades
  * to the CalibraFácil default so the sign-in page always renders.
  */
-export async function fetchBranding(): Promise<PortalBranding> {
+async function fetchBranding(): Promise<PortalBranding> {
   try {
     return await fetchPortalJson(
       "/api/portal/branding",

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { formatMoneyBRL } from "@calibra-facil/shared/format";
 import { formatInstant } from "./dates.js";
 
-export type ServiceOrderDocumentItem = {
+type ServiceOrderDocumentItem = {
   description: string;
   quantity: number;
   unit: string;
@@ -120,7 +120,7 @@ export type ServiceOrderQuoteData = ServiceOrderDocumentData & {
   };
 };
 
-export type ServiceOrderSignatureBlock = {
+type ServiceOrderSignatureBlock = {
   signerName: string;
   signedAt?: Date | string | null;
   dataUrl?: string | null;

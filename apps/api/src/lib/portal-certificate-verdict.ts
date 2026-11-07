@@ -13,7 +13,7 @@ import { formatCalibrationValue } from "@calibra-facil/shared";
  * post-adjustment tolerance margin (`margem_conformidade_apos`) is >= 0.
  */
 
-export type CertificateConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
+type CertificateConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
 
 export type PortalCertificateVerdict = {
   /** Overall conformance; UNKNOWN when the method declares no tolerance. */

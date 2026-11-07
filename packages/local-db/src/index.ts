@@ -1,21 +1,11 @@
 export {
-  configureLocalDatabase,
-  assertLocalSchemaCompatible,
   getLocalSchemaVersion,
   LocalDatabaseVersionError,
   openLocalDatabase,
   runLocalMigrations,
   type LocalDatabase,
-  type OpenLocalDatabaseOptions,
 } from "./database";
-export {
-  listLocalJobs,
-  upsertLocalJobProjection,
-  type LocalJobProjectionInput,
-  type LocalJobStatus,
-  type LocalJobsListData,
-  type LocalJobsListInput,
-} from "./jobs";
+export { listLocalJobs, upsertLocalJobProjection } from "./jobs";
 export {
   buildLocalStandardsSnapshot,
   judgeLocalStandards,
@@ -23,7 +13,6 @@ export {
   resolveLocalDraftStandards,
   getLocalJobDetail,
   saveLocalJobExecution,
-  type SaveLocalExecutionInput,
 } from "./execution";
 export {
   applySyncPushResult,
@@ -40,82 +29,46 @@ export {
   markOutboxEventsFailedForRetry,
   requeueDeadOutboxEvent,
   setSyncCursor,
-  type DeadOutboxEvent,
-  type DiscardOutboxEventOptions,
   type PendingOutboxEvent,
 } from "./outbox";
 export {
-  baseExpectedVersion,
   countBlockedOutbox,
   getStoredAggregateVersion,
   listBlockedOutboxEvents,
   recomputeBlockedOutbox,
-  recordAggregateVersion,
 } from "./outbox-ordering";
 export {
-  getSyncConflict,
   listSyncConflicts,
   resolveSyncConflict,
   SyncConflictReasonRequiredError,
-  type ListSyncConflictsInput,
-  type ResolveSyncConflictOptions,
 } from "./conflicts";
 export {
   createLocalAsset,
   getLocalAssetDetail,
   listLocalAssets,
   updateLocalAsset,
-  type CreateLocalAssetInput,
-  type LocalAsset,
-  type LocalAssetStatus,
-  type LocalAssetsListData,
-  type LocalAssetsListInput,
-  type UpdateLocalAssetInput,
 } from "./assets";
-export { listLocalAssetTypes, type LocalAssetType } from "./asset-types";
+export { listLocalAssetTypes } from "./asset-types";
 export {
   createLocalAttachment,
   getLocalAttachment,
   listLocalAttachments,
   markAttachmentUploaded,
   markAttachmentUploadDead,
-  resetAttachmentUpload,
-  type AttachmentUploadStatus,
-  type CreateLocalAttachmentInput,
-  type LocalAttachment,
 } from "./attachments";
 export {
   createLocalCustomer,
   getLocalCustomerDetail,
   listLocalCustomers,
   updateLocalCustomer,
-  type CreateLocalCustomerInput,
-  type LocalCustomer,
-  type LocalCustomersListData,
-  type LocalCustomersListInput,
-  type UpdateLocalCustomerInput,
 } from "./customers";
-export {
-  getLocalMethodDetail,
-  listLocalMethods,
-  type LocalMethod,
-  type LocalMethodsListData,
-  type LocalMethodsListInput,
-} from "./methods";
+export { getLocalMethodDetail, listLocalMethods } from "./methods";
 export {
   getLocalStandardDetail,
   listLocalCompositionProfiles,
   listLocalStandards,
-  type LocalCertifiedValue,
-  type LocalStandard,
-  type LocalStandardsListData,
-  type LocalStandardsListInput,
-  type LocalStandardStatus,
 } from "./standards";
-export {
-  resolveLocalEffectiveEnvironmentalLimits,
-  type LocalEffectiveEnvironmentalLimitsInput,
-} from "./environmental-limits";
+export { resolveLocalEffectiveEnvironmentalLimits } from "./environmental-limits";
 export {
   deletePrinterProfile,
   getDefaultPrinterProfile,
@@ -128,22 +81,8 @@ export {
   getLocalServiceOrderDetail,
   listLocalServiceOrders,
   saveLocalServiceOrderExecutionNotes,
-  type CreateLocalServiceOrderIntakeInput,
-  type LocalServiceOrderIntakeType,
-  type LocalServiceOrderItemType,
-  type LocalServiceOrderPriority,
-  type LocalServiceOrderPricedItemInput,
-  type LocalServiceOrderExecutionResult,
-  type LocalServiceOrdersListData,
-  type LocalServiceOrdersListInput,
-  type LocalServiceOrderStatus,
-  type SaveLocalServiceOrderExecutionNotesInput,
 } from "./service-orders";
-export {
-  currentLocalDbSchemaVersion,
-  localDbMigrations,
-  type LocalDbMigration,
-} from "./migrations";
+export { currentLocalDbSchemaVersion, localDbMigrations } from "./migrations";
 export { countSkippedRows, releaseSettledSkippedRows } from "./skipped-rows";
 export {
   applySyncBootstrap,
@@ -154,10 +93,7 @@ export {
   getLocalSessionSnapshot,
   hasIncompleteBootstrap,
 } from "./sync";
-export {
-  getLocalDatabaseDiagnostics,
-  type LocalDatabaseDiagnostics,
-} from "./diagnostics";
+export { getLocalDatabaseDiagnostics } from "./diagnostics";
 export * from "./partitions";
 export * from "./legacy-adoption";
 export * from "./state-machines";
