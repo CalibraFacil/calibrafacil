@@ -84,7 +84,7 @@ export function isVisitTerminal(status: string): boolean {
 // A customer's request to move the visit date (portal). One PENDING request per
 // visit (partial unique index); the lab accepts or declines it, and a lab-driven
 // date change, a cancellation or a completion supersedes it.
-//   create     apps/api/src/routes/portal-visits.ts
+//   create     apps/api/src/domains/portal/routes/portal-visits.ts
 //   accept     routes/visits.ts POST /:id/reschedule-requests/:requestId/accept
 //   decline    the same, /decline
 //   supersede  routes/visits.ts `supersedePendingRescheduleRequests`

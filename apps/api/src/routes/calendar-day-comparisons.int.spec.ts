@@ -34,7 +34,7 @@ import {
 } from "../../test/integration/seed";
 import { dashboardRouter } from "../domains/reports/routes/dashboard";
 import { jobsRouter } from "./jobs";
-import { portalRouter } from "./portal";
+import { portalRouter } from "../domains/portal/routes/portal";
 import { standardsRouter } from "../domains/standards/routes/standards";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 

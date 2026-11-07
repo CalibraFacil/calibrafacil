@@ -222,15 +222,15 @@ Extends the existing `PUT /api/portal/assets/:id/interval`.
 
 ## Decomposition
 
-| Mini-spec                 | Layer (real path)                              | Depends on       | Risk                       | Mode                            |
-| ------------------------- | ---------------------------------------------- | ---------------- | -------------------------- | ------------------------------- |
-| C0 history read           | `apps/api/src/routes/portal.ts` + tenant scope | A (verdict cols) | high (tenant)              | pair-don't-loop                 |
-| C1 pure engine            | `packages/interval-analysis` (new)             | —                | med (metrology math)       | loopable-with-verifier (oracle) |
-| C2 portal insight         | `apps/api` GET + `apps/portal` `$id.tsx`       | C0, C1           | med                        | loopable-with-verifier          |
-| D1 recommendation         | `packages/interval-analysis`                   | C1               | med                        | loopable-with-verifier (oracle) |
-| D2 apply (engine_applied) | `apps/api/src/routes/portal.ts` (extend PUT)   | B2, D1           | **high (writes interval)** | **pair-don't-loop**             |
-| E1 family RP-1            | `packages/interval-analysis`                   | C1               | med (binomial CI)          | loopable-with-verifier (oracle) |
-| E2 report PDF             | `packages/documents`                           | D1               | low                        | loopable-with-verifier          |
+| Mini-spec                 | Layer (real path)                                             | Depends on       | Risk                       | Mode                            |
+| ------------------------- | ------------------------------------------------------------- | ---------------- | -------------------------- | ------------------------------- |
+| C0 history read           | `apps/api/src/domains/portal/routes/portal.ts` + tenant scope | A (verdict cols) | high (tenant)              | pair-don't-loop                 |
+| C1 pure engine            | `packages/interval-analysis` (new)                            | —                | med (metrology math)       | loopable-with-verifier (oracle) |
+| C2 portal insight         | `apps/api` GET + `apps/portal` `$id.tsx`                      | C0, C1           | med                        | loopable-with-verifier          |
+| D1 recommendation         | `packages/interval-analysis`                                  | C1               | med                        | loopable-with-verifier (oracle) |
+| D2 apply (engine_applied) | `apps/api/src/domains/portal/routes/portal.ts` (extend PUT)   | B2, D1           | **high (writes interval)** | **pair-don't-loop**             |
+| E1 family RP-1            | `packages/interval-analysis`                                  | C1               | med (binomial CI)          | loopable-with-verifier (oracle) |
+| E2 report PDF             | `packages/documents`                                          | D1               | low                        | loopable-with-verifier          |
 
 **Pairing:** C0 (tenant read) + D2 (writes an interval) → pair-don't-loop. The pure engine
 (C1/D1/E1) is loopable **only** while gated by the numeric oracle + the no-drift /

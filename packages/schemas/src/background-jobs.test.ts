@@ -97,7 +97,7 @@ const PRODUCER_FIXTURES = {
     limit: 50,
     trigger: "manual",
   },
-  // apps/api/src/routes/portal.ts
+  // apps/api/src/domains/portal/routes/portal.ts
   "portal audit pack": { type: "AUDIT_PACK", exportId: 13, userId: "user_1" },
   // apps/api/src/cron/dispatch.ts timers
   "spc recompute timer": { type: "SPC_RECOMPUTE" },

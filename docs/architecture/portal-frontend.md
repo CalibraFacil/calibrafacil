@@ -197,7 +197,7 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   and pre-auth queries (verification, invites, magic link, branding) and the
   user-level org list stay unscoped, under `portalPublicKeys`.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint
-  in `apps/api/src/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
+  in `apps/api/src/domains/portal/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
   the sidebar badges reuse the same hook so counts cannot drift.
 - The server redacts what customers must not see — e.g. the portal service-order
   endpoints return client-visible projections, and the assets list accepts a

@@ -8,7 +8,7 @@ import { dateOnlyDaysBetween } from "@calibra-facil/shared/calendar-date";
  *
  * The conformance verdict itself (points within tolerance + expanded
  * uncertainty) is computed server-side from the frozen `results` jsonb — see
- * `apps/api/src/lib/portal-certificate-verdict.ts`. These helpers turn that
+ * `apps/api/src/domains/portal/portal-certificate-verdict.ts`. These helpers turn that
  * verdict and the raw scalar results into the tones, labels and value rows the
  * detail page renders.
  */

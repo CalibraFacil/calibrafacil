@@ -18,7 +18,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The laboratory's customers (the cadastro and its portal users). Response
  * schemas are wire schemas written from what the handlers in
- * `apps/api/src/routes/customers.ts` return; the desktop local-server answers
+ * `apps/api/src/domains/customers/routes/customers.ts` return; the desktop local-server answers
  * `list` and `get` with the same ones (`apps/local-server/src/contract.test.ts`).
  *
  * Not client-facing, so not defined here: `GET /search` (command palette,

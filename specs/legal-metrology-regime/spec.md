@@ -180,15 +180,15 @@ not_nationally_fixed}`, each member requiring a trimmed non-empty `regulationRef
 
 ## Decomposition
 
-| Mini-spec                               | Layer (real path)                                                             | Depends on | Risk                                       | Mode                            |
-| --------------------------------------- | ----------------------------------------------------------------------------- | ---------- | ------------------------------------------ | ------------------------------- |
-| L1 regime/legal-verif schema + backfill | `packages/db/src/schema.ts` + migration 0066 + local-db mirror                | —          | **high (migration + transition)**          | **pair-don't-loop**             |
-| L2 RegulatedInterval Zod                | `packages/schemas`                                                            | —          | low                                        | loopable-with-verifier          |
-| L3 next-date derivation (pure)          | `apps/api/src/lib/regulated-interval.ts` (reuse `deriveNextCalibrationDate`)  | L2         | med                                        | loopable-with-verifier (oracle) |
-| L4 lab regulated-interval write         | `apps/api/src/routes/assets.ts` + `CreateAsset/UpdateAsset` schema            | L1,L2,L3   | **high (regulatory + track independence)** | **pair-don't-loop**             |
-| L5 portal lock removal                  | `apps/api/src/lib/portal-asset-interval.ts` + `apps/api/src/routes/portal.ts` | L1         | **high (relaxes shipped guard)**           | **pair-don't-loop**             |
-| L6 engine regime-agnostic               | `packages/interval-analysis` + `apps/api/src/lib/interval-insight.ts` caller  | L1         | **high (removes LEGAL_FIXED)**             | loopable-with-verifier (oracle) |
-| L7 two-date UI + regime selector        | `apps/portal` asset view + `apps/web/src/features/assets/*`                   | L4,L5      | med                                        | loopable-with-verifier          |
+| Mini-spec                               | Layer (real path)                                                                            | Depends on | Risk                                       | Mode                            |
+| --------------------------------------- | -------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------ | ------------------------------- |
+| L1 regime/legal-verif schema + backfill | `packages/db/src/schema.ts` + migration 0066 + local-db mirror                               | —          | **high (migration + transition)**          | **pair-don't-loop**             |
+| L2 RegulatedInterval Zod                | `packages/schemas`                                                                           | —          | low                                        | loopable-with-verifier          |
+| L3 next-date derivation (pure)          | `apps/api/src/lib/regulated-interval.ts` (reuse `deriveNextCalibrationDate`)                 | L2         | med                                        | loopable-with-verifier (oracle) |
+| L4 lab regulated-interval write         | `apps/api/src/routes/assets.ts` + `CreateAsset/UpdateAsset` schema                           | L1,L2,L3   | **high (regulatory + track independence)** | **pair-don't-loop**             |
+| L5 portal lock removal                  | `apps/api/src/lib/portal-asset-interval.ts` + `apps/api/src/domains/portal/routes/portal.ts` | L1         | **high (relaxes shipped guard)**           | **pair-don't-loop**             |
+| L6 engine regime-agnostic               | `packages/interval-analysis` + `apps/api/src/lib/interval-insight.ts` caller                 | L1         | **high (removes LEGAL_FIXED)**             | loopable-with-verifier (oracle) |
+| L7 two-date UI + regime selector        | `apps/portal` asset view + `apps/web/src/features/assets/*`                                  | L4,L5      | med                                        | loopable-with-verifier          |
 
 **Pairing note:** L1, L4, L5 touch the asset migration, the regulated write path + track
 independence, and the relaxation of a shipped HIGH-RISK guard → **pair-don't-loop**

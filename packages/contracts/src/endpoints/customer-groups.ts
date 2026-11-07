@@ -13,7 +13,7 @@ import { portalInvitationSchema, portalMemberSchema } from "./customers";
  * Customer groups (redes): a multi-unit client modelled as a group whose
  * branches are customer rows, with its own CLIENT organization (the portal
  * tenant the managers sign in to). Response schemas are wire schemas written
- * from what the handlers in `apps/api/src/routes/customer-groups.ts` return.
+ * from what the handlers in `apps/api/src/domains/customers/routes/customer-groups.ts` return.
  * Cloud-only lab feature: the desktop cannot provision CLIENT organizations.
  */
 

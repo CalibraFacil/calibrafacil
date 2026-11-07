@@ -3,7 +3,7 @@ import { IllegalTransitionError } from "@calibra-facil/schemas/state-machine";
 import type { Env as HonoEnv, Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { extractPgErrorCode } from "../lib/db-errors";
-import { PortalServiceAccountError } from "../lib/portal-service-account";
+import { PortalServiceAccountError } from "../lib/portal-service-account-error";
 import { DomainError, domainErrorBody } from "../lib/domain-errors";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
 
