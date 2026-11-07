@@ -73,27 +73,29 @@ jobs:
       # (psql, pg_restore) must be that major or newer to talk to it; the
       # runner's are older, so install them (see integration.yml), and age for
       # the encrypted leg.
-      - name: Start PostgreSQL and install matching client tools
+      - name: Read the server image
+        id: pg
         run: |
           image=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*(postgres:[^[:space:]]+).*/\1/p' deploy/compose.yaml | head -1)
-          major=$(echo "$image" | sed -E 's/^postgres:([0-9]+).*/\1/')
-          echo "Server image: $image (major $major)"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "major=$(echo "$image" | sed -E 's/^postgres:([0-9]+).*/\1/')" >> "$GITHUB_OUTPUT"
+
+      # Always the PostgreSQL project's repository: the dump comes from the
+      # image's newest minor, whose archive format (1.16 since 17.6) an older
+      # minor of the same major (the runner's, or Ubuntu's) cannot read.
+      - uses: ./.github/actions/postgres-client
+        with:
+          major: ${{ steps.pg.outputs.major }}
+          extra-packages: age
+
+      - name: Start PostgreSQL
+        env:
+          IMAGE: ${{ steps.pg.outputs.image }}
+        run: |
           docker run --detach --name drill-postgres \
             --env POSTGRES_USER=calibra --env POSTGRES_PASSWORD=calibra --env POSTGRES_DB=calibra \
-            --publish 127.0.0.1:5432:5432 "$image"
-          # Always the PostgreSQL project's repository: the dump comes from the
-          # image's newest minor, whose archive format (1.16 since 17.6) an older
-          # minor of the same major (the runner's, or Ubuntu's) cannot read.
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install -y "postgresql-client-${major}" age
-          # Debian's pg_wrapper resolves pg_restore to the runner's preinstalled
-          # cluster version (16), not the newest client: put this major first.
-          echo "/usr/lib/postgresql/${major}/bin" >> "$GITHUB_PATH"
-          "/usr/lib/postgresql/${major}/bin/psql" --version
-          "/usr/lib/postgresql/${major}/bin/pg_restore" --version
+            --publish 127.0.0.1:5432:5432 "$IMAGE"
+          pg_restore --version
           age --version
           for _ in $(seq 1 60); do
             if pg_isready -h 127.0.0.1 -p 5432 -U calibra -d calibra; then exit 0; fi
