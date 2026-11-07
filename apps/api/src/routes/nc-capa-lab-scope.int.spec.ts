@@ -364,6 +364,8 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
       body: { note: "Confirmado por telefone com o responsavel" },
     });
     expect(ack.status).toBe(200);
+    // The acknowledgement answers the notification without its public link token.
+    expect(JSON.stringify(await ack.json())).not.toContain(own.ackToken);
     const [stamped] = await db
       .select()
       .from(ootNotification)

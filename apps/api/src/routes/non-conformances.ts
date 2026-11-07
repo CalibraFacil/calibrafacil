@@ -861,7 +861,10 @@ mount(
           ),
         );
 
-        return row;
+        // Like the read above: the unguessable public link never leaves
+        // through the authenticated surface.
+        const { ackToken: _publicLinkToken, ...notificationWithoutToken } = row;
+        return notificationWithoutToken;
       },
     );
 
