@@ -1,0 +1,38 @@
+name: PostgreSQL client tools
+description: >
+  Installs postgresql-client-<major> (plus any extra apt packages) from the
+  PostgreSQL project's apt repository and puts that major's bin directory first
+  on PATH. The runner image ships an older client, Ubuntu's archive has no newer
+  major, and pg_dump/pg_restore refuse a server (or an archive format) newer than
+  themselves; Debian's pg_wrapper would otherwise resolve to the runner's own
+  cluster version.
+inputs:
+  major:
+    description: PostgreSQL major version (the server image's).
+    required: true
+  extra-packages:
+    description: Space-separated apt packages to install alongside the client.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MAJOR: ${{ inputs.major }}
+        EXTRA_PACKAGES: ${{ inputs.extra-packages }}
+      run: |
+        set -euo pipefail
+        sudo install -d /usr/share/postgresql-common/pgdg
+        # postgresql.org occasionally drops the connection mid-transfer.
+        sudo curl -fsS --retry 5 --retry-all-errors --retry-delay 3 \
+          -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+          https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          | sudo tee /etc/apt/sources.list.d/pgdg.list
+        sudo apt-get -o Acquire::Retries=3 update
+        # shellcheck disable=SC2086 # EXTRA_PACKAGES is a word list on purpose
+        sudo apt-get -o Acquire::Retries=3 install -y "postgresql-client-${MAJOR}" ${EXTRA_PACKAGES}
+        echo "/usr/lib/postgresql/${MAJOR}/bin" >> "$GITHUB_PATH"
+        "/usr/lib/postgresql/${MAJOR}/bin/psql" --version
+        "/usr/lib/postgresql/${MAJOR}/bin/pg_dump" --version
