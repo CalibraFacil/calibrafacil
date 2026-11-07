@@ -1,4 +1,3 @@
-import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   publicApiWebhookDelivery,
   publicApiWebhookSubscription,
@@ -17,6 +16,7 @@ import {
   dispatchStagedBackgroundJob,
   stageBackgroundJob,
 } from "./background-job-outbox";
+import type { OrgContext } from "./org-context";
 import {
   orgTransactionWithExecutor,
   type OrgRawTransaction,
@@ -31,12 +31,11 @@ import {
  * and records every attempt on the delivery row.
  */
 
-/** The transaction a mutation runs in, and where to register post-commit work. */
-export type WebhookStagingScope = {
-  o: OrgDb;
-  tx: OrgRawTransaction;
-  afterCommit: (task: AfterCommitTask) => void;
-};
+/**
+ * The transaction a mutation runs in, and where to register post-commit work:
+ * the `OrgContext` of the write (`withOrg`) is one.
+ */
+export type WebhookStagingScope = Pick<OrgContext, "o" | "tx" | "afterCommit">;
 
 type StageParams = {
   organizationId: string;
@@ -145,23 +144,6 @@ export async function emitPublicApiWebhookEvent(params: StageParams) {
     stagePublicApiWebhookEvent({ o, tx, afterCommit: queue.add }, params),
   );
   await runAfterCommit(queue);
-}
-
-/**
- * An org-bound transaction for a mutation that raises webhook events: `run`
- * stages them with the scope it is handed, they are queued with the mutation
- * (a rollback queues nothing) and dispatched once it has committed.
- */
-export async function withPublicApiWebhookTransaction<R>(
-  organizationId: string,
-  run: (o: OrgDb, webhooks: WebhookStagingScope) => Promise<R>,
-): Promise<R> {
-  const queue = afterCommitQueue();
-  const result = await orgTransactionWithExecutor(organizationId, (o, tx) =>
-    run(o, { o, tx, afterCommit: queue.add }),
-  );
-  await runAfterCommit(queue);
-  return result;
 }
 
 /**

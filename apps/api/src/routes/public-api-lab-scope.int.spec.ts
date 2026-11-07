@@ -46,10 +46,8 @@ import {
 import { parseBackgroundJobMessage } from "@calibra-facil/schemas";
 import { routeOutboundThroughGlobalFetch } from "@calibra-facil/shared/outbound-testing";
 import { ALL_PUBLIC_API_SCOPES } from "../lib/api-keys";
-import {
-  stagePublicApiWebhookEvent,
-  withPublicApiWebhookTransaction,
-} from "../lib/public-api-webhooks";
+import { withOrg } from "../lib/org-context";
+import { stagePublicApiWebhookEvent } from "../lib/public-api-webhooks";
 import { truncateAll } from "../../test/integration/db";
 import {
   seedApprovedJob,
@@ -930,10 +928,11 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
       eventType: "customer.created" as const,
       payload: { id: 1 },
     };
+    const actor = { userId: w.a.userId, ipAddress: null };
 
     await expect(
-      withPublicApiWebhookTransaction(w.a.orgId, async (_o, webhooks) => {
-        await stagePublicApiWebhookEvent(webhooks, event);
+      withOrg(w.a.orgId, actor, async (ctx) => {
+        await stagePublicApiWebhookEvent(ctx, event);
         // Staged inside the transaction, then the mutation fails.
         throw new Error("the mutation failed");
       }),
@@ -941,8 +940,8 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
     expect(await db.select().from(publicApiWebhookDelivery)).toHaveLength(0);
     expect(await db.select().from(appQueueJob)).toHaveLength(0);
 
-    await withPublicApiWebhookTransaction(w.a.orgId, (_o, webhooks) =>
-      stagePublicApiWebhookEvent(webhooks, event),
+    await withOrg(w.a.orgId, actor, (ctx) =>
+      stagePublicApiWebhookEvent(ctx, event),
     );
     const deliveries = await db.select().from(publicApiWebhookDelivery);
     const queued = await db.select().from(appQueueJob);

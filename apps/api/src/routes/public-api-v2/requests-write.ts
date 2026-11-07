@@ -1,27 +1,19 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import {
-  asset,
-  calibrationRequest,
-  calibrationRequestAuditLog,
-  calibrationRequestItem,
-  customer,
-} from "@calibra-facil/db/schema";
+import { asset, calibrationRequest, customer } from "@calibra-facil/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { CALIBRATION_REQUEST_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   buildPublicApiError,
-  getPublicApiRequestIp,
   getResourceExternalId,
   upsertResourceExternalId,
 } from "../../lib/public-api";
-import {
-  stagePublicApiWebhookEvent,
-  withPublicApiWebhookTransaction,
-} from "../../lib/public-api-webhooks";
+import { stagePublicApiWebhookEvent } from "../../lib/public-api-webhooks";
 import { requireApiScope } from "../../middleware/api-key-auth";
-import { orgDb } from "../../lib/org-db";
+import { submitCalibrationRequest } from "../../lib/calibration-request-submission";
+import { withOrg } from "../../lib/org-context";
 import { type PublicApiV2Env } from "./env";
+import { apiKeyActor } from "./actor";
 import {
   CancelRequestPublicSchema,
   PublicCreateRequestSchema,
@@ -43,208 +35,172 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
 
-      return withIdempotentMutation(
-        c,
-        input,
-        async ({ o, tx, afterCommit }) => {
-          const resolvedCustomerId = await resolveCustomerId(
-            {
-              organizationId: apiKey.organizationId,
-              customerId: input.customerId,
-              customerExternalId: input.customerExternalId,
-            },
-            o,
-          );
-
-          if (!resolvedCustomerId) {
-            return {
-              status: 404,
-              body: buildPublicApiError({
-                code: "customer_not_found",
-                message: "Cliente não encontrado",
-              }),
-            };
-          }
-
-          const assetIds = Array.from(
-            new Set([
-              ...(input.assetIds ?? []),
-              ...(
-                await Promise.all(
-                  (input.assetExternalIds ?? []).map((externalId) =>
-                    resolveAssetId(
-                      {
-                        organizationId: apiKey.organizationId,
-                        assetExternalId: externalId,
-                      },
-                      o,
-                    ),
-                  ),
-                )
-              ).filter((value): value is number => !!value),
-            ]),
-          );
-
-          if (assetIds.length === 0) {
-            return {
-              status: 400,
-              body: buildPublicApiError({
-                code: "invalid_assets",
-                message: "Informe ativos válidos",
-              }),
-            };
-          }
-
-          const [foundCustomer] = await o
-            .select()
-            .from(customer)
-            .where(
-              and(
-                eq(customer.id, resolvedCustomerId),
-                eq(customer.labOrganizationId, apiKey.organizationId),
-              ),
-            )
-            .limit(1);
-          const assetsInScope = foundCustomer
-            ? await o
-                .select({
-                  id: asset.id,
-                  unitId: asset.unitId,
-                })
-                .from(asset)
-                .where(
-                  and(
-                    inArray(asset.id, assetIds),
-                    eq(asset.customerId, foundCustomer.id),
-                    isNull(asset.deletedAt),
-                    eq(asset.status, "ACTIVE"),
-                  ),
-                )
-            : [];
-
-          if (!foundCustomer) {
-            return {
-              status: 404,
-              body: buildPublicApiError({
-                code: "customer_not_found",
-                message: "Cliente não encontrado",
-              }),
-            };
-          }
-
-          if (assetsInScope.length !== assetIds.length) {
-            return {
-              status: 400,
-              body: buildPublicApiError({
-                code: "invalid_assets",
-                message: "Um ou mais ativos não pertencem ao cliente",
-              }),
-            };
-          }
-
-          const unitIds = [
-            ...new Set(assetsInScope.map((item) => item.unitId)),
-          ];
-          if (input.unitId && !unitIds.includes(input.unitId)) {
-            return {
-              status: 400,
-              body: buildPublicApiError({
-                code: "unit_asset_mismatch",
-                message: "Os ativos não pertencem à unidade informada",
-              }),
-            };
-          }
-
-          if (unitIds.length !== 1) {
-            return {
-              status: 400,
-              body: buildPublicApiError({
-                code: "multi_unit_request_not_allowed",
-                message:
-                  "Selecione ativos da mesma unidade para criar a solicitação",
-              }),
-            };
-          }
-
-          const requestedDueDate = input.requestedDueDate
-            ? new Date(input.requestedDueDate)
-            : null;
-
-          const externalId = input.externalId?.trim();
-          const [created] = await o
-            .insert(calibrationRequest)
-            .values({
-              organizationId: apiKey.organizationId,
-              unitId: input.unitId ?? unitIds[0]!,
-              customerId: foundCustomer.id,
-              authOrganizationId: foundCustomer.authOrganizationId,
-              observations: input.observations || null,
-              requestedDueDate,
-              submittedBy: apiKey.createdBy,
-            })
-            .returning();
-
-          await o.insert(calibrationRequestItem).values(
-            assetIds.map((assetId) => ({
-              organizationId: apiKey.organizationId,
-              requestId: created!.id,
-              assetId,
-            })),
-          );
-
-          await o.insert(calibrationRequestAuditLog).values({
+      return withIdempotentMutation(c, input, async (ctx) => {
+        const resolvedCustomerId = await resolveCustomerId(
+          {
             organizationId: apiKey.organizationId,
-            requestId: created!.id,
-            action: "create",
-            changes: {
-              initial: {
-                assetIds,
-                observations: input.observations || null,
-                requestedDueDate: requestedDueDate?.toISOString() ?? null,
-              },
-            },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c),
-          });
+            customerId: input.customerId,
+            customerExternalId: input.customerExternalId,
+          },
+          ctx.o,
+        );
 
-          if (externalId) {
-            await upsertResourceExternalId(
-              {
-                organizationId: apiKey.organizationId,
-                apiKeyId: apiKey.id,
-                resourceType: "request",
-                resourceId: created!.id,
-                externalId,
-              },
-              o,
-            );
-          }
-
-          const body = {
-            data: {
-              id: created!.id,
-              status: created!.status,
-              externalId: externalId ?? null,
-            },
+        if (!resolvedCustomerId) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "customer_not_found",
+              message: "Cliente não encontrado",
+            }),
           };
+        }
 
-          await stagePublicApiWebhookEvent(
-            { o, tx, afterCommit },
+        const assetIds = Array.from(
+          new Set([
+            ...(input.assetIds ?? []),
+            ...(
+              await Promise.all(
+                (input.assetExternalIds ?? []).map((externalId) =>
+                  resolveAssetId(
+                    {
+                      organizationId: apiKey.organizationId,
+                      assetExternalId: externalId,
+                    },
+                    ctx.o,
+                  ),
+                ),
+              )
+            ).filter((value): value is number => !!value),
+          ]),
+        );
+
+        if (assetIds.length === 0) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "invalid_assets",
+              message: "Informe ativos válidos",
+            }),
+          };
+        }
+
+        const [foundCustomer] = await ctx.o
+          .select()
+          .from(customer)
+          .where(
+            and(
+              eq(customer.id, resolvedCustomerId),
+              eq(customer.labOrganizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
+        const assetsInScope = foundCustomer
+          ? await ctx.o
+              .select({
+                id: asset.id,
+                unitId: asset.unitId,
+              })
+              .from(asset)
+              .where(
+                and(
+                  inArray(asset.id, assetIds),
+                  eq(asset.customerId, foundCustomer.id),
+                  isNull(asset.deletedAt),
+                  eq(asset.status, "ACTIVE"),
+                ),
+              )
+          : [];
+
+        if (!foundCustomer) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "customer_not_found",
+              message: "Cliente não encontrado",
+            }),
+          };
+        }
+
+        if (assetsInScope.length !== assetIds.length) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "invalid_assets",
+              message: "Um ou mais ativos não pertencem ao cliente",
+            }),
+          };
+        }
+
+        const unitIds = [...new Set(assetsInScope.map((item) => item.unitId))];
+        if (input.unitId && !unitIds.includes(input.unitId)) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "unit_asset_mismatch",
+              message: "Os ativos não pertencem à unidade informada",
+            }),
+          };
+        }
+
+        if (unitIds.length !== 1) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "multi_unit_request_not_allowed",
+              message:
+                "Selecione ativos da mesma unidade para criar a solicitação",
+            }),
+          };
+        }
+
+        const requestedDueDate = input.requestedDueDate
+          ? new Date(input.requestedDueDate)
+          : null;
+
+        const externalId = input.externalId?.trim();
+        const created = await submitCalibrationRequest(ctx, {
+          unitId: input.unitId ?? unitIds[0]!,
+          customerId: foundCustomer.id,
+          authOrganizationId: foundCustomer.authOrganizationId,
+          assetIds,
+          observations: input.observations,
+          requestedDueDate,
+        });
+
+        if (externalId) {
+          await upsertResourceExternalId(
             {
               organizationId: apiKey.organizationId,
-              eventType: "request.created",
-              payload: body.data,
+              apiKeyId: apiKey.id,
+              resourceType: "request",
+              resourceId: created.id,
+              externalId,
             },
+            ctx.o,
           );
+        }
 
-          return {
-            status: 201,
-            body,
-            resourceType: "request" as const,
-            resourceId: created!.id,
-          };
-        },
-      );
+        const body = {
+          data: {
+            id: created.id,
+            status: created.status,
+            externalId: externalId ?? null,
+          },
+        };
+
+        await stagePublicApiWebhookEvent(ctx, {
+          organizationId: apiKey.organizationId,
+          eventType: "request.created",
+          payload: body.data,
+        });
+
+        return {
+          status: 201,
+          body,
+          resourceType: "request" as const,
+          resourceId: created.id,
+        };
+      });
     },
   )
   .patch(
@@ -271,10 +227,11 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
       }
 
       // Look-up, update and audit entry are one transaction.
-      const outcome = await withPublicApiWebhookTransaction(
+      const outcome = await withOrg(
         apiKey.organizationId,
-        async (o, webhooks) => {
-          const [existing] = await o
+        apiKeyActor(apiKey, c),
+        async (ctx) => {
+          const [existing] = await ctx.o
             .select()
             .from(calibrationRequest)
             .where(
@@ -293,7 +250,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             return { kind: "not_editable" as const };
           }
 
-          const [updated] = await o
+          const [updated] = await ctx.o
             .update(calibrationRequest)
             .set({
               observations: input.observations ?? existing.observations,
@@ -314,13 +271,9 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             .returning();
           if (!updated) return { kind: "not_editable" as const };
 
-          await o.insert(calibrationRequestAuditLog).values({
-            organizationId: apiKey.organizationId,
-            requestId: existing.id,
+          await ctx.audit("calibrationRequest", existing.id, {
             action: "update",
             changes: { request: { old: existing, new: updated } },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c),
           });
 
           const externalId = await getResourceExternalId(
@@ -329,10 +282,10 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
               resourceType: "request",
               resourceId: existing.id,
             },
-            o,
+            ctx.o,
           );
           // The event is queued with the update and goes out after it commits.
-          await stagePublicApiWebhookEvent(webhooks, {
+          await stagePublicApiWebhookEvent(ctx, {
             organizationId: apiKey.organizationId,
             eventType: "request.updated",
             payload: { ...updated, externalId },
@@ -398,111 +351,97 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return withIdempotentMutation(
-        c,
-        input,
-        async ({ o, tx, afterCommit }) => {
-          // Look-up, rejection and audit entry are one transaction (and the
-          // idempotency record commits with them).
-          const [existing] = await o
-            .select()
-            .from(calibrationRequest)
-            .where(
-              and(
-                eq(calibrationRequest.id, resolvedId),
-                eq(calibrationRequest.organizationId, apiKey.organizationId),
-              ),
-            )
-            .limit(1);
+      return withIdempotentMutation(c, input, async (ctx) => {
+        // Look-up, rejection and audit entry are one transaction (and the
+        // idempotency record commits with them).
+        const [existing] = await ctx.o
+          .select()
+          .from(calibrationRequest)
+          .where(
+            and(
+              eq(calibrationRequest.id, resolvedId),
+              eq(calibrationRequest.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
 
-          if (!existing) {
-            return {
-              status: 404,
-              body: buildPublicApiError({
-                code: "request_not_found",
-                message: "Solicitação não encontrada",
-              }),
-            };
-          }
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "request_not_found",
+              message: "Solicitação não encontrada",
+            }),
+          };
+        }
 
-          if (
-            !CALIBRATION_REQUEST_MACHINE.canTransition(
+        if (
+          !CALIBRATION_REQUEST_MACHINE.canTransition(existing.status, "reject")
+        ) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "request_not_cancelable",
+              message: "A solicitação não pode ser cancelada neste status",
+            }),
+          };
+        }
+
+        const [updated] = await ctx.o
+          .update(calibrationRequest)
+          .set({
+            status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
               existing.status,
               "reject",
-            )
-          ) {
-            return {
-              status: 409,
-              body: buildPublicApiError({
-                code: "request_not_cancelable",
-                message: "A solicitação não pode ser cancelada neste status",
-              }),
-            };
-          }
-
-          const [updated] = await o
-            .update(calibrationRequest)
-            .set({
-              status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
-                existing.status,
-                "reject",
-              ),
-              rejectedBy: apiKey.createdBy,
-              rejectedAt: new Date(),
-              rejectionReason: input.reason,
-              // As the lab's reject: a rejected request carries no approval.
-              approvedBy: null,
-              approvedAt: null,
-            })
-            .where(
-              and(
-                eq(calibrationRequest.id, existing.id),
-                eq(calibrationRequest.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!updated) {
-            return {
-              status: 409,
-              body: buildPublicApiError({
-                code: "request_not_cancelable",
-                message: "A solicitação mudou de status durante a operação",
-              }),
-            };
-          }
-
-          await o.insert(calibrationRequestAuditLog).values({
-            organizationId: apiKey.organizationId,
-            requestId: existing.id,
-            action: "reject",
-            changes: { status: { old: existing.status, new: "REJECTED" } },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c),
-            reason: input.reason,
-          });
-
-          const body = { data: updated };
-
-          await stagePublicApiWebhookEvent(
-            { o, tx, afterCommit },
-            {
-              organizationId: apiKey.organizationId,
-              eventType: "request.canceled",
-              payload: {
-                id: updated.id,
-                status: updated.status,
-                rejectionReason: updated.rejectionReason,
-              },
-            },
-          );
-
+            ),
+            rejectedBy: apiKey.createdBy,
+            rejectedAt: new Date(),
+            rejectionReason: input.reason,
+            // As the lab's reject: a rejected request carries no approval.
+            approvedBy: null,
+            approvedAt: null,
+          })
+          .where(
+            and(
+              eq(calibrationRequest.id, existing.id),
+              eq(calibrationRequest.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!updated) {
           return {
-            status: 200,
-            body,
-            resourceType: "request" as const,
-            resourceId: updated.id,
+            status: 409,
+            body: buildPublicApiError({
+              code: "request_not_cancelable",
+              message: "A solicitação mudou de status durante a operação",
+            }),
           };
-        },
-      );
+        }
+
+        await ctx.audit("calibrationRequest", existing.id, {
+          action: "reject",
+          changes: { status: { old: existing.status, new: "REJECTED" } },
+          reason: input.reason,
+        });
+
+        const body = { data: updated };
+
+        await stagePublicApiWebhookEvent(ctx, {
+          organizationId: apiKey.organizationId,
+          eventType: "request.canceled",
+          payload: {
+            id: updated.id,
+            status: updated.status,
+            rejectionReason: updated.rejectionReason,
+          },
+        });
+
+        return {
+          status: 200,
+          body,
+          resourceType: "request" as const,
+          resourceId: updated.id,
+        };
+      });
     },
   );

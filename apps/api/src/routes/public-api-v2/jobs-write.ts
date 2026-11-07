@@ -6,7 +6,6 @@ import {
 } from "@calibra-facil/schemas";
 import {
   buildPublicApiError,
-  getPublicApiRequestIp,
   getResourceExternalId,
   upsertResourceExternalId,
 } from "../../lib/public-api";
@@ -45,14 +44,14 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
       return withIdempotentMutation(
         c,
         input,
-        async ({ o, tx, afterCommit }) => {
+        async (ctx) => {
           const assetId = await resolveAssetId(
             {
               organizationId: apiKey.organizationId,
               assetId: input.assetId,
               assetExternalId: input.assetExternalId,
             },
-            o,
+            ctx.o,
           );
 
           if (!assetId) {
@@ -70,7 +69,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
               organizationId: apiKey.organizationId,
               requestedUnitId: input.unitId,
             },
-            o,
+            ctx.o,
           );
 
           // The job, its audit entry and the caller's external id commit
@@ -79,13 +78,13 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
           const created = await createCalibrationJob({
             organizationId: apiKey.organizationId,
             unitId,
-            createdBy: apiKey.createdBy,
+            createdBy: ctx.actor.userId,
             assetId,
             serviceId: input.serviceId,
             technicianId: input.technicianId,
             dueDate: input.dueDate,
-            ipAddress: getPublicApiRequestIp(c),
-            executor: tx,
+            ipAddress: ctx.actor.ipAddress,
+            executor: ctx.tx,
             // The assignment notification waits for the commit: a technician
             // is never told about a job that rolled back.
             notifyOnAssignment: false,
@@ -101,7 +100,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
                 resourceId: created.id,
                 externalId,
               },
-              o,
+              ctx.o,
             );
           }
 
@@ -117,29 +116,15 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
 
           if (input.technicianId) {
             const technicianId = input.technicianId;
-            afterCommit(async () => {
-              try {
-                await notifyJobAssigned(
-                  created.id,
-                  technicianId,
-                  apiKey.createdBy,
-                );
-              } catch (error) {
-                console.error(
-                  "[Jobs] Failed to send assignment notification:",
-                  error,
-                );
-              }
-            });
+            ctx.afterCommit(() =>
+              notifyJobAssigned(created.id, technicianId, ctx.actor.userId),
+            );
           }
-          await stagePublicApiWebhookEvent(
-            { o, tx, afterCommit },
-            {
-              organizationId: apiKey.organizationId,
-              eventType: "job.created",
-              payload: body.data,
-            },
-          );
+          await stagePublicApiWebhookEvent(ctx, {
+            organizationId: apiKey.organizationId,
+            eventType: "job.created",
+            payload: body.data,
+          });
 
           return {
             status: 201,
