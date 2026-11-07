@@ -229,7 +229,7 @@ export async function sendServiceOrderCustomerEmail(
 
   // REQ-SOEMAIL-005: wrap the send in try/catch — never propagate.
   //
-  // #584: when the brand carries a lab sender, the email goes out through the
+  // When the brand carries a lab sender, the email goes out through the
   // lab's own Resend account. Key/domain-class failures fall back to the
   // platform sender INSIDE this call (fall-back-now), so the outbox drain only
   // ever sees transient failures on its release/retry path (retry-later).

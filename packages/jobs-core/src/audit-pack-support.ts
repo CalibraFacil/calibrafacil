@@ -5,7 +5,7 @@ import {
 import { portalBaseUrl as sharedPortalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 // =============================================================================
-// AUDIT PACK (#738) — customer-requested bulk export of released certificates
+// AUDIT PACK — customer-requested bulk export of released certificates
 // + fleet-status report + verification-links index, zipped and uploaded to R2.
 // =============================================================================
 

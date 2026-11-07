@@ -6,22 +6,14 @@
  * data once, at approval (`@calibra-facil/jobs-core/certificate-input`), and both go
  * through the same pure assembly, `assembleCertificateJobData`.
  *
- * Originally:
+ * Notes on the projection:
  *
- * Restored for Phase 3 from the pre-removal worker (`git show abfea552`), with
- * three deliberate differences from what was deleted:
- *
- *   1. No certificate-template resolution. The old version, on finding no
- *      frozen snapshot, went looking for the org's default ACTIVE template and
- *      WROTE it back onto the job. That whole concept died with the
- *      lab-authored templates (#865) — the layout is now ours and is chosen by
- *      the method's quantity, not by a row a lab configured.
- *   2. `method_deviations` is selected. §7.8.2.1(n) content the product had
- *      nowhere to record until migration 0106.
+ *   1. No certificate-template resolution and no write-back onto the job: the
+ *      layout is chosen by the method's quantity, not by a row a lab configured.
+ *   2. `method_deviations` is selected (§7.8.2.1(n) content, migration 0106).
  *   3. The service-order LATERAL join carries `opened_at`, `intake_condition`
- *      and `accessories`, not just the repair-mark number. Those are
- *      §7.8.2.1(g) and (h) — condition on receipt and date of receipt — which
- *      the XLSX layout never printed and the fixed layout does.
+ *      and `accessories`, not just the repair-mark number: §7.8.2.1(g) and (h),
+ *      condition on receipt and date of receipt.
  *
  * It lives in its own module rather than back in `index.ts` (2,300 lines
  * already) so the query is readable and the issuance pipeline can be followed
@@ -71,9 +63,9 @@ const JOB_QUERY = `
     cj.superseded_by_id,
     cj.amendment_number,
     cj.amendment_reason,
-    -- #427: non-null downgrades the issuance to non-accredited
+    -- non-null downgrades the issuance to non-accredited
     cj.scope_override_justification,
-    -- §7.8.2.1(n), added in 0106
+    -- §7.8.2.1(n)
     cj.method_deviations,
     o.name as lab_name,
     o.cnpj as lab_cnpj,

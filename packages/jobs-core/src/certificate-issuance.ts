@@ -44,7 +44,7 @@ type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
  * Signing certificate data fetched from database
  */
 // =============================================================================
-// CERTIFICATE SIGNING AND ISSUANCE TRANSITION (#865 Phase 3)
+// CERTIFICATE SIGNING AND ISSUANCE TRANSITION
 //
 // Restored from 45571b97, unchanged. None of it was layout-specific: it signs
 // whatever PDF bytes it is handed and moves the job to APPROVED. It came out
@@ -102,7 +102,7 @@ interface SigningCertificateData extends StoredSigningCredential {
 }
 
 /**
- * The unit's signing policy: #644 `require_signature` and, since Q51, the
+ * The unit's signing policy: `require_signature` and the
  * recorded reason of its explicit "emitir sem assinatura digital" setting
  * (null = the unit did not choose to issue unsigned).
  */
@@ -132,7 +132,7 @@ async function fetchUnitSigningPolicy(
 }
 
 /**
- * Whether the unit has EVER had a signing certificate (P0-8): any row, expired,
+ * Whether the unit has EVER had a signing certificate: any row, expired,
  * revoked and deactivated ones included, and the state of the newest one, for the
  * reason a blocked issuance reports. `fetchSigningCertificate` only sees a valid
  * default certificate, so without this an expired A1 looks like "never had one".
@@ -282,7 +282,7 @@ export async function updateJobWithCertificate(
   signatureVerdict?: StoredSignatureVerdict,
   options: {
     preserveSignatureMetadata?: boolean;
-    /** Q51: the reason the unit recorded for issuing unsigned; written on the audit event. */
+    /** The reason the unit recorded for issuing unsigned; written on the audit event. */
     unsignedByPolicy?: string;
   } = {},
 ): Promise<CertificateTransitionResult> {
@@ -633,7 +633,7 @@ export async function signPdfWithUnitCertificate(
   pdfBuffer: Buffer;
   signatureMetadata?: SignatureMetadata;
   signatureVerdict?: StoredSignatureVerdict;
-  /** Q51: set when the unit issues unsigned on purpose; the reason it recorded. */
+  /** Set when the unit issues unsigned on purpose; the reason it recorded. */
   unsignedByPolicy?: string;
 }> {
   const signStart = performance.now();
@@ -644,9 +644,9 @@ export async function signPdfWithUnitCertificate(
     console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
   }
 
-  // #644 (CMP-01): the unit's signing policy governs the missing-cert /
+  // The unit's signing policy governs the missing-cert /
   // missing-master-key paths. Unresolvable flag (legacy job without unit)
-  // keeps the pre-#644 permissive behavior.
+  // is permissive.
   const { requireSignature, unsignedIssuanceReason } =
     organizationId && unitId
       ? await withOrgDbClient(env, organizationId, (client) =>
@@ -661,7 +661,7 @@ export async function signPdfWithUnitCertificate(
         )
       : null;
 
-  // P0-8: a unit that has ever had a signing certificate and has no valid one
+  // A unit that has ever had a signing certificate and has no valid one
   // now fails closed (never an unsigned PDF). Not read for a certificate that
   // is valid: the history only matters when there is nothing to sign with.
   const history =
@@ -703,7 +703,7 @@ export async function signPdfWithUnitCertificate(
     console.warn(
       `[JOB ${jobId}] ${policy.action === "EMIT_UNSIGNED" ? policy.warning : "No signing certificate available"}`,
     );
-    // Q51: when the unit chose to issue unsigned, the issued certificate records
+    // When the unit chose to issue unsigned, the issued certificate records
     // that it was unsigned BY POLICY, with the reason, next to the plain UNSIGNED.
     return {
       pdfBuffer,
@@ -738,9 +738,9 @@ export async function signPdfWithUnitCertificate(
       },
       keyring,
     );
-    // #646 / CMP-03: with a TSA configured this embeds an RFC 3161 carimbo do
+    // With a TSA configured this embeds an RFC 3161 carimbo do
     // tempo (PAdES-T / AD-RT) and FAILS CLOSED on TSA errors; without one it is
-    // byte-identical to the pre-#646 AD-RB signature.
+    // plain AD-RB signature.
     const result = await signAndTimestampPdf(pdfBuffer, {
       p12Buffer,
       password,
@@ -763,7 +763,7 @@ export async function signPdfWithUnitCertificate(
       const verdict = await verifyPdf(result.signedPdf, {
         expectedSha256: result.metadata.pdfHash,
         trustAnchors: getIcpBrasilTrustAnchors(),
-        // #646 fase b: best-effort revocation at issue time (verdict degrades
+        // Best-effort revocation at issue time (verdict degrades
         // to revocationChecked=false on network trouble; never blocks issuance
         // since this whole precompute is already best-effort).
         fetchCrl: createCrlFetcher(),
@@ -781,10 +781,10 @@ export async function signPdfWithUnitCertificate(
       signatureVerdict,
     };
   } catch (signError) {
-    // #644 (REQ-CMP-SIGN-001/002): a configured certificate that fails to sign
+    // REQ-CMP-SIGN-001/002: a configured certificate that fails to sign
     // ALWAYS fails the emission — the job goes REJECTED with a named reason and
     // neither the R2 upload, the APPROVED transition nor notifyCertificateReady
-    // (all downstream of this call) can run. Includes #646's TIMESTAMP_FAILED.
+    // (all downstream of this call) can run. Includes TIMESTAMP_FAILED.
     console.error(`[JOB ${jobId}] PDF signing failed:`, signError);
     if (signError instanceof SigningPolicyError) {
       throw signError;

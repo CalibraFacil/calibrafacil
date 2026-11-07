@@ -157,7 +157,7 @@ export async function checkStandardsExpiring(
 
 /**
  * Check for proficiency-test participation-plan items due within 90 days or
- * already overdue (ISO/IEC 17025 §7.7.2, issue #60).
+ * already overdue (ISO/IEC 17025 §7.7.2).
  *
  * Duplicate prevention: plan items are notified once per 30-day window —
  * the cycle is measured in years, so a monthly reminder is enough.

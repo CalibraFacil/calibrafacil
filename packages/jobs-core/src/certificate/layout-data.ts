@@ -6,8 +6,8 @@
  * `reporting.phase`, and which block a formula belongs to from
  * `scope.tableKey`. Nothing is inferred from an output key's spelling.
  *
- * That constraint is the whole point. The WYSIWYG editor (#863) and the XLSX
- * importer (#865) both died from being modelled on one laboratory's method: a
+ * That constraint is the whole point. The WYSIWYG editor and the XLSX
+ * importer both died from being modelled on one laboratory's method: a
  * heuristic like "keys ending in _antes are the as-found phase" reads a pilot lab's
  * naming convention as if it were a platform contract, and the next lab's
  * method silently renders wrong. If a method does not declare enough to build a
@@ -178,7 +178,7 @@ function collectColumns(
 
     // Taking the first match and ignoring the rest would be a guess, and a
     // silent one: two formulas claiming "primary_result" in the same phase is
-    // exactly the pre-#865 shape (media_indicacao and erro_indicacao both did),
+    // exactly that older shape (media_indicacao and erro_indicacao both did),
     // and picking whichever comes first in the array prints the mean indication
     // under the "Erro" heading. Frozen snapshots from before the re-seed still
     // look like that, so this is reachable in production, not hypothetical.
@@ -310,11 +310,10 @@ function resolvePointLabels(
  * Which column of the points table holds the applied reference value, so each
  * row can be labelled with its actual load instead of "Ponto 1".
  *
- * The columns are NESTED under the table's own data field — an earlier version
- * looked for flattened `<tableKey>_<column>` entries in the top-level field
- * list, found nothing, and silently fell back to row indices on every real
- * certificate. The platform templates have always declared
- * `quantityKind: "reference"` on the right column; nothing was reading it.
+ * The columns are NESTED under the table's own data field, not flattened
+ * `<tableKey>_<column>` entries in the top-level field list (looking there
+ * finds nothing and silently falls back to row indices). The platform templates
+ * declare `quantityKind: "reference"` on the right column.
  */
 function resolveReferenceColumnKey(
   job: CertificateJobData,
@@ -486,7 +485,7 @@ function buildTraceabilityStatement(job: CertificateJobData): string | null {
 }
 
 /**
- * C2 (ILAC P10, ISO/IEC 17025 §6.5.1): the SI-traceability sentence is printed
+ * ILAC P10, ISO/IEC 17025 §6.5.1: the SI-traceability sentence is printed
  * only when the approval FROZE a verified decision (`job.traceability`): every
  * standard with a valid certificate from a provider recorded as accredited by an
  * ILAC-MRA signatory. Never from free text, never re-decided at render time;
@@ -590,7 +589,7 @@ export type BuildLayoutDataOptions = {
   /**
    * Which statement rules apply (`certificateContentRulesFor(layout.version)` of
    * the frozen input). "legacy" (the default, and every input frozen before
-   * roadmap 2 C1/C2) re-renders byte-identically to what was issued; "current"
+   * the content decisions were frozen) re-renders byte-identically to what was issued; "current"
    * builds the coverage sentence from the frozen result, prints the signatory's
    * authorized-signatory title and the calibrating body, and asserts SI
    * traceability only when it was verified.
@@ -685,7 +684,7 @@ export function buildCertificateLayoutData(
     };
   }
 
-  // #647: accreditation vigência is evaluated at the EMISSION instant. From a
+  // Accreditation vigência is evaluated at the EMISSION instant. From a
   // frozen certificate input the decision was taken at approval and is only
   // read here; the legacy path (no frozen input) still evaluates it now.
   const accredited =
@@ -815,7 +814,7 @@ export function buildCertificateLayoutData(
     // §7.8.6.2 needs all three of: what it applies to, the specification, and
     // the decision rule. No method in the catalogue declares a decision rule
     // yet, so no certificate carries a verdict — deliberately. Inventing one
-    // (as PR #587 did) is a metrological claim the laboratory never made.
+    // is a metrological claim the laboratory never made.
     conformity: null,
 
     supersedesText: job.originalJobId

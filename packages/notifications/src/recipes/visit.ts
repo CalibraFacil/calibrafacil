@@ -368,7 +368,7 @@ export const visitRecipes = {
   },
 
   /**
-   * #739: notify the lab (unit staff) that the portal customer confirmed
+   * Notify the lab (unit staff) that the portal customer confirmed
    * attendance for a visit — schedulers chase only the unconfirmed ones.
    */
   async *VISIT_CUSTOMER_CONFIRMED({ visitId, actorUserId }) {
@@ -397,7 +397,7 @@ export const visitRecipes = {
   },
 
   /**
-   * #739: notify the lab (unit staff) that the portal customer asked to
+   * Notify the lab (unit staff) that the portal customer asked to
    * reschedule a visit — actionable: someone must accept or decline.
    */
   async *VISIT_RESCHEDULE_REQUESTED({ visitId, actorUserId }) {
@@ -426,7 +426,7 @@ export const visitRecipes = {
   },
 
   /**
-   * #739: notify the requesting portal user that the lab declined their
+   * Notify the requesting portal user that the lab declined their
    * reschedule request (the visit keeps its date). The recipient is whoever
    * opened the most recently declined request, not the original request
    * submitter — in group mode those can differ.

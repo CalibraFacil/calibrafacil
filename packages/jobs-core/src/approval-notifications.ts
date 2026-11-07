@@ -1,5 +1,5 @@
 /**
- * Post-approval notifications (ISO/IEC 17025 7.10, roadmap 2 B2).
+ * Post-approval notifications (ISO/IEC 17025 7.10).
  *
  * The approval transaction writes the regulated records itself (the asset
  * out-of-tolerance event, the asset calibration-date advance and their audit

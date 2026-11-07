@@ -8,7 +8,7 @@ import {
   type SigningCertificateExpiryInput,
 } from "./signing-certificate-expiry";
 
-// Signing certificates alert at 30, 14 and 7 days (P0-8): every case below is
+// Signing certificates alert at 30, 14 and 7 days: every case below is
 // about them, so the windows are fixed here once.
 function decideSigningCertificateExpiryAlert(
   input: Omit<SigningCertificateExpiryInput, "leadDays">,
@@ -19,7 +19,7 @@ function decideSigningCertificateExpiryAlert(
   });
 }
 
-// CMP-02 (issue #645). Pure decider for the ICP-Brasil A1 signing-certificate
+// Pure decider for the ICP-Brasil A1 signing-certificate
 // expiry alert — exercised directly (no DB / no mock), with fixed dates under
 // TZ=UTC. Reads `validUntil` only; never touches signing crypto.
 const NOW = new Date("2026-07-03T08:00:00.000Z");

@@ -1,6 +1,5 @@
 /**
- * Customer-facing §7.10 out-of-tolerance notification email dispatcher
- * (#426 Phase 0).
+ * Customer-facing §7.10 out-of-tolerance notification email dispatcher.
  *
  * Sibling to sendServiceOrderCustomerEmail — same contract:
  *  - Recipient/brand are resolved by the caller (the oot email-outbox drain),

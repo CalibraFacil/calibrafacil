@@ -1,15 +1,15 @@
 /**
- * Pure decision logic for the ICP-Brasil A1 signing-certificate expiry alert
- * (issue #645 · CMP-02). Kept in its OWN module — no DB / wall-clock / email
+ * Pure decision logic for the ICP-Brasil A1 signing-certificate expiry alert.
+ * Kept in its OWN module — no DB / wall-clock / email
  * imports — so it is directly unit-testable with fixed dates.
  *
  * An A1 certificate has ~1yr validity. Once it expires, issuance for the unit
- * FAILS CLOSED (P0-8: no unsigned PDF), so the lab is warned ahead of time.
+ * FAILS CLOSED (no unsigned PDF), so the lab is warned ahead of time.
  * This decider only READS the certificate's `validUntil` and decides whether to
  * warn. It does NOT touch signing crypto.
  *
  * Escalating lead windows (days before `validUntil`): 30 → 14 → 7 for signing
- * certificates (P0-8). On any given cron run a certificate belongs to exactly
+ * certificates. On any given cron run a certificate belongs to exactly
  * one window — the smallest lead that is still ≥ the days remaining.
  * Idempotency is "per window": once an alert has been recorded for a window
  * (its `leadTimeDays`), that window never re-fires; crossing into the next,

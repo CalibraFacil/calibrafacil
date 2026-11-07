@@ -10,7 +10,7 @@ import { defineConfig } from "vitest/config";
 // @calibra-facil/email React-Email `.tsx` templates). Vite 8 honours each
 // package's tsconfig `jsx` setting, so without the plugin import-analysis chokes
 // on the JSX before any test runs and the NIE-Cgcre-009 page-geometry guard in
-// pdf-render-request.spec.ts silently stops executing (#930).
+// pdf-render-request.spec.ts silently stops executing.
 export default defineConfig({
   plugins: [react()],
   test: {

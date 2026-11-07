@@ -258,8 +258,8 @@ export async function sendPortalDueDigests(
       }
 
       // The digest is marketing-class mail: never send it to an address on the
-      // suppression ledger (a Resend complaint / hard bounce, fed by the webhook
-      // in PR #591). isEmailSuppressed normalizes the address and also honours
+      // suppression ledger (a Resend complaint / hard bounce, fed by the webhook).
+      // isEmailSuppressed normalizes the address and also honours
       // the broader 'all' scope. Per-recipient lookup is fine at cron volume.
       // oxlint-disable-next-line eslint/no-await-in-loop -- sequential per recipient (see above).
       if (await isEmailSuppressed(recipient.email, "all")) {
