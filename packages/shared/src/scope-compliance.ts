@@ -1,6 +1,6 @@
 /**
  * Accredited-scope (CMC) compliance gate — ISO/IEC 17025 §7.6 / §7.8.3, ILAC
- * P14 (#427, Phase 0).
+ * P14.
  *
  * An accredited certificate must never report an expanded uncertainty smaller
  * than the laboratory's published CMC ("not less than" — ILAC P14 §6), nor
@@ -66,15 +66,15 @@ export function quantityKindLabelPt(kind: string): string {
 }
 
 /**
- * Org-level guard behavior (#427 Phase 1). `enforce` blocks accredited approval
+ * Org-level guard behavior. `enforce` blocks accredited approval
  * on OUT_OF_SCOPE/U_BELOW_CMC unless a documented override downgrades the
  * issuance to non-accredited; `warn` only classifies. Which one a lab gets when
- * it never chose is {@link resolveScopeEnforcementMode} (Q45).
+ * it never chose is {@link resolveScopeEnforcementMode}.
  */
 export type ScopeEnforcementMode = "warn" | "enforce";
 
 /**
- * The guard mode in force for a lab (decision Q45). `stored` is
+ * The guard mode in force for a lab. `stored` is
  * `organization.scope_enforcement_mode`, which is NULL until the lab chooses:
  *
  *  - an explicit `warn` or `enforce` is returned as is, never overridden;
@@ -82,8 +82,8 @@ export type ScopeEnforcementMode = "warn" | "enforce";
  *    lab is blocked from issuing an adverse accredited result by default), else
  *    `warn` (nothing to guard).
  *
- * `warn` stays selectable but never seals an adverse or unevaluated result
- * (Q42), whichever way the mode was arrived at.
+ * `warn` stays selectable but never seals an adverse or unevaluated result,
+ * whichever way the mode was arrived at.
  */
 export function resolveScopeEnforcementMode(params: {
   stored: ScopeEnforcementMode | null | undefined;
@@ -115,7 +115,7 @@ export type AccreditedScopeLineLike = {
   cmcUnit: string;
   /** Coverage factor the CMC is stated at (ILAC P14: k=2 / ~95 %). */
   coverageFactor?: number | null;
-  /** Vigência window; null bounds impose no constraint (mirrors #647). */
+  /** Vigência window; null bounds impose no constraint (mirrors the organization-level accreditation window). */
   validFrom?: Date | string | null;
   validUntil?: Date | string | null;
 };
@@ -127,7 +127,7 @@ export type ScopeEvaluationPoint = {
   unit: string;
   /**
    * Reported expanded uncertainty, in `uncertaintyUnit`, at `coverageFactor`.
-   * Null (Q52): the row has a measurement point but no uncertainty; it cannot
+   * Null: the row has a measurement point but no uncertainty; it cannot
    * be compared and is surfaced as a `not_evaluated` finding ("sem incerteza"),
    * never dropped.
    */
@@ -138,7 +138,7 @@ export type ScopeEvaluationPoint = {
 };
 
 /**
- * Q42: only `PASS` is positive, and `PASS` means EVERY point was compared and
+ * Only `PASS` is positive, and `PASS` means EVERY point was compared and
  * none is adverse. `PARTIALLY_EVALUATED` (some points compared and clean, others
  * `not_evaluated`), `NOT_EVALUATED` (nothing could be compared) and
  * `NO_SCOPE_LINES` (the unit has no accredited scope lines at all) are
@@ -272,7 +272,7 @@ export function evaluateScopeCompliance(input: {
       continue;
     }
 
-    // Q52: a point inside the scope whose row reports no uncertainty cannot be
+    // A point inside the scope whose row reports no uncertainty cannot be
     // compared with the CMC. Counted and surfaced (the job is at most
     // PARTIALLY_EVALUATED, so the seal is withheld), never silently dropped.
     if (point.expandedUncertainty === null) {
@@ -541,7 +541,7 @@ export function extractScopeEvaluationPoints(input: {
         suffixRank(a.formula.outputKey) - suffixRank(b.formula.outputKey),
     );
   // A series that carries values wins; a table whose declared uncertainty
-  // formula produced NO value at all is still evaluated (Q52), so its points
+  // formula produced NO value at all is still evaluated, so its points
   // surface as "sem incerteza" instead of the table vanishing from the verdict.
   for (const withValues of [true, false]) {
     for (const entry of ranked) {
@@ -635,7 +635,7 @@ function extractPointsForTable(params: {
   const kValues = kFormula ? numericSeries(results[kFormula.outputKey]) : [];
 
   const points: ScopeEvaluationPoint[] = [];
-  // Every row with a measurement point is a point to evaluate (Q52): one whose
+  // Every row with a measurement point is a point to evaluate: one whose
   // uncertainty is missing (shorter or empty series, unparseable cell) is kept
   // with `expandedUncertainty: null` and reported as not evaluated, not dropped.
   // A row without a point value is not a measurement point and is skipped.

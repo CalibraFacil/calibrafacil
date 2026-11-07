@@ -55,9 +55,9 @@ export interface VerifyPdfResult {
   certNotExpiredAtCheckDate: boolean;
   /** A signature object was found and parsed in the PDF. */
   signaturePresent: boolean;
-  /** An RFC 3161 DocTimeStamp (SubFilter /ETSI.RFC3161) is embedded (#646, PAdES-T). */
+  /** An RFC 3161 DocTimeStamp (SubFilter /ETSI.RFC3161) is embedded (PAdES-T). */
   timestampPresent: boolean;
-  /** A signed, issuer-verified CRL covering the signer cert was consulted (#646 fase b). */
+  /** A signed, issuer-verified CRL covering the signer cert was consulted. */
   revocationChecked: boolean;
   /** Signer certificate revoked per the verified CRL. Null when unchecked. */
   certificateRevoked: boolean | null;
@@ -79,7 +79,7 @@ export interface VerifyPdfOptions {
   /** Reference time for validity / chain checks (default: now). */
   checkDate?: Date;
   /**
-   * Injected CRL fetcher (#646 fase b) — verifyPdf itself performs no network
+   * Injected CRL fetcher — verifyPdf itself performs no network
    * I/O. Given a CRL Distribution Point URL from the signer chain, return the
    * DER bytes or null. Fetch failures degrade to `revocationChecked: false`.
    */
@@ -169,7 +169,7 @@ interface ExtractedSignatures {
 
 /**
  * Walk EVERY `/ByteRange` in the PDF and split candidates into the document
- * signature vs RFC 3161 DocTimeStamps. A timestamped PDF (#646, PAdES-T)
+ * signature vs RFC 3161 DocTimeStamps. A timestamped PDF (PAdES-T)
  * carries the timestamp as a SECOND signature field appended by incremental
  * update — a naive `lastIndexOf("/ByteRange")` would grab the timestamp and
  * try to verify it as the document signature.
@@ -405,7 +405,7 @@ export async function verifyPdf(
             }
           }
 
-          // #646 fase b (REQ-CMP-LTV-002): consult revocation material via the
+          // REQ-CMP-LTV-002: consult revocation material via the
           // injected fetcher. Only a CRL whose issuer matches AND whose
           // signature verifies against the chain counts; anything else
           // degrades to revocationChecked=false (never a false REVOKED).
@@ -480,7 +480,7 @@ export async function verifyPdf(
   } else if (hashMatch === false || !signatureCryptographicallyValid) {
     overall = "ALTERED";
   } else if (revocationOverride) {
-    // #646 fase b: revoked without a timestamp proving the signature predates
+    // Revoked without a timestamp proving the signature predates
     // the revocation. Takes precedence over VALID/UNVERIFIABLE — integrity
     // failures (ALTERED/UNSIGNED) above remain the stronger signal.
     overall = "REVOKED";

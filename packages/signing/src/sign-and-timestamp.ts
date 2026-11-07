@@ -1,5 +1,5 @@
 /**
- * PAdES-T orchestration (issue #646 / CMP-03): sign, then (when a TSA is
+ * PAdES-T orchestration: sign, then (when a TSA is
  * configured) embed an RFC 3161 timestamp — the AD-RT building block of
  * DOC-ICP-15.03. Legal basis for the signature itself: MP 2.200-2 (ICP-Brasil)
  * + ABNT NBR ISO/IEC 17025:2017 §7.8 (signatory identification).
@@ -8,7 +8,7 @@
  * stamp cannot be obtained, this throws SigningError("TIMESTAMP_FAILED") so
  * callers treat it as a signing failure — a certificate is never silently
  * emitted without the configured carimbo do tempo. Without a TSA config the
- * behavior is byte-identical to plain signPdf (AD-RB, the pre-#646 baseline).
+ * behavior is byte-identical to plain signPdf (AD-RB).
  *
  * The returned metadata.pdfHash always describes the FINAL artifact (the
  * timestamped bytes when stamping ran) — it is what gets persisted and what

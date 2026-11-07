@@ -3,9 +3,9 @@
  *
  * A pure, dependency-free layer that sits ALONGSIDE the unit registry
  * ({@link ./registry}) and gives every unit a SI *dimension vector*. It is the
- * foundation of the method-level dimensional lint decided in issue #663: it does
- * not touch the validated math engine and does no formula/AST checking (that is
- * slice 2). Everything here is exact over the rationals — there is deliberately
+ * foundation of the method-level dimensional lint: it does
+ * not touch the validated math engine and does no formula/AST checking (that
+ * is a separate layer). Everything here is exact over the rationals — there is deliberately
  * no floating-point exponent, because `sqrt` of a variance has dimension^(1/2).
  *
  * Scope note: affine offsets (°C vs K) are a CONVERSION concern handled by

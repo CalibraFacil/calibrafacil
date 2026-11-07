@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { SigningError } from "./types.js";
 
 /**
- * signAndTimestampPdf — the PAdES-T orchestration (issue #646 / CMP-03).
+ * signAndTimestampPdf — the PAdES-T orchestration.
  *
  * REQ-CMP-LTV-001: with a TSA configured, the signer embeds an RFC 3161
  *                  timestamp and the metadata reflects it (incl. the honest

@@ -97,9 +97,8 @@ function trimDashes(value: string): string {
 }
 
 /**
- * Sanitize a free-form path segment (sync entity ids, file identities). Mirrors
- * the previous `safeR2Segment` in sync.ts: keeps alphanumerics/`._-`, collapses
- * the rest to `-`, and falls back to "local" when nothing survives.
+ * Sanitize a free-form path segment (sync entity ids, file identities). Keeps
+ * alphanumerics/`._-`, collapses the rest to `-`, and falls back to "local" when nothing survives.
  */
 export function safeR2Segment(value: string): string {
   return trimDashes(value.replace(/[^a-zA-Z0-9._-]+/g, "-")) || "local";
@@ -288,7 +287,7 @@ export interface PortalAuditPackKeyParams {
 }
 
 /**
- * Customer-requested audit-pack ZIP (issue #738). Lives under a dedicated
+ * Customer-requested audit-pack ZIP. Lives under a dedicated
  * `portal-exports/` org sub-prefix so a bucket lifecycle rule can expire these
  * short-lived, regenerate-on-demand objects without touching regulated records.
  */
@@ -312,7 +311,7 @@ export interface OotNotificationKeyParams {
 }
 
 /**
- * §7.10 out-of-tolerance customer-notification letter (#426 Phase 0). Lives
+ * §7.10 out-of-tolerance customer-notification letter. Lives
  * with the other regulated documents — this is retained quality evidence, so
  * it must NOT sit under a lifecycle-expired prefix like portal-exports/.
  */

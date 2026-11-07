@@ -57,7 +57,7 @@ export function formatAccreditationNumber(
 export type AccreditationProfile = {
   accreditationActive?: boolean | null;
   accreditationNumber?: string | null;
-  /** Vigência window (#647). Null bounds impose no constraint (REQ-CMP-VIG-004). */
+  /** Vigência window. Null bounds impose no constraint (REQ-CMP-VIG-004). */
   accreditationValidFrom?: Date | string | null;
   accreditationValidUntil?: Date | string | null;
 };
@@ -177,7 +177,7 @@ export function accreditationBoundDay(
  * Whether `atDate` falls inside the accreditation vigência window, judged by
  * the laboratory's calendar day (both bounds inclusive). Bounds are
  * independent: a missing side imposes no constraint, so orgs that never filled
- * the window keep the pre-#647 behavior (REQ-CMP-VIG-004).
+ * the window keep working as before (REQ-CMP-VIG-004).
  */
 function isWithinAccreditationWindow(
   profile: AccreditationProfile,
@@ -211,7 +211,7 @@ export function isLabDayWithinBounds(
 /**
  * Single source of truth for "the lab is accredited": the explicit toggle is
  * on, an accreditation number is present AND `atDate` (default: now) falls
- * inside the vigência window (#647). Drives both the holographic state of the
+ * inside the vigência window. Drives both the holographic state of the
  * settings seal and seal emission on issued certificates — callers evaluating
  * a stored certificate should pass its EMISSION date, not the viewing time.
  */
@@ -355,7 +355,7 @@ function scopeWithheldReason(
 }
 
 /**
- * Q42 (P0-7). A certificate carries the accreditation seal only when ALL of:
+ * A certificate carries the accreditation seal only when ALL of:
  *
  *  1. the lab is accredited at `atDate` (the emission date for a stored
  *     certificate): toggle on, a number, and the vigência window covers it;

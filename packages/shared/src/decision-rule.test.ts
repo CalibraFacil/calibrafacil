@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decidePoint, isDecisionRuleKind } from "./decision-rule";
 
-// Golden cases (roadmap 2 C4): tolerance T = 1.0, U = 0.2.
+// Golden cases: tolerance T = 1.0, U = 0.2.
 // margin m = T - |E|: E = 0.5 -> 0.5; E = 0.9 -> 0.1; E = 1.1 -> -0.1; E = 1.5 -> -0.5.
 describe("decision rules (ILAC-G8)", () => {
   it("simple acceptance judges the measured value alone", () => {

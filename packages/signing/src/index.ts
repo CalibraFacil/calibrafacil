@@ -48,13 +48,13 @@ export type { VerifyPdfResult, VerifyPdfTimestamp } from "./verify.js";
 // RFC-3161 timestamp (carimbo de tempo) — PAdES-T building block
 export type { TimestampConfig } from "./timestamp.js";
 
-// PAdES-T orchestration (#646 / CMP-03): sign + RFC-3161 stamp, fail-closed.
+// PAdES-T orchestration: sign + RFC-3161 stamp, fail-closed.
 export { signAndTimestampPdf } from "./sign-and-timestamp.js";
 
-// CRL revocation (#646 / CMP-03 fase b): pure check + injectable HTTP fetcher.
+// CRL revocation: pure check + injectable HTTP fetcher.
 export { createCrlFetcher } from "./crl-fetcher.js";
 
-// Envelope encryption of the signing credentials (roadmap 2 B4a): per-field data
+// Envelope encryption of the signing credentials: per-field data
 // keys wrapped by an identified KEK, AAD = organization + unit + serial.
 export {
   CREDENTIAL_FORMAT_ENVELOPE,
@@ -67,7 +67,7 @@ export {
 } from "./envelope.js";
 export type { SigningKeyring, StoredSigningCredential } from "./envelope.js";
 
-// Validation of a signing credential at upload (roadmap 2 B4a): validity window,
+// Validation of a signing credential at upload: validity window,
 // key usage and the chain to the configured trust store.
 export {
   resolveSigningTrustAnchors,

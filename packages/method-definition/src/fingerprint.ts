@@ -20,7 +20,7 @@ export function canonicalJson(value: unknown): string {
 }
 
 // Uses the same SHA-256 digest as @calibra-facil/math-engine's audit fingerprints
-// (previously a separate 64-bit FNV-1a) so method-level and engine-level audit
+// so method-level and engine-level audit
 // fingerprints share one cryptographic hash. For finite JSON data the canonical
 // form above is byte-identical to the engine's canonicalJson (V8 number formatting
 // equals the shortest round-trip form), keeping the two families consistent.

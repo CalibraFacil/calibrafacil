@@ -288,7 +288,7 @@ describe("external-provider results suppress the seal", () => {
   });
 });
 
-// #647 (CMP — vigência da acreditação)
+// Vigência da acreditação
 describe("accreditation vigência window", () => {
   const base = { accreditationActive: true, accreditationNumber: "9999" };
   const from = new Date("2024-03-01T00:00:00.000Z");
@@ -409,7 +409,7 @@ describe("accreditation vigência window", () => {
   });
 });
 
-// #427 Phase 1: a documented scope-violation override downgrades the issuance
+// A documented scope-violation override downgrades the issuance
 // to NON-accredited — the seal must never render for an overridden approval.
 describe("shouldRenderAccreditationSeal — scope-override downgrade", () => {
   const activeLab = { accreditationActive: true, accreditationNumber: "9999" };
@@ -544,7 +544,7 @@ describe("accreditation vigência window — laboratory calendar days", () => {
   });
 });
 
-// Q42 (P0-7): the seal needs a positive frozen scope verdict.
+// The seal needs a positive frozen scope verdict.
 describe("decideAccreditationSeal — scope verdict (Q42)", () => {
   const lab = {
     accreditationActive: true,

@@ -154,7 +154,7 @@ function normalizeStandardNumberToGrams(
  * canonical mass unit (grams) before official execution. This MUST run on every
  * authoritative execution path — cloud (jobs/sync) and offline desktop — so that
  * a non-gram lab gets identical results, acceptance verdicts and certificates
- * online and offline (audit H4). Generic so each caller keeps its own snapshot
+ * online and offline. Generic so each caller keeps its own snapshot
  * type; Object.assign preserves all non-mass fields.
  */
 export function normalizeStandardsForOfficialExecution<

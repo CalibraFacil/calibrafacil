@@ -109,7 +109,7 @@ describe("PDF Signing", () => {
   });
 
   /**
-   * Real error-path coverage (TST-02 / #668). These build genuine
+   * Real error-path coverage. These build genuine
    * certificates + PKCS#12 files via node-forge (same fixture pattern as
    * chain-validation.spec.ts) and drive the real `parsePkcs12` /
    * `validateCertificateValidity` production logic down each error branch,

@@ -48,7 +48,7 @@ export interface SignatureMetadata {
   pdfHash: string;
   /** Whether LTV (Long-Term Validation) is enabled */
   ltvEnabled: boolean;
-  /** Whether an RFC 3161 timestamp (carimbo do tempo) was embedded (#646). */
+  /** Whether an RFC 3161 timestamp (carimbo do tempo) was embedded. */
   timestamped?: boolean;
   /**
    * Whether the TSA that issued the timestamp is a credentialed ICP-Brasil ACT.

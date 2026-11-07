@@ -418,8 +418,8 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
     },
     expected: {
       // Row-scoped formulas yield one value per row. Pinned from the engine
-      // (decimal mode), within 1e-9. The coverage factor now COMES FROM
-      // Welch–Satterthwaite + Student-t (no longer a flat k=2). In THIS point the
+      // (decimal mode), within 1e-9. The coverage factor COMES FROM
+      // Welch–Satterthwaite + Student-t (not a flat k=2). In THIS point the
       // reference term (0.25 N) dominates u_c, so the Type A weight is small and
       // ν_eff is high (≈820) → k ≈ 2.003; at a point where repeatability dominates
       // (ν_eff→2), k would rise toward 4,53 (Tabela E.1). A second scenario with a

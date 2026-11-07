@@ -15,7 +15,7 @@ import {
 } from "./revocation.js";
 
 /**
- * CRL revocation checking (#646 / CMP-03 fase b) against a self-generated
+ * CRL revocation checking against a self-generated
  * CA → leaf chain, a REAL pkijs-built-and-signed CRL and a really-signed PDF.
  * No network — the fetcher is injected per VerifyPdfOptions.fetchCrl.
  *

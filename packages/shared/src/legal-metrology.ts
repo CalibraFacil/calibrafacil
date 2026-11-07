@@ -16,7 +16,7 @@
  *
  * Keys are `asset_type.slug` values from `seed-asset-types.ts`; values must
  * match a seeded `legal_metrology_regulation.category` verbatim (cross-checked
- * by `packages/db/src/seed-legal-metrology-regulations.test.ts`).
+ * by `packages/db/src/seed-catalog-consistency.test.ts`).
  */
 export const REGULATION_CATEGORY_BY_ASSET_TYPE_SLUG = {
   "balanca-digital": "Balanças (IPNA)",

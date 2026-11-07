@@ -532,7 +532,7 @@ describe("extractScopeEvaluationPoints", () => {
   });
 });
 
-// ── Review-fix regressions (#427 stack self-review) ──────────────────────────
+// ── Regressions ──────────────────────────────────────────────────────────────
 
 describe("evaluateScopeCompliance — CMC coverage-factor normalization", () => {
   it("scales a CMC stated at k≠2 before comparing", () => {
@@ -665,7 +665,7 @@ describe("extractScopeEvaluationPoints — sparse result series stay row-aligned
         },
       ],
     });
-    // Q52: point 100 (null U) is KEPT with no uncertainty (reported as "sem
+    // Point 100 (null U) is KEPT with no uncertainty (reported as "sem
     // incerteza", never dropped); 200↔0.02 and 500↔0.03 stay paired.
     expect(points).toHaveLength(3);
     expect(points[0]).toMatchObject({ value: 100, expandedUncertainty: null });

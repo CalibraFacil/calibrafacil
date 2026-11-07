@@ -141,7 +141,7 @@ describe("verifyPdf", () => {
   });
 
   // ===========================================================================
-  // DocTimeStamp handling (#646 / CMP-03, PAdES-T). A timestamped PDF carries a
+  // DocTimeStamp handling (PAdES-T). A timestamped PDF carries a
   // SECOND signature field (SubFilter /ETSI.RFC3161) appended by incremental
   // update. Verification must (a) still verify the ORIGINAL document signature
   // — a naive lastIndexOf("/ByteRange") would grab the timestamp instead and

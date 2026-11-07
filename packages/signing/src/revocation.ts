@@ -1,5 +1,5 @@
 /**
- * CRL-based revocation checking (#646 / CMP-03 phase b, REQ-CMP-LTV-002).
+ * CRL-based revocation checking (REQ-CMP-LTV-002).
  *
  * Pure helpers — NO network here. The caller (API verify route, worker
  * precompute) injects a fetcher; `verify.ts` extracts the CRL Distribution
