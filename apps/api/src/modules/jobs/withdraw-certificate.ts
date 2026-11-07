@@ -1,3 +1,4 @@
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { appendCertificateStatusEvent } from "@calibra-facil/db/certificate-status-events";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
@@ -54,7 +55,19 @@ export type WithdrawCertificateResult =
   | { status: "not_issued"; error: DomainError }
   | { status: "already_withdrawn"; error: DomainError };
 
-export async function withdrawCertificate(
+export function withdrawCertificate(
+  command: WithdrawCertificateCommand,
+): Promise<WithdrawCertificateResult> {
+  return orgDb(command.organizationId).transaction((o) =>
+    withdrawCertificateIn(o, command),
+  );
+}
+
+/**
+ * The command inside the caller's transaction (`ctx.o` of a `withOrg`).
+ */
+export async function withdrawCertificateIn(
+  o: OrgDb,
   command: WithdrawCertificateCommand,
 ): Promise<WithdrawCertificateResult> {
   const { actor, organizationId } = command;
@@ -63,96 +76,89 @@ export async function withdrawCertificate(
     throw new Error("A withdrawal needs a written reason");
   }
 
-  return orgDb(organizationId).transaction(
-    async (o): Promise<WithdrawCertificateResult> => {
-      const [job] = await o
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-          supersededById: calibrationJob.supersededById,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, command.jobId),
-            command.unitScope
-              ? buildUnitScopeCondition(
-                  calibrationJob.unitId,
-                  command.unitScope,
-                )
-              : undefined,
-          ),
-        )
-        .limit(1)
-        .for("update");
-      if (!job) return { status: "not_found" };
+  const [job] = await o
+    .select({
+      id: calibrationJob.id,
+      jobId: calibrationJob.jobId,
+      status: calibrationJob.status,
+      supersededById: calibrationJob.supersededById,
+    })
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.id, command.jobId),
+        command.unitScope
+          ? buildUnitScopeCondition(calibrationJob.unitId, command.unitScope)
+          : undefined,
+      ),
+    )
+    .limit(1)
+    .for("update");
+  if (!job) return { status: "not_found" };
 
-      const [certificate] = await o
-        .select({ id: issuedCertificateSnapshot.id })
-        .from(issuedCertificateSnapshot)
-        .where(eq(issuedCertificateSnapshot.jobId, job.id))
-        .limit(1);
-      if (
-        !certificate ||
-        (job.status !== "APPROVED" && job.status !== "SUPERSEDED")
-      ) {
-        return {
-          status: "not_issued",
-          error: conflict(
-            "certificate_not_issued",
-            `Apenas certificados emitidos podem ser retirados. Status atual: ${job.status}`,
-          ),
-        };
-      }
+  const [certificate] = await o
+    .select({ id: issuedCertificateSnapshot.id })
+    .from(issuedCertificateSnapshot)
+    .where(eq(issuedCertificateSnapshot.jobId, job.id))
+    .limit(1);
+  if (
+    !certificate ||
+    (job.status !== "APPROVED" && job.status !== "SUPERSEDED")
+  ) {
+    return {
+      status: "not_issued",
+      error: conflict(
+        "certificate_not_issued",
+        `Apenas certificados emitidos podem ser retirados. Status atual: ${job.status}`,
+      ),
+    };
+  }
 
-      const lifecycle = (await loadCertificateLifecycles(o, [job])).get(job.id);
-      if (lifecycle?.status === "WITHDRAWN") {
-        return {
-          status: "already_withdrawn",
-          error: conflict(
-            "certificate_already_withdrawn",
-            "Este certificado ja foi retirado",
-          ),
-        };
-      }
+  const lifecycle = (await loadCertificateLifecycles(o, [job])).get(job.id);
+  if (lifecycle?.status === "WITHDRAWN") {
+    return {
+      status: "already_withdrawn",
+      error: conflict(
+        "certificate_already_withdrawn",
+        "Este certificado ja foi retirado",
+      ),
+    };
+  }
 
-      const withdrawnAt = new Date();
-      await appendCertificateStatusEvent(o, {
-        organizationId,
-        certificateId: certificate.id,
-        jobId: job.id,
-        event: "WITHDRAWN",
-        reason,
-        actorUserId: actor.userId,
-        source: "api",
-        occurredAt: withdrawnAt,
-      });
-      await appendJobEvent(o, {
-        action: "certificate_withdrawn",
-        organizationId,
-        jobId: job.id,
-        actor: { kind: "user", userId: actor.userId },
-        performedAt: withdrawnAt,
-        changes: {
-          ...jobActorAuditFields(actor),
-          certificateStatus: {
-            old: lifecycle?.status ?? "ISSUED",
-            new: "WITHDRAWN",
-          },
-          reason,
-        },
-        ipAddress: actor.ipAddress ?? null,
-        reason,
-      });
-
-      return {
-        status: "ok",
-        jobId: job.id,
-        jobNumber: job.jobId,
-        jobStatus: job.status,
-        withdrawnAt,
-      };
+  const withdrawnAt = new Date();
+  await appendCertificateStatusEvent(o, {
+    organizationId,
+    certificateId: certificate.id,
+    jobId: job.id,
+    event: "WITHDRAWN",
+    reason,
+    actorUserId: actor.userId,
+    source: "api",
+    occurredAt: withdrawnAt,
+  });
+  await appendJobEvent(o, {
+    action: "certificate_withdrawn",
+    organizationId,
+    jobId: job.id,
+    actor: { kind: "user", userId: actor.userId },
+    performedAt: withdrawnAt,
+    changes: {
+      ...jobActorAuditFields(actor),
+      certificateStatus: {
+        old: lifecycle?.status ?? "ISSUED",
+        new: "WITHDRAWN",
+      },
+      reason,
     },
-  );
+    ipAddress: actor.ipAddress ?? null,
+    reason,
+  });
+
+  return {
+    status: "ok",
+    jobId: job.id,
+    jobNumber: job.jobId,
+    jobStatus: job.status,
+    withdrawnAt,
+  };
 }

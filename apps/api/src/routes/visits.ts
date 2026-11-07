@@ -726,7 +726,6 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
               createdBy: ctx.actor.userId,
               assetId,
               serviceId,
-              notifyOnAssignment: false,
               onsiteLocation: {
                 addressText: formatOnsiteAddressText(visit.address),
               },

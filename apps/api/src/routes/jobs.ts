@@ -1,26 +1,23 @@
-import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import type { OrgExecutor } from "@calibra-facil/db/for-org";
-import {
-  domainErrorBody,
-  domainErrorResponse,
-  invalid,
-  notFound,
-} from "../lib/domain-errors";
+import { toApiErrorJson } from "../lib/api-error-json";
+import { DomainError, invalid, notFound } from "../lib/domain-errors";
 import {
   renderLabel,
   defaultRenderOptions,
 } from "@calibra-facil/label-rendering";
-import { afterCommitQueue } from "../lib/after-commit";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
-import { orgDb } from "../lib/org-db";
 import {
-  orgTransactionWithExecutor,
-  withOrgReader,
-} from "../lib/org-transaction";
+  jobNotFound,
+  requireJobRouteId,
+  resolveJobRouteId,
+} from "../lib/job-access";
+import { orgDb } from "../lib/org-db";
+import { withOrg } from "../lib/org-context";
+import { orgTransactionWithExecutor } from "../lib/org-transaction";
+import { requestActor } from "../middleware/request-actor";
 import { sendServiceOrdersToFinance } from "../lib/finance";
 import type { IntegrationsEnv } from "../modules/integrations";
 import {
@@ -103,7 +100,7 @@ import {
   generatePresignedUrl,
   extractKeyFromUrl,
 } from "../lib/storage";
-import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import { createCalibrationJob } from "../lib/jobs";
 import { loadJobFinancialContexts } from "../lib/finance";
 import {
   frozenSealColumn,
@@ -114,22 +111,23 @@ import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
 import {
-  decodeRouteIdentifier,
   shouldUseLocalR2Download,
   r2EnvFromUnknown,
   methodSnapshotDisplay,
   buildLocalJobFileUrl,
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
-import { approvalStandardsRefusalDomainError } from "../modules/jobs/standards-judgement";
-import { amendJob } from "../modules/jobs/amend-job";
-import { withdrawCertificate } from "../modules/jobs/withdraw-certificate";
+import { approvalRefusalError } from "../modules/jobs/approval-refusals";
+import { amendJobIn } from "../modules/jobs/amend-job";
+import { withdrawCertificateIn } from "../modules/jobs/withdraw-certificate";
 import { loadCertificateLifecycles } from "../lib/certificate-lifecycle";
-import { assignJob } from "../modules/jobs/assign-job";
+import { assignJobIn } from "../modules/jobs/assign-job";
 import { cancelJob } from "../modules/jobs/cancel-job";
-import { editJob } from "../modules/jobs/edit-job";
-import { rejectJob } from "../modules/jobs/reject-job";
-import { retryRender } from "../modules/jobs/retry-render";
+import { editJobIn } from "../modules/jobs/edit-job";
+import { requireJobCommandOk } from "../modules/jobs/job-command-result";
+import { userJobActor } from "../modules/jobs/job-actor";
+import { rejectJobIn } from "../modules/jobs/reject-job";
+import { retryRenderIn } from "../modules/jobs/retry-render";
 import {
   executeJob,
   submitJob,
@@ -155,42 +153,6 @@ const CommandPaletteJobSearchQuerySchema = z.object({
 });
 
 /**
- * The job a route identifier names (a numeric id or the certificate number), in
- * the caller's organization and unit scope. Reads through the caller's org-bound
- * handle when it passes one, else in a short transaction of its own that names
- * the laboratory (row-level security).
- */
-function resolveJobRouteId(
-  identifier: string,
-  memberData: AuthVariables["member"],
-  executor?: Pick<OrgExecutor, "select">,
-): Promise<number | null> {
-  const routeIdentifier = decodeRouteIdentifier(identifier);
-  const legacyId = parseNumericRouteIdentifier(routeIdentifier);
-
-  return withOrgReader(memberData.organizationId, executor, async (reader) => {
-    const [job] = await reader
-      .select({ id: calibrationJob.id })
-      .from(calibrationJob)
-      .where(
-        and(
-          legacyId
-            ? or(
-                eq(calibrationJob.id, legacyId),
-                eq(calibrationJob.jobId, routeIdentifier),
-              )
-            : eq(calibrationJob.jobId, routeIdentifier),
-          eq(calibrationJob.organizationId, memberData.organizationId),
-          buildUnitScopeCondition(calibrationJob.unitId, memberData),
-        ),
-      )
-      .limit(1);
-
-    return job?.id ?? null;
-  });
-}
-
-/**
  * The 409 body of a lost compare-and-set: the status the job holds now, read in
  * a short transaction that names the laboratory.
  */
@@ -198,41 +160,35 @@ function statusConflictFor(jobId: number, organizationId: string) {
   return orgDb(organizationId).transaction((o) => jobStatusConflict(jobId, o));
 }
 
-function jobNotFound() {
-  return notFound("job_not_found", "Job nao encontrado");
-}
-
 /**
- * The HTTP answer to a submit/execute command that did not write: the
- * command's own refusal (code, status, pt-BR message), unchanged. Transport
- * mapping only.
+ * The refusal of a submit/execute command that did not write, as the
+ * `DomainError` the route throws: the command's own refusal (code, status,
+ * pt-BR message), unchanged. Transport mapping only.
  */
-async function jobExecutionRefusalResponse(
-  c: Context,
+async function jobExecutionRefusal(
   jobId: number,
   organizationId: string,
   result: Exclude<JobExecutionResult, { status: "ok" }>,
-) {
+): Promise<DomainError> {
   switch (result.status) {
     case "not_found":
-      return domainErrorResponse(c, jobNotFound());
+      return jobNotFound();
     case "concurrent_update":
-      return domainErrorResponse(
-        c,
-        await statusConflictFor(jobId, organizationId),
-      );
+      return statusConflictFor(jobId, organizationId);
     case "official_execution_failed":
       // The 422 carries the method diagnostics next to the stable code.
-      return c.newResponse(
-        JSON.stringify({
-          ...domainErrorBody(result.error),
-          diagnostics: result.failure.diagnostics,
-        }),
-        result.error.status,
-        { "Content-Type": "application/json" },
-      );
+      return new DomainError({
+        code: result.error.code,
+        status: result.error.status,
+        message: result.error.message,
+        details: result.error.details,
+        legacyBody: {
+          ...result.error.legacyBody,
+          diagnostics: toApiErrorJson(result.failure.diagnostics),
+        },
+      });
     case "precondition_failed":
-      return domainErrorResponse(c, invalid("invalid_request", result.reason));
+      return invalid("invalid_request", result.reason);
     case "illegal_transition":
     case "status_payload_mismatch":
     case "invalid_performed_at":
@@ -240,7 +196,7 @@ async function jobExecutionRefusalResponse(
     case "asset_unavailable":
     case "record_incomplete":
     case "competence_missing":
-      return domainErrorResponse(c, result.error);
+      return result.error;
   }
 }
 
@@ -283,35 +239,29 @@ export const jobsRouter = new Hono<{
       const memberData = c.get("member");
       const { query, limit } = c.req.valid("query");
 
-      try {
-        const results = await orgDb(memberData.organizationId).transaction(
-          (o) =>
-            o
-              .select({
-                id: calibrationJob.id,
-                jobId: calibrationJob.jobId,
-                status: calibrationJob.status,
-              })
-              .from(calibrationJob)
-              .where(
-                and(
-                  eq(calibrationJob.organizationId, memberData.organizationId),
-                  buildUnitScopeCondition(calibrationJob.unitId, memberData),
-                  or(
-                    ilike(calibrationJob.jobId, `%${query}%`),
-                    ilike(calibrationJob.certificateName, `%${query}%`),
-                  )!,
-                ),
-              )
-              .orderBy(desc(calibrationJob.createdAt))
-              .limit(limit),
-        );
+      const results = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+              or(
+                ilike(calibrationJob.jobId, `%${query}%`),
+                ilike(calibrationJob.certificateName, `%${query}%`),
+              )!,
+            ),
+          )
+          .orderBy(desc(calibrationJob.createdAt))
+          .limit(limit),
+      );
 
-        return c.json(results);
-      } catch (error) {
-        console.error("Error searching jobs:", error);
-        return c.json({ error: "Erro ao buscar ordens de serviço" }, 500);
-      }
+      return c.json(results);
     },
   )
 
@@ -521,7 +471,7 @@ export const jobsRouter = new Hono<{
       );
 
       if (!found) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        throw jobNotFound();
       }
 
       return c.json({
@@ -715,7 +665,7 @@ export const jobsRouter = new Hono<{
       },
     );
     if (!loaded) {
-      return c.json({ error: "Job nao encontrado" }, 404);
+      throw jobNotFound();
     }
     const {
       job: loadedJob,
@@ -787,78 +737,53 @@ export const jobsRouter = new Hono<{
     zValidator("json", CreateJobSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
 
       const activeUnitId = memberData.activeUnitId;
       if (!activeUnitId) {
-        return c.json(
-          { error: "Selecione uma unidade específica para criar ordens" },
-          400,
+        throw invalid(
+          "unit_active_required",
+          "Selecione uma unidade específica para criar ordens",
         );
       }
 
-      try {
-        // One transaction that names the laboratory (row-level security); the
-        // raw executor goes to the creator, whose advisory lock and certificate
-        // numbering run raw SQL.
-        const newJob = await orgTransactionWithExecutor(
-          memberData.organizationId,
-          (_o, tx) => {
-            return createCalibrationJob({
-              organizationId: memberData.organizationId,
-              unitId: activeUnitId,
-              createdBy: session.user.id,
-              assetId: input.assetId,
-              serviceId: input.serviceId,
-              technicianId: input.technicianId,
-              dueDate: input.dueDate,
-              // DOM-02 (#655): back-link to the repair OS this calibration came
-              // from, when opened from the pending-after-repair flow. Org-scoped
-              // in createCalibrationJob.
-              sourceServiceOrderId: input.sourceServiceOrderId ?? null,
-              ipAddress: clientIp(c),
-              executor: tx,
-              // Defer the assignment notification until after commit (below) —
-              // sending it from inside an open transaction that might still
-              // roll back would notify a technician about a job that never
-              // existed.
-              notifyOnAssignment: false,
-            });
-          },
-        );
+      // One transaction that names the laboratory (row-level security); the
+      // raw executor goes to the creator, whose advisory lock and certificate
+      // numbering run raw SQL.
+      const newJob = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const job = await createCalibrationJob({
+            organizationId: ctx.org,
+            unitId: activeUnitId,
+            createdBy: ctx.actor.userId,
+            assetId: input.assetId,
+            serviceId: input.serviceId,
+            technicianId: input.technicianId,
+            dueDate: input.dueDate,
+            // DOM-02 (#655): back-link to the repair OS this calibration came
+            // from, when opened from the pending-after-repair flow. Org-scoped
+            // in createCalibrationJob.
+            sourceServiceOrderId: input.sourceServiceOrderId ?? null,
+            ipAddress: ctx.actor.ipAddress,
+            executor: ctx.tx,
+          });
 
-        if (newJob.technicianId) {
-          try {
-            await notifyJobAssigned(
-              newJob.id,
-              newJob.technicianId,
-              session.user.id,
+          // The assignment notification waits for the commit: sending it from
+          // inside an open transaction that might still roll back would notify
+          // a technician about a job that never existed.
+          const { technicianId } = job;
+          if (technicianId) {
+            ctx.afterCommit(() =>
+              notifyJobAssigned(job.id, technicianId, ctx.actor.userId),
             );
-          } catch (error) {
-            console.error("Error sending job assignment notification:", error);
           }
-        }
+          return job;
+        },
+      );
 
-        return c.json(newJob satisfies ServerShape<JobCreateResponse>, 201);
-      } catch (error) {
-        console.error("Error creating job:", error);
-        const message =
-          error instanceof Error ? error.message : "Erro ao criar job";
-
-        if (
-          message === "Ativo nao encontrado" ||
-          message === "Servico nao encontrado"
-        ) {
-          return c.json({ error: message }, 404);
-        }
-
-        if (jobCreationClientErrors.has(message)) {
-          return c.json({ error: message }, 400);
-        }
-
-        return c.json({ error: "Erro ao criar job" }, 500);
-      }
+      return c.json(newJob satisfies ServerShape<JobCreateResponse>, 201);
     },
   )
 
@@ -871,52 +796,37 @@ export const jobsRouter = new Hono<{
     zValidator("json", UpdateJobSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      const result = await editJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        technicianId: input.technicianId,
-        dueDate: input.dueDate,
-      });
-      switch (result.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "illegal_transition":
-        case "technician_not_found":
-        case "competence_missing":
-          return domainErrorResponse(c, result.error);
-        case "concurrent_update":
-          return domainErrorResponse(
-            c,
-            await statusConflictFor(id, memberData.organizationId),
+      const job = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const result = await requireJobCommandOk(
+            ctx.o,
+            id,
+            await editJobIn(ctx.o, {
+              actor: userJobActor(ctx.actor),
+              jobId: id,
+              organizationId: ctx.org,
+              unitScope: memberData,
+              technicianId: input.technicianId,
+              dueDate: input.dueDate,
+            }),
           );
-        case "ok":
           // Notify the technician if it changed.
-          if (result.changed.technician && input.technicianId) {
-            try {
-              await notifyJobAssigned(id, input.technicianId, session.user.id);
-            } catch (err) {
-              console.error(
-                "[Jobs] Failed to send assignment notification:",
-                err,
-              );
-            }
+          const { technicianId } = input;
+          if (result.changed.technician && technicianId) {
+            ctx.afterCommit(() =>
+              notifyJobAssigned(id, technicianId, ctx.actor.userId),
+            );
           }
-          return c.json(result.job);
-      }
+          return result.job;
+        },
+      );
+
+      return c.json(job);
     },
   )
 
@@ -929,53 +839,36 @@ export const jobsRouter = new Hono<{
     zValidator("json", AssignTechnicianSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      const result = await assignJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        technicianId: input.technicianId,
-      });
-      switch (result.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "illegal_transition":
-        case "technician_not_found":
-        case "competence_missing":
-          return domainErrorResponse(c, result.error);
-        case "concurrent_update":
-          return domainErrorResponse(
-            c,
-            await statusConflictFor(id, memberData.organizationId),
+      const assigned = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const result = await requireJobCommandOk(
+            ctx.o,
+            id,
+            await assignJobIn(ctx.o, {
+              actor: userJobActor(ctx.actor),
+              jobId: id,
+              organizationId: ctx.org,
+              unitScope: memberData,
+              technicianId: input.technicianId,
+            }),
           );
-        case "ok":
           // Send notification to assigned technician
-          try {
-            await notifyJobAssigned(id, input.technicianId, session.user.id);
-          } catch (err) {
-            console.error(
-              "[Jobs] Failed to send assignment notification:",
-              err,
-            );
-          }
+          ctx.afterCommit(() =>
+            notifyJobAssigned(id, input.technicianId, ctx.actor.userId),
+          );
+          return result;
+        },
+      );
 
-          return c.json({
-            message: `Job atribuido a ${result.technicianName}`,
-            data: result.job,
-          } satisfies ServerShape<JobMutationResponse>);
-      }
+      return c.json({
+        message: `Job atribuido a ${assigned.technicianName}`,
+        data: assigned.job,
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -990,12 +883,8 @@ export const jobsRouter = new Hono<{
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
-
-      if (id === null) {
-        return domainErrorResponse(c, jobNotFound());
-      }
 
       const result = await submitJob({
         actor: {
@@ -1016,12 +905,7 @@ export const jobsRouter = new Hono<{
         calibrationPhases: input.calibrationPhases,
       });
       if (result.status !== "ok") {
-        return jobExecutionRefusalResponse(
-          c,
-          id,
-          memberData.organizationId,
-          result,
-        );
+        throw await jobExecutionRefusal(id, memberData.organizationId, result);
       }
 
       // Send notifications to admins/owners (fire and forget)
@@ -1047,12 +931,8 @@ export const jobsRouter = new Hono<{
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
-
-      if (id === null) {
-        return domainErrorResponse(c, jobNotFound());
-      }
 
       const result = await executeJob({
         actor: {
@@ -1073,12 +953,7 @@ export const jobsRouter = new Hono<{
         methodDeviations: input.methodDeviations,
       });
       if (result.status !== "ok") {
-        return jobExecutionRefusalResponse(
-          c,
-          id,
-          memberData.organizationId,
-          result,
-        );
+        throw await jobExecutionRefusal(id, memberData.organizationId, result);
       }
 
       return c.json({
@@ -1093,7 +968,11 @@ export const jobsRouter = new Hono<{
 
   // =========================================================================
   // POST /:id/approve - Approve job (manager only)
-  // Enqueues certificate generation instead of directly approving
+  // Enqueues certificate generation instead of directly approving. The
+  // approval runs its own read / write transactions (`approveJob`): the
+  // certificate images are read from object storage between them and a
+  // failed dispatch is compensated after the commit, neither of which a
+  // single `withOrg` transaction can express.
   // =========================================================================
   .post(
     "/:id/approve",
@@ -1102,12 +981,8 @@ export const jobsRouter = new Hono<{
     zValidator("json", ApproveJobSchema),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
 
       const result = await approveJob({
         jobId: id,
@@ -1124,110 +999,12 @@ export const jobsRouter = new Hono<{
             }),
         },
       });
+      if (result.status !== "approved") throw approvalRefusalError(result);
 
-      switch (result.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "invalid_status":
-          return domainErrorResponse(
-            c,
-            invalid(
-              "job_not_approvable",
-              `Nao e possivel aprovar um job com status ${result.currentStatus}. O job deve estar em REVIEW.`,
-            ),
-          );
-        case "approval_requires_signatory":
-          return c.json(
-            {
-              error:
-                "Apenas um signatário autorizado pode aprovar a calibração.",
-              code: "approval_requires_signatory",
-            },
-            403,
-          );
-        case "role_not_permitted":
-          return c.json(
-            {
-              error: "Seu papel não permite aprovar calibrações.",
-              code: "APPROVAL_ROLE_NOT_PERMITTED",
-            },
-            403,
-          );
-        case "dispatch_failed":
-          return c.json(
-            {
-              error:
-                "Não foi possível enfileirar a geração do certificado. A aprovação foi revertida; tente novamente.",
-              code: "APPROVAL_DISPATCH_FAILED",
-            },
-            503,
-          );
-        case "concurrent_approval":
-          return c.json(
-            {
-              error:
-                "A calibração foi alterada por outra aprovação ou revisão em andamento. Atualize e tente novamente.",
-              code: "APPROVAL_CONFLICT",
-            },
-            409,
-          );
-        case "self_approval_blocked":
-          return c.json(
-            {
-              error:
-                "Separação de responsabilidades (ISO/IEC 17025): quem executou, criou ou submeteu a calibração para revisão não pode aprová-la. Solicite a aprovação a outro membro autorizado.",
-              code: "SELF_APPROVAL_BLOCKED",
-            },
-            403,
-          );
-        case "signatory_roster_empty":
-          return c.json(
-            {
-              error:
-                "O laboratório acreditado não mantém signatários autorizados ativos (ISO/IEC 17025 §6.2.6): ninguém pode liberar o certificado. Cadastre ao menos um signatário autorizado e tente novamente.",
-              code: "APPROVAL_ROSTER_EMPTY",
-            },
-            403,
-          );
-        case "standards_refused":
-          return domainErrorResponse(
-            c,
-            approvalStandardsRefusalDomainError(result.refusal),
-          );
-        case "not_authorized_signatory":
-          return c.json(
-            {
-              error:
-                "O aprovador não é um signatário autorizado para este tipo de instrumento (ISO/IEC 17025 §6.2.6). A liberação do certificado deve ser feita por um signatário autorizado.",
-              code: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
-            },
-            403,
-          );
-        case "environmental_justification_required":
-          return c.json(
-            {
-              error:
-                "Condições ambientais fora dos limites. Forneça uma justificativa para aprovar.",
-              environmentalSnapshot: result.environmentalSnapshot,
-            },
-            400,
-          );
-        case "scope_violation":
-          return c.json(
-            {
-              error:
-                "Violação do escopo acreditado (CMC): a emissão acreditada está bloqueada. Corrija o resultado ou aprove com justificativa documentada. Nesse caso o certificado sai sem o selo de acreditação.",
-              code: "SCOPE_VIOLATION",
-              scopeCompliance: result.scopeCompliance,
-            },
-            422,
-          );
-        case "approved":
-          return c.json({
-            message: "Gerando certificado...",
-            data: result.job,
-          } satisfies ServerShape<JobMutationResponse>);
-      }
+      return c.json({
+        message: "Gerando certificado...",
+        data: result.job,
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -1240,46 +1017,36 @@ export const jobsRouter = new Hono<{
     zValidator("json", RejectJobSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      const result = await rejectJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        reason: input.reason,
-      });
-      switch (result.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "illegal_transition":
-          return domainErrorResponse(c, result.error);
-        case "concurrent_update":
-          return domainErrorResponse(
-            c,
-            await statusConflictFor(id, memberData.organizationId),
+      const rejected = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const result = await requireJobCommandOk(
+            ctx.o,
+            id,
+            await rejectJobIn(ctx.o, {
+              actor: userJobActor(ctx.actor),
+              jobId: id,
+              organizationId: ctx.org,
+              unitScope: memberData,
+              reason: input.reason,
+            }),
           );
-        case "ok":
-          // Send notification to technician (fire and forget)
-          notifyJobRejected(id, session.user.id, input.reason).catch((err) => {
-            console.error("[Jobs] Failed to send rejection notification:", err);
-          });
+          // Send notification to technician
+          ctx.afterCommit(() =>
+            notifyJobRejected(id, ctx.actor.userId, input.reason),
+          );
+          return result.job;
+        },
+      );
 
-          return c.json({
-            message: "Job rejeitado",
-            data: result.job,
-          } satisfies ServerShape<JobMutationResponse>);
-      }
+      return c.json({
+        message: "Job rejeitado",
+        data: rejected,
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -1292,39 +1059,28 @@ export const jobsRouter = new Hono<{
     ...withLabPermission({ calibration: ["approve"] }),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const retried = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) =>
+          requireJobCommandOk(
+            ctx.o,
+            id,
+            await retryRenderIn(ctx, {
+              actor: userJobActor(ctx.actor),
+              jobId: id,
+              organizationId: ctx.org,
+              unitScope: memberData,
+            }),
+          ),
+      );
 
-      const result = await retryRender({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-      });
-      switch (result.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "illegal_transition":
-          return domainErrorResponse(c, result.error);
-        case "concurrent_update":
-          return domainErrorResponse(
-            c,
-            await statusConflictFor(id, memberData.organizationId),
-          );
-        case "ok":
-          return c.json({
-            message: "Emissão do certificado reenviada",
-            data: result.job,
-          } satisfies ServerShape<JobMutationResponse>);
-      }
+      return c.json({
+        message: "Emissão do certificado reenviada",
+        data: retried.job,
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -1339,24 +1095,20 @@ export const jobsRouter = new Hono<{
     zValidator("json", FlagJobOutOfToleranceSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
 
       // The unit-scope check, the NC and the customer notification are written
       // in ONE transaction that names the laboratory (row-level security); the
       // notification PDF job and the NC notification read what it wrote, so
       // they run once it has committed.
-      const afterCommit = afterCommitQueue();
-      const flagged = await orgDb(memberData.organizationId).transaction(
-        async (o) => {
+      const flagged = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
           // Unit scope check here — the shared creator (also used by the
           // desktop sync ingest) only scopes by organization.
-          const [scoped] = await o
+          const [scoped] = await ctx.o
             .select({
               id: calibrationJob.id,
               asFoundConformity: calibrationJob.asFoundConformity,
@@ -1365,18 +1117,18 @@ export const jobsRouter = new Hono<{
             .where(
               and(
                 eq(calibrationJob.id, id),
-                eq(calibrationJob.organizationId, memberData.organizationId),
+                eq(calibrationJob.organizationId, ctx.org),
                 buildUnitScopeCondition(calibrationJob.unitId, memberData),
               ),
             )
             .limit(1);
 
-          if (!scoped) return null;
+          if (!scoped) throw jobNotFound();
 
-          return flagJobOutOfTolerance(
+          const result = await flagJobOutOfTolerance(
             {
-              organizationId: memberData.organizationId,
-              actorUserId: session.user.id,
+              organizationId: ctx.org,
+              actorUserId: ctx.actor.userId,
               jobId: id,
               description: input.description,
               affectedScope: input.affectedScope,
@@ -1385,30 +1137,26 @@ export const jobsRouter = new Hono<{
                 scoped.asFoundConformity === "NON_CONFORMING"
                   ? "as_found_verdict"
                   : "manual",
-              ipAddress: clientIp(c),
+              ipAddress: ctx.actor.ipAddress,
             },
-            { executor: o, afterCommit: afterCommit.add },
+            { executor: ctx.o, afterCommit: ctx.afterCommit },
           );
+          // A refusal comes back before anything is written.
+          if (!result.ok) {
+            throw new DomainError({
+              code: result.code,
+              status: result.status,
+              message: result.message,
+            });
+          }
+          return result;
         },
       );
-      await afterCommit.run();
-
-      if (!flagged) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-      const result = flagged;
-
-      if (!result.ok) {
-        return c.json(
-          { error: result.message, code: result.code },
-          result.status,
-        );
-      }
 
       return c.json(
         {
           message: "Nao conformidade registrada",
-          data: { nc: result.nc, notification: result.notification },
+          data: { nc: flagged.nc, notification: flagged.notification },
         } satisfies ServerShape<JobFlagOotResponse>,
         201,
       );
@@ -1424,41 +1172,38 @@ export const jobsRouter = new Hono<{
     zValidator("json", CancelJobSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const canceled = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) =>
+          requireJobCommandOk(
+            ctx.o,
+            id,
+            // The read and the compare-and-set write run on the context's one
+            // transaction; the write still matches on the status it read.
+            await cancelJob(
+              {
+                actor: userJobActor(ctx.actor),
+                jobId: id,
+                organizationId: ctx.org,
+                unitScope: memberData,
+                reason: input.reason,
+              },
+              {
+                read: (run) => run(ctx.o),
+                write: (run) => run(ctx.tx),
+              },
+            ),
+          ),
+      );
 
-      const result = await cancelJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        reason: input.reason,
-      });
-      switch (result.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "illegal_transition":
-          return domainErrorResponse(c, result.error);
-        case "concurrent_update":
-          return domainErrorResponse(
-            c,
-            await statusConflictFor(id, memberData.organizationId),
-          );
-        case "ok":
-          return c.json({
-            message: "Job cancelado",
-            data: result.job,
-          } satisfies ServerShape<JobMutationResponse>);
-      }
+      return c.json({
+        message: "Job cancelado",
+        data: canceled.job,
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -1472,47 +1217,39 @@ export const jobsRouter = new Hono<{
     zValidator("json", AmendJobSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      const outcome = await amendJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: clientIp(c),
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        reason: input.reason,
-      });
-      switch (outcome.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "illegal_transition":
-        case "already_amended":
-        case "amendment_in_progress":
-        case "certificate_withdrawn":
-          return domainErrorResponse(c, outcome.error);
-        case "ok":
-          break;
-      }
-
-      const { originalJob, amendedJob, amendmentNumber } = outcome;
-
-      // Reverse traceability (#426 Phase 1): the amendment clones the frozen
-      // standards snapshot verbatim, so mirror the links for the new job too.
-      await syncJobStandardLinks(
-        amendedJob.id,
-        originalJob.standardsSnapshot,
-        originalJob.performedAt,
+      const { originalJob, amendedJob, amendmentNumber } = await withOrg(
         memberData.organizationId,
-        orgDb(memberData.organizationId),
+        requestActor(c),
+        async (ctx) => {
+          const amended = await requireJobCommandOk(
+            ctx.o,
+            id,
+            await amendJobIn(ctx, {
+              actor: userJobActor(ctx.actor),
+              jobId: id,
+              organizationId: ctx.org,
+              unitScope: memberData,
+              reason: input.reason,
+            }),
+          );
+
+          // Reverse traceability (#426 Phase 1): the amendment clones the
+          // frozen standards snapshot verbatim, so mirror the links for the new
+          // job too. A derived index: after the commit, as the submit does.
+          ctx.afterCommit(() =>
+            syncJobStandardLinks(
+              amended.amendedJob.id,
+              amended.originalJob.standardsSnapshot,
+              amended.originalJob.performedAt,
+              ctx.org,
+              orgDb(ctx.org),
+            ),
+          );
+          return amended;
+        },
       );
 
       // The original stays APPROVED (the valid certificate) until the
@@ -1552,34 +1289,25 @@ export const jobsRouter = new Hono<{
     zValidator("json", WithdrawCertificateSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      const outcome = await withdrawCertificate({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        },
-        jobId: id,
-        organizationId: memberData.organizationId,
-        unitScope: memberData,
-        reason: input.reason,
-      });
-      switch (outcome.status) {
-        case "not_found":
-          return c.json({ error: "Job nao encontrado" }, 404);
-        case "not_issued":
-        case "already_withdrawn":
-          return domainErrorResponse(c, outcome.error);
-        case "ok":
-          break;
-      }
+      const outcome = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) =>
+          requireJobCommandOk(
+            ctx.o,
+            id,
+            await withdrawCertificateIn(ctx.o, {
+              actor: userJobActor(ctx.actor),
+              jobId: id,
+              organizationId: ctx.org,
+              unitScope: memberData,
+              reason: input.reason,
+            }),
+          ),
+      );
 
       return c.json({
         message: "Certificado retirado com sucesso",
@@ -1604,12 +1332,9 @@ export const jobsRouter = new Hono<{
     async (c) => {
       const handlerStartedAt = performance.now();
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
       try {
-        if (id === null) {
-          return c.json({ error: "Job nao encontrado" }, 404);
-        }
+        const id = await requireJobRouteId(c.req.param("id"), memberData);
 
         // Safety limit to prevent infinite loops from corrupted data
         const MAX_CHAIN_LENGTH = 100;
@@ -1745,7 +1470,7 @@ export const jobsRouter = new Hono<{
         );
         addServerTiming(c, "amendment_chain_db", dbStartedAt);
         if (chain === null) {
-          return c.json({ error: "Job nao encontrado" }, 404);
+          throw jobNotFound();
         }
 
         return c.json({
@@ -1768,11 +1493,7 @@ export const jobsRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
       const logs = await orgDb(memberData.organizationId).transaction(
         async (o) => {
@@ -1811,7 +1532,7 @@ export const jobsRouter = new Hono<{
       );
 
       if (!logs) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        throw jobNotFound();
       }
 
       return c.json({ data: logs });
@@ -1890,11 +1611,7 @@ export const jobsRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
       const [job] = await orgDb(memberData.organizationId).transaction((o) =>
         o
@@ -1911,11 +1628,14 @@ export const jobsRouter = new Hono<{
       );
 
       if (!job) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        throw jobNotFound();
       }
 
       if (!job.certificateUrl) {
-        return c.json({ error: "Certificado ainda nao foi gerado" }, 400);
+        throw invalid(
+          "certificate_not_ready",
+          "Certificado ainda nao foi gerado",
+        );
       }
 
       const env = r2EnvFromUnknown(c.env);
@@ -1947,18 +1667,14 @@ export const jobsRouter = new Hono<{
     async (c) => {
       const env = r2EnvFromUnknown(c.env);
       if (!shouldUseLocalR2Download(env)) {
-        return c.json(
-          { error: "Disponivel apenas em desenvolvimento local" },
-          404,
+        throw notFound(
+          "not_found",
+          "Disponivel apenas em desenvolvimento local",
         );
       }
 
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
       const [job] = await orgDb(memberData.organizationId).transaction((o) =>
         o
@@ -1975,14 +1691,17 @@ export const jobsRouter = new Hono<{
       );
 
       if (!job?.certificateUrl) {
-        return c.json({ error: "Certificado ainda nao foi gerado" }, 400);
+        throw invalid(
+          "certificate_not_ready",
+          "Certificado ainda nao foi gerado",
+        );
       }
 
       const key = extractKeyFromUrl(job.certificateUrl);
       const object = await env.CERTIFICATES_BUCKET.get(key);
 
       if (!object) {
-        return c.json({ error: "Arquivo nao encontrado no R2 local" }, 404);
+        throw notFound("not_found", "Arquivo nao encontrado no R2 local");
       }
 
       return new Response(object.body, {
@@ -2003,11 +1722,7 @@ export const jobsRouter = new Hono<{
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
       const [job] = await orgDb(memberData.organizationId).transaction((o) =>
         o
@@ -2028,14 +1743,14 @@ export const jobsRouter = new Hono<{
       );
 
       if (!job) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        throw jobNotFound();
       }
 
       // Only approved jobs can have labels generated
       if (job.status !== "APPROVED") {
-        return c.json(
-          { error: "Apenas jobs aprovados podem ter etiquetas geradas" },
-          400,
+        throw invalid(
+          "invalid_request",
+          "Apenas jobs aprovados podem ter etiquetas geradas",
         );
       }
 
@@ -2060,11 +1775,7 @@ export const jobsRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
       const [job] = await orgDb(memberData.organizationId).transaction((o) =>
         o
@@ -2081,11 +1792,11 @@ export const jobsRouter = new Hono<{
       );
 
       if (!job) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        throw jobNotFound();
       }
 
       if (!job.labelUrl) {
-        return c.json({ error: "Etiqueta ainda nao foi gerada" }, 400);
+        throw invalid("invalid_request", "Etiqueta ainda nao foi gerada");
       }
 
       const env = r2EnvFromUnknown(c.env);
@@ -2120,11 +1831,7 @@ export const jobsRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
       const [job] = await orgDb(memberData.organizationId).transaction((o) =>
         o
@@ -2152,7 +1859,7 @@ export const jobsRouter = new Hono<{
       );
 
       if (!job) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        throw jobNotFound();
       }
 
       const dpi = c.req.query("dpi") === "300" ? 300 : 203;
@@ -2182,18 +1889,14 @@ export const jobsRouter = new Hono<{
     async (c) => {
       const env = r2EnvFromUnknown(c.env);
       if (!shouldUseLocalR2Download(env)) {
-        return c.json(
-          { error: "Disponivel apenas em desenvolvimento local" },
-          404,
+        throw notFound(
+          "not_found",
+          "Disponivel apenas em desenvolvimento local",
         );
       }
 
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
-
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const id = await requireJobRouteId(c.req.param("id"), memberData);
 
       const [job] = await orgDb(memberData.organizationId).transaction((o) =>
         o
@@ -2210,14 +1913,14 @@ export const jobsRouter = new Hono<{
       );
 
       if (!job?.labelUrl) {
-        return c.json({ error: "Etiqueta ainda nao foi gerada" }, 400);
+        throw invalid("invalid_request", "Etiqueta ainda nao foi gerada");
       }
 
       const key = extractKeyFromUrl(job.labelUrl);
       const object = await env.CERTIFICATES_BUCKET.get(key);
 
       if (!object) {
-        return c.json({ error: "Arquivo nao encontrado no R2 local" }, 404);
+        throw notFound("not_found", "Arquivo nao encontrado no R2 local");
       }
 
       return new Response(object.body, {

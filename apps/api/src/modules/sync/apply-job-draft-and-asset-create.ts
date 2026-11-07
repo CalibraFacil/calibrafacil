@@ -62,7 +62,6 @@ export async function applyCreateLocalJobDraft(
     serviceId,
     technicianId: getNullableString(payload, "technicianId"),
     dueDate: getNullableString(payload, "dueDate"),
-    notifyOnAssignment: false,
   });
 
   await writeDesktopSyncAudit(input, actorUserId, {

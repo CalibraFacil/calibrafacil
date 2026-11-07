@@ -85,9 +85,6 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
             dueDate: input.dueDate,
             ipAddress: ctx.actor.ipAddress,
             executor: ctx.tx,
-            // The assignment notification waits for the commit: a technician
-            // is never told about a job that rolled back.
-            notifyOnAssignment: false,
           });
 
           const externalId = input.externalId?.trim();

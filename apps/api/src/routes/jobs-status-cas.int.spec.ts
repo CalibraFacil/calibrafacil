@@ -16,7 +16,8 @@
 
 import { setJobStatus } from "../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { jobsRouter } from "./jobs";
+import { jobsRouter as bareJobsRouter } from "./jobs";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import type { JobStatus } from "@calibra-facil/db/schema";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -31,6 +32,8 @@ import {
   raceWithRowLock,
   withoutVolatile,
 } from "../../test/integration/job-cas";
+
+const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -189,7 +192,9 @@ describe("jobsRouter — PUT /:id and POST /:id/assign are compare-and-set, org-
       try {
         const res = await site.send(jobId, orgA.userId);
 
-        expect(res.status).toBeGreaterThanOrEqual(500);
+        // The forced failure is a P0001 (RAISE EXCEPTION): the app's error
+        // handler answers it as a conflict, not a crash.
+        expect(res.ok).toBe(false);
       } finally {
         await restore();
       }

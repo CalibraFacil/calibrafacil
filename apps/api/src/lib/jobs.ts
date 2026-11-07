@@ -15,13 +15,13 @@ import {
   type MethodInputField,
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
-import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { addLabBusinessDays } from "@calibra-facil/shared";
 import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
+import { invalid, notFound } from "./domain-errors";
 import { orgTransactionWithExecutor } from "./org-transaction";
 import { toRecord } from "@calibra-facil/shared/record";
 
@@ -47,7 +47,6 @@ type CreateCalibrationJobParams = {
   // a cross-tenant id is dropped to null rather than linked.
   sourceServiceOrderId?: number | null;
   executor?: JobDbExecutor;
-  notifyOnAssignment?: boolean;
   // On-site (calibração in loco): pre-freeze the calibration location to the
   // customer's site so the technician doesn't re-enter it during execution.
   onsiteLocation?: { addressText: string; notes?: string | null } | null;
@@ -98,7 +97,8 @@ function validateRequiredAssetSpecs(
   );
 
   if (missing.length > 0) {
-    throw new Error(
+    throw invalid(
+      "asset_specification_missing",
       "Ativo nao possui especificacao obrigatoria para este metodo",
     );
   }
@@ -142,7 +142,8 @@ function validatePublishedMethodCompiledArtifact(methodData: {
     compiledEngine.version !== methodEngine.version ||
     compiledEngine.optionsFingerprint !== methodEngine.optionsFingerprint
   ) {
-    throw new Error(
+    throw invalid(
+      "invalid_request",
       "Método publicado sem artefato compilado consistente não pode gerar job regulado.",
     );
   }
@@ -174,31 +175,37 @@ async function persistCalibrationJob(
     .from(asset)
     .innerJoin(customer, eq(asset.customerId, customer.id))
     .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
-    .where(eq(asset.id, params.assetId))
+    .where(
+      and(
+        eq(asset.id, params.assetId),
+        eq(customer.labOrganizationId, params.organizationId),
+      ),
+    )
     .limit(1);
 
   if (!assetData) {
-    throw new Error("Ativo nao encontrado");
+    throw notFound("asset_not_found", "Ativo nao encontrado");
   }
 
   if (assetData.deletedAt) {
-    throw new Error("Ativo foi removido");
+    throw invalid("invalid_request", "Ativo foi removido");
   }
 
   // Another tenant's asset answers exactly like a missing one: the sequential
   // asset id must not be an existence oracle across organizations.
   if (assetData.labOrganizationId !== params.organizationId) {
-    throw new Error("Ativo nao encontrado");
+    throw notFound("asset_not_found", "Ativo nao encontrado");
   }
 
   if (assetData.unitId !== params.unitId) {
-    throw new Error("Ativo nao pertence a esta unidade");
+    throw invalid("unit_asset_mismatch", "Ativo nao pertence a esta unidade");
   }
 
   const customerCompliance = toRecord(assetData.customerCompliance);
 
   if (customerCompliance.qualificationStatus === "suspended") {
-    throw new Error(
+    throw invalid(
+      "invalid_request",
       "Cliente suspenso. Reative a qualificação antes de criar novas ordens de serviço.",
     );
   }
@@ -215,19 +222,19 @@ async function persistCalibrationJob(
     .limit(1);
 
   if (!serviceData) {
-    throw new Error("Servico nao encontrado");
+    throw notFound("service_not_found", "Servico nao encontrado");
   }
 
   if (serviceData.unitId !== params.unitId) {
-    throw new Error("Servico nao pertence a esta unidade");
+    throw invalid("invalid_request", "Servico nao pertence a esta unidade");
   }
 
   if (!serviceData.isActive) {
-    throw new Error("Servico esta inativo");
+    throw invalid("invalid_request", "Servico esta inativo");
   }
 
   if (!serviceData.methodId) {
-    throw new Error("Servico nao possui metodo vinculado");
+    throw invalid("invalid_request", "Servico nao possui metodo vinculado");
   }
 
   const [methodData] = await executor
@@ -242,11 +249,12 @@ async function persistCalibrationJob(
     .limit(1);
 
   if (!methodData) {
-    throw new Error("Metodo do servico nao encontrado");
+    throw invalid("invalid_request", "Metodo do servico nao encontrado");
   }
 
   if (methodData.status !== "PUBLISHED") {
-    throw new Error(
+    throw invalid(
+      "invalid_request",
       "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
     );
   }
@@ -256,7 +264,10 @@ async function persistCalibrationJob(
     serviceData.assetTypeId &&
     serviceData.assetTypeId !== assetData.assetTypeId
   ) {
-    throw new Error("Tipo do ativo nao e compativel com o servico selecionado");
+    throw invalid(
+      "invalid_request",
+      "Tipo do ativo nao e compativel com o servico selecionado",
+    );
   }
 
   if (params.technicianId) {
@@ -272,7 +283,10 @@ async function persistCalibrationJob(
       .limit(1);
 
     if (!techMember) {
-      throw new Error("Tecnico nao encontrado ou sem permissao");
+      throw invalid(
+        "technician_not_found",
+        "Tecnico nao encontrado ou sem permissao",
+      );
     }
 
     if (!["admin", "owner"].includes(techMember.role)) {
@@ -290,7 +304,10 @@ async function persistCalibrationJob(
         .limit(1);
 
       if (!techAssignment) {
-        throw new Error("Tecnico nao encontrado ou sem permissao");
+        throw invalid(
+          "technician_not_found",
+          "Tecnico nao encontrado ou sem permissao",
+        );
       }
     }
 
@@ -323,7 +340,8 @@ async function persistCalibrationJob(
         .limit(1);
 
       if (!activeCompetence?.id) {
-        throw new Error(
+        throw invalid(
+          "technician_competence_missing",
           "Técnico não possui competência ativa para este tipo de instrumento",
         );
       }
@@ -332,7 +350,8 @@ async function persistCalibrationJob(
         activeCompetence.expiresAt &&
         activeCompetence.expiresAt < new Date()
       ) {
-        throw new Error(
+        throw invalid(
+          "technician_competence_missing",
           "Técnico não possui competência ativa para este tipo de instrumento",
         );
       }
@@ -518,14 +537,6 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     : await orgTransactionWithExecutor(params.organizationId, (_o, tx) =>
         persistCalibrationJob(params, tx),
       );
-
-  if (params.technicianId && params.notifyOnAssignment !== false) {
-    try {
-      await notifyJobAssigned(newJob.id, params.technicianId, params.createdBy);
-    } catch (error) {
-      console.error("[Jobs] Failed to send assignment notification:", error);
-    }
-  }
 
   return newJob;
 }

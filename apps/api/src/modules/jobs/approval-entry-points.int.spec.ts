@@ -52,11 +52,14 @@ import { truncateAll } from "../../../test/integration/db";
 import { outsideApplication } from "../../../test/integration/app-role-mode";
 import { seedOrg } from "../../../test/integration/seed";
 import { createApiKeySecret } from "../../lib/api-keys";
-import { jobsRouter } from "../../routes/jobs";
+import { jobsRouter as bareJobsRouter } from "../../routes/jobs";
+import { withErrorHandling } from "../../../test/integration/with-error-handling";
 import { syncRouter } from "../../routes/sync";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { approveJob } from "./approve-job";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
+
+const jobsRouter = withErrorHandling(bareJobsRouter);
 
 const mocks = vi.hoisted(() => {
   const scope: {
@@ -321,10 +324,10 @@ const cloud: EntryPoint = {
       environmentalSnapshot?: unknown;
       error?: string;
     } = await res.json();
-    if (body.code) return { approved: false, code: body.code };
     if (body.environmentalSnapshot !== undefined) {
       return { approved: false, code: "ENVIRONMENTAL_JUSTIFICATION_REQUIRED" };
     }
+    if (body.code) return { approved: false, code: body.code };
     return { approved: false, code: "INVALID_STATUS" };
   },
 };
@@ -1354,7 +1357,9 @@ describe("post-approval effects are atomic with the approval (roadmap 2 B2, Q39)
       vi.stubEnv("DOCUMENT_WORKER_URL", "");
       const restore = await failInsertsInto(table, 1_000_000);
       try {
-        expect((await approveRaw(jobId)).status).toBe(500);
+        // The forced failure is a P0001 (RAISE EXCEPTION): the app's error
+        // handler answers it as a conflict; what counts is that nothing stays.
+        expect((await approveRaw(jobId)).ok).toBe(false);
       } finally {
         await restore();
         vi.unstubAllEnvs();
@@ -1382,7 +1387,9 @@ describe("post-approval effects are atomic with the approval (roadmap 2 B2, Q39)
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const restore = await failInsertsInto("asset_oot_audit_log", 1);
     try {
-      expect((await approveRaw(jobId)).status).toBe(500);
+      // The forced failure is a P0001 (RAISE EXCEPTION): the app's error
+      // handler answers it as a conflict; what counts is that nothing stays.
+      expect((await approveRaw(jobId)).ok).toBe(false);
     } finally {
       await restore();
       errors.mockRestore();

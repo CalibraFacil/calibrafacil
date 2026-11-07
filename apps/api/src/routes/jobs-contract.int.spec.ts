@@ -49,11 +49,14 @@ import {
 } from "@calibra-facil/db/schema";
 import { addCalendarDays, labToday } from "@calibra-facil/shared";
 import { eq, sql } from "drizzle-orm";
-import { jobsRouter } from "./jobs";
+import { jobsRouter as bareJobsRouter } from "./jobs";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

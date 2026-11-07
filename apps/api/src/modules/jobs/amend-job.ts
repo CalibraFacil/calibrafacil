@@ -8,6 +8,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { generateCertificateIdentity } from "../../lib/certificate-numbering";
 import { loadCertificateLifecycles } from "../../lib/certificate-lifecycle";
 import { conflict, invalid, type DomainError } from "../../lib/domain-errors";
+import type { OrgContext } from "../../lib/org-context";
 import { orgTransactionWithExecutor } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
 import {
@@ -127,171 +128,174 @@ export type AmendJobResult =
     }
   | { status: "certificate_withdrawn"; error: DomainError };
 
-export async function amendJob(
+export function amendJob(command: AmendJobCommand): Promise<AmendJobResult> {
+  // The transaction names the laboratory (row-level security). It hands the
+  // raw executor on purpose: the certificate numbering runs raw SQL (advisory
+  // lock). Every statement below carries the organization predicate itself.
+  return orgTransactionWithExecutor(command.organizationId, (o, tx) =>
+    amendJobIn({ o, tx }, command),
+  );
+}
+
+/**
+ * The command inside the caller's transaction (a `withOrg` context): the
+ * route runs it there so the standards links are written once it committed.
+ */
+export async function amendJobIn(
+  { o, tx }: Pick<OrgContext, "o" | "tx">,
   command: AmendJobCommand,
 ): Promise<AmendJobResult> {
   const { actor, organizationId } = command;
 
-  // The transaction names the laboratory (row-level security). It hands the
-  // raw executor on purpose: the certificate numbering runs raw SQL (advisory
-  // lock). Every statement below carries the organization predicate itself.
-  return orgTransactionWithExecutor(
-    organizationId,
-    async (o, tx): Promise<AmendJobResult> => {
-      const [originalJob] = await tx
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, command.jobId),
-            eq(calibrationJob.organizationId, organizationId),
-            command.unitScope
-              ? buildUnitScopeCondition(
-                  calibrationJob.unitId,
-                  command.unitScope,
-                )
-              : undefined,
-          ),
-        )
-        .limit(1)
-        .for("update");
-      if (!originalJob) return { status: "not_found" };
+  const [originalJob] = await tx
+    .select()
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.id, command.jobId),
+        eq(calibrationJob.organizationId, organizationId),
+        command.unitScope
+          ? buildUnitScopeCondition(calibrationJob.unitId, command.unitScope)
+          : undefined,
+      ),
+    )
+    .limit(1)
+    .for("update");
+  if (!originalJob) return { status: "not_found" };
 
-      if (targetOf(originalJob.status, "amend") === null) {
-        return {
-          status: "illegal_transition",
-          currentStatus: originalJob.status,
-          error: invalid(
-            "job_not_amendable",
-            `Apenas certificados aprovados podem ser retificados. Status atual: ${originalJob.status}`,
-          ),
-        };
-      }
+  if (targetOf(originalJob.status, "amend") === null) {
+    return {
+      status: "illegal_transition",
+      currentStatus: originalJob.status,
+      error: invalid(
+        "job_not_amendable",
+        `Apenas certificados aprovados podem ser retificados. Status atual: ${originalJob.status}`,
+      ),
+    };
+  }
 
-      if (originalJob.supersededById) {
-        return {
-          status: "already_amended",
-          supersededById: originalJob.supersededById,
-          error: invalid(
-            "job_already_amended",
-            "Este certificado ja foi retificado",
-            { legacyBody: { supersededBy: originalJob.supersededById } },
-          ),
-        };
-      }
+  if (originalJob.supersededById) {
+    return {
+      status: "already_amended",
+      supersededById: originalJob.supersededById,
+      error: invalid(
+        "job_already_amended",
+        "Este certificado ja foi retificado",
+        { legacyBody: { supersededBy: originalJob.supersededById } },
+      ),
+    };
+  }
 
-      // A withdrawn certificate is not the one an amendment replaces.
-      const lifecycles = await loadCertificateLifecycles(o, [originalJob]);
-      if (lifecycles.get(originalJob.id)?.status === "WITHDRAWN") {
-        return {
-          status: "certificate_withdrawn",
-          error: conflict(
-            "job_certificate_withdrawn",
-            "Este certificado foi retirado e nao pode ser retificado",
-          ),
-        };
-      }
+  // A withdrawn certificate is not the one an amendment replaces.
+  const lifecycles = await loadCertificateLifecycles(o, [originalJob]);
+  if (lifecycles.get(originalJob.id)?.status === "WITHDRAWN") {
+    return {
+      status: "certificate_withdrawn",
+      error: conflict(
+        "job_certificate_withdrawn",
+        "Este certificado foi retirado e nao pode ser retificado",
+      ),
+    };
+  }
 
-      // One amendment in progress per certificate. The original row lock above
-      // serialises two requests; the partial unique index is the last wall.
-      const [inProgress] = await tx
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.supersedesId, originalJob.id),
-            eq(calibrationJob.organizationId, organizationId),
-            ne(calibrationJob.status, "CANCELED"),
-          ),
-        )
-        .limit(1);
-      if (inProgress) {
-        return {
-          status: "amendment_in_progress",
-          amendedJobId: inProgress.id,
-          error: conflict(
-            "job_amendment_in_progress",
-            `Ja existe uma retificacao em andamento para este certificado (${inProgress.jobId}). Conclua ou cancele essa retificacao antes de iniciar outra.`,
-            {
-              details: {
-                amendedJobId: inProgress.id,
-                amendedJobNumber: inProgress.jobId,
-                amendedJobStatus: inProgress.status,
-              },
-            },
-          ),
-        };
-      }
-
-      // This is already an amendment: increment.
-      const amendmentNumber = originalJob.supersedesId
-        ? (originalJob.amendmentNumber || 0) + 1
-        : 1;
-
-      // A lab-specific certificate number for the amended job.
-      const certificateIdentity = await generateCertificateIdentity(
+  // One amendment in progress per certificate. The original row lock above
+  // serialises two requests; the partial unique index is the last wall.
+  const [inProgress] = await tx
+    .select({
+      id: calibrationJob.id,
+      jobId: calibrationJob.jobId,
+      status: calibrationJob.status,
+    })
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.supersedesId, originalJob.id),
+        eq(calibrationJob.organizationId, organizationId),
+        ne(calibrationJob.status, "CANCELED"),
+      ),
+    )
+    .limit(1);
+  if (inProgress) {
+    return {
+      status: "amendment_in_progress",
+      amendedJobId: inProgress.id,
+      error: conflict(
+        "job_amendment_in_progress",
+        `Ja existe uma retificacao em andamento para este certificado (${inProgress.jobId}). Conclua ou cancele essa retificacao antes de iniciar outra.`,
         {
-          organizationId,
-          generatedAt: new Date(),
-          performedBy: actor.userId,
+          details: {
+            amendedJobId: inProgress.id,
+            amendedJobNumber: inProgress.jobId,
+            amendedJobStatus: inProgress.status,
+          },
         },
-        tx,
-      );
-      const [amendedJob] = await tx
-        .insert(calibrationJob)
-        .values({
-          ...technicalRecordOf(originalJob),
-          jobId: certificateIdentity.certificateNumber,
-          certificateName: certificateIdentity.certificateName,
-          certificateNumberingSnapshot: certificateIdentity.snapshot,
-          organizationId: originalJob.organizationId,
-          unitId: originalJob.unitId,
-          status: requireTargetOf(null, "create"), // DRAFT, for the corrections
-          supersedesId: originalJob.id, // Link to the original
-          amendmentNumber,
-          amendmentReason: command.reason,
-          createdBy: actor.userId,
-        })
-        .returning();
-      if (!amendedJob) {
-        throw new Error("Falha ao criar retificacao");
-      }
+      ),
+    };
+  }
 
-      await appendJobEvent(tx, {
-        action: "amendment_started",
-        organizationId,
-        jobId: originalJob.id,
-        actor: { kind: "user", userId: actor.userId },
-        changes: {
-          ...jobActorAuditFields(actor),
-          amendedJobId: amendedJob.id,
-          amendmentNumber,
-          reason: command.reason,
-        },
-        ipAddress: actor.ipAddress ?? null,
-        reason: `Retificacao iniciada. Nova: ${amendedJob.jobId}. O certificado original segue valido ate a emissao da retificacao. Motivo: ${command.reason}`,
-      });
+  // This is already an amendment: increment.
+  const amendmentNumber = originalJob.supersedesId
+    ? (originalJob.amendmentNumber || 0) + 1
+    : 1;
 
-      await appendJobEvent(tx, {
-        action: "create_amendment",
-        organizationId,
-        jobId: amendedJob.id,
-        actor: { kind: "user", userId: actor.userId },
-        changes: {
-          ...jobActorAuditFields(actor),
-          supersedesId: originalJob.id,
-          amendmentNumber,
-          reason: command.reason,
-        },
-        ipAddress: actor.ipAddress ?? null,
-        reason: command.reason,
-      });
-
-      return { status: "ok", originalJob, amendedJob, amendmentNumber };
+  // A lab-specific certificate number for the amended job.
+  const certificateIdentity = await generateCertificateIdentity(
+    {
+      organizationId,
+      generatedAt: new Date(),
+      performedBy: actor.userId,
     },
+    tx,
   );
+  const [amendedJob] = await tx
+    .insert(calibrationJob)
+    .values({
+      ...technicalRecordOf(originalJob),
+      jobId: certificateIdentity.certificateNumber,
+      certificateName: certificateIdentity.certificateName,
+      certificateNumberingSnapshot: certificateIdentity.snapshot,
+      organizationId: originalJob.organizationId,
+      unitId: originalJob.unitId,
+      status: requireTargetOf(null, "create"), // DRAFT, for the corrections
+      supersedesId: originalJob.id, // Link to the original
+      amendmentNumber,
+      amendmentReason: command.reason,
+      createdBy: actor.userId,
+    })
+    .returning();
+  if (!amendedJob) {
+    throw new Error("Falha ao criar retificacao");
+  }
+
+  await appendJobEvent(tx, {
+    action: "amendment_started",
+    organizationId,
+    jobId: originalJob.id,
+    actor: { kind: "user", userId: actor.userId },
+    changes: {
+      ...jobActorAuditFields(actor),
+      amendedJobId: amendedJob.id,
+      amendmentNumber,
+      reason: command.reason,
+    },
+    ipAddress: actor.ipAddress ?? null,
+    reason: `Retificacao iniciada. Nova: ${amendedJob.jobId}. O certificado original segue valido ate a emissao da retificacao. Motivo: ${command.reason}`,
+  });
+
+  await appendJobEvent(tx, {
+    action: "create_amendment",
+    organizationId,
+    jobId: amendedJob.id,
+    actor: { kind: "user", userId: actor.userId },
+    changes: {
+      ...jobActorAuditFields(actor),
+      supersedesId: originalJob.id,
+      amendmentNumber,
+      reason: command.reason,
+    },
+    ipAddress: actor.ipAddress ?? null,
+    reason: command.reason,
+  });
+
+  return { status: "ok", originalJob, amendedJob, amendmentNumber };
 }

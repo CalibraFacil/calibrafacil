@@ -60,7 +60,11 @@ export function rejectJob(command: RejectJobCommand): Promise<RejectJobResult> {
   );
 }
 
-async function rejectJobIn(
+/**
+ * The command inside the caller's transaction (`ctx.o` of a `withOrg`): the
+ * route runs it there so the notification waits for the commit.
+ */
+export async function rejectJobIn(
   o: OrgDb,
   command: RejectJobCommand,
 ): Promise<RejectJobResult> {

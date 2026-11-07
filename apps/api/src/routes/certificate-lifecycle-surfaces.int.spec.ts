@@ -33,7 +33,7 @@ import {
 } from "../../test/integration/seed";
 import { loginAs, loginAsPortal } from "../../test/integration/setup";
 import { createApiKeySecret } from "../lib/api-keys";
-import { jobsRouter } from "./jobs";
+import { jobsRouter as bareJobsRouter } from "./jobs";
 import { portalRouter as barePortalRouter } from "./portal";
 import { publicApiV2Router } from "./public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
@@ -41,6 +41,8 @@ import { isRecord } from "@calibra-facil/shared/record";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
 
 const portalRouter = withErrorHandling(barePortalRouter);
+
+const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

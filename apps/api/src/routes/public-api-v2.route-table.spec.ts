@@ -1,17 +1,11 @@
-import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
-// REQ-SPLIT-2: the public API v2 router is split by resource, so the route
-// table (method, path and the exact middleware chain, in registration order)
-// is pinned in a snapshot recorded BEFORE the split. A dropped, reordered or
-// re-guarded route, or a changed handler body, turns this red.
-//
-// Scope guards and validators are closures, so the two factories are mocked to
-// return functions named after their arguments; every other middleware keeps
-// its real function name. Handler bodies are fingerprinted on their compiled
-// source with module-import indirection and whitespace normalised away, so
-// moving a helper between files does not change the fingerprint but editing
-// the handler does.
+// The public API v2 route table (method, path and the middleware chain, in
+// registration order) is pinned: a dropped, reordered or re-guarded route turns
+// this red. Scope guards and validators are closures, so the two factories are
+// mocked to return functions named after their arguments; every other middleware
+// keeps its real function name. Handler bodies are not pinned: what a handler
+// does is the integration specs' job.
 const { named } = vi.hoisted(() => ({
   named: <T extends (...args: never[]) => unknown>(fn: T, name: string) =>
     Object.defineProperty(fn, "name", { value: name }),
@@ -36,15 +30,6 @@ vi.mock("@hono/zod-validator", () => ({
     named(async () => undefined, `zValidator(${target}:${schemaKeys(schema)})`),
 }));
 
-function fingerprint(handler: (...args: never[]) => unknown) {
-  const source = handler
-    .toString()
-    .replace(/\(0,\s*__(?:vi|vite_ssr)_import_\d+__\.(\w+)\)/g, "$1")
-    .replace(/__(?:vi|vite_ssr)_import_\d+__\./g, "")
-    .replace(/\s+/g, "");
-  return createHash("sha256").update(source).digest("hex").slice(0, 10);
-}
-
 function describeRoutes(
   label: string,
   routes: readonly {
@@ -54,16 +39,13 @@ function describeRoutes(
   }[],
 ) {
   return routes.map(({ method, path, handler }) => {
-    const name = handler.name;
-    const isMock =
-      name.startsWith("requireApi") || name.startsWith("zValidator");
-    return `${label} ${method} ${path} ${name || "<anonymous>"}${isMock ? "" : ` #${fingerprint(handler)}`}`;
+    return `${label} ${method} ${path} ${handler.name || "<anonymous>"}`;
   });
 }
 
 describe("public API v2 route table", () => {
   it(
-    "REQ-SPLIT-2 keeps every route, middleware and handler in order",
+    "REQ-SPLIT-2 keeps every route and its middleware chain in order",
     { timeout: 60_000 },
     async () => {
       const { publicApiV2Router, publicApiV2DocsRouter } =

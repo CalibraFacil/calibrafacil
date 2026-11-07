@@ -83,7 +83,11 @@ export function editJob(command: EditJobCommand): Promise<EditJobResult> {
   );
 }
 
-async function editJobIn(
+/**
+ * The command inside the caller's transaction (`ctx.o` of a `withOrg`): the
+ * route runs it there so the notification waits for the commit.
+ */
+export async function editJobIn(
   o: OrgDb,
   command: EditJobCommand,
 ): Promise<EditJobResult> {
