@@ -596,14 +596,11 @@ function ServiceOrderDetailContent({
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   /**
-   * PAR-06. Every one of these was disabled by a bare `isDesktopRuntime()`,
-   * which took an entire end-to-end workflow away from a connected desktop:
-   * intake documents, tags, service start, evaluation, quote sending, the
-   * Marca de Reparo, delivery and the delivery receipt.
-   *
-   * The real blockers are connectivity and this order's own sync state — an
-   * order created offline has no cloud identity, and one with queued local
-   * edits would have the command decided against a stale server snapshot.
+   * What may run for this order from a desktop: intake documents, tags, service
+   * start, evaluation, quote sending, the Marca de Reparo, delivery and the
+   * delivery receipt. The blockers are connectivity and this order's own sync
+   * state — an order created offline has no cloud identity, and one with queued
+   * local edits would have the command decided against a stale server snapshot.
    */
   const orderTarget = serviceOrderCloudCommandTarget(order)
   /**
@@ -630,8 +627,8 @@ function ServiceOrderDetailContent({
     orderTarget,
   )
   // Saving a quote draft, recording the execution and issuing the delivery
-  // document used to be queued offline. They are online-only since Q13, so
-  // they are gated like every other cloud command on this page.
+  // document are online-only (Q13): gated like every other cloud command on
+  // this page.
   const saveQuoteAvailability = useOperationAvailability(
     'serviceOrders',
     'createQuote',

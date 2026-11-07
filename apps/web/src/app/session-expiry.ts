@@ -1,7 +1,6 @@
 /**
- * Global handling of an expired session in the cloud web app (roadmap 2 F4,
- * review 3.5). A 401 from any query or mutation used to surface as that
- * screen's generic error, or be retried three times. Now:
+ * Global handling of an expired session in the cloud web app: a 401 from any
+ * query or mutation is not that screen's generic error, nor retried three times.
  *
  * - a 401 is never retried (signing in is the only fix), and
  * - the first one shows a persistent "Sessão expirada" notice whose action goes

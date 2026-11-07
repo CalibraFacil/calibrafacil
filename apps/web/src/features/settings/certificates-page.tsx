@@ -623,7 +623,6 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
         const reader = new FileReader()
         reader.onload = () => {
           const result = typeof reader.result === 'string' ? reader.result : ''
-          // Remove data URL prefix
           const base64 = result.split(',')[1]
           resolve(base64)
         }

@@ -4,7 +4,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FinancialSummaryCard,
-  isFinancialSummary,
   type PortalFinancialSummary,
 } from "./financial-summary-card";
 
@@ -222,39 +221,7 @@ describe("FinancialSummaryCard", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("rejects malformed summaries before rendering the card", () => {
-    expect(
-      isFinancialSummary({
-        visible: false,
-        state: null,
-        freshness: "unknown",
-        documents: [],
-      }),
-    ).toBe(true);
-    expect(
-      isFinancialSummary({
-        visible: false,
-        state: "PAYMENT_PENDING",
-        freshness: "fresh",
-        documents: [],
-      }),
-    ).toBe(false);
-    expect(
-      isFinancialSummary({
-        visible: true,
-        state: "PAYMENT_PENDING",
-        freshness: "fresh",
-      }),
-    ).toBe(false);
-    expect(
-      isFinancialSummary({
-        visible: true,
-        state: "PAYMENT_PENDING",
-        freshness: "expired",
-        documents: [],
-      }),
-    ).toBe(false);
-
+  it("shows the unavailable notice when the summary failed to load", () => {
     expect(() =>
       render(<FinancialSummaryCard isError summary={undefined} />),
     ).not.toThrow();

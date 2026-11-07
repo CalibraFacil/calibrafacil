@@ -117,7 +117,6 @@ export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
     return tech?.name || ''
   }, [formData.technicianId, techniciansData])
 
-  // Create mutation
   const createMutation = useMutation({
     mutationFn: (data: CreateJobInput) =>
       calibraApi.jobs.create({ body: data }),

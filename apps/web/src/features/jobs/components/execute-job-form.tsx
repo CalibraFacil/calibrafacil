@@ -338,7 +338,6 @@ export function ExecuteJobForm({
     [setCalibrationPhases],
   )
 
-  // Compute environment warnings
   const envWarnings = useMemo(
     () => buildEnvironmentWarnings({ environment, envLimits }),
     [environment, envLimits],
@@ -381,7 +380,6 @@ export function ExecuteJobForm({
   const isPerformedDateValid = performedAtState.field !== 'performedAt'
   const isBackdateReasonSatisfied = performedAtState.field !== 'backdateReason'
 
-  // Check if can submit
   const meetsExecutionRequirements = useMemo(
     () =>
       canSubmitExecution({

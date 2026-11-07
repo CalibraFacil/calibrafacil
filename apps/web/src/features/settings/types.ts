@@ -1,9 +1,4 @@
 import type {
-  AccreditedScopeResponse,
-  CertificateNumberingProfileResponse,
-  EnvironmentalLimitsResponse,
-} from '@calibra-facil/client-runtime'
-import type {
   ContaAzulAppSaveResponse as ContractContaAzulAppSaveResponse,
   ContaAzulAppSummary as ContractContaAzulAppSummary,
   ContaAzulCatalogItem as ContractContaAzulCatalogItem,
@@ -16,13 +11,6 @@ import type {
   SyncPreviewResponse as ContractSyncPreviewResponse,
   UnitAssignmentRole,
 } from '@calibra-facil/contracts'
-
-export type SettingsCertificateNumberingData =
-  CertificateNumberingProfileResponse
-
-export type SettingsEnvironmentalLimitsData = EnvironmentalLimitsResponse
-
-export type SettingsAccreditedScopeData = AccreditedScopeResponse
 
 export type OrganizationMember = {
   id: string

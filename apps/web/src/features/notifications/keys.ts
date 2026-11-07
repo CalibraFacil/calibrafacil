@@ -6,8 +6,6 @@ export const notificationKeys = {
     ['notifications', organizationKey] as const,
   unreadCount: (organizationKey: string) =>
     ['notifications', organizationKey, 'unread-count'] as const,
-  recent: (organizationKey: string) =>
-    ['notifications', organizationKey, 'recent'] as const,
   inbox: (
     organizationKey: string,
     view: { page: number; unreadOnly: boolean },

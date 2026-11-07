@@ -46,10 +46,8 @@ export type ApplySyncSummary = {
  * Apply a cloud snapshot/delta to the local cache.
  *
  * A pulled row never overwrites a row that still has queued local changes (an
- * outbox event that is pending, failed or in conflict). The upserts used to be
- * blind and forced `sync_state = 'synced'`, so any pull that arrived while an
- * edit was waiting silently replaced the edit; since the push cursor bug made
- * every pull restart from the epoch, that happened on every sync.
+ * outbox event that is pending, failed or in conflict): a blind upsert that forced
+ * `sync_state = 'synced'` would silently replace an edit that is still waiting.
  *
  * The row is skipped, not merged, and no local conflict is recorded here: the
  * conflict model is server-detected: the queued change is pushed as it was made

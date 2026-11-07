@@ -5,10 +5,8 @@ import type { ContaAzulCatalogKey } from '@calibra-facil/contracts'
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
 import type {
-  SettingsAccreditedScopeData,
   OrganizationInvitation,
   OrganizationMember,
-  SettingsEnvironmentalLimitsData,
   IntegrationRunItemsResponse,
   SyncTarget,
 } from './types'
@@ -23,11 +21,6 @@ import { assetKeys } from '@/features/assets/keys'
 import { sessionKeys } from '@/lib/query-keys'
 
 export type { ContaAzulCatalogKey }
-
-function trustedApiResult<T>(promise: Promise<unknown>): Promise<T> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- typed API facade methods lag behind the route-specific response contracts.
-  return promise as Promise<T>
-}
 
 function trustedApiValue<T>(value: unknown): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- Better Auth client responses are validated by the auth package contract.
@@ -86,20 +79,14 @@ function emailDomainQueryOptions() {
 export function environmentalLimitsQueryOptions(unitId: number | null) {
   return queryOptions({
     queryKey: environmentalLimitKeys.unit(unitId),
-    queryFn: () =>
-      trustedApiResult<SettingsEnvironmentalLimitsData>(
-        calibraApi.environmentalLimits.list(),
-      ),
+    queryFn: () => calibraApi.environmentalLimits.list(),
   })
 }
 
 function accreditedScopeQueryOptions(unitId: number | null) {
   return queryOptions({
     queryKey: settingsKeys.accreditedScope(unitId),
-    queryFn: () =>
-      trustedApiResult<SettingsAccreditedScopeData>(
-        calibraApi.accreditedScope.list(),
-      ),
+    queryFn: () => calibraApi.accreditedScope.list(),
   })
 }
 

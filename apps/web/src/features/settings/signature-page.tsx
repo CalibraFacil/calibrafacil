@@ -56,7 +56,6 @@ export function SignatureSettingsPage() {
     },
   })
 
-  // Handle file selection
   const handleFileSelect = useCallback(
     (file: File) => {
       // Validate file type
@@ -71,7 +70,6 @@ export function SignatureSettingsPage() {
         return
       }
 
-      // Create preview
       const reader = new FileReader()
       reader.onload = (e) => {
         const result = e.target?.result
