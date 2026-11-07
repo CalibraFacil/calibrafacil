@@ -11,7 +11,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The signed-in user's in-app notifications and their preferences. Response
  * schemas are wire schemas written from what
- * `apps/api/src/routes/notifications.ts` returns. Cloud-only: the desktop shell
+ * `apps/api/src/domains/notifications/routes/notifications.ts` returns. Cloud-only: the desktop shell
  * answers an empty inbox and the default preferences locally
  * (`client-runtime/src/transport/desktop-client.ts`).
  *

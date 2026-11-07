@@ -11,6 +11,13 @@ describe("calibra/no-json-error-body-in-routes (real oxlint)", () => {
     });
   });
 
+  it("REQ-DE-5: guards a domain's routes/ folder", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/domains/jobs/routes/new.ts":
+        'export const h = (c: any) => c.json({ error: "x" }, 404);\n',
+    });
+  });
+
   it("REQ-DE-5: reports the multi-line and quoted-key forms", async () => {
     await expectViolation(RULE, {
       "apps/api/src/routes/multi.ts":

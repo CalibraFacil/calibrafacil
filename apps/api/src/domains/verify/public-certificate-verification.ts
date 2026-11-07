@@ -15,8 +15,8 @@ import {
   frozenAccreditationNumberColumn,
   frozenSealColumn,
   frozenSealJoin,
-} from "./frozen-seal";
-import { orgDb } from "./org-db";
+} from "../../lib/frozen-seal";
+import { orgDb } from "../../lib/org-db";
 
 /**
  * Lookups of the PUBLIC certificate verification routes (routes/verify.ts, no

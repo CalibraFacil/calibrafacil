@@ -128,6 +128,15 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     });
   });
 
+  it("REQ-ORGDB-2: a domain's routes/ folder is a routes folder, its other files are not", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/domains/finance/routes/new.ts": uses(1),
+    });
+    await expectClean(RULE, {
+      "apps/api/src/domains/finance/finance.ts": uses(3),
+    });
+  });
+
   it("REQ-ORGDB-2: the org-bound handle, other imports and unrelated names are fine", async () => {
     await expectClean(RULE, {
       "apps/api/src/routes/clean.ts":

@@ -1,4 +1,4 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { notificationEndpoints } from "@calibra-facil/contracts";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
@@ -16,14 +16,14 @@ import {
   withLabPermission,
   requireLabProtected,
   type AuthVariables,
-} from "../middleware/permission";
+} from "../../../middleware/permission";
 import { eq, and, desc, count, inArray, sql } from "drizzle-orm";
 
-import { invalid, notFound } from "../lib/domain-errors";
-import { withOrg } from "../lib/org-context";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
-import { requestActor } from "../middleware/request-actor";
+import { invalid, notFound } from "../../../lib/domain-errors";
+import { withOrg } from "../../../lib/org-context";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
+import { requestActor } from "../../../middleware/request-actor";
 
 /**
  * Notifications Router - In-App & Email Notification Management

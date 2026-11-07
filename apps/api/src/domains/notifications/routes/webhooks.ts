@@ -1,13 +1,17 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { suppressEmail } from "@calibra-facil/notifications";
 import {
   parseResendEvent,
   resendBounceIsHard,
   resendEventRecipients,
   verifyResendSignature,
-} from "../lib/resend-webhook";
-import { DomainError, invalid, unauthenticated } from "../lib/domain-errors";
-import { recordResendWebhookEvent } from "../lib/resend-webhook-ledger";
+} from "../resend-webhook";
+import {
+  DomainError,
+  invalid,
+  unauthenticated,
+} from "../../../lib/domain-errors";
+import { recordResendWebhookEvent } from "../resend-webhook-ledger";
 import { isRecord } from "@calibra-facil/shared/record";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;

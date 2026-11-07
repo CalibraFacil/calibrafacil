@@ -45,7 +45,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 import { portalRouter } from "./portal";
-import { verifyRouter } from "./verify";
+import { verifyRouter } from "../domains/verify/routes/verify";
 import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";

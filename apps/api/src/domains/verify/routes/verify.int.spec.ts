@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { insertJobs } from "../../test/integration/job-fixtures";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
 import { verifyRouter } from "./verify";
 import { db } from "@calibra-facil/db";
 import {
@@ -15,8 +15,8 @@ import {
   type JobStatus,
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import { truncateAll } from "../../test/integration/db";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { truncateAll } from "../../../../test/integration/db";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
 
 // ---------------------------------------------------------------------------

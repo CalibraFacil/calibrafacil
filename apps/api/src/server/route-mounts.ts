@@ -28,7 +28,7 @@ import { legalMetrologyRegulationsRouter } from "../routes/legal-metrology-regul
 import { runApiHealthCheck } from "../lib/health";
 import { jobsRouter } from "../routes/jobs";
 import { methodsRouter } from "../routes/methods";
-import { notificationsRouter } from "../routes/notifications";
+import { notificationsRouter } from "../domains/notifications";
 import { nonConformancesRouter } from "../routes/non-conformances";
 import { ootAckRouter } from "../routes/oot-ack";
 import { organizationLifecycleRouter } from "../routes/organization-lifecycle";
@@ -64,8 +64,8 @@ import { syncRouter } from "../routes/sync";
 import { trainingRecordsRouter } from "../routes/training-records";
 import { unitsRouter } from "../routes/units";
 import { magicLinkRouter } from "../routes/magic-link";
-import { verifyRouter } from "../routes/verify";
-import { webhooksRouter } from "../routes/webhooks";
+import { verifyRouter } from "../domains/verify";
+import { webhooksRouter } from "../domains/notifications";
 import type { Env } from "./env";
 
 import { readCronSuccesses, readHealthAlerts } from "../lib/health-alerts";

@@ -29,7 +29,8 @@ import {
 // portal scope resolver, public tokens) live in a lib module with a reason in
 // tenant-sql-allowlist.ts, not in a route.
 
-const ROUTES_PATTERN = /(^|\/)apps\/api\/src\/routes\//;
+const ROUTES_PATTERN =
+  /(^|\/)apps\/api\/src\/(routes|domains\/[^/]+\/routes)\//;
 const DB_PACKAGE = "@calibra-facil/db";
 
 // Keys that are not part of the program structure (the token and comment lists

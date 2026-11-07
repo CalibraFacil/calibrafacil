@@ -32,7 +32,7 @@ import { db } from "@calibra-facil/db";
 import { notification } from "@calibra-facil/db/schema";
 import { apiKeysRouter } from "./api-keys";
 import { emailDomainsRouter } from "./email-domains";
-import { notificationsRouter } from "./notifications";
+import { notificationsRouter } from "../domains/notifications/routes/notifications";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
