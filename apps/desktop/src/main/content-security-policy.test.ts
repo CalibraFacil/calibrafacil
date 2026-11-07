@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   buildContentSecurityPolicy,
@@ -114,5 +117,58 @@ describe("rendererResponseHeaders", () => {
 
     expect(headers["Content-Security-Policy"]).toBeUndefined();
     expect(headers["Content-Type"]).toBe("text/javascript; charset=utf-8");
+  });
+});
+
+describe("the desktop policy and the hosted one (apps/web/public/_headers)", () => {
+  const hostedLine = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../web/public/_headers",
+    ),
+    "utf8",
+  )
+    .split("\n")
+    .find((entry) => entry.trim().startsWith("Content-Security-Policy:"));
+  const hosted = directives(
+    (hostedLine ?? "").replace(/^\s*Content-Security-Policy:\s*/, ""),
+  );
+  const desktop = directives(
+    buildContentSecurityPolicy({
+      localServerHost: "127.0.0.1",
+      cloudApiUrls: ["https://api.lab.example"],
+    }),
+  );
+
+  it("has a hosted policy to compare with", () => {
+    expect(hosted.get("default-src")).toEqual(["'self'"]);
+  });
+
+  it("keeps the directives the hosted policy fixes equal, so changing one without the other fails", () => {
+    for (const name of [
+      "default-src",
+      "object-src",
+      "frame-ancestors",
+      "base-uri",
+      "style-src",
+      "font-src",
+    ]) {
+      expect(desktop.get(name), name).toEqual(hosted.get(name));
+    }
+  });
+
+  it("never allows a script source the hosted policy does not", () => {
+    const allowed = hosted.get("script-src") ?? [];
+    for (const source of desktop.get("script-src") ?? []) {
+      expect(allowed, source).toContain(source);
+    }
+  });
+
+  it("widens img-src and connect-src, never narrows them below the hosted ones", () => {
+    for (const name of ["img-src", "connect-src"]) {
+      for (const source of hosted.get(name) ?? []) {
+        expect(desktop.get(name), `${name} ${source}`).toContain(source);
+      }
+    }
   });
 });

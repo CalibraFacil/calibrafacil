@@ -24,8 +24,8 @@ import {
   CHECKABLE_RUNTIMES,
   checkConfig,
   isCheckableRuntime,
-  parseEnvFile,
 } from "../src/check";
+import { parseEnvFile } from "../src/env-file";
 
 function usage(message: string): never {
   console.error(

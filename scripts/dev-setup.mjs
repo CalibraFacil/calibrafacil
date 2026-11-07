@@ -19,6 +19,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { tsImport } from "tsx/esm/api";
 import { run as runCommand } from "./lib/script-helpers.mjs";
 import { splitDatabaseRoles } from "./role-split.mjs";
 
@@ -50,14 +51,14 @@ function hasCommand(command, args = ["--version"]) {
   }
 }
 
+// The same reader the API, the worker and `config:check` use.
+const { parseEnvFile: parseEnvContents } = await tsImport(
+  "../packages/config/src/env-file.ts",
+  import.meta.url,
+);
+
 function parseEnvFile(file) {
-  const env = {};
-  for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (!match) continue;
-    env[match[1]] = match[2].replace(/^(["'])(.*)\1$/, "$2");
-  }
-  return env;
+  return parseEnvContents(readFileSync(file, "utf8")).env;
 }
 
 // ── 1. toolchain ──────────────────────────────────────────────────────────────

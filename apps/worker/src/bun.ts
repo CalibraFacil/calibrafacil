@@ -2,6 +2,7 @@ import {
   failFast,
   failFastAsync,
   loadWorkerConfig,
+  parseEnvFile,
   rawEnv,
   readRuntimeConfig,
   setProcessEnvDefault,
@@ -30,32 +31,6 @@ declare const Bun: BunRuntime;
 const workerDirectory = new URL("..", import.meta.url);
 const isProduction = rawEnv().NODE_ENV === "production";
 
-function parseLocalEnv(contents: string): Record<string, string> {
-  const env: Record<string, string> = {};
-
-  for (const line of contents.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex === -1) continue;
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    let value = trimmed.slice(separatorIndex + 1).trim();
-
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    env[key] = value;
-  }
-
-  return env;
-}
-
 async function loadLocalEnv() {
   if (isProduction) return;
 
@@ -63,7 +38,7 @@ async function loadLocalEnv() {
     const file = Bun.file(new URL(filename, workerDirectory));
     if (!(await file.exists())) continue;
 
-    const localEnv = parseLocalEnv(await file.text());
+    const localEnv = parseEnvFile(await file.text()).env;
     for (const [key, value] of Object.entries(localEnv)) {
       setProcessEnvDefault(key, value);
     }

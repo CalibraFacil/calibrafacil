@@ -745,9 +745,6 @@ importers:
 
   apps/worker:
     dependencies:
-      '@aws-sdk/client-s3':
-        specifier: ^3.1060.0
-        version: 3.1060.0
       '@calibra-facil/certificate-data':
         specifier: workspace:^
         version: link:../../packages/certificate-data
@@ -1110,6 +1107,9 @@ importers:
 
   packages/jobs-core:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1060.0
+        version: 3.1060.0
       '@calibra-facil/certificate-data':
         specifier: workspace:^
         version: link:../certificate-data

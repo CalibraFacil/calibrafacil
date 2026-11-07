@@ -18,6 +18,7 @@
     "config:check": "tsx packages/config/scripts/check-config.ts",
     "check:app-boundaries": "node scripts/check-app-boundaries.mjs",
     "test:app-boundaries": "node scripts/check-app-boundaries.test.mjs",
+    "test:ci-local": "node scripts/ci-local.test.mjs",
     "check:blocked-deps": "node scripts/check-blocked-deps.mjs",
     "check:cycles": "node scripts/check-import-cycles.mjs",
     "knip": "knip --no-progress",
