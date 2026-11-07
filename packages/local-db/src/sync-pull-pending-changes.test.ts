@@ -269,7 +269,7 @@ function accept(database: Database, eventId: string, remoteEntityId: number) {
 }
 
 describe("pull does not clobber queued local changes", () => {
-  it("keeps a customer edit that is still in the outbox, with its base anchor", () => {
+  it("keeps a customer edit that is still in the outbox", () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     pull(database, { customers: [customerRow("Cloud v1", BASE_UPDATED_AT)] });
     updateLocalCustomer(database, {
@@ -298,12 +298,6 @@ describe("pull does not clobber queued local changes", () => {
     const row = readRow(database, "customers", "customer:123");
     expect(row.name).toBe("Edited offline");
     expect(row.sync_state).toBe("local");
-    // The queued edit must still be pushed against the version it was made on,
-    // so the cloud can answer concurrent_update instead of a silent overwrite.
-    expect(row.remote_base_updated_at).toBe(BASE_UPDATED_AT);
-    expect(pendingEvent(database, "customer").baseUpdatedAt).toBe(
-      BASE_UPDATED_AT,
-    );
     expect(summary.skipped).toEqual([
       { entityType: "customer", localId: "customer:123" },
     ]);
@@ -389,7 +383,6 @@ describe("pull does not clobber queued local changes", () => {
       const row = readRow(database, "customers", "customer:123");
       expect(row.name).toBe("Cloud v2");
       expect(row.sync_state).toBe("synced");
-      expect(row.remote_base_updated_at).toBe(NEWER_CLOUD_UPDATED_AT);
 
       database.close();
     });
@@ -427,7 +420,6 @@ describe("pull does not clobber queued local changes", () => {
       const row = readRow(database, "customers", "customer:123");
       expect(row.name).toBe("Edited offline");
       expect(row.sync_state).toBe("synced");
-      expect(row.remote_base_updated_at).toBe("2026-01-17T00:00:00.000Z");
 
       database.close();
     });
@@ -555,7 +547,6 @@ describe("pull does not clobber queued local changes", () => {
     const row = readRow(database, "assets", "asset:456");
     expect(row.name).toBe("Edited asset");
     expect(row.sync_state).toBe("local");
-    expect(row.remote_base_updated_at).toBe(BASE_UPDATED_AT);
 
     database.close();
   });

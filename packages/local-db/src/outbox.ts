@@ -249,24 +249,12 @@ SELECT
   domain_events.occurred_at,
   outbox.idempotency_key,
   CASE domain_events.aggregate_kind
-    WHEN 'asset' THEN (
-      SELECT remote_base_updated_at FROM assets
-      WHERE assets.id = domain_events.aggregate_id
-    )
-    WHEN 'customer' THEN (
-      SELECT remote_base_updated_at FROM customers
-      WHERE customers.id = domain_events.aggregate_id
-    )
-    WHEN 'service_order_execution' THEN (
-      SELECT remote_base_updated_at FROM service_order_executions
-      WHERE service_order_executions.id = domain_events.aggregate_id
-    )
     -- A job execution carries its base in the payload it was written with:
     -- there is one per queued event, and the accept of an earlier one moves it.
     WHEN 'calibration_job' THEN
       json_extract(domain_events.payload_json, '$.baseUpdatedAt')
     ELSE NULL
-  END AS remote_base_updated_at
+  END AS base_updated_at
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE ${sendableSql("outbox", "domain_events")}
@@ -326,7 +314,7 @@ LIMIT @limit
     deviceId: row.device_id,
     idempotencyKey: row.idempotency_key,
     localVersion: row.aggregate_version,
-    baseUpdatedAt: row.remote_base_updated_at,
+    baseUpdatedAt: row.base_updated_at,
     expectedVersion,
     sequence: row.sequence,
   }));
@@ -1038,52 +1026,17 @@ WHERE id = @localId
     event.aggregate_kind === "asset" &&
     typeof accepted.remoteEntityId === "number"
   ) {
-    // REL-01 slice 3 (REQ-REL-RES-002): refresh the base-version anchor to the
-    // accepted server updatedAt. Without this a SECOND same-device edit before
-    // the next pull is compared against the stale pre-push base and the server
-    // reports a false self-conflict. COALESCE keeps the prior anchor when a
-    // (legacy) accept response omits updatedAt.
     database
       .prepare(
         `
 UPDATE assets
 SET remote_id = @remoteId,
-  sync_state = 'synced',
-  remote_base_updated_at = COALESCE(@remoteBaseUpdatedAt, remote_base_updated_at)
+  sync_state = 'synced'
 WHERE id = @localId
 `,
       )
       .run({
         remoteId: accepted.remoteEntityId,
-        remoteBaseUpdatedAt: getString(
-          toRecord(accepted.remoteEntity),
-          "updatedAt",
-        ),
-        localId: event.aggregate_id,
-      });
-  }
-
-  if (
-    event.aggregate_kind === "customer" &&
-    typeof accepted.remoteEntityId === "number"
-  ) {
-    // REL-01 slice 3 (REQ-REL-RES-002): refresh the base-version anchor on accept.
-    database
-      .prepare(
-        `
-UPDATE customers
-SET remote_id = @remoteId,
-  sync_state = 'synced',
-  remote_base_updated_at = COALESCE(@remoteBaseUpdatedAt, remote_base_updated_at)
-WHERE id = @localId
-`,
-      )
-      .run({
-        remoteId: accepted.remoteEntityId,
-        remoteBaseUpdatedAt: getString(
-          toRecord(accepted.remoteEntity),
-          "updatedAt",
-        ),
         localId: event.aggregate_id,
       });
   }
@@ -1116,115 +1069,6 @@ WHERE id = @localId
         localId: event.aggregate_id,
       });
   }
-
-  if (
-    event.aggregate_kind === "service_order_quote" &&
-    typeof accepted.remoteEntityId === "number"
-  ) {
-    database
-      .prepare(
-        `
-UPDATE service_order_quotes
-SET remote_id = @remoteId,
-  sync_state = 'synced'
-WHERE id = @localId
-`,
-      )
-      .run({
-        remoteId: accepted.remoteEntityId,
-        localId: event.aggregate_id,
-      });
-  }
-
-  if (
-    event.aggregate_kind === "service_order_execution" &&
-    typeof accepted.remoteEntityId === "number"
-  ) {
-    const remoteEntity = toRecord(accepted.remoteEntity);
-    const status = getString(remoteEntity, "status");
-    const localServiceOrderId = getString(
-      toRecord(parseJson(event.payload_json)),
-      "serviceOrderId",
-    );
-    // REL-01 slice 3 (REQ-REL-RES-002/003): the execution row has no pull path,
-    // so the accept response is the ONLY place its base-version anchor gets set.
-    // Write the accepted server updatedAt so slice-2 divergence detection can
-    // fire on a genuinely stale second edit (and not on the device's own push).
-    database
-      .prepare(
-        `
-UPDATE service_order_executions
-SET remote_id = @remoteId,
-  sync_state = 'synced',
-  remote_base_updated_at = COALESCE(@remoteBaseUpdatedAt, remote_base_updated_at)
-WHERE id = @localId
-`,
-      )
-      .run({
-        remoteId: accepted.remoteEntityId,
-        remoteBaseUpdatedAt: getString(remoteEntity, "updatedAt"),
-        localId: event.aggregate_id,
-      });
-
-    if (localServiceOrderId && status) {
-      database
-        .prepare(
-          `
-UPDATE service_orders
-SET status = @status,
-  sync_state = 'synced'
-WHERE id = @localServiceOrderId
-`,
-        )
-        .run({ status, localServiceOrderId });
-    }
-  }
-
-  if (
-    event.aggregate_kind === "non_conformance" &&
-    typeof accepted.remoteEntityId === "number"
-  ) {
-    const remoteEntity = toRecord(accepted.remoteEntity);
-    const officialNcNumber = getString(remoteEntity, "ncNumber");
-    database
-      .prepare(
-        `
-UPDATE non_conformances
-SET remote_id = @remoteId,
-  nc_number = COALESCE(@officialNcNumber, nc_number),
-  sync_state = 'synced'
-WHERE id = @localId
-`,
-      )
-      .run({
-        remoteId: accepted.remoteEntityId,
-        officialNcNumber,
-        localId: event.aggregate_id,
-      });
-  }
-
-  if (
-    event.aggregate_kind === "service_order_delivery_document" &&
-    typeof accepted.remoteEntityId === "number"
-  ) {
-    const remoteEntity = toRecord(accepted.remoteEntity);
-    const issuedAt = getString(remoteEntity, "issuedAt");
-    database
-      .prepare(
-        `
-UPDATE service_order_delivery_documents
-SET remote_id = @remoteId,
-  issued_at = COALESCE(@issuedAt, issued_at),
-  sync_state = 'synced'
-WHERE id = @localId
-`,
-      )
-      .run({
-        remoteId: accepted.remoteEntityId,
-        issuedAt,
-        localId: event.aggregate_id,
-      });
-  }
 }
 
 function parseJson(value: string) {
@@ -1248,7 +1092,7 @@ type PendingOutboxEventRow = {
   device_id: string;
   occurred_at: string;
   idempotency_key: string;
-  remote_base_updated_at: string | null;
+  base_updated_at: string | null;
 };
 
 type DomainEventRow = {

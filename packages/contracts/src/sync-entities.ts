@@ -1,13 +1,11 @@
 /**
- * The one table of the entities the desktop mirrors (docs/architecture/sync-change-seq.md).
- *
- * Before it, the same facts (wire name, cloud table, local mirror table, id prefix,
- * pull and bootstrap order, delete mode, bootstrap array, skipped-row kind, partition
- * domain table) were declared by hand in about ten places across `packages/db`,
- * `packages/contracts`, `apps/api` and `packages/local-db`. Each of those now derives
- * from this table; a side that needs data only it knows (the API's row sources, the
- * local mirror's column predicates) keeps a `satisfies Record<SyncEntity, ...>` map, so
- * a new entity fails to compile there until that side says what it does with it.
+ * The one table of the entities the desktop mirrors (docs/architecture/sync-change-seq.md):
+ * wire name, cloud table, local mirror table, id prefix, pull and bootstrap order, delete
+ * mode, bootstrap array, skipped-row kind and partition domain table. `packages/db`,
+ * `packages/contracts`, `apps/api` and `packages/local-db` derive from it; a side that
+ * needs data only it knows (the API's row sources, the local mirror's column predicates)
+ * keeps a `satisfies Record<SyncEntity, ...>` map, so a new entity fails to compile there
+ * until that side says what it does with it.
  *
  * What stays outside, because it is not a TypeScript list: the SQL triggers that fill
  * `sync_change_log` (migration 0122 and `packages/db/sql/schema-extras.sql`). The drift
@@ -77,11 +75,6 @@ export type SyncEntityDefinition = {
    */
   readonly skippedRowKind: boolean;
   /**
-   * Read by the deprecated `updatedAt` pull of protocols 1 and 2, which predates the
-   * entities that are not listed; protocol 3 reads the change log and serves them all.
-   */
-  readonly legacyPull: boolean;
-  /**
    * The local table holds customer or calibration data: a database that has rows in it
    * is never adopted by another account (`localDatabaseHasDomainRows`).
    */
@@ -96,7 +89,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "hard",
     bootstrapKey: "assetTypes",
     skippedRowKind: false,
-    legacyPull: true,
     partitionDomain: false,
   },
   customer: {
@@ -106,7 +98,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "deleted_at",
     bootstrapKey: "customers",
     skippedRowKind: true,
-    legacyPull: true,
     partitionDomain: true,
   },
   asset: {
@@ -116,7 +107,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "deleted_at",
     bootstrapKey: "assets",
     skippedRowKind: true,
-    legacyPull: true,
     partitionDomain: true,
   },
   service: {
@@ -126,7 +116,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "hard",
     bootstrapKey: "services",
     skippedRowKind: false,
-    legacyPull: true,
     partitionDomain: false,
   },
   reference_standard: {
@@ -137,7 +126,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "sync_state",
     bootstrapKey: "standards",
     skippedRowKind: false,
-    legacyPull: true,
     partitionDomain: true,
   },
   environmental_limit: {
@@ -147,7 +135,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "hard",
     bootstrapKey: "environmentalLimits",
     skippedRowKind: false,
-    legacyPull: true,
     partitionDomain: false,
   },
   calibration_job: {
@@ -157,7 +144,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "deleted_at",
     bootstrapKey: "jobs",
     skippedRowKind: true,
-    legacyPull: true,
     partitionDomain: true,
   },
   service_order: {
@@ -167,7 +153,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "hard",
     bootstrapKey: "serviceOrders",
     skippedRowKind: true,
-    legacyPull: true,
     partitionDomain: true,
   },
   published_method: {
@@ -177,7 +162,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "hard",
     bootstrapKey: "publishedMethods",
     skippedRowKind: false,
-    legacyPull: true,
     partitionDomain: false,
   },
   mass_composition_profile: {
@@ -187,7 +171,6 @@ export const SYNC_ENTITIES = {
     deleteMode: "hard",
     bootstrapKey: "massCompositionProfiles",
     skippedRowKind: false,
-    legacyPull: false,
     partitionDomain: false,
   },
 } as const satisfies Record<SyncEntity, SyncEntityDefinition>;
@@ -196,9 +179,7 @@ export const SYNC_ENTITIES = {
 export type SyncBootstrapKey =
   (typeof SYNC_ENTITIES)[SyncEntity]["bootstrapKey"];
 
-type EntitiesWhere<
-  Flag extends "skippedRowKind" | "legacyPull" | "partitionDomain",
-> = {
+type EntitiesWhere<Flag extends "skippedRowKind" | "partitionDomain"> = {
   [Entity in SyncEntity]: (typeof SYNC_ENTITIES)[Entity][Flag] extends true
     ? Entity
     : never;
@@ -206,9 +187,6 @@ type EntitiesWhere<
 
 /** The entities whose pulled rows are skipped while local changes are queued. */
 export type SyncSkippedRowKind = EntitiesWhere<"skippedRowKind">;
-
-/** The entities the deprecated `updatedAt` pull (protocols 1 and 2) reads. */
-export type SyncLegacyPullEntity = EntitiesWhere<"legacyPull">;
 
 /** The entities whose local table is a partition domain table. */
 export type SyncPartitionDomainEntity = EntitiesWhere<"partitionDomain">;
@@ -231,10 +209,6 @@ function entitiesWhere<Entity extends SyncEntity>(
 }
 
 export const SYNC_SKIPPED_ROW_KINDS = entitiesWhere(isSyncSkippedRowKind);
-
-export const SYNC_LEGACY_PULL_ENTITIES = entitiesWhere(
-  (entity): entity is SyncLegacyPullEntity => SYNC_ENTITIES[entity].legacyPull,
-);
 
 export const SYNC_PARTITION_DOMAIN_ENTITIES = entitiesWhere(
   (entity): entity is SyncPartitionDomainEntity =>

@@ -3,7 +3,6 @@ import { cloudSyncEventSchema, syncBootstrapResponseSchema } from "./sync";
 import {
   SYNC_ENTITIES,
   SYNC_ENTITY_ORDER,
-  SYNC_LEGACY_PULL_ENTITIES,
   SYNC_PARTITION_DOMAIN_ENTITIES,
   SYNC_SKIPPED_ROW_KINDS,
   isSyncEntity,
@@ -104,12 +103,6 @@ describe("the sync entity table", () => {
     expect(isSyncSkippedRowKind("asset")).toBe(true);
     expect(isSyncSkippedRowKind("service")).toBe(false);
     expect(isSyncSkippedRowKind("nope")).toBe(false);
-    // Protocols 1 and 2 never read mass profiles: the one entity that is not a legacy pull entity.
-    expect(SYNC_LEGACY_PULL_ENTITIES).toEqual(
-      SYNC_ENTITY_ORDER.filter(
-        (entity) => entity !== "mass_composition_profile",
-      ),
-    );
     expect(
       SYNC_PARTITION_DOMAIN_ENTITIES.map(
         (entity) => SYNC_ENTITIES[entity].mirrorTable,

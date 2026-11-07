@@ -51,14 +51,11 @@ export type ApplySyncSummary = {
  * every pull restart from the epoch, that happened on every sync.
  *
  * The row is skipped, not merged, and no local conflict is recorded here: the
- * conflict model is server-detected. The skipped row keeps its
- * `remote_base_updated_at` anchor, so the queued edit is pushed with the base
- * it was really made against and the cloud answers `concurrent_update`
- * (STALE_BASE_VERSION, with the current cloud fields) if the row moved on. That
- * lands in `sync_conflicts` through the normal push path, where the conflicts
- * UI already shows local vs cloud values. Overwriting the anchor instead would
- * have hidden the divergence from the server. Once the queued change is
- * accepted the row is clean again and the next pull applies normally.
+ * conflict model is server-detected: the queued change is pushed as it was made
+ * and the cloud answers `concurrent_update` if the row moved on. That lands in
+ * `sync_conflicts` through the normal push path, where the conflicts UI already
+ * shows local vs cloud values. Once the queued change is accepted (or refused
+ * for good) the row is clean again and the next pull applies normally.
  */
 export type ApplySyncOptions = {
   /**
@@ -258,7 +255,6 @@ INSERT INTO customers (
   address_json,
   compliance_json,
   updated_at,
-  remote_base_updated_at,
   sync_state
 ) VALUES (
   @id,
@@ -272,7 +268,6 @@ INSERT INTO customers (
   @addressJson,
   @complianceJson,
   @updatedAt,
-  @remoteBaseUpdatedAt,
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
@@ -284,7 +279,6 @@ ON CONFLICT(id) DO UPDATE SET
   address_json = excluded.address_json,
   compliance_json = excluded.compliance_json,
   updated_at = excluded.updated_at,
-  remote_base_updated_at = excluded.remote_base_updated_at,
   sync_state = excluded.sync_state
 `,
         )
@@ -300,7 +294,6 @@ ON CONFLICT(id) DO UPDATE SET
           addressJson: JSON.stringify(row.address ?? null),
           complianceJson: JSON.stringify(row.compliance ?? null),
           updatedAt: getDateString(row, "updatedAt") ?? pulledAt,
-          remoteBaseUpdatedAt: getDateString(row, "updatedAt"),
         });
     }
 
@@ -337,7 +330,6 @@ INSERT INTO assets (
   installed_at,
   status,
   updated_at,
-  remote_base_updated_at,
   sync_state
 ) VALUES (
   @id,
@@ -362,7 +354,6 @@ INSERT INTO assets (
   @installedAt,
   @status,
   @updatedAt,
-  @remoteBaseUpdatedAt,
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
@@ -385,7 +376,6 @@ ON CONFLICT(id) DO UPDATE SET
   installed_at = excluded.installed_at,
   status = excluded.status,
   updated_at = excluded.updated_at,
-  remote_base_updated_at = excluded.remote_base_updated_at,
   sync_state = excluded.sync_state
 `,
         )
@@ -415,7 +405,6 @@ ON CONFLICT(id) DO UPDATE SET
           installedAt: getDateString(row, "installedAt"),
           status: getString(row, "status") ?? "ACTIVE",
           updatedAt: getDateString(row, "updatedAt") ?? pulledAt,
-          remoteBaseUpdatedAt: getDateString(row, "updatedAt"),
         });
     }
 

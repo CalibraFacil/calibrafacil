@@ -1,5 +1,3 @@
-import { PERMANENT_OUTBOX_REJECTION_CODES } from "@calibra-facil/contracts/outbox-rejections";
-
 // Permanently refused events get their own outbox state (`dead`) instead of
 // staying `failed` with no next attempt, which kept them eligible on every
 // cycle and let ~50 of them crowd newer work out of the push page.
@@ -10,11 +8,42 @@ import { PERMANENT_OUTBOX_REJECTION_CODES } from "@calibra-facil/contracts/outbo
 //
 // Older builds recorded every cloud rejection as `failed` with a NULL next
 // attempt and `last_error = '<CODE>: <reason>'`. Those rows are classified by
-// that stored code with the same table the running code uses, so the two cannot
-// disagree: permanent codes become `dead`; the rest keep retrying.
-const permanentCodes = PERMANENT_OUTBOX_REJECTION_CODES.map(
-  (code) => `'${code}'`,
-).join(", ");
+// that stored code: permanent codes become `dead`; the rest keep retrying. The list
+// is frozen here, as the permanent codes stood when this migration was last
+// edited; a migration never follows the live table.
+const permanentCodes = [
+  "UNSUPPORTED_SYNC_OPERATION",
+  "STATUS_PAYLOAD_MISMATCH",
+  "INVALID_DESKTOP_EVENT_PAYLOAD",
+  "INVALID_SYNC_COMMAND",
+  "SYNC_PERMISSION_DENIED",
+  "SYNC_ATTACHMENT_TYPE_NOT_ALLOWED",
+  "SYNC_ATTACHMENT_TOO_LARGE",
+  "SYNC_ATTACHMENT_INTEGRITY_FAILED",
+  "SYNC_ATTACHMENT_UPLOAD_UNSUPPORTED",
+  "INVALID_STANDARD_SNAPSHOT",
+  "COMPILED_METHOD_SNAPSHOT_INVALID",
+  "CALIBRATION_RECORD_INCOMPLETE",
+  "OFFICIAL_EXECUTION_FAILED",
+  "DOMAIN_VALIDATION_FAILED",
+  "TAG_ALREADY_EXISTS",
+  "ASSET_NOT_FOUND",
+  "ASSET_SPECIFICATION_MISSING",
+  "REMOTE_ENTITY_NOT_FOUND",
+  "INVALID_STATUS_TRANSITION",
+  "STANDARD_NOT_ACTIVE",
+  "STANDARD_EXPIRED",
+  "STANDARD_SCOPE_MISMATCH",
+  "STANDARD_CERTIFIED_VALUES_MISSING",
+  "STANDARD_BACKDATE_REASON_REQUIRED",
+  "TECHNICIAN_COMPETENCE_MISSING",
+  "ATTACHMENT_FILE_MISSING",
+  "ATTACHMENT_FILE_CHANGED",
+  "ATTACHMENT_UPLOAD_REJECTED",
+  "PUSH_REQUEST_REJECTED",
+]
+  .map((code) => `'${code}'`)
+  .join(", ");
 
 export const migration0021OutboxDeadEvents = {
   id: 21,
