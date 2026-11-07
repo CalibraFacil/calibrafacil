@@ -291,8 +291,8 @@ describe('service order detail model', () => {
         stockQuantity: null,
         stockSyncedAt: null,
         isActive: true,
-        createdAt: null,
-        updatedAt: null,
+        createdAt: '2026-01-10T12:00:00.000Z',
+        updatedAt: '2026-01-10T12:00:00.000Z',
       }),
     ).toEqual({
       materialId: 5,
@@ -320,8 +320,8 @@ describe('service order detail model', () => {
         stockQuantity: null,
         stockSyncedAt: null,
         isActive: true,
-        createdAt: null,
-        updatedAt: null,
+        createdAt: '2026-01-10T12:00:00.000Z',
+        updatedAt: '2026-01-10T12:00:00.000Z',
       }).unitPrice,
     ).toBe('')
   })

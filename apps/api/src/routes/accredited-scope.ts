@@ -1,5 +1,6 @@
 import { createRouter } from "../server/router";
-import { zValidator } from "@hono/zod-validator";
+import { accreditedScopeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { writeComplianceAuditEvent } from "../lib/compliance-audit";
 import {
@@ -8,8 +9,6 @@ import {
   organization,
 } from "@calibra-facil/db/schema";
 import { eq, and, asc } from "drizzle-orm";
-import { z } from "zod";
-import { AccreditedScopeLineSchema } from "@calibra-facil/schemas";
 import { resolveScopeEnforcementMode, unitKind } from "@calibra-facil/shared";
 import {
   requireLabProtected,
@@ -68,13 +67,23 @@ function diffScopeLine(
  * managers and leave an append-only audit trail. The org-level enforcement mode
  * is the exception: it needs the organization `settings:update` permission.
  */
+const PREFIX = "/api/accredited-scope";
+
 export const accreditedScopeRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  // ===========================================================================
-  // GET / - List accredited-scope lines for the selected unit
-  // ===========================================================================
-  .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+}>();
+
+const labMiddleware = [...requireLabProtected, requireOrgType("LAB")];
+
+// ===========================================================================
+// GET / - List accredited-scope lines for the selected unit
+// ===========================================================================
+mount(
+  accreditedScopeRouter,
+  PREFIX,
+  accreditedScopeEndpoints.list,
+  labMiddleware,
+  async (c) => {
     const memberData = c.get("member");
     requireUnitOperationalSettingsManager(memberData);
     const unit = resolveAccessibleUnitContext(memberData);
@@ -104,7 +113,7 @@ export const accreditedScopeRouter = createRouter<{
           .limit(1),
       ]);
 
-      return c.json({
+      return {
         lines,
         unit,
         // The EFFECTIVE mode (Q45); a lab that never chose gets the default.
@@ -113,234 +122,243 @@ export const accreditedScopeRouter = createRouter<{
           accreditationActive: org?.accreditationActive,
         }),
         enforcementModeIsDefault: !org?.scopeEnforcementMode,
-      });
+      };
     });
-  })
+  },
+);
 
-  // ===========================================================================
-  // PUT /enforcement - Switch the org-level guard mode (#427 Phase 1)
-  // ===========================================================================
-  .put(
-    "/enforcement",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
+// ===========================================================================
+// PUT /enforcement - Switch the org-level guard mode (#427 Phase 1)
+// ===========================================================================
+mount(
+  accreditedScopeRouter,
+  PREFIX,
+  accreditedScopeEndpoints.setEnforcementMode,
+  [
+    ...labMiddleware,
     // organization.scopeEnforcementMode governs EVERY unit's accredited
     // approvals, so it is an organization-level settings write (owner/admin).
     // A single-unit unit_admin must not be able to relax it org-wide.
     requirePermission({ settings: ["update"] }),
-    zValidator("json", z.object({ mode: z.enum(["warn", "enforce"]) })),
-    async (c) => {
-      const input = c.req.valid("json");
-      const memberData = c.get("member");
+  ],
+  async (c, { body: input }) => {
+    const memberData = c.get("member");
 
-      await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
-        const [before] = await ctx.o
-          .select({
-            scopeEnforcementMode: organization.scopeEnforcementMode,
-            accreditationActive: organization.accreditationActive,
+    await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+      const [before] = await ctx.o
+        .select({
+          scopeEnforcementMode: organization.scopeEnforcementMode,
+          accreditationActive: organization.accreditationActive,
+        })
+        .from(organization)
+        .where(eq(organization.id, memberData.organizationId))
+        .limit(1);
+
+      // What was in force (Q45: for a lab that never chose, the default),
+      // so the trail reads "enforce -> warn" even when the stored value was
+      // still unset.
+      const effectiveBefore = before
+        ? resolveScopeEnforcementMode({
+            stored: before.scopeEnforcementMode,
+            accreditationActive: before.accreditationActive,
           })
-          .from(organization)
-          .where(eq(organization.id, memberData.organizationId))
-          .limit(1);
+        : null;
 
-        // What was in force (Q45: for a lab that never chose, the default),
-        // so the trail reads "enforce -> warn" even when the stored value was
-        // still unset.
-        const effectiveBefore = before
-          ? resolveScopeEnforcementMode({
-              stored: before.scopeEnforcementMode,
-              accreditationActive: before.accreditationActive,
-            })
-          : null;
+      // The mode change and its audit row commit (or fail) together. Choosing
+      // a mode makes it explicit, even one equal to the default: from then on
+      // the lab's choice is never overridden by the default.
+      await ctx.o
+        .update(organization)
+        .set({ scopeEnforcementMode: input.mode })
+        .where(eq(organization.id, memberData.organizationId));
 
-        // The mode change and its audit row commit (or fail) together. Choosing
-        // a mode makes it explicit, even one equal to the default: from then on
-        // the lab's choice is never overridden by the default.
-        await ctx.o
-          .update(organization)
-          .set({ scopeEnforcementMode: input.mode })
-          .where(eq(organization.id, memberData.organizationId));
-
-        // Audited whenever the effective mode changes, or a default becomes an
-        // explicit choice (the record that the lab chose, and by whom).
-        if (
-          before &&
-          (effectiveBefore !== input.mode || !before.scopeEnforcementMode)
-        ) {
-          // Not a line's audit entry (`scopeLineId` is null: the change is
-          // the organization's), so it stays off `ctx.audit`.
-          await ctx.o.insert(accreditedScopeLineAuditLog).values({
-            scopeLineId: null,
+      // Audited whenever the effective mode changes, or a default becomes an
+      // explicit choice (the record that the lab chose, and by whom).
+      if (
+        before &&
+        (effectiveBefore !== input.mode || !before.scopeEnforcementMode)
+      ) {
+        // Not a line's audit entry (`scopeLineId` is null: the change is
+        // the organization's), so it stays off `ctx.audit`.
+        await ctx.o.insert(accreditedScopeLineAuditLog).values({
+          scopeLineId: null,
+          organizationId: memberData.organizationId,
+          action: "enforcement_mode_change",
+          changes: {
+            scopeEnforcementMode: {
+              old: effectiveBefore,
+              new: input.mode,
+            },
+            wasDefault: !before.scopeEnforcementMode,
+          },
+          performedBy: ctx.actor.userId,
+          ipAddress: ctx.actor.ipAddress,
+        });
+        // B4a: also on the compliance trail the accreditation profile uses.
+        await writeComplianceAuditEvent(
+          {
             organizationId: memberData.organizationId,
-            action: "enforcement_mode_change",
+            action: "accreditation.scope_enforcement_changed",
+            entityType: "organization",
+            entityId: memberData.organizationId,
             changes: {
-              scopeEnforcementMode: {
-                old: effectiveBefore,
-                new: input.mode,
+              before: {
+                scopeEnforcementMode: effectiveBefore,
+                wasDefault: !before.scopeEnforcementMode,
               },
-              wasDefault: !before.scopeEnforcementMode,
+              after: { scopeEnforcementMode: input.mode },
             },
             performedBy: ctx.actor.userId,
-            ipAddress: ctx.actor.ipAddress,
-          });
-          // B4a: also on the compliance trail the accreditation profile uses.
-          await writeComplianceAuditEvent(
-            {
-              organizationId: memberData.organizationId,
-              action: "accreditation.scope_enforcement_changed",
-              entityType: "organization",
-              entityId: memberData.organizationId,
-              changes: {
-                before: {
-                  scopeEnforcementMode: effectiveBefore,
-                  wasDefault: !before.scopeEnforcementMode,
-                },
-                after: { scopeEnforcementMode: input.mode },
-              },
-              performedBy: ctx.actor.userId,
-              ipAddress: c.req.header("x-forwarded-for") || null,
-            },
-            ctx.o,
-          );
-        }
-      });
-
-      return c.json({
-        message:
-          input.mode === "enforce"
-            ? "Guarda de escopo ativada: violações bloqueiam a emissão acreditada"
-            : "Guarda de escopo em modo aviso",
-        enforcementMode: input.mode,
-      });
-    },
-  )
-
-  // ===========================================================================
-  // PUT / - Create or update a scope line (id present = update)
-  // ===========================================================================
-  .put(
-    "/",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    zValidator("json", AccreditedScopeLineSchema),
-    async (c) => {
-      const input = c.req.valid("json");
-      const memberData = c.get("member");
-      const session = c.get("session");
-      requireUnitOperationalSettingsManager(memberData);
-      const unit = resolveAccessibleUnitContext(memberData);
-
-      // The Zod schema cannot see the unit registry; enforce grandeza/unit
-      // coherence here so a mass line can never carry a temperature unit.
-      if (
-        unitKind(input.rangeUnit) !== input.quantityKind ||
-        unitKind(input.cmcUnit) !== input.quantityKind
-      ) {
-        throw invalid(
-          "scope_line_unit_mismatch",
-          "Unidades incompatíveis com a grandeza da linha",
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          },
+          ctx.o,
         );
       }
+    });
 
-      const values = {
-        quantityKind: input.quantityKind,
-        rangeMin: input.rangeMin,
-        rangeMax: input.rangeMax,
-        rangeUnit: input.rangeUnit,
-        cmcType: input.cmcType,
-        cmcA: input.cmcA,
-        cmcB: input.cmcType === "linear" ? (input.cmcB ?? null) : null,
-        cmcUnit: input.cmcUnit,
-        description: input.description ?? null,
-        validFrom: input.validFrom ? new Date(input.validFrom) : null,
-        validUntil: input.validUntil ? new Date(input.validUntil) : null,
-        updatedBy: session.user.id,
-      };
+    return {
+      message:
+        input.mode === "enforce"
+          ? "Guarda de escopo ativada: violações bloqueiam a emissão acreditada"
+          : "Guarda de escopo em modo aviso",
+      enforcementMode: input.mode,
+    };
+  },
+);
 
-      const result = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          if (input.id != null) {
-            const [existing] = await ctx.o
-              .select()
-              .from(accreditedScopeLine)
-              .where(
-                and(
-                  eq(accreditedScopeLine.id, input.id),
-                  eq(
-                    accreditedScopeLine.organizationId,
-                    memberData.organizationId,
-                  ),
-                  eq(accreditedScopeLine.unitId, unit.unitId),
+// ===========================================================================
+// PUT / - Create or update a scope line (id present = update)
+// ===========================================================================
+mount(
+  accreditedScopeRouter,
+  PREFIX,
+  accreditedScopeEndpoints.save,
+  labMiddleware,
+  async (c, { body: input }) => {
+    const memberData = c.get("member");
+    const session = c.get("session");
+    requireUnitOperationalSettingsManager(memberData);
+    const unit = resolveAccessibleUnitContext(memberData);
+
+    // The Zod schema cannot see the unit registry; enforce grandeza/unit
+    // coherence here so a mass line can never carry a temperature unit.
+    if (
+      unitKind(input.rangeUnit) !== input.quantityKind ||
+      unitKind(input.cmcUnit) !== input.quantityKind
+    ) {
+      throw invalid(
+        "scope_line_unit_mismatch",
+        "Unidades incompatíveis com a grandeza da linha",
+      );
+    }
+
+    const values = {
+      quantityKind: input.quantityKind,
+      rangeMin: input.rangeMin,
+      rangeMax: input.rangeMax,
+      rangeUnit: input.rangeUnit,
+      cmcType: input.cmcType,
+      cmcA: input.cmcA,
+      cmcB: input.cmcType === "linear" ? (input.cmcB ?? null) : null,
+      cmcUnit: input.cmcUnit,
+      description: input.description ?? null,
+      validFrom: input.validFrom ? new Date(input.validFrom) : null,
+      validUntil: input.validUntil ? new Date(input.validUntil) : null,
+      updatedBy: session.user.id,
+    };
+
+    return await withOrg(
+      memberData.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        if (input.id != null) {
+          const [existing] = await ctx.o
+            .select()
+            .from(accreditedScopeLine)
+            .where(
+              and(
+                eq(accreditedScopeLine.id, input.id),
+                eq(
+                  accreditedScopeLine.organizationId,
+                  memberData.organizationId,
                 ),
-              )
-              .limit(1);
-            if (!existing) {
-              throw notFound(
-                "scope_line_not_found",
-                "Linha de escopo não encontrada",
-              );
-            }
-
-            const [updated] = await ctx.o
-              .update(accreditedScopeLine)
-              .set({
-                ...values,
-                // Omitted on the wire = preserve; the web dialog has no k field.
-                coverageFactor: input.coverageFactor ?? existing.coverageFactor,
-              })
-              .where(eq(accreditedScopeLine.id, existing.id))
-              .returning();
-
-            if (updated) {
-              await ctx.audit("accreditedScopeLine", existing.id, {
-                action: "update",
-                changes: diffScopeLine(existing, updated),
-              });
-            }
-
-            return {
-              message: "Linha de escopo atualizada",
-              data: updated,
-              unit,
-            };
+                eq(accreditedScopeLine.unitId, unit.unitId),
+              ),
+            )
+            .limit(1);
+          if (!existing) {
+            throw notFound(
+              "scope_line_not_found",
+              "Linha de escopo não encontrada",
+            );
           }
 
-          const [created] = await ctx.o
-            .insert(accreditedScopeLine)
-            .values({
-              organizationId: memberData.organizationId,
-              unitId: unit.unitId,
+          const [updated] = await ctx.o
+            .update(accreditedScopeLine)
+            .set({
               ...values,
-              coverageFactor: input.coverageFactor ?? 2,
+              // Omitted on the wire = preserve; the web dialog has no k field.
+              coverageFactor: input.coverageFactor ?? existing.coverageFactor,
             })
+            .where(eq(accreditedScopeLine.id, existing.id))
             .returning();
 
-          if (created) {
-            await ctx.audit("accreditedScopeLine", created.id, {
-              action: "create",
-              changes: null,
-            });
+          // `existing` was read in this transaction, so the update returns it.
+          if (!updated) {
+            throw notFound(
+              "scope_line_not_found",
+              "Linha de escopo não encontrada",
+            );
           }
+          await ctx.audit("accreditedScopeLine", existing.id, {
+            action: "update",
+            changes: diffScopeLine(existing, updated),
+          });
 
           return {
-            message: "Linha de escopo adicionada",
-            data: created,
+            message: "Linha de escopo atualizada",
+            data: updated,
             unit,
           };
-        },
-      );
-      return c.json(result);
-    },
-  )
+        }
 
-  // ===========================================================================
-  // DELETE /:id - Remove a scope line (audit row survives, soft reference)
-  // ===========================================================================
-  .delete("/:id", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+        const [created] = await ctx.o
+          .insert(accreditedScopeLine)
+          .values({
+            organizationId: memberData.organizationId,
+            unitId: unit.unitId,
+            ...values,
+            coverageFactor: input.coverageFactor ?? 2,
+          })
+          .returning();
+
+        if (!created) throw new Error("Falha ao criar linha de escopo");
+        await ctx.audit("accreditedScopeLine", created.id, {
+          action: "create",
+          changes: null,
+        });
+
+        return {
+          message: "Linha de escopo adicionada",
+          data: created,
+          unit,
+        };
+      },
+    );
+  },
+);
+
+// ===========================================================================
+// DELETE /:id - Remove a scope line (audit row survives, soft reference)
+// ===========================================================================
+mount(
+  accreditedScopeRouter,
+  PREFIX,
+  accreditedScopeEndpoints.delete,
+  labMiddleware,
+  async (c, { params }) => {
     const memberData = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+    const id = parseInt(params.id, 10);
     requireUnitOperationalSettingsManager(memberData);
     const unit = resolveAccessibleUnitContext(memberData);
 
@@ -372,5 +390,6 @@ export const accreditedScopeRouter = createRouter<{
         changes: null,
       });
     });
-    return c.json({ message: "Linha de escopo removida" });
-  });
+    return { message: "Linha de escopo removida" };
+  },
+);

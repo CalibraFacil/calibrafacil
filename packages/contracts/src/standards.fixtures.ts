@@ -5,7 +5,7 @@ import type {
   EnvironmentalLimitRow,
   EnvironmentalLimitsResponse,
   SaveEnvironmentalLimitResponse,
-} from "./environmental-limits";
+} from "./endpoints/environmental-limits";
 import type {
   MassCompositionProfile,
   MassCompositionProfilesResponse,

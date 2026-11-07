@@ -227,16 +227,8 @@ export const calibraApiPolicyRegistry = {
     update: "cloud-only",
     deactivate: "cloud-only",
   },
-  // Material catalog is cloud-only in v1: the desktop SO flow keeps the
-  // free-form part-item fallback when offline (materialId stays null).
-  materials: {
-    list: "cloud-only",
-    get: "cloud-only",
-    create: "cloud-only",
-    update: "cloud-only",
-    deactivate: "cloud-only",
-    adjustStock: "cloud-only",
-  },
+  // Material catalog is cloud-only in v1 (see the endpoint definitions).
+  materials: endpointPolicies(ENDPOINT_GROUPS.materials),
   methods: {
     list: "local-first-read-through-sync",
     get: "local-first-read-through-sync",
@@ -331,21 +323,10 @@ export const calibraApiPolicyRegistry = {
     list: "local-only",
     upload: "local-command-sync",
   },
-  environmentalLimits: {
-    list: "local-first-read-through-sync",
-    save: "cloud-only",
-    delete: "cloud-only",
-  },
-  // #427 Phase 0: managed on the cloud-only settings surface and enforced
-  // server-side at submit/approve; nothing consumes scope lines on the
-  // desktop yet, so the whole namespace stays cloud-only until the offline
-  // execution warning lands.
-  accreditedScope: {
-    list: "cloud-only",
-    save: "cloud-only",
-    delete: "cloud-only",
-    setEnforcementMode: "cloud-only",
-  },
+  environmentalLimits: endpointPolicies(ENDPOINT_GROUPS.environmentalLimits),
+  // #427 Phase 0: the whole namespace stays cloud-only (see the endpoint
+  // definitions).
+  accreditedScope: endpointPolicies(ENDPOINT_GROUPS.accreditedScope),
   reports: endpointPolicies(ENDPOINT_GROUPS.reports),
   publicSignup: {
     start: "cloud-only",

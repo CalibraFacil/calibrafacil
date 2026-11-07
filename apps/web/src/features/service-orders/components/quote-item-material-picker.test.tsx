@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MaterialsListData } from '@calibra-facil/client-runtime'
+import { buildMaterialRecord } from '@calibra-facil/contracts/materials-fixtures'
 
 const queryMocks = vi.hoisted(() => ({
   useServiceOrderMaterialsData: vi.fn(),
@@ -13,21 +14,15 @@ vi.mock('../queries', () => queryMocks)
 
 import { QuoteItemMaterialPicker } from './quote-item-material-picker'
 
-const MATERIAL: MaterialsListData['data'][number] = {
+const MATERIAL: MaterialsListData['data'][number] = buildMaterialRecord({
   id: 42,
   name: 'Correia dentada',
-  description: null,
   sku: 'CB-100',
   unit: 'pç',
   unitCostCents: 800,
   unitPriceCents: 1990,
   controlsStock: true,
-  stockQuantity: null,
-  stockSyncedAt: null,
-  isActive: true,
-  createdAt: null,
-  updatedAt: null,
-}
+})
 
 function mockMaterials(data: MaterialsListData['data'], isLoading = false) {
   queryMocks.useServiceOrderMaterialsData.mockReturnValue({

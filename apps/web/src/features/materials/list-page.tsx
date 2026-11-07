@@ -67,7 +67,8 @@ export function MaterialsListPage() {
   })
 
   const deactivateMutation = useMutation({
-    mutationFn: (id: number) => calibraApi.materials.deactivate(id),
+    mutationFn: (id: number) =>
+      calibraApi.materials.deactivate({ params: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materials'] })
       toast.success('Material desativado com sucesso')
@@ -79,7 +80,10 @@ export function MaterialsListPage() {
 
   const reactivateMutation = useMutation({
     mutationFn: (id: number) =>
-      calibraApi.materials.update(id, { isActive: true }),
+      calibraApi.materials.update({
+        params: { id },
+        body: { isActive: true },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materials'] })
       toast.success('Material reativado com sucesso')

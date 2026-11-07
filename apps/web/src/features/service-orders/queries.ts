@@ -164,10 +164,12 @@ export function fetchServiceOrderMaterials(
   search = '',
 ): Promise<MaterialsListData> {
   return calibraApi.materials.list({
-    page: 1,
-    limit: SERVICE_ORDER_MATERIAL_PICKER_LIMIT,
-    query: search.trim() || undefined,
-    isActive: true,
+    query: {
+      page: 1,
+      limit: SERVICE_ORDER_MATERIAL_PICKER_LIMIT,
+      query: search.trim() || undefined,
+      isActive: true,
+    },
   })
 }
 

@@ -83,7 +83,10 @@ function EditMaterialForm({ materialData }: { materialData: MaterialDetail }) {
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateMaterialInput) =>
-      calibraApi.materials.update(materialData.id, data),
+      calibraApi.materials.update({
+        params: { id: materialData.id },
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materials'] })
       queryClient.invalidateQueries({

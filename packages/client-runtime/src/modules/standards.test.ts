@@ -163,20 +163,22 @@ describe("environmental-limits module response contracts", () => {
     const saved = buildSaveEnvironmentalLimitResponse();
     expect(
       await clientReplying({ body: saved }).client.environmentalLimits.save({
-        assetTypeId: null,
-        temperatureMin: 18,
-        temperatureMax: 25,
-        humidityMin: null,
-        humidityMax: null,
-        pressureMin: null,
-        pressureMax: null,
+        body: {
+          assetTypeId: null,
+          temperatureMin: 18,
+          temperatureMax: 25,
+          humidityMin: null,
+          humidityMax: null,
+          pressureMin: null,
+          pressureMax: null,
+        },
       }),
     ).toEqual(saved);
 
     const removed = buildDeleteEnvironmentalLimitResponse();
     expect(
       await clientReplying({ body: removed }).client.environmentalLimits.delete(
-        5,
+        { params: { id: 5 } },
       ),
     ).toEqual(removed);
   });

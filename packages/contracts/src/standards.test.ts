@@ -6,7 +6,7 @@ import {
   effectiveEnvironmentalLimitsResponseSchema,
   environmentalLimitsResponseSchema,
   saveEnvironmentalLimitResponseSchema,
-} from "./environmental-limits";
+} from "./endpoints/environmental-limits";
 import {
   massCompositionProfilesResponseSchema,
   standardCertificateDocumentDownloadResponseSchema,

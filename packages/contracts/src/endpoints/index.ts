@@ -9,6 +9,9 @@ import { nonConformanceEndpoints } from "./non-conformances";
 import { proficiencyTestEndpoints } from "./proficiency-tests";
 import { spcEndpoints } from "./spc";
 import { trainingRecordEndpoints } from "./training-records";
+import { accreditedScopeEndpoints } from "./accredited-scope";
+import { environmentalLimitEndpoints } from "./environmental-limits";
+import { materialEndpoints } from "./materials";
 import type { EndpointGroup, EndpointPaths } from "./define";
 import { reportEndpoints } from "./reports";
 import { signatureEndpoints } from "./signatures";
@@ -29,6 +32,9 @@ export * from "./training-records";
 export * from "./signatures";
 export * from "./visits";
 export * from "./calibration-requests";
+export * from "./accredited-scope";
+export * from "./environmental-limits";
+export * from "./materials";
 
 /**
  * Every converted domain, keyed by its `CalibraApi` namespace. This is the one
@@ -50,6 +56,9 @@ export const ENDPOINT_GROUPS = {
   signatures: signatureEndpoints,
   visits: visitEndpoints,
   calibrationRequests: calibrationRequestEndpoints,
+  environmentalLimits: environmentalLimitEndpoints,
+  accreditedScope: accreditedScopeEndpoints,
+  materials: materialEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

@@ -85,7 +85,7 @@ export function AccreditedScopeSettingsPage() {
     mutationFn: async (data: ScopeLineFormState) => {
       const built = buildScopeLinePayload(data, editingId)
       if (!built.ok) throw new Error(built.error)
-      return calibraApi.accreditedScope.save(built.payload)
+      return calibraApi.accreditedScope.save({ body: built.payload })
     },
     onSuccess: () => {
       invalidate()
@@ -102,7 +102,8 @@ export function AccreditedScopeSettingsPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => calibraApi.accreditedScope.delete(id),
+    mutationFn: async (id: number) =>
+      calibraApi.accreditedScope.delete({ params: { id } }),
     onSuccess: () => {
       invalidate()
       toast.success('Linha de escopo removida')
@@ -114,7 +115,7 @@ export function AccreditedScopeSettingsPage() {
 
   const enforcementMutation = useMutation({
     mutationFn: async (mode: 'warn' | 'enforce') =>
-      calibraApi.accreditedScope.setEnforcementMode(mode),
+      calibraApi.accreditedScope.setEnforcementMode({ body: { mode } }),
     onSuccess: (result) => {
       invalidate()
       toast.success(result.message)

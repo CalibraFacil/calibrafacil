@@ -1,8 +1,10 @@
 /**
  * environmental-limits-contract.int.spec.ts: P2-15 REQ-TC-1. The environmental
  * limits endpoints' REAL responses (real handlers, real middleware, real
- * Postgres) must parse with the response schemas in `@calibra-facil/contracts`
- * that the client SDK validates against and the desktop local-server mirrors.
+ * Postgres) must parse with the response schemas of the `environmentalLimitEndpoints`
+ * definitions in `@calibra-facil/contracts` (`GET /effective` keeps its own exported
+ * schema: the jobs client reaches it) that the client SDK validates against and the
+ * desktop local-server mirrors.
  *
  * Covered: GET /, GET /effective/:assetTypeId (unit default, asset-type
  * override, nothing configured), PUT / and DELETE /:id.
@@ -11,10 +13,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
-  deleteEnvironmentalLimitResponseSchema,
   effectiveEnvironmentalLimitsResponseSchema,
-  environmentalLimitsResponseSchema,
-  saveEnvironmentalLimitResponseSchema,
+  environmentalLimitEndpoints,
 } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { assetType } from "@calibra-facil/db/schema";
@@ -75,7 +75,7 @@ describe("environmental-limits endpoints: real responses honor the contract sche
         temperatureMin: 18,
         temperatureMax: 25,
       }),
-      saveEnvironmentalLimitResponseSchema,
+      environmentalLimitEndpoints.save.response,
     );
     expect(saved.data.temperatureMax).toBe(25);
     expect(saved.unit.unitId).toBe(org.unitId);
@@ -87,12 +87,12 @@ describe("environmental-limits endpoints: real responses honor the contract sche
         humidityMin: 30,
         humidityMax: 60,
       }),
-      saveEnvironmentalLimitResponseSchema,
+      environmentalLimitEndpoints.save.response,
     );
 
     const list = await parsedBody(
       await environmentalLimitsRouter.request("/"),
-      environmentalLimitsResponseSchema,
+      environmentalLimitEndpoints.list.response,
     );
     expect(list.limits).toHaveLength(2);
     expect(list.limits.map((limit) => limit.assetTypeName).sort()).toEqual([
@@ -104,7 +104,7 @@ describe("environmental-limits endpoints: real responses honor the contract sche
       await environmentalLimitsRouter.request(`/${saved.data.id}`, {
         method: "DELETE",
       }),
-      deleteEnvironmentalLimitResponseSchema,
+      environmentalLimitEndpoints.delete.response,
     );
   });
 
