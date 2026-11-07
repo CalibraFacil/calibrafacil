@@ -1,4 +1,4 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { customerEndpoints } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -23,11 +23,8 @@ import { eq, ilike, or, count, and, desc, inArray, sql } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
-} from "../middleware/permission";
-import {
-  requireLabCustomer,
-  requireLabCustomerId,
-} from "../lib/customer-access";
+} from "../../../middleware/permission";
+import { requireLabCustomer, requireLabCustomerId } from "../customer-access";
 import {
   conflict,
   DomainError,
@@ -35,30 +32,30 @@ import {
   invalid,
   notFound,
   unprocessable,
-} from "../lib/domain-errors";
+} from "../../../lib/domain-errors";
 import {
   createLabCustomer,
   deleteLabCustomer,
   groupBelongsToLab,
   provisionCustomerOrganization,
   updateLabCustomer,
-} from "../lib/customer-writes";
-import { mount } from "../lib/endpoint-mount";
-import { withOrg } from "../lib/org-context";
-import { requestActor } from "../middleware/request-actor";
-import { isReferencedRowViolation } from "../lib/db-errors";
-import { fetchCnpjRegistration } from "../lib/cnpj-lookup";
+} from "../customer-writes";
+import { mount } from "../../../lib/endpoint-mount";
+import { withOrg } from "../../../lib/org-context";
+import { requestActor } from "../../../middleware/request-actor";
+import { isReferencedRowViolation } from "../../../lib/db-errors";
+import { fetchCnpjRegistration } from "../cnpj-lookup";
 import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
-} from "../lib/finance";
+} from "../../../lib/finance";
 import {
   cancelPortalInvitationAsService,
   createPortalInvitationAsService,
   enforceClientPortalMembershipBoundary,
   removePortalMemberAsService,
-} from "../lib/portal-service-account";
-import { orgDb } from "../lib/org-db";
+} from "../../../lib/portal-service-account";
+import { orgDb } from "../../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({

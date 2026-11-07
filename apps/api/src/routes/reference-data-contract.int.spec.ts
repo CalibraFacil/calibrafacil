@@ -25,7 +25,7 @@ import { asset, assetType, calibrationMethod } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 import { assetTypesRouter } from "./asset-types";
 import { assetsRouter } from "./assets";
-import { customersRouter } from "./customers";
+import { customersRouter } from "../domains/customers/routes/customers";
 import { methodsRouter } from "../domains/methods/routes/methods";
 import { serviceOrdersRouter } from "./service-orders";
 import { loginAs } from "../../test/integration/setup";

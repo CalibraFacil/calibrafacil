@@ -1,5 +1,5 @@
-import { createRouter } from "../server/router";
-import { uniqueSlug } from "../lib/unique-slug";
+import { createRouter } from "../../../server/router";
+import { uniqueSlug } from "../../../lib/unique-slug";
 import { customerGroupEndpoints } from "@calibra-facil/contracts";
 import {
   asset,
@@ -19,28 +19,25 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
-} from "../middleware/permission";
+} from "../../../middleware/permission";
 import {
   cancelPortalInvitationAsService,
   createClientOrganizationAsServiceOwner,
   createPortalInvitationAsService,
   enforceClientPortalMembershipBoundary,
   removePortalMemberAsService,
-} from "../lib/portal-service-account";
-import {
-  requireGroupRouteId,
-  requireLabGroup,
-} from "../lib/customer-group-access";
+} from "../../../lib/portal-service-account";
+import { requireGroupRouteId, requireLabGroup } from "../customer-group-access";
 import {
   DomainError,
   forbidden,
   invalid,
   notFound,
-} from "../lib/domain-errors";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
-import { withOrg } from "../lib/org-context";
-import { requestActor } from "../middleware/request-actor";
+} from "../../../lib/domain-errors";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
+import { withOrg } from "../../../lib/org-context";
+import { requestActor } from "../../../middleware/request-actor";
 
 // Mirrors the portal's DUE_SOON window (apps/portal calibration-status / portal.ts).
 const DUE_SOON_DAYS = 30;

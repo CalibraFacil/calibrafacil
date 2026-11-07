@@ -57,7 +57,7 @@ import { magicLinkRouter } from "../routes/magic-link";
 import { publicApiRouter } from "../domains/public-api/routes/public-api";
 import { publicApiV2Router } from "../domains/public-api/routes/public-api-v2";
 import { verifyRouter } from "../domains/verify/routes/verify";
-import { customersRouter } from "../routes/customers";
+import { customersRouter } from "../domains/customers/routes/customers";
 import { loginAs } from "../../test/integration/setup";
 import { asApplicationRole } from "../../test/integration/application-role";
 import { truncateAll } from "../../test/integration/db";

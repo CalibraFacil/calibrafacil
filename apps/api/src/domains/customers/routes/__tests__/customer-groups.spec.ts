@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Env } from "../../server/env";
+import type { Env } from "../../../../server/env";
 import { Hono, type Context, type Next } from "hono";
 
 // FIFO queue of canned drizzle results (see portal-overview.spec.ts).
@@ -53,7 +53,7 @@ const cancelPortalInvitationAsService = vi.fn(async () => ({ success: true }));
 const removePortalMemberAsService = vi.fn(async () => ({ success: true }));
 const enforceClientPortalMembershipBoundary = vi.fn(async () => undefined);
 
-vi.mock("../../lib/portal-service-account", () => ({
+vi.mock("../../../../lib/portal-service-account", () => ({
   createClientOrganizationAsServiceOwner,
   createPortalInvitationAsService,
   cancelPortalInvitationAsService,
@@ -62,7 +62,7 @@ vi.mock("../../lib/portal-service-account", () => ({
   PortalServiceAccountError: class extends Error {},
 }));
 
-vi.mock("../../middleware/permission", () => {
+vi.mock("../../../../middleware/permission", () => {
   const labMiddleware = async (c: Context, next: Next) => {
     c.set("session", { user: { id: "lab-user-1" } });
     c.set("member", { organizationId: "lab-1", userId: "lab-user-1" });
@@ -74,7 +74,8 @@ vi.mock("../../middleware/permission", () => {
 });
 
 const { customerGroupsRouter } = await import("../customer-groups");
-const { applyErrorHandling } = await import("../../server/error-handling");
+const { applyErrorHandling } =
+  await import("../../../../server/error-handling");
 
 // Domain failures are thrown and rendered once by the app's error handler.
 const app = new Hono<{ Bindings: Env }>();

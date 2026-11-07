@@ -26,10 +26,10 @@ import {
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { customerGroupsRouter } from "./customer-groups";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedCustomer, seedOrg } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

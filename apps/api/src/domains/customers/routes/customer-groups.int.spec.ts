@@ -8,10 +8,10 @@ import {
   organization,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for customer-groups (redes/grupos). Only
 // the better-auth session is mocked (see test/integration/setup.ts); the real

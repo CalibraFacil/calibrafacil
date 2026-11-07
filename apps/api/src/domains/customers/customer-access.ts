@@ -1,13 +1,13 @@
-import { orgDb } from "./org-db";
+import { orgDb } from "../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { customer, customerGroup } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import {
   loadCustomerActiveCommercialAgreement,
   loadCustomerFinancialSummary,
-} from "./finance";
-import { invalid, notFound } from "./domain-errors";
-import { resolveCustomerRouteId } from "./customer-route-id";
+} from "../../lib/finance";
+import { invalid, notFound } from "../../lib/domain-errors";
+import { resolveCustomerRouteId } from "../../lib/customer-route-id";
 
 /**
  * The laboratory's customer with its financial summary, active agreement and

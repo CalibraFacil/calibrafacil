@@ -24,7 +24,7 @@ import {
   deleteLabCustomer,
   provisionCustomerOrganization,
   updateLabCustomer,
-} from "../../../../lib/customer-writes";
+} from "../../../customers";
 import { withOrg } from "../../../../lib/org-context";
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { organizationOf } from "../../test/integration/organization-of";
+import { organizationOf } from "../../../../test/integration/organization-of";
 import { customersRouter } from "./customers";
 import { db } from "@calibra-facil/db";
 import {
@@ -11,10 +11,10 @@ import {
   organization,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test. Only the better-auth session is mocked
 // (see test/integration/setup.ts); requireLabAuth -> requireOrganization ->

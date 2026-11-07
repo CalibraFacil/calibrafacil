@@ -27,14 +27,14 @@ import {
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { customersRouter } from "./customers";
-import { insertJobs } from "../../test/integration/job-fixtures";
-import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
-import { loginAs } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedCustomer, seedOrg } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
+import { seedAssetOotEvent } from "../../../../test/integration/oot-fixtures";
+import { loginAs } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-vi.mock("../lib/background-jobs", () => ({
+vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
 

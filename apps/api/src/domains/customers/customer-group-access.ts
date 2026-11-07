@@ -1,7 +1,7 @@
 import { customerGroup } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { invalid, notFound } from "./domain-errors";
-import { orgDb } from "./org-db";
+import { invalid, notFound } from "../../lib/domain-errors";
+import { orgDb } from "../../lib/org-db";
 
 /** The numeric id of a customer-group route parameter; throws 400 when unreadable. */
 export function requireGroupRouteId(routeIdentifier: string): number {
