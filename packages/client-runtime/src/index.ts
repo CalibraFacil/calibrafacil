@@ -610,7 +610,7 @@ export function createCloudApiClient(
     access: createAccessApi(rawCloudClient),
     onboarding: createOnboardingApi(rawCloudClient),
     sessions: createSessionsApi(rawCloudClient),
-    finance: createFinanceApi(rawCloudClient),
+    finance: createFinanceApi(endpointTransport, options),
     sso: createSsoApi(rawCloudClient),
     apiKeys: createApiKeysApi(rawCloudClient),
     organizationLifecycle: createOrganizationLifecycleApi(rawCloudClient),

@@ -3,6 +3,7 @@ import { calibrationRequestEndpoints } from "./calibration-requests";
 import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { capaEndpoints } from "./capa";
 import { customerEndpoints } from "./customers";
+import { financeEndpoints } from "./finance";
 import { dashboardEndpoints } from "./dashboard";
 import { competenceEndpoints } from "./competences";
 import { nonConformanceEndpoints } from "./non-conformances";
@@ -20,6 +21,7 @@ export * from "./customers";
 export * from "./capa";
 export * from "./non-conformances";
 export * from "./spc";
+export * from "./finance";
 export * from "./dashboard";
 export * from "./reports";
 export * from "./certificate-numbering";
@@ -41,6 +43,7 @@ export const ENDPOINT_GROUPS = {
   nonConformances: nonConformanceEndpoints,
   capas: capaEndpoints,
   spc: spcEndpoints,
+  finance: financeEndpoints,
   dashboard: dashboardEndpoints,
   reports: reportEndpoints,
   certificateNumbering: certificateNumberingEndpoints,

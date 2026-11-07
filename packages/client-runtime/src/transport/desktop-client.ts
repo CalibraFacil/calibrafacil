@@ -271,7 +271,7 @@ export function createDesktopApiClient(
     sessions: desktopCloudOnlyStubs("sessions", {
       action: "Gerenciamento de sessoes",
     }),
-    finance: desktopCloudOnlyStubs("finance", { action: "Financeiro" }),
+    finance: desktopEndpointStubs("finance"),
     sso: {
       ...desktopCloudOnlyStubs("sso", {
         action: "Configuração SSO",

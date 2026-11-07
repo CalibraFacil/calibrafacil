@@ -39,9 +39,9 @@ function certificateReleaseQueryOptions(calibrationJobId: number) {
     queryKey: ['finance', 'certificate-release', calibrationJobId],
     queryFn: async () => {
       try {
-        return await calibraApi.finance.getCertificateRelease<{
-          data: CertificateReleaseDto
-        }>(calibrationJobId)
+        return await calibraApi.finance.getCertificateRelease({
+          params: { calibrationJobId },
+        })
       } catch (error) {
         // 404 = release row not yet evaluated. Treat as "no badge".
         if (
@@ -107,9 +107,10 @@ function ManualReleaseDialog({
 
   const mutation = useMutation({
     mutationFn: () =>
-      calibraApi.finance.releaseCertificateByException<{
-        data: CertificateReleaseDto
-      }>(calibrationJobId, { reason: trimmed }),
+      calibraApi.finance.releaseCertificateByException({
+        params: { calibrationJobId },
+        body: { reason: trimmed },
+      }),
     onSuccess: () => {
       toast.success('Certificado liberado com exceção')
       queryClient.invalidateQueries({

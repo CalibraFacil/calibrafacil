@@ -1,7 +1,7 @@
 import { createRouter } from "../../server/router";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { orgDb } from "../../lib/org-db";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
 import type { BillingReadinessStatus } from "@calibra-facil/shared";
 import { computeBillingReadinessQueue } from "../../lib/billing-readiness";
 import { sendServiceOrdersToFinance } from "../../lib/finance";
@@ -10,10 +10,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-
-const SendSchema = z.object({
-  serviceOrderIds: z.array(z.number().int().positive()).min(1).max(50),
-});
 
 const READINESS_STATUSES: BillingReadinessStatus[] = [
   "READY",
@@ -26,15 +22,22 @@ function parseStatusFilter(value: string | undefined) {
   return READINESS_STATUSES.find((status) => status === value);
 }
 
+const PREFIX = "/api/finance/billing-readiness";
+
 export const financeBillingReadinessRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
-}>()
-  .get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
+}>();
+mount(
+  financeBillingReadinessRouter,
+  PREFIX,
+  financeEndpoints.listBillingReadiness,
+  withLabPermission({ financial: ["read"] }),
+  async (c, { query }) => {
     const member = c.get("member");
 
-    const statusFilter = parseStatusFilter(c.req.query("status"));
-    const customerIdRaw = c.req.query("customerId");
+    const statusFilter = parseStatusFilter(query.status);
+    const customerIdRaw = query.customerId;
     const customerId = customerIdRaw
       ? Number.parseInt(customerIdRaw, 10)
       : undefined;
@@ -56,31 +59,32 @@ export const financeBillingReadinessRouter = createRouter<{
       ),
     );
 
-    return c.json({
+    return {
       billing: {
         integrationState: queue.integrationState,
       },
       summary: queue.summary,
       data: queue.items,
+    };
+  },
+);
+mount(
+  financeBillingReadinessRouter,
+  PREFIX,
+  financeEndpoints.sendBillingReadiness,
+  withLabPermission({ financial: ["export"] }),
+  async (c, { body: { serviceOrderIds } }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+
+    const results = await sendServiceOrdersToFinance({
+      organizationId: member.organizationId,
+      serviceOrderIds,
+      actorUserId: session.user.id,
+      scope: member,
+      env: c.env,
     });
-  })
-  .post(
-    "/send",
-    ...withLabPermission({ financial: ["export"] }),
-    zValidator("json", SendSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const { serviceOrderIds } = c.req.valid("json");
 
-      const results = await sendServiceOrdersToFinance({
-        organizationId: member.organizationId,
-        serviceOrderIds,
-        actorUserId: session.user.id,
-        scope: member,
-        env: c.env,
-      });
-
-      return c.json({ data: results });
-    },
-  );
+    return { data: results };
+  },
+);

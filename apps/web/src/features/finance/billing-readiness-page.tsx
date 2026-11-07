@@ -203,7 +203,7 @@ export function FinanceBillingReadinessPage({
 
   const sendMutation = useMutation({
     mutationFn: async (serviceOrderIds: number[]) =>
-      calibraApi.finance.sendBillingReadiness({ serviceOrderIds }),
+      calibraApi.finance.sendBillingReadiness({ body: { serviceOrderIds } }),
     onSuccess: () => {
       toast.success('Ordens enviadas para o financeiro')
       for (const key of [

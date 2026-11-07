@@ -76,14 +76,14 @@ export function NewFinanceDocumentPage() {
       if (selectedJobIds.length === 0) {
         throw new Error('Selecione pelo menos uma OS elegível')
       }
-      return calibraApi.finance.createDocument<{
-        data: { id: number; publicId: string }
-      }>({
-        mode,
-        jobIds: selectedJobIds,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
-        notes: notes || undefined,
-        discountCents,
+      return calibraApi.finance.createDocument({
+        body: {
+          mode,
+          jobIds: selectedJobIds,
+          dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+          notes: notes || undefined,
+          discountCents,
+        },
       })
     },
     onSuccess: (result) => {

@@ -5,7 +5,6 @@ import type {
   CustomerAuditLogEntry,
   CustomerDetail as ContractCustomerDetail,
 } from '@calibra-facil/contracts'
-import type { CustomerFinancialTimeline } from '@calibra-facil/shared'
 
 export type CustomerListItem =
   ClientRuntimeCustomersListData['data'][number] & {
@@ -21,10 +20,6 @@ export type CustomersListQueryInput = {
   page: number
   limit: number
   search: string
-}
-
-export type CustomerFinancialTimelineResponse = {
-  data: CustomerFinancialTimeline
 }
 
 // The customer DTOs are the contract's (`@calibra-facil/contracts`,

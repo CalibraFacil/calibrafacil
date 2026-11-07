@@ -1,6 +1,10 @@
 import { createRouter } from "../../server/router";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import {
+  financeEndpoints,
+  type CertificateReleasePolicy,
+} from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
+import { requirePositiveRouteId } from "./ids";
 import { and, eq } from "drizzle-orm";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
@@ -32,59 +36,11 @@ import {
   recomputeCertificateRelease,
   releaseByException,
 } from "../../lib/certificate-release";
-import type { CertificateReleasePolicyMode } from "@calibra-facil/shared";
-
-const JobIdParamSchema = z.object({
-  calibrationJobId: z.coerce.number().int().positive(),
-});
 
 /** Partial unique index: one organization-wide default policy (migration 0029). */
 const ORG_DEFAULT_POLICY_INDEX = "certificate_release_policy_org_default_uidx";
 
-const PolicyIdParamSchema = z.object({
-  id: z.coerce.number().int().positive(),
-});
-
-const POLICY_MODES = [
-  "release_after_invoice",
-  "release_after_first_installment",
-  "release_after_full_payment",
-  "trusted_customer",
-  "manual_only",
-] as const satisfies readonly CertificateReleasePolicyMode[];
-
-const ReleaseByExceptionSchema = z.object({
-  reason: z
-    .string()
-    .min(1, "Reason is required")
-    .max(500)
-    .transform((value) => value.trim())
-    .refine((value) => value.length > 0, "Reason is required"),
-});
-
-const PolicyModeSchema = z.enum(POLICY_MODES);
-
-const CreatePolicySchema = z.object({
-  mode: PolicyModeSchema,
-  customerId: z.number().int().positive().nullable().optional(),
-  commercialAgreementId: z.number().int().positive().nullable().optional(),
-  serviceCategory: z
-    .string()
-    .min(1)
-    .max(200)
-    .nullable()
-    .optional()
-    .transform((value) => (value === undefined ? null : value?.trim() || null)),
-  priority: z.number().int().min(0).max(1000).optional(),
-});
-
-const UpdatePolicySchema = z.object({
-  mode: PolicyModeSchema.optional(),
-  archived: z.boolean().optional(),
-  priority: z.number().int().min(0).max(1000).optional(),
-});
-
-type PolicyMode = (typeof POLICY_MODES)[number];
+type PolicyMode = CertificateReleasePolicy["mode"];
 
 interface PolicyDTO {
   id: number;
@@ -207,143 +163,145 @@ async function loadReleaseDto(o: OrgDb, calibrationJobId: number) {
   };
 }
 
+const RELEASES_PREFIX = "/api/finance/certificate-releases";
+
 export const financeCertificateReleaseRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  // -------------------------------------------------------------------------
-  // GET /api/finance/certificate-releases/:calibrationJobId
-  // -------------------------------------------------------------------------
-  .get(
-    "/:calibrationJobId",
-    ...withLabPermission({ financial: ["read"] }),
-    zValidator("param", JobIdParamSchema),
-    async (c) => {
-      const member = c.get("member");
-      const { calibrationJobId } = c.req.valid("param");
+}>();
 
-      // Not read-only for the record: the release is recomputed (and its audit
-      // row written) in this transaction, so it is a write on the one door.
-      const dto = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const job = await loadJobInOrgScope(ctx.o, {
+// -------------------------------------------------------------------------
+// GET /api/finance/certificate-releases/:calibrationJobId
+// -------------------------------------------------------------------------
+mount(
+  financeCertificateReleaseRouter,
+  RELEASES_PREFIX,
+  financeEndpoints.getCertificateRelease,
+  withLabPermission({ financial: ["read"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const calibrationJobId = requirePositiveRouteId(params.calibrationJobId);
+
+    // Not read-only for the record: the release is recomputed (and its audit
+    // row written) in this transaction, so it is a write on the one door.
+    const dto = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const job = await loadJobInOrgScope(ctx.o, {
+          organizationId: member.organizationId,
+          calibrationJobId,
+          scope: member,
+        });
+        if (!job) {
+          throw notFound("certificate_not_found", "Certificado não encontrado");
+        }
+
+        // Recompute defensively so callers see fresh state without waiting
+        // for the next reconciliation poll. Recompute is read-only with
+        // respect to calibration_job.status and issued_certificate_snapshot.
+        await recomputeCertificateRelease(
+          {
             organizationId: member.organizationId,
             calibrationJobId,
-            scope: member,
-          });
-          if (!job) {
-            throw notFound(
-              "certificate_not_found",
-              "Certificado não encontrado",
-            );
-          }
+            source: "system_reconciliation",
+            actorUserId: null,
+          },
+          ctx.o,
+        );
 
-          // Recompute defensively so callers see fresh state without waiting
-          // for the next reconciliation poll. Recompute is read-only with
-          // respect to calibration_job.status and issued_certificate_snapshot.
-          await recomputeCertificateRelease(
-            {
-              organizationId: member.organizationId,
-              calibrationJobId,
-              source: "system_reconciliation",
-              actorUserId: null,
-            },
-            ctx.o,
+        const loaded = await loadReleaseDto(ctx.o, calibrationJobId);
+        if (!loaded) {
+          throw notFound(
+            "release_not_calculated",
+            "Liberação ainda não calculada",
           );
+        }
+        return loaded;
+      },
+    );
+    return { data: dto };
+  },
+);
 
-          const loaded = await loadReleaseDto(ctx.o, calibrationJobId);
-          if (!loaded) {
-            throw notFound(
-              "release_not_calculated",
-              "Liberação ainda não calculada",
-            );
-          }
-          return loaded;
-        },
-      );
-      return c.json({ data: dto });
-    },
-  )
-  // -------------------------------------------------------------------------
-  // POST /api/finance/certificate-releases/:calibrationJobId/release-by-exception
-  // -------------------------------------------------------------------------
-  .post(
-    "/:calibrationJobId/release-by-exception",
-    ...withLabPermission({ financial: ["export"] }),
-    zValidator("param", JobIdParamSchema),
-    zValidator("json", ReleaseByExceptionSchema),
-    async (c) => {
-      const member = c.get("member");
-      const { calibrationJobId } = c.req.valid("param");
-      const { reason } = c.req.valid("json");
+// -------------------------------------------------------------------------
+// POST /api/finance/certificate-releases/:calibrationJobId/release-by-exception
+// -------------------------------------------------------------------------
+mount(
+  financeCertificateReleaseRouter,
+  RELEASES_PREFIX,
+  financeEndpoints.releaseCertificateByException,
+  withLabPermission({ financial: ["export"] }),
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const calibrationJobId = requirePositiveRouteId(params.calibrationJobId);
+    const { reason } = body;
 
-      const dto = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const job = await loadJobInOrgScope(ctx.o, {
+    const dto = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const job = await loadJobInOrgScope(ctx.o, {
+          organizationId: member.organizationId,
+          calibrationJobId,
+          scope: member,
+        });
+        if (!job) {
+          throw notFound("certificate_not_found", "Certificado não encontrado");
+        }
+
+        const result = await releaseByException(
+          {
             organizationId: member.organizationId,
             calibrationJobId,
-            scope: member,
+            actorUserId: ctx.actor.userId,
+            reason,
+          },
+          ctx.o,
+        );
+
+        if ("code" in result) {
+          if (result.code === "REASON_REQUIRED") {
+            throw invalid("release_reason_required", "Motivo é obrigatório");
+          }
+          if (result.code === "NOT_APPROVED") {
+            throw conflict(
+              "release_certificate_not_approved",
+              "Certificado ainda não aprovado",
+            );
+          }
+          throw notFound("certificate_not_found", "Certificado não encontrado");
+        }
+
+        const loaded = await loadReleaseDto(ctx.o, calibrationJobId);
+        if (!loaded) {
+          throw new DomainError({
+            code: "release_unavailable",
+            status: 500,
+            message: "Liberação não disponível",
           });
-          if (!job) {
-            throw notFound(
-              "certificate_not_found",
-              "Certificado não encontrado",
-            );
-          }
+        }
+        return loaded;
+      },
+    );
 
-          const result = await releaseByException(
-            {
-              organizationId: member.organizationId,
-              calibrationJobId,
-              actorUserId: ctx.actor.userId,
-              reason,
-            },
-            ctx.o,
-          );
-
-          if ("code" in result) {
-            if (result.code === "REASON_REQUIRED") {
-              throw invalid("release_reason_required", "Motivo é obrigatório");
-            }
-            if (result.code === "NOT_APPROVED") {
-              throw conflict(
-                "release_certificate_not_approved",
-                "Certificado ainda não aprovado",
-              );
-            }
-            throw notFound(
-              "certificate_not_found",
-              "Certificado não encontrado",
-            );
-          }
-
-          const loaded = await loadReleaseDto(ctx.o, calibrationJobId);
-          if (!loaded) {
-            throw new DomainError({
-              code: "release_unavailable",
-              status: 500,
-              message: "Liberação não disponível",
-            });
-          }
-          return loaded;
-        },
-      );
-
-      return c.json({ data: dto });
-    },
-  );
-
+    return { data: dto };
+  },
+);
 // ---------------------------------------------------------------------------
 // Settings router for org-level policy CRUD. Mounted under /api/settings.
 // ---------------------------------------------------------------------------
 
+const POLICIES_PREFIX = "/api/finance/certificate-release-policies";
+
 export const settingsCertificateReleasePolicyRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  .get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
+}>();
+mount(
+  settingsCertificateReleasePolicyRouter,
+  POLICIES_PREFIX,
+  financeEndpoints.listCertificateReleasePolicies,
+  withLabPermission({ financial: ["read"] }),
+  async (c) => {
     const member = c.get("member");
     const rows = await orgDb(member.organizationId).transaction((o) =>
       o
@@ -384,154 +342,150 @@ export const settingsCertificateReleasePolicyRouter = createRouter<{
       updatedAt: row.updatedAt.toISOString(),
     }));
 
-    return c.json({ data });
-  })
-  .post(
-    "/",
-    ...withLabPermission({ financial: ["contract_create"] }),
-    zValidator("json", CreatePolicySchema),
-    async (c) => {
-      const member = c.get("member");
-      const body = c.req.valid("json");
+    return { data };
+  },
+);
+mount(
+  settingsCertificateReleasePolicyRouter,
+  POLICIES_PREFIX,
+  financeEndpoints.createCertificateReleasePolicy,
+  withLabPermission({ financial: ["contract_create"] }),
+  async (c, { body }) => {
+    const member = c.get("member");
 
-      // The partial unique index is the authority: a second org-wide default
-      // (customer, agreement and category all null) violates it, also when two
-      // requests race. Map that one index to 409 instead of a 500. The violation
-      // aborts the transaction, so it is caught outside it.
-      const created = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          // Restrict customer / agreement override creation to entities inside
-          // the caller's organization (no cross-tenant leak via FK fishing).
-          if (body.customerId != null) {
-            const [matched] = await ctx.o
-              .select({ id: customer.id })
-              .from(customer)
-              .where(
-                and(
-                  eq(customer.id, body.customerId),
-                  eq(customer.labOrganizationId, member.organizationId),
-                ),
-              )
-              .limit(1);
-            if (!matched) {
-              throw invalid("rule_customer_invalid", "Cliente inválido");
-            }
-          }
-
-          // Same cross-tenant guard for the agreement the override is pinned to.
-          if (
-            body.commercialAgreementId != null &&
-            !(await agreementBelongsToOrganization(
-              member.organizationId,
-              body.commercialAgreementId,
-              ctx.o,
-            ))
-          ) {
-            throw invalid("rule_agreement_invalid", "Contrato inválido");
-          }
-
-          const [row] = await ctx.o
-            .insert(certificateReleasePolicy)
-            .values({
-              organizationId: member.organizationId,
-              mode: body.mode,
-              customerId: body.customerId ?? null,
-              commercialAgreementId: body.commercialAgreementId ?? null,
-              serviceCategory: body.serviceCategory ?? null,
-              priority: body.priority ?? 0,
-              createdByUserId: ctx.actor.userId,
-            })
-            .returning();
-          if (!row) throw new Error("Falha ao criar política");
-          return row;
-        },
-      ).catch((error: unknown) => {
-        if (isUniqueViolationOf(error, ORG_DEFAULT_POLICY_INDEX)) {
-          throw conflict(
-            "release_policy_default_exists",
-            "Já existe uma política padrão para a organização",
-          );
-        }
-        throw error;
-      });
-
-      return c.json({
-        data: {
-          id: created.id,
-          mode: created.mode,
-          customerId: created.customerId,
-          commercialAgreementId: created.commercialAgreementId,
-          serviceCategory: created.serviceCategory,
-          priority: created.priority,
-          scope: policyScope(created),
-          archivedAt: created.archivedAt
-            ? created.archivedAt.toISOString()
-            : null,
-          createdAt: created.createdAt.toISOString(),
-          updatedAt: created.updatedAt.toISOString(),
-        },
-      });
-    },
-  )
-  .put(
-    "/:id",
-    ...withLabPermission({ financial: ["contract_update"] }),
-    zValidator("param", PolicyIdParamSchema),
-    zValidator("json", UpdatePolicySchema),
-    async (c) => {
-      const member = c.get("member");
-      const { id } = c.req.valid("param");
-      const body = c.req.valid("json");
-
-      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
-        const [existing] = await ctx.o
-          .select({
-            id: certificateReleasePolicy.id,
-            customerId: certificateReleasePolicy.customerId,
-            commercialAgreementId:
-              certificateReleasePolicy.commercialAgreementId,
-            serviceCategory: certificateReleasePolicy.serviceCategory,
-          })
-          .from(certificateReleasePolicy)
-          .where(
-            and(
-              eq(certificateReleasePolicy.id, id),
-              eq(
-                certificateReleasePolicy.organizationId,
-                member.organizationId,
+    // The partial unique index is the authority: a second org-wide default
+    // (customer, agreement and category all null) violates it, also when two
+    // requests race. Map that one index to 409 instead of a 500. The violation
+    // aborts the transaction, so it is caught outside it.
+    const created = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        // Restrict customer / agreement override creation to entities inside
+        // the caller's organization (no cross-tenant leak via FK fishing).
+        if (body.customerId != null) {
+          const [matched] = await ctx.o
+            .select({ id: customer.id })
+            .from(customer)
+            .where(
+              and(
+                eq(customer.id, body.customerId),
+                eq(customer.labOrganizationId, member.organizationId),
               ),
-            ),
-          )
-          .limit(1);
-        if (!existing) {
-          throw notFound("release_policy_not_found", "Política não encontrada");
+            )
+            .limit(1);
+          if (!matched) {
+            throw invalid("rule_customer_invalid", "Cliente inválido");
+          }
         }
 
-        const isOrgDefault =
-          existing.customerId === null &&
-          existing.commercialAgreementId === null &&
-          existing.serviceCategory === null;
-        if (isOrgDefault && body.archived === true) {
-          throw invalid(
-            "release_policy_default_not_archivable",
-            "Política padrão da organização não pode ser arquivada",
-          );
+        // Same cross-tenant guard for the agreement the override is pinned to.
+        if (
+          body.commercialAgreementId != null &&
+          !(await agreementBelongsToOrganization(
+            member.organizationId,
+            body.commercialAgreementId,
+            ctx.o,
+          ))
+        ) {
+          throw invalid("rule_agreement_invalid", "Contrato inválido");
         }
 
-        await ctx.o
-          .update(certificateReleasePolicy)
-          .set({
-            ...(body.mode !== undefined ? { mode: body.mode } : {}),
-            ...(body.priority !== undefined ? { priority: body.priority } : {}),
-            ...(body.archived === true ? { archivedAt: new Date() } : {}),
-            ...(body.archived === false ? { archivedAt: null } : {}),
-            updatedAt: new Date(),
+        const [row] = await ctx.o
+          .insert(certificateReleasePolicy)
+          .values({
+            organizationId: member.organizationId,
+            mode: body.mode,
+            customerId: body.customerId ?? null,
+            commercialAgreementId: body.commercialAgreementId ?? null,
+            serviceCategory: body.serviceCategory ?? null,
+            priority: body.priority ?? 0,
+            createdByUserId: ctx.actor.userId,
           })
-          .where(eq(certificateReleasePolicy.id, id));
-      });
+          .returning();
+        if (!row) throw new Error("Falha ao criar política");
+        return row;
+      },
+    ).catch((error: unknown) => {
+      if (isUniqueViolationOf(error, ORG_DEFAULT_POLICY_INDEX)) {
+        throw conflict(
+          "release_policy_default_exists",
+          "Já existe uma política padrão para a organização",
+        );
+      }
+      throw error;
+    });
 
-      return c.json({ data: { id } });
-    },
-  );
+    return {
+      data: {
+        id: created.id,
+        mode: created.mode,
+        customerId: created.customerId,
+        commercialAgreementId: created.commercialAgreementId,
+        serviceCategory: created.serviceCategory,
+        priority: created.priority,
+        scope: policyScope(created),
+        archivedAt: created.archivedAt
+          ? created.archivedAt.toISOString()
+          : null,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString(),
+      },
+    };
+  },
+);
+mount(
+  settingsCertificateReleasePolicyRouter,
+  POLICIES_PREFIX,
+  financeEndpoints.updateCertificateReleasePolicy,
+  withLabPermission({ financial: ["contract_update"] }),
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const id = requirePositiveRouteId(params.id);
+
+    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+      const [existing] = await ctx.o
+        .select({
+          id: certificateReleasePolicy.id,
+          customerId: certificateReleasePolicy.customerId,
+          commercialAgreementId: certificateReleasePolicy.commercialAgreementId,
+          serviceCategory: certificateReleasePolicy.serviceCategory,
+        })
+        .from(certificateReleasePolicy)
+        .where(
+          and(
+            eq(certificateReleasePolicy.id, id),
+            eq(certificateReleasePolicy.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        throw notFound("release_policy_not_found", "Política não encontrada");
+      }
+
+      const isOrgDefault =
+        existing.customerId === null &&
+        existing.commercialAgreementId === null &&
+        existing.serviceCategory === null;
+      if (isOrgDefault && body.archived === true) {
+        throw invalid(
+          "release_policy_default_not_archivable",
+          "Política padrão da organização não pode ser arquivada",
+        );
+      }
+
+      await ctx.o
+        .update(certificateReleasePolicy)
+        .set({
+          ...(body.mode !== undefined ? { mode: body.mode } : {}),
+          ...(body.priority !== undefined ? { priority: body.priority } : {}),
+          ...(body.archived === true ? { archivedAt: new Date() } : {}),
+          ...(body.archived === false ? { archivedAt: null } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(certificateReleasePolicy.id, id));
+    });
+
+    return { data: { id } };
+  },
+);

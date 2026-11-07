@@ -1,4 +1,6 @@
 import { createRouter } from "../../server/router";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { orgDb } from "../../lib/org-db";
 import {
   withLabPermission,
@@ -6,18 +8,27 @@ import {
 } from "../../middleware/permission";
 import { buildMarginDashboards } from "../../lib/margin-dashboards";
 
+const PREFIX = "/api/finance/margin-dashboards";
+
 export const financeMarginDashboardsRouter = createRouter<{
   Variables: AuthVariables;
-}>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
-  const member = c.get("member");
-  const envelope = await orgDb(member.organizationId).transaction((o) =>
-    buildMarginDashboards(
-      {
-        organizationId: member.organizationId,
-        scope: member,
-      },
-      o,
-    ),
-  );
-  return c.json(envelope);
-});
+}>();
+mount(
+  financeMarginDashboardsRouter,
+  PREFIX,
+  financeEndpoints.getMarginDashboards,
+  withLabPermission({ financial: ["read"] }),
+  async (c) => {
+    const member = c.get("member");
+    const envelope = await orgDb(member.organizationId).transaction((o) =>
+      buildMarginDashboards(
+        {
+          organizationId: member.organizationId,
+          scope: member,
+        },
+        o,
+      ),
+    );
+    return envelope;
+  },
+);

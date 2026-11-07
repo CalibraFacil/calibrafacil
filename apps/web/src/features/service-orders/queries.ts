@@ -17,7 +17,6 @@ import {
   type NewServiceOrderAssetsData,
   type NewServiceOrderCustomersData,
   type ServiceOrderDetail,
-  type ServiceOrderFinancialStatusResponse,
   type ServiceOrdersListData,
   type ServiceOrdersListQueryInput,
 } from './types'
@@ -97,9 +96,9 @@ export function serviceOrderFinancialStatusQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['service-order', id, 'financial-status'],
     queryFn: () =>
-      calibraApi.finance.getServiceOrderStatus<ServiceOrderFinancialStatusResponse>(
-        id,
-      ),
+      calibraApi.finance.getServiceOrderStatus({
+        params: { serviceOrderId: id },
+      }),
   })
 }
 

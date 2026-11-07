@@ -56,26 +56,28 @@ export function NewFinanceContractPage() {
       if (!customerId) {
         throw new Error('Selecione um cliente para o contrato')
       }
-      return calibraApi.finance.createContract<{ data: { id: number } }>({
-        customerId: Number(customerId),
-        title,
-        agreementCode: agreementCode || undefined,
-        currency,
-        effectiveFrom: new Date(effectiveFrom).toISOString(),
-        effectiveTo: effectiveTo
-          ? new Date(effectiveTo).toISOString()
-          : undefined,
-        defaultPaymentTermDays: Number(defaultPaymentTermDays) || 28,
-        notes: notes || undefined,
-        unitIds: [],
-        serviceTerms: serviceTerms
-          .filter((term) => term.serviceId)
-          .map((term) => ({
-            serviceId: Number(term.serviceId),
-            priceCents: term.priceCents,
-            currency: FINANCE_CURRENCY,
-            isActive: true,
-          })),
+      return calibraApi.finance.createContract({
+        body: {
+          customerId: Number(customerId),
+          title,
+          agreementCode: agreementCode || undefined,
+          currency,
+          effectiveFrom: new Date(effectiveFrom).toISOString(),
+          effectiveTo: effectiveTo
+            ? new Date(effectiveTo).toISOString()
+            : undefined,
+          defaultPaymentTermDays: Number(defaultPaymentTermDays) || 28,
+          notes: notes || undefined,
+          unitIds: [],
+          serviceTerms: serviceTerms
+            .filter((term) => term.serviceId)
+            .map((term) => ({
+              serviceId: Number(term.serviceId),
+              priceCents: term.priceCents,
+              currency: FINANCE_CURRENCY,
+              isActive: true,
+            })),
+        },
       })
     },
     onSuccess: (result) => {

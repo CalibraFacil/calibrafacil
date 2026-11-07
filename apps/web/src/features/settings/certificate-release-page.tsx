@@ -80,10 +80,7 @@ const SCOPE_LABEL: Record<Scope, string> = {
 function listPoliciesQueryOptions() {
   return queryOptions<{ data: PolicyDTO[] }>({
     queryKey: ['finance', 'certificate-release-policies'],
-    queryFn: () =>
-      calibraApi.finance.listCertificateReleasePolicies<{
-        data: PolicyDTO[]
-      }>(),
+    queryFn: () => calibraApi.finance.listCertificateReleasePolicies(),
   })
 }
 
@@ -97,9 +94,9 @@ export function CertificateReleasePolicyPage() {
       mode?: CertificateReleasePolicyMode
       archived?: boolean
     }) =>
-      calibraApi.finance.updateCertificateReleasePolicy(input.id, {
-        mode: input.mode,
-        archived: input.archived,
+      calibraApi.finance.updateCertificateReleasePolicy({
+        params: { id: input.id },
+        body: { mode: input.mode, archived: input.archived },
       }),
     onSuccess: () => {
       toast.success('Política atualizada')
@@ -120,7 +117,7 @@ export function CertificateReleasePolicyPage() {
       customerId?: number | null
       commercialAgreementId?: number | null
       serviceCategory?: string | null
-    }) => calibraApi.finance.createCertificateReleasePolicy(input),
+    }) => calibraApi.finance.createCertificateReleasePolicy({ body: input }),
     onSuccess: () => {
       toast.success('Exceção criada')
       queryClient.invalidateQueries({

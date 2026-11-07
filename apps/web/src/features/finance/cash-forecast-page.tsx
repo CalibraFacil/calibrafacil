@@ -1,3 +1,4 @@
+import type { CashForecastEnvelope } from '@calibra-facil/contracts'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { AlertCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -39,25 +40,10 @@ const BUCKET_LABEL: Record<Bucket, string> = {
   IN_90_DAYS: 'Em 90 dias',
 }
 
-interface BucketSummary {
-  confirmedCents: number
-  projectedCents: number
-  confirmedCount: number
-}
-
-interface CashForecastEnvelope {
-  buckets: Record<Bucket | 'OVERDUE', BucketSummary>
-  totals: {
-    confirmedCents: number
-    projectedCents: number
-    overdueCents: number
-  }
-}
-
 function cashForecastQueryOptions() {
   return queryOptions<CashForecastEnvelope>({
     queryKey: ['finance', 'cash-forecast'],
-    queryFn: () => calibraApi.finance.getCashForecast<CashForecastEnvelope>(),
+    queryFn: () => calibraApi.finance.getCashForecast(),
   })
 }
 

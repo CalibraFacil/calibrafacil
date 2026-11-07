@@ -40,7 +40,6 @@ import {
   useActivateContractMutation,
   useCancelContractMutation,
 } from '@/features/finance/mutations'
-import type { FinanceContractDetails } from '@/features/finance/types'
 
 const QUALIFICATION_LABELS: Record<string, string> = {
   qualified: 'Qualificado',
@@ -51,9 +50,7 @@ const QUALIFICATION_LABELS: Record<string, string> = {
 export function FinanceContractDetailsPage({ id }: { id: string }) {
   const [cancelOpen, setCancelOpen] = useState(false)
 
-  const contractQuery = useFinanceContractDetailData<{
-    data: FinanceContractDetails
-  }>(id)
+  const contractQuery = useFinanceContractDetailData(id)
   const serviceOptionsQuery = useFinanceContractServiceOptionsData()
 
   const activateMutation = useActivateContractMutation()

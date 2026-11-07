@@ -1,6 +1,12 @@
 import { createRouter } from "../../server/router";
+import {
+  financeEndpoints,
+  CreateAgreementSchema,
+  UpdateAgreementSchema,
+} from "@calibra-facil/contracts";
+import { mount } from "../../lib/endpoint-mount";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import type { z } from "zod";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { COMMERCIAL_AGREEMENT_MACHINE } from "@calibra-facil/schemas/machines";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -10,7 +16,6 @@ import {
   commercialAgreementUnitScope,
   customer,
 } from "@calibra-facil/db/schema";
-import { COMMERCIAL_AGREEMENT_STATUSES } from "@calibra-facil/shared";
 import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
@@ -27,40 +32,6 @@ import { invalid, notFound } from "../../lib/domain-errors";
 import { withOrg } from "../../lib/org-context";
 import { orgDb } from "../../lib/org-db";
 import { requestActor } from "../../middleware/request-actor";
-
-const AgreementServiceTermSchema = z.object({
-  id: z.number().int().optional(),
-  serviceId: z.number().int().positive(),
-  unitId: z.number().int().positive().nullable().optional(),
-  priceCents: z.number().int().nonnegative(),
-  currency: z.string().trim().min(3).max(8).default("BRL"),
-  tatDays: z.number().int().nonnegative().nullable().optional(),
-  isActive: z.boolean().default(true),
-});
-
-const CreateAgreementSchema = z.object({
-  customerId: z.number().int().positive(),
-  title: z.string().trim().min(3).max(120),
-  agreementCode: z.string().trim().max(60).optional(),
-  externalReference: z.string().trim().max(120).optional(),
-  currency: z.string().trim().min(3).max(8).default("BRL"),
-  effectiveFrom: z.string().datetime(),
-  effectiveTo: z.string().datetime().optional(),
-  defaultPaymentTermDays: z.number().int().min(1).max(180).default(28),
-  notes: z.string().trim().max(5000).optional(),
-  unitIds: z.array(z.number().int().positive()).default([]),
-  serviceTerms: z.array(AgreementServiceTermSchema).min(1),
-});
-
-const UpdateAgreementSchema = CreateAgreementSchema.extend({
-  status: z.enum(COMMERCIAL_AGREEMENT_STATUSES).optional(),
-});
-
-const ListContractsQuerySchema = z.object({
-  query: z.string().trim().optional(),
-  customerId: z.coerce.number().int().positive().optional(),
-  status: z.enum(COMMERCIAL_AGREEMENT_STATUSES).optional(),
-});
 
 async function customerBelongsToOrganization(
   executor: OrgDb,
@@ -259,362 +230,374 @@ async function requireOwnedCustomer(
   return ownedCustomer;
 }
 
+const PREFIX = "/api/finance/contracts";
+
 export const financeContractsRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  .get(
-    "/",
-    ...withLabPermission({ financial: ["read"] }),
-    zValidator("query", ListContractsQuerySchema),
-    async (c) => {
-      const member = c.get("member");
-      const query = c.req.valid("query");
-      const conditions = [
-        eq(commercialAgreement.organizationId, member.organizationId),
-        eq(customer.labOrganizationId, member.organizationId),
-      ];
+}>();
+mount(
+  financeContractsRouter,
+  PREFIX,
+  financeEndpoints.listContracts,
+  withLabPermission({ financial: ["read"] }),
+  async (c, { query }) => {
+    const member = c.get("member");
+    const conditions = [
+      eq(commercialAgreement.organizationId, member.organizationId),
+      eq(customer.labOrganizationId, member.organizationId),
+    ];
 
-      if (query.customerId) {
-        conditions.push(eq(commercialAgreement.customerId, query.customerId));
-      }
+    if (query.customerId) {
+      conditions.push(eq(commercialAgreement.customerId, query.customerId));
+    }
 
-      if (query.status) {
-        conditions.push(eq(commercialAgreement.status, query.status));
-      }
+    if (query.status) {
+      conditions.push(eq(commercialAgreement.status, query.status));
+    }
 
-      if (query.query) {
-        conditions.push(
-          ilike(
-            sql<string>`coalesce(${commercialAgreement.title}, '') || ' ' || coalesce(${customer.name}, '') || ' ' || coalesce(${commercialAgreement.agreementCode}, '')`,
-            `%${query.query}%`,
-          ),
-        );
-      }
-
-      const agreements = await orgDb(member.organizationId).transaction((o) =>
-        o
-          .select({
-            id: commercialAgreement.id,
-            customerId: commercialAgreement.customerId,
-            customerName: customer.name,
-            status: commercialAgreement.status,
-            agreementCode: commercialAgreement.agreementCode,
-            title: commercialAgreement.title,
-            currency: commercialAgreement.currency,
-            effectiveFrom: commercialAgreement.effectiveFrom,
-            effectiveTo: commercialAgreement.effectiveTo,
-            defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
-            updatedAt: commercialAgreement.updatedAt,
-          })
-          .from(commercialAgreement)
-          .innerJoin(customer, eq(commercialAgreement.customerId, customer.id))
-          .where(and(...conditions))
-          .orderBy(desc(commercialAgreement.updatedAt)),
+    if (query.query) {
+      conditions.push(
+        ilike(
+          sql<string>`coalesce(${commercialAgreement.title}, '') || ' ' || coalesce(${customer.name}, '') || ' ' || coalesce(${commercialAgreement.agreementCode}, '')`,
+          `%${query.query}%`,
+        ),
       );
+    }
 
-      return c.json({ data: agreements });
-    },
-  )
-  .post(
-    "/",
-    ...withLabPermission({ financial: ["contract_create"] }),
-    zValidator("json", CreateAgreementSchema),
-    async (c) => {
-      const member = c.get("member");
-      const input = c.req.valid("json");
+    const agreements = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select({
+          id: commercialAgreement.id,
+          customerId: commercialAgreement.customerId,
+          customerName: customer.name,
+          status: commercialAgreement.status,
+          agreementCode: commercialAgreement.agreementCode,
+          title: commercialAgreement.title,
+          currency: commercialAgreement.currency,
+          effectiveFrom: commercialAgreement.effectiveFrom,
+          effectiveTo: commercialAgreement.effectiveTo,
+          defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
+          updatedAt: commercialAgreement.updatedAt,
+        })
+        .from(commercialAgreement)
+        .innerJoin(customer, eq(commercialAgreement.customerId, customer.id))
+        .where(and(...conditions))
+        .orderBy(desc(commercialAgreement.updatedAt)),
+    );
 
-      const agreement = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          await requireOwnedCustomer(
-            ctx.o,
-            member.organizationId,
-            input.customerId,
-          );
-          await assertAgreementRefsInOrganization(
-            ctx.o,
-            member.organizationId,
-            input,
-          );
+    return { data: agreements };
+  },
+);
+mount(
+  financeContractsRouter,
+  PREFIX,
+  financeEndpoints.createContract,
+  withLabPermission({ financial: ["contract_create"] }),
+  async (c, { body: input }) => {
+    const member = c.get("member");
 
-          const [created] = await ctx.o
-            .insert(commercialAgreement)
-            .values({
-              organizationId: member.organizationId,
-              customerId: input.customerId,
-              status: "DRAFT",
-              agreementCode: input.agreementCode?.trim() || null,
-              title: input.title,
-              externalReference: input.externalReference?.trim() || null,
-              currency: input.currency,
-              effectiveFrom: new Date(input.effectiveFrom),
-              effectiveTo: input.effectiveTo
-                ? new Date(input.effectiveTo)
-                : null,
-              defaultPaymentTermDays: input.defaultPaymentTermDays,
-              notes: input.notes?.trim() || null,
-              createdBy: ctx.actor.userId,
-              updatedBy: ctx.actor.userId,
-            })
-            .returning();
+    const agreement = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        await requireOwnedCustomer(
+          ctx.o,
+          member.organizationId,
+          input.customerId,
+        );
+        await assertAgreementRefsInOrganization(
+          ctx.o,
+          member.organizationId,
+          input,
+        );
 
-          if (!created) {
-            throw new Error("Falha ao criar contrato comercial");
-          }
+        const [created] = await ctx.o
+          .insert(commercialAgreement)
+          .values({
+            organizationId: member.organizationId,
+            customerId: input.customerId,
+            status: "DRAFT",
+            agreementCode: input.agreementCode?.trim() || null,
+            title: input.title,
+            externalReference: input.externalReference?.trim() || null,
+            currency: input.currency,
+            effectiveFrom: new Date(input.effectiveFrom),
+            effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
+            defaultPaymentTermDays: input.defaultPaymentTermDays,
+            notes: input.notes?.trim() || null,
+            createdBy: ctx.actor.userId,
+            updatedBy: ctx.actor.userId,
+          })
+          .returning();
 
-          if (input.unitIds.length > 0) {
-            await ctx.o.insert(commercialAgreementUnitScope).values(
-              input.unitIds.map((unitId) => ({
-                organizationId: member.organizationId,
-                agreementId: created.id,
-                unitId,
-              })),
-            );
-          }
+        if (!created) {
+          throw new Error("Falha ao criar contrato comercial");
+        }
 
-          await ctx.o.insert(commercialAgreementServiceTerm).values(
-            input.serviceTerms.map((term) => ({
+        if (input.unitIds.length > 0) {
+          await ctx.o.insert(commercialAgreementUnitScope).values(
+            input.unitIds.map((unitId) => ({
               organizationId: member.organizationId,
               agreementId: created.id,
-              serviceId: term.serviceId,
-              unitId: term.unitId ?? null,
-              priceCents: term.priceCents,
-              currency: term.currency,
-              tatDays: term.tatDays ?? null,
-              isActive: term.isActive,
+              unitId,
             })),
           );
+        }
 
-          return created;
-        },
-      );
+        await ctx.o.insert(commercialAgreementServiceTerm).values(
+          input.serviceTerms.map((term) => ({
+            organizationId: member.organizationId,
+            agreementId: created.id,
+            serviceId: term.serviceId,
+            unitId: term.unitId ?? null,
+            priceCents: term.priceCents,
+            currency: term.currency,
+            tatDays: term.tatDays ?? null,
+            isActive: term.isActive,
+          })),
+        );
 
-      return c.json({ data: agreement }, 201);
-    },
-  )
-  .get("/:id", ...withLabPermission({ financial: ["read"] }), async (c) => {
+        return created;
+      },
+    );
+
+    return { data: agreement };
+  },
+);
+mount(
+  financeContractsRouter,
+  PREFIX,
+  financeEndpoints.getContract,
+  withLabPermission({ financial: ["read"] }),
+  async (c, { params }) => {
     const member = c.get("member");
-    const id = requireAgreementRouteId(c.req.param("id"));
+    const id = requireAgreementRouteId(params.id);
 
     const agreement = await orgDb(member.organizationId).transaction((o) =>
       requireLabAgreement(o, member.organizationId, id),
     );
 
-    return c.json({ data: agreement });
-  })
-  .put(
-    "/:id",
-    ...withLabPermission({ financial: ["contract_update"] }),
-    zValidator("json", UpdateAgreementSchema),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireAgreementRouteId(c.req.param("id"));
-      const input = c.req.valid("json");
+    return { data: agreement };
+  },
+);
+// A plain route: nothing in the frontends calls the contract update.
+financeContractsRouter.put(
+  "/:id",
+  ...withLabPermission({ financial: ["contract_update"] }),
+  zValidator("json", UpdateAgreementSchema),
+  async (c) => {
+    const member = c.get("member");
+    const id = requireAgreementRouteId(c.req.param("id"));
+    const input = c.req.valid("json");
 
-      const agreement = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabAgreement(
-            ctx.o,
-            member.organizationId,
-            id,
-          );
-          await requireOwnedCustomer(
-            ctx.o,
-            member.organizationId,
-            input.customerId,
-          );
-          await assertAgreementRefsInOrganization(
-            ctx.o,
-            member.organizationId,
-            input,
-          );
+    const agreement = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabAgreement(
+          ctx.o,
+          member.organizationId,
+          id,
+        );
+        await requireOwnedCustomer(
+          ctx.o,
+          member.organizationId,
+          input.customerId,
+        );
+        await assertAgreementRefsInOrganization(
+          ctx.o,
+          member.organizationId,
+          input,
+        );
 
-          const [updated] = await ctx.o
-            .update(commercialAgreement)
-            .set({
-              customerId: input.customerId,
-              status:
-                input.status && input.status !== existing.status
-                  ? COMMERCIAL_AGREEMENT_MACHINE.requireTransition(
-                      existing.status,
-                      "set_status",
-                      input.status,
-                    )
-                  : existing.status,
-              agreementCode: input.agreementCode?.trim() || null,
-              title: input.title,
-              externalReference: input.externalReference?.trim() || null,
-              currency: input.currency,
-              effectiveFrom: new Date(input.effectiveFrom),
-              effectiveTo: input.effectiveTo
-                ? new Date(input.effectiveTo)
-                : null,
-              defaultPaymentTermDays: input.defaultPaymentTermDays,
-              notes: input.notes?.trim() || null,
-              updatedBy: ctx.actor.userId,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(commercialAgreement.id, id),
-                eq(commercialAgreement.organizationId, member.organizationId),
-              ),
-            )
-            .returning();
+        const [updated] = await ctx.o
+          .update(commercialAgreement)
+          .set({
+            customerId: input.customerId,
+            status:
+              input.status && input.status !== existing.status
+                ? COMMERCIAL_AGREEMENT_MACHINE.requireTransition(
+                    existing.status,
+                    "set_status",
+                    input.status,
+                  )
+                : existing.status,
+            agreementCode: input.agreementCode?.trim() || null,
+            title: input.title,
+            externalReference: input.externalReference?.trim() || null,
+            currency: input.currency,
+            effectiveFrom: new Date(input.effectiveFrom),
+            effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
+            defaultPaymentTermDays: input.defaultPaymentTermDays,
+            notes: input.notes?.trim() || null,
+            updatedBy: ctx.actor.userId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(commercialAgreement.id, id),
+              eq(commercialAgreement.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
 
-          await ctx.o
-            .delete(commercialAgreementUnitScope)
-            .where(eq(commercialAgreementUnitScope.agreementId, id));
-          await ctx.o
-            .delete(commercialAgreementServiceTerm)
-            .where(eq(commercialAgreementServiceTerm.agreementId, id));
+        await ctx.o
+          .delete(commercialAgreementUnitScope)
+          .where(eq(commercialAgreementUnitScope.agreementId, id));
+        await ctx.o
+          .delete(commercialAgreementServiceTerm)
+          .where(eq(commercialAgreementServiceTerm.agreementId, id));
 
-          if (input.unitIds.length > 0) {
-            await ctx.o.insert(commercialAgreementUnitScope).values(
-              input.unitIds.map((unitId) => ({
-                organizationId: member.organizationId,
-                agreementId: id,
-                unitId,
-              })),
-            );
-          }
-
-          await ctx.o.insert(commercialAgreementServiceTerm).values(
-            input.serviceTerms.map((term) => ({
+        if (input.unitIds.length > 0) {
+          await ctx.o.insert(commercialAgreementUnitScope).values(
+            input.unitIds.map((unitId) => ({
               organizationId: member.organizationId,
               agreementId: id,
-              serviceId: term.serviceId,
-              unitId: term.unitId ?? null,
-              priceCents: term.priceCents,
-              currency: term.currency,
-              tatDays: term.tatDays ?? null,
-              isActive: term.isActive,
+              unitId,
             })),
           );
+        }
 
-          // The agreement update and the customers' compliance follow-up are
-          // separate writes, as before; they share this transaction now.
-          if ((input.status ?? existing.status) === "ACTIVE") {
-            // Ascending, so two reassignments in opposite directions lock the
-            // customer rows in the same order and cannot deadlock.
-            const customerIdsToSync = [
-              ...new Set([existing.customerId, input.customerId]),
-            ].sort((a, b) => a - b);
-            for (const customerId of customerIdsToSync) {
-              await syncCustomerComplianceContract(
-                ctx.o,
-                member.organizationId,
-                customerId,
-              );
-            }
-          }
+        await ctx.o.insert(commercialAgreementServiceTerm).values(
+          input.serviceTerms.map((term) => ({
+            organizationId: member.organizationId,
+            agreementId: id,
+            serviceId: term.serviceId,
+            unitId: term.unitId ?? null,
+            priceCents: term.priceCents,
+            currency: term.currency,
+            tatDays: term.tatDays ?? null,
+            isActive: term.isActive,
+          })),
+        );
 
-          return updated;
-        },
-      );
-
-      return c.json({ data: agreement });
-    },
-  )
-  .post(
-    "/:id/activate",
-    ...withLabPermission({ financial: ["contract_update"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireAgreementRouteId(c.req.param("id"));
-
-      const agreement = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const existing = await requireLabAgreement(
-            ctx.o,
-            member.organizationId,
-            id,
-          );
-
-          if (existing.serviceTerms.length === 0) {
-            throw invalid(
-              "agreement_terms_required",
-              "Contrato precisa ter pelo menos um termo de servico",
+        // The agreement update and the customers' compliance follow-up are
+        // separate writes, as before; they share this transaction now.
+        if ((input.status ?? existing.status) === "ACTIVE") {
+          // Ascending, so two reassignments in opposite directions lock the
+          // customer rows in the same order and cannot deadlock.
+          const customerIdsToSync = [
+            ...new Set([existing.customerId, input.customerId]),
+          ].sort((a, b) => a - b);
+          for (const customerId of customerIdsToSync) {
+            await syncCustomerComplianceContract(
+              ctx.o,
+              member.organizationId,
+              customerId,
             );
           }
+        }
 
-          const [updated] = await ctx.o
-            .update(commercialAgreement)
-            .set({
-              status: COMMERCIAL_AGREEMENT_MACHINE.requireTargetOf(
-                existing.status,
-                "activate",
-              ),
-              updatedAt: new Date(),
-              updatedBy: ctx.actor.userId,
-            })
-            .where(
-              and(
-                eq(commercialAgreement.id, id),
-                eq(commercialAgreement.organizationId, member.organizationId),
-              ),
-            )
-            .returning();
+        return updated;
+      },
+    );
 
-          await syncCustomerComplianceContract(
-            ctx.o,
-            member.organizationId,
-            existing.customerId,
+    return c.json({ data: agreement });
+  },
+);
+mount(
+  financeContractsRouter,
+  PREFIX,
+  financeEndpoints.activateContract,
+  withLabPermission({ financial: ["contract_update"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const id = requireAgreementRouteId(params.id);
+
+    const agreement = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabAgreement(
+          ctx.o,
+          member.organizationId,
+          id,
+        );
+
+        if (existing.serviceTerms.length === 0) {
+          throw invalid(
+            "agreement_terms_required",
+            "Contrato precisa ter pelo menos um termo de servico",
           );
+        }
 
-          return updated;
-        },
-      );
+        const [updated] = await ctx.o
+          .update(commercialAgreement)
+          .set({
+            status: COMMERCIAL_AGREEMENT_MACHINE.requireTargetOf(
+              existing.status,
+              "activate",
+            ),
+            updatedAt: new Date(),
+            updatedBy: ctx.actor.userId,
+          })
+          .where(
+            and(
+              eq(commercialAgreement.id, id),
+              eq(commercialAgreement.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
+        if (!updated) {
+          throw notFound("agreement_not_found", "Contrato nao encontrado");
+        }
 
-      return c.json({ data: agreement });
-    },
-  )
-  .post(
-    "/:id/cancel",
-    ...withLabPermission({ financial: ["contract_update"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = requireAgreementRouteId(c.req.param("id"));
+        await syncCustomerComplianceContract(
+          ctx.o,
+          member.organizationId,
+          existing.customerId,
+        );
 
-      const canceled = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [agreement] = await ctx.o
-            .update(commercialAgreement)
-            .set({
-              // `cancel` of COMMERCIAL_AGREEMENT_MACHINE (from any status).
-              status: "CANCELED",
-              updatedAt: new Date(),
-              updatedBy: ctx.actor.userId,
-            })
-            .where(
-              and(
-                eq(commercialAgreement.id, id),
-                eq(commercialAgreement.organizationId, member.organizationId),
-              ),
-            )
-            .returning();
+        return updated;
+      },
+    );
 
-          if (!agreement) {
-            throw notFound("agreement_not_found", "Contrato nao encontrado");
-          }
+    return { data: agreement };
+  },
+);
+mount(
+  financeContractsRouter,
+  PREFIX,
+  financeEndpoints.cancelContract,
+  withLabPermission({ financial: ["contract_update"] }),
+  async (c, { params }) => {
+    const member = c.get("member");
+    const id = requireAgreementRouteId(params.id);
 
-          await syncCustomerComplianceContract(
-            ctx.o,
-            member.organizationId,
-            agreement.customerId,
-          );
+    const canceled = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [agreement] = await ctx.o
+          .update(commercialAgreement)
+          .set({
+            // `cancel` of COMMERCIAL_AGREEMENT_MACHINE (from any status).
+            status: "CANCELED",
+            updatedAt: new Date(),
+            updatedBy: ctx.actor.userId,
+          })
+          .where(
+            and(
+              eq(commercialAgreement.id, id),
+              eq(commercialAgreement.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
 
-          return agreement;
-        },
-      );
+        if (!agreement) {
+          throw notFound("agreement_not_found", "Contrato nao encontrado");
+        }
 
-      return c.json({ data: canceled });
-    },
-  );
+        await syncCustomerComplianceContract(
+          ctx.o,
+          member.organizationId,
+          agreement.customerId,
+        );
+
+        return agreement;
+      },
+    );
+
+    return { data: canceled };
+  },
+);

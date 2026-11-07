@@ -1,181 +1,27 @@
 import type {
-  BillingIntegrationState,
-  BillingReadinessItem,
-  BillingReadinessSummary,
-} from '@calibra-facil/shared'
+  BillingDocumentDetails as ContractBillingDocumentDetails,
+  BillingDocumentListItem as ContractBillingDocumentListItem,
+  ContractListItem as ContractContractListItem,
+  ErpExportRow,
+  FinanceOverview,
+  ReceiptRow as ContractReceiptRow,
+} from '@calibra-facil/contracts'
 
-export type BillingReadinessResponse = {
-  billing: {
-    integrationState: BillingIntegrationState
-  }
-  summary: BillingReadinessSummary
-  data: BillingReadinessItem[]
-}
-
-export type FinanceOverviewResponse = {
-  totals: {
-    issuedCents: number
-    openCents: number
-    overdueCents: number
-    receivedCents: number
-  }
-  counts: {
-    draftDocuments: number
-    issuedDocuments: number
-    overdueDocuments: number
-    paidDocuments: number
-  }
-  aging: Record<string, number>
-  recentDocuments: Array<{
-    id: number
-    publicId: string
-    documentNumber: string | null
-    status: string
-    exportStatus: string
-    totalCents: number
-    dueDate: string
-    issueDate: string | null
-    customerName: string
-    unitName: string
-  }>
-  pendingExports: number
-}
-
-export type BillingDocumentListItem = {
-  id: number
-  publicId: string
-  documentNumber: string | null
-  status: string
-  customerId: number
-  customerName: string
-  unitId: number
-  unitName: string
-  issueDate: string | null
-  dueDate: string
-  subtotalCents: number
-  discountCents: number
-  totalCents: number
-  currency: string
-  exportStatus: string
-  exportedAt: string | null
-}
-
-export type BillingDocumentsListData = {
-  data: BillingDocumentListItem[]
-}
-
-export type BillingDocumentDetails = {
-  id: number
-  publicId: string
-  documentNumber: string | null
-  status: string
-  customerName: string
-  unitName: string
-  dueDate: string
-  issueDate: string | null
-  currency: string
-  subtotalCents: number
-  discountCents: number
-  totalCents: number
-  notes: string | null
-  exportStatus: string
-  exportedAt: string | null
-  voidReason: string | null
-  items: Array<{
-    id: number
-    jobId: number | null
-    jobDisplayId: string | null
-    description: string
-    quantity: number
-    unitPriceCents: number
-    totalCents: number
-  }>
-  installments: Array<{
-    id: number
-    installmentNumber: number
-    status: string
-    dueDate: string
-    amountCents: number
-    currency: string
-    paidAt: string | null
-    paymentMethod: string | null
-    paymentReference: string | null
-  }>
-  receipts: Array<{
-    id: number
-    amountCents: number
-    paymentMethod: string
-    reference: string | null
-    receivedAt: string
-  }>
-  audit: Array<{
-    id: number
-    action: string
-    reason: string | null
-    performedAt: string
-  }>
-}
-
-export type ContractListItem = {
-  id: number
-  customerId: number
-  customerName: string
-  status: string
-  agreementCode: string | null
-  title: string
-  currency: string
-  effectiveFrom: string
-  effectiveTo: string | null
-  defaultPaymentTermDays: number
-  updatedAt: string
-}
-
-export type FinanceContractsListData = {
-  data: ContractListItem[]
-}
-
-export type FinanceContractDetails = ContractListItem & {
-  customerCompliance?: {
-    qualificationStatus?: string | null
-    qualityRequirementsAcknowledged?: boolean | null
-    contractSignedAt?: string | null
-    contractNumber?: string | null
-  } | null
-  serviceTerms: Array<{
-    id: number
-    serviceId: number
-    unitId: number | null
-    priceCents: number
-    currency: string
-  }>
-  notes: string | null
-}
+// The finance DTOs are the contract's (`@calibra-facil/contracts`,
+// `endpoints/finance.ts`); the names below are the views the pages use.
+export type BillingDocumentDetails = ContractBillingDocumentDetails
+export type BillingDocumentListItem = ContractBillingDocumentListItem
+export type ContractListItem = ContractContractListItem
+export type FinanceOverviewResponse = FinanceOverview
+export type ErpExportsResponse = { data: ErpExportRow[] }
+export type ReceiptRow = ContractReceiptRow
+export type FinanceReceiptsData = { data: ReceiptRow[] }
 
 export type FinanceSearchQueryInput = {
   search: string
 }
 
 export type FinanceBillingMode = 'single' | 'consolidated'
-
-type FinanceEligibleJob = {
-  id: number
-  jobId: string
-  customerId: number
-  customerName: string
-  unitId: number
-  unitName: string
-  serviceId: number
-  serviceName: string
-  approvedAt: string | null
-  priceCents: number
-  currency: string
-  paymentTermDays: number
-  snapshotId: number
-}
-
-export type FinanceEligibleJobsData = {
-  data: FinanceEligibleJob[]
-}
 
 type FinanceContractCustomerOption = {
   id: number
@@ -195,37 +41,4 @@ export type FinanceContractServiceOption = {
 
 export type FinanceContractServiceOptionsData = {
   data: FinanceContractServiceOption[]
-}
-
-export type ReceiptRow = {
-  installmentId: number
-  documentId: number
-  documentNumber: string | null
-  documentStatus: string
-  customerName: string
-  dueDate: string
-  amountCents: number
-  installmentStatus: string
-  paidAt: string | null
-  paymentMethod: string | null
-  paymentReference: string | null
-}
-
-export type FinanceReceiptsData = {
-  data: ReceiptRow[]
-}
-
-export type ErpExportsResponse = {
-  data: Array<{
-    id: number
-    documentNumber: string | null
-    customerName: string
-    status: string
-    exportStatus: string
-    exportedAt: string | null
-    totalCents: number
-    currency: string
-    dueDate: string
-    issueDate: string | null
-  }>
 }

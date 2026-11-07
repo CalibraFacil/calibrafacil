@@ -165,9 +165,7 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [voidReason, setVoidReason] = useState('')
 
-  const documentQuery = useFinanceDocumentDetailData<{
-    data: BillingDocumentDetails
-  }>(id)
+  const documentQuery = useFinanceDocumentDetailData(id)
   const document = documentQuery.data?.data
 
   const issueMutation = useIssueDocumentMutation()
