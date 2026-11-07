@@ -5,7 +5,9 @@ import {
   loadCustomerActiveCommercialAgreement,
   loadCustomerFinancialSummary,
 } from "./finance";
+import { invalid, notFound } from "./domain-errors";
 import { inOrgTransaction } from "./org-transaction";
+import { resolveCustomerRouteId } from "./customer-route-id";
 
 /**
  * The laboratory's customer with its financial summary, active agreement and
@@ -65,4 +67,20 @@ export async function getLabCustomerById(
       group,
     };
   });
+}
+
+/**
+ * The laboratory's customer a route parameter names (numeric id, tax id or
+ * slug). Throws 400 for an unreadable identifier and 404 when no customer of
+ * this laboratory matches.
+ */
+export async function requireLabCustomer(
+  routeIdentifier: string,
+  labOrganizationId: string,
+) {
+  const id = await resolveCustomerRouteId(routeIdentifier, labOrganizationId);
+  if (id === null) throw invalid("invalid_request", "ID invalido");
+  const found = await getLabCustomerById(id, labOrganizationId);
+  if (!found) throw notFound("customer_not_found", "Cliente nao encontrado");
+  return found;
 }
