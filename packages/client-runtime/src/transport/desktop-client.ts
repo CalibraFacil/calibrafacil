@@ -76,58 +76,8 @@ function desktopUnsupportedError(
   );
 }
 
-type DesktopCloudOnlyStubLabels<TNamespace extends CalibraApiNamespace> = {
-  action: string;
-  flavor?: DesktopUnsupportedMessageFlavor;
-  actionByMethod?: Partial<
-    Record<CalibraApiMethodsWithPolicy<TNamespace, "cloud-only">, string>
-  >;
-};
-
 /**
- * Throw-stubs for every method the policy registry classifies as
- * `cloud-only` in a namespace. The return type is a `Pick` of exactly those
- * methods, so any method with a local policy (`local-*`) still demands an
- * explicit implementation at the call site — reclassifying a method in
- * `calibraApiPolicyRegistry` surfaces here as a compile error instead of a
- * silently wrong stub. Graceful desktop degradations (empty lists, synthesized
- * responses) stay hand-written and simply override their stub in the spread.
- */
-function desktopCloudOnlyStubs<TNamespace extends CalibraApiNamespace>(
-  namespace: TNamespace,
-  labels: DesktopCloudOnlyStubLabels<TNamespace>,
-): Pick<
-  CalibraApi[TNamespace],
-  CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
-    keyof CalibraApi[TNamespace]
-> {
-  const actionOverrides = new Map<string, string>();
-  for (const [method, action] of Object.entries(labels.actionByMethod ?? {})) {
-    if (typeof action === "string") {
-      actionOverrides.set(method, action);
-    }
-  }
-
-  const stubs: Record<string, () => Promise<never>> = {};
-  for (const method of listCalibraApiNamespaceMethodsWithPolicy(namespace, [
-    "cloud-only",
-  ])) {
-    const action = actionOverrides.get(method) ?? labels.action;
-    stubs[method] = async () => {
-      throw desktopUnsupportedError(action, labels.flavor ?? "web-api");
-    };
-  }
-
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- the stub keys are exactly the registry's cloud-only methods for this namespace, and the registry is type-total over CalibraApi; this is the single trust point that ties the runtime object to the Pick above.
-  return stubs as Pick<
-    CalibraApi[TNamespace],
-    CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
-      keyof CalibraApi[TNamespace]
-  >;
-}
-
-/**
- * The same throw-stubs for a domain converted to endpoint definitions: the
+ * Throw-stubs for a domain converted to endpoint definitions: the
  * `cloud-only` endpoints of its group, labelled by each definition's
  * `desktopLabel`. Local-first methods are not stubbed here: the caller supplies
  * them (typically the group's own client over the desktop transport).
