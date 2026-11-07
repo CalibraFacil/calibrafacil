@@ -30,7 +30,10 @@ export function EditMethodPage({ id }: { id: string }) {
   const updateMutation = useMutation({
     mutationFn: async (draft: MethodDraft) => {
       const payload = draftToMethodSavePayload(draft)
-      return calibraApi.methods.update(method?.id ?? id, payload)
+      return calibraApi.methods.update({
+        params: { id: method?.id ?? id },
+        body: payload,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })

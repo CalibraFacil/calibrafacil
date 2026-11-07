@@ -15,6 +15,7 @@ import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  methodEndpoints,
   assetEndpoints,
   assetTypesResponseSchema,
   customerEndpoints,
@@ -30,8 +31,6 @@ import {
   syncBootstrapResponseSchema,
   syncPushRequestSchema,
   massCompositionProfilesResponseSchema,
-  methodDetailSchema,
-  methodsListResponseSchema,
   serviceOrderEndpoints,
   standardSchema,
   standardsListResponseSchema,
@@ -566,10 +565,13 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
     expect(assetTypes.data.map((type) => type.slug)).toEqual(["balanca"]);
     const methods = await parsedBody(
       await app.request("/api/methods?status=PUBLISHED&limit=100"),
-      methodsListResponseSchema,
+      methodEndpoints.list.response,
     );
     expect(methods.data.map((method) => method.name)).toEqual(["Mass error"]);
-    await parsedBody(await app.request("/api/methods/321"), methodDetailSchema);
+    await parsedBody(
+      await app.request("/api/methods/321"),
+      methodEndpoints.get.response,
+    );
     database.close();
   });
 

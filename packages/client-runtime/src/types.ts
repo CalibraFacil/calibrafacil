@@ -17,6 +17,7 @@ import type {
   CreateMaterialSchema,
   CreateNonConformanceSchema,
   CreateServiceOrderSchema,
+  FromTemplateSchema,
   CreateServiceSchema,
   SoftDeleteOrganizationSchema,
   UpdateOrganizationProfileSchema,
@@ -38,6 +39,7 @@ import type { FinanceApi } from "./modules/finance";
 import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
 import type { EnvironmentalLimitsApi } from "./modules/environmental-limits";
 import type { MaterialsApi } from "./modules/materials";
+import type { MethodsApi } from "./modules/methods";
 import type { ReportsApi } from "./modules/reports";
 import type { ServiceOrdersApi } from "./modules/service-orders";
 import type { SignaturesApi } from "./modules/signatures";
@@ -92,6 +94,10 @@ import type {
   UpdateCertificateNumberingProfileResponse,
   CustomerDetail,
   CustomersListResponse,
+  MethodDetail,
+  MethodGovernance,
+  MethodsListResponse,
+  MethodTemplateCatalogEntry,
   AccreditedScopeLine as ContractAccreditedScopeLine,
   AccreditedScopeResponse as ContractAccreditedScopeResponse,
   AdjustMaterialStockResponse,
@@ -368,219 +374,13 @@ export type MaterialDetailData = MaterialRecord;
 export type AdjustMaterialStockData = AdjustMaterialStockResponse;
 export type { MaterialsApi };
 
-export type MethodsListInput = {
-  page?: number;
-  limit?: number;
-  status?: string;
-  assetTypeId?: number;
-  query?: string;
-};
-
-export type MethodsListData = {
-  data: Array<{
-    id: number;
-    name: string;
-    description: string | null;
-    version: number;
-    status: string;
-    assetTypeId: number | null;
-    assetTypeName: string | null;
-    dataFields: unknown[];
-    variableBindings?: unknown[];
-    formulas: unknown[];
-    measurementModels?: unknown[];
-    validations: unknown[];
-    uncertaintyParams?: unknown[];
-    certificateContent?: unknown;
-    accreditedScope?: boolean;
-    compiledMethod?: unknown;
-    methodFingerprint?: string | null;
-    methodEngine?: { version?: string; optionsFingerprint?: string } | null;
-    methodCompiledAt?: string | null;
-    publicationEvidence?: unknown;
-    createdAt: string;
-    publishedAt: string | null;
-    parentId: number | null;
-  }>;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-export type MethodDetailData = MethodsListData["data"][number] & {
-  technicalReviewedBy?: string | null;
-  approvedBy?: string | null;
-  createdByName?: string;
-  technicalReviewedByName?: string | null;
-  approvedByName?: string | null;
-  archivedAt?: string | null;
-};
-
-export type MethodWriteInput = {
-  name?: string;
-  description?: string | null;
-  assetTypeId?: number | null;
-  dataFields?: unknown[];
-  variableBindings?: unknown[];
-  formulas?: unknown[];
-  measurementModels?: unknown[];
-  validations?: unknown[];
-  uncertaintyParams?: unknown[];
-  certificateContent?: unknown;
-  accreditedScope?: boolean;
-  reason?: string;
-};
-
-export type MethodCompileDraftInput = {
-  draft: unknown;
-};
-
-export type MethodPreviewDraftInput = {
-  draft: unknown;
-  sampleData: Record<string, unknown>;
-};
-
-export type MethodPublishDraftInput = {
-  sampleData: Record<string, unknown>;
-  reasonForChange?: string;
-};
-
-export type MethodRequestApprovalInput = {
-  sampleData: Record<string, unknown>;
-};
-
-export type MethodAuditLogData<TRecord = unknown> = {
-  data: TRecord[];
-};
-
-type MethodGovernanceSource = {
-  title: string;
-  edition: string;
-  section?: string;
-  url?: string;
-};
-
-type MethodGovernanceVerificarItem = {
-  ref?: string;
-  item: string;
-  severity: "info" | "action" | "platform";
-  fieldKeys?: string[];
-};
-
-export type MethodGovernance = {
-  summary: string;
-  measurand: string;
-  model: "formulas" | "gum_measurement_model";
-  sources: MethodGovernanceSource[];
-  conformanceNotes: Array<{ ref: string; note: string }>;
-  verificarItems: MethodGovernanceVerificarItem[];
-  omittedComponents: Array<{
-    ref: string;
-    component: string;
-    appliesWhen?: string;
-  }>;
-  workedExample?: {
-    scenarioKey: string;
-    provenance: "cited_guide_table" | "engine_characterization";
-    source: string;
-    expected: Record<string, number>;
-  };
-  reviewStatus: "draft_pending_revalidation";
-};
-
-/**
- * One entry of the curated method-template catalog (`GET /api/methods/templates`).
- * `governance` is the picker's informed-adoption surface; `spec` feeds the
- * read-only spec preview. Spec arrays are opaque here (the web layer narrows
- * them) to keep client-runtime free of server-side method types.
- */
-export type MethodTemplateCatalogEntry = {
-  templateKey: string;
-  templateVersion: number;
-  discipline: string;
-  defaultName: string;
-  defaultAccreditedScope: boolean;
-  assetTypeSlug?: string;
-  description: string;
-  model: "formulas" | "gum_measurement_model";
-  counts: {
-    dataFields: number;
-    formulas: number;
-    validations: number;
-    uncertaintyParams: number;
-    verificar: number;
-    omitted: number;
-  };
-  governance: MethodGovernance;
-  spec: {
-    dataFields: unknown[];
-    formulas: unknown[];
-    measurementModels: unknown[];
-    validations: unknown[];
-    uncertaintyParams: unknown[];
-    certificateContent: unknown;
-  };
-  previewScenarios: unknown[];
-};
-
-/** Mandatory acknowledgements for adopting a template (all three must be true). */
-type MethodTemplateAcknowledgements = {
-  readVerificarAndOmitted: true;
-  acceptsVerificationDuty: true;
-  understandsDraftGate: true;
-  acknowledgedAt: string;
-  templateVersion: number;
-  acceptedVerificarRefs: string[];
-};
-
-export type MethodFromTemplateInput = {
-  templateKey: string;
-  assetTypeId?: number | null;
-  name?: string;
-  acknowledgements: MethodTemplateAcknowledgements;
-};
-
-export interface MethodsApi {
-  list(input?: MethodsListInput): Promise<MethodsListData>;
-  get(id: string | number): Promise<MethodDetailData>;
-  audit<TRecord = unknown>(
-    id: string | number,
-  ): Promise<MethodAuditLogData<TRecord>>;
-  create(input: MethodWriteInput): Promise<MethodDetailData>;
-  update(
-    id: string | number,
-    input: MethodWriteInput,
-  ): Promise<MethodDetailData>;
-  archive(id: string | number): Promise<unknown>;
-  createNewVersion(id: string | number): Promise<MethodDetailData>;
-  technicalReview(id: string | number): Promise<unknown>;
-  qualityApprove(
-    id: string | number,
-    input?: MethodWriteInput,
-  ): Promise<unknown>;
-  returnToDraft(id: string | number, reason: string): Promise<unknown>;
-  compileDraft<TResponse = unknown>(
-    input: MethodCompileDraftInput,
-  ): Promise<TResponse>;
-  previewDraft<TResponse = unknown>(
-    input: MethodPreviewDraftInput,
-  ): Promise<TResponse>;
-  publishDraft<TResponse = unknown>(
-    id: string | number,
-    input: MethodPublishDraftInput,
-  ): Promise<TResponse>;
-  requestApproval<TResponse = unknown>(
-    id: string | number,
-    input: MethodRequestApprovalInput,
-  ): Promise<TResponse>;
-  /** Curated method-template catalog (cloud-only). */
-  listMethodTemplates(): Promise<MethodTemplateCatalogEntry[]>;
-  /** Adopt a template → creates a DRAFT method in the caller's org (cloud-only). */
-  fromTemplate(input: MethodFromTemplateInput): Promise<MethodDetailData>;
-}
+// METHODS: the DTOs are the contract schemas' types (`endpoints/methods.ts`);
+// the client is generated from the endpoint definitions (`modules/methods.ts`).
+export type MethodsListData = MethodsListResponse;
+export type MethodDetailData = MethodDetail;
+export type { MethodGovernance, MethodTemplateCatalogEntry };
+export type MethodFromTemplateInput = z.input<typeof FromTemplateSchema>;
+export type { MethodsApi };
 
 export type StandardStatus = ReferenceStandardStatus;
 

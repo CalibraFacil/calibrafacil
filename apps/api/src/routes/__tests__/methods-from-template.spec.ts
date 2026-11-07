@@ -165,7 +165,25 @@ describe("POST /from-template (adoption)", () => {
     if (!electrical) throw new Error("electrical template missing");
     dbQueue.push([{ id: 7 }]); // asset-type slug → id
     dbQueue.push([]); // uniqueness: no existing method
-    dbQueue.push([{ id: 101, name: electrical.defaultName, status: "DRAFT" }]); // insert ... returning
+    dbQueue.push([
+      {
+        id: 101,
+        name: electrical.defaultName,
+        description: null,
+        version: 1,
+        status: "DRAFT",
+        assetTypeId: 7,
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        publishedAt: null,
+        parentId: null,
+      },
+    ]); // insert ... returning
 
     const res = await postFromTemplate({
       templateKey: "electrical-indication",

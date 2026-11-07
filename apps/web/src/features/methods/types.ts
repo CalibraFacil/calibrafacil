@@ -1,18 +1,8 @@
-import type { MethodDetailData as ClientRuntimeMethodDetailData } from '@calibra-facil/client-runtime'
+import type { MethodsListData as ClientRuntimeMethodsListData } from '@calibra-facil/client-runtime'
 import type { MethodStatus } from '@calibra-facil/schemas/machines'
 
 import type { MethodRecordData } from '@/components/method-builder'
 import type { MethodData } from '@/components/method-runtime/types'
-
-type ClientRuntimeMethodsListData = {
-  data: Array<ClientRuntimeMethodDetailData>
-  pagination?: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
-  }
-}
 
 export type { MethodStatus }
 

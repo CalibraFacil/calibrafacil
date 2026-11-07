@@ -2442,6 +2442,28 @@ describe("api keys runtime adapter", () => {
   });
 });
 
+/** A stored method row, as the workflow endpoints answer it. */
+function storedMethod(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 12,
+    name: "Massa",
+    description: null,
+    version: 1,
+    status: "DRAFT",
+    assetTypeId: null,
+    dataFields: [],
+    variableBindings: [],
+    formulas: [],
+    measurementModels: [],
+    validations: [],
+    uncertaintyParams: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    publishedAt: null,
+    parentId: null,
+    ...overrides,
+  };
+}
+
 describe("methods runtime adapter", () => {
   it("routes Method Builder actions through the cloud methods facade", async () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
@@ -2451,6 +2473,7 @@ describe("methods runtime adapter", () => {
 
       if (url.pathname === "/api/methods/compile") {
         return Response.json({
+          ok: true,
           diagnostics: [],
           fingerprint: "fp-1",
           normalizedFormulas: [{ outputKey: "erro", expression: "a-b" }],
@@ -2459,18 +2482,19 @@ describe("methods runtime adapter", () => {
 
       if (url.pathname === "/api/methods/preview") {
         return Response.json({
+          ok: true,
           diagnostics: [],
+          fingerprint: "fp-1",
           results: { erro: 0.1 },
-          normalizedData: { leitura: 10 },
         });
       }
 
       if (url.pathname === "/api/methods/12/publish") {
-        return Response.json({ id: 12, status: "PUBLISHED" });
+        return Response.json(storedMethod({ status: "PUBLISHED" }));
       }
 
       if (url.pathname === "/api/methods/12/request-approval") {
-        return Response.json({ id: 12, status: "TECHNICAL_REVIEW" });
+        return Response.json(storedMethod({ status: "TECHNICAL_REVIEW" }));
       }
 
       throw new Error(`Unexpected request: ${url.toString()}`);
@@ -2481,22 +2505,27 @@ describe("methods runtime adapter", () => {
     });
 
     await expect(
-      client.methods.compileDraft({ draft: { name: "Massa" } }),
+      client.methods.compileDraft({ body: { draft: { name: "Massa" } } }),
     ).resolves.toMatchObject({ fingerprint: "fp-1" });
     await expect(
       client.methods.previewDraft({
-        draft: { name: "Massa" },
-        sampleData: { leitura: 10 },
+        body: { draft: { name: "Massa" }, sampleData: { leitura: 10 } },
       }),
     ).resolves.toMatchObject({ results: { erro: 0.1 } });
     await expect(
-      client.methods.publishDraft(12, {
-        sampleData: { leitura: 10 },
-        reasonForChange: "Publicação inicial",
+      client.methods.publishDraft({
+        params: { id: 12 },
+        body: {
+          sampleData: { leitura: 10 },
+          reasonForChange: "Publicação inicial",
+        },
       }),
     ).resolves.toMatchObject({ status: "PUBLISHED" });
     await expect(
-      client.methods.requestApproval(12, { sampleData: { leitura: 10 } }),
+      client.methods.requestApproval({
+        params: { id: 12 },
+        body: { sampleData: { leitura: 10 } },
+      }),
     ).resolves.toMatchObject({ status: "TECHNICAL_REVIEW" });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
@@ -2519,14 +2548,21 @@ describe("methods runtime adapter", () => {
       baseUrl: "https://api.example.test",
       fetch: async () =>
         Response.json(
-          { diagnostics: [{ message: "Fórmula inválida" }] },
+          {
+            ok: false,
+            diagnostics: [{ message: "Fórmula inválida" }],
+            fingerprint: null,
+            normalizedFormulas: [],
+            compiledMethod: null,
+          },
           { status: 422 },
         ),
     });
 
     await expect(
-      client.methods.compileDraft({ draft: { name: "Massa" } }),
-    ).resolves.toEqual({
+      client.methods.compileDraft({ body: { draft: { name: "Massa" } } }),
+    ).resolves.toMatchObject({
+      ok: false,
       diagnostics: [{ message: "Fórmula inválida" }],
     });
   });
@@ -2542,16 +2578,22 @@ describe("methods runtime adapter", () => {
     });
 
     await expect(
-      client.methods.publishDraft(12, {
-        sampleData: { leitura: 10 },
-        reasonForChange: "Publicação inicial",
+      client.methods.publishDraft({
+        params: { id: 12 },
+        body: {
+          sampleData: { leitura: 10 },
+          reasonForChange: "Publicação inicial",
+        },
       }),
     ).rejects.toMatchObject({
       status: 422,
       payload: { diagnostics: [{ message: "Amostra inválida" }] },
     });
     await expect(
-      client.methods.requestApproval(12, { sampleData: { leitura: 10 } }),
+      client.methods.requestApproval({
+        params: { id: 12 },
+        body: { sampleData: { leitura: 10 } },
+      }),
     ).rejects.toMatchObject({
       status: 422,
       payload: { diagnostics: [{ message: "Amostra inválida" }] },
@@ -3066,7 +3108,7 @@ describe("desktop hybrid runtime adapter", () => {
     await client.customers.list({ query: { page: 1, limit: 20 } });
     await client.assets.list({ query: { page: 1, limit: 20 } });
     await client.assetTypes.list();
-    await client.methods.list({ page: 1, limit: 20 });
+    await client.methods.list({ query: { page: 1, limit: 20 } });
     await client.standards.list({ page: 1, limit: 20 });
     await client.environmentalLimits.list();
     await client.jobs.list({ page: 1, limit: 20 });
@@ -3143,6 +3185,15 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/customers/1") {
         return Response.json(buildCustomerDetail());
       }
+      if (url.pathname === "/api/methods/1") {
+        return Response.json({
+          ...storedMethod({ id: 1 }),
+          assetTypeName: null,
+          methodEngine: null,
+          compiledMethod: null,
+          publicationEvidence: null,
+        });
+      }
       if (url.pathname === "/api/assets/1") {
         return Response.json(buildAssetDetail());
       }
@@ -3172,8 +3223,8 @@ describe("desktop hybrid runtime adapter", () => {
     await client.assets.list({ query: { page: 1, limit: 20 } });
     await client.assets.get({ params: { id: 1 } });
     await client.assetTypes.list();
-    await client.methods.list({ page: 1, limit: 20 });
-    await client.methods.get(1);
+    await client.methods.list({ query: { page: 1, limit: 20 } });
+    await client.methods.get({ params: { id: 1 } });
     await client.standards.list({ page: 1, limit: 20 });
     await client.standards.get(1);
     await client.environmentalLimits.list();

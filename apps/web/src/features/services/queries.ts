@@ -87,8 +87,7 @@ export function publishedMethodsQueryOptions() {
     queryKey: ['methods', 'published'],
     queryFn: (): Promise<PublishedMethodsData> =>
       calibraApi.methods.list({
-        status: 'PUBLISHED',
-        limit: 100,
+        query: { status: 'PUBLISHED', limit: 100 },
       }),
   })
 }

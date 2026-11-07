@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { nullableNumber, nullableString, paginationSchema } from "./common";
+import { nullableString } from "./common";
 
 /**
  * Response contracts for the reference data a technician reads and captures in
- * the field: asset types and calibration methods (customers live in `endpoints/customers.ts`). Wire
+ * the field: asset types (the other domains live in `endpoints/`). Wire
  * schemas (see `jobs.ts` for the rules). The cloud API and the desktop
  * local-server (offline mirror) both serve these shapes; the API contract
  * specs and the local-server contract tests parse the real responses with the
@@ -34,47 +34,3 @@ export const assetTypesResponseSchema = z.object({
   data: z.array(assetTypeSchema),
 });
 export type AssetTypesResponse = z.infer<typeof assetTypesResponseSchema>;
-
-// ---------------------------------------------------------------------------
-// Methods
-// ---------------------------------------------------------------------------
-
-/** One method as GET /api/methods lists it (the compiled artifact stays out). */
-const methodSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  description: nullableString,
-  version: z.number(),
-  status: z.string(),
-  assetTypeId: nullableNumber,
-  assetTypeName: nullableString,
-  dataFields: z.array(z.unknown()),
-  variableBindings: z.array(z.unknown()),
-  formulas: z.array(z.unknown()),
-  measurementModels: z.array(z.unknown()),
-  validations: z.array(z.unknown()),
-  certificateContent: z.unknown().optional(),
-  accreditedScope: z.boolean().optional(),
-  methodFingerprint: nullableString.optional(),
-  /** `{ version, optionsFingerprint }` of the engine that compiled it; the column is untyped. */
-  methodEngine: z.unknown(),
-  methodCompiledAt: nullableString.optional(),
-  createdAt: z.string(),
-  publishedAt: nullableString,
-  parentId: nullableNumber,
-});
-
-/** GET /api/methods */
-export const methodsListResponseSchema = z.object({
-  data: z.array(methodSchema),
-  pagination: paginationSchema,
-});
-export type MethodsListResponse = z.infer<typeof methodsListResponseSchema>;
-
-/** GET /api/methods/:id: adds the compiled artifact and the review trail. */
-export const methodDetailSchema = methodSchema.extend({
-  uncertaintyParams: z.array(z.unknown()),
-  compiledMethod: z.unknown(),
-  publicationEvidence: z.unknown(),
-});
-export type MethodDetail = z.infer<typeof methodDetailSchema>;

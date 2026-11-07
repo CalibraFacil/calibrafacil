@@ -145,7 +145,7 @@ export function MethodDetailPage({ id }: { id: string }) {
 
   const technicalReviewMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.methods.technicalReview(method?.id ?? id),
+      calibraApi.methods.technicalReview({ params: { id: method?.id ?? id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })
       queryClient.invalidateQueries({ queryKey: ['methods'] })
@@ -157,7 +157,10 @@ export function MethodDetailPage({ id }: { id: string }) {
   const qualityApproveMutation = useMutation({
     mutationFn: async () => {
       if (!method) throw new Error('Método não carregado')
-      return calibraApi.methods.qualityApprove(method.id ?? id, {})
+      return calibraApi.methods.qualityApprove({
+        params: { id: method.id ?? id },
+        body: {},
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })
@@ -169,7 +172,10 @@ export function MethodDetailPage({ id }: { id: string }) {
 
   const returnToDraftMutation = useMutation({
     mutationFn: async (reason: string) =>
-      calibraApi.methods.returnToDraft(method?.id ?? id, reason),
+      calibraApi.methods.returnToDraft({
+        params: { id: method?.id ?? id },
+        body: { reason },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })
       queryClient.invalidateQueries({ queryKey: ['methods'] })

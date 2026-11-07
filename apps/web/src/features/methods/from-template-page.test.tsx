@@ -449,7 +449,9 @@ describe('FromTemplatePage — URL-driven wizard', () => {
 
     await waitFor(() => {
       expect(fromTemplateMock).toHaveBeenCalledWith(
-        expect.objectContaining({ templateKey: 'weighing-instrument' }),
+        expect.objectContaining({
+          body: expect.objectContaining({ templateKey: 'weighing-instrument' }),
+        }),
       )
     })
   })
