@@ -3,6 +3,7 @@ import {
   buildCustomerRecord,
   buildCustomersListResponse,
 } from "@calibra-facil/contracts/customers-fixtures";
+import { buildDashboardStats } from "@calibra-facil/contracts/dashboard-fixtures";
 import { buildStandard } from "@calibra-facil/contracts/standards-fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -2895,6 +2896,9 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/customers/1") {
         return Response.json(buildCustomerRecord());
       }
+      if (url.pathname === "/api/dashboard/stats") {
+        return Response.json(buildDashboardStats());
+      }
 
       return Response.json({ ok: true, data: { id: "cloud-1" } });
     };
@@ -4109,8 +4113,7 @@ describe("certificate numbering runtime adapter", () => {
     });
     await expect(
       client.certificateNumbering.updateProfile({
-        name: "Padrao",
-        config: profile.config,
+        body: { name: "Padrao", config: profile.config },
       }),
     ).resolves.toMatchObject({
       message: "Perfil de numeracao atualizado",
@@ -4140,17 +4143,19 @@ describe("certificate numbering runtime adapter", () => {
     });
     await expect(
       client.certificateNumbering.updateProfile({
-        name: "Padrao",
-        config: {
-          labCode: "LAB",
-          projectCode: null,
-          numberTemplate: "{labCode}-{yyyy}-{seq}",
-          certificateNameTemplate: "Certificado {number}",
-          sequence: {
-            resetScope: "year",
-            startAt: 1,
-            increment: 1,
-            padding: 4,
+        body: {
+          name: "Padrao",
+          config: {
+            labCode: "LAB",
+            projectCode: null,
+            numberTemplate: "{labCode}-{yyyy}-{seq}",
+            certificateNameTemplate: "Certificado {number}",
+            sequence: {
+              resetScope: "year",
+              startAt: 1,
+              increment: 1,
+              padding: 4,
+            },
           },
         },
       }),

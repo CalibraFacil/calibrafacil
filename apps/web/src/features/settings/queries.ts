@@ -11,7 +11,6 @@ import type {
   OrganizationInvitation,
   OrganizationMember,
   OrganizationUnitsData,
-  SettingsCertificateNumberingData,
   SettingsEnvironmentalLimitsData,
   SettingsIntegrationsData,
   ContaAzulAppSummary,
@@ -74,10 +73,7 @@ export function ssoSettingsQueryOptions(organizationKey: string | null) {
 export function certificateNumberingProfileQueryOptions() {
   return queryOptions({
     queryKey: ['certificate-numbering-profile'],
-    queryFn: () =>
-      trustedApiResult<SettingsCertificateNumberingData>(
-        calibraApi.certificateNumbering.getProfile(),
-      ),
+    queryFn: () => calibraApi.certificateNumbering.getProfile(),
   })
 }
 

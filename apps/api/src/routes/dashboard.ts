@@ -1,4 +1,5 @@
 import { createRouter } from "../server/router";
+import { dashboardEndpoints } from "@calibra-facil/contracts";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { OPEN_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
@@ -42,6 +43,7 @@ import {
   or,
 } from "drizzle-orm";
 import { getDashboardWindows } from "../lib/dashboard-windows";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { buildUnitScopeCondition } from "../lib/units";
 
@@ -56,11 +58,19 @@ import { buildUnitScopeCondition } from "../lib/units";
  * Permissions:
  * - GET /stats: calibration:read (all lab roles)
  */
-export const dashboardRouter = createRouter<{ Variables: AuthVariables }>()
-  // =========================================================================
-  // GET /stats - Get all dashboard statistics
-  // =========================================================================
-  .get("/stats", ...withLabPermission({ calibration: ["read"] }), async (c) => {
+const PREFIX = "/api/dashboard";
+
+export const dashboardRouter = createRouter<{ Variables: AuthVariables }>();
+
+// =========================================================================
+// GET /stats - Get all dashboard statistics
+// =========================================================================
+mount(
+  dashboardRouter,
+  PREFIX,
+  dashboardEndpoints.getStats,
+  withLabPermission({ calibration: ["read"] }),
+  async (c) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const handlerStartedAt = performance.now();
       const memberData = c.get("member");
@@ -559,12 +569,10 @@ export const dashboardRouter = createRouter<{ Variables: AuthVariables }>()
             : 100; // Default to 100% if no decisions made
         const dueToday = dueTodayResult[0]?.count ?? 0;
         const dueNextSevenDays = dueNextSevenDaysResult[0]?.count ?? 0;
-        const statusBreakdown = statusBreakdownResult.map(
-          (row: { status: string; count: number }) => ({
-            status: row.status,
-            count: row.count,
-          }),
-        );
+        const statusBreakdown = statusBreakdownResult.map((row) => ({
+          status: row.status,
+          count: row.count,
+        }));
 
         // Format trend data
         const calibrationTrend = trendResult.map((row) => ({
@@ -589,7 +597,7 @@ export const dashboardRouter = createRouter<{ Variables: AuthVariables }>()
         const recentJobs = recentJobsResult.map(withOverdueFlag);
         const dueSoonJobs = dueSoonJobsResult.map(withOverdueFlag);
 
-        return c.json({
+        return {
           pendingCalibrations,
           approvedThisMonth,
           rejectedThisMonth,
@@ -619,9 +627,10 @@ export const dashboardRouter = createRouter<{ Variables: AuthVariables }>()
           ptRoundsPending: ptRoundsPendingResult[0]?.count ?? 0,
           spcChartsWithSignals: spcSignalsResult[0]?.count ?? 0,
           dueSoonJobs,
-        });
+        };
       } finally {
         addServerTiming(c, "dashboard_handler", handlerStartedAt);
       }
     });
-  });
+  },
+);

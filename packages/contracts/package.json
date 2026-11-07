@@ -11,6 +11,7 @@
     "./jobs-fixtures": "./src/jobs.fixtures.ts",
     "./standards-fixtures": "./src/standards.fixtures.ts",
     "./customers-fixtures": "./src/endpoints/customers.fixtures.ts",
+    "./dashboard-fixtures": "./src/endpoints/dashboard.fixtures.ts",
     "./portal-fixtures": "./src/portal.fixtures.ts",
     "./sync": "./src/sync.ts",
     "./sync-entities": "./src/sync-entities.ts",

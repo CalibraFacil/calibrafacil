@@ -222,7 +222,7 @@ export function createDesktopApiClient(
   }
 
   return {
-    dashboard: desktopCloudOnlyStubs("dashboard", { action: "Painel" }),
+    dashboard: desktopEndpointStubs("dashboard"),
     units: {
       ...desktopCloudOnlyStubs("units", { action: "Governança de unidades" }),
       async getDashboardUnits() {
@@ -302,9 +302,8 @@ export function createDesktopApiClient(
       },
     },
     certificateNumbering: {
-      ...desktopCloudOnlyStubs("certificateNumbering", {
-        action: "Numeração de certificados",
-      }),
+      ...desktopEndpointStubs("certificateNumbering"),
+      // The desktop shows the default profile; it never reads or writes the real one.
       async getProfile() {
         return desktopCertificateNumberingProfile();
       },
@@ -504,9 +503,7 @@ export function createDesktopApiClient(
     accreditedScope: desktopCloudOnlyStubs("accreditedScope", {
       action: "Escopo acreditado (CMC)",
     }),
-    reports: desktopCloudOnlyStubs("reports", {
-      action: "Relatórios consolidados",
-    }),
+    reports: desktopEndpointStubs("reports"),
     publicInvitations: desktopCloudOnlyStubs("publicInvitations", {
       action: "Convites",
     }),

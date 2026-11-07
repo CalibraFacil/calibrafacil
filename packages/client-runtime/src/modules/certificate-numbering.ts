@@ -1,27 +1,20 @@
-import type {
-  CertificateNumberingApi,
-  CertificateNumberingProfileResponse,
-  UpdateCertificateNumberingProfileResponse,
-} from "../types";
-import { readJsonResponse } from "../transport/response";
+import { certificateNumberingEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
+
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The certificate-numbering client is its endpoint group (`certificateNumberingEndpoints` in `@calibra-facil/contracts`). */
+export type CertificateNumberingApi = EndpointClient<
+  typeof certificateNumberingEndpoints
+>;
 
 export function createCertificateNumberingApi(
-  rawCloudClient: any,
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
 ): CertificateNumberingApi {
-  return {
-    async getProfile() {
-      return readJsonResponse<CertificateNumberingProfileResponse>(
-        await rawCloudClient.api["certificate-numbering"].$get(),
-        "Falha ao carregar perfil de numeração",
-      );
-    },
-    async updateProfile(input) {
-      return readJsonResponse<UpdateCertificateNumberingProfileResponse>(
-        await rawCloudClient.api["certificate-numbering"].$put({
-          json: input,
-        }),
-        "Falha ao salvar perfil",
-      );
-    },
-  };
+  return endpointClient(certificateNumberingEndpoints, transport, options);
 }

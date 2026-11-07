@@ -1,8 +1,14 @@
+import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { customerEndpoints } from "./customers";
+import { dashboardEndpoints } from "./dashboard";
 import type { EndpointGroup, EndpointPaths } from "./define";
+import { reportEndpoints } from "./reports";
 
 export * from "./define";
 export * from "./customers";
+export * from "./dashboard";
+export * from "./reports";
+export * from "./certificate-numbering";
 
 /**
  * Every converted domain, keyed by its `CalibraApi` namespace. This is the one
@@ -11,6 +17,9 @@ export * from "./customers";
  */
 export const ENDPOINT_GROUPS = {
   customers: customerEndpoints,
+  dashboard: dashboardEndpoints,
+  reports: reportEndpoints,
+  certificateNumbering: certificateNumberingEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;
