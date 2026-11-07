@@ -81,13 +81,19 @@ import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
 import {
+  formatFromEmail,
   formatLabFromHeader,
   getPlatformFromEmail,
+  getReplyToEmail,
   isPlatformEmailConfigured,
-  resolveLabEmailSender,
   sendEmailWithLabSender,
   sendPlatformEmail,
+  stripBrandSender,
 } from "@calibra-facil/email-sender";
+import {
+  labEmailSenderResolver,
+  resolveLabEmailSender,
+} from "@calibra-facil/lab-email-domain";
 import { render } from "@react-email/render";
 import {
   NotificationEmail,
@@ -444,27 +450,6 @@ function getEmailLogoSrc(): string {
   return `${appBaseUrl()}/logo192.png`;
 }
 
-function sanitizeMailHeader(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").trim();
-}
-
-function getEmailAddress(value: string): string {
-  const match = value.match(/<([^>]+)>/);
-  return match?.[1]?.trim() ?? value.trim();
-}
-
-function formatFromEmail(fromEmail: string, brand: EmailBrand | undefined) {
-  if (!brand?.isWhiteLabel) return fromEmail;
-
-  return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
-}
-
-function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
-  const email = brand?.supportEmail?.trim();
-  if (!email || !email.includes("@")) return undefined;
-  return sanitizeMailHeader(email);
-}
-
 function getWebBaseUrl(): string {
   return appBaseUrl();
 }
@@ -538,18 +523,6 @@ function createLabEmailBrand(
     website: lab.website ?? undefined,
     isWhiteLabel: true,
   };
-}
-
-/**
- * Platform-variant copy of a brand: same identity, shared envelope. Used when
- * a lab-sender attempt falls back so the rendered HTML (which shows/hides the
- * "via CalibraFácil" wording) always matches the actual envelope.
- */
-function stripBrandSender(
-  brand: EmailBrand | undefined,
-): EmailBrand | undefined {
-  if (!brand?.sender) return brand;
-  return { ...brand, sender: undefined };
 }
 
 export async function getLabEmailBrand(
@@ -930,6 +903,7 @@ async function sendNotificationEmail(options: {
     // (re-)rendered per variant so the HTML matches the actual envelope.
     const outcome = await sendEmailWithLabSender({
       organizationId: emailBrand?.sender?.organizationId,
+      labSender: labEmailSenderResolver,
       buildPayload: async (sender) => {
         const brandVariant = sender ? emailBrand : stripBrandSender(emailBrand);
         const emailElement = renderEmailTemplate(

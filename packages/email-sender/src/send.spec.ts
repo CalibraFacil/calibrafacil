@@ -16,12 +16,21 @@ vi.mock("resend", () => ({
 const getLabEmailCredentialMock = vi.hoisted(() => vi.fn());
 const markLabEmailKeyFailureMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./sender", () => ({
-  getLabEmailCredential: getLabEmailCredentialMock,
-  markLabEmailKeyFailure: markLabEmailKeyFailureMock,
-}));
+import { sendEmailWithLabSender as sendWithResolver } from "./send";
+import { formatLabFromHeader } from "./mail-headers";
 
-import { formatLabFromHeader, sendEmailWithLabSender } from "./send";
+/** The tenant-side resolver the callers pass in (here: two spies). */
+const labSender = {
+  getCredential: getLabEmailCredentialMock,
+  recordKeyFailure: markLabEmailKeyFailureMock,
+};
+
+function sendEmailWithLabSender(params: {
+  organizationId: string | undefined;
+  buildPayload: Parameters<typeof sendWithResolver>[0]["buildPayload"];
+}) {
+  return sendWithResolver({ ...params, labSender });
+}
 
 const CREDENTIAL = {
   apiKey: "re_lab_key",
@@ -274,5 +283,22 @@ describe("sendEmailWithLabSender", () => {
       retryable: false,
       error: "invalid payload",
     });
+  });
+});
+
+describe("sendEmailWithLabSender without a lab sender resolver", () => {
+  it("sends through the platform even when an organization is given", async () => {
+    emailsSendMock.mockResolvedValue({ data: { id: "e9" }, error: null });
+    const buildPayload = buildPayloadSpy();
+
+    const outcome = await sendWithResolver({
+      organizationId: "org-1",
+      buildPayload,
+    });
+
+    expect(outcome).toMatchObject({ sent: true, usedLabSender: false });
+    expect(buildPayload).toHaveBeenCalledTimes(1);
+    expect(buildPayload).toHaveBeenCalledWith(null);
+    expect(getLabEmailCredentialMock).not.toHaveBeenCalled();
   });
 });

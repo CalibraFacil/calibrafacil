@@ -1,5 +1,8 @@
 /**
- * Sender resolution for the lab-owned email domain (issue #584).
+ * Tenant sending-domain state for the lab-owned email domain (issue #584):
+ * resolve the sender and credential from `organization_email_domain`, and
+ * record a key failure with its audit event. The transport (email-sender)
+ * never touches these tables; it receives {@link labEmailSenderResolver}.
  *
  * A lab sends from its own domain only while EVERY gate holds:
  *   row active + Resend-verified + key not known-dead. Anything else resolves to `undefined` and the caller
@@ -22,20 +25,17 @@ import {
 import { and, eq, ne } from "drizzle-orm";
 import {
   decryptResendApiKey,
-  getEmailDomainMasterKey,
   EMAIL_DOMAIN_MASTER_KEY_ENV,
-} from "./encryption";
-import type { ResendFailureClass } from "./resend-domains";
+  getEmailDomainMasterKey,
+  reportEmailError,
+  type LabEmailCredential,
+  type LabSenderResolver,
+  type ResendFailureClass,
+} from "@calibra-facil/email-sender";
 
 /** Attached to EmailBrand so templates/layout know the mail is first-party. */
 export interface LabEmailSenderInfo {
   organizationId: string;
-  fromAddress: string;
-  hostname: string;
-}
-
-export interface LabEmailCredential {
-  apiKey: string;
   fromAddress: string;
   hostname: string;
 }
@@ -82,9 +82,10 @@ export async function resolveLabEmailSender(
       hostname: row.hostname,
     };
   } catch (error) {
-    console.error(
-      `[EmailSender] Failed to resolve lab sender for org ${organizationId}:`,
+    reportEmailError(
+      `Failed to resolve lab sender for org ${organizationId}`,
       error,
+      { event: "lab_sender_resolve_failed" },
     );
     return undefined;
   }
@@ -122,8 +123,10 @@ export async function getLabEmailCredential(
 
     const masterKey = getEmailDomainMasterKey();
     if (!masterKey) {
-      console.error(
-        `[EmailSender] ${EMAIL_DOMAIN_MASTER_KEY_ENV} is not set; falling back to the platform sender for org ${organizationId}.`,
+      reportEmailError(
+        `${EMAIL_DOMAIN_MASTER_KEY_ENV} is not set; falling back to the platform sender for org ${organizationId}`,
+        undefined,
+        { event: "lab_sender_master_key_missing" },
       );
       return undefined;
     }
@@ -140,9 +143,10 @@ export async function getLabEmailCredential(
       hostname: row.hostname,
     };
   } catch (error) {
-    console.error(
-      `[EmailSender] Failed to resolve lab credential for org ${organizationId}:`,
+    reportEmailError(
+      `Failed to resolve lab credential for org ${organizationId}`,
       error,
+      { event: "lab_credential_resolve_failed" },
     );
     return undefined;
   }
@@ -200,9 +204,16 @@ export async function markLabEmailKeyFailure(
       });
     });
   } catch (error) {
-    console.error(
-      `[EmailSender] Failed to record key failure for org ${organizationId}:`,
+    reportEmailError(
+      `Failed to record key failure for org ${organizationId}`,
       error,
+      { event: "lab_key_failure_record_failed" },
     );
   }
 }
+
+/** What `sendEmailWithLabSender` (email-sender) is given to resolve a lab's own credential. */
+export const labEmailSenderResolver: LabSenderResolver = {
+  getCredential: getLabEmailCredential,
+  recordKeyFailure: markLabEmailKeyFailure,
+};

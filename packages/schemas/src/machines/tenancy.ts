@@ -103,7 +103,7 @@ export const EMAIL_DOMAIN_MACHINE = defineStateMachine({
 
 // organization_email_domain.key_status: whether the lab's provider API key works.
 //   create        ok
-//   key_failure   packages/email-sender (a send the provider refused for the
+//   key_failure   packages/lab-email-domain (a send the provider refused for the
 //                   key: invalid or rate_limited), the health cron, verify
 //   key_ok        a successful health check or verify
 const EMAIL_DOMAIN_KEY_STATUSES = ["ok", "invalid", "rate_limited"] as const;

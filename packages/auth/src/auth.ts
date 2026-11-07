@@ -11,26 +11,26 @@ import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
-import type { CreateEmailOptions } from "resend";
 import {
-  formatLabFromHeader,
-  getPlatformFromEmail,
   isPlatformEmailConfigured,
-  resolveLabEmailSender,
-  sendEmailWithLabSender,
-  sendPlatformEmail,
+  sanitizeMailHeader,
 } from "@calibra-facil/email-sender";
+import { resolveLabEmailSender } from "@calibra-facil/lab-email-domain";
 import type {} from "@simplewebauthn/server";
+import type { EmailBrand } from "@calibra-facil/email";
 import {
-  EmailConfirmationEmail,
-  LabAccessLinkEmail,
-  LabOtpEmail,
-  OrganizationInvitationEmail,
-  PasswordResetEmail,
-  PortalInvitationEmail,
-  PortalMagicLinkEmail,
-  type EmailBrand,
-} from "@calibra-facil/email";
+  createLabEmailBrand,
+  deliverEmailConfirmationEmail,
+  deliverLabAccountSetupEmail,
+  deliverLabMagicLinkEmail,
+  deliverLabOtpEmail,
+  deliverOrganizationInvitationEmail,
+  deliverPasswordResetEmail,
+  deliverPortalInvitationEmail,
+  deliverPortalMagicLinkEmail,
+  emailNotConfiguredError,
+} from "./auth-emails";
+import { getRequiredEnv, readEnv, readEnvList } from "./auth-env";
 import {
   PORTAL_ACCESS_ROLES,
   ac,
@@ -49,27 +49,6 @@ import { toRecord } from "@calibra-facil/shared/record";
 
 let devFallbackAuthSecret: string | null = null;
 
-function readEnv(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
-}
-
-function getRequiredEnv(name: string): string {
-  const value = readEnv(name);
-  if (!value) {
-    throw new Error(`${name} environment variable is required`);
-  }
-  return value;
-}
-
-/** Comma-separated env list, trimmed, empty entries dropped. */
-function readEnvList(name: string): string[] {
-  return (readEnv(name) ?? "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
 function originOf(value: string | undefined): string | null {
   if (!value) return null;
   try {
@@ -77,21 +56,6 @@ function originOf(value: string | undefined): string | null {
   } catch {
     return null;
   }
-}
-
-// Sender used when neither RESEND_FROM_EMAIL nor EMAIL_FROM is configured. The
-// example.com domain is reserved, so a misconfigured deployment fails loudly at
-// the email provider instead of impersonating a real domain.
-const DEFAULT_EMAIL_FROM = "Calibra Fácil <noreply@example.com>";
-
-function getEmailLogoSrc(): string {
-  const explicitLogoUrl = readEnv("EMAIL_LOGO_URL");
-  if (explicitLogoUrl) return explicitLogoUrl;
-
-  const appUrl = readEnv("APP_URL") ?? readEnv("WEB_URL");
-  if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
-
-  return "http://localhost:5173/logo192.png";
 }
 
 function resolveApiBaseUrl(fallback: string): string {
@@ -481,52 +445,6 @@ async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
   }
 }
 
-function sanitizeMailHeader(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").trim();
-}
-
-function getEmailAddress(value: string): string {
-  const match = value.match(/<([^>]+)>/);
-  return match?.[1]?.trim() ?? value.trim();
-}
-
-function formatFromEmail(fromEmail: string, brand: EmailBrand | undefined) {
-  if (!brand?.isWhiteLabel) return fromEmail;
-
-  return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
-}
-
-function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
-  const email = brand?.supportEmail?.trim();
-  if (!email || !email.includes("@")) return undefined;
-  return sanitizeMailHeader(email);
-}
-
-/**
- * Send a transactional email through the platform transport (SMTP or Resend)
- * and FAIL LOUDLY on a delivery error.
- *
- * Providers report a rejected message (invalid/rotated key, unverified sender
- * domain, suppressed recipient, quota/rate limit) as a result, not an
- * exception. Every auth email below once discarded that result, so a total
- * delivery outage surfaced as a silent HTTP 200 with nothing logged —
- * undetectable until users reported it. Surfacing the error (log + throw →
- * 5xx) makes a rejection observable instead of invisible.
- */
-async function sendAuthEmail(payload: CreateEmailOptions): Promise<void> {
-  const result = await sendPlatformEmail(payload);
-  if (!result.ok) {
-    console.error("[Email] Delivery failed", result.error);
-    throw new Error(`Email delivery failed: ${result.error}`);
-  }
-}
-
-function emailNotConfiguredError(what: string): Error {
-  return new Error(
-    `E-mail is not configured (set SMTP_HOST or RESEND_API_KEY); cannot send ${what}`,
-  );
-}
-
 function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
   if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return null;
 
@@ -592,67 +510,6 @@ async function findPendingPortalInvitation(
   return pendingInvitation ?? null;
 }
 
-function formatLabAddress(lab: {
-  street: string | null;
-  number: string | null;
-  complement: string | null;
-  neighbourhood: string | null;
-  city: string | null;
-  state: string | null;
-  cep: string | null;
-}): string | undefined {
-  const streetLine = [lab.street, lab.number, lab.complement]
-    .filter(Boolean)
-    .join(", ");
-  const cityLine = [
-    lab.neighbourhood,
-    [lab.city, lab.state].filter(Boolean).join(" - "),
-    lab.cep ? `CEP ${lab.cep}` : undefined,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  const address = [streetLine, cityLine].filter(Boolean).join(" · ");
-
-  return address || undefined;
-}
-
-function createLabEmailBrand(lab: {
-  name: string;
-  logo: string | null;
-  cnpj: string | null;
-  accreditationNumber: string | null;
-  accreditationBody: string | null;
-  street: string | null;
-  number: string | null;
-  complement: string | null;
-  neighbourhood: string | null;
-  city: string | null;
-  state: string | null;
-  cep: string | null;
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-}): EmailBrand {
-  const accreditation = [lab.accreditationBody, lab.accreditationNumber]
-    .filter(Boolean)
-    .join(" ");
-  const legalLines = [
-    lab.cnpj ? `CNPJ ${lab.cnpj}` : undefined,
-    accreditation ? `Acreditação ${accreditation}` : undefined,
-    formatLabAddress(lab),
-    lab.phone ? `Telefone: ${lab.phone}` : undefined,
-  ].filter((line): line is string => Boolean(line));
-
-  return {
-    name: lab.name,
-    logoSrc: lab.logo ?? getEmailLogoSrc(),
-    footerLegalLines: legalLines,
-    supportEmail: lab.email ?? undefined,
-    website: lab.website ?? undefined,
-    isWhiteLabel: true,
-  };
-}
-
 async function findLabBrandForClientOrganization(
   clientOrganizationId: string,
 ): Promise<EmailBrand | undefined> {
@@ -705,14 +562,6 @@ async function findLabBrandForClientOrganization(
   }
 
   return brand;
-}
-
-/** Platform-variant brand (shared envelope): see #584 fallback semantics. */
-function stripBrandSender(
-  brand: EmailBrand | undefined,
-): EmailBrand | undefined {
-  if (!brand?.sender) return brand;
-  return { ...brand, sender: undefined };
 }
 
 async function hasExistingPortalAccess(email: string): Promise<boolean> {
@@ -811,8 +660,6 @@ async function sendPortalMagicLink(
   const labBrand = pendingInvitation
     ? await findLabBrandForClientOrganization(pendingInvitation.organizationId)
     : undefined;
-  const labName = labBrand?.name ?? null;
-
   if (!isPlatformEmailConfigured()) {
     if (isProductionRuntime()) {
       throw emailNotConfiguredError("portal magic links");
@@ -824,73 +671,21 @@ async function sendPortalMagicLink(
     return;
   }
 
-  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
-
   if (pendingInvitation) {
-    // #584: the portal INVITATION is lab-branded and may leave through the
-    // lab's own sending domain when one is active. The login magic link below
-    // stays on the platform sender on purpose: auth mail is the most
-    // deliverability-sensitive, so it rides the platform sender.
-    const invitation = pendingInvitation;
-    const outcome = await sendEmailWithLabSender({
-      organizationId: labBrand?.sender?.organizationId,
-      buildPayload: (sender) => {
-        const brandVariant = sender ? labBrand : stripBrandSender(labBrand);
-        return {
-          from:
-            sender && brandVariant
-              ? formatLabFromHeader(brandVariant.name, sender.fromAddress)
-              : formatFromEmail(fromEmail, brandVariant),
-          to: normalizedEmail,
-          subject,
-          replyTo: getReplyToEmail(brandVariant),
-          react: PortalInvitationEmail({
-            recipientName: normalizedEmail,
-            organizationName: invitation.organizationName,
-            labName,
-            role: invitation.role ?? undefined,
-            inviteUrl: magicLinkUrl,
-            logoSrc: getEmailLogoSrc(),
-            brand: brandVariant,
-          }),
-          text: [
-            `Convite para ${invitation.organizationName}`,
-            "",
-            "Use o link abaixo para aceitar o convite e acessar o portal:",
-            magicLinkUrl,
-            "",
-            "Se você não esperava este convite, ignore esta mensagem.",
-          ].join("\n"),
-        };
-      },
+    await deliverPortalInvitationEmail({
+      to: normalizedEmail,
+      subject,
+      invitation: pendingInvitation,
+      labBrand,
+      magicLinkUrl,
     });
-
-    if (!outcome.sent) {
-      // Same fail-loud contract as sendAuthEmail: a provider rejection must
-      // surface instead of returning a silent 200.
-      console.error("[Email] Delivery failed", outcome.error);
-      throw new Error(`Email delivery failed: ${outcome.error}`);
-    }
     return;
   }
 
-  await sendAuthEmail({
-    from: formatFromEmail(fromEmail, undefined),
+  await deliverPortalMagicLinkEmail({
     to: normalizedEmail,
     subject,
-    react: PortalMagicLinkEmail({
-      recipientName: normalizedEmail,
-      magicLinkUrl,
-      logoSrc: getEmailLogoSrc(),
-    }),
-    text: [
-      "Acesse o Portal CalibraFácil",
-      "",
-      "Use o link abaixo para entrar no portal:",
-      magicLinkUrl,
-      "",
-      "Se você não solicitou acesso, ignore esta mensagem.",
-    ].join("\n"),
+    magicLinkUrl,
   });
 }
 
@@ -969,27 +764,9 @@ async function sendLabMagicLink(
     return;
   }
 
-  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
-
-  const accessUrl = buildLabMagicLinkAccessUrl(data);
-
-  await sendAuthEmail({
-    from: fromEmail,
+  await deliverLabMagicLinkEmail({
     to: normalizedEmail,
-    subject: "Acesse o CalibraFácil",
-    react: LabAccessLinkEmail({
-      recipientName: normalizedEmail,
-      accessUrl,
-      logoSrc: getEmailLogoSrc(),
-    }),
-    text: [
-      "Acesse o CalibraFácil",
-      "",
-      "Use o link abaixo para entrar no dashboard:",
-      accessUrl,
-      "",
-      "Se você não solicitou acesso, ignore esta mensagem.",
-    ].join("\n"),
+    accessUrl: buildLabMagicLinkAccessUrl(data),
   });
 }
 
@@ -1021,25 +798,7 @@ async function sendLabVerificationOtp(data: {
     return;
   }
 
-  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
-
-  await sendAuthEmail({
-    from: fromEmail,
-    to: normalizedEmail,
-    subject: "Código de acesso ao CalibraFácil",
-    react: LabOtpEmail({
-      recipientName: normalizedEmail,
-      otp: data.otp,
-      logoSrc: getEmailLogoSrc(),
-    }),
-    text: [
-      "Código de acesso ao CalibraFácil",
-      "",
-      `Seu código de acesso é: ${data.otp}`,
-      "",
-      "Este código expira em poucos minutos. Se você não solicitou acesso, ignore esta mensagem.",
-    ].join("\n"),
-  });
+  await deliverLabOtpEmail({ to: normalizedEmail, otp: data.otp });
 }
 
 export async function sendLabAccountSetupEmail(input: {
@@ -1060,26 +819,11 @@ export async function sendLabAccountSetupEmail(input: {
     return;
   }
 
-  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
-
-  await sendAuthEmail({
-    from: fromEmail,
+  await deliverLabAccountSetupEmail({
     to: normalizedEmail,
-    subject: `Configure seu acesso a ${sanitizeMailHeader(input.organizationName)}`,
-    react: LabAccessLinkEmail({
-      recipientName: input.recipientName ?? normalizedEmail,
-      organizationName: input.organizationName,
-      accessUrl: input.claimUrl,
-      logoSrc: getEmailLogoSrc(),
-    }),
-    text: [
-      `Configure seu acesso a ${input.organizationName}`,
-      "",
-      "Use o link abaixo para reivindicar seu acesso ao CalibraFácil:",
-      input.claimUrl,
-      "",
-      "Se você não esperava este convite, ignore esta mensagem.",
-    ].join("\n"),
+    recipientName: input.recipientName ?? normalizedEmail,
+    organizationName: input.organizationName,
+    claimUrl: input.claimUrl,
   });
 }
 
@@ -1343,20 +1087,13 @@ function createOrganizationPlugin() {
       if (!isPlatformEmailConfigured()) {
         throw emailNotConfiguredError("organization invitations");
       }
-      const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
-
-      await sendAuthEmail({
-        from: fromEmail,
+      await deliverOrganizationInvitationEmail({
         to: data.email,
-        subject: `Convite para ${data.organization.name}`,
-        react: OrganizationInvitationEmail({
-          invitedByUsername: data.inviter.user.name,
-          invitedByEmail: data.inviter.user.email,
-          organizationName: data.organization.name,
-          inviteLink,
-          role: data.role,
-          logoSrc: getEmailLogoSrc(),
-        }),
+        organizationName: data.organization.name,
+        invitedByUsername: data.inviter.user.name,
+        invitedByEmail: data.inviter.user.email,
+        inviteLink,
+        role: data.role,
       });
     },
   });
@@ -1417,26 +1154,7 @@ function createSharedConfig(surface: AuthSurface) {
           return;
         }
 
-        const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
-
-        await sendAuthEmail({
-          from: fromEmail,
-          to: user.email,
-          subject: "Defina sua senha no CalibraFácil",
-          react: PasswordResetEmail({
-            recipientName: user.email,
-            resetUrl: url,
-            logoSrc: getEmailLogoSrc(),
-          }),
-          text: [
-            "Defina sua senha no CalibraFácil",
-            "",
-            "Use o link abaixo para definir ou redefinir sua senha:",
-            url,
-            "",
-            "Se você não esperava este email, ignore esta mensagem.",
-          ].join("\n"),
-        });
+        await deliverPasswordResetEmail({ to: user.email, resetUrl: url });
       },
       resetPasswordTokenExpiresIn: 60 * 60,
     },
@@ -1468,25 +1186,10 @@ function createSharedConfig(surface: AuthSurface) {
           return;
         }
 
-        const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
-
-        await sendAuthEmail({
-          from: fromEmail,
+        await deliverEmailConfirmationEmail({
           to: user.email,
-          subject: "Confirme seu e-mail no CalibraFácil",
-          react: EmailConfirmationEmail({
-            recipientName: user.name ?? user.email,
-            confirmationUrl: verificationUrl,
-            logoSrc: getEmailLogoSrc(),
-          }),
-          text: [
-            "Confirme seu e-mail no CalibraFácil",
-            "",
-            "Use o link abaixo para confirmar seu endereço de e-mail:",
-            verificationUrl,
-            "",
-            "Se você não criou uma conta, ignore esta mensagem.",
-          ].join("\n"),
+          recipientName: user.name ?? user.email,
+          confirmationUrl: verificationUrl,
         });
       },
     },

@@ -17,11 +17,16 @@
 
 import { render } from "@react-email/render";
 import {
+  formatFromEmail,
   formatLabFromHeader,
   getPlatformFromEmail,
+  getReplyToEmail,
   isPlatformEmailConfigured,
+  sanitizeMailHeader,
   sendEmailWithLabSender,
+  stripBrandSender,
 } from "@calibra-facil/email-sender";
+import { labEmailSenderResolver } from "@calibra-facil/lab-email-domain";
 import type { EmailBrand } from "@calibra-facil/email";
 
 // =============================================================================
@@ -154,37 +159,6 @@ export function resolveServiceOrderRecipient(
   return undefined;
 }
 
-function sanitizeMailHeader(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").trim();
-}
-
-function getEmailAddress(value: string): string {
-  const match = value.match(/<([^>]+)>/);
-  return match?.[1]?.trim() ?? value.trim();
-}
-
-function formatFromEmail(
-  fromEmail: string,
-  brand: EmailBrand | undefined,
-): string {
-  if (!brand?.isWhiteLabel) return fromEmail;
-  return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
-}
-
-function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
-  const email = brand?.supportEmail?.trim();
-  if (!email || !email.includes("@")) return undefined;
-  return sanitizeMailHeader(email);
-}
-
-/** Platform-variant brand (shared envelope): see #584 fallback semantics. */
-function stripBrandSender(
-  brand: EmailBrand | undefined,
-): EmailBrand | undefined {
-  if (!brand?.sender) return brand;
-  return { ...brand, sender: undefined };
-}
-
 // =============================================================================
 // CORE DISPATCHER
 // =============================================================================
@@ -262,6 +236,7 @@ export async function sendServiceOrderCustomerEmail(
   try {
     const outcome = await sendEmailWithLabSender({
       organizationId: brand?.sender?.organizationId,
+      labSender: labEmailSenderResolver,
       buildPayload: async (sender) => {
         const brandVariant = sender ? brand : stripBrandSender(brand);
         const element =

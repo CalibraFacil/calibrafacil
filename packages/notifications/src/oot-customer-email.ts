@@ -14,8 +14,11 @@
 
 import { render } from "@react-email/render";
 import {
+  formatFromEmail,
   getPlatformFromEmail,
+  getReplyToEmail,
   isPlatformEmailConfigured,
+  sanitizeMailHeader,
   sendPlatformEmail,
 } from "@calibra-facil/email-sender";
 import type { EmailBrand } from "@calibra-facil/email";
@@ -37,29 +40,6 @@ export type OotCustomerEmailResult =
   | { sent: true; skipped?: false; emailId?: string; error?: undefined }
   | { sent: false; skipped: true; skipReason: string; error?: undefined }
   | { sent: false; skipped?: false; error: string };
-
-function sanitizeMailHeader(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").trim();
-}
-
-function getEmailAddress(value: string): string {
-  const match = value.match(/<([^>]+)>/);
-  return match?.[1]?.trim() ?? value.trim();
-}
-
-function formatFromEmail(
-  fromEmail: string,
-  brand: EmailBrand | undefined,
-): string {
-  if (!brand?.isWhiteLabel) return fromEmail;
-  return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
-}
-
-function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
-  const email = brand?.supportEmail?.trim();
-  if (!email || !email.includes("@")) return undefined;
-  return sanitizeMailHeader(email);
-}
 
 export async function sendOotCustomerEmail(
   input: OotCustomerEmailInput,

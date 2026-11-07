@@ -1,0 +1,29 @@
+{
+  "name": "@calibra-facil/lab-email-domain",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A laboratory's own e-mail sending domain: resolves its sender and credential from organization_email_domain and records key failures with their audit event. The transport (email-sender) only sends.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "oxlint"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@calibra-facil/config": "workspace:^",
+    "@calibra-facil/db": "workspace:*",
+    "@calibra-facil/email-sender": "workspace:^",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^24.13.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  }
+}

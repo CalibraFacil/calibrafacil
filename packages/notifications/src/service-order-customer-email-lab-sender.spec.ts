@@ -2,8 +2,8 @@
  * #584 P2: white-label envelope for service-order customer emails.
  *
  * Exercises sendServiceOrderCustomerEmail through the REAL
- * @calibra-facil/email-sender chain (credential resolution + decryption +
- * fallback) with only the DB and the Resend transport mocked:
+ * @calibra-facil/email-sender + @calibra-facil/lab-email-domain chain
+ * (credential resolution + decryption + fallback) with only the DB and the Resend transport mocked:
  *
  *  - brand.sender present → the email leaves through the LAB's Resend key,
  *    From is first-party ("Lab <os@mail.lab.com.br>", no "via CalibraFácil"),

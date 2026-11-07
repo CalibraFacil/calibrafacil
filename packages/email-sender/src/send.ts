@@ -11,9 +11,37 @@
  */
 
 import { Resend, type CreateEmailOptions } from "resend";
-import { getLabEmailCredential, markLabEmailKeyFailure } from "./sender";
-import { classifyResendErrorName } from "./resend-domains";
+import {
+  classifyResendErrorName,
+  type ResendFailureClass,
+} from "./resend-domains";
+import { reportEmailError } from "./report";
 import { sendPlatformEmail } from "./transport";
+
+/** The lab's own sending identity, resolved by whoever owns the tenant's e-mail domain. */
+export interface LabEmailCredential {
+  apiKey: string;
+  fromAddress: string;
+  hostname: string;
+}
+
+/**
+ * What the sender needs to know about a laboratory's own sending domain. The
+ * state lives with the tenant's e-mail domains (the database), not in this
+ * transport: the caller passes an implementation in.
+ */
+export interface LabSenderResolver {
+  /** The decrypted credential, or `undefined` to use the platform sender. */
+  getCredential(
+    organizationId: string,
+  ): Promise<LabEmailCredential | undefined>;
+  /** Record a key/domain-class failure seen at send time. Best-effort, never throws. */
+  recordKeyFailure(
+    organizationId: string,
+    failureClass: ResendFailureClass,
+    message: string,
+  ): Promise<void>;
+}
 
 /** Passed to the payload builder when the lab variant is being rendered. */
 interface LabSenderContext {
@@ -44,15 +72,6 @@ export type SendEmailOutcome =
     }
   | { sent: false; retryable: boolean; error: string };
 
-/** From-header for the lab's own domain — no "via CalibraFácil". */
-export function formatLabFromHeader(
-  displayName: string,
-  fromAddress: string,
-): string {
-  const name = displayName.replace(/[\r\n"]+/g, " ").trim();
-  return `${name} <${fromAddress}>`;
-}
-
 async function sendOnce(
   apiKey: string,
   payload: CreateEmailOptions,
@@ -80,19 +99,24 @@ async function sendOnce(
  *
  * @param params.organizationId lab org whose sender should be tried; pass
  *   `undefined` to send via the platform directly (non-white-label mail).
+ * @param params.labSender resolves the lab's credential and records its
+ *   failures; without it every message leaves through the platform sender.
  * @param params.buildPayload see {@link EmailPayloadBuilder}.
  */
 export async function sendEmailWithLabSender(params: {
   organizationId: string | undefined;
+  labSender?: LabSenderResolver;
   buildPayload: EmailPayloadBuilder;
 }): Promise<SendEmailOutcome> {
-  const credential = params.organizationId
-    ? await getLabEmailCredential(params.organizationId)
-    : undefined;
+  const { labSender } = params;
+  const credential =
+    params.organizationId && labSender
+      ? await labSender.getCredential(params.organizationId)
+      : undefined;
 
   let fellBack = false;
 
-  if (credential && params.organizationId) {
+  if (credential && params.organizationId && labSender) {
     let labResult: Awaited<ReturnType<typeof sendOnce>>;
     try {
       const labPayload = await params.buildPayload({
@@ -122,10 +146,12 @@ export async function sendEmailWithLabSender(params: {
     }
 
     // Key/domain-class failure: record it and resend via the platform NOW.
-    console.warn(
-      `[EmailSender] Lab sender failed for org ${params.organizationId} (${labResult.errorName}: ${labResult.message}); falling back to the platform sender.`,
+    reportEmailError(
+      `Lab sender failed for org ${params.organizationId} (${labResult.errorName}: ${labResult.message}); falling back to the platform sender`,
+      undefined,
+      { event: "lab_sender_fallback" },
     );
-    await markLabEmailKeyFailure(
+    await labSender.recordKeyFailure(
       params.organizationId,
       failureClass,
       `${labResult.errorName}: ${labResult.message}`,
