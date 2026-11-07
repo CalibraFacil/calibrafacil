@@ -55,9 +55,9 @@ import { assetsRouter as bareAssetsRouter } from "./assets";
 import { calibrationRequestsRouter } from "./calibration-requests";
 import { customerGroupsRouter as bareCustomerGroupsRouter } from "./customer-groups";
 import { customersRouter as bareCustomersRouter } from "./customers";
-import { materialsRouter } from "./materials";
+import { materialsRouter as bareMaterialsRouter } from "./materials";
 import { servicesRouter } from "./services";
-import { unitsRouter } from "./units";
+import { unitsRouter as bareUnitsRouter } from "./units";
 import { visitJobsRouter } from "./visits";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { withErrorHandling } from "../../test/integration/with-error-handling";
@@ -65,6 +65,8 @@ import { withErrorHandling } from "../../test/integration/with-error-handling";
 const assetsRouter = withErrorHandling(bareAssetsRouter);
 const customerGroupsRouter = withErrorHandling(bareCustomerGroupsRouter);
 const customersRouter = withErrorHandling(bareCustomersRouter);
+const materialsRouter = withErrorHandling(bareMaterialsRouter);
+const unitsRouter = withErrorHandling(bareUnitsRouter);
 
 // The request-state notifications read what the transaction wrote and send
 // e-mail; they are not under test here.

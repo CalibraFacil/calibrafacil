@@ -22,6 +22,10 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { orgDb } from "../lib/org-db";
+import { isUniqueViolation } from "../lib/db-errors";
+import { conflict, forbidden, invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import { isValidCnpj, normalizeCnpj } from "@calibra-facil/shared/cnpj";
 import { calibrationWorkflowPermissions } from "@calibra-facil/auth/access";
 import type { RoleName } from "@calibra-facil/auth/access";
@@ -116,13 +120,43 @@ const UpdateMemberRoleSchema = z.object({
   role: z.enum(["member", "operator", "technician", "admin"]),
 });
 
-function isUniqueViolation(error: unknown) {
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? error.code
-      : undefined;
+/** The laboratory's unit, or a 404. */
+async function requireLabUnit(
+  id: number,
+  organizationId: string,
+  o: Pick<OrgDb, "select">,
+) {
+  const [existing] = await o
+    .select()
+    .from(organizationUnit)
+    .where(
+      and(
+        eq(organizationUnit.id, id),
+        eq(organizationUnit.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  if (!existing) throw notFound("unit_not_found", "Unidade não encontrada");
+  return existing;
+}
 
-  return typeof code === "string" && code === "23505";
+/** The laboratory's member, or a 404. */
+async function requireLabMember(
+  memberId: string,
+  organizationId: string,
+  o: Pick<OrgDb, "select">,
+) {
+  const [targetMember] = await o
+    .select({ id: member.id, role: member.role })
+    .from(member)
+    .where(
+      and(eq(member.id, memberId), eq(member.organizationId, organizationId)),
+    )
+    .limit(1);
+  if (!targetMember) {
+    throw notFound("member_not_found", "Membro não encontrado");
+  }
+  return targetMember;
 }
 
 async function allocateUnitSlug(
@@ -245,7 +279,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       const { memberData, viewer } = getViewerAccess(c);
 
       if (!viewer.canViewGovernance) {
-        return c.json({ error: "Permissão insuficiente" }, 403);
+        throw forbidden("forbidden", "Permissão insuficiente");
       }
 
       const units = await orgDb(memberData.organizationId).transaction((o) =>
@@ -290,70 +324,76 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateUnitSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
-      const session = c.get("session");
       const input = c.req.valid("json");
-      let created: typeof organizationUnit.$inferSelect | undefined;
 
       if (!viewer.canManageOrganizationUnits) {
-        return c.json(
-          { error: "Apenas administradores globais podem criar unidades" },
-          403,
+        throw forbidden(
+          "forbidden",
+          "Apenas administradores globais podem criar unidades",
         );
       }
 
-      // One transaction per attempt: a unique violation aborts it, and the
-      // retry allocates a fresh slug in a new one.
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          [created] = await orgDb(memberData.organizationId).transaction(
-            async (o) => {
-              const slug = await allocateUnitSlug(o, {
-                organizationId: memberData.organizationId,
-                name: input.name,
-              });
+      const created = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          let unit: typeof organizationUnit.$inferSelect | undefined;
 
-              const rows = await o
-                .insert(organizationUnit)
-                .values({
+          // One savepoint per attempt: a unique violation aborts it, and the
+          // retry allocates a fresh slug in a new one.
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              [unit] = await ctx.o.transaction(async (o) => {
+                const slug = await allocateUnitSlug(o, {
                   organizationId: memberData.organizationId,
                   name: input.name,
-                  slug,
-                  status: "ACTIVE",
-                  isDefault: false,
-                  createdBy: session.user.id,
-                })
-                .returning();
-
-              const [unit] = rows;
-              if (unit) {
-                await o.insert(organizationEventLog).values({
-                  organizationId: memberData.organizationId,
-                  unitId: unit.id,
-                  actorUserId: session.user.id,
-                  actorMemberId: memberData.id,
-                  action: "unit.created",
-                  entityType: "organization_unit",
-                  entityId: String(unit.id),
-                  details: {
-                    name: input.name,
-                    slug: unit.slug,
-                  },
                 });
-              }
 
-              return rows;
-            },
-          );
-          break;
-        } catch (error) {
-          if (!isUniqueViolation(error) || attempt === 1) {
-            throw error;
+                const rows = await o
+                  .insert(organizationUnit)
+                  .values({
+                    organizationId: memberData.organizationId,
+                    name: input.name,
+                    slug,
+                    status: "ACTIVE",
+                    isDefault: false,
+                    createdBy: ctx.actor.userId,
+                  })
+                  .returning();
+
+                const [inserted] = rows;
+                if (inserted) {
+                  await o.insert(organizationEventLog).values({
+                    organizationId: memberData.organizationId,
+                    unitId: inserted.id,
+                    actorUserId: ctx.actor.userId,
+                    actorMemberId: memberData.id,
+                    action: "unit.created",
+                    entityType: "organization_unit",
+                    entityId: String(inserted.id),
+                    details: {
+                      name: input.name,
+                      slug: inserted.slug,
+                    },
+                  });
+                }
+
+                return rows;
+              });
+              break;
+            } catch (error) {
+              if (!isUniqueViolation(error) || attempt === 1) {
+                throw error;
+              }
+            }
           }
-        }
-      }
+
+          return unit;
+        },
+      );
 
       if (!created) {
-        return c.json({ error: "Falha ao criar unidade" }, 500);
+        throw new Error("Falha ao criar unidade");
       }
 
       return c.json(created, 201);
@@ -366,43 +406,28 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateUnitSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
-      const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
 
       if (!viewer.canManageOrganizationUnits) {
-        return c.json(
-          { error: "Apenas administradores globais podem atualizar unidades" },
-          403,
+        throw forbidden(
+          "forbidden",
+          "Apenas administradores globais podem atualizar unidades",
         );
       }
 
       if (!Number.isInteger(id)) {
-        return c.json({ error: "ID inválido" }, 400);
+        throw invalid("invalid_request", "ID inválido");
       }
 
-      const [existing] = await orgDb(memberData.organizationId).transaction(
-        (o) =>
-          o
-            .select()
-            .from(organizationUnit)
-            .where(
-              and(
-                eq(organizationUnit.id, id),
-                eq(organizationUnit.organizationId, memberData.organizationId),
-              ),
-            )
-            .limit(1),
+      const existing = await orgDb(memberData.organizationId).transaction((o) =>
+        requireLabUnit(id, memberData.organizationId, o),
       );
 
-      if (!existing) {
-        return c.json({ error: "Unidade não encontrada" }, 404);
-      }
-
       if (input.status === "ARCHIVED" && existing.isDefault) {
-        return c.json(
-          { error: "A unidade padrão não pode ser arquivada" },
-          400,
+        throw invalid(
+          "unit_default_not_archivable",
+          "A unidade padrão não pode ser arquivada",
         );
       }
 
@@ -437,69 +462,75 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(existing);
       }
 
-      let updated: typeof existing | undefined;
+      const updated = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          let result: typeof existing | undefined;
 
-      // One transaction per attempt: a unique violation aborts it, and the
-      // retry allocates a fresh slug in a new one.
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          [updated] = await orgDb(memberData.organizationId).transaction(
-            async (o) => {
-              if (input.name && renamed) {
-                updateData.slug = await allocateUnitSlug(o, {
+          // One savepoint per attempt: a unique violation aborts it, and the
+          // retry allocates a fresh slug in a new one.
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              [result] = await ctx.o.transaction(async (o) => {
+                if (input.name && renamed) {
+                  updateData.slug = await allocateUnitSlug(o, {
+                    organizationId: memberData.organizationId,
+                    name: input.name,
+                    excludeId: id,
+                  });
+                }
+
+                const rows = await o
+                  .update(organizationUnit)
+                  .set(updateData)
+                  // Compare-and-set on the status the checks above read.
+                  .where(
+                    and(
+                      eq(organizationUnit.id, id),
+                      eq(organizationUnit.status, existing.status),
+                    ),
+                  )
+                  .returning();
+
+                await o.insert(organizationEventLog).values({
                   organizationId: memberData.organizationId,
-                  name: input.name,
-                  excludeId: id,
-                });
-              }
-
-              const rows = await o
-                .update(organizationUnit)
-                .set(updateData)
-                // Compare-and-set on the status the checks above read.
-                .where(
-                  and(
-                    eq(organizationUnit.id, id),
-                    eq(organizationUnit.status, existing.status),
-                  ),
-                )
-                .returning();
-
-              await o.insert(organizationEventLog).values({
-                organizationId: memberData.organizationId,
-                unitId: id,
-                actorUserId: session.user.id,
-                actorMemberId: memberData.id,
-                action:
-                  input.status === "ARCHIVED"
-                    ? "unit.archived"
-                    : input.status === "ACTIVE" &&
-                        existing.status === "ARCHIVED"
-                      ? "unit.reactivated"
-                      : "unit.updated",
-                entityType: "organization_unit",
-                entityId: String(id),
-                details: {
-                  before: {
-                    name: existing.name,
-                    slug: existing.slug,
-                    status: existing.status,
-                    ...bodyBefore,
+                  unitId: id,
+                  actorUserId: ctx.actor.userId,
+                  actorMemberId: memberData.id,
+                  action:
+                    input.status === "ARCHIVED"
+                      ? "unit.archived"
+                      : input.status === "ACTIVE" &&
+                          existing.status === "ARCHIVED"
+                        ? "unit.reactivated"
+                        : "unit.updated",
+                  entityType: "organization_unit",
+                  entityId: String(id),
+                  details: {
+                    before: {
+                      name: existing.name,
+                      slug: existing.slug,
+                      status: existing.status,
+                      ...bodyBefore,
+                    },
+                    after: updateData,
                   },
-                  after: updateData,
-                },
-              });
+                });
 
-              return rows;
-            },
-          );
-          break;
-        } catch (error) {
-          if (!isUniqueViolation(error) || attempt === 1) {
-            throw error;
+                return rows;
+              });
+              break;
+            } catch (error) {
+              if (!isUniqueViolation(error) || attempt === 1) {
+                throw error;
+              }
+            }
           }
-        }
-      }
+
+          return result;
+        },
+      );
 
       return c.json(updated);
     },
@@ -512,7 +543,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       const { memberData, viewer } = getViewerAccess(c);
 
       if (!viewer.canViewGovernance) {
-        return c.json({ error: "Permissão insuficiente" }, 403);
+        throw forbidden("forbidden", "Permissão insuficiente");
       }
 
       return orgDb(memberData.organizationId).transaction(async (o) => {
@@ -609,7 +640,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       const { memberData, viewer } = getViewerAccess(c);
 
       if (!viewer.canViewGovernance) {
-        return c.json({ error: "Permissão insuficiente" }, 403);
+        throw forbidden("forbidden", "Permissão insuficiente");
       }
 
       return orgDb(memberData.organizationId).transaction(async (o) => {
@@ -694,45 +725,32 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateAssignmentsSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
-      const session = c.get("session");
       const targetMemberId = c.req.param("memberId");
       const input = c.req.valid("json");
 
       if (!viewer.canManageAssignments) {
-        return c.json(
-          { error: "Permissão insuficiente para editar atribuições" },
-          403,
+        throw forbidden(
+          "forbidden",
+          "Permissão insuficiente para editar atribuições",
         );
       }
 
       const dedupedAssignments = dedupeUnitAssignments(input.assignments);
 
-      return orgDb(memberData.organizationId).transaction(async (o) => {
-        const [targetMember] = await o
-          .select({ id: member.id, role: member.role })
-          .from(member)
-          .where(
-            and(
-              eq(member.id, targetMemberId),
-              eq(member.organizationId, memberData.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!targetMember) {
-          return c.json({ error: "Membro não encontrado" }, 404);
-        }
+      await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+        const targetMember = await requireLabMember(
+          targetMemberId,
+          memberData.organizationId,
+          ctx.o,
+        );
 
         if (
           !viewer.isGlobalManager &&
           ["owner", "admin"].includes(targetMember.role)
         ) {
-          return c.json(
-            {
-              error:
-                "Papéis globais não podem ser gerenciados por administradores de unidade",
-            },
-            403,
+          throw forbidden(
+            "forbidden",
+            "Papéis globais não podem ser gerenciados por administradores de unidade",
           );
         }
 
@@ -744,18 +762,16 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           !viewer.isGlobalManager &&
           unitIds.some((unitId) => !viewer.managedUnitIds.includes(unitId))
         ) {
-          return c.json(
-            {
-              error: "Uma ou mais unidades estão fora do seu escopo de gestão",
-            },
-            403,
+          throw forbidden(
+            "forbidden",
+            "Uma ou mais unidades estão fora do seu escopo de gestão",
           );
         }
 
         const units =
           unitIds.length === 0
             ? []
-            : await o
+            : await ctx.o
                 .select({ id: organizationUnit.id })
                 .from(organizationUnit)
                 .where(
@@ -769,13 +785,13 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
                 );
 
         if (units.length !== unitIds.length) {
-          return c.json(
-            { error: "Uma ou mais unidades informadas são inválidas" },
-            400,
+          throw invalid(
+            "invalid_request",
+            "Uma ou mais unidades informadas são inválidas",
           );
         }
 
-        const existingAssignments = await o
+        const existingAssignments = await ctx.o
           .select({
             unitId: memberUnitAssignment.unitId,
             role: memberUnitAssignment.role,
@@ -812,7 +828,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         );
 
         if (scopedEditableUnitIds.length > 0) {
-          await o
+          await ctx.o
             .delete(memberUnitAssignment)
             .where(
               and(
@@ -827,20 +843,20 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         if (dedupedAssignments.length > 0) {
-          await o.insert(memberUnitAssignment).values(
+          await ctx.o.insert(memberUnitAssignment).values(
             dedupedAssignments.map((assignment) => ({
               organizationId: memberData.organizationId,
               memberId: targetMemberId,
               unitId: assignment.unitId,
               role: assignment.role,
-              createdBy: session.user.id,
+              createdBy: ctx.actor.userId,
             })),
           );
         }
 
-        await o.insert(organizationEventLog).values({
+        await ctx.o.insert(organizationEventLog).values({
           organizationId: memberData.organizationId,
-          actorUserId: session.user.id,
+          actorUserId: ctx.actor.userId,
           actorMemberId: memberData.id,
           action: "unit.assignments.updated",
           entityType: "member",
@@ -852,9 +868,9 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
             after: dedupedAssignments,
           },
         });
-
-        return c.json({ success: true });
       });
+
+      return c.json({ success: true });
     },
   )
   .patch(
@@ -864,47 +880,32 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateMemberRoleSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
-      const session = c.get("session");
       const targetMemberId = c.req.param("memberId");
       const input = c.req.valid("json");
 
       if (!viewer.canManageGlobalRoles) {
-        return c.json(
-          {
-            error:
-              "Apenas administradores globais podem alterar papéis globais",
-          },
-          403,
+        throw forbidden(
+          "forbidden",
+          "Apenas administradores globais podem alterar papéis globais",
         );
       }
 
-      return orgDb(memberData.organizationId).transaction(async (o) => {
-        const [targetMember] = await o
-          .select({ id: member.id, role: member.role })
-          .from(member)
-          .where(
-            and(
-              eq(member.id, targetMemberId),
-              eq(member.organizationId, memberData.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!targetMember) {
-          return c.json({ error: "Membro não encontrado" }, 404);
-        }
+      await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+        const targetMember = await requireLabMember(
+          targetMemberId,
+          memberData.organizationId,
+          ctx.o,
+        );
 
         if (targetMember.role === "owner") {
-          return c.json(
-            {
-              error: "O proprietário da organização não pode ser alterado aqui",
-            },
-            400,
+          throw invalid(
+            "invalid_request",
+            "O proprietário da organização não pode ser alterado aqui",
           );
         }
 
         if (targetMember.role === input.role) {
-          return c.json({ success: true });
+          return;
         }
 
         // Separation of duties (ISO/IEC 17025 6.2.4): the organization must always
@@ -915,7 +916,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           isCalibrationApprover(targetMember.role) &&
           !isCalibrationApprover(input.role)
         ) {
-          const [remainingApprovers] = await o
+          const [remainingApprovers] = await ctx.o
             .select({ value: count() })
             .from(member)
             .where(
@@ -927,25 +928,21 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
             );
 
           if ((remainingApprovers?.value ?? 0) === 0) {
-            return c.json(
-              {
-                error:
-                  "Não é possível rebaixar o último membro capaz de aprovar calibrações. A organização precisa manter ao menos um aprovador (separação de funções, ISO/IEC 17025 6.2.4).",
-                code: "LAST_CALIBRATION_APPROVER",
-              },
-              409,
+            throw conflict(
+              "LAST_CALIBRATION_APPROVER",
+              "Não é possível rebaixar o último membro capaz de aprovar calibrações. A organização precisa manter ao menos um aprovador (separação de funções, ISO/IEC 17025 6.2.4).",
             );
           }
         }
 
-        await o
+        await ctx.o
           .update(member)
           .set({ role: input.role })
           .where(eq(member.id, targetMemberId));
 
-        await o.insert(organizationEventLog).values({
+        await ctx.o.insert(organizationEventLog).values({
           organizationId: memberData.organizationId,
-          actorUserId: session.user.id,
+          actorUserId: ctx.actor.userId,
           actorMemberId: memberData.id,
           action: "member.role.updated",
           entityType: "member",
@@ -955,8 +952,8 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
             after: { role: input.role },
           },
         });
-
-        return c.json({ success: true });
       });
+
+      return c.json({ success: true });
     },
   );

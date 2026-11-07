@@ -29,9 +29,14 @@ import { seedOrg, seedStandard } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { capaRouter } from "./capa";
 import { nonConformancesRouter } from "./non-conformances";
-import { proficiencyTestsRouter } from "./proficiency-tests";
-import { spcRouter } from "./spc";
+import { proficiencyTestsRouter as bareProficiencyTestsRouter } from "./proficiency-tests";
+import { spcRouter as bareSpcRouter } from "./spc";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const spcRouter = withErrorHandling(bareSpcRouter);
+
+const proficiencyTestsRouter = withErrorHandling(bareProficiencyTestsRouter);
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),

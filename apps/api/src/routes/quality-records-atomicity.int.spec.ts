@@ -23,10 +23,13 @@ import {
   proficiencyTestAuditLog,
   ptPlanItem,
 } from "@calibra-facil/db/schema";
-import { proficiencyTestsRouter } from "./proficiency-tests";
+import { proficiencyTestsRouter as bareProficiencyTestsRouter } from "./proficiency-tests";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const proficiencyTestsRouter = withErrorHandling(bareProficiencyTestsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
@@ -50,11 +53,15 @@ const UNSATISFACTORY_POINT = {
   scoreType: "en",
 };
 
-/** Makes every UPDATE of `table` fail, for the duration of `run`. */
+/**
+ * Makes every UPDATE of `table` fail, for the duration of `run`. The failure is
+ * an internal error (XX000), not P0001: the app's error handler reads a P0001
+ * as a trigger's refusal and answers 409.
+ */
 async function withFailingUpdates<T>(table: string, run: () => Promise<T>) {
   await db.execute(
     sql.raw(`create or replace function p218d_fail_update() returns trigger
-      language plpgsql as $$ begin raise exception 'p218d: forced failure'; end $$`),
+      language plpgsql as $$ begin raise exception 'p218d: forced failure' using errcode = 'XX000'; end $$`),
   );
   await db.execute(
     sql.raw(

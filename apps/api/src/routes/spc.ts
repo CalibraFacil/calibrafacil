@@ -5,7 +5,6 @@ import { orgDb } from "../lib/org-db";
 import {
   checkStandardReading,
   controlChart,
-  controlChartAuditLog,
   referenceStandard,
   user,
   type SpcChartParams,
@@ -23,6 +22,7 @@ import { evaluateChart } from "@calibra-facil/interval-analysis";
 import {
   withLabPermission,
   type AuthVariables,
+  type MemberData,
 } from "../middleware/permission";
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { calibrationJobBelongsToOrganization } from "../lib/tenant-refs";
@@ -30,7 +30,9 @@ import { buildUnitScopeCondition } from "../lib/units";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, asc, desc, count } from "drizzle-orm";
 import { SPC_MACHINE } from "@calibra-facil/schemas/machines";
-import { clientIp } from "../lib/client-ip";
+import { invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 
 /**
  * SPC Router - ISO/IEC 17025 §7.7.1 (issue #60 Phase 1)
@@ -56,6 +58,53 @@ async function loadChartScoped(
     )
     .limit(1);
   return chart;
+}
+
+/** The laboratory's chart, or a 404. */
+async function requireChart(
+  id: number,
+  organizationId: string,
+  executor: Pick<OrgExecutor, "select">,
+) {
+  const chart = await loadChartScoped(id, organizationId, executor);
+  if (!chart) {
+    throw notFound(
+      "control_chart_not_found",
+      "Carta de controle não encontrada",
+    );
+  }
+  return chart;
+}
+
+function requireId(raw: string): number {
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) throw invalid("invalid_request", "ID inválido");
+  return id;
+}
+
+/** A reference standard the caller can see (the unit scope applies), or a 404. */
+async function requireVisibleStandard(
+  standardId: number,
+  member: MemberData,
+  executor: Pick<OrgExecutor, "select">,
+) {
+  const [standard] = await executor
+    .select({ id: referenceStandard.id })
+    .from(referenceStandard)
+    .where(
+      and(
+        eq(referenceStandard.id, standardId),
+        eq(referenceStandard.organizationId, member.organizationId),
+        // A standard outside the caller's units is not visible to them
+        // (the `spc:create` unit elevation relies on this, see
+        // UNIT_ELEVATED_ACTIONS in middleware/permission.ts).
+        buildUnitScopeCondition(referenceStandard.unitId, member),
+      ),
+    )
+    .limit(1);
+  if (!standard) {
+    throw notFound("standard_not_found", "Padrão de referência não encontrado");
+  }
 }
 
 /**
@@ -185,15 +234,9 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/charts/:id", ...withLabPermission({ spc: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
-    if (isNaN(id)) {
-      return c.json({ error: "ID inválido" }, 400);
-    }
+    const id = requireId(c.req.param("id"));
     return await orgDb(member.organizationId).transaction(async (tx) => {
-      const chart = await loadChartScoped(id, member.organizationId, tx);
-      if (!chart) {
-        return c.json({ error: "Carta de controle não encontrada" }, 404);
-      }
+      const chart = await requireChart(id, member.organizationId, tx);
 
       const [readings, [standard]] = await Promise.all([
         tx
@@ -241,86 +284,70 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateControlChartSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [standard] = await tx
-          .select({ id: referenceStandard.id })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.id, input.standardId),
-              eq(referenceStandard.organizationId, member.organizationId),
-              // A standard outside the caller's units is not visible to them
-              // (the `spc:create` unit elevation relies on this, see
-              // UNIT_ELEVATED_ACTIONS in middleware/permission.ts).
-              buildUnitScopeCondition(referenceStandard.unitId, member),
-            ),
-          )
-          .limit(1);
-        if (!standard) {
-          return c.json({ error: "Padrão de referência não encontrado" }, 404);
-        }
+      const chart = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          await requireVisibleStandard(input.standardId, member, ctx.o);
 
-        // A body-supplied unit must be one the caller can access (throws 403
-        // otherwise — identical for another tenant's unit and an unknown one).
-        const chartUnitId =
-          input.unitId == null
-            ? null
-            : resolveAccessibleUnitContext(member, input.unitId).unitId;
+          // A body-supplied unit must be one the caller can access (throws 403
+          // otherwise — identical for another tenant's unit and an unknown one).
+          const chartUnitId =
+            input.unitId == null
+              ? null
+              : resolveAccessibleUnitContext(member, input.unitId).unitId;
 
-        const [existing] = await tx
-          .select({ id: controlChart.id })
-          .from(controlChart)
-          .where(
-            and(
-              eq(controlChart.standardId, input.standardId),
-              eq(controlChart.parameter, input.parameter),
-            ),
-          )
-          .limit(1);
-        if (existing) {
-          return c.json(
-            { error: "Já existe uma carta para este padrão e parâmetro" },
-            400,
+          const [existing] = await ctx.o
+            .select({ id: controlChart.id })
+            .from(controlChart)
+            .where(
+              and(
+                eq(controlChart.standardId, input.standardId),
+                eq(controlChart.parameter, input.parameter),
+              ),
+            )
+            .limit(1);
+          if (existing) {
+            throw invalid(
+              "control_chart_exists",
+              "Já existe uma carta para este padrão e parâmetro",
+            );
+          }
+
+          const [created] = await ctx.o
+            .insert(controlChart)
+            .values({
+              organizationId: member.organizationId,
+              unitId: chartUnitId,
+              standardId: input.standardId,
+              parameter: input.parameter,
+              chartType: input.chartType,
+              params: input.params ?? null,
+              createdBy: ctx.actor.userId,
+            })
+            .returning();
+
+          if (!created) {
+            throw new Error("Falha ao criar carta de controle");
+          }
+
+          await ctx.audit("controlChart", created.id, {
+            action: "create",
+            changes: { initial: input },
+          });
+
+          await recomputeControlChart(created, ctx.o);
+          const refreshed = await loadChartScoped(
+            created.id,
+            member.organizationId,
+            ctx.o,
           );
-        }
-
-        const [created] = await tx
-          .insert(controlChart)
-          .values({
-            organizationId: member.organizationId,
-            unitId: chartUnitId,
-            standardId: input.standardId,
-            parameter: input.parameter,
-            chartType: input.chartType,
-            params: input.params ?? null,
-            createdBy: session.user.id,
-          })
-          .returning();
-
-        if (!created) {
-          return c.json({ error: "Falha ao criar carta de controle" }, 500);
-        }
-
-        await tx.insert(controlChartAuditLog).values({
-          organizationId: member.organizationId,
-          controlChartId: created.id,
-          action: "create",
-          changes: { initial: input },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-
-        await recomputeControlChart(created, tx);
-        const refreshed = await loadChartScoped(
-          created.id,
-          member.organizationId,
-          tx,
-        );
-        return c.json(refreshed ?? created, 201);
-      });
+          return refreshed ?? created;
+        },
+      );
+      return c.json(chart, 201);
     },
   )
 
@@ -333,47 +360,46 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateControlChartSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireId(c.req.param("id"));
       const input = c.req.valid("json");
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const chart = await loadChartScoped(id, member.organizationId, tx);
-        if (!chart) {
-          return c.json({ error: "Carta de controle não encontrada" }, 404);
-        }
+      const chart = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireChart(id, member.organizationId, ctx.o);
 
-        const [updated] = await tx
-          .update(controlChart)
-          .set({
-            chartType: input.chartType ?? chart.chartType,
-            params: input.params === undefined ? chart.params : input.params,
-          })
-          .where(
-            and(
-              eq(controlChart.id, id),
-              eq(controlChart.organizationId, member.organizationId),
-            ),
-          )
-          .returning();
+          const [updated] = await ctx.o
+            .update(controlChart)
+            .set({
+              chartType: input.chartType ?? existing.chartType,
+              params:
+                input.params === undefined ? existing.params : input.params,
+            })
+            .where(
+              and(
+                eq(controlChart.id, id),
+                eq(controlChart.organizationId, member.organizationId),
+              ),
+            )
+            .returning();
 
-        await tx.insert(controlChartAuditLog).values({
-          organizationId: member.organizationId,
-          controlChartId: id,
-          action: "update",
-          changes: { input },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          await ctx.audit("controlChart", id, {
+            action: "update",
+            changes: { input },
+          });
 
-        if (updated) {
-          await recomputeControlChart(updated, tx);
-        }
-        const refreshed = await loadChartScoped(id, member.organizationId, tx);
-        return c.json(refreshed ?? updated);
-      });
+          if (updated) {
+            await recomputeControlChart(updated, ctx.o);
+          }
+          const refreshed = await loadChartScoped(
+            id,
+            member.organizationId,
+            ctx.o,
+          );
+          return refreshed ?? updated;
+        },
+      );
+      return c.json(chart);
     },
   )
 
@@ -385,13 +411,9 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ spc: ["delete"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const deleted = await tx
+      const id = requireId(c.req.param("id"));
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const deleted = await ctx.o
           .delete(controlChart)
           .where(
             and(
@@ -401,17 +423,14 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .returning();
         if (deleted.length === 0) {
-          return c.json({ error: "Carta de controle não encontrada" }, 404);
+          throw notFound(
+            "control_chart_not_found",
+            "Carta de controle não encontrada",
+          );
         }
-        await tx.insert(controlChartAuditLog).values({
-          organizationId: member.organizationId,
-          controlChartId: id,
-          action: "delete",
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-        return c.json({ message: "Carta removida" });
+        await ctx.audit("controlChart", id, { action: "delete" });
       });
+      return c.json({ message: "Carta removida" });
     },
   )
 
@@ -423,34 +442,32 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ spc: ["recalculate"] }),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const chart = await loadChartScoped(id, member.organizationId, tx);
-        if (!chart) {
-          return c.json({ error: "Carta de controle não encontrada" }, 404);
-        }
+      const id = requireId(c.req.param("id"));
+      const chart = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireChart(id, member.organizationId, ctx.o);
 
-        const evaluation = await recomputeControlChart(chart, tx);
+          const evaluation = await recomputeControlChart(existing, ctx.o);
 
-        await tx.insert(controlChartAuditLog).values({
-          organizationId: member.organizationId,
-          controlChartId: id,
-          action: "recalculate",
-          changes: {
-            status: { old: chart.status, new: evaluation.status },
-            fingerprint: evaluation.fingerprint,
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          await ctx.audit("controlChart", id, {
+            action: "recalculate",
+            changes: {
+              status: { old: existing.status, new: evaluation.status },
+              fingerprint: evaluation.fingerprint,
+            },
+          });
 
-        const refreshed = await loadChartScoped(id, member.organizationId, tx);
-        return c.json(refreshed ?? chart);
-      });
+          const refreshed = await loadChartScoped(
+            id,
+            member.organizationId,
+            ctx.o,
+          );
+          return refreshed ?? existing;
+        },
+      );
+      return c.json(chart);
     },
   )
 
@@ -463,88 +480,83 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", EscalateControlChartSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = requireId(c.req.param("id"));
       const input = c.req.valid("json");
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const chart = await loadChartScoped(id, member.organizationId, tx);
-        if (!chart) {
-          return c.json({ error: "Carta de controle não encontrada" }, 404);
-        }
-        if (chart.capaId) {
-          return c.json({ error: "Carta já possui CAPA vinculada" }, 400);
-        }
-        if (
-          chart.status === "in_control" ||
-          chart.status === "insufficient_data"
-        ) {
-          return c.json(
-            { error: "Carta sob controle estatístico — nada a escalar" },
-            400,
-          );
-        }
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const chart = await requireChart(id, member.organizationId, ctx.o);
+          if (chart.capaId) {
+            throw invalid(
+              "control_chart_already_escalated",
+              "Carta já possui CAPA vinculada",
+            );
+          }
+          if (
+            chart.status === "in_control" ||
+            chart.status === "insufficient_data"
+          ) {
+            throw invalid(
+              "control_chart_in_control",
+              "Carta sob controle estatístico — nada a escalar",
+            );
+          }
 
-        const [standard] = await tx
-          .select({ name: referenceStandard.name })
-          .from(referenceStandard)
-          .where(eq(referenceStandard.id, chart.standardId))
-          .limit(1);
-        const ruleSummary = (chart.lastEvaluation?.ruleHits ?? [])
-          .map((h) => h.description)
-          .join("; ");
+          const [standard] = await ctx.o
+            .select({ name: referenceStandard.name })
+            .from(referenceStandard)
+            .where(eq(referenceStandard.id, chart.standardId))
+            .limit(1);
+          const ruleSummary = (chart.lastEvaluation?.ruleHits ?? [])
+            .map((h) => h.description)
+            .join("; ");
 
-        const newCapa = await createCorrectiveActionRecord(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            source: "spc_signal",
-            sourceReference: `${standard?.name ?? `Padrão #${chart.standardId}`} — ${chart.parameter}`,
-            title: `Sinal de controle estatístico: ${standard?.name ?? `padrão #${chart.standardId}`}`,
-            description:
-              input.description ??
-              `Carta de controle "${chart.parameter}" do padrão ${standard?.name ?? `#${chart.standardId}`} em estado "${chart.status}". Regras violadas: ${ruleSummary || "n/d"}.`,
-            detectionDate: chart.lastEvaluatedAt ?? new Date(),
-            severity: chart.status === "out_of_control" ? "major" : "minor",
-            category: "equipment",
-            ipAddress: clientIp(c),
-          },
-          tx,
-        );
-
-        await tx
-          .update(controlChart)
-          .set({ capaId: newCapa.id })
-          .where(
-            and(
-              eq(controlChart.id, id),
-              eq(controlChart.organizationId, member.organizationId),
-            ),
+          const newCapa = await createCorrectiveActionRecord(
+            {
+              organizationId: member.organizationId,
+              actorUserId: ctx.actor.userId,
+              source: "spc_signal",
+              sourceReference: `${standard?.name ?? `Padrão #${chart.standardId}`} — ${chart.parameter}`,
+              title: `Sinal de controle estatístico: ${standard?.name ?? `padrão #${chart.standardId}`}`,
+              description:
+                input.description ??
+                `Carta de controle "${chart.parameter}" do padrão ${standard?.name ?? `#${chart.standardId}`} em estado "${chart.status}". Regras violadas: ${ruleSummary || "n/d"}.`,
+              detectionDate: chart.lastEvaluatedAt ?? new Date(),
+              severity: chart.status === "out_of_control" ? "major" : "minor",
+              category: "equipment",
+              ipAddress: ctx.actor.ipAddress,
+            },
+            ctx.o,
           );
 
-        await tx.insert(controlChartAuditLog).values({
-          organizationId: member.organizationId,
-          controlChartId: id,
-          action: "escalate",
-          changes: {
-            capaId: { old: null, new: newCapa.id },
-            capaNumber: newCapa.capaNumber,
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          await ctx.o
+            .update(controlChart)
+            .set({ capaId: newCapa.id })
+            .where(
+              and(
+                eq(controlChart.id, id),
+                eq(controlChart.organizationId, member.organizationId),
+              ),
+            );
 
-        const refreshed = await loadChartScoped(id, member.organizationId, tx);
-        return c.json(
-          {
-            message: "CAPA criada com sucesso",
-            data: { chart: refreshed, capa: newCapa },
-          },
-          201,
-        );
-      });
+          await ctx.audit("controlChart", id, {
+            action: "escalate",
+            changes: {
+              capaId: { old: null, new: newCapa.id },
+              capaNumber: newCapa.capaNumber,
+            },
+          });
+
+          const refreshed = await loadChartScoped(
+            id,
+            member.organizationId,
+            ctx.o,
+          );
+          return { chart: refreshed, capa: newCapa };
+        },
+      );
+      return c.json({ message: "CAPA criada com sucesso", data: result }, 201);
     },
   )
 
@@ -604,72 +616,63 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", CreateCheckStandardReadingSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [standard] = await tx
-          .select({ id: referenceStandard.id })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.id, input.standardId),
-              eq(referenceStandard.organizationId, member.organizationId),
-              // A standard outside the caller's units is not visible to them
-              // (the `spc:create` unit elevation relies on this, see
-              // UNIT_ELEVATED_ACTIONS in middleware/permission.ts).
-              buildUnitScopeCondition(referenceStandard.unitId, member),
-            ),
-          )
-          .limit(1);
-        if (!standard) {
-          return c.json({ error: "Padrão de referência não encontrado" }, 404);
-        }
+      const created = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          await requireVisibleStandard(input.standardId, member, ctx.o);
 
-        if (
-          input.sourceJobId != null &&
-          !(await calibrationJobBelongsToOrganization(
-            member.organizationId,
-            input.sourceJobId,
-            tx,
-          ))
-        ) {
-          return c.json({ error: "Calibração de origem não encontrada" }, 404);
-        }
+          if (
+            input.sourceJobId != null &&
+            !(await calibrationJobBelongsToOrganization(
+              member.organizationId,
+              input.sourceJobId,
+              ctx.o,
+            ))
+          ) {
+            throw notFound(
+              "job_not_found",
+              "Calibração de origem não encontrada",
+            );
+          }
 
-        const [created] = await tx
-          .insert(checkStandardReading)
-          .values({
-            organizationId: member.organizationId,
-            standardId: input.standardId,
-            parameter: input.parameter,
-            value: input.value,
-            uncertainty: input.uncertainty ?? null,
-            measuredAt: new Date(input.measuredAt),
-            sourceJobId: input.sourceJobId ?? null,
-            createdBy: session.user.id,
-          })
-          .returning();
+          const [reading] = await ctx.o
+            .insert(checkStandardReading)
+            .values({
+              organizationId: member.organizationId,
+              standardId: input.standardId,
+              parameter: input.parameter,
+              value: input.value,
+              uncertainty: input.uncertainty ?? null,
+              measuredAt: new Date(input.measuredAt),
+              sourceJobId: input.sourceJobId ?? null,
+              createdBy: ctx.actor.userId,
+            })
+            .returning();
 
-        // Keep the matching chart current so trends surface without waiting
-        // for the nightly sweep.
-        const [chart] = await tx
-          .select()
-          .from(controlChart)
-          .where(
-            and(
-              eq(controlChart.organizationId, member.organizationId),
-              eq(controlChart.standardId, input.standardId),
-              eq(controlChart.parameter, input.parameter),
-            ),
-          )
-          .limit(1);
-        if (chart) {
-          await recomputeControlChart(chart, tx);
-        }
+          // Keep the matching chart current so trends surface without waiting
+          // for the nightly sweep.
+          const [chart] = await ctx.o
+            .select()
+            .from(controlChart)
+            .where(
+              and(
+                eq(controlChart.organizationId, member.organizationId),
+                eq(controlChart.standardId, input.standardId),
+                eq(controlChart.parameter, input.parameter),
+              ),
+            )
+            .limit(1);
+          if (chart) {
+            await recomputeControlChart(chart, ctx.o);
+          }
 
-        return c.json(created, 201);
-      });
+          return reading;
+        },
+      );
+      return c.json(created, 201);
     },
   )
 
@@ -681,12 +684,9 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ spc: ["delete"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const deleted = await tx
+      const id = requireId(c.req.param("id"));
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const deleted = await ctx.o
           .delete(checkStandardReading)
           .where(
             and(
@@ -697,10 +697,13 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
         const removed = deleted[0];
         if (!removed) {
-          return c.json({ error: "Leitura não encontrada" }, 404);
+          throw notFound(
+            "check_standard_reading_not_found",
+            "Leitura não encontrada",
+          );
         }
 
-        const [chart] = await tx
+        const [chart] = await ctx.o
           .select()
           .from(controlChart)
           .where(
@@ -712,10 +715,9 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .limit(1);
         if (chart) {
-          await recomputeControlChart(chart, tx);
+          await recomputeControlChart(chart, ctx.o);
         }
-
-        return c.json({ message: "Leitura removida" });
       });
+      return c.json({ message: "Leitura removida" });
     },
   );

@@ -16,7 +16,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { proficiencyTestsRouter } from "./proficiency-tests";
+import { proficiencyTestsRouter as bareProficiencyTestsRouter } from "./proficiency-tests";
 import { db } from "@calibra-facil/db";
 import {
   correctiveAction,
@@ -27,6 +27,9 @@ import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const proficiencyTestsRouter = withErrorHandling(bareProficiencyTestsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 

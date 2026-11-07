@@ -22,6 +22,9 @@ import {
   selectEffectiveEnvironmentalLimits,
 } from "../lib/unit-operational-settings";
 import { orgDb } from "../lib/org-db";
+import { invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 
 export const environmentalLimitsRouter = new Hono<{
   Variables: AuthVariables;
@@ -81,7 +84,7 @@ export const environmentalLimitsRouter = new Hono<{
       const queryUnitId = c.req.query("unitId");
 
       if (isNaN(assetTypeId)) {
-        return c.json({ error: "ID inválido" }, 400);
+        throw invalid("invalid_request", "ID inválido");
       }
 
       const unit = resolveAccessibleUnitContext(
@@ -145,42 +148,46 @@ export const environmentalLimitsRouter = new Hono<{
     async (c) => {
       const input = c.req.valid("json");
       const memberData = c.get("member");
-      const session = c.get("session");
       requireUnitOperationalSettingsManager(memberData);
       const unit = resolveAccessibleUnitContext(memberData);
 
-      const [result] = await orgDb(memberData.organizationId).transaction((o) =>
-        o
-          .insert(environmentalLimits)
-          .values({
-            organizationId: memberData.organizationId,
-            unitId: unit.unitId,
-            assetTypeId: input.assetTypeId,
-            temperatureMin: input.temperatureMin,
-            temperatureMax: input.temperatureMax,
-            humidityMin: input.humidityMin,
-            humidityMax: input.humidityMax,
-            pressureMin: input.pressureMin,
-            pressureMax: input.pressureMax,
-            updatedBy: session.user.id,
-          })
-          .onConflictDoUpdate({
-            target: [
-              environmentalLimits.organizationId,
-              environmentalLimits.unitId,
-              environmentalLimits.assetTypeId,
-            ],
-            set: {
+      const result = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [saved] = await ctx.o
+            .insert(environmentalLimits)
+            .values({
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              assetTypeId: input.assetTypeId,
               temperatureMin: input.temperatureMin,
               temperatureMax: input.temperatureMax,
               humidityMin: input.humidityMin,
               humidityMax: input.humidityMax,
               pressureMin: input.pressureMin,
               pressureMax: input.pressureMax,
-              updatedBy: session.user.id,
-            },
-          })
-          .returning(),
+              updatedBy: ctx.actor.userId,
+            })
+            .onConflictDoUpdate({
+              target: [
+                environmentalLimits.organizationId,
+                environmentalLimits.unitId,
+                environmentalLimits.assetTypeId,
+              ],
+              set: {
+                temperatureMin: input.temperatureMin,
+                temperatureMax: input.temperatureMax,
+                humidityMin: input.humidityMin,
+                humidityMax: input.humidityMax,
+                pressureMin: input.pressureMin,
+                pressureMax: input.pressureMax,
+                updatedBy: ctx.actor.userId,
+              },
+            })
+            .returning();
+          return saved;
+        },
       );
 
       if (!result) {
@@ -207,11 +214,11 @@ export const environmentalLimitsRouter = new Hono<{
     const unit = resolveAccessibleUnitContext(memberData);
 
     if (isNaN(id)) {
-      return c.json({ error: "ID inválido" }, 400);
+      throw invalid("invalid_request", "ID inválido");
     }
 
-    const [deleted] = await orgDb(memberData.organizationId).transaction((o) =>
-      o
+    await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+      const [deleted] = await ctx.o
         .delete(environmentalLimits)
         .where(
           and(
@@ -220,12 +227,15 @@ export const environmentalLimitsRouter = new Hono<{
             eq(environmentalLimits.unitId, unit.unitId),
           ),
         )
-        .returning(),
-    );
+        .returning();
 
-    if (!deleted) {
-      return c.json({ error: "Configuração não encontrada" }, 404);
-    }
+      if (!deleted) {
+        throw notFound(
+          "environmental_limits_not_found",
+          "Configuração não encontrada",
+        );
+      }
+    });
 
     return c.json({
       message: "Limites removidos",

@@ -14,10 +14,16 @@ import {
 import {
   withLabPermission,
   type AuthVariables,
+  type MemberData,
 } from "../middleware/permission";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
 import { orgDb } from "../lib/org-db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import { isUniqueViolation } from "../lib/db-errors";
+import { conflict, invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 
 /**
  * Materials Router - Parts/Materials Catalog (Peças e materiais)
@@ -40,18 +46,35 @@ function parseMaterialId(raw: string): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-function extractPgCode(error: unknown): unknown {
-  if (!error || typeof error !== "object") return undefined;
-  if ("code" in error && error.code !== undefined) return error.code;
-  // Drizzle wraps driver errors (DrizzleQueryError) — the SQLSTATE lives on cause
-  if ("cause" in error) return extractPgCode(error.cause);
-  return undefined;
+/** The route's material id, or a 400. */
+function requireMaterialId(raw: string): number {
+  const id = parseMaterialId(raw);
+  if (id === null) throw invalid("invalid_request", "ID inválido");
+  return id;
 }
 
-function isUniqueViolation(error: unknown) {
-  const code = extractPgCode(error);
-  return typeof code === "string" && code === "23505";
+/** A material the caller's units can see, or a 404. */
+async function requireLabMaterial(
+  id: number,
+  member: MemberData,
+  executor: Pick<OrgExecutor, "select">,
+) {
+  const [found] = await executor
+    .select()
+    .from(material)
+    .where(
+      and(
+        eq(material.id, id),
+        eq(material.organizationId, member.organizationId),
+        buildUnitScopeCondition(material.unitId, member),
+      ),
+    )
+    .limit(1);
+  if (!found) throw notFound("material_not_found", "Material não encontrado");
+  return found;
 }
+
+const DUPLICATE_SKU = "Já existe um material com este código";
 
 export const materialsRouter = new Hono<{
   Variables: AuthVariables;
@@ -143,29 +166,11 @@ export const materialsRouter = new Hono<{
   // =========================================================================
   .get("/:id", ...withLabPermission({ service: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseMaterialId(c.req.param("id"));
+    const id = requireMaterialId(c.req.param("id"));
 
-    if (id === null) {
-      return c.json({ error: "ID inválido" }, 400);
-    }
-
-    const [found] = await orgDb(member.organizationId).transaction((o) =>
-      o
-        .select()
-        .from(material)
-        .where(
-          and(
-            eq(material.id, id),
-            eq(material.organizationId, member.organizationId),
-            buildUnitScopeCondition(material.unitId, member),
-          ),
-        )
-        .limit(1),
+    const found = await orgDb(member.organizationId).transaction((o) =>
+      requireLabMaterial(id, member, o),
     );
-
-    if (!found) {
-      return c.json({ error: "Material não encontrado" }, 404);
-    }
 
     return c.json(found);
   })
@@ -182,43 +187,45 @@ export const materialsRouter = new Hono<{
       const input = c.req.valid("json");
 
       if (!member.activeUnitId) {
-        return c.json(
-          { error: "Selecione uma unidade específica para criar materiais" },
-          400,
+        throw invalid(
+          "unit_active_required",
+          "Selecione uma unidade específica para criar materiais",
         );
       }
 
       try {
         const { activeUnitId } = member;
-        const [created] = await orgDb(member.organizationId).transaction((o) =>
-          o
-            .insert(material)
-            .values({
-              unitId: activeUnitId,
-              organizationId: member.organizationId,
-              name: input.name,
-              description: input.description || null,
-              sku: input.sku || null,
-              unit: input.unit || "un",
-              unitCostCents: input.unitCostCents ?? null,
-              unitPriceCents: input.unitPriceCents ?? null,
-              controlsStock: input.controlsStock ?? false,
-              isActive: input.isActive ?? true,
-            })
-            .returning(),
+        const created = await withOrg(
+          member.organizationId,
+          requestActor(c),
+          async (ctx) => {
+            const [row] = await ctx.o
+              .insert(material)
+              .values({
+                unitId: activeUnitId,
+                organizationId: member.organizationId,
+                name: input.name,
+                description: input.description || null,
+                sku: input.sku || null,
+                unit: input.unit || "un",
+                unitCostCents: input.unitCostCents ?? null,
+                unitPriceCents: input.unitPriceCents ?? null,
+                controlsStock: input.controlsStock ?? false,
+                isActive: input.isActive ?? true,
+              })
+              .returning();
+            return row;
+          },
         );
 
         if (!created) {
-          return c.json({ error: "Falha ao criar material" }, 500);
+          throw new Error("Falha ao criar material");
         }
 
         return c.json(created, 201);
       } catch (error) {
         if (isUniqueViolation(error)) {
-          return c.json(
-            { error: "Já existe um material com este código" },
-            409,
-          );
+          throw conflict("material_sku_conflict", DUPLICATE_SKU);
         }
         throw error;
       }
@@ -235,29 +242,11 @@ export const materialsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const input = c.req.valid("json");
-      const id = parseMaterialId(c.req.param("id"));
+      const id = requireMaterialId(c.req.param("id"));
 
-      if (id === null) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-
-      const [existing] = await orgDb(member.organizationId).transaction((o) =>
-        o
-          .select()
-          .from(material)
-          .where(
-            and(
-              eq(material.id, id),
-              eq(material.organizationId, member.organizationId),
-              buildUnitScopeCondition(material.unitId, member),
-            ),
-          )
-          .limit(1),
+      const existing = await orgDb(member.organizationId).transaction((o) =>
+        requireLabMaterial(id, member, o),
       );
-
-      if (!existing) {
-        return c.json({ error: "Material não encontrado" }, 404);
-      }
 
       const updateData: Record<string, unknown> = {};
       if (input.name !== undefined) updateData.name = input.name;
@@ -282,21 +271,23 @@ export const materialsRouter = new Hono<{
       }
 
       try {
-        const [updated] = await orgDb(member.organizationId).transaction((o) =>
-          o
-            .update(material)
-            .set(updateData)
-            .where(eq(material.id, id))
-            .returning(),
+        const updated = await withOrg(
+          member.organizationId,
+          requestActor(c),
+          async (ctx) => {
+            const [row] = await ctx.o
+              .update(material)
+              .set(updateData)
+              .where(eq(material.id, id))
+              .returning();
+            return row;
+          },
         );
 
         return c.json(updated);
       } catch (error) {
         if (isUniqueViolation(error)) {
-          return c.json(
-            { error: "Já existe um material com este código" },
-            409,
-          );
+          throw conflict("material_sku_conflict", DUPLICATE_SKU);
         }
         throw error;
       }
@@ -313,29 +304,11 @@ export const materialsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const input = c.req.valid("json");
-      const id = parseMaterialId(c.req.param("id"));
+      const id = requireMaterialId(c.req.param("id"));
 
-      if (id === null) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-
-      const [existing] = await orgDb(member.organizationId).transaction((o) =>
-        o
-          .select({ id: material.id })
-          .from(material)
-          .where(
-            and(
-              eq(material.id, id),
-              eq(material.organizationId, member.organizationId),
-              buildUnitScopeCondition(material.unitId, member),
-            ),
-          )
-          .limit(1),
+      await orgDb(member.organizationId).transaction((o) =>
+        requireLabMaterial(id, member, o),
       );
-
-      if (!existing) {
-        return c.json({ error: "Material não encontrado" }, 404);
-      }
 
       try {
         const result = await adjustMaterialErpStock({
@@ -354,7 +327,7 @@ export const materialsRouter = new Hono<{
         // pt-BR message; unexpected failures still bubble to the 500 handler.
         const message =
           error instanceof Error ? error.message : "Falha ao ajustar estoque";
-        return c.json({ error: message }, 409);
+        throw conflict("conflict", message);
       }
     },
   )
@@ -364,39 +337,26 @@ export const materialsRouter = new Hono<{
   // =========================================================================
   .delete("/:id", ...withLabPermission({ service: ["delete"] }), async (c) => {
     const member = c.get("member");
-    const id = parseMaterialId(c.req.param("id"));
+    const id = requireMaterialId(c.req.param("id"));
 
-    if (id === null) {
-      return c.json({ error: "ID inválido" }, 400);
-    }
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        await requireLabMaterial(id, member, ctx.o);
 
-    return orgDb(member.organizationId).transaction(async (o) => {
-      const [existing] = await o
-        .select()
-        .from(material)
-        .where(
-          and(
-            eq(material.id, id),
-            eq(material.organizationId, member.organizationId),
-            buildUnitScopeCondition(material.unitId, member),
-          ),
-        )
-        .limit(1);
+        // Soft delete - never hard delete commercial data
+        const [row] = await ctx.o
+          .update(material)
+          .set({ isActive: false })
+          .where(eq(material.id, id))
+          .returning();
+        return row;
+      },
+    );
 
-      if (!existing) {
-        return c.json({ error: "Material não encontrado" }, 404);
-      }
-
-      // Soft delete - never hard delete commercial data
-      const [updated] = await o
-        .update(material)
-        .set({ isActive: false })
-        .where(eq(material.id, id))
-        .returning();
-
-      return c.json({
-        message: "Material desativado com sucesso",
-        data: updated,
-      });
+    return c.json({
+      message: "Material desativado com sucesso",
+      data: updated,
     });
   });
