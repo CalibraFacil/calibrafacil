@@ -65,7 +65,7 @@ export function NewCompetencePage() {
       userId: string
       assetTypeId?: number
       scopeDescription: string
-    }) => calibraApi.competences.create<{ id: number }>(payload),
+    }) => calibraApi.competences.create({ body: payload }),
     onSuccess: (result) => {
       toast.success('Solicitação de competência criada')
       navigate({

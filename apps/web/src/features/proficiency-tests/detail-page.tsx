@@ -63,7 +63,10 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   delete: 'Remoção',
 }
 
-function formatValueWithUncertainty(value: number, uncertainty: number | null) {
+function formatValueWithUncertainty(
+  value: number,
+  uncertainty: number | null | undefined,
+) {
   if (uncertainty == null) return String(value)
   return `${value} ± ${uncertainty}`
 }

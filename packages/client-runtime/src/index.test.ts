@@ -1489,7 +1489,17 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "transition",
+          "method": "startTraining",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "completeTraining",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "suspend",
           "namespace": "competences",
           "policy": "cloud-only",
         },

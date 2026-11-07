@@ -97,7 +97,17 @@ export function CompetenceDetailPage({ id }: { id: string }) {
       action,
     }: {
       action: 'start-training' | 'complete-training' | 'suspend'
-    }) => calibraApi.competences.transition(id, action),
+    }) => {
+      const input = { params: { id } }
+      switch (action) {
+        case 'start-training':
+          return calibraApi.competences.startTraining(input)
+        case 'complete-training':
+          return calibraApi.competences.completeTraining(input)
+        case 'suspend':
+          return calibraApi.competences.suspend(input)
+      }
+    },
     onSuccess: () => {
       invalidateAll()
       toast.success('Status atualizado')
@@ -112,7 +122,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
       notes?: string
       qualifiedAt?: string
       expiresAt?: string
-    }) => calibraApi.competences.evaluate(id, data),
+    }) => calibraApi.competences.evaluate({ params: { id }, body: data }),
     onSuccess: () => {
       invalidateAll()
       toast.success('Avaliação registrada')
@@ -128,7 +138,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
       notes?: string
       qualifiedAt?: string
       expiresAt?: string
-    }) => calibraApi.competences.renew(id, data),
+    }) => calibraApi.competences.renew({ params: { id }, body: data }),
     onSuccess: () => {
       invalidateAll()
       toast.success('Competência renovada')
@@ -139,7 +149,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
 
   const cancelMutation = useMutation({
     mutationFn: async (notes?: string) =>
-      calibraApi.competences.cancel(id, { notes }),
+      calibraApi.competences.cancel({ params: { id }, body: { notes } }),
     onSuccess: () => {
       invalidateAll()
       toast.success('Competência cancelada')
@@ -150,7 +160,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async () => calibraApi.competences.delete(id),
+    mutationFn: async () => calibraApi.competences.delete({ params: { id } }),
     onSuccess: async () => {
       invalidateAll()
       toast.success('Competência excluída')
@@ -380,7 +390,8 @@ export function CompetenceDetailPage({ id }: { id: string }) {
                 comp.status,
                 'assign_training',
               ) &&
-                comp.status === 'REQUESTED' && (
+                comp.status === 'REQUESTED' &&
+                comp.userId && (
                   <AssignTrainingDialog
                     competenceId={id}
                     userId={comp.userId}
@@ -577,8 +588,9 @@ function AssignTrainingDialog({
 
   const assignTrainingMutation = useMutation({
     mutationFn: async (trainingRecordIds: number[]) =>
-      calibraApi.competences.assignTraining(competenceId, {
-        trainingRecordIds,
+      calibraApi.competences.assignTraining({
+        params: { id: competenceId },
+        body: { trainingRecordIds },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['training-records'] })
@@ -592,8 +604,8 @@ function AssignTrainingDialog({
 
   const createTrainingMutation = useMutation({
     mutationFn: async () => {
-      const created = await calibraApi.trainingRecords.create<{ id: number }>(
-        createTrainingRecordPayload({
+      const created = await calibraApi.trainingRecords.create({
+        body: createTrainingRecordPayload({
           userId,
           title,
           type,
@@ -602,10 +614,11 @@ function AssignTrainingDialog({
           startDate,
           endDate,
         }),
-      )
+      })
 
-      return calibraApi.competences.assignTraining(competenceId, {
-        trainingRecordIds: [created.id],
+      return calibraApi.competences.assignTraining({
+        params: { id: competenceId },
+        body: { trainingRecordIds: [created.id] },
       })
     },
     onSuccess: () => {

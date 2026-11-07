@@ -26,13 +26,13 @@ import type {
   UpdateNotificationPreferencesSchema,
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
-import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
+import type { CompetencesApi } from "./modules/competences";
 import type { CustomersApi } from "./modules/customers";
 import type { DashboardApi } from "./modules/dashboard";
+import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
 import type { ReportsApi } from "./modules/reports";
-import type { SignaturesApi } from "./modules/signatures";
-import type { VisitsApi } from "./modules/visits";
+import type { TrainingRecordsApi } from "./modules/training-records";
 
 export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
@@ -82,8 +82,6 @@ import type {
   CnpjLookupResult,
   DashboardJob,
   DashboardStats,
-  MySignatureResponse,
-  SignatureUploadResponse,
   UpdateCertificateNumberingProfileResponse,
   CustomerDetail,
   CustomersListResponse,
@@ -1211,86 +1209,9 @@ export interface CapasApi {
   ): Promise<TResponse>;
 }
 
-export type ProficiencyTestListInput = {
-  page: number;
-  limit: number;
-  query?: string;
-  status?: string;
-  activityType?: string;
-  scopePart?: string;
-};
-
-export type ProficiencyTestCreateInput = {
-  activityType?: "proficiency_test" | "interlab_comparison";
-  provider: string;
-  providerAccreditation?: string;
-  ptRound: string;
-  scopePart: string;
-  metrologyKind?: string;
-  standardId?: number;
-  unitId?: number;
-  registrationDate?: string;
-  participationDate?: string;
-  notes?: string;
-};
-
-export type ProficiencyTestUpdateInput = Partial<ProficiencyTestCreateInput>;
-
-type PtResultPointInput = {
-  label: string;
-  unit?: string;
-  labValue: number;
-  labUncertainty?: number;
-  refValue: number;
-  refUncertainty?: number;
-  sigmaPt?: number;
-  scoreType?: "en" | "z" | "z_prime" | "zeta";
-};
-
-export type ProficiencyTestRecordResultsInput = {
-  resultReportedAt: string;
-  results: PtResultPointInput[];
-};
-
-export type PtPlanItemCreateInput = {
-  scopePart: string;
-  riskJustification?: string;
-  frequencyMonths?: number;
-  unitId?: number;
-  lastSatisfactoryAt?: string;
-};
-
-export type PtPlanItemUpdateInput = Partial<PtPlanItemCreateInput>;
-
-export interface ProficiencyTestsApi {
-  list<TResponse = unknown>(
-    input: ProficiencyTestListInput,
-  ): Promise<TResponse>;
-  summary<TResponse = unknown>(): Promise<TResponse>;
-  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  auditLog<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  create<TResponse = unknown>(
-    input: ProficiencyTestCreateInput,
-  ): Promise<TResponse>;
-  update<TResponse = unknown>(
-    id: string | number,
-    input: ProficiencyTestUpdateInput,
-  ): Promise<TResponse>;
-  recordResults<TResponse = unknown>(
-    id: string | number,
-    input: ProficiencyTestRecordResultsInput,
-  ): Promise<TResponse>;
-  remove<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  listPlan<TResponse = unknown>(): Promise<TResponse>;
-  createPlanItem<TResponse = unknown>(
-    input: PtPlanItemCreateInput,
-  ): Promise<TResponse>;
-  updatePlanItem<TResponse = unknown>(
-    id: string | number,
-    input: PtPlanItemUpdateInput,
-  ): Promise<TResponse>;
-  removePlanItem<TResponse = unknown>(id: string | number): Promise<TResponse>;
-}
+// Proficiency tests, competences and training records: the clients are generated
+// from the endpoint definitions (`modules/`); their DTOs are the contract's.
+export type { ProficiencyTestsApi };
 
 export type SpcChartListInput = {
   standardId?: number;
@@ -1372,93 +1293,139 @@ export interface SpcApi {
   removeReading<TResponse = unknown>(id: string | number): Promise<TResponse>;
 }
 
-export type CompetenceListInput = {
+export type { CompetencesApi, TrainingRecordsApi };
+
+export type CalibrationRequestsListInput = {
   page: number;
   limit: number;
+  query?: string;
   status?: string;
-  userId?: string;
-  assetTypeId?: string | number;
 };
 
-export type CompetenceCreateInput = {
-  userId: string;
-  assetTypeId?: number;
-  scopeDescription: string;
+export type CalibrationRequestActionInput = {
+  internalNotes?: string;
 };
 
-export type CompetenceEvaluateInput = {
-  passed: boolean;
-  notes?: string;
-  qualifiedAt?: string;
-  expiresAt?: string;
+export type CalibrationRequestConvertInput = {
+  items: Array<{
+    itemId: number;
+    serviceId: number;
+    technicianId?: string;
+    dueDate?: string;
+  }>;
+  // On-site only: schedule one visit for the whole conversion (the trip).
+  visit?: {
+    scheduledAt?: string | null;
+    technicianId?: string | null;
+  } | null;
 };
 
-export type CompetenceAssignTrainingInput = {
-  trainingRecordIds: number[];
-};
-
-export interface CompetencesApi {
-  list<TResponse = unknown>(input: CompetenceListInput): Promise<TResponse>;
-  matrix<TResponse = unknown>(): Promise<TResponse>;
+export interface CalibrationRequestsApi {
+  list<TResponse = unknown>(
+    input: CalibrationRequestsListInput,
+  ): Promise<TResponse>;
   get<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  auditLog<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  create<TResponse = unknown>(input: CompetenceCreateInput): Promise<TResponse>;
-  transition<TResponse = unknown>(
+  review<TResponse = unknown>(
     id: string | number,
-    action: "start-training" | "complete-training" | "suspend",
+    input?: CalibrationRequestActionInput,
   ): Promise<TResponse>;
-  evaluate<TResponse = unknown>(
+  approve<TResponse = unknown>(
     id: string | number,
-    input: CompetenceEvaluateInput,
+    input?: CalibrationRequestActionInput,
   ): Promise<TResponse>;
-  renew<TResponse = unknown>(
+  reject<TResponse = unknown>(
     id: string | number,
-    input: CompetenceEvaluateInput,
+    input: CalibrationRequestActionInput & { reason: string },
+  ): Promise<TResponse>;
+  convert<TResponse = unknown>(
+    id: string | number,
+    input: CalibrationRequestConvertInput,
+  ): Promise<TResponse>;
+}
+
+// — On-site visits (calibração in loco) —————————————————————————————————————
+
+export type VisitsListInput = {
+  page?: number;
+  limit?: number;
+  status?: string;
+  technicianId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  mine?: boolean;
+  rescheduleRequested?: boolean;
+};
+
+export type VisitAssignInput = { technicianId: string };
+
+export type VisitConfirmInput = {
+  scheduledAt?: string | null;
+  technicianId?: string | null;
+};
+
+export type VisitRescheduleInput = {
+  scheduledAt?: string | null;
+  scheduledEndAt?: string | null;
+  address?: unknown;
+  notes?: string | null;
+};
+
+export type VisitCancelInput = { reason?: string | null };
+
+export type VisitAddJobInput = {
+  assetId: number;
+  serviceId: number;
+};
+
+export type VisitAcceptRescheduleRequestInput = {
+  scheduledAt: string;
+  scheduledEndAt?: string | null;
+  resolutionNote?: string | null;
+};
+
+export type VisitDeclineRescheduleRequestInput = {
+  resolutionNote?: string | null;
+};
+
+export interface VisitsApi {
+  list<TResponse = unknown>(input?: VisitsListInput): Promise<TResponse>;
+  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  assign<TResponse = unknown>(
+    id: string | number,
+    input: VisitAssignInput,
+  ): Promise<TResponse>;
+  confirm<TResponse = unknown>(
+    id: string | number,
+    input?: VisitConfirmInput,
+  ): Promise<TResponse>;
+  reschedule<TResponse = unknown>(
+    id: string | number,
+    input: VisitRescheduleInput,
   ): Promise<TResponse>;
   cancel<TResponse = unknown>(
     id: string | number,
-    input?: { notes?: string },
+    input?: VisitCancelInput,
   ): Promise<TResponse>;
-  delete<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  assignTraining<TResponse = unknown>(
+  complete<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  addJob<TResponse = unknown>(
     id: string | number,
-    input: CompetenceAssignTrainingInput,
+    input: VisitAddJobInput,
+  ): Promise<TResponse>;
+  removeJob<TResponse = unknown>(
+    id: string | number,
+    jobId: string | number,
+  ): Promise<TResponse>;
+  acceptRescheduleRequest<TResponse = unknown>(
+    id: string | number,
+    requestId: string | number,
+    input: VisitAcceptRescheduleRequestInput,
+  ): Promise<TResponse>;
+  declineRescheduleRequest<TResponse = unknown>(
+    id: string | number,
+    requestId: string | number,
+    input?: VisitDeclineRescheduleRequestInput,
   ): Promise<TResponse>;
 }
-
-export type TrainingRecordsListInput = {
-  page: number;
-  limit: number;
-  userId?: string;
-  competenceId?: string | number;
-  status?: string;
-  type?: string;
-};
-
-export type TrainingRecordCreateInput = {
-  userId: string;
-  title: string;
-  type: string;
-  provider?: string;
-  description?: string;
-  startDate: string;
-  endDate?: string;
-  competenceId?: number;
-};
-
-export interface TrainingRecordsApi {
-  list<TResponse = unknown>(
-    input: TrainingRecordsListInput,
-  ): Promise<TResponse>;
-  create<TResponse = unknown>(
-    input: TrainingRecordCreateInput,
-  ): Promise<TResponse>;
-}
-
-// CALIBRATION REQUESTS and ON-SITE VISITS: the DTOs and the clients are the
-// endpoint definitions' own (`endpoints/calibration-requests.ts`,
-// `endpoints/visits.ts`; `modules/calibration-requests.ts`, `modules/visits.ts`).
-export type { CalibrationRequestsApi, VisitsApi };
 
 export interface IntegrationsApi {
   list<TResponse = unknown>(): Promise<TResponse>;
@@ -2148,10 +2115,39 @@ export interface NotificationsApi {
   ): Promise<NotificationPreferencesResponse>;
 }
 
-// SIGNATURES: the DTOs are the contract schemas' types
-// (`endpoints/signatures.ts`); the client is generated from the endpoint
-// definitions plus the multipart upload (`modules/signatures.ts`).
-export type { MySignatureResponse, SignatureUploadResponse, SignaturesApi };
+type SignatureImageDimensions = {
+  width: number;
+  height: number;
+};
+
+export type MySignatureResponse =
+  | {
+      hasSignature: false;
+    }
+  | {
+      hasSignature: true;
+      url: string;
+      dimensions: SignatureImageDimensions;
+      uploadedAt?: string | Date | null;
+    };
+
+export type SignatureUploadResponse = {
+  message: string;
+  dimensions: SignatureImageDimensions;
+};
+
+export type SignatureDeleteResponse = {
+  message: string;
+};
+
+export interface SignaturesApi {
+  getMine(): Promise<MySignatureResponse>;
+  uploadMine(
+    file: Blob,
+    input?: { fileName?: string },
+  ): Promise<SignatureUploadResponse>;
+  deleteMine(): Promise<SignatureDeleteResponse>;
+}
 
 export type ProfileAvatarUploadResponse = {
   imageUrl: string;

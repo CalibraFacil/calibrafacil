@@ -14,6 +14,8 @@ import {
   Settings02Icon,
 } from '@hugeicons/core-free-icons'
 
+import { isRecord } from '@calibra-facil/shared/record'
+
 import {
   EventTimeline,
   type EventTimelineItem,
@@ -371,7 +373,8 @@ function mapActionToEventType(action: string): TimelineEvent['type'] {
 export interface AuditLogRecord {
   id: number
   action: string
-  changes?: Record<string, unknown> | null
+  /** The audit row's jsonb diff; entity-specific, narrowed where it is read. */
+  changes?: unknown
   performedAt: string
   performedBy?: string | null
   performerName?: string | null
@@ -387,10 +390,8 @@ export interface AuditLogRecord {
  * returns undefined for entries that aren't from-template adoptions.
  */
 function describeAuditChanges(log: AuditLogRecord): string | undefined {
+  if (log.action !== 'create' || !isRecord(log.changes)) return undefined
   const changes = log.changes
-  if (log.action !== 'create' || !changes || typeof changes !== 'object') {
-    return undefined
-  }
   const fromTemplate = changes.fromTemplate
   if (typeof fromTemplate !== 'string') return undefined
 

@@ -10,6 +10,8 @@ import {
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import { CALIBRATION_REQUEST_STATUS } from '@calibra-facil/schemas/machines'
 import {
+  type CalibrationRequestDetail,
+  type CalibrationRequestsListData,
   type CalibrationRequestsListQueryInput,
   type CalibrationRequestStatus,
   type RequestConversionService,
@@ -50,13 +52,11 @@ export function calibrationRequestsListQueryOptions(
       input.statusFilter,
     ],
     queryFn: () =>
-      calibraApi.calibrationRequests.list({
-        query: {
-          page: input.page,
-          limit: input.limit,
-          query: input.search || undefined,
-          status: input.statusFilter || undefined,
-        },
+      calibraApi.calibrationRequests.list<CalibrationRequestsListData>({
+        page: input.page,
+        limit: input.limit,
+        query: input.search || undefined,
+        status: input.statusFilter || undefined,
       }),
     placeholderData: keepPreviousDataInScope([
       'calibration-requests',
@@ -71,7 +71,8 @@ export function calibrationRequestDetailQueryOptions(
 ) {
   return queryOptions({
     queryKey: ['calibration-request', organizationId, String(id)],
-    queryFn: () => calibraApi.calibrationRequests.get({ params: { id } }),
+    queryFn: () =>
+      calibraApi.calibrationRequests.get<CalibrationRequestDetail>(id),
   })
 }
 

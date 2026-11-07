@@ -1,3 +1,4 @@
+import { buildTrainingRecordListItem } from '@calibra-facil/contracts/training-records-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import type { AssignableTrainingRecord } from './types'
@@ -131,17 +132,5 @@ describe('personnel detail model', () => {
 function trainingRecord(
   overrides: Partial<AssignableTrainingRecord>,
 ): AssignableTrainingRecord {
-  return {
-    id: 1,
-    userId: 'user-1',
-    competenceId: null,
-    title: 'Treinamento',
-    type: 'internal',
-    status: 'planned',
-    provider: null,
-    startDate: '2026-05-20T00:00:00.000Z',
-    endDate: null,
-    hoursCompleted: null,
-    ...overrides,
-  }
+  return buildTrainingRecordListItem({ title: 'Treinamento', ...overrides })
 }
