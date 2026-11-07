@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
+import { orgDb } from "../../lib/org-db";
 import { zValidator } from "@hono/zod-validator";
 import {
   ExecuteJobSchema,
@@ -20,6 +21,7 @@ import { executeJob, submitJob } from "../../modules/jobs/submit-job";
 import { editJob } from "../../modules/jobs/edit-job";
 import { type PublicApiV2Env } from "./env";
 import { JobCreatePublicSchema, PublicUpdateJobSchema } from "./schemas";
+import { apiKeyActor } from "./actor";
 import { withIdempotentCommand, withIdempotentMutation } from "./idempotency";
 import {
   resolveAssetId,
@@ -32,7 +34,7 @@ import {
   publicApiJobExecutionRefusal,
 } from "./job-support";
 
-export const jobWriteRoutes = new Hono<PublicApiV2Env>()
+export const jobWriteRoutes = createRouter<PublicApiV2Env>()
   .post(
     "/jobs",
     requireApiScope("jobs:write"),
@@ -153,11 +155,16 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "job",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "job",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(
@@ -221,13 +228,18 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
 
       const externalId = input.externalId?.trim();
       if (externalId) {
-        await upsertResourceExternalId({
-          organizationId: apiKey.organizationId,
-          apiKeyId: apiKey.id,
-          resourceType: "job",
-          resourceId: resolvedId,
-          externalId,
-        });
+        await orgDb(apiKey.organizationId).transaction((o) =>
+          upsertResourceExternalId(
+            {
+              organizationId: apiKey.organizationId,
+              apiKeyId: apiKey.id,
+              resourceType: "job",
+              resourceId: resolvedId,
+              externalId,
+            },
+            o,
+          ),
+        );
       }
 
       const body = {
@@ -235,15 +247,20 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
           ...updated,
           externalId:
             externalId ??
-            (await getResourceExternalId({
-              organizationId: apiKey.organizationId,
-              resourceType: "job",
-              resourceId: resolvedId,
-            })),
+            (await orgDb(apiKey.organizationId).transaction((o) =>
+              getResourceExternalId(
+                {
+                  organizationId: apiKey.organizationId,
+                  resourceType: "job",
+                  resourceId: resolvedId,
+                },
+                o,
+              ),
+            )),
         },
       };
 
-      await emitPublicApiWebhookEvent({
+      await emitPublicApiWebhookEvent(apiKeyActor(apiKey, c), {
         organizationId: apiKey.organizationId,
         eventType: "job.updated",
         payload: body.data,
@@ -259,11 +276,16 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "job",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "job",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(
@@ -306,7 +328,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
         const body = { data: updated, warnings: result.warnings };
 
         afterCommit(() =>
-          emitPublicApiWebhookEvent({
+          emitPublicApiWebhookEvent(apiKeyActor(apiKey, c), {
             organizationId: apiKey.organizationId,
             eventType: "job.results_submitted",
             payload: body.data,
@@ -329,11 +351,16 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "job",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "job",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(

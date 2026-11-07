@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(
@@ -63,9 +64,14 @@ beforeEach(() => {
 describe("buildIntegrationDriftQueue", () => {
   it("returns an empty list when there are no drift rows", async () => {
     mocks.rows = [];
-    const result = await buildIntegrationDriftQueue({
-      organizationId: "org-1",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      buildIntegrationDriftQueue(
+        {
+          organizationId: "org-1",
+        },
+        o,
+      ),
+    );
     expect(result).toEqual([]);
   });
 
@@ -90,9 +96,14 @@ describe("buildIntegrationDriftQueue", () => {
       },
     ];
 
-    const result = await buildIntegrationDriftQueue({
-      organizationId: "org-1",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      buildIntegrationDriftQueue(
+        {
+          organizationId: "org-1",
+        },
+        o,
+      ),
+    );
 
     expect(result).toEqual([
       {
@@ -129,32 +140,47 @@ describe("buildIntegrationDriftQueue", () => {
       },
     ];
 
-    const result = await buildIntegrationDriftQueue({
-      organizationId: "org-1",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      buildIntegrationDriftQueue(
+        {
+          organizationId: "org-1",
+        },
+        o,
+      ),
+    );
     expect(result).toEqual([]);
   });
 });
 
 describe("acknowledgeIntegrationDrift", () => {
   it("rejects empty reasons", async () => {
-    const result = await acknowledgeIntegrationDrift({
-      organizationId: "org-1",
-      linkId: "lnk-1",
-      actorUserId: "user-1",
-      reason: "   ",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      acknowledgeIntegrationDrift(
+        {
+          organizationId: "org-1",
+          linkId: "lnk-1",
+          actorUserId: "user-1",
+          reason: "   ",
+        },
+        o,
+      ),
+    );
     expect(result).toEqual({ ok: false });
     expect(mocks.updateCalls).toHaveLength(0);
   });
 
   it("writes the acknowledgement when reason is non-empty", async () => {
-    const result = await acknowledgeIntegrationDrift({
-      organizationId: "org-1",
-      linkId: "lnk-1",
-      actorUserId: "user-1",
-      reason: "cliente migrou de ERP",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      acknowledgeIntegrationDrift(
+        {
+          organizationId: "org-1",
+          linkId: "lnk-1",
+          actorUserId: "user-1",
+          reason: "cliente migrou de ERP",
+        },
+        o,
+      ),
+    );
     expect(result).toEqual({ ok: true });
     expect(mocks.updateCalls).toHaveLength(1);
     const [first] = mocks.updateCalls;

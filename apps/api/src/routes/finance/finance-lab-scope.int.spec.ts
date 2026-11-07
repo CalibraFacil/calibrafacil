@@ -21,6 +21,7 @@
  *   REQ-FINLAB-POL   certificate-release policy PUT, automatic-send rule GET / PUT
  *   REQ-FINLAB-ENG   automatic-send engine (trigger + job lookup)
  */
+import { orgDb } from "../../lib/org-db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@calibra-facil/db";
 import {
@@ -59,15 +60,9 @@ import {
   findServiceOrdersForCalibrationJob,
   triggerAutomaticSendForMilestone,
 } from "../../lib/automatic-send";
-import { financeRouter as bareFinanceRouter } from "./index";
-import { settingsCertificateReleasePolicyRouter as bareSettingsCertificateReleasePolicyRouter } from "./certificate-release";
+import { financeRouter } from "./index";
+import { settingsCertificateReleasePolicyRouter } from "./certificate-release";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
-
-const financeRouter = withErrorHandling(bareFinanceRouter);
-const settingsCertificateReleasePolicyRouter = withErrorHandling(
-  bareSettingsCertificateReleasePolicyRouter,
-);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
@@ -1243,10 +1238,16 @@ describe("finance routes — success paths and cross-laboratory negatives", () =
       createdByUserId: a.userId,
     });
 
-    expect(await findServiceOrdersForCalibrationJob(jobA, a.orgId)).toEqual([
-      orderA,
-    ]);
-    expect(await findServiceOrdersForCalibrationJob(jobB, a.orgId)).toEqual([]);
+    expect(
+      await orgDb(a.orgId).transaction((o) =>
+        findServiceOrdersForCalibrationJob(jobA, a.orgId, o),
+      ),
+    ).toEqual([orderA]);
+    expect(
+      await orgDb(a.orgId).transaction((o) =>
+        findServiceOrdersForCalibrationJob(jobB, a.orgId, o),
+      ),
+    ).toEqual([]);
 
     const invoker = vi.fn(async () => ({ ok: true, summary: { sent: 1 } }));
     const sent = await triggerAutomaticSendForMilestone({

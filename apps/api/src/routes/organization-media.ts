@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { randomUUID } from "node:crypto";
 import { organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
@@ -38,7 +38,7 @@ function orgNotFound() {
   return notFound("not_found", "Organização não encontrada");
 }
 
-export const organizationMediaRouter = new Hono<{
+export const organizationMediaRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env;
 }>()

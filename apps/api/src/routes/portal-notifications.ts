@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { requirePortalLabScope } from "../lib/portal-lab-scope";
-import { Hono } from "hono";
 import type {
   PortalNotificationCountResponse,
   PortalNotificationFeedResponse,
@@ -65,7 +65,7 @@ function portalNotificationConditions(userId: string) {
   ];
 }
 
-export const portalNotificationsRouter = new Hono<{
+export const portalNotificationsRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   // =========================================================================

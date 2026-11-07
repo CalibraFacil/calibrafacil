@@ -1,6 +1,6 @@
+import { createRouter } from "../../server/router";
 import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
@@ -95,7 +95,9 @@ async function lockBillingDocumentStatus(o: Pick<OrgDb, "select">, id: number) {
   return row?.status ?? null;
 }
 
-export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
+export const financeDocumentsRouter = createRouter<{
+  Variables: AuthVariables;
+}>()
   .get(
     "/",
     ...withLabPermission({ financial: ["read"] }),

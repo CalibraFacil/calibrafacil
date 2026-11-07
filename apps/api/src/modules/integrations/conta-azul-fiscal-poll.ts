@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 import { integrationConnection } from "@calibra-facil/db/schema";
 import {
@@ -8,7 +9,6 @@ import {
 } from "@calibra-facil/shared";
 import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { getIntegrationRecord, writeIntegrationEvent } from "./records";
 import {
   getIntegrationCursor,
@@ -26,9 +26,8 @@ export async function pollContaAzulFiscalDocuments(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {
@@ -40,11 +39,16 @@ export async function pollContaAzulFiscalDocuments(params: {
     throw new Error("Sincronização fiscal da Conta Azul está desativada");
   }
 
-  const storedCursor = await getIntegrationCursor({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    cursorType: CONTA_AZUL_FISCAL_DOCUMENTS_CURSOR_TYPE,
-  });
+  const storedCursor = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationCursor(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        cursorType: CONTA_AZUL_FISCAL_DOCUMENTS_CURSOR_TYPE,
+      },
+      o,
+    ),
+  );
   const adapter = await createContaAzulAdapterForRecord({
     record,
     env: params.env,
@@ -82,7 +86,7 @@ export async function pollContaAzulFiscalDocuments(params: {
   });
 
   // The poll's bookkeeping (config watermark, cursor, event) commits together.
-  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+  await orgDb(params.organizationId).transaction(async (o) => {
     await o
       .update(integrationConnection)
       .set({
@@ -126,9 +130,8 @@ export async function linkContaAzulFiscalDocumentsToMdfe(params: {
   env: IntegrationsEnv;
   payload: IntegrationMdfeLinkPayload;
 }) {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {
@@ -153,19 +156,24 @@ export async function linkContaAzulFiscalDocumentsToMdfe(params: {
     organizationId: params.organizationId,
   });
 
-  await writeIntegrationEvent({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    level: "info",
-    event: "integration.conta_azul.mdfe_link.completed",
-    message: "Vínculo MDF-e da Conta Azul concluído",
-    details: {
-      remoteEntityId: result.remoteEntityId,
-      remoteEntityType: result.remoteEntityType,
-      accessKeyCount: params.payload.fiscalDocumentAccessKeys.length,
-      status: params.payload.status,
-    },
-  });
+  await orgDb(params.organizationId).transaction((o) =>
+    writeIntegrationEvent(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        level: "info",
+        event: "integration.conta_azul.mdfe_link.completed",
+        message: "Vínculo MDF-e da Conta Azul concluído",
+        details: {
+          remoteEntityId: result.remoteEntityId,
+          remoteEntityType: result.remoteEntityType,
+          accessKeyCount: params.payload.fiscalDocumentAccessKeys.length,
+          status: params.payload.status,
+        },
+      },
+      o,
+    ),
+  );
 
   return result;
 }
@@ -176,9 +184,8 @@ export async function pollContaAzulProtocols(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {
@@ -190,11 +197,16 @@ export async function pollContaAzulProtocols(params: {
     throw new Error("Polling de protocolos da Conta Azul está desativado");
   }
 
-  const storedCursor = await getIntegrationCursor({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    cursorType: CONTA_AZUL_PROTOCOLS_CURSOR_TYPE,
-  });
+  const storedCursor = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationCursor(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        cursorType: CONTA_AZUL_PROTOCOLS_CURSOR_TYPE,
+      },
+      o,
+    ),
+  );
   const adapter = await createContaAzulAdapterForRecord({
     record,
     env: params.env,
@@ -232,7 +244,7 @@ export async function pollContaAzulProtocols(params: {
   });
 
   // The poll's bookkeeping (config watermark, cursor, event) commits together.
-  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+  await orgDb(params.organizationId).transaction(async (o) => {
     await o
       .update(integrationConnection)
       .set({

@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   billingDocument,
@@ -7,7 +8,6 @@ import {
   receivableInstallment,
 } from "@calibra-facil/db/schema";
 import { recomputeCertificateReleasesForBillingDocument } from "../../lib/certificate-release-reconciliation";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   normalizeContaAzulConnectionConfig,
   type IntegrationSyncCursor,
@@ -148,9 +148,8 @@ export async function pollContaAzulBillingStatus(params: {
   limit?: number;
   now?: Date;
 }): Promise<RemoteStatusPollResult> {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {
@@ -163,11 +162,16 @@ export async function pollContaAzulBillingStatus(params: {
   }
 
   const now = params.now ?? new Date();
-  const storedCursor = await getIntegrationCursor({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    cursorType: CONTA_AZUL_RECEIVABLES_CURSOR_TYPE,
-  });
+  const storedCursor = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationCursor(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        cursorType: CONTA_AZUL_RECEIVABLES_CURSOR_TYPE,
+      },
+      o,
+    ),
+  );
   const lastRemoteUpdatedAt =
     storedCursor?.lastRemoteUpdatedAt?.toISOString() ??
     config.polling.receivablesLastRemoteUpdatedAt;
@@ -242,9 +246,7 @@ export async function pollContaAzulBillingStatus(params: {
 
     // The installment, its receipt and the document status are one unit of
     // work (no remote call inside): one transaction per item.
-    const reconciled = await inOrgTransaction(
-      params.organizationId,
-      undefined,
+    const reconciled = await orgDb(params.organizationId).transaction(
       async (o) => {
         const [localInstallment] = await o
           .select({
@@ -373,48 +375,64 @@ export async function pollContaAzulBillingStatus(params: {
       billingDocumentId: localInstallment.documentId,
     });
 
-    if (item.evento?.id) {
-      const billingDocumentLink = await getExistingLink(
+    const eventId = item.evento?.id;
+    if (eventId) {
+      const billingDocumentLink = await orgDb(
         params.organizationId,
-        params.integrationId,
-        "billing_document",
-        matched.externalId,
+      ).transaction((o) =>
+        getExistingLink(
+          params.organizationId,
+          params.integrationId,
+          "billing_document",
+          matched.externalId,
+          o,
+        ),
       );
       const protocolId =
         billingDocumentLink?.remoteEntityType ===
           "conta_azul_receivable_protocol" &&
-        billingDocumentLink.remoteEntityId !== item.evento.id
+        billingDocumentLink.remoteEntityId !== eventId
           ? billingDocumentLink.remoteEntityId
           : null;
 
-      await upsertLink({
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        target: "billing_document",
-        localEntityId: matched.externalId,
-        remoteEntityId: item.evento.id,
-        remoteDisplayId: item.evento.id,
-        remoteEntityType: "conta_azul_receivable_event",
-        metadata: buildContaAzulReceivableEventLinkMetadata({
-          installment: item,
-          protocolId,
-        }),
-      });
+      await orgDb(params.organizationId).transaction((o) =>
+        upsertLink(
+          {
+            integrationId: params.integrationId,
+            organizationId: params.organizationId,
+            target: "billing_document",
+            localEntityId: matched.externalId,
+            remoteEntityId: eventId,
+            remoteDisplayId: eventId,
+            remoteEntityType: "conta_azul_receivable_event",
+            metadata: buildContaAzulReceivableEventLinkMetadata({
+              installment: item,
+              protocolId,
+            }),
+          },
+          o,
+        ),
+      );
     }
 
-    await upsertLink({
-      integrationId: params.integrationId,
-      organizationId: params.organizationId,
-      target: "receivable_installment",
-      localEntityId: `receivable_installment:${localInstallment.id}`,
-      remoteEntityId: item.id,
-      remoteDisplayId: item.id,
-      remoteEntityType: "conta_azul_receivable_installment",
-      metadata: buildContaAzulReceivableInstallmentLinkMetadata({
-        installment: item,
-        matched,
-      }),
-    });
+    await orgDb(params.organizationId).transaction((o) =>
+      upsertLink(
+        {
+          integrationId: params.integrationId,
+          organizationId: params.organizationId,
+          target: "receivable_installment",
+          localEntityId: `receivable_installment:${localInstallment.id}`,
+          remoteEntityId: item.id,
+          remoteDisplayId: item.id,
+          remoteEntityType: "conta_azul_receivable_installment",
+          metadata: buildContaAzulReceivableInstallmentLinkMetadata({
+            installment: item,
+            matched,
+          }),
+        },
+        o,
+      ),
+    );
 
     if (mapped.requiresReview) {
       warnings.push(`Parcela ${item.id} requer revisão manual`);
@@ -456,7 +474,7 @@ export async function pollContaAzulBillingStatus(params: {
   };
 
   // The poll's bookkeeping (config watermark, cursor, event) commits together.
-  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+  await orgDb(params.organizationId).transaction(async (o) => {
     await o
       .update(integrationConnection)
       .set({

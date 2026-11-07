@@ -19,6 +19,10 @@
  *              for calibra_app (grant), and carry their CHECKs
  */
 
+import {
+  amendJobInOrg,
+  cancelJobInOrg,
+} from "../../../test/integration/job-commands";
 import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,17 +42,10 @@ import {
   seedExtraMember,
   seedJobForOrg,
 } from "../../../test/integration/tenant-refs";
-import { jobsRouter as bareJobsRouter } from "../../routes/jobs";
-import { verifyRouter as bareVerifyRouter } from "../../routes/verify";
+import { jobsRouter } from "../../routes/jobs";
+import { verifyRouter } from "../../routes/verify";
 import type { JobLifecycleActor } from "./job-actor";
-import { amendJob } from "./amend-job";
-import { cancelJob } from "./cancel-job";
 import { withdrawCertificate } from "./withdraw-certificate";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
-
-const verifyRouter = withErrorHandling(bareVerifyRouter);
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -208,7 +205,7 @@ async function verification(jobId: number) {
 }
 
 const amend = (jobId: number, organizationId = ORG) =>
-  amendJob({
+  amendJobInOrg({
     actor: admin,
     jobId,
     organizationId,
@@ -351,7 +348,7 @@ describe("certificate lifecycle (real Postgres)", () => {
       if (first.status !== "ok") throw new Error(first.status);
       const before = await jobRow(jobId);
 
-      const canceled = await cancelJob({
+      const canceled = await cancelJobInOrg({
         actor: admin,
         jobId: first.amendedJob.id,
         organizationId: ORG,

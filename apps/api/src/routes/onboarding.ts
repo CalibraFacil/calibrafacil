@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 
 import {
   requireLabProtected,
@@ -16,7 +16,9 @@ import { getActivationChecklist } from "../services/activation-checklist";
  * Better Auth's custom session data bypasses the cookie cache and would run
  * these existence checks on every route transition, for every user, forever.
  */
-export const onboardingRouter = new Hono<{ Variables: AuthVariables }>().get(
+export const onboardingRouter = createRouter<{
+  Variables: AuthVariables;
+}>().get(
   "/checklist",
   ...requireLabProtected,
   requireOrgType("LAB"),

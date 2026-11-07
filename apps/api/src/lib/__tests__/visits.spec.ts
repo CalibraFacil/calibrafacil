@@ -84,6 +84,7 @@ vi.mock("@calibra-facil/db", async () => {
 });
 
 // Import AFTER the mock is registered so the module picks up the mock.
+import { db } from "@calibra-facil/db";
 import { syncVisitStatusFromJobs } from "../visits";
 
 // ---------------------------------------------------------------------------
@@ -118,7 +119,7 @@ beforeEach(() => {
 describe("REQ-VISIT-001: null/undefined visitId", () => {
   it("REQ-VISIT-001: returns immediately for null visitId without any DB query", async () => {
     // No rows pushed — any db call would resolve [] but we assert no call was made.
-    await syncVisitStatusFromJobs(null);
+    await syncVisitStatusFromJobs(null, db);
     // Queue should still be empty (no reads consumed)
     expect(dbState.queue).toHaveLength(0);
     // No update either
@@ -126,7 +127,7 @@ describe("REQ-VISIT-001: null/undefined visitId", () => {
   });
 
   it("REQ-VISIT-001: returns immediately for undefined visitId without any DB query", async () => {
-    await syncVisitStatusFromJobs(undefined);
+    await syncVisitStatusFromJobs(undefined, db);
     expect(dbState.queue).toHaveLength(0);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
@@ -139,7 +140,7 @@ describe("REQ-VISIT-001: null/undefined visitId", () => {
 describe("REQ-VISIT-002: missing visit row", () => {
   it("REQ-VISIT-002: returns without updating when the visit does not exist", async () => {
     pushMissingVisit(); // select for visit → []
-    await syncVisitStatusFromJobs(42);
+    await syncVisitStatusFromJobs(42, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 });
@@ -153,14 +154,14 @@ describe("REQ-VISIT-003: terminal visit statuses", () => {
     pushVisit("CANCELLED");
     // Jobs would be queued next but the function must return before querying them
     pushJobs(["APPROVED"]); // would push toward COMPLETED if status weren't terminal
-    await syncVisitStatusFromJobs(7);
+    await syncVisitStatusFromJobs(7, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 
   it("REQ-VISIT-003: COMPLETED visit is never updated (no downgrade)", async () => {
     pushVisit("COMPLETED");
     pushJobs(["DRAFT"]); // would push toward IN_PROGRESS if status weren't terminal
-    await syncVisitStatusFromJobs(7);
+    await syncVisitStatusFromJobs(7, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 });
@@ -173,14 +174,14 @@ describe("REQ-VISIT-004: zero child jobs", () => {
   it("REQ-VISIT-004: PROPOSED visit with no jobs produces no update", async () => {
     pushVisit("PROPOSED");
     pushJobs([]); // zero jobs
-    await syncVisitStatusFromJobs(5);
+    await syncVisitStatusFromJobs(5, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 
   it("REQ-VISIT-004: CONFIRMED visit with no jobs produces no update", async () => {
     pushVisit("CONFIRMED");
     pushJobs([]);
-    await syncVisitStatusFromJobs(5);
+    await syncVisitStatusFromJobs(5, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 });
@@ -193,7 +194,7 @@ describe("REQ-VISIT-005: all settled with at least one approved", () => {
   it("REQ-VISIT-005: all APPROVED → sets status to COMPLETED", async () => {
     pushVisit("IN_PROGRESS");
     pushJobs(["APPROVED", "APPROVED"]);
-    await syncVisitStatusFromJobs(10);
+    await syncVisitStatusFromJobs(10, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "COMPLETED" });
     // A settled visit supersedes its pending reschedule request.
@@ -205,7 +206,7 @@ describe("REQ-VISIT-005: all settled with at least one approved", () => {
   it("REQ-VISIT-005: mix of APPROVED and CANCELED (all settled, one approved) → COMPLETED", async () => {
     pushVisit("IN_PROGRESS");
     pushJobs(["APPROVED", "CANCELED"]);
-    await syncVisitStatusFromJobs(11);
+    await syncVisitStatusFromJobs(11, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "COMPLETED" });
   });
@@ -213,7 +214,7 @@ describe("REQ-VISIT-005: all settled with at least one approved", () => {
   it("REQ-VISIT-005: SUPERSEDED counts as approved — all settled with one SUPERSEDED → COMPLETED", async () => {
     pushVisit("IN_PROGRESS");
     pushJobs(["SUPERSEDED", "CANCELED"]);
-    await syncVisitStatusFromJobs(12);
+    await syncVisitStatusFromJobs(12, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "COMPLETED" });
   });
@@ -221,7 +222,7 @@ describe("REQ-VISIT-005: all settled with at least one approved", () => {
   it("REQ-VISIT-005: all SUPERSEDED → sets status to COMPLETED", async () => {
     pushVisit("IN_PROGRESS");
     pushJobs(["SUPERSEDED", "SUPERSEDED"]);
-    await syncVisitStatusFromJobs(13);
+    await syncVisitStatusFromJobs(13, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "COMPLETED" });
   });
@@ -235,7 +236,7 @@ describe("REQ-VISIT-006: all settled but all CANCELED", () => {
   it("REQ-VISIT-006: all CANCELED jobs do NOT trigger COMPLETED", async () => {
     pushVisit("IN_PROGRESS");
     pushJobs(["CANCELED", "CANCELED"]);
-    await syncVisitStatusFromJobs(20);
+    await syncVisitStatusFromJobs(20, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 
@@ -245,7 +246,7 @@ describe("REQ-VISIT-006: all settled but all CANCELED", () => {
     // REQ-VISIT-006 confirms no COMPLETED; the transition to IN_PROGRESS is expected behavior.
     pushVisit("PROPOSED");
     pushJobs(["CANCELED"]);
-    await syncVisitStatusFromJobs(21);
+    await syncVisitStatusFromJobs(21, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "IN_PROGRESS" });
     expect(dbState.rescheduleSpy).not.toHaveBeenCalled();
@@ -261,7 +262,7 @@ describe("REQ-VISIT-007: at least one non-DRAFT job advances PROPOSED/CONFIRMED 
   it("REQ-VISIT-007: PROPOSED with one IN_PROGRESS job → IN_PROGRESS", async () => {
     pushVisit("PROPOSED");
     pushJobs(["IN_PROGRESS", "DRAFT"]);
-    await syncVisitStatusFromJobs(30);
+    await syncVisitStatusFromJobs(30, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "IN_PROGRESS" });
   });
@@ -270,7 +271,7 @@ describe("REQ-VISIT-007: at least one non-DRAFT job advances PROPOSED/CONFIRMED 
     // anyStarted=true, allSettled=false → IN_PROGRESS (not COMPLETED yet)
     pushVisit("CONFIRMED");
     pushJobs(["APPROVED", "DRAFT"]);
-    await syncVisitStatusFromJobs(31);
+    await syncVisitStatusFromJobs(31, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "IN_PROGRESS" });
   });
@@ -282,7 +283,7 @@ describe("REQ-VISIT-007: at least one non-DRAFT job advances PROPOSED/CONFIRMED 
     // because anyStarted=true and the COMPLETED branch requires anyApproved.
     pushVisit("PROPOSED");
     pushJobs(["CANCELED", "DRAFT"]);
-    await syncVisitStatusFromJobs(32);
+    await syncVisitStatusFromJobs(32, db);
     expect(dbState.setSpy).toHaveBeenCalledOnce();
     expect(dbState.setSpy).toHaveBeenCalledWith({ status: "IN_PROGRESS" });
   });
@@ -296,14 +297,14 @@ describe("REQ-VISIT-008: all DRAFT jobs → no update to PROPOSED/CONFIRMED", ()
   it("REQ-VISIT-008: PROPOSED visit + all DRAFT jobs → no update", async () => {
     pushVisit("PROPOSED");
     pushJobs(["DRAFT", "DRAFT"]);
-    await syncVisitStatusFromJobs(40);
+    await syncVisitStatusFromJobs(40, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 
   it("REQ-VISIT-008: CONFIRMED visit + all DRAFT jobs → no update", async () => {
     pushVisit("CONFIRMED");
     pushJobs(["DRAFT"]);
-    await syncVisitStatusFromJobs(41);
+    await syncVisitStatusFromJobs(41, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 
@@ -312,7 +313,7 @@ describe("REQ-VISIT-008: all DRAFT jobs → no update to PROPOSED/CONFIRMED", ()
     // → nextStatus stays IN_PROGRESS → no update
     pushVisit("IN_PROGRESS");
     pushJobs(["DRAFT"]);
-    await syncVisitStatusFromJobs(42);
+    await syncVisitStatusFromJobs(42, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 });
@@ -328,7 +329,7 @@ describe("REQ-VISIT-009: next status equals current → no update", () => {
     // → nextStatus remains IN_PROGRESS == current → no update
     pushVisit("IN_PROGRESS");
     pushJobs(["IN_PROGRESS", "DRAFT"]);
-    await syncVisitStatusFromJobs(50);
+    await syncVisitStatusFromJobs(50, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 
@@ -336,7 +337,7 @@ describe("REQ-VISIT-009: next status equals current → no update", () => {
     // allSettled=false, anyStarted=false → nextStatus stays PROPOSED → no update
     pushVisit("PROPOSED");
     pushJobs(["DRAFT"]);
-    await syncVisitStatusFromJobs(51);
+    await syncVisitStatusFromJobs(51, db);
     expect(dbState.setSpy).not.toHaveBeenCalled();
   });
 });

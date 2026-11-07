@@ -1,5 +1,4 @@
 import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
-import { db } from "@calibra-facil/db";
 import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
@@ -27,16 +26,15 @@ import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
  * `organizationId` is the job's laboratory; the composite (organization_id,
  * job_id) foreign key rejects a pair that is not the same tenant.
  *
- * `executor` is the org-bound handle of a caller that already runs under
- * `orgDb(org).transaction` (row-level security); the rewrite is then a savepoint
- * of it. Without it the rewrite is its own transaction on the plain `db`.
+ * `executor` is the org-bound handle of the caller (row-level security); the
+ * rewrite is a savepoint of its transaction.
  */
 export async function syncJobStandardLinks(
   jobId: number,
   snapshot: StandardSnapshot[] | null | undefined,
   usedAt: Date | null | undefined,
   organizationId: string,
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<void> {
   // undefined = "snapshot untouched by this write" — keep existing links.
   if (snapshot === undefined) return;
@@ -73,8 +71,7 @@ export async function syncJobStandardLinks(
       .onConflictDoNothing();
   };
   try {
-    if (executor) await executor.transaction(rewrite);
-    else await db.transaction(rewrite);
+    await executor.transaction(rewrite);
   } catch (error) {
     console.error(
       `[JobStandards] Failed to sync standard links for job ${jobId}:`,
@@ -113,7 +110,7 @@ export async function findImpactedCertificates(
     to: Date;
   },
   /** The org-bound handle of the caller's transaction (row-level security). */
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<ImpactedCertificate[]> {
   const rows = await executor
     .select({
@@ -235,7 +232,7 @@ export type InFlightJob = {
 export async function findInFlightJobsUsingStandard(
   input: { standardId: number; organizationId: string },
   /** The org-bound handle of the caller's transaction (row-level security). */
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<InFlightJob[]> {
   const rows = await executor
     .select({

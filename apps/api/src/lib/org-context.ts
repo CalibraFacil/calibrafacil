@@ -43,6 +43,12 @@ export type OrgActor = {
   userAgent?: string | null;
 };
 
+/**
+ * The actor of laboratory-scoped work that no signed-in user started (a drain,
+ * a reconciler, a retention purge). It is never written to an audit row.
+ */
+export const SYSTEM_ACTOR: OrgActor = { userId: "system", ipAddress: null };
+
 export type AuditEntry = {
   action: string;
   changes?: unknown;
@@ -220,12 +226,8 @@ const AUDIT_WRITERS = {
 
 export type AuditedEntity = keyof typeof AUDIT_WRITERS;
 
-/**
- * The `ctx.audit` of a handle: appends the entity's audit row on `o`. For a
- * lib that still joins a caller's transaction through an `OrgScope` and has to
- * hand a context-shaped writer to a function that takes one.
- */
-export function auditOn(
+/** The `ctx.audit` of a handle: appends the entity's audit row on `o`. */
+function auditOn(
   base: Pick<OrgContext, "o" | "org" | "actor">,
 ): OrgContext["audit"] {
   return async (entity, entityId, entry) => {

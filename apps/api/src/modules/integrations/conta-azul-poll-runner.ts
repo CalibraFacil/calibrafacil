@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { integrationSyncRun } from "@calibra-facil/db/schema";
 import {
   normalizeContaAzulConnectionConfig,
@@ -7,7 +8,6 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { INTEGRATION_SYNC_RUN_MACHINE } from "@calibra-facil/schemas/machines";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { listActiveContaAzulConnections } from "./active-connections";
 import {
   type ContaAzulPollDefinition,
@@ -42,22 +42,19 @@ async function hasActiveContaAzulPollRun(params: {
   kind: ContaAzulScheduledPollKind;
   target: IntegrationSyncTarget;
 }) {
-  const activeRuns = await inOrgTransaction(
-    params.organizationId,
-    undefined,
-    (o) =>
-      o
-        .select()
-        .from(integrationSyncRun)
-        .where(
-          and(
-            eq(integrationSyncRun.integrationId, params.integrationId),
-            eq(integrationSyncRun.organizationId, params.organizationId),
-            eq(integrationSyncRun.target, params.target),
-            inArray(integrationSyncRun.status, ["PENDING", "RUNNING"]),
-          ),
-        )
-        .orderBy(desc(integrationSyncRun.createdAt)),
+  const activeRuns = await orgDb(params.organizationId).transaction((o) =>
+    o
+      .select()
+      .from(integrationSyncRun)
+      .where(
+        and(
+          eq(integrationSyncRun.integrationId, params.integrationId),
+          eq(integrationSyncRun.organizationId, params.organizationId),
+          eq(integrationSyncRun.target, params.target),
+          inArray(integrationSyncRun.status, ["PENDING", "RUNNING"]),
+        ),
+      )
+      .orderBy(desc(integrationSyncRun.createdAt)),
   );
 
   // TODO(canonicalize-poll-kind-lock): move pollKind out of summary JSONB so this can be filtered by SQL.
@@ -110,64 +107,60 @@ export async function runContaAzulScheduledPoll(params: {
 
   const requestedLimit = params.limit ?? DEFAULT_INTEGRATION_SYNC_LIMIT;
   // The run row, its dispatch event and the RUNNING stamp commit together.
-  const runId = await inOrgTransaction(
-    params.organizationId,
-    undefined,
-    async (o) => {
-      const runId = await createSyncRun(
-        {
-          integrationId: params.integrationId,
-          organizationId: params.organizationId,
-          trigger: "scheduled",
-          target: definition.target,
-          requestedLimit,
+  const runId = await orgDb(params.organizationId).transaction(async (o) => {
+    const runId = await createSyncRun(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        trigger: "scheduled",
+        target: definition.target,
+        requestedLimit,
+        pollKind: params.kind,
+        cursorType: definition.cursorType,
+      },
+      o,
+    );
+
+    await writeIntegrationEvent(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        runId,
+        level: "info",
+        event: "sync.scheduled.dispatched",
+        message: "Polling Conta Azul agendado iniciado",
+        details: {
+          provider: "conta_azul",
           pollKind: params.kind,
           cursorType: definition.cursorType,
+          trigger: "scheduled",
         },
-        o,
-      );
+      },
+      o,
+    );
 
-      await writeIntegrationEvent(
-        {
-          integrationId: params.integrationId,
-          organizationId: params.organizationId,
-          runId,
-          level: "info",
-          event: "sync.scheduled.dispatched",
-          message: "Polling Conta Azul agendado iniciado",
-          details: {
-            provider: "conta_azul",
-            pollKind: params.kind,
-            cursorType: definition.cursorType,
-            trigger: "scheduled",
-          },
-        },
-        o,
-      );
-
-      await o
-        .update(integrationSyncRun)
-        .set({
-          status: "RUNNING",
-          startedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(integrationSyncRun.id, runId),
-            inArray(
-              integrationSyncRun.status,
-              INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("start"),
-            ),
+    await o
+      .update(integrationSyncRun)
+      .set({
+        status: "RUNNING",
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(integrationSyncRun.id, runId),
+          inArray(
+            integrationSyncRun.status,
+            INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("start"),
           ),
-        );
-      return runId;
-    },
-  );
+        ),
+      );
+    return runId;
+  });
 
   try {
     const result = await runContaAzulPollByKind(params);
-    await inOrgTransaction(params.organizationId, undefined, async (o) => {
+    await orgDb(params.organizationId).transaction(async (o) => {
       await o
         .update(integrationSyncRun)
         .set({
@@ -262,27 +255,37 @@ async function processScheduledContaAzulPollKind(params: {
     const config = normalizeContaAzulConnectionConfig(row.config);
 
     if (!isContaAzulPollEnabled(config, params.definition.kind)) {
-      await writeIntegrationEvent({
-        integrationId: row.integrationId,
-        organizationId: row.organizationId,
-        level: "info",
-        event: "sync.skipped.disabled",
-        message: params.definition.disabledMessage,
-        details: {
-          provider: "conta_azul",
-          pollKind: params.definition.kind,
-          cursorType: params.definition.cursorType,
-          trigger: "scheduled",
-        },
-      });
+      await orgDb(row.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: row.integrationId,
+            organizationId: row.organizationId,
+            level: "info",
+            event: "sync.skipped.disabled",
+            message: params.definition.disabledMessage,
+            details: {
+              provider: "conta_azul",
+              pollKind: params.definition.kind,
+              cursorType: params.definition.cursorType,
+              trigger: "scheduled",
+            },
+          },
+          o,
+        ),
+      );
       continue;
     }
 
-    const cursor = await getIntegrationCursor({
-      integrationId: row.integrationId,
-      organizationId: row.organizationId,
-      cursorType: params.definition.cursorType,
-    });
+    const cursor = await orgDb(row.organizationId).transaction((o) =>
+      getIntegrationCursor(
+        {
+          integrationId: row.integrationId,
+          organizationId: row.organizationId,
+          cursorType: params.definition.cursorType,
+        },
+        o,
+      ),
+    );
 
     if (
       !isContaAzulPollDue({
@@ -306,19 +309,24 @@ async function processScheduledContaAzulPollKind(params: {
     });
 
     if (activeRun) {
-      await writeIntegrationEvent({
-        integrationId: row.integrationId,
-        organizationId: row.organizationId,
-        level: "info",
-        event: "sync.skipped.locked",
-        message: "Polling Conta Azul já está em execução",
-        details: {
-          provider: "conta_azul",
-          pollKind: params.definition.kind,
-          cursorType: params.definition.cursorType,
-          trigger: "scheduled",
-        },
-      });
+      await orgDb(row.organizationId).transaction((tx) =>
+        writeIntegrationEvent(
+          {
+            integrationId: row.integrationId,
+            organizationId: row.organizationId,
+            level: "info",
+            event: "sync.skipped.locked",
+            message: "Polling Conta Azul já está em execução",
+            details: {
+              provider: "conta_azul",
+              pollKind: params.definition.kind,
+              cursorType: params.definition.cursorType,
+              trigger: "scheduled",
+            },
+          },
+          tx,
+        ),
+      );
       continue;
     }
 

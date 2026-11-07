@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { isCalendarDatePast, labDaysUntil } from "@calibra-facil/shared";
@@ -23,7 +23,7 @@ function getAgingBucketLabel(daysOverdue: number) {
   return "90_plus";
 }
 
-export const financeOverviewRouter = new Hono<{
+export const financeOverviewRouter = createRouter<{
   Variables: AuthVariables;
 }>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
   const member = c.get("member");

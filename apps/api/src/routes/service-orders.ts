@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
+import { orgDb } from "../lib/org-db";
 import type {
   PortalFinancialSummaryResponse,
   PortalQuoteDecisionResponse,
@@ -170,7 +171,7 @@ function withPublicNoStoreHeaders(c: {
   c.header("X-Robots-Tag", "noindex, nofollow");
 }
 
-export const serviceOrdersRouter = new Hono<{
+export const serviceOrdersRouter = createRouter<{
   Bindings: ServiceOrderEnv;
   Variables: AuthVariables;
 }>()
@@ -261,10 +262,13 @@ export const serviceOrdersRouter = new Hono<{
       const id = await resolveServiceOrderIdByPublicId(publicId, member);
       if (id === null) throw serviceOrderNotFound();
 
-      const detail = await getServiceOrderDetail(
-        id,
-        member.organizationId,
-        buildUnitScopeCondition(serviceOrder.unitId, member),
+      const detail = await orgDb(member.organizationId).transaction((o) =>
+        getServiceOrderDetail(
+          o,
+          id,
+          member.organizationId,
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+        ),
       );
       if (!detail) throw serviceOrderNotFound();
       return c.json({ data: detail });
@@ -277,10 +281,13 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const { id } = c.req.valid("param");
-      const detail = await getServiceOrderDetail(
-        id,
-        member.organizationId,
-        buildUnitScopeCondition(serviceOrder.unitId, member),
+      const detail = await orgDb(member.organizationId).transaction((o) =>
+        getServiceOrderDetail(
+          o,
+          id,
+          member.organizationId,
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+        ),
       );
       if (!detail) throw serviceOrderNotFound();
       return c.json({
@@ -298,10 +305,13 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const { id } = c.req.valid("param");
-      const result = await listServiceOrderCommunications(
-        id,
-        member.organizationId,
-        buildUnitScopeCondition(serviceOrder.unitId, member),
+      const result = await orgDb(member.organizationId).transaction((o) =>
+        listServiceOrderCommunications(
+          o,
+          id,
+          member.organizationId,
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+        ),
       );
       if (!result) throw serviceOrderNotFound();
       return c.json(result);
@@ -360,7 +370,9 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const { id } = c.req.valid("param");
-      const order = await getScopedServiceOrder(id, member);
+      const order = await orgDb(member.organizationId).transaction((o) =>
+        getScopedServiceOrder(id, member, o),
+      );
       if (!order) throw serviceOrderNotFound();
       const url = await getLatestIntakeDocumentDownloadUrl(
         c.env,
@@ -378,7 +390,9 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const { id } = c.req.valid("param");
-      const order = await getScopedServiceOrder(id, member);
+      const order = await orgDb(member.organizationId).transaction((o) =>
+        getScopedServiceOrder(id, member, o),
+      );
       if (!order) throw serviceOrderNotFound();
       const url = await getLatestTagDownloadUrl(
         c.env,
@@ -417,10 +431,13 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const { id } = c.req.valid("param");
-      const detail = await getServiceOrderDetail(
-        id,
-        member.organizationId,
-        buildUnitScopeCondition(serviceOrder.unitId, member),
+      const detail = await orgDb(member.organizationId).transaction((o) =>
+        getServiceOrderDetail(
+          o,
+          id,
+          member.organizationId,
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+        ),
       );
       if (!detail) throw serviceOrderNotFound();
       const url = await getLatestDeliveryDocumentDownloadUrl(
@@ -609,7 +626,9 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const { id, quoteFile: quoteId } = c.req.valid("param");
-      const order = await getScopedServiceOrder(id, member);
+      const order = await orgDb(member.organizationId).transaction((o) =>
+        getScopedServiceOrder(id, member, o),
+      );
       if (!order) throw serviceOrderNotFound();
       const url = await getQuoteDocumentDownloadUrl(
         c.env,
@@ -779,7 +798,7 @@ export const serviceOrdersRouter = new Hono<{
     },
   );
 
-export const portalServiceOrdersRouter = new Hono<{
+export const portalServiceOrdersRouter = createRouter<{
   Bindings: ServiceOrderEnv;
   Variables: AuthVariables;
 }>()
@@ -828,9 +847,8 @@ export const portalServiceOrdersRouter = new Hono<{
         linkedCustomer.labOrganizationId,
       );
       if (id === null) throw serviceOrderNotFound();
-      const detail = await getServiceOrderDetail(
-        id,
-        linkedCustomer.labOrganizationId,
+      const detail = await orgDb(linkedCustomer.labOrganizationId).transaction(
+        (o) => getServiceOrderDetail(o, id, linkedCustomer.labOrganizationId),
       );
       if (!detail || detail.customerId !== linkedCustomer.id) {
         throw serviceOrderNotFound();
@@ -880,9 +898,9 @@ export const portalServiceOrdersRouter = new Hono<{
         linkedCustomer.labOrganizationId,
       );
       if (orderId === null) throw serviceOrderNotFound();
-      const detail = await getServiceOrderDetail(
-        orderId,
-        linkedCustomer.labOrganizationId,
+      const detail = await orgDb(linkedCustomer.labOrganizationId).transaction(
+        (o) =>
+          getServiceOrderDetail(o, orderId, linkedCustomer.labOrganizationId),
       );
       if (!detail || detail.customerId !== linkedCustomer.id) {
         throw serviceOrderNotFound();
@@ -954,7 +972,7 @@ export const portalServiceOrdersRouter = new Hono<{
     },
   );
 
-export const publicServiceOrderAccessRouter = new Hono<{
+export const publicServiceOrderAccessRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   .post(

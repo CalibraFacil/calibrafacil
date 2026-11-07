@@ -9,7 +9,6 @@ import {
 import { and, asc, eq, sql } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../../lib/audit";
 import { orgDb } from "../../lib/org-db";
-import { withOrgReader } from "../../lib/org-transaction";
 import { type MemberData } from "../../middleware/permission";
 import { getNullableString } from "./helpers";
 import { type ApplyDesktopSyncEventInput } from "./desktop-event-support";
@@ -24,29 +23,27 @@ type AuditLogReader = Pick<OrgExecutor, "select">;
 export async function findDesktopSyncRemoteEntityId(
   organizationId: string,
   localEntityId: string,
-  executor?: AuditLogReader,
+  executor: AuditLogReader,
 ) {
   // Filter in SQL on the key itself. An entity can have far more audit rows
   // than any page, most of them without a remote id (updates, retries); an
   // unordered LIMIT over all of them could miss the row that maps the local id
   // to its cloud row, and the create was then applied a second time. The
   // oldest mapping wins, which is the one the entity was created with.
-  const [row] = await withOrgReader(organizationId, executor, (reader) =>
-    reader
-      .select({
-        details: organizationEventLog.details,
-      })
-      .from(organizationEventLog)
-      .where(
-        and(
-          eq(organizationEventLog.organizationId, organizationId),
-          eq(organizationEventLog.entityId, localEntityId),
-          sql`${organizationEventLog.details}->>'remoteEntityId' IS NOT NULL`,
-        ),
-      )
-      .orderBy(asc(organizationEventLog.id))
-      .limit(1),
-  );
+  const [row] = await executor
+    .select({
+      details: organizationEventLog.details,
+    })
+    .from(organizationEventLog)
+    .where(
+      and(
+        eq(organizationEventLog.organizationId, organizationId),
+        eq(organizationEventLog.entityId, localEntityId),
+        sql`${organizationEventLog.details}->>'remoteEntityId' IS NOT NULL`,
+      ),
+    )
+    .orderBy(asc(organizationEventLog.id))
+    .limit(1);
 
   if (!row) return null;
 
@@ -80,32 +77,34 @@ export async function isDesktopSyncEventApplied(
       .limit(1),
   );
   if (claim?.appliedAt) return true;
-  return (await findAppliedDesktopSyncEvent(organizationId, event)) !== null;
+  return (
+    (await orgDb(organizationId).transaction((o) =>
+      findAppliedDesktopSyncEvent(organizationId, event, o),
+    )) !== null
+  );
 }
 
 export async function findAppliedDesktopSyncEvent(
   organizationId: string,
   event: SyncEvent,
-  executor?: AuditLogReader,
+  executor: AuditLogReader,
 ) {
-  const rows = await withOrgReader(organizationId, executor, (reader) =>
-    reader
-      .select({
-        details: organizationEventLog.details,
-      })
-      .from(organizationEventLog)
-      .where(
-        and(
-          eq(organizationEventLog.organizationId, organizationId),
-          eq(organizationEventLog.entityId, event.entityId),
-          // Filter on the op id in SQL: an entity can have far more audit rows
-          // than the page below, and an unordered LIMIT would miss the one that
-          // proves this event was already applied (a retried push re-applied).
-          sql`${organizationEventLog.details}->>'eventId' = ${event.eventId}`,
-        ),
-      )
-      .limit(100),
-  );
+  const rows = await executor
+    .select({
+      details: organizationEventLog.details,
+    })
+    .from(organizationEventLog)
+    .where(
+      and(
+        eq(organizationEventLog.organizationId, organizationId),
+        eq(organizationEventLog.entityId, event.entityId),
+        // Filter on the op id in SQL: an entity can have far more audit rows
+        // than the page below, and an unordered LIMIT would miss the one that
+        // proves this event was already applied (a retried push re-applied).
+        sql`${organizationEventLog.details}->>'eventId' = ${event.eventId}`,
+      ),
+    )
+    .limit(100);
 
   for (const row of rows) {
     const details = toRecord(row.details);

@@ -4,10 +4,9 @@ import { orgDb } from "../lib/org-db";
 import { withOrg } from "../lib/org-context";
 import { getPortalCustomerForAuthOrganization } from "../modules/service-orders/service-order.list-queries";
 import {
-  publicServiceOrderAccessRouter as publicServiceOrderAccessRouterBare,
-  serviceOrdersRouter as serviceOrdersRouterBare,
+  publicServiceOrderAccessRouter,
+  serviceOrdersRouter,
 } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -36,10 +35,6 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const publicServiceOrderAccessRouter = withErrorHandling(
-  publicServiceOrderAccessRouterBare,
-);
-const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 // Public quote-access token lifecycle — spec quote-approval-public-access
 // (issue #785), mini-spec A. Real DB, real routers, no session mock for the

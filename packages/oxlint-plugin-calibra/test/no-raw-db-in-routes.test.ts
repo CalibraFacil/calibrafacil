@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { RAW_DB_BASELINE } from "../src/lib/raw-db-baseline.ts";
 import {
   expectClean,
   expectViolation,
@@ -156,8 +155,8 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     });
   });
 
-  // The committed baseline is empty since P2-18j, so the ratchet is exercised with
-  // a baseline INJECTED through the rule options (the repo config never sets it).
+  // No route is grandfathered since P2-18j, so the ratchet is exercised with a
+  // baseline INJECTED through the rule options (the repo config never sets it).
   const INJECTED = {
     baseline: {
       "apps/api/src/routes/legacy-a.ts": 2,
@@ -165,8 +164,7 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     },
   };
 
-  it("REQ-ORGDB-2: an empty committed baseline grandfathers nothing: a single use fails", async () => {
-    expect([...RAW_DB_BASELINE]).toEqual([]);
+  it("REQ-ORGDB-2: with no baseline nothing is grandfathered: a single use fails", async () => {
     await expectViolation(RULE, {
       "apps/api/src/routes/anything.ts": uses(1),
     });
@@ -212,11 +210,4 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     expect(output).not.toContain(`calibra(${RULE})`);
     expect(exitCode).toBe(0);
   }, 120_000);
-
-  it("REQ-ORGDB-3: the portal route files are not grandfathered at all", () => {
-    const portal = [...RAW_DB_BASELINE.keys()].filter((file) =>
-      /apps\/api\/src\/routes\/portal[^/]*\.ts$/.test(file),
-    );
-    expect(portal).toEqual([]);
-  });
 });

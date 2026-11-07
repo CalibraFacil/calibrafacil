@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 import { integrationConnection } from "@calibra-facil/db/schema";
 import {
@@ -7,7 +8,6 @@ import {
 } from "@calibra-facil/shared";
 import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { getIntegrationRecord, writeIntegrationEvent } from "./records";
 import {
   getIntegrationCursor,
@@ -22,9 +22,8 @@ export async function pollContaAzulRemoteDrift(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {
@@ -36,11 +35,16 @@ export async function pollContaAzulRemoteDrift(params: {
     throw new Error("Verificação de drift da Conta Azul está desativada");
   }
 
-  const storedCursor = await getIntegrationCursor({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    cursorType: CONTA_AZUL_DRIFT_CURSOR_TYPE,
-  });
+  const storedCursor = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationCursor(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        cursorType: CONTA_AZUL_DRIFT_CURSOR_TYPE,
+      },
+      o,
+    ),
+  );
   const adapter = await createContaAzulAdapterForRecord({
     record,
     env: params.env,
@@ -77,7 +81,7 @@ export async function pollContaAzulRemoteDrift(params: {
   });
 
   // The poll's bookkeeping (config watermark, cursor, event) commits together.
-  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+  await orgDb(params.organizationId).transaction(async (o) => {
     await o
       .update(integrationConnection)
       .set({

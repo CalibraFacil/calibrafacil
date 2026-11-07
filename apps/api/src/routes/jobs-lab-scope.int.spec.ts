@@ -27,8 +27,7 @@ import {
   ootNotification,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { jobsRouter } from "./jobs";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -37,8 +36,6 @@ import {
   seedExtraMember,
   seedJobForOrg,
 } from "../../test/integration/tenant-refs";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

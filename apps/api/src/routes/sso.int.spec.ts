@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { ssoRouter as bareSsoRouter } from "./sso";
+import { ssoRouter } from "./sso";
 import { db } from "@calibra-facil/db";
 import { ssoProvider } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const ssoRouter = withErrorHandling(bareSsoRouter);
 
 // Real-DB + real-RBAC integration tests for the ssoRouter (SAML/OIDC SSO).
 // Only the better-auth lab session is mocked (see test/integration/setup.ts):

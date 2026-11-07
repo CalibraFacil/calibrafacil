@@ -47,12 +47,17 @@ export async function recomputeCertificateReleasesForBillingDocument(params: {
 
   const recomputedJobIds: number[] = [];
   for (const link of linkedJobs) {
-    const result = await recomputeCertificateRelease({
-      organizationId: params.organizationId,
-      calibrationJobId: link.jobId,
-      source: "system_reconciliation",
-      actorUserId: null,
-    });
+    const result = await orgDb(params.organizationId).transaction((o) =>
+      recomputeCertificateRelease(
+        {
+          organizationId: params.organizationId,
+          calibrationJobId: link.jobId,
+          source: "system_reconciliation",
+          actorUserId: null,
+        },
+        o,
+      ),
+    );
     if (result) recomputedJobIds.push(link.jobId);
   }
 

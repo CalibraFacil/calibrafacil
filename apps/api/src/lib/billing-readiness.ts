@@ -1,6 +1,5 @@
 import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import { orgDb } from "./org-db";
-import { inOrgTransaction } from "./org-transaction";
 import {
   calibrationJob,
   customer,
@@ -43,7 +42,7 @@ export { evaluateOrderBlockers } from "./finance";
 export async function getFinancialIntegrationState(
   organizationId: string,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<BillingIntegrationState> {
   const read = (reader: Pick<OrgExecutor, "select">) =>
     reader
@@ -129,11 +128,9 @@ type BillingReadinessParams = {
 export async function computeBillingReadinessQueue(
   params: BillingReadinessParams,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<BillingReadinessQueue> {
-  return inOrgTransaction(params.organizationId, executor, (o) =>
-    readBillingReadinessQueue(o, params),
-  );
+  return readBillingReadinessQueue(executor, params);
 }
 
 async function readBillingReadinessQueue(

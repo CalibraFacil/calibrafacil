@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type {
   BillingDocumentStatus,
@@ -325,12 +326,17 @@ describe("evaluateReleaseStatus", () => {
 describe("resolveCertificateReleasePolicy", () => {
   it("returns the fallback policy when no rows match", async () => {
     mocks.policyRows = [];
-    const result = await resolveCertificateReleasePolicy({
-      organizationId: "org_1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org_1").transaction((o) =>
+      resolveCertificateReleasePolicy(
+        {
+          organizationId: "org_1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result).toEqual({
       id: null,
       mode: "manual_only",
@@ -349,12 +355,17 @@ describe("resolveCertificateReleasePolicy", () => {
         priority: 0,
       },
     ];
-    const result = await resolveCertificateReleasePolicy({
-      organizationId: "org_1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org_1").transaction((o) =>
+      resolveCertificateReleasePolicy(
+        {
+          organizationId: "org_1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(1);
     expect(result.mode).toBe("release_after_invoice");
     expect(result.scope).toBe("organization");
@@ -379,12 +390,17 @@ describe("resolveCertificateReleasePolicy", () => {
         priority: 0,
       },
     ];
-    const result = await resolveCertificateReleasePolicy({
-      organizationId: "org_1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org_1").transaction((o) =>
+      resolveCertificateReleasePolicy(
+        {
+          organizationId: "org_1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(2);
     expect(result.scope).toBe("customer");
     expect(result.mode).toBe("release_after_full_payment");
@@ -417,12 +433,17 @@ describe("resolveCertificateReleasePolicy", () => {
         priority: 0,
       },
     ];
-    const result = await resolveCertificateReleasePolicy({
-      organizationId: "org_1",
-      customerId: null,
-      commercialAgreementId: 99,
-      serviceName: "Calibracao de Paquimetro",
-    });
+    const result = await orgDb("org_1").transaction((o) =>
+      resolveCertificateReleasePolicy(
+        {
+          organizationId: "org_1",
+          customerId: null,
+          commercialAgreementId: 99,
+          serviceName: "Calibracao de Paquimetro",
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(3);
     expect(result.scope).toBe("agreement");
   });
@@ -446,12 +467,17 @@ describe("resolveCertificateReleasePolicy", () => {
         priority: 0,
       },
     ];
-    const result = await resolveCertificateReleasePolicy({
-      organizationId: "org_1",
-      customerId: null,
-      commercialAgreementId: null,
-      serviceName: "  CALIBRAÇÃO DE PAQUÍMETRO  ",
-    });
+    const result = await orgDb("org_1").transaction((o) =>
+      resolveCertificateReleasePolicy(
+        {
+          organizationId: "org_1",
+          customerId: null,
+          commercialAgreementId: null,
+          serviceName: "  CALIBRAÇÃO DE PAQUÍMETRO  ",
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(2);
     expect(result.scope).toBe("service");
   });
@@ -475,12 +501,17 @@ describe("resolveCertificateReleasePolicy", () => {
         priority: 0,
       },
     ];
-    const result = await resolveCertificateReleasePolicy({
-      organizationId: "org_1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org_1").transaction((o) =>
+      resolveCertificateReleasePolicy(
+        {
+          organizationId: "org_1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(1);
     expect(result.scope).toBe("organization");
   });
@@ -512,12 +543,17 @@ describe("resolveCertificateReleasePolicy", () => {
         priority: 0,
       },
     ];
-    const result = await resolveCertificateReleasePolicy({
-      organizationId: "org_1",
-      customerId: 10,
-      commercialAgreementId: null,
-      serviceName: null,
-    });
+    const result = await orgDb("org_1").transaction((o) =>
+      resolveCertificateReleasePolicy(
+        {
+          organizationId: "org_1",
+          customerId: 10,
+          commercialAgreementId: null,
+          serviceName: null,
+        },
+        o,
+      ),
+    );
     expect(result.id).toBe(7);
     expect(result.scope).toBe("customer");
   });

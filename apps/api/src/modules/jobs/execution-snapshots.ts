@@ -16,7 +16,6 @@ import {
   type StandardsDraftWarning,
 } from "@calibra-facil/schemas";
 import { and, desc, eq, inArray, isNull, like, not, or } from "drizzle-orm";
-import { withOrgReader } from "../../lib/org-transaction";
 import { selectEffectiveEnvironmentalLimits } from "../../lib/unit-operational-settings";
 import {
   checkEnvironmentWithinLimits,
@@ -122,7 +121,7 @@ export async function resolveAssetSnapshot(
     assetSnapshot: AssetSnapshot | null;
     methodSnapshot: MethodSnapshot;
   },
-  executor?: Reader,
+  executor: Reader,
 ): Promise<
   | { ok: true; snapshot: AssetSnapshot; built: boolean }
   | {
@@ -134,9 +133,7 @@ export async function resolveAssetSnapshot(
   const frozen = job.assetSnapshot;
   const resolved = frozen
     ? { ok: true as const, snapshot: frozen }
-    : await withOrgReader(job.organizationId, executor, (reader) =>
-        buildAssetSnapshot(job.assetId, job.organizationId, reader),
-      );
+    : await buildAssetSnapshot(job.assetId, job.organizationId, executor);
   if (!resolved.ok) {
     return { ok: false, kind: "asset_not_found", error: resolved.error };
   }
@@ -258,7 +255,7 @@ export async function replaceStaleFrozenStandards(
     savedSnapshot: StandardSnapshot[] | null;
     organizationId: string;
   },
-  executor?: Reader,
+  executor: Reader,
 ): Promise<StandardSnapshot[]> {
   if (input.staleIds.size === 0) return input.frozen;
 
@@ -266,25 +263,19 @@ export async function replaceStaleFrozenStandards(
     (input.savedSnapshot ?? []).map((standard) => [standard.id, standard]),
   );
   const unsaved = [...input.staleIds].filter((id) => !saved.has(id));
-  const built = await withOrgReader(
-    input.organizationId,
-    executor,
-    async (reader) => {
-      const rows =
-        unsaved.length === 0
-          ? []
-          : await reader
-              .select()
-              .from(referenceStandard)
-              .where(
-                and(
-                  inArray(referenceStandard.id, unsaved),
-                  eq(referenceStandard.organizationId, input.organizationId),
-                ),
-              );
-      return standardSnapshotEntries(rows, reader);
-    },
-  );
+  const rows =
+    unsaved.length === 0
+      ? []
+      : await executor
+          .select()
+          .from(referenceStandard)
+          .where(
+            and(
+              inArray(referenceStandard.id, unsaved),
+              eq(referenceStandard.organizationId, input.organizationId),
+            ),
+          );
+  const built = await standardSnapshotEntries(rows, executor);
 
   return input.frozen.flatMap((entry) => {
     if (!input.staleIds.has(entry.id)) return [entry];
@@ -308,7 +299,7 @@ export async function buildStandardsSnapshot(
   unitId: number,
   performedAt: Date,
   savedSnapshot: StandardSnapshot[] | null = null,
-  executor?: Reader,
+  executor: Reader,
 ): Promise<
   | {
       ok: true;
@@ -329,15 +320,13 @@ export async function buildStandardsSnapshot(
   // order it was first named.
   const standardIds = [...new Set(selectedStandardIds)];
 
-  return withOrgReader(organizationId, executor, (reader) =>
-    buildStandardsSnapshotOn(reader, {
-      standardIds,
-      organizationId,
-      unitId,
-      performedAt,
-      savedSnapshot,
-    }),
-  );
+  return buildStandardsSnapshotOn(executor, {
+    standardIds,
+    organizationId,
+    unitId,
+    performedAt,
+    savedSnapshot,
+  });
 }
 
 async function buildStandardsSnapshotOn(
@@ -425,18 +414,16 @@ export async function buildEnvironmentalSnapshot(
   existing: { assetId: number; unitId: number },
   organizationId: string,
   userId: string,
-  executor?: Reader,
+  executor: Reader,
 ): Promise<EnvironmentalSnapshot | undefined> {
   if (!environment) return undefined;
 
-  return withOrgReader(organizationId, executor, (reader) =>
-    buildEnvironmentalSnapshotOn(reader, {
-      environment,
-      existing,
-      organizationId,
-      userId,
-    }),
-  );
+  return buildEnvironmentalSnapshotOn(executor, {
+    environment,
+    existing,
+    organizationId,
+    userId,
+  });
 }
 
 async function buildEnvironmentalSnapshotOn(

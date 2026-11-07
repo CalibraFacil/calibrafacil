@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { createHash, randomUUID } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -44,7 +44,6 @@ import {
   createStandardRecallNotifications,
   type RecallStandardIdentity,
 } from "../lib/oot-notifications";
-import type { OrgScope } from "../lib/after-commit";
 import {
   findImpactedCertificates,
   findInFlightJobsUsingStandard,
@@ -78,7 +77,7 @@ import {
   requireLabStandard,
   requireLabStandardId,
 } from "../lib/standard-access";
-import { withOrg, type OrgContext } from "../lib/org-context";
+import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 import {
   createR2Client,
@@ -305,12 +304,7 @@ function calibrationRecordOf(
   };
 }
 
-/** What `lib/oot-notifications` takes to join the write's transaction and commit hooks. */
-function scopeOf(ctx: OrgContext): OrgScope {
-  return { executor: ctx.o, afterCommit: ctx.afterCommit };
-}
-
-export const standardsRouter = new Hono<{
+export const standardsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env;
 }>()
@@ -1360,9 +1354,8 @@ export const standardsRouter = new Hono<{
                     organizationId: member.organizationId,
                     actorUserId: session.user.id,
                     standard: standardToRecall,
-                    ipAddress: ctx.actor.ipAddress,
                   },
-                  scopeOf(recallCtx),
+                  recallCtx,
                 ),
               ),
             );
@@ -1636,9 +1629,8 @@ export const standardsRouter = new Hono<{
                 certificateNumber: standard.certificateNumber,
                 calibrationDate: standard.calibrationDate,
               },
-              ipAddress: ctx.actor.ipAddress,
             },
-            scopeOf(ctx),
+            ctx,
           );
 
           // Every selected job must actually be linked to this standard — the
@@ -1715,7 +1707,7 @@ export const standardsRouter = new Hono<{
               organizationId: member.organizationId,
               actorUserId: session.user.id,
             },
-            scopeOf(ctx),
+            ctx,
           ),
       );
 

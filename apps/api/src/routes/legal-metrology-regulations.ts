@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { listLegalMetrologyRegulations } from "../lib/legal-metrology-regulations";
 import { withPermission, type AuthVariables } from "../middleware/permission";
 
@@ -9,7 +9,7 @@ import { withPermission, type AuthVariables } from "../middleware/permission";
  * no org/unit WHERE clause — only authentication is enforced (reuse the existing
  * `withPermission({ equipment: ["read"] })` guard; unauth → 401). Spec: REQ-CATALOG-003.
  */
-export const legalMetrologyRegulationsRouter = new Hono<{
+export const legalMetrologyRegulationsRouter = createRouter<{
   Variables: AuthVariables;
 }>().get("/", ...withPermission({ equipment: ["read"] }), async (c) => {
   const rows = await listLegalMetrologyRegulations();

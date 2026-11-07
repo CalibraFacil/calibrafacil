@@ -1,9 +1,5 @@
 import { backgroundJobType } from "@calibra-facil/schemas";
 import { readJobsConfig } from "@calibra-facil/config";
-import {
-  afterTransactionCommit,
-  isInTransactionScope,
-} from "@calibra-facil/db";
 import { enqueueQueueJob, isQueueMessage } from "@calibra-facil/db/queue";
 import {
   parseBackgroundJobMessage,
@@ -185,43 +181,10 @@ export async function enqueueBackgroundJob(input: BackgroundJobMessage) {
   }
   const message = parsed.message;
 
-  // Inside a transaction scope (the desktop sync apply) the job must not leave
-  // the process before the state it is about for is durable, and must not leave
-  // at all when the transaction rolls back:
-  // - a row of the database queue is inserted in the transaction, so it commits
-  //   or rolls back with the change (the wake-up ping goes after the commit);
-  // - every other dispatch (in-process `local`/`inline` work that reads the
-  //   committed rows) runs after the commit and never on a rollback.
-  if (isInTransactionScope()) {
-    if (routesToDatabaseQueue(message)) {
-      const jobId = await enqueueQueueJob(message);
-      const documentWorkerUrl = getDocumentWorkerUrl();
-      if (documentWorkerUrl) {
-        // Fire-and-forget like the unscoped path: the row is durable already.
-        afterTransactionCommit(() => {
-          void wakeAfterCommit(message, documentWorkerUrl);
-        });
-      }
-      return { messageId: `app-queue-${jobId}` };
-    }
-    afterTransactionCommit(async () => {
-      await dispatchBackgroundJob(message);
-    });
-    return { messageId: `deferred-${Date.now()}` };
-  }
-
+  // A job that belongs to a change is staged with `ctx.emit` of `withOrg`, which
+  // keeps it from leaving before the change is durable (also inside the desktop
+  // sync's transaction scope). This is the dispatch itself.
   return dispatchBackgroundJob(message);
-}
-
-async function wakeAfterCommit(message: QueueMessage, baseUrl: string) {
-  try {
-    await wakeDocumentWorker(baseUrl);
-  } catch (error) {
-    console.error("[BackgroundJobs] Failed to wake document worker", {
-      type: backgroundJobType(message),
-      error: error instanceof Error ? error.message : "unknown error",
-    });
-  }
 }
 
 async function dispatchBackgroundJob(message: BackgroundJobMessage) {

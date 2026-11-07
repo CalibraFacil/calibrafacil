@@ -1,5 +1,4 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { inOrgTransaction } from "./org-transaction";
 import {
   customer,
   serviceOrder,
@@ -86,11 +85,9 @@ export async function buildMarginDashboards(
     scope: Parameters<typeof buildUnitScopeCondition>[1];
   },
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<MarginDashboardEnvelope> {
-  return inOrgTransaction(input.organizationId, executor, (o) =>
-    readMarginDashboards(o, input),
-  );
+  return readMarginDashboards(executor, input);
 }
 
 async function readMarginDashboards(

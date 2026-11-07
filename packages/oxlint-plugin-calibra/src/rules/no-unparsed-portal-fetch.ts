@@ -1,8 +1,6 @@
 import {
-  createRatchet,
   isTestFile,
   normalizedFilename,
-  type Baseline,
   type RuleContext,
   type RuleModule,
   toRecord,
@@ -19,14 +17,10 @@ import {
 // A raw `fetch(...)` or a `<response>.json()` anywhere else under
 // apps/portal/src is an unparsed (`any`) read: it is what the ~55 pre-contract
 // call sites were. This rule keeps new ones out. The helper module itself and
-// tests are exempt; any legacy site would be grandfathered as an exact
-// per-file count (LEGACY_BASELINE, the same ratchet as the other calibra
-// rules) that may only go down. The baseline is empty: every site is migrated.
+// tests are exempt.
 
 const PORTAL_SRC_PATTERN = /(^|\/)apps\/portal\/src\//;
 const HELPER_PATTERN = /(^|\/)apps\/portal\/src\/lib\/api-fetch\.ts$/;
-
-const LEGACY_BASELINE: Baseline = new Map<string, number>([]);
 
 const MESSAGE =
   "Do not call fetch() or read .json() directly in the portal. Use fetchPortalJson(path, schema, { errorMessage }) from @/lib/api-fetch (or fetchPortalResponse + readPortalJson / readPortalJsonResult when the HTTP status decides what to render) with a schema from @calibra-facil/contracts, so the response is validated.";
@@ -74,7 +68,6 @@ const rule: RuleModule = {
       return {};
     }
 
-    const ratchet = createRatchet(LEGACY_BASELINE, filename);
     return {
       CallExpression(node: unknown) {
         const call = toRecord(node);
@@ -82,7 +75,6 @@ const rule: RuleModule = {
         if (!isFetchCall(callee) && !isBodyJsonCall(callee, call?.arguments)) {
           return;
         }
-        if (!ratchet.exceeds()) return;
         context.report({ node, message: MESSAGE });
       },
     };

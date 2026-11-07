@@ -7,7 +7,6 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { invalid } from "../../lib/domain-errors";
-import { withOrgReader as withReader } from "../../lib/org-transaction";
 import { isAssignableTechnician } from "../../lib/tenant-refs";
 
 type Reader = Pick<OrgExecutor, "select">;
@@ -26,30 +25,27 @@ type Reader = Pick<OrgExecutor, "select">;
  * job's unit (org admins and owners need none). Decision Q25: this is the ONE
  * rule, for `assignJob` and `editJob` alike.
  */
-export function findAssignableTechnician(
+export async function findAssignableTechnician(
   params: {
     organizationId: string;
     userId: string;
     unitId: number | null;
   },
-  executor?: Reader,
+  executor: Reader,
 ): Promise<{ userId: string; name: string } | null> {
-  return withReader(params.organizationId, executor, async (reader) => {
-    if (!(await isAssignableTechnician(params, reader))) return null;
-
-    const [found] = await reader
-      .select({ userId: member.userId, name: user.name })
-      .from(member)
-      .innerJoin(user, eq(member.userId, user.id))
-      .where(
-        and(
-          eq(member.userId, params.userId),
-          eq(member.organizationId, params.organizationId),
-        ),
-      )
-      .limit(1);
-    return found ?? null;
-  });
+  if (!(await isAssignableTechnician(params, executor))) return null;
+  const [found] = await executor
+    .select({ userId: member.userId, name: user.name })
+    .from(member)
+    .innerJoin(user, eq(member.userId, user.id))
+    .where(
+      and(
+        eq(member.userId, params.userId),
+        eq(member.organizationId, params.organizationId),
+      ),
+    )
+    .limit(1);
+  return found ?? null;
 }
 
 /**
@@ -66,14 +62,12 @@ export function technicianHasCompetence(
     assetTypeId: number;
     performedAt: Date;
   },
-  executor?: Reader,
+  executor: Reader,
 ): Promise<boolean> {
   if (!params.technicianId) return Promise.resolve(true);
   const technicianId = params.technicianId;
 
-  return withReader(params.organizationId, executor, (reader) =>
-    competenceHeld(reader, { ...params, technicianId }),
-  );
+  return competenceHeld(executor, { ...params, technicianId });
 }
 
 async function competenceHeld(
@@ -125,37 +119,34 @@ async function competenceHeld(
  * gate it applies once the organization keeps competence records at all, and
  * an assignment is judged now.
  */
-export function technicianCompetentForJobService(
+export async function technicianCompetentForJobService(
   params: {
     organizationId: string;
     technicianId: string;
     serviceId: number;
   },
-  executor?: Reader,
+  executor: Reader,
 ): Promise<boolean> {
-  return withReader(params.organizationId, executor, async (reader) => {
-    const [jobService] = await reader
-      .select({ assetTypeId: service.assetTypeId })
-      .from(service)
-      .where(
-        and(
-          eq(service.id, params.serviceId),
-          eq(service.organizationId, params.organizationId),
-        ),
-      )
-      .limit(1);
-    if (!jobService?.assetTypeId) return true;
-
-    return technicianHasCompetence(
-      {
-        organizationId: params.organizationId,
-        technicianId: params.technicianId,
-        assetTypeId: jobService.assetTypeId,
-        performedAt: new Date(),
-      },
-      reader,
-    );
-  });
+  const [jobService] = await executor
+    .select({ assetTypeId: service.assetTypeId })
+    .from(service)
+    .where(
+      and(
+        eq(service.id, params.serviceId),
+        eq(service.organizationId, params.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!jobService?.assetTypeId) return true;
+  return technicianHasCompetence(
+    {
+      organizationId: params.organizationId,
+      technicianId: params.technicianId,
+      assetTypeId: jobService.assetTypeId,
+      performedAt: new Date(),
+    },
+    executor,
+  );
 }
 
 /** The refusal both commands answer with when the competence gate says no. */

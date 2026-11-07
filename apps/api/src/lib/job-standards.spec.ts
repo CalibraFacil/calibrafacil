@@ -122,6 +122,10 @@ import {
   syncJobStandardLinks,
 } from "./job-standards";
 
+// The org-bound handle of the caller's transaction, as the lib functions take it.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the helpers read
+const o = { select: mockDbSelectFn, transaction: mockTransaction } as never;
+
 function enqueueSelects(...rows: unknown[][]) {
   mockDbSelectFn._reset();
   for (const r of rows) mockDbSelectFn._queue.push(r);
@@ -149,12 +153,12 @@ beforeEach(() => {
 
 describe("syncJobStandardLinks", () => {
   it("keeps existing links untouched when the snapshot is undefined", async () => {
-    await syncJobStandardLinks(1, undefined);
+    await syncJobStandardLinks(1, undefined, null, "org-1", o);
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 
   it("clears links when the snapshot is null and inserts nothing", async () => {
-    await syncJobStandardLinks(1, null);
+    await syncJobStandardLinks(1, null, null, "org-1", o);
     expect(mockTransaction).toHaveBeenCalledTimes(1);
     expect(mockTxDelete).toHaveBeenCalledTimes(1);
     expect(mockTxInsertValues).not.toHaveBeenCalled();
@@ -174,11 +178,13 @@ describe("syncJobStandardLinks", () => {
       drift: null,
       certifiedValues: null,
     });
-    await syncJobStandardLinks(7, [
-      snapshotEntry(5),
-      snapshotEntry(5),
-      snapshotEntry(9),
-    ]);
+    await syncJobStandardLinks(
+      7,
+      [snapshotEntry(5), snapshotEntry(5), snapshotEntry(9)],
+      null,
+      "org-1",
+      o,
+    );
 
     expect(mockTxDelete).toHaveBeenCalledTimes(1);
     const values = mockTxInsertValues.mock.calls[0]?.[0];
@@ -193,7 +199,9 @@ describe("syncJobStandardLinks", () => {
 
   it("never propagates a database failure (derived data)", async () => {
     mockTransaction.mockRejectedValueOnce(new Error("db down"));
-    await expect(syncJobStandardLinks(1, null)).resolves.toBeUndefined();
+    await expect(
+      syncJobStandardLinks(1, null, null, "org-1", o),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -207,7 +215,7 @@ describe("findImpactedCertificates", () => {
 
   it("returns an empty list when no jobs relied on the standard", async () => {
     enqueueSelects([]);
-    const result = await findImpactedCertificates(INPUT);
+    const result = await findImpactedCertificates(INPUT, o);
     expect(result).toEqual([]);
   });
 
@@ -222,7 +230,7 @@ describe("findImpactedCertificates", () => {
       [],
     );
 
-    const result = await findImpactedCertificates(INPUT);
+    const result = await findImpactedCertificates(INPUT, o);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
@@ -238,7 +246,7 @@ describe("findImpactedCertificates", () => {
       [],
     );
 
-    const result = await findImpactedCertificates(INPUT);
+    const result = await findImpactedCertificates(INPUT, o);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
@@ -256,7 +264,7 @@ describe("findImpactedCertificates", () => {
       [{ jobId: 2 }],
     );
 
-    const result = await findImpactedCertificates(INPUT);
+    const result = await findImpactedCertificates(INPUT, o);
 
     expect(result.find((row) => row.jobId === 1)?.alreadyNotified).toBe(false);
     expect(result.find((row) => row.jobId === 2)?.alreadyNotified).toBe(true);

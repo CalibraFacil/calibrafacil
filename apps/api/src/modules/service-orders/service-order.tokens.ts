@@ -229,10 +229,9 @@ export async function viewPublicServiceOrderAccess(
       .where(eq(serviceOrderPublicAccessToken.id, access.id));
 
     const detail = await getServiceOrderDetail(
+      o,
       access.serviceOrderId,
       access.organizationId,
-      undefined,
-      o,
     );
     if (!detail) throw serviceOrderNotFound();
 

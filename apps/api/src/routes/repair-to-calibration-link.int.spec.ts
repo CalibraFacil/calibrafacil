@@ -21,8 +21,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
-import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { serviceOrdersRouter } from "./service-orders";
+import { withOrg } from "../lib/org-context";
 import { createCalibrationJob } from "../lib/jobs";
 import { db } from "@calibra-facil/db";
 import {
@@ -45,7 +45,6 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
@@ -291,14 +290,20 @@ describe("DOM-02 — repair OS → calibration link", () => {
       serviceOrderNumber: "OS-A-0001",
     });
 
-    const newJob = await createCalibrationJob({
-      organizationId: orgA.orgId,
-      unitId: orgA.unitId,
-      createdBy: orgA.userId,
-      assetId: orgA.assetId,
-      serviceId: orgA.serviceId,
-      sourceServiceOrderId: soId,
-    });
+    const newJob = await withOrg(
+      orgA.orgId,
+      { userId: orgA.userId, ipAddress: null },
+      (ctx) =>
+        createCalibrationJob({
+          organizationId: orgA.orgId,
+          unitId: orgA.unitId,
+          createdBy: orgA.userId,
+          assetId: orgA.assetId,
+          serviceId: orgA.serviceId,
+          sourceServiceOrderId: soId,
+          executor: ctx.tx,
+        }),
+    );
 
     const [persisted] = await db
       .select({ sourceServiceOrderId: calibrationJob.sourceServiceOrderId })
@@ -332,14 +337,20 @@ describe("DOM-02 — repair OS → calibration link", () => {
     });
 
     // org A opens a calibration but passes org B's OS id — must not link.
-    const newJob = await createCalibrationJob({
-      organizationId: orgA.orgId,
-      unitId: orgA.unitId,
-      createdBy: orgA.userId,
-      assetId: orgA.assetId,
-      serviceId: orgA.serviceId,
-      sourceServiceOrderId: foreignSoId,
-    });
+    const newJob = await withOrg(
+      orgA.orgId,
+      { userId: orgA.userId, ipAddress: null },
+      (ctx) =>
+        createCalibrationJob({
+          organizationId: orgA.orgId,
+          unitId: orgA.unitId,
+          createdBy: orgA.userId,
+          assetId: orgA.assetId,
+          serviceId: orgA.serviceId,
+          sourceServiceOrderId: foreignSoId,
+          executor: ctx.tx,
+        }),
+    );
 
     const [persisted] = await db
       .select({ sourceServiceOrderId: calibrationJob.sourceServiceOrderId })
@@ -411,14 +422,17 @@ describe("DOM-02 — repair OS → calibration link", () => {
       calibrationRequiredAfterRepair: true,
       finished: true,
     });
-    await createCalibrationJob({
-      organizationId: orgA.orgId,
-      unitId: orgA.unitId,
-      createdBy: orgA.userId,
-      assetId: orgA.assetId,
-      serviceId: orgA.serviceId,
-      sourceServiceOrderId: linkedSo,
-    });
+    await withOrg(orgA.orgId, { userId: orgA.userId, ipAddress: null }, (ctx) =>
+      createCalibrationJob({
+        organizationId: orgA.orgId,
+        unitId: orgA.unitId,
+        createdBy: orgA.userId,
+        assetId: orgA.assetId,
+        serviceId: orgA.serviceId,
+        sourceServiceOrderId: linkedSo,
+        executor: ctx.tx,
+      }),
+    );
 
     // (5) org B: finalized + flagged → must never appear for org A.
     const foreignSo = await seedServiceOrder({

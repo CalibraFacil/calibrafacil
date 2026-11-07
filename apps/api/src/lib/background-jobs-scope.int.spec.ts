@@ -1,7 +1,8 @@
 /**
- * background-jobs-scope.int.spec.ts: a background job enqueued inside a
- * transaction scope (the desktop sync apply) is sent after the commit, and not
- * at all when the transaction rolls back (D3).
+ * background-jobs-scope.int.spec.ts: a background job emitted with `ctx.emit`
+ * of `withOrg` inside a transaction scope (the desktop sync apply) is sent
+ * after the scope's commit, and not at all when the transaction rolls back
+ * (D3).
  *
  *   - a row of the database queue (`queue` mode) is written IN the transaction,
  *     so it commits or rolls back with the change; the document-worker ping
@@ -31,7 +32,7 @@ vi.mock("./runtime-env", () => ({
   createWorkerRuntimeEnv: vi.fn(() => ({})),
 }));
 
-import { enqueueBackgroundJob } from "./background-jobs";
+import { SYSTEM_ACTOR, withOrg } from "./org-context";
 
 const message: BackgroundJobMessage = {
   type: "OOT_NOTIFICATION",
@@ -41,16 +42,22 @@ const message: BackgroundJobMessage = {
 
 class Rollback extends Error {}
 
+// Inside the scope `withOrg` is a savepoint: the job is staged in it and sent
+// after the scope's own commit.
+function emitInScope() {
+  return withOrg("org-1", SYSTEM_ACTOR, (ctx) => ctx.emit(message));
+}
+
 async function enqueueInScopeThenCommit() {
   await runInTransactionScope(async () => {
-    await enqueueBackgroundJob(message);
+    await emitInScope();
   });
 }
 
 async function enqueueInScopeThenRollBack() {
   await expect(
     runInTransactionScope(async () => {
-      await enqueueBackgroundJob(message);
+      await emitInScope();
       throw new Rollback("the event failed");
     }),
   ).rejects.toThrow(Rollback);
@@ -78,7 +85,7 @@ describe("in-process runners (D3)", () => {
       vi.stubEnv("BACKGROUND_JOBS_MODE", mode);
 
       await runInTransactionScope(async () => {
-        await enqueueBackgroundJob(message);
+        await emitInScope();
         await new Promise((resolve) => setTimeout(resolve, 20));
         expect(mocks.processBackgroundJob).not.toHaveBeenCalled();
       });
@@ -103,7 +110,7 @@ describe("database queue (D3)", () => {
 
   it("D3 [HIGH RISK]: the queue row joins the transaction (visible inside, durable after the commit) and the worker is woken after the commit", async () => {
     await runInTransactionScope(async () => {
-      await enqueueBackgroundJob(message);
+      await emitInScope();
       expect(await db.select().from(appQueueJob)).toHaveLength(1);
       expect(mocks.fetch).not.toHaveBeenCalled();
     });

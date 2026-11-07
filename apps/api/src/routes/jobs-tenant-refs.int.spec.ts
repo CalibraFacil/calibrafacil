@@ -9,16 +9,13 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { jobsRouter } from "./jobs";
 import { db } from "@calibra-facil/db";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

@@ -17,7 +17,7 @@
 
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
-import { portalRouter as barePortalRouter } from "./portal";
+import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -35,9 +35,6 @@ import {
   seedService,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const portalRouter = withErrorHandling(barePortalRouter);
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = {

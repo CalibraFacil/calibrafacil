@@ -1,7 +1,7 @@
 /**
  * Tests for the §7.10 out-of-tolerance flag flow (#426 Phase 0).
  *
- * Mocks Drizzle `db`, the shared NC creator and the background-job enqueue to
+ * Mocks the org-bound handle, the shared NC creator and the background-job enqueue to
  * assert the workflow contract of flagJobOutOfTolerance():
  *   - only approved-ish jobs can be flagged (404 / 409 codes otherwise);
  *   - one open OOT NC per job (self-healing when a previous flag died before
@@ -92,31 +92,6 @@ const {
   };
 });
 
-vi.mock("@calibra-facil/db", () => ({
-  db: {
-    select: mockDbSelectFn,
-    transaction: mockTransaction,
-    // Direct inserts (standard_recall) share the recording tx-insert mock.
-    insert: mockTxInsertFn,
-  },
-}));
-
-// Without the caller's transaction the workflow opens one that names the
-// laboratory: the handle selects on the select queue, and its inner transaction
-// (the notification + outbox savepoint) is the recording one.
-vi.mock("./org-db", () => ({
-  orgDb: () => ({
-    select: mockDbSelectFn,
-    insert: mockTxInsertFn,
-    transaction: async (run: (tx: unknown) => unknown) =>
-      run({
-        select: mockDbSelectFn,
-        insert: mockTxInsertFn,
-        transaction: mockTransaction,
-      }),
-  }),
-}));
-
 vi.mock("@calibra-facil/db/schema", () => ({
   calibrationJob: {
     id: "j_id",
@@ -177,6 +152,29 @@ import {
   flagJobOutOfTolerance,
 } from "./oot-notifications";
 
+// The write context `withOrg` hands the workflow: the org-bound handle selects
+// on the select queue, its savepoint is the recording transaction, and the
+// after-commit work runs at once (the transaction is the test double).
+function makeCtx() {
+  const ctx = {
+    org: "org-1",
+    actor: { userId: "user-1", ipAddress: null },
+    o: {
+      select: mockDbSelectFn,
+      insert: mockTxInsertFn,
+      transaction: mockTransaction,
+    },
+    tx: {},
+    audit: vi.fn().mockResolvedValue(undefined),
+    emit: vi.fn().mockResolvedValue(undefined),
+    afterCommit: (task: () => unknown) => {
+      void task();
+    },
+  };
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the workflow reads
+  return ctx as never;
+}
+
 function enqueueSelects(...rows: unknown[][]) {
   mockDbSelectFn._reset();
   for (const r of rows) mockDbSelectFn._queue.push(r);
@@ -217,13 +215,13 @@ beforeEach(() => {
 describe("flagJobOutOfTolerance", () => {
   it("returns JOB_NOT_FOUND when the job is not in the organization", async () => {
     enqueueSelects([]);
-    const result = await flagJobOutOfTolerance(BASE_PARAMS);
+    const result = await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
     expect(result).toMatchObject({ ok: false, code: "JOB_NOT_FOUND" });
   });
 
   it("returns JOB_NOT_APPROVED for a job still in execution", async () => {
     enqueueSelects([{ ...JOB_ROW, status: "IN_PROGRESS" }]);
-    const result = await flagJobOutOfTolerance(BASE_PARAMS);
+    const result = await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
     expect(result).toMatchObject({ ok: false, code: "JOB_NOT_APPROVED" });
   });
 
@@ -233,7 +231,7 @@ describe("flagJobOutOfTolerance", () => {
       [{ ...CREATED_NC, id: 400 }], // existing open OOT NC
       [{ id: 700 }], // its notification
     );
-    const result = await flagJobOutOfTolerance(BASE_PARAMS);
+    const result = await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
     expect(result).toMatchObject({ ok: false, code: "OOT_ALREADY_FLAGGED" });
     expect(mockCreateNcRecord).not.toHaveBeenCalled();
   });
@@ -245,7 +243,7 @@ describe("flagJobOutOfTolerance", () => {
       [], // no notification yet
       [{ name: "Cliente X", email: "x@cliente.com" }], // customer snapshot
     );
-    const result = await flagJobOutOfTolerance(BASE_PARAMS);
+    const result = await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
     expect(result.ok).toBe(true);
     expect(mockCreateNcRecord).not.toHaveBeenCalled();
     expect(mockEnqueue).toHaveBeenCalledWith(
@@ -260,7 +258,7 @@ describe("flagJobOutOfTolerance", () => {
       [{ name: "Cliente X", email: "x@cliente.com" }],
     );
 
-    const result = await flagJobOutOfTolerance(BASE_PARAMS);
+    const result = await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
 
     expect(result.ok).toBe(true);
     expect(mockCreateNcRecord).toHaveBeenCalledWith(
@@ -269,7 +267,7 @@ describe("flagJobOutOfTolerance", () => {
         triggerSource: "as_found_verdict",
         jobId: 33,
       }),
-      // Joins the workflow's own org-bound transaction, as the actor.
+      // Joins the caller's transaction, as the actor.
       expect.objectContaining({
         org: "org-1",
         actor: { userId: "user-1", ipAddress: null },
@@ -311,7 +309,7 @@ describe("flagJobOutOfTolerance", () => {
   it("skips the outbox row (but still renders the PDF) when the customer has no e-mail", async () => {
     enqueueSelects([JOB_ROW], [], [{ name: "Cliente X", email: null }]);
 
-    const result = await flagJobOutOfTolerance(BASE_PARAMS);
+    const result = await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
 
     expect(result.ok).toBe(true);
     const outboxInsert = mockTxValuesCalls.find(
@@ -326,10 +324,10 @@ describe("flagJobOutOfTolerance", () => {
 
   it("creates no notification when notifyCustomer is false", async () => {
     enqueueSelects([JOB_ROW], []);
-    const result = await flagJobOutOfTolerance({
-      ...BASE_PARAMS,
-      notifyCustomer: false,
-    });
+    const result = await flagJobOutOfTolerance(
+      { ...BASE_PARAMS, notifyCustomer: false },
+      makeCtx(),
+    );
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.notification).toBeNull();
@@ -345,7 +343,7 @@ describe("flagJobOutOfTolerance", () => {
       [{ name: "Cliente X", email: "x@cliente.com" }],
     );
 
-    await flagJobOutOfTolerance(BASE_PARAMS);
+    await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
 
     const call = mockCreateNcRecord.mock.calls[0]?.[0];
     expect(call.description).toContain("CAL-2026-0100");
@@ -366,11 +364,14 @@ describe("ensureStandardRecall", () => {
     const draft = { id: 70, standardId: 8, ncId: 501, status: "DRAFT" };
     enqueueSelects([draft]);
 
-    const result = await ensureStandardRecall({
-      organizationId: "org-1",
-      actorUserId: "user-1",
-      standard: STANDARD,
-    });
+    const result = await ensureStandardRecall(
+      {
+        organizationId: "org-1",
+        actorUserId: "user-1",
+        standard: STANDARD,
+      },
+      makeCtx(),
+    );
 
     expect(result).toEqual({ recall: draft, created: false });
     expect(mockCreateNcRecord).not.toHaveBeenCalled();
@@ -379,11 +380,14 @@ describe("ensureStandardRecall", () => {
   it("creates the NC (triggerSource standard_recall) and the DRAFT recall", async () => {
     enqueueSelects([]); // no existing draft
 
-    const result = await ensureStandardRecall({
-      organizationId: "org-1",
-      actorUserId: "user-1",
-      standard: STANDARD,
-    });
+    const result = await ensureStandardRecall(
+      {
+        organizationId: "org-1",
+        actorUserId: "user-1",
+        standard: STANDARD,
+      },
+      makeCtx(),
+    );
 
     expect(result.created).toBe(true);
     expect(mockCreateNcRecord).toHaveBeenCalledWith(
@@ -391,7 +395,6 @@ describe("ensureStandardRecall", () => {
         type: "out_of_tolerance",
         triggerSource: "standard_recall",
       }),
-      // No caller scope: the recall runs in a transaction of its own.
       expect.objectContaining({ org: "org-1", o: expect.anything() }),
     );
     const ncDescription = mockCreateNcRecord.mock.calls[0]?.[0]?.description;
@@ -441,13 +444,16 @@ describe("createStandardRecallNotifications", () => {
       [{ name: "Cliente X", email: "x@cliente.com" }], // recipient for job 1
     );
 
-    const result = await createStandardRecallNotifications({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the function reads
-      recall: RECALL as never,
-      jobIds: [1, 2],
-      organizationId: "org-1",
-      actorUserId: "user-9",
-    });
+    const result = await createStandardRecallNotifications(
+      {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the function reads
+        recall: RECALL as never,
+        jobIds: [1, 2],
+        organizationId: "org-1",
+        actorUserId: "user-9",
+      },
+      makeCtx(),
+    );
 
     expect(result).toEqual({ created: 1, skipped: 1 });
     const notificationInsert = mockTxValuesCalls.find(
@@ -472,13 +478,16 @@ describe("createStandardRecallNotifications", () => {
       [{ name: "Cliente X", email: "x@cliente.com" }],
     );
 
-    const result = await createStandardRecallNotifications({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the function reads
-      recall: RECALL as never,
-      jobIds: [1, 999],
-      organizationId: "org-1",
-      actorUserId: "user-9",
-    });
+    const result = await createStandardRecallNotifications(
+      {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the function reads
+        recall: RECALL as never,
+        jobIds: [1, 999],
+        organizationId: "org-1",
+        actorUserId: "user-9",
+      },
+      makeCtx(),
+    );
 
     expect(result).toEqual({ created: 1, skipped: 1 });
   });

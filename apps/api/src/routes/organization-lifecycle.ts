@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { eq } from "drizzle-orm";
 import { orgDb } from "../lib/org-db";
@@ -25,7 +25,7 @@ import { softDeleteLabOrganization } from "../lib/records-retention";
  * revoked) and only the records purge job may remove it, once the retention
  * period of its newest record has passed (docs/architecture/records-retention.md).
  */
-export const organizationLifecycleRouter = new Hono<{
+export const organizationLifecycleRouter = createRouter<{
   Variables: AuthVariables;
 }>().post(
   "/soft-delete",

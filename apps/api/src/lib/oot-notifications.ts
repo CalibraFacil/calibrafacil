@@ -1,6 +1,4 @@
 import { formatCalendarDate } from "@calibra-facil/shared/format";
-import { db } from "@calibra-facil/db";
-import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
   customer,
@@ -11,14 +9,10 @@ import {
   type NonConformanceTriggerSource,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { orgDb } from "./org-db";
-import { afterCommitQueue, type OrgScope } from "./after-commit";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { enqueueBackgroundJob } from "./background-jobs";
-import {
-  createNonConformanceRecord,
-  type NonConformanceWriteContext,
-} from "./non-conformances";
-import { auditOn } from "./org-context";
+import { createNonConformanceRecord } from "./non-conformances";
+import type { OrgContext } from "./org-context";
 
 /**
  * §7.10 out-of-tolerance workflow (#426 Phase 0).
@@ -35,35 +29,6 @@ import { auditOn } from "./org-context";
  * approval.
  */
 
-/**
- * The write context the NC creator takes, over the caller's transaction (an
- * `OrgScope`): the audit row joins it and the NC notification waits for the
- * scope's commit. A failing after-commit task is logged, never thrown at the
- * committed change (what `withOrg` does for its own tasks).
- */
-function ncWriteContext(
-  scope: OrgScope,
-  organizationId: string,
-  actorUserId: string,
-  ipAddress: string | null | undefined,
-): NonConformanceWriteContext {
-  const actor = { userId: actorUserId, ipAddress: ipAddress ?? null };
-  return {
-    org: organizationId,
-    actor,
-    o: scope.executor,
-    audit: auditOn({ o: scope.executor, org: organizationId, actor }),
-    afterCommit: (task) =>
-      scope.afterCommit(async () => {
-        try {
-          await task();
-        } catch (error) {
-          console.error("[oot] after-commit task failed", error);
-        }
-      }),
-  };
-}
-
 /** Stable outbox dedup key: one notification email per oot_notification row. */
 const OOT_NOTIFICATION_EVENT_KEY = "oot_notification";
 
@@ -76,7 +41,6 @@ export type FlagJobOutOfToleranceParams = {
   affectedScope?: string;
   notifyCustomer: boolean;
   triggerSource: NonConformanceTriggerSource;
-  ipAddress?: string | null;
 };
 
 export type FlagJobOutOfToleranceResult =
@@ -116,9 +80,9 @@ function buildDefaultDescription(job: JobRow): string {
  * is skipped — the PDF is still generated for manual delivery and the UI
  * surfaces the missing address.
  *
- * `scope` joins the caller's org-bound transaction: the rows are written in it
- * (their own insert is a savepoint of it) and the PDF job is handed to
- * `scope.afterCommit`, so it only runs on a committed notification.
+ * The rows are written in `ctx`'s transaction (their own insert is a savepoint
+ * of it) and the PDF job is handed to `ctx.afterCommit`, so it only runs on a
+ * committed notification.
  */
 async function createNotificationForNc(
   input: {
@@ -130,10 +94,9 @@ async function createNotificationForNc(
     /** #426 Phase 1: set when the notification belongs to a recall batch. */
     recallId?: number | null;
   },
-  scope?: OrgScope,
+  ctx: OrgContext,
 ): Promise<typeof ootNotification.$inferSelect | null> {
-  const reader: Pick<OrgExecutor, "select"> = scope?.executor ?? db;
-  const [customerRow] = await reader
+  const [customerRow] = await ctx.o
     .select({ name: customer.name, email: customer.email })
     .from(customer)
     .where(
@@ -182,52 +145,31 @@ async function createNotificationForNc(
 
     return inserted;
   };
-  const notification = scope
-    ? await scope.executor.transaction(insertRows)
-    : await db.transaction(insertRows);
+  const notification = await ctx.o.transaction(insertRows);
 
   if (notification) {
-    const enqueue = () =>
+    ctx.afterCommit(() =>
       enqueueBackgroundJob({
         type: "OOT_NOTIFICATION",
         notificationId: notification.id,
         userId: input.actorUserId,
-      });
-    if (scope) scope.afterCommit(enqueue);
-    else await enqueue();
+      }),
+    );
   }
 
   return notification;
 }
 
 /**
- * Flags an approved job as out-of-tolerance. `scope` joins the caller's
- * org-bound transaction; without it the whole workflow (job read, NC, audit
- * entry, notification, outbox row) runs in ONE transaction that names the
- * laboratory, and the PDF job is enqueued once it has committed.
+ * Flags an approved job as out-of-tolerance in `ctx`'s transaction (job read,
+ * NC, audit entry, notification, outbox row); the PDF job is enqueued once it
+ * has committed.
  */
 export async function flagJobOutOfTolerance(
   params: FlagJobOutOfToleranceParams,
-  scope?: OrgScope,
+  ctx: OrgContext,
 ): Promise<FlagJobOutOfToleranceResult> {
-  if (scope) return flagJobOutOfToleranceIn(params, scope);
-
-  const queue = afterCommitQueue();
-  const result = await orgDb(params.organizationId).transaction((o) =>
-    flagJobOutOfToleranceIn(params, {
-      executor: o,
-      afterCommit: queue.add,
-    }),
-  );
-  await queue.run();
-  return result;
-}
-
-async function flagJobOutOfToleranceIn(
-  params: FlagJobOutOfToleranceParams,
-  scope: OrgScope,
-): Promise<FlagJobOutOfToleranceResult> {
-  const [job] = await scope.executor
+  const [job] = await ctx.o
     .select({
       id: calibrationJob.id,
       jobId: calibrationJob.jobId,
@@ -274,7 +216,7 @@ async function flagJobOutOfToleranceIn(
   // One open OOT NC per job. If a previous flag created the NC but died before
   // the notification record, self-heal by attaching the notification now
   // instead of stranding the workflow.
-  const [existing] = await scope.executor
+  const [existing] = await ctx.o
     .select()
     .from(nonConformance)
     .where(
@@ -297,7 +239,7 @@ async function flagJobOutOfToleranceIn(
       };
     }
 
-    const [existingNotification] = await scope.executor
+    const [existingNotification] = await ctx.o
       .select()
       .from(ootNotification)
       .where(eq(ootNotification.ncId, existing.id))
@@ -320,7 +262,7 @@ async function flagJobOutOfToleranceIn(
         actorUserId: params.actorUserId,
         affectedScope: params.affectedScope,
       },
-      scope,
+      ctx,
     );
     return { ok: true, nc: existing, notification };
   }
@@ -348,12 +290,7 @@ async function flagJobOutOfToleranceIn(
         },
       },
     },
-    ncWriteContext(
-      scope,
-      params.organizationId,
-      params.actorUserId,
-      params.ipAddress,
-    ),
+    ctx,
   );
 
   const notification = params.notifyCustomer
@@ -365,7 +302,7 @@ async function flagJobOutOfToleranceIn(
           actorUserId: params.actorUserId,
           affectedScope: params.affectedScope,
         },
-        scope,
+        ctx,
       )
     : null;
 
@@ -386,43 +323,18 @@ export async function ensureOotNotificationForNc(
     actorUserId: string;
     affectedScope?: string;
   },
-  scope?: OrgScope,
+  ctx: OrgContext,
 ): Promise<typeof ootNotification.$inferSelect | null> {
   if (input.nc.type !== "out_of_tolerance" || !input.nc.jobId) return null;
-  if (scope) return ensureOotNotificationForNcIn(input, scope);
 
-  // Without the caller's transaction: one that names the laboratory, with the
-  // PDF job enqueued after it commits.
-  const queue = afterCommitQueue();
-  const notification = await orgDb(input.organizationId).transaction((o) =>
-    ensureOotNotificationForNcIn(input, {
-      executor: o,
-      afterCommit: queue.add,
-    }),
-  );
-  await queue.run();
-  return notification;
-}
-
-async function ensureOotNotificationForNcIn(
-  input: {
-    nc: typeof nonConformance.$inferSelect;
-    organizationId: string;
-    actorUserId: string;
-    affectedScope?: string;
-  },
-  scope: OrgScope,
-): Promise<typeof ootNotification.$inferSelect | null> {
-  if (!input.nc.jobId) return null;
-
-  const [existing] = await scope.executor
+  const [existing] = await ctx.o
     .select({ id: ootNotification.id })
     .from(ootNotification)
     .where(eq(ootNotification.ncId, input.nc.id))
     .limit(1);
   if (existing) return null;
 
-  const [job] = await scope.executor
+  const [job] = await ctx.o
     .select({
       id: calibrationJob.id,
       jobId: calibrationJob.jobId,
@@ -448,7 +360,7 @@ async function ensureOotNotificationForNcIn(
       actorUserId: input.actorUserId,
       affectedScope: input.affectedScope,
     },
-    scope,
+    ctx,
   );
 }
 
@@ -464,6 +376,12 @@ export type RecallStandardIdentity = {
   calibrationDate: Date;
 };
 
+type StandardRecallInput = {
+  organizationId: string;
+  actorUserId: string;
+  standard: RecallStandardIdentity;
+};
+
 /**
  * Called when a reference standard transitions to OUT_OF_TOLERANCE: opens the
  * typed NC (triggerSource standard_recall) and its DRAFT recall record.
@@ -471,38 +389,14 @@ export type RecallStandardIdentity = {
  * so re-flagging (or a retried request) never duplicates the campaign. A new
  * OOT event after a previous recall was SENT starts a fresh campaign.
  *
- * `scope` joins the caller's org-bound transaction (the NC, the recall and
- * their audit entry are written in it; the NC notification waits for
- * `scope.afterCommit`). Without it the work runs in a transaction of its own.
+ * The NC, the recall and their audit entry are written in `ctx`'s transaction;
+ * the NC notification waits for its commit.
  */
 export async function ensureStandardRecall(
   input: StandardRecallInput,
-  scope?: OrgScope,
+  ctx: OrgContext,
 ): Promise<{ recall: typeof standardRecall.$inferSelect; created: boolean }> {
-  if (scope) return ensureStandardRecallIn(input, scope);
-
-  // Without the caller's transaction: one that names the laboratory, with the
-  // NC notification sent after it commits.
-  const queue = afterCommitQueue();
-  const result = await orgDb(input.organizationId).transaction((o) =>
-    ensureStandardRecallIn(input, { executor: o, afterCommit: queue.add }),
-  );
-  await queue.run();
-  return result;
-}
-
-type StandardRecallInput = {
-  organizationId: string;
-  actorUserId: string;
-  standard: RecallStandardIdentity;
-  ipAddress?: string | null;
-};
-
-async function ensureStandardRecallIn(
-  input: StandardRecallInput,
-  scope: OrgScope,
-): Promise<{ recall: typeof standardRecall.$inferSelect; created: boolean }> {
-  const writer = scope.executor;
+  const writer = ctx.o;
   const [existingDraft] = await writer
     .select()
     .from(standardRecall)
@@ -536,12 +430,7 @@ async function ensureStandardRecallIn(
         },
       },
     },
-    ncWriteContext(
-      scope,
-      input.organizationId,
-      input.actorUserId,
-      input.ipAddress,
-    ),
+    ctx,
   );
 
   const [recall] = await writer
@@ -575,8 +464,7 @@ export type StandardRecallSendResult = {
  * already-notified certificates (unique recall_id+job_id) are skipped, so the
  * send is safely retryable.
  *
- * `scope` joins the caller's org-bound transaction (every statement runs in it,
- * the PDF jobs wait for `scope.afterCommit`); without it, through the plain `db`.
+ * Every statement runs in `ctx`'s transaction; the PDF jobs wait for its commit.
  */
 export async function createStandardRecallNotifications(
   input: {
@@ -585,11 +473,11 @@ export async function createStandardRecallNotifications(
     organizationId: string;
     actorUserId: string;
   },
-  scope?: OrgScope,
+  ctx: OrgContext,
 ): Promise<StandardRecallSendResult> {
   if (input.jobIds.length === 0) return { created: 0, skipped: 0 };
 
-  const reader: Pick<OrgExecutor, "select"> = scope?.executor ?? db;
+  const reader = ctx.o;
   const [nc] = await reader
     .select()
     .from(nonConformance)
@@ -641,7 +529,7 @@ export async function createStandardRecallNotifications(
         actorUserId: input.actorUserId,
         recallId: input.recall.id,
       },
-      scope,
+      ctx,
     );
     if (notification) {
       created++;

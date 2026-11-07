@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
@@ -259,7 +259,9 @@ async function requireOwnedCustomer(
   return ownedCustomer;
 }
 
-export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
+export const financeContractsRouter = createRouter<{
+  Variables: AuthVariables;
+}>()
   .get(
     "/",
     ...withLabPermission({ financial: ["read"] }),

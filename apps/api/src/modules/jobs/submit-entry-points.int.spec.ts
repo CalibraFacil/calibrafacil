@@ -50,14 +50,11 @@ import {
 } from "../../../test/integration/tenant-refs";
 import { executableMethodSnapshot } from "../../../test/integration/executable-method";
 import { auditActions, jobRow } from "../../../test/integration/job-cas";
-import { jobsRouter as bareJobsRouter } from "../../routes/jobs";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
+import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { syncRouter } from "../../routes/sync";
 import { executeOfficialCompiledSnapshot } from "./official-execution";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 const mocks = vi.hoisted(() => {
   const scope: { status: "OUT_OF_SCOPE" | null } = { status: null };

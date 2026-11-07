@@ -1,6 +1,6 @@
+import { createRouter } from "../server/router";
 import { slugify } from "@calibra-facil/shared/text";
 import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
   certificateNumberingAuditLog,
@@ -28,7 +28,7 @@ import { invalid } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 
-export const certificateNumberingRouter = new Hono<{
+export const certificateNumberingRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {

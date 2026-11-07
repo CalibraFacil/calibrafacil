@@ -160,7 +160,8 @@ export async function failJobAuditInserts(): Promise<() => Promise<void>> {
   await db.execute(sql`
     CREATE OR REPLACE FUNCTION cas_test_fail_job_audit() RETURNS trigger AS $$
     BEGIN
-      RAISE EXCEPTION 'cas_test: job_audit_log insert forced to fail';
+      -- XX000 (internal_error), not the default P0001 the error handler answers as a 409
+      RAISE EXCEPTION 'cas_test: job_audit_log insert forced to fail' USING ERRCODE = 'XX000';
     END;
     $$ LANGUAGE plpgsql
   `);

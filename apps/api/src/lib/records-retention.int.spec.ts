@@ -54,10 +54,10 @@ import {
   hasPendingLabInvitation,
 } from "@calibra-facil/auth/lab-access";
 import { magicLinkRouter } from "../routes/magic-link";
-import { publicApiRouter as barePublicApiRouter } from "../routes/public-api";
+import { publicApiRouter } from "../routes/public-api";
 import { publicApiV2Router } from "../routes/public-api-v2";
-import { verifyRouter as bareVerifyRouter } from "../routes/verify";
-import { customersRouter as bareCustomersRouter } from "../routes/customers";
+import { verifyRouter } from "../routes/verify";
+import { customersRouter } from "../routes/customers";
 import { loginAs } from "../../test/integration/setup";
 import { asApplicationRole } from "../../test/integration/application-role";
 import { truncateAll } from "../../test/integration/db";
@@ -81,12 +81,6 @@ import {
 import { cleanupFailedLabProvisioning } from "../services/lab-provisioning";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const verifyRouter = withErrorHandling(bareVerifyRouter);
-const publicApiRouter = withErrorHandling(barePublicApiRouter);
-
-const customersRouter = withErrorHandling(bareCustomersRouter);
 
 // ---------------------------------------------------------------------------
 // Helpers

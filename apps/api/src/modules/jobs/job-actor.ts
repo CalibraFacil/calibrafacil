@@ -96,7 +96,7 @@ export function loadScopedJob(
     organizationId: string;
     unitScope: UnitScope | null;
   },
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<JobRow | undefined> {
   const read = async (reader: Pick<OrgExecutor, "select">) => {
     const [job] = await reader

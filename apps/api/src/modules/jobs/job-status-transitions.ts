@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { canTransition } from "@calibra-facil/schemas/job-transitions";
@@ -41,9 +40,8 @@ export function isCancelableJobStatus(status: JobStatus): boolean {
  */
 export async function jobStatusConflict(
   jobId: number,
-  // An org-bound transaction handle when the caller has one (row-level
-  // security); the default is the plain `db`, as before.
-  executor: Pick<OrgExecutor, "select"> = db,
+  // The caller's org-bound transaction handle (row-level security).
+  executor: Pick<OrgExecutor, "select">,
 ) {
   const [current] = await executor
     .select({ status: calibrationJob.status })

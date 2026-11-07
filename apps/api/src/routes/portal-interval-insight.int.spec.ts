@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { insertJobs } from "../../test/integration/job-fixtures";
-import { portalRouter as barePortalRouter } from "./portal";
+import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
 import { asset, assetType } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
@@ -14,9 +14,6 @@ import {
   seedService,
 } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const portalRouter = withErrorHandling(barePortalRouter);
 
 // Real-DB integration test for GET /api/portal/assets/:id/interval-insight (Phase C2):
 // the engine runs on the asset's approved as-found history, tenant-scoped, with the

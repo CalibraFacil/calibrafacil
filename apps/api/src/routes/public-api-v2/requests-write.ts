@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
+import { orgDb } from "../../lib/org-db";
 import { zValidator } from "@hono/zod-validator";
 import { asset, calibrationRequest, customer } from "@calibra-facil/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -26,7 +27,7 @@ import {
   resolveExternalResourceId,
 } from "./resolvers";
 
-export const requestWriteRoutes = new Hono<PublicApiV2Env>()
+export const requestWriteRoutes = createRouter<PublicApiV2Env>()
   .post(
     "/requests",
     requireApiScope("requests:write"),
@@ -210,11 +211,16 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "request",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "request",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(
@@ -335,11 +341,16 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "request",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "request",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { billingDocument, customer } from "@calibra-facil/db/schema";
@@ -15,7 +15,7 @@ import { forbidden, invalid, notFound } from "../../lib/domain-errors";
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 
-export const financeErpRouter = new Hono<{
+export const financeErpRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
 }>()
@@ -61,9 +61,8 @@ export const financeErpRouter = new Hono<{
         throw invalid("invalid_request", "ID invalido");
       }
 
-      const payload = await loadBillingDocumentExportPayload(
-        member.organizationId,
-        documentId,
+      const payload = await orgDb(member.organizationId).transaction((o) =>
+        loadBillingDocumentExportPayload(member.organizationId, documentId, o),
       );
       if (!payload) {
         throw notFound(

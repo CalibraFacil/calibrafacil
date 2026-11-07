@@ -21,8 +21,7 @@ import {
   serviceOrderEmailOutbox,
   serviceOrderQuote,
 } from "@calibra-facil/db/schema";
-import { portalServiceOrdersRouter as portalServiceOrdersRouterBare } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { portalServiceOrdersRouter } from "./service-orders";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
@@ -31,9 +30,6 @@ import { isRecord } from "@calibra-facil/shared/record";
 
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const portalServiceOrdersRouter = withErrorHandling(
-  portalServiceOrdersRouterBare,
-);
 
 const ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = { ...ORIGIN, "content-type": "application/json" };

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import type {
   CustomerDetail,
   CustomersListResponse,
@@ -98,7 +98,7 @@ function customerSearchCondition(query: string) {
   );
 }
 
-export const customersRouter = new Hono<{ Variables: AuthVariables }>()
+export const customersRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // POST / - Create a new customer
   // =========================================================================

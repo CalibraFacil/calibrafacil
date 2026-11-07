@@ -18,6 +18,13 @@ describe("calibra/no-error-response-in-transaction (real oxlint)", () => {
     });
   });
 
+  it("REQ-D4-2: reports it inside a withOrg callback, the one write door", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/routes/door.ts":
+        "export const h = (c: any) =>\n  withOrg('o', {}, async (ctx: any) => {\n    await ctx.o.update(1);\n    return c.json({ error: 'x' }, 409);\n  });\ndeclare function withOrg(o: string, a: object, f: (ctx: any) => unknown): unknown;\n",
+    });
+  });
+
   it("REQ-D4-2: allows a thrown error inside, error responses outside, and success responses inside", async () => {
     await expectClean(RULE, {
       "apps/api/src/routes/clean.ts":
@@ -26,8 +33,8 @@ describe("calibra/no-error-response-in-transaction (real oxlint)", () => {
   });
 
   it("REQ-D4-2: grandfathers the exact legacy count and fails above it", async () => {
-    // The committed baseline shrinks toward empty, so the ratchet is exercised
-    // with a baseline INJECTED through the rule options (the repo config never sets it).
+    // The committed baseline is empty, so the ratchet is exercised with a
+    // baseline INJECTED through the rule options (the repo config never sets it).
     const options = { baseline: { "apps/api/src/routes/legacy.ts": 1 } };
     const one =
       "export const h = (c: any, db: any) => db.transaction(async () => c.json({ error: 'x' }, 404));\n";

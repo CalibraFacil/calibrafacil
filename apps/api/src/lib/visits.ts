@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
@@ -26,9 +25,8 @@ const SETTLED_JOB_STATES = new Set(["APPROVED", "SUPERSEDED", "CANCELED"]);
  */
 export async function syncVisitStatusFromJobs(
   visitId: number | null | undefined,
-  // The org-bound handle of a caller that runs under row-level security; the
-  // default is the plain `db`, as before.
-  executor: Pick<OrgExecutor, "select" | "update"> = db,
+  // The org-bound handle of the caller (row-level security).
+  executor: Pick<OrgExecutor, "select" | "update">,
 ): Promise<void> {
   if (!visitId) return;
 

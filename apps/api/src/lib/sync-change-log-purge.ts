@@ -13,11 +13,11 @@
  * laboratory is purged in its own transaction that names it (P2-18j): the delete
  * and the recording of its horizon commit together, for that laboratory only.
  */
+import { withOrg, SYSTEM_ACTOR } from "./org-context";
 import { sql } from "drizzle-orm";
 import { systemDb } from "@calibra-facil/db";
 import { readSyncConfig } from "@calibra-facil/config";
 import { getExecuteRows } from "./db";
-import { orgTransactionWithExecutor } from "./org-transaction";
 
 export type SyncChangeLogPurgeResult = {
   /** Entries deleted. */
@@ -77,7 +77,7 @@ export async function purgeSyncChangeLog(
 
 /** Deletes one laboratory's old entries and records its purge horizon, in one transaction naming it. */
 function purgeOrganization(organizationId: string, retentionDays: number) {
-  return orgTransactionWithExecutor(organizationId, async (_lab, tx) => {
+  return withOrg(organizationId, SYSTEM_ACTOR, async ({ tx }) => {
     const result = await tx.execute(sql`
       WITH purged AS (
         DELETE FROM sync_change_log

@@ -1,6 +1,7 @@
 /** Managed laboratory sending domains, with read support for legacy BYOK rows. */
 
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
+import { orgDb } from "../lib/org-db";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { organizationEmailDomain } from "@calibra-facil/db/schema";
@@ -121,10 +122,12 @@ function resolveRowApiKey(record: {
   }
 }
 
-export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
+export const emailDomainsRouter = createRouter<{ Variables: AuthVariables }>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const member = c.get("member");
-    const record = await getOrganizationEmailDomain(member.organizationId);
+    const record = await orgDb(member.organizationId).transaction((o) =>
+      getOrganizationEmailDomain(member.organizationId, o),
+    );
     const replyToEmail = await getOrganizationReplyToEmail(
       member.organizationId,
     );
@@ -191,7 +194,9 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
 
-      const record = await getOrganizationEmailDomain(member.organizationId);
+      const record = await orgDb(member.organizationId).transaction((o) =>
+        getOrganizationEmailDomain(member.organizationId, o),
+      );
       if (!record) {
         throw noEmailDomain();
       }
@@ -283,7 +288,9 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
 
-      const record = await getOrganizationEmailDomain(member.organizationId);
+      const record = await orgDb(member.organizationId).transaction((o) =>
+        getOrganizationEmailDomain(member.organizationId, o),
+      );
       if (!record) {
         throw noEmailDomain();
       }

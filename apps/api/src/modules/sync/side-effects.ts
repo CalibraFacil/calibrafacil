@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 import { type SyncCommand } from "@calibra-facil/contracts";
 import { CreateCustomerSchema } from "@calibra-facil/schemas";
@@ -29,11 +30,16 @@ export async function prepareDesktopEventSideEffects(
 
   // Already applied (a retried push): the transaction answers from its record.
   if (
-    (await findDesktopSyncRemoteEntityId(
-      memberData.organizationId,
-      command.entityId,
+    (await orgDb(memberData.organizationId).transaction((o) =>
+      findDesktopSyncRemoteEntityId(
+        memberData.organizationId,
+        command.entityId,
+        o,
+      ),
     )) !== null ||
-    (await findAppliedDesktopSyncEvent(memberData.organizationId, command))
+    (await orgDb(memberData.organizationId).transaction((o) =>
+      findAppliedDesktopSyncEvent(memberData.organizationId, command, o),
+    ))
   ) {
     return {};
   }

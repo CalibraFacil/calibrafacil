@@ -14,9 +14,9 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { financeContractsRouter as bareFinanceContractsRouter } from "./contracts";
-import { financeAutomaticSendRouter as bareFinanceAutomaticSendRouter } from "./automatic-send";
-import { settingsCertificateReleasePolicyRouter as bareSettingsCertificateReleasePolicyRouter } from "./certificate-release";
+import { financeContractsRouter } from "./contracts";
+import { financeAutomaticSendRouter } from "./automatic-send";
+import { settingsCertificateReleasePolicyRouter } from "./certificate-release";
 import { db } from "@calibra-facil/db";
 import {
   automaticSendRule,
@@ -34,15 +34,6 @@ import {
   seedService,
 } from "../../../test/integration/seed";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
-
-const financeContractsRouter = withErrorHandling(bareFinanceContractsRouter);
-const financeAutomaticSendRouter = withErrorHandling(
-  bareFinanceAutomaticSendRouter,
-);
-const settingsCertificateReleasePolicyRouter = withErrorHandling(
-  bareSettingsCertificateReleasePolicyRouter,
-);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 

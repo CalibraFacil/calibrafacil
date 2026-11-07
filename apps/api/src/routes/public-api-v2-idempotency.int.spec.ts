@@ -200,7 +200,7 @@ async function failFinalRecord() {
       create function q38_fail_finalize() returns trigger language plpgsql as $$
       begin
         if new.response_status <> 0 then
-          raise exception 'q38 injected failure after the mutation';
+          raise exception 'q38 injected failure after the mutation' using errcode = 'XX000';
         end if;
         return new;
       end $$;

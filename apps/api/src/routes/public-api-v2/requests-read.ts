@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
@@ -22,7 +22,7 @@ import { ListQuerySchema } from "./schemas";
 import { resolveCustomerId, resolveExternalResourceId } from "./resolvers";
 import { orgDb } from "../../lib/org-db";
 
-export const requestReadRoutes = new Hono<PublicApiV2Env>()
+export const requestReadRoutes = createRouter<PublicApiV2Env>()
   .get(
     "/requests",
     requireApiScope("requests:read"),
@@ -46,11 +46,17 @@ export const requestReadRoutes = new Hono<PublicApiV2Env>()
         customerExternalId,
       } = c.req.valid("query");
       const offset = (page - 1) * limit;
-      const resolvedCustomerId = await resolveCustomerId({
-        organizationId: apiKey.organizationId,
-        customerId,
-        customerExternalId,
-      });
+      const resolvedCustomerId = await orgDb(apiKey.organizationId).transaction(
+        (o) =>
+          resolveCustomerId(
+            {
+              organizationId: apiKey.organizationId,
+              customerId,
+              customerExternalId,
+            },
+            o,
+          ),
+      );
       const conditions = [
         eq(calibrationRequest.organizationId, apiKey.organizationId),
         unitId ? eq(calibrationRequest.unitId, unitId) : undefined,
@@ -101,11 +107,16 @@ export const requestReadRoutes = new Hono<PublicApiV2Env>()
         ]),
       );
 
-      const externalIds = await getResourceExternalIdMap({
-        organizationId: apiKey.organizationId,
-        resourceType: "request",
-        resourceIds: rows.map((row) => row.id),
-      });
+      const externalIds = await orgDb(apiKey.organizationId).transaction((o) =>
+        getResourceExternalIdMap(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "request",
+            resourceIds: rows.map((row) => row.id),
+          },
+          o,
+        ),
+      );
 
       return c.json({
         data: rows.map((row) => ({
@@ -131,11 +142,16 @@ export const requestReadRoutes = new Hono<PublicApiV2Env>()
   )
   .get("/requests/:id", requireApiScope("requests:read"), async (c) => {
     const apiKey = c.get("apiKey");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "request",
-      value: c.req.param("id"),
-    });
+    const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+      resolveExternalResourceId(
+        {
+          organizationId: apiKey.organizationId,
+          resourceType: "request",
+          value: c.req.param("id"),
+        },
+        o,
+      ),
+    );
 
     if (!resolvedId) {
       return c.json(
@@ -207,11 +223,16 @@ export const requestReadRoutes = new Hono<PublicApiV2Env>()
     return c.json({
       data: {
         ...found,
-        externalId: await getResourceExternalId({
-          organizationId: apiKey.organizationId,
-          resourceType: "request",
-          resourceId: found.id,
-        }),
+        externalId: await orgDb(apiKey.organizationId).transaction((o) =>
+          getResourceExternalId(
+            {
+              organizationId: apiKey.organizationId,
+              resourceType: "request",
+              resourceId: found.id,
+            },
+            o,
+          ),
+        ),
         unit: found.unitId
           ? { id: found.unitId, name: found.unitName ?? "Unidade removida" }
           : null,

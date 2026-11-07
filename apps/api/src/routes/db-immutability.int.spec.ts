@@ -67,13 +67,10 @@ import {
 import { createRoleDatabase } from "@calibra-facil/db/role-connection";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { applyJobTimeline } from "../cli/seed-demo/timeline";
-import { jobsRouter as bareJobsRouter } from "./jobs";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { jobsRouter } from "./jobs";
 import { publicApiV2Router } from "./public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

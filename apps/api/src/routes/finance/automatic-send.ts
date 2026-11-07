@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -64,7 +64,7 @@ function ruleScope(row: {
   return "organization";
 }
 
-export const financeAutomaticSendRouter = new Hono<{
+export const financeAutomaticSendRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   .get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {

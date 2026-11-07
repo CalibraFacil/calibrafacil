@@ -278,11 +278,19 @@ export async function applyCreateLocalNonConformance(
       ),
   );
 
-  await ensureOotNotificationForNc({
-    nc: created,
-    organizationId: input.memberData.organizationId,
-    actorUserId,
-  });
+  await withOrg(
+    input.memberData.organizationId,
+    { userId: actorUserId, ipAddress: null },
+    (ctx) =>
+      ensureOotNotificationForNc(
+        {
+          nc: created,
+          organizationId: input.memberData.organizationId,
+          actorUserId,
+        },
+        ctx,
+      ),
+  );
 
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: created.id,

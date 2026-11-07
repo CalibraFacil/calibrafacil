@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import {
   buildPublicApiError,
@@ -15,7 +15,7 @@ import { AssetCreatePublicSchema } from "./schemas";
 import { withIdempotentMutation } from "./idempotency";
 import { resolveCustomerId, resolveUnitIdForWrite } from "./resolvers";
 
-export const assetCreateRoutes = new Hono<PublicApiV2Env>().post(
+export const assetCreateRoutes = createRouter<PublicApiV2Env>().post(
   "/assets",
   requireApiScope("assets:write"),
   zValidator("json", AssetCreatePublicSchema),

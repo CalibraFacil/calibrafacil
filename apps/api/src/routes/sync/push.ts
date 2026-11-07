@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import {
   LEGACY_SYNC_PROTOCOL_VERSION,
   SYNC_PROTOCOL_VERSION,
@@ -52,7 +52,7 @@ function aggregateKeyOf(rawEvent: unknown): string | null {
     : null;
 }
 
-export const pushRoutes = new Hono<SyncRouterEnv>().post(
+export const pushRoutes = createRouter<SyncRouterEnv>().post(
   "/push",
   // Authentication, membership and the laboratory organization only: what each
   // member may send is decided per event (`SYNC_OPERATIONS`, then `authorizeSyncOperation`), since

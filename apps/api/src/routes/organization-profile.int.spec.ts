@@ -24,12 +24,7 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { inSequence } from "../../test/integration/in-sequence";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
-import { organizationProfileRouter as bareOrganizationProfileRouter } from "./organization-profile";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const organizationProfileRouter = withErrorHandling(
-  bareOrganizationProfileRouter,
-);
+import { organizationProfileRouter } from "./organization-profile";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 

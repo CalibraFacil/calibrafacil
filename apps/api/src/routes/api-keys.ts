@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
@@ -93,7 +93,7 @@ function apiKeyNotFound() {
   return notFound("api_key_not_found", "Chave de API não encontrada");
 }
 
-export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
+export const apiKeysRouter = createRouter<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...requireLabProtected,

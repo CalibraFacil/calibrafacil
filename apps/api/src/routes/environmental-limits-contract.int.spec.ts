@@ -18,15 +18,10 @@ import {
 } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { assetType } from "@calibra-facil/db/schema";
-import { environmentalLimitsRouter as bareEnvironmentalLimitsRouter } from "./environmental-limits";
+import { environmentalLimitsRouter } from "./environmental-limits";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const environmentalLimitsRouter = withErrorHandling(
-  bareEnvironmentalLimitsRouter,
-);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

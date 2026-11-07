@@ -13,7 +13,6 @@ import type {
 } from "@calibra-facil/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import { orgDb } from "./org-db";
-import { inOrgTransaction } from "./org-transaction";
 
 export interface ResolvedAutomaticSendRule {
   id: number | null;
@@ -45,11 +44,9 @@ function byPriorityThenId(
 export async function resolveAutomaticSendRule(
   input: AutomaticSendRuleResolutionInput,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<ResolvedAutomaticSendRule> {
-  return inOrgTransaction(input.organizationId, executor, (o) =>
-    resolveRuleOn(o, input),
-  );
+  return resolveRuleOn(executor, input);
 }
 
 async function resolveRuleOn(
@@ -240,12 +237,17 @@ export async function triggerAutomaticSendForMilestone(
     });
   }
 
-  const rule = await resolveAutomaticSendRule({
-    organizationId: input.event.organizationId,
-    customerId: so.customerId,
-    commercialAgreementId: so.commercialAgreementId,
-    serviceName: null,
-  });
+  const rule = await orgDb(input.event.organizationId).transaction((o) =>
+    resolveAutomaticSendRule(
+      {
+        organizationId: input.event.organizationId,
+        customerId: so.customerId,
+        commercialAgreementId: so.commercialAgreementId,
+        serviceName: null,
+      },
+      o,
+    ),
+  );
 
   const evaluation = evaluateMilestone({
     event: input.event.event,
@@ -376,27 +378,25 @@ export async function findServiceOrdersForCalibrationJob(
   calibrationJobId: number,
   organizationId: string,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<number[]> {
-  const rows = await inOrgTransaction(organizationId, executor, (o) =>
-    o
-      .select({ serviceOrderId: serviceOrderCertificateLink.serviceOrderId })
-      .from(serviceOrderCertificateLink)
-      .innerJoin(
-        serviceOrder,
-        eq(serviceOrder.id, serviceOrderCertificateLink.serviceOrderId),
-      )
-      .innerJoin(
-        calibrationJob,
-        eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
-      )
-      .where(
-        and(
-          eq(serviceOrderCertificateLink.certificateJobId, calibrationJobId),
-          eq(serviceOrder.organizationId, organizationId),
-          eq(calibrationJob.organizationId, organizationId),
-        ),
+  const rows = await executor
+    .select({ serviceOrderId: serviceOrderCertificateLink.serviceOrderId })
+    .from(serviceOrderCertificateLink)
+    .innerJoin(
+      serviceOrder,
+      eq(serviceOrder.id, serviceOrderCertificateLink.serviceOrderId),
+    )
+    .innerJoin(
+      calibrationJob,
+      eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
+    )
+    .where(
+      and(
+        eq(serviceOrderCertificateLink.certificateJobId, calibrationJobId),
+        eq(serviceOrder.organizationId, organizationId),
+        eq(calibrationJob.organizationId, organizationId),
       ),
-  );
+    );
   return rows.map((row) => row.serviceOrderId);
 }

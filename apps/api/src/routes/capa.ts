@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import {
   correctiveAction,
@@ -52,7 +52,7 @@ import { CORRECTIVE_ACTION_MACHINE } from "@calibra-facil/schemas/machines";
 const RESPONSIBLE_REFUSED =
   "Responsavel nao encontrado ou nao pertence a organizacao";
 
-export const capaRouter = new Hono<{ Variables: AuthVariables }>()
+export const capaRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List CAPAs with pagination and filtering
   // =========================================================================

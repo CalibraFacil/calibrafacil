@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { suppressEmail } from "@calibra-facil/notifications";
 import {
   parseResendEvent,
@@ -16,7 +16,7 @@ const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 // (graceful degradation, mirroring the email-config warnings elsewhere).
 let resendWebhookSecretWarningLogged = false;
 
-export const webhooksRouter = new Hono().post("/resend", async (c) => {
+export const webhooksRouter = createRouter().post("/resend", async (c) => {
   const contentLength = Number(c.req.header("content-length") ?? "0");
   if (
     Number.isFinite(contentLength) &&

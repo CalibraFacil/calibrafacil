@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { insertJobs } from "../../test/integration/job-fixtures";
-import { verifyRouter as bareVerifyRouter } from "./verify";
+import { verifyRouter } from "./verify";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -18,9 +18,6 @@ import { sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const verifyRouter = withErrorHandling(bareVerifyRouter);
 
 // ---------------------------------------------------------------------------
 // Real-DB integration test for the PUBLIC certificate-verification router.

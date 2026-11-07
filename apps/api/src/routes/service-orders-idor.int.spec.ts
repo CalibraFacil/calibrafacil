@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { organizationOf } from "../../test/integration/organization-of";
-import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { serviceOrdersRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -25,7 +24,6 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 // SEC-01 — cross-tenant IDOR regression suite for the lab serviceOrdersRouter.
 //

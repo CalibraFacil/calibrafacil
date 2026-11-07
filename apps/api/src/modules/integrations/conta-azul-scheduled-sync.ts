@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { integrationConnection } from "@calibra-facil/db/schema";
 import {
   normalizeContaAzulConnectionConfig,
@@ -6,7 +7,6 @@ import {
 import type { IntegrationSyncBackgroundJobMessage } from "@calibra-facil/schemas";
 import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { listActiveContaAzulConnections } from "./active-connections";
 import { isContaAzulTargetEnabled } from "./payload-guards";
 import { parseRemoteDate } from "./conta-azul-due";
@@ -73,11 +73,16 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
         continue;
       }
 
-      const activeRun = await hasActiveSyncRun({
-        integrationId: row.integrationId,
-        organizationId: row.organizationId,
-        target,
-      });
+      const activeRun = await orgDb(row.organizationId).transaction((o) =>
+        hasActiveSyncRun(
+          {
+            integrationId: row.integrationId,
+            organizationId: row.organizationId,
+            target,
+          },
+          o,
+        ),
+      );
 
       if (activeRun) {
         continue;
@@ -86,39 +91,35 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
       dueRuns += 1;
 
       // The run row and the event that requests it commit together.
-      const runId = await inOrgTransaction(
-        row.organizationId,
-        undefined,
-        async (o) => {
-          const created = await createSyncRun(
-            {
-              integrationId: row.integrationId,
-              organizationId: row.organizationId,
-              trigger: "scheduled",
-              target,
-              requestedLimit: params.limit ?? DEFAULT_INTEGRATION_SYNC_LIMIT,
-            },
-            o,
-          );
+      const runId = await orgDb(row.organizationId).transaction(async (o) => {
+        const created = await createSyncRun(
+          {
+            integrationId: row.integrationId,
+            organizationId: row.organizationId,
+            trigger: "scheduled",
+            target,
+            requestedLimit: params.limit ?? DEFAULT_INTEGRATION_SYNC_LIMIT,
+          },
+          o,
+        );
 
-          await writeIntegrationEvent(
-            {
-              integrationId: row.integrationId,
-              organizationId: row.organizationId,
-              runId: created,
-              level: "info",
-              event: "sync.scheduled_requested",
-              message: "Sincronização Conta Azul agendada solicitada",
-              details: {
-                target,
-                trigger: "scheduled",
-              },
+        await writeIntegrationEvent(
+          {
+            integrationId: row.integrationId,
+            organizationId: row.organizationId,
+            runId: created,
+            level: "info",
+            event: "sync.scheduled_requested",
+            message: "Sincronização Conta Azul agendada solicitada",
+            details: {
+              target,
+              trigger: "scheduled",
             },
-            o,
-          );
-          return created;
-        },
-      );
+          },
+          o,
+        );
+        return created;
+      });
 
       let syncStarted = false;
 
@@ -135,7 +136,7 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
           }),
         });
 
-        await inOrgTransaction(row.organizationId, undefined, async (o) => {
+        await orgDb(row.organizationId).transaction(async (o) => {
           await o
             .update(integrationConnection)
             .set({
@@ -190,18 +191,23 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
             },
           });
         }
-        await writeIntegrationEvent({
-          integrationId: row.integrationId,
-          organizationId: row.organizationId,
-          runId,
-          level: "error",
-          event: "sync.scheduled_failed",
-          message,
-          details: {
-            target,
-            trigger: "scheduled",
-          },
-        });
+        await orgDb(row.organizationId).transaction((o) =>
+          writeIntegrationEvent(
+            {
+              integrationId: row.integrationId,
+              organizationId: row.organizationId,
+              runId,
+              level: "error",
+              event: "sync.scheduled_failed",
+              message,
+              details: {
+                target,
+                trigger: "scheduled",
+              },
+            },
+            o,
+          ),
+        );
       }
     }
   }

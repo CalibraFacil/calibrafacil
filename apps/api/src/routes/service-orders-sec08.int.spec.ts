@@ -27,8 +27,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { serviceOrdersRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -45,7 +44,6 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

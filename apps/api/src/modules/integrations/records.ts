@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   integrationConnection,
@@ -12,7 +13,6 @@ import {
 } from "@calibra-facil/shared";
 import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { INTEGRATION_SYNC_RUN_MACHINE } from "@calibra-facil/schemas/machines";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { type GenericConnectionRecord } from "./types";
 
 // Every function here runs in the caller's org-bound transaction (`executor`)
@@ -45,30 +45,26 @@ async function selectIntegrationsWithConnection(
 
 export async function listOrganizationIntegrations(
   organizationId: string,
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  return inOrgTransaction(organizationId, executor, (o) =>
-    selectIntegrationsWithConnection(
-      o,
-      eq(organizationIntegration.organizationId, organizationId),
-    ),
+  return selectIntegrationsWithConnection(
+    executor,
+    eq(organizationIntegration.organizationId, organizationId),
   );
 }
 
 export async function getIntegrationRecord(
   organizationId: string,
   integrationId: string,
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<GenericConnectionRecord | null> {
-  const [integration] = await inOrgTransaction(organizationId, executor, (o) =>
-    selectIntegrationsWithConnection(
-      o,
-      and(
-        eq(organizationIntegration.id, integrationId),
-        eq(organizationIntegration.organizationId, organizationId),
-      ),
-      1,
+  const [integration] = await selectIntegrationsWithConnection(
+    executor,
+    and(
+      eq(organizationIntegration.id, integrationId),
+      eq(organizationIntegration.organizationId, organizationId),
     ),
+    1,
   );
 
   if (!integration?.connection) {
@@ -97,18 +93,16 @@ export async function writeIntegrationEvent(
     message: string;
     details?: Record<string, unknown> | null;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  await inOrgTransaction(params.organizationId, executor, async (o) => {
-    await o.insert(integrationEventLog).values({
-      integrationId: params.integrationId,
-      organizationId: params.organizationId,
-      runId: params.runId ?? null,
-      level: params.level,
-      event: params.event,
-      message: params.message,
-      details: params.details ?? null,
-    });
+  await executor.insert(integrationEventLog).values({
+    integrationId: params.integrationId,
+    organizationId: params.organizationId,
+    runId: params.runId ?? null,
+    level: params.level,
+    event: params.event,
+    message: params.message,
+    details: params.details ?? null,
   });
 }
 
@@ -119,38 +113,35 @@ export async function markContaAzulReconnectRequired(
     message: string;
     details?: Record<string, unknown> | null;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  await inOrgTransaction(params.organizationId, executor, async (o) => {
-    await o
-      .update(organizationIntegration)
-      .set({
-        status: "ACTION_REQUIRED",
-        lastValidationError: params.message,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(organizationIntegration.id, params.integrationId),
-          eq(organizationIntegration.organizationId, params.organizationId),
-        ),
-      );
-
-    await writeIntegrationEvent(
-      {
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        level: "error",
-        event: "integration.conta_azul.reconnect_required",
-        message: params.message,
-        details: {
-          provider: "conta_azul",
-          ...params.details,
-        },
-      },
-      o,
+  await executor
+    .update(organizationIntegration)
+    .set({
+      status: "ACTION_REQUIRED",
+      lastValidationError: params.message,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(organizationIntegration.id, params.integrationId),
+        eq(organizationIntegration.organizationId, params.organizationId),
+      ),
     );
-  });
+  await writeIntegrationEvent(
+    {
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      level: "error",
+      event: "integration.conta_azul.reconnect_required",
+      message: params.message,
+      details: {
+        provider: "conta_azul",
+        ...params.details,
+      },
+    },
+    executor,
+  );
 }
 
 export async function writeOrganizationIntegrationEvent(
@@ -162,33 +153,28 @@ export async function writeOrganizationIntegrationEvent(
     entityId: string;
     details?: Record<string, unknown> | null;
   },
-  executor?: OrgDb,
+  executor: OrgDb,
 ) {
-  await inOrgTransaction(params.organizationId, executor, async (o) => {
-    await o.insert(organizationEventLog).values({
-      organizationId: params.organizationId,
-      actorUserId: params.actorUserId,
-      actorMemberId: params.actorMemberId ?? null,
-      action: params.action,
-      entityType: "integration",
-      entityId: params.entityId,
-      details: params.details ?? null,
-    });
+  await executor.insert(organizationEventLog).values({
+    organizationId: params.organizationId,
+    actorUserId: params.actorUserId,
+    actorMemberId: params.actorMemberId ?? null,
+    action: params.action,
+    entityType: "integration",
+    entityId: params.entityId,
+    details: params.details ?? null,
   });
 }
 
-export async function failIntegrationSyncRun(
-  params: {
-    integrationId: string;
-    organizationId: string;
-    runId: string;
-    target: IntegrationSyncTarget;
-    message: string;
-    details?: Record<string, unknown> | null;
-  },
-  executor?: OrgDb,
-) {
-  await inOrgTransaction(params.organizationId, executor, async (o) => {
+export async function failIntegrationSyncRun(params: {
+  integrationId: string;
+  organizationId: string;
+  runId: string;
+  target: IntegrationSyncTarget;
+  message: string;
+  details?: Record<string, unknown> | null;
+}) {
+  await orgDb(params.organizationId).transaction(async (o) => {
     await o
       .update(integrationSyncRun)
       .set({

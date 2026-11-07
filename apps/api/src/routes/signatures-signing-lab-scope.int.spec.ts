@@ -22,15 +22,11 @@ import {
   memberVisualSignature,
   organizationSigningCertificate,
 } from "@calibra-facil/db/schema";
-import { signaturesRouter as bareSignaturesRouter } from "./signatures";
-import { signingRouter as bareSigningRouter } from "./signing";
+import { signaturesRouter } from "./signatures";
+import { signingRouter } from "./signing";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const signingRouter = withErrorHandling(bareSigningRouter);
-const signaturesRouter = withErrorHandling(bareSignaturesRouter);
 
 vi.mock("../lib/storage", () => ({
   createR2Client: () => ({}),

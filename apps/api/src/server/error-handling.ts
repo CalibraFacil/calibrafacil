@@ -1,12 +1,11 @@
 import type { ApiErrorCode } from "@calibra-facil/contracts";
 import { IllegalTransitionError } from "@calibra-facil/schemas/state-machine";
-import type { Hono } from "hono";
+import type { Env as HonoEnv, Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { extractPgErrorCode } from "../lib/db-errors";
 import { PortalServiceAccountError } from "../lib/portal-service-account";
 import { DomainError, domainErrorBody } from "../lib/domain-errors";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
-import type { Env } from "./env";
 
 const STATUS_CODES: Partial<Record<number, ApiErrorCode>> = {
   400: "invalid_request",
@@ -47,13 +46,13 @@ export type ErrorHandlingDeps = {
 // and reported before returning a generic JSON 500. Intentional
 // HTTP errors (HTTPException 4xx/5xx thrown by routes) pass through untouched:
 // they are control flow, not defects.
-export function applyErrorHandling(
-  app: Hono<{ Bindings: Env }>,
+export function applyErrorHandling<E extends HonoEnv>(
+  app: Hono<E>,
   deps: ErrorHandlingDeps = {
     report: reportServerError,
     flush: flushErrorReporter,
   },
-): Hono<{ Bindings: Env }> {
+): Hono<E> {
   app.onError(async (error, c) => {
     if (error instanceof HTTPException) {
       // A response the route built itself (a domain body, a challenge) is kept;

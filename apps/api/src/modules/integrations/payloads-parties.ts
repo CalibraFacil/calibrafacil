@@ -1,5 +1,4 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import { customer, serviceOrder } from "@calibra-facil/db/schema";
 import {
   formatIntegrationCustomerAddress,
@@ -12,27 +11,24 @@ import { and, desc, eq, isNotNull } from "drizzle-orm";
 export async function loadCustomerPayloads(
   organizationId: string,
   limit: number,
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<IntegrationCustomerPayload[]> {
-  return inOrgTransaction(organizationId, executor, async (o) => {
-    const rows = await o
-      .select({
-        id: customer.id,
-        name: customer.name,
-        taxId: customer.taxId,
-        email: customer.email,
-        phone: customer.phone,
-        address: customer.address,
-        createdAt: customer.createdAt,
-        updatedAt: customer.updatedAt,
-      })
-      .from(customer)
-      .where(eq(customer.labOrganizationId, organizationId))
-      .limit(limit)
-      .orderBy(desc(customer.updatedAt));
-
-    return rows.map((row) => mapCustomerRowToPayload(row, organizationId));
-  });
+  const rows = await executor
+    .select({
+      id: customer.id,
+      name: customer.name,
+      taxId: customer.taxId,
+      email: customer.email,
+      phone: customer.phone,
+      address: customer.address,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt,
+    })
+    .from(customer)
+    .where(eq(customer.labOrganizationId, organizationId))
+    .limit(limit)
+    .orderBy(desc(customer.updatedAt));
+  return rows.map((row) => mapCustomerRowToPayload(row, organizationId));
 }
 
 function mapCustomerRowToPayload(
@@ -65,37 +61,32 @@ function mapCustomerRowToPayload(
 export async function loadCustomerPayloadByExternalId(
   organizationId: string,
   externalId: string,
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<IntegrationCustomerPayload | null> {
-  return inOrgTransaction(organizationId, executor, async (o) => {
-    const match = externalId.match(/^customer:(\d+)$/);
-    if (!match?.[1]) return null;
-
-    const customerId = Number(match[1]);
-    if (!Number.isInteger(customerId) || customerId <= 0) return null;
-
-    const [row] = await o
-      .select({
-        id: customer.id,
-        name: customer.name,
-        taxId: customer.taxId,
-        email: customer.email,
-        phone: customer.phone,
-        address: customer.address,
-        createdAt: customer.createdAt,
-        updatedAt: customer.updatedAt,
-      })
-      .from(customer)
-      .where(
-        and(
-          eq(customer.id, customerId),
-          eq(customer.labOrganizationId, organizationId),
-        ),
-      )
-      .limit(1);
-
-    return row ? mapCustomerRowToPayload(row, organizationId) : null;
-  });
+  const match = externalId.match(/^customer:(\d+)$/);
+  if (!match?.[1]) return null;
+  const customerId = Number(match[1]);
+  if (!Number.isInteger(customerId) || customerId <= 0) return null;
+  const [row] = await executor
+    .select({
+      id: customer.id,
+      name: customer.name,
+      taxId: customer.taxId,
+      email: customer.email,
+      phone: customer.phone,
+      address: customer.address,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt,
+    })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, customerId),
+        eq(customer.labOrganizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  return row ? mapCustomerRowToPayload(row, organizationId) : null;
 }
 
 function normalizeDocumentDigits(value: string | null | undefined) {
@@ -133,94 +124,88 @@ function dedupePessoaPayloads<
 export async function loadSupplierPayloads(
   organizationId: string,
   limit: number,
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<IntegrationSupplierPayload[]> {
-  return inOrgTransaction(organizationId, executor, async (o) => {
-    const rows = await o
-      .select({
-        id: serviceOrder.id,
-        name: serviceOrder.thirdPartyName,
-        taxId: serviceOrder.thirdPartyDocument,
-        phone: serviceOrder.thirdPartyPhone,
-        createdAt: serviceOrder.createdAt,
-        updatedAt: serviceOrder.updatedAt,
-      })
-      .from(serviceOrder)
-      .where(
-        and(
-          eq(serviceOrder.organizationId, organizationId),
-          isNotNull(serviceOrder.thirdPartyName),
-        ),
-      )
-      .orderBy(desc(serviceOrder.updatedAt));
-
-    return dedupePessoaPayloads(
-      rows
-        .filter((row) => row.name?.trim())
-        .map((row) => ({
-          externalId: buildPessoaExternalId({
-            role: "supplier",
-            sourceId: row.id,
-            document: row.taxId,
-          }),
-          organizationId,
-          pessoaRole: "supplier",
-          name: row.name?.trim() ?? "",
-          taxId: row.taxId,
-          email: null,
-          phone: row.phone,
-          address: null,
-          createdAt: row.createdAt?.toISOString?.() ?? null,
-          updatedAt: row.updatedAt?.toISOString?.() ?? null,
-        })),
-      limit,
-    );
-  });
+  const rows = await executor
+    .select({
+      id: serviceOrder.id,
+      name: serviceOrder.thirdPartyName,
+      taxId: serviceOrder.thirdPartyDocument,
+      phone: serviceOrder.thirdPartyPhone,
+      createdAt: serviceOrder.createdAt,
+      updatedAt: serviceOrder.updatedAt,
+    })
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.organizationId, organizationId),
+        isNotNull(serviceOrder.thirdPartyName),
+      ),
+    )
+    .orderBy(desc(serviceOrder.updatedAt));
+  return dedupePessoaPayloads(
+    rows
+      .filter((row) => row.name?.trim())
+      .map((row) => ({
+        externalId: buildPessoaExternalId({
+          role: "supplier",
+          sourceId: row.id,
+          document: row.taxId,
+        }),
+        organizationId,
+        pessoaRole: "supplier",
+        name: row.name?.trim() ?? "",
+        taxId: row.taxId,
+        email: null,
+        phone: row.phone,
+        address: null,
+        createdAt: row.createdAt?.toISOString?.() ?? null,
+        updatedAt: row.updatedAt?.toISOString?.() ?? null,
+      })),
+    limit,
+  );
 }
 
 export async function loadTransporterPayloads(
   organizationId: string,
   limit: number,
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<IntegrationTransporterPayload[]> {
-  return inOrgTransaction(organizationId, executor, async (o) => {
-    const rows = await o
-      .select({
-        id: serviceOrder.id,
-        name: serviceOrder.carrierName,
-        taxId: serviceOrder.carrierDocument,
-        createdAt: serviceOrder.createdAt,
-        updatedAt: serviceOrder.updatedAt,
-      })
-      .from(serviceOrder)
-      .where(
-        and(
-          eq(serviceOrder.organizationId, organizationId),
-          isNotNull(serviceOrder.carrierName),
-        ),
-      )
-      .orderBy(desc(serviceOrder.updatedAt));
-
-    return dedupePessoaPayloads(
-      rows
-        .filter((row) => row.name?.trim())
-        .map((row) => ({
-          externalId: buildPessoaExternalId({
-            role: "transporter",
-            sourceId: row.id,
-            document: row.taxId,
-          }),
-          organizationId,
-          pessoaRole: "transporter",
-          name: row.name?.trim() ?? "",
-          taxId: row.taxId,
-          email: null,
-          phone: null,
-          address: null,
-          createdAt: row.createdAt?.toISOString?.() ?? null,
-          updatedAt: row.updatedAt?.toISOString?.() ?? null,
-        })),
-      limit,
-    );
-  });
+  const rows = await executor
+    .select({
+      id: serviceOrder.id,
+      name: serviceOrder.carrierName,
+      taxId: serviceOrder.carrierDocument,
+      createdAt: serviceOrder.createdAt,
+      updatedAt: serviceOrder.updatedAt,
+    })
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.organizationId, organizationId),
+        isNotNull(serviceOrder.carrierName),
+      ),
+    )
+    .orderBy(desc(serviceOrder.updatedAt));
+  return dedupePessoaPayloads(
+    rows
+      .filter((row) => row.name?.trim())
+      .map((row) => ({
+        externalId: buildPessoaExternalId({
+          role: "transporter",
+          sourceId: row.id,
+          document: row.taxId,
+        }),
+        organizationId,
+        pessoaRole: "transporter",
+        name: row.name?.trim() ?? "",
+        taxId: row.taxId,
+        email: null,
+        phone: null,
+        address: null,
+        createdAt: row.createdAt?.toISOString?.() ?? null,
+        updatedAt: row.updatedAt?.toISOString?.() ?? null,
+      })),
+    limit,
+  );
 }

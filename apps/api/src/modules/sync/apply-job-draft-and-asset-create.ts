@@ -10,6 +10,7 @@ import { resolveAssetRegimeWrite } from "../../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../../lib/regulated-interval";
 import { getNullableString, getNumber } from "./helpers";
 import { createCalibrationJob } from "../../lib/jobs";
+import { withOrg } from "../../lib/org-context";
 import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
@@ -54,15 +55,21 @@ export async function applyCreateLocalJobDraft(
     };
   }
 
-  const job = await createCalibrationJob({
-    organizationId: input.memberData.organizationId,
-    unitId,
-    createdBy: actorUserId,
-    assetId,
-    serviceId,
-    technicianId: getNullableString(payload, "technicianId"),
-    dueDate: getNullableString(payload, "dueDate"),
-  });
+  const job = await withOrg(
+    input.memberData.organizationId,
+    { userId: actorUserId, ipAddress: null },
+    (ctx) =>
+      createCalibrationJob({
+        organizationId: ctx.org,
+        unitId,
+        createdBy: actorUserId,
+        assetId,
+        serviceId,
+        technicianId: getNullableString(payload, "technicianId"),
+        dueDate: getNullableString(payload, "dueDate"),
+        executor: ctx.tx,
+      }),
+  );
 
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: job.id,

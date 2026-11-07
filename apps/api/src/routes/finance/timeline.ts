@@ -1,5 +1,5 @@
+import { createRouter } from "../../server/router";
 import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
-import { Hono } from "hono";
 import {
   buildCustomerFinancialTimeline,
   buildServiceOrderFinancialStatus,
@@ -19,7 +19,7 @@ function parseStrictPositiveInt(value: string | undefined) {
 
 const CUSTOMER_TIMELINE_MAX_LIMIT = 50;
 
-export const financeTimelineRouter = new Hono<{
+export const financeTimelineRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   .get(
@@ -61,7 +61,9 @@ export const financeTimelineRouter = new Hono<{
       const member = c.get("member");
       const customerRouteId = c.req.param("customerId");
       const customerId = customerRouteId
-        ? await resolveCustomerRouteId(customerRouteId, member.organizationId)
+        ? await orgDb(member.organizationId).transaction((o) =>
+            resolveCustomerRouteId(customerRouteId, member.organizationId, o),
+          )
         : null;
       const limitParam = c.req.query("limit");
       const limit = limitParam ? parseStrictPositiveInt(limitParam) : null;

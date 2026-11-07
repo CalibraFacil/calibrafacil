@@ -28,26 +28,18 @@ import {
 import { db } from "@calibra-facil/db";
 import { asset, assetType, calibrationMethod } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import { assetTypesRouter as bareAssetTypesRouter } from "./asset-types";
-import { assetsRouter as bareAssetsRouter } from "./assets";
-import { customersRouter as bareCustomersRouter } from "./customers";
-import { methodsRouter as bareMethodsRouter } from "./methods";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
+import { assetTypesRouter } from "./asset-types";
+import { assetsRouter } from "./assets";
+import { customersRouter } from "./customers";
+import { methodsRouter } from "./methods";
+import { serviceOrdersRouter } from "./service-orders";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 
-const assetTypesRouter = withErrorHandling(bareAssetTypesRouter);
-
-const assetsRouter = withErrorHandling(bareAssetsRouter);
-const customersRouter = withErrorHandling(bareCustomersRouter);
-
-const methodsRouter = withErrorHandling(bareMethodsRouter);
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

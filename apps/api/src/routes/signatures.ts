@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import {
   memberVisualSignature,
   member,
@@ -70,7 +70,7 @@ function getPngDimensions(
 // ROUTES
 // =============================================================================
 
-export const signaturesRouter = new Hono<{
+export const signaturesRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env;
 }>()

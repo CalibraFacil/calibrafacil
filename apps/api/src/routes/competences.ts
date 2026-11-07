@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
 import { conflict, forbidden, invalid, notFound } from "../lib/domain-errors";
@@ -39,7 +39,7 @@ import { COMPETENCE_MACHINE } from "@calibra-facil/schemas/machines";
  * REQUESTED/TRAINING_ASSIGNED/IN_TRAINING/PENDING_EVALUATION → CANCELLED
  * ACTIVE → SUSPENDED (manual) / EXPIRED (auto) → ACTIVE (renew)
  */
-export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
+export const competencesRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List competences with pagination and filtering
   // =========================================================================

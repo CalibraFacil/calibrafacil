@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { syncBootstrapPageRequestSchema } from "@calibra-facil/contracts";
 import { domainErrorResponse, invalid } from "../../lib/domain-errors";
 import { withLabPermission } from "../../middleware/permission";
@@ -9,7 +9,7 @@ import {
 import { buildLegacyBootstrapResponse } from "../../modules/sync/legacy-bootstrap";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
-export const bootstrapRoutes = new Hono<SyncRouterEnv>().post(
+export const bootstrapRoutes = createRouter<SyncRouterEnv>().post(
   "/bootstrap",
   ...withLabPermission({ calibration: ["read"] }),
   async (c) => {

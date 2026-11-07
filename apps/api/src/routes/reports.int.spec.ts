@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { insertJobs } from "../../test/integration/job-fixtures";
-import { reportsRouter as bareReportsRouter } from "./reports";
+import { reportsRouter } from "./reports";
 import { db } from "@calibra-facil/db";
 import {
   organization,
@@ -14,9 +14,6 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const reportsRouter = withErrorHandling(bareReportsRouter);
 
 // Real-DB + real-RBAC integration tests for the reportsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts).

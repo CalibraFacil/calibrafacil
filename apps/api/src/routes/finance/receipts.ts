@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
@@ -38,7 +38,7 @@ const RecordReceiptSchema = z.object({
   notes: z.string().trim().max(5000).optional(),
 });
 
-export const financeReceiptsRouter = new Hono<{
+export const financeReceiptsRouter = createRouter<{
   Variables: AuthVariables;
 }>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
   const member = c.get("member");
@@ -79,7 +79,7 @@ export const financeReceiptsRouter = new Hono<{
   return c.json({ data });
 });
 
-export const financeInstallmentsRouter = new Hono<{
+export const financeInstallmentsRouter = createRouter<{
   Variables: AuthVariables;
 }>().post(
   "/:id/receive",

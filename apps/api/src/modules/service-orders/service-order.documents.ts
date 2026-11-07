@@ -40,10 +40,10 @@ async function requireServiceOrderDetail(
   serviceOrderId: number,
 ) {
   const detail = await getServiceOrderDetail(
+    ctx.o,
     serviceOrderId,
     ctx.org,
     buildUnitScopeCondition(serviceOrder.unitId, scope),
-    ctx.o,
   );
   if (!detail) throw serviceOrderNotFound();
   return detail;

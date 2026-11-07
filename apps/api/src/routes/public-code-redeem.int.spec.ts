@@ -8,8 +8,7 @@ import {
   vi,
 } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
-import { publicServiceOrderAccessRouter as publicServiceOrderAccessRouterBare } from "./service-orders";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
+import { publicServiceOrderAccessRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -31,9 +30,6 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
-const publicServiceOrderAccessRouter = withErrorHandling(
-  publicServiceOrderAccessRouterBare,
-);
 
 // The requests below arrive as from behind one trusted reverse proxy (the Caddy of
 // deploy/compose.yaml), which writes X-Forwarded-For: lib/client-ip.ts.

@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { HTTPException } from "hono/http-exception";
 import { type IntegrationSyncTarget } from "@calibra-facil/shared";
 import { getIntegrationRecord, type IntegrationsEnv } from "./index";
@@ -26,9 +27,8 @@ export async function assertActiveContaAzulIntegration(params: {
   organizationId: string;
   integrationId: string;
 }) {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (!record || record.integration.provider !== "conta_azul") {

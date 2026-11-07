@@ -26,7 +26,6 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { resolveServiceOrderRecipient } from "@calibra-facil/notifications";
-import { inOrgTransaction } from "../../lib/org-transaction";
 import type { buildUnitScopeCondition } from "../../lib/units";
 
 type ServiceOrderCommunicationStatus =
@@ -174,17 +173,6 @@ export function buildServiceOrderCommunicationEntries(input: {
  * (route answers 404).
  */
 export async function listServiceOrderCommunications(
-  id: number,
-  organizationId: string,
-  unitCondition?: ReturnType<typeof buildUnitScopeCondition>,
-  executor?: OrgDb,
-): Promise<{ data: ServiceOrderCommunicationEntry[] } | undefined> {
-  return inOrgTransaction(organizationId, executor, (o) =>
-    readServiceOrderCommunications(o, id, organizationId, unitCondition),
-  );
-}
-
-async function readServiceOrderCommunications(
   o: OrgDb,
   id: number,
   organizationId: string,

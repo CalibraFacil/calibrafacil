@@ -28,7 +28,7 @@
 
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { signingRouter as bareSigningRouter } from "./signing";
+import { signingRouter } from "./signing";
 import { db } from "@calibra-facil/db";
 import {
   organizationEventLog,
@@ -50,9 +50,6 @@ import {
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const signingRouter = withErrorHandling(bareSigningRouter);
 
 // ---------------------------------------------------------------------------
 // Constants

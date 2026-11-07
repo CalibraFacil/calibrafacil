@@ -5,9 +5,9 @@ import {
   resolveRelativeImport,
 } from "../src/lib/rule-support.ts";
 
-// The live rules all ship with EMPTY baselines (the boundaries are clean), so
-// the grandfathering mechanics are proven here at the unit level: a listed
-// file gets exactly its allowance and not one more; unlisted files get zero.
+// The grandfathering mechanics are proven here at the unit level, whatever the
+// live baselines hold: a listed file gets exactly its allowance and not one
+// more; unlisted files get zero.
 
 describe("baseline ratchet", () => {
   const baseline = new Map<string, number>([

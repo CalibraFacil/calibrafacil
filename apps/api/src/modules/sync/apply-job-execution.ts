@@ -1,3 +1,4 @@
+import { orgDb } from "../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 import { desktopEventCarriesCalibrationRecordRule } from "@calibra-facil/schemas";
 import {
@@ -38,9 +39,14 @@ export async function applyLocalJobExecution(
   actorUserId: string,
 ): Promise<ApplyDesktopSyncEventResult> {
   const payload = toRecord(input.event.payload);
-  const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
+  const mappedRemoteEntityId = await orgDb(
     input.memberData.organizationId,
-    input.event.entityId,
+  ).transaction((o) =>
+    findDesktopSyncRemoteEntityId(
+      input.memberData.organizationId,
+      input.event.entityId,
+      o,
+    ),
   );
   const remoteEntityId =
     typeof mappedRemoteEntityId === "number"

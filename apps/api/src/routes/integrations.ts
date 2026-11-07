@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -18,7 +18,6 @@ import {
 } from "../lib/integration-access";
 import { withOrg } from "../lib/org-context";
 import { orgDb } from "../lib/org-db";
-import { orgTransactionWithExecutor } from "../lib/org-transaction";
 import {
   integrationEventLog,
   integrationObjectLink,
@@ -443,13 +442,18 @@ async function requireContaAzulReconnectAfterAppChange(params: {
 
   await Promise.all(
     connected.map((integration) =>
-      markContaAzulReconnectRequired({
-        integrationId: integration.id,
-        organizationId: params.organizationId,
-        message:
-          "O aplicativo Conta Azul mudou. Reconecte a conta para continuar sincronizando.",
-        details: { reason: "app_changed" },
-      }),
+      orgDb(params.organizationId).transaction((o) =>
+        markContaAzulReconnectRequired(
+          {
+            integrationId: integration.id,
+            organizationId: params.organizationId,
+            message:
+              "O aplicativo Conta Azul mudou. Reconecte a conta para continuar sincronizando.",
+            details: { reason: "app_changed" },
+          },
+          o,
+        ),
+      ),
     ),
   );
 }
@@ -612,9 +616,8 @@ export async function dispatchSyncRun(params: {
   trigger: "manual" | "event" | "scheduled" | "retry";
   waitUntil?: (promise: Promise<void>) => void;
 }) {
-  const record = await getIntegrationRecord(
-    params.organizationId,
-    params.integrationId,
+  const record = await orgDb(params.organizationId).transaction((o) =>
+    getIntegrationRecord(params.organizationId, params.integrationId, o),
   );
 
   if (record) {
@@ -705,117 +708,121 @@ async function upsertContaAzulConnection(params: {
     params.env,
   );
 
-  return orgTransactionWithExecutor(params.organizationId, async (o, tx) => {
-    // Serialize concurrent OAuth callbacks for the same org+provider so two
-    // first-time connect requests cannot both pass findFirst and insert
-    // duplicate organization_integration rows. Lock is transaction-scoped and
-    // released on commit/rollback.
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`integration:conta_azul:${params.organizationId}`}, 0))`,
-    );
+  return withOrg(
+    params.organizationId,
+    { userId: params.actorUserId, ipAddress: null },
+    async ({ o, tx }) => {
+      // Serialize concurrent OAuth callbacks for the same org+provider so two
+      // first-time connect requests cannot both pass findFirst and insert
+      // duplicate organization_integration rows. Lock is transaction-scoped and
+      // released on commit/rollback.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`integration:conta_azul:${params.organizationId}`}, 0))`,
+      );
 
-    const [existingRow] = await o
-      .select({
-        integration: organizationIntegration,
-        connection: integrationConnection,
-      })
-      .from(organizationIntegration)
-      .leftJoin(
-        integrationConnection,
-        eq(integrationConnection.integrationId, organizationIntegration.id),
-      )
-      .where(
-        and(
-          eq(organizationIntegration.organizationId, params.organizationId),
-          eq(organizationIntegration.type, "financial_erp"),
-          eq(organizationIntegration.provider, "conta_azul"),
-        ),
-      )
-      .limit(1);
-    const existing = existingRow
-      ? { ...existingRow.integration, connection: existingRow.connection }
-      : undefined;
-    const integrationId = existing?.id ?? crypto.randomUUID();
-    const connectionId = existing?.connection?.id ?? crypto.randomUUID();
-    const previousConfig = existing?.connection
-      ? normalizeContaAzulConnectionConfig(existing.connection.config)
-      : null;
-    const config = normalizeContaAzulConnectionConfig({
-      ...previousConfig,
-      accessTokenExpiresAt: params.tokenBundle.expiresAt,
-      scopes: params.tokenBundle.scopes,
-    });
+      const [existingRow] = await o
+        .select({
+          integration: organizationIntegration,
+          connection: integrationConnection,
+        })
+        .from(organizationIntegration)
+        .leftJoin(
+          integrationConnection,
+          eq(integrationConnection.integrationId, organizationIntegration.id),
+        )
+        .where(
+          and(
+            eq(organizationIntegration.organizationId, params.organizationId),
+            eq(organizationIntegration.type, "financial_erp"),
+            eq(organizationIntegration.provider, "conta_azul"),
+          ),
+        )
+        .limit(1);
+      const existing = existingRow
+        ? { ...existingRow.integration, connection: existingRow.connection }
+        : undefined;
+      const integrationId = existing?.id ?? crypto.randomUUID();
+      const connectionId = existing?.connection?.id ?? crypto.randomUUID();
+      const previousConfig = existing?.connection
+        ? normalizeContaAzulConnectionConfig(existing.connection.config)
+        : null;
+      const config = normalizeContaAzulConnectionConfig({
+        ...previousConfig,
+        accessTokenExpiresAt: params.tokenBundle.expiresAt,
+        scopes: params.tokenBundle.scopes,
+      });
 
-    if (existing) {
-      // Re-authorization may target a different Conta Azul account. Prior
-      // integration_object_link rows and sync cursors are tied to the old
-      // remote-account identity, so wipe them — callers must re-sync after a
-      // reconnect.
-      if (existing.connection) {
+      if (existing) {
+        // Re-authorization may target a different Conta Azul account. Prior
+        // integration_object_link rows and sync cursors are tied to the old
+        // remote-account identity, so wipe them — callers must re-sync after a
+        // reconnect.
+        if (existing.connection) {
+          await o
+            .delete(integrationObjectLink)
+            .where(eq(integrationObjectLink.integrationId, integrationId));
+
+          await o
+            .delete(integrationSyncCursor)
+            .where(eq(integrationSyncCursor.integrationId, integrationId));
+        }
+
         await o
-          .delete(integrationObjectLink)
-          .where(eq(integrationObjectLink.integrationId, integrationId));
-
-        await o
-          .delete(integrationSyncCursor)
-          .where(eq(integrationSyncCursor.integrationId, integrationId));
+          .update(organizationIntegration)
+          .set({
+            name: existing.name || "Conta Azul",
+            status: "ACTIVE",
+            lastValidationError: null,
+            disabledAt: null,
+            updatedBy: params.actorUserId,
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationIntegration.id, integrationId));
+      } else {
+        await o.insert(organizationIntegration).values({
+          id: integrationId,
+          organizationId: params.organizationId,
+          type: "financial_erp",
+          provider: "conta_azul",
+          name: "Conta Azul",
+          status: "ACTIVE",
+          createdBy: params.actorUserId,
+          updatedBy: params.actorUserId,
+        });
       }
 
-      await o
-        .update(organizationIntegration)
-        .set({
-          name: existing.name || "Conta Azul",
-          status: "ACTIVE",
-          lastValidationError: null,
-          disabledAt: null,
-          updatedBy: params.actorUserId,
-          updatedAt: new Date(),
-        })
-        .where(eq(organizationIntegration.id, integrationId));
-    } else {
-      await o.insert(organizationIntegration).values({
-        id: integrationId,
-        organizationId: params.organizationId,
-        type: "financial_erp",
-        provider: "conta_azul",
-        name: "Conta Azul",
-        status: "ACTIVE",
-        createdBy: params.actorUserId,
-        updatedBy: params.actorUserId,
-      });
-    }
-
-    if (existing?.connection) {
-      await o
-        .update(integrationConnection)
-        .set({
+      if (existing?.connection) {
+        await o
+          .update(integrationConnection)
+          .set({
+            credentialType: "oauth2",
+            config,
+            encryptedSecret: encrypted.encryptedSecret,
+            secretIv: encrypted.secretIv,
+            updatedBy: params.actorUserId,
+            updatedAt: new Date(),
+          })
+          .where(eq(integrationConnection.id, connectionId));
+      } else {
+        await o.insert(integrationConnection).values({
+          id: connectionId,
+          integrationId,
+          organizationId: params.organizationId,
           credentialType: "oauth2",
           config,
           encryptedSecret: encrypted.encryptedSecret,
           secretIv: encrypted.secretIv,
+          createdBy: params.actorUserId,
           updatedBy: params.actorUserId,
-          updatedAt: new Date(),
-        })
-        .where(eq(integrationConnection.id, connectionId));
-    } else {
-      await o.insert(integrationConnection).values({
-        id: connectionId,
-        integrationId,
-        organizationId: params.organizationId,
-        credentialType: "oauth2",
-        config,
-        encryptedSecret: encrypted.encryptedSecret,
-        secretIv: encrypted.secretIv,
-        createdBy: params.actorUserId,
-        updatedBy: params.actorUserId,
-      });
-    }
+        });
+      }
 
-    return {
-      integrationId,
-      accessTokenExpiresAt: params.tokenBundle.expiresAt,
-    };
-  });
+      return {
+        integrationId,
+        accessTokenExpiresAt: params.tokenBundle.expiresAt,
+      };
+    },
+  );
 }
 
 function decryptContaAzulTokenBundle(params: {
@@ -832,7 +839,7 @@ function decryptContaAzulTokenBundle(params: {
   );
 }
 
-export const integrationsRouter = new Hono<{
+export const integrationsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsBindings;
 }>()
@@ -890,29 +897,39 @@ export const integrationsRouter = new Hono<{
         organizationId: member.organizationId,
         env: c.env,
       });
-      await saveContaAzulAppCredentials({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        credentials,
-        env: c.env,
-      });
+      await orgDb(member.organizationId).transaction((o) =>
+        saveContaAzulAppCredentials(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            credentials,
+            env: c.env,
+          },
+          o,
+        ),
+      );
       await requireContaAzulReconnectAfterAppChange({
         organizationId: member.organizationId,
         clientIdBefore: effectiveContaAzulClientId(before, c.env),
         clientIdAfter: credentials.clientId,
       });
-      await writeOrganizationIntegrationEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "integration.conta_azul.app_saved",
-        entityId: "conta_azul",
-        details: {
-          provider: "conta_azul",
-          clientId: credentials.clientId,
-          check,
-        },
-      });
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.app_saved",
+            entityId: "conta_azul",
+            details: {
+              provider: "conta_azul",
+              clientId: credentials.clientId,
+              check,
+            },
+          },
+          o,
+        ),
+      );
 
       return c.json({
         app: await getContaAzulAppSummary({
@@ -935,9 +952,14 @@ export const integrationsRouter = new Hono<{
         organizationId: member.organizationId,
         env: c.env,
       });
-      const removed = await deleteContaAzulAppCredentials({
-        organizationId: member.organizationId,
-      });
+      const removed = await orgDb(member.organizationId).transaction((o) =>
+        deleteContaAzulAppCredentials(
+          {
+            organizationId: member.organizationId,
+          },
+          o,
+        ),
+      );
 
       if (removed) {
         await requireContaAzulReconnectAfterAppChange({
@@ -945,14 +967,19 @@ export const integrationsRouter = new Hono<{
           clientIdBefore: effectiveContaAzulClientId(before, c.env),
           clientIdAfter: getServerContaAzulCredentials(c.env)?.clientId ?? null,
         });
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.conta_azul.app_removed",
-          entityId: "conta_azul",
-          details: { provider: "conta_azul" },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.conta_azul.app_removed",
+              entityId: "conta_azul",
+              details: { provider: "conta_azul" },
+            },
+            o,
+          ),
+        );
       }
 
       return c.json(
@@ -1004,18 +1031,23 @@ export const integrationsRouter = new Hono<{
         });
       }
 
-      await writeOrganizationIntegrationEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "integration.conta_azul.oauth_started",
-        entityId: "conta_azul",
-        details: {
-          provider: "conta_azul",
-          redirectUri: config.redirectUri,
-          returnTo: input.returnTo,
-        },
-      });
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.oauth_started",
+            entityId: "conta_azul",
+            details: {
+              provider: "conta_azul",
+              redirectUri: config.redirectUri,
+              returnTo: input.returnTo,
+            },
+          },
+          o,
+        ),
+      );
 
       return c.json({
         authorizationUrl: authorization.url,
@@ -1083,29 +1115,39 @@ export const integrationsRouter = new Hono<{
         env: c.env,
       });
 
-      await writeIntegrationEvent({
-        integrationId: connection.integrationId,
-        organizationId: callbackContext.organizationId,
-        level: "info",
-        event: "integration.conta_azul.connected",
-        message: "Conta Azul conectada via OAuth",
-        details: {
-          provider: "conta_azul",
-          accessTokenExpiresAt: connection.accessTokenExpiresAt,
-        },
-      });
+      await orgDb(callbackContext.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: connection.integrationId,
+            organizationId: callbackContext.organizationId,
+            level: "info",
+            event: "integration.conta_azul.connected",
+            message: "Conta Azul conectada via OAuth",
+            details: {
+              provider: "conta_azul",
+              accessTokenExpiresAt: connection.accessTokenExpiresAt,
+            },
+          },
+          o,
+        ),
+      );
 
-      await writeOrganizationIntegrationEvent({
-        organizationId: callbackContext.organizationId,
-        actorUserId: callbackContext.userId,
-        actorMemberId: callbackContext.memberId,
-        action: "integration.conta_azul.connected",
-        entityId: connection.integrationId,
-        details: {
-          provider: "conta_azul",
-          accessTokenExpiresAt: connection.accessTokenExpiresAt,
-        },
-      });
+      await orgDb(callbackContext.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: callbackContext.organizationId,
+            actorUserId: callbackContext.userId,
+            actorMemberId: callbackContext.memberId,
+            action: "integration.conta_azul.connected",
+            entityId: connection.integrationId,
+            details: {
+              provider: "conta_azul",
+              accessTokenExpiresAt: connection.accessTokenExpiresAt,
+            },
+          },
+          o,
+        ),
+      );
 
       return c.redirect(buildContaAzulOAuthReturnUrl(c.env, state.returnTo));
     },
@@ -1313,10 +1355,15 @@ export const integrationsRouter = new Hono<{
       });
 
       return c.json(
-        await getContaAzulScheduleState({
-          integrationId: id,
-          organizationId: member.organizationId,
-        }),
+        await orgDb(member.organizationId).transaction((o) =>
+          getContaAzulScheduleState(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+            },
+            o,
+          ),
+        ),
       );
     },
   )
@@ -1801,18 +1848,23 @@ export const integrationsRouter = new Hono<{
           limit: input.limit,
         });
 
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.conta_azul.payment_poll",
-          entityId: id,
-          details: {
-            processedCount: result.processedCount,
-            updatedCount: result.updatedCount,
-            warningCount: result.warnings.length,
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.conta_azul.payment_poll",
+              entityId: id,
+              details: {
+                processedCount: result.processedCount,
+                updatedCount: result.updatedCount,
+                warningCount: result.warnings.length,
+              },
+            },
+            o,
+          ),
+        );
 
         return c.json(result);
       } catch (error) {
@@ -1821,16 +1873,21 @@ export const integrationsRouter = new Hono<{
             ? error.message
             : "Falha ao consultar pagamentos da Conta Azul";
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.conta_azul.payment_poll.failed",
-          message,
-          details: {
-            provider: "conta_azul",
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.conta_azul.payment_poll.failed",
+              message,
+              details: {
+                provider: "conta_azul",
+              },
+            },
+            o,
+          ),
+        );
 
         throw invalid("integration_request_failed", message);
       }
@@ -1861,18 +1918,23 @@ export const integrationsRouter = new Hono<{
           limit: input.limit,
         });
 
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.conta_azul.payable_poll",
-          entityId: id,
-          details: {
-            processedCount: result.processedCount,
-            updatedCount: result.updatedCount,
-            warningCount: result.warnings.length,
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.conta_azul.payable_poll",
+              entityId: id,
+              details: {
+                processedCount: result.processedCount,
+                updatedCount: result.updatedCount,
+                warningCount: result.warnings.length,
+              },
+            },
+            o,
+          ),
+        );
 
         return c.json(result);
       } catch (error) {
@@ -1881,16 +1943,21 @@ export const integrationsRouter = new Hono<{
             ? error.message
             : "Falha ao consultar contas a pagar da Conta Azul";
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.conta_azul.payable_poll.failed",
-          message,
-          details: {
-            provider: "conta_azul",
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.conta_azul.payable_poll.failed",
+              message,
+              details: {
+                provider: "conta_azul",
+              },
+            },
+            o,
+          ),
+        );
 
         throw invalid("integration_request_failed", message);
       }
@@ -1921,18 +1988,23 @@ export const integrationsRouter = new Hono<{
           limit: input.limit,
         });
 
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.conta_azul.fiscal_poll",
-          entityId: id,
-          details: {
-            processedCount: result.processedCount,
-            updatedCount: result.updatedCount,
-            warningCount: result.warnings.length,
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.conta_azul.fiscal_poll",
+              entityId: id,
+              details: {
+                processedCount: result.processedCount,
+                updatedCount: result.updatedCount,
+                warningCount: result.warnings.length,
+              },
+            },
+            o,
+          ),
+        );
 
         return c.json(result);
       } catch (error) {
@@ -1941,16 +2013,21 @@ export const integrationsRouter = new Hono<{
             ? error.message
             : "Falha ao consultar documentos fiscais da Conta Azul";
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.conta_azul.fiscal_poll.failed",
-          message,
-          details: {
-            provider: "conta_azul",
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.conta_azul.fiscal_poll.failed",
+              message,
+              details: {
+                provider: "conta_azul",
+              },
+            },
+            o,
+          ),
+        );
 
         throw invalid("integration_request_failed", message);
       }
@@ -1987,18 +2064,23 @@ export const integrationsRouter = new Hono<{
           },
         });
 
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.conta_azul.mdfe_link",
-          entityId: id,
-          details: {
-            remoteEntityId: result.remoteEntityId,
-            accessKeyCount: input.fiscalDocumentAccessKeys.length,
-            status: input.status ?? null,
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.conta_azul.mdfe_link",
+              entityId: id,
+              details: {
+                remoteEntityId: result.remoteEntityId,
+                accessKeyCount: input.fiscalDocumentAccessKeys.length,
+                status: input.status ?? null,
+              },
+            },
+            o,
+          ),
+        );
 
         return c.json(result);
       } catch (error) {
@@ -2007,16 +2089,21 @@ export const integrationsRouter = new Hono<{
             ? error.message
             : "Falha ao vincular MDF-e na Conta Azul";
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.conta_azul.mdfe_link.failed",
-          message,
-          details: {
-            provider: "conta_azul",
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.conta_azul.mdfe_link.failed",
+              message,
+              details: {
+                provider: "conta_azul",
+              },
+            },
+            o,
+          ),
+        );
 
         throw invalid("integration_request_failed", message);
       }
@@ -2047,18 +2134,23 @@ export const integrationsRouter = new Hono<{
           limit: input.limit,
         });
 
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.conta_azul.protocol_poll",
-          entityId: id,
-          details: {
-            processedCount: result.processedCount,
-            updatedCount: result.updatedCount,
-            warningCount: result.warnings.length,
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.conta_azul.protocol_poll",
+              entityId: id,
+              details: {
+                processedCount: result.processedCount,
+                updatedCount: result.updatedCount,
+                warningCount: result.warnings.length,
+              },
+            },
+            o,
+          ),
+        );
 
         return c.json(result);
       } catch (error) {
@@ -2067,16 +2159,21 @@ export const integrationsRouter = new Hono<{
             ? error.message
             : "Falha ao consultar protocolos da Conta Azul";
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.conta_azul.protocol_poll.failed",
-          message,
-          details: {
-            provider: "conta_azul",
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.conta_azul.protocol_poll.failed",
+              message,
+              details: {
+                provider: "conta_azul",
+              },
+            },
+            o,
+          ),
+        );
 
         throw invalid("integration_request_failed", message);
       }
@@ -2107,18 +2204,23 @@ export const integrationsRouter = new Hono<{
           limit: input.limit,
         });
 
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.conta_azul.drift_poll",
-          entityId: id,
-          details: {
-            processedCount: result.processedCount,
-            updatedCount: result.updatedCount,
-            warningCount: result.warnings.length,
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.conta_azul.drift_poll",
+              entityId: id,
+              details: {
+                processedCount: result.processedCount,
+                updatedCount: result.updatedCount,
+                warningCount: result.warnings.length,
+              },
+            },
+            o,
+          ),
+        );
 
         return c.json(result);
       } catch (error) {
@@ -2127,16 +2229,21 @@ export const integrationsRouter = new Hono<{
             ? error.message
             : "Falha ao verificar drift da Conta Azul";
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.conta_azul.drift_poll.failed",
-          message,
-          details: {
-            provider: "conta_azul",
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.conta_azul.drift_poll.failed",
+              message,
+              details: {
+                provider: "conta_azul",
+              },
+            },
+            o,
+          ),
+        );
 
         throw invalid("integration_request_failed", message);
       }
@@ -2268,12 +2375,19 @@ export const integrationsRouter = new Hono<{
         input.target,
       );
 
-      const preview = await previewIntegrationSync({
-        record,
-        target: input.target,
-        limit: input.limit,
-        mappings: input.mappings,
-      });
+      const preview = await orgDb(
+        record.integration.organizationId,
+      ).transaction((o) =>
+        previewIntegrationSync(
+          {
+            record,
+            target: input.target,
+            limit: input.limit,
+            mappings: input.mappings,
+          },
+          o,
+        ),
+      );
 
       return c.json(preview);
     },
@@ -2300,11 +2414,14 @@ export const integrationsRouter = new Hono<{
         throw conflict("integration_inactive", "Integração desativada");
       }
 
-      const preview = await previewIntegrationSync({
-        record,
-        target: input.target,
-        limit: input.limit,
-      });
+      const preview = await orgDb(
+        record.integration.organizationId,
+      ).transaction((o) =>
+        previewIntegrationSync(
+          { record, target: input.target, limit: input.limit },
+          o,
+        ),
+      );
 
       if (preview.blocked) {
         throw conflict(
@@ -2321,11 +2438,16 @@ export const integrationsRouter = new Hono<{
         );
       }
 
-      const activeRun = await hasActiveSyncRun({
-        integrationId: id,
-        organizationId: member.organizationId,
-        target: input.target,
-      });
+      const activeRun = await orgDb(member.organizationId).transaction((o) =>
+        hasActiveSyncRun(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            target: input.target,
+          },
+          o,
+        ),
+      );
 
       if (activeRun) {
         throw conflict(
@@ -2571,7 +2693,9 @@ export const integrationsRouter = new Hono<{
       const record = await requireLabIntegration(member.organizationId, id);
 
       return c.json({
-        data: await buildIntegrationOverview(record),
+        data: await orgDb(record.integration.organizationId).transaction((o) =>
+          buildIntegrationOverview(record, o),
+        ),
       });
     },
   )
@@ -2712,11 +2836,16 @@ export const integrationsRouter = new Hono<{
         );
       }
 
-      const activeRun = await hasActiveSyncRun({
-        integrationId: id,
-        organizationId: member.organizationId,
-        target: originalRun.target,
-      });
+      const activeRun = await orgDb(member.organizationId).transaction((o) =>
+        hasActiveSyncRun(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            target: originalRun.target,
+          },
+          o,
+        ),
+      );
 
       if (activeRun) {
         throw conflict(
@@ -2727,35 +2856,48 @@ export const integrationsRouter = new Hono<{
       }
 
       const requestedLimit = getRequestedLimitFromRun(originalRun);
-      const preview = await previewIntegrationSync({
-        record,
-        target: originalRun.target,
-        limit: requestedLimit,
-      });
+      const preview = await orgDb(
+        record.integration.organizationId,
+      ).transaction((o) =>
+        previewIntegrationSync(
+          { record, target: originalRun.target, limit: requestedLimit },
+          o,
+        ),
+      );
 
-      const retryRunId = await createSyncRun({
-        integrationId: id,
-        organizationId: member.organizationId,
-        trigger: "retry",
-        target: originalRun.target,
-        initiatedBy: session.user.id,
-        requestedLimit,
-        retryOfRunId: originalRun.id,
-      });
+      const retryRunId = await orgDb(member.organizationId).transaction((o) =>
+        createSyncRun(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            trigger: "retry",
+            target: originalRun.target,
+            initiatedBy: session.user.id,
+            requestedLimit,
+            retryOfRunId: originalRun.id,
+          },
+          o,
+        ),
+      );
 
       if (preview.blocked) {
         const message =
           preview.warnings[0]?.message ??
           "A integração ainda não está pronta para este alvo";
 
-        await failSyncRunAsBlocked({
-          integrationId: id,
-          organizationId: member.organizationId,
-          runId: retryRunId,
-          target: originalRun.target,
-          requestedLimit,
-          message,
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          failSyncRunAsBlocked(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              runId: retryRunId,
+              target: originalRun.target,
+              requestedLimit,
+              message,
+            },
+            o,
+          ),
+        );
 
         throw conflict("integration_sync_blocked", message, {
           legacyBody: {
@@ -2766,19 +2908,24 @@ export const integrationsRouter = new Hono<{
         });
       }
 
-      await writeIntegrationEvent({
-        integrationId: id,
-        organizationId: member.organizationId,
-        runId: retryRunId,
-        level: "info",
-        event: "sync.retry_requested",
-        message: "Reprocessamento solicitado",
-        details: {
-          target: originalRun.target,
-          requestedLimit,
-          retryOfRunId: originalRun.id,
-        },
-      });
+      await orgDb(member.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            runId: retryRunId,
+            level: "info",
+            event: "sync.retry_requested",
+            message: "Reprocessamento solicitado",
+            details: {
+              target: originalRun.target,
+              requestedLimit,
+              retryOfRunId: originalRun.id,
+            },
+          },
+          o,
+        ),
+      );
 
       let result;
       try {
@@ -2842,10 +2989,15 @@ export const integrationsRouter = new Hono<{
   .get("/drift", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const member = c.get("member");
     const target = c.req.query("target");
-    const rows = await buildIntegrationDriftQueue({
-      organizationId: member.organizationId,
-      target: target && isDriftTarget(target) ? target : undefined,
-    });
+    const rows = await orgDb(member.organizationId).transaction((o) =>
+      buildIntegrationDriftQueue(
+        {
+          organizationId: member.organizationId,
+          target: target && isDriftTarget(target) ? target : undefined,
+        },
+        o,
+      ),
+    );
     return c.json({ data: rows });
   })
   .post(

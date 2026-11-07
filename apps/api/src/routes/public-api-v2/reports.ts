@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import {
   calibrationJob,
@@ -20,7 +20,7 @@ import {
 } from "./report-support";
 import { orgDb } from "../../lib/org-db";
 
-export const reportRoutes = new Hono<PublicApiV2Env>()
+export const reportRoutes = createRouter<PublicApiV2Env>()
   .get(
     "/reports/consolidated/executive-overview",
     requireApiScope("reports:read"),

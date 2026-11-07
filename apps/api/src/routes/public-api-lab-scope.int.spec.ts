@@ -55,12 +55,9 @@ import {
   type BillingLab,
 } from "../../test/integration/billing-fixtures";
 import { seedApiKey } from "../../test/integration/seed";
-import { publicApiRouter as barePublicApiRouter } from "./public-api";
+import { publicApiRouter } from "./public-api";
 import { publicApiV2Router } from "./public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const publicApiRouter = withErrorHandling(barePublicApiRouter);
 
 const ENV = {
   PUBLIC_API_MASTER_KEY: Buffer.alloc(32).toString("base64"),

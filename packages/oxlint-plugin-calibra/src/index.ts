@@ -3,14 +3,14 @@
 // every per-package `oxlint` run (pnpm lint / CI) enforces the boundaries that
 // previously relied on manual `rg` scans.
 //
-// Each rule carries a LEGACY_BASELINE ratchet: existing violations can be
-// grandfathered with exact per-file counts while net-new ones fail. Only
-// no-json-error-body-in-routes, no-calibration-job-update-outside-owner,
-// no-process-env, no-raw-palette-color-classes, no-raw-db-in-routes and
-// no-error-response-in-transaction carry a non-empty baseline (legacy writers,
-// remaining reads, raw palette colours in feature code, routes still on the raw
-// db, error responses returned before any write inside a transaction). no-raw-db-in-routes also fails a
-// count that is higher than the file's real number of uses (stale).
+// A rule whose legacy violations are not all gone carries a LEGACY_BASELINE
+// ratchet: existing violations are grandfathered with exact per-file counts while
+// net-new ones fail. Only no-json-error-body-in-routes,
+// no-calibration-job-update-outside-owner, no-process-env, no-raw-locale-formatting
+// and no-raw-palette-color-classes have a non-empty baseline (the rest report every
+// occurrence; no-raw-db-in-routes and no-error-response-in-transaction keep a
+// `baseline` rule option for their own tests only). no-raw-db-in-routes also fails
+// a count that is higher than the file's real number of uses (stale).
 import noApiImportInFrontend from "./rules/no-api-import-in-frontend.ts";
 import noHonoClientOutsideClientRuntime from "./rules/no-hono-client-outside-client-runtime.ts";
 import noCalibrationJobUpdateOutsideOwner from "./rules/no-calibration-job-update-outside-owner.ts";

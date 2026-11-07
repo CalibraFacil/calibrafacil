@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
 import { financeTimelineRouter } from "../finance/timeline";
 import type { AuthVariables } from "../../middleware/permission";
 
@@ -57,7 +56,7 @@ function createTestApp() {
   });
   app.route("/api/finance", financeTimelineRouter);
 
-  return withErrorHandling(app);
+  return app;
 }
 
 describe("finance timeline routes", () => {
@@ -161,6 +160,7 @@ describe("finance timeline routes", () => {
     expect(mocks.resolveCustomerRouteId).toHaveBeenCalledWith(
       "5-cliente-a",
       "org-1",
+      { transactionOf: "org-1" },
     );
     expect(mocks.buildCustomerFinancialTimeline).toHaveBeenCalledWith(
       expect.objectContaining({

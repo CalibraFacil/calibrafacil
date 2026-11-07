@@ -21,6 +21,18 @@ vi.mock("../middleware/permission", async (importOriginal) => ({
   ],
 }));
 
+// A router mounted with its own error handler (`createRouter`) has each handler
+// wrapped by Hono; the wrapper keeps the original under this key. Unwrap to the
+// handler the module registered.
+function registered(handler: (...args: never[]) => unknown) {
+  let current = handler;
+  for (;;) {
+    const inner: unknown = Reflect.get(current, "__COMPOSED_HANDLER");
+    if (typeof inner !== "function") return current;
+    current = inner;
+  }
+}
+
 describe("sync router route table", () => {
   it(
     "REQ-SPLIT-2 keeps every route and its middleware chain in order",
@@ -30,7 +42,7 @@ describe("sync router route table", () => {
 
       const table = syncRouter.routes
         .map(({ method, path, handler }) => {
-          return `${method} ${path} ${handler.name || "<anonymous>"}`;
+          return `${method} ${path} ${registered(handler).name || "<anonymous>"}`;
         })
         .join("\n");
 

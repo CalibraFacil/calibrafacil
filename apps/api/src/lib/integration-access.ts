@@ -1,3 +1,4 @@
+import { orgDb } from "./org-db";
 import { getIntegrationRecord } from "../modules/integrations";
 import { notFound } from "./domain-errors";
 
@@ -9,7 +10,9 @@ export async function requireLabIntegration(
   organizationId: string,
   integrationId: string,
 ) {
-  const record = await getIntegrationRecord(organizationId, integrationId);
+  const record = await orgDb(organizationId).transaction((o) =>
+    getIntegrationRecord(organizationId, integrationId, o),
+  );
   if (!record) {
     throw notFound("integration_not_found", "Integração não encontrada");
   }
@@ -24,7 +27,9 @@ export async function requireLabContaAzulIntegration(
   organizationId: string,
   integrationId: string,
 ) {
-  const record = await getIntegrationRecord(organizationId, integrationId);
+  const record = await orgDb(organizationId).transaction((o) =>
+    getIntegrationRecord(organizationId, integrationId, o),
+  );
   if (!record || record.integration.provider !== "conta_azul") {
     throw notFound(
       "integration_not_found",

@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { organizationEventLog } from "@calibra-facil/db/schema";
 
@@ -14,12 +13,11 @@ export async function writeOrganizationAuditEvent(
     details?: Record<string, unknown> | null;
   },
   /**
-   * The handle the row is written through. A caller that already runs in an
-   * org-bound transaction (`orgDb(org).transaction((tx) => ...)`) passes its `tx`,
-   * so the event is written in the same transaction and under the same
-   * organization setting (row-level security); the default is the plain `db`.
+   * The handle the row is written through: the caller's org-bound transaction
+   * (`ctx.o` of a `withOrg`), so the event is written in the same transaction
+   * and under the same organization setting (row-level security).
    */
-  executor: Pick<OrgDb, "insert"> = db,
+  executor: Pick<OrgDb, "insert">,
 ) {
   await executor.insert(organizationEventLog).values({
     organizationId: params.organizationId,

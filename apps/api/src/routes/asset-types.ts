@@ -1,10 +1,11 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import type { AssetTypesResponse, ServerShape } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { ListAssetTypesQuerySchema } from "@calibra-facil/schemas";
 import { withPermission, type AuthVariables } from "../middleware/permission";
 import { findAssetTypeById, listAssetTypes } from "../lib/asset-types";
 import { invalid, notFound } from "../lib/domain-errors";
+import { orgDb } from "../lib/org-db";
 
 /**
  * READ-ONLY lab-facing view of the GLOBAL asset-type catalog (#637).
@@ -18,7 +19,7 @@ import { invalid, notFound } from "../lib/domain-errors";
  * The reads live in `lib/asset-types.ts`: the catalog has no tenant column and
  * no row-level-security policy, so there is no laboratory to bind them to.
  */
-export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
+export const assetTypesRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List all asset types (for dropdown/selection)
   // =========================================================================
@@ -47,7 +48,9 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
       throw invalid("invalid_request", "ID inválido");
     }
 
-    const foundType = await findAssetTypeById(id);
+    const foundType = await orgDb(c.get("member").organizationId).transaction(
+      (o) => findAssetTypeById(id, o),
+    );
 
     if (!foundType) {
       throw notFound("asset_type_not_found", "Tipo de ativo não encontrado");

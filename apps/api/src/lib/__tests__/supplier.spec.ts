@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(
@@ -64,10 +65,15 @@ describe("findOrCreateSupplierByName", () => {
       },
     ];
 
-    const result = await findOrCreateSupplierByName({
-      organizationId: "org-1",
-      name: "  lab externo ",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      findOrCreateSupplierByName(
+        {
+          organizationId: "org-1",
+          name: "  lab externo ",
+        },
+        o,
+      ),
+    );
 
     expect(result?.id).toBe(1);
     expect(mocks.insertCalls).toHaveLength(0);
@@ -88,11 +94,16 @@ describe("findOrCreateSupplierByName", () => {
       },
     ];
 
-    const result = await findOrCreateSupplierByName({
-      organizationId: "org-1",
-      name: "Transportadora X",
-      defaultKind: "transporter",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      findOrCreateSupplierByName(
+        {
+          organizationId: "org-1",
+          name: "Transportadora X",
+          defaultKind: "transporter",
+        },
+        o,
+      ),
+    );
 
     expect(result?.id).toBe(99);
     expect(mocks.insertCalls).toHaveLength(1);
@@ -101,10 +112,15 @@ describe("findOrCreateSupplierByName", () => {
   });
 
   it("returns null when the name is empty after trim", async () => {
-    const result = await findOrCreateSupplierByName({
-      organizationId: "org-1",
-      name: "   ",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      findOrCreateSupplierByName(
+        {
+          organizationId: "org-1",
+          name: "   ",
+        },
+        o,
+      ),
+    );
     expect(result).toBeNull();
     expect(mocks.insertCalls).toHaveLength(0);
   });
@@ -125,11 +141,16 @@ describe("reconcileSupplierWithPersonLink", () => {
       },
     ];
 
-    const result = await reconcileSupplierWithPersonLink({
-      organizationId: "org-1",
-      remoteName: "Different Name",
-      remoteTaxId: "12345678900",
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      reconcileSupplierWithPersonLink(
+        {
+          organizationId: "org-1",
+          remoteName: "Different Name",
+          remoteTaxId: "12345678900",
+        },
+        o,
+      ),
+    );
 
     expect(result?.id).toBe(1);
   });
@@ -148,11 +169,16 @@ describe("reconcileSupplierWithPersonLink", () => {
       },
     ];
 
-    const result = await reconcileSupplierWithPersonLink({
-      organizationId: "org-1",
-      remoteName: "transportadora x",
-      remoteTaxId: null,
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      reconcileSupplierWithPersonLink(
+        {
+          organizationId: "org-1",
+          remoteName: "transportadora x",
+          remoteTaxId: null,
+        },
+        o,
+      ),
+    );
 
     expect(result?.id).toBe(2);
   });
@@ -160,11 +186,16 @@ describe("reconcileSupplierWithPersonLink", () => {
   it("returns null when neither tax_id nor name resolves", async () => {
     mocks.selectResult = [];
 
-    const result = await reconcileSupplierWithPersonLink({
-      organizationId: "org-1",
-      remoteName: "Unknown",
-      remoteTaxId: null,
-    });
+    const result = await orgDb("org-1").transaction((o) =>
+      reconcileSupplierWithPersonLink(
+        {
+          organizationId: "org-1",
+          remoteName: "Unknown",
+          remoteTaxId: null,
+        },
+        o,
+      ),
+    );
 
     expect(result).toBeNull();
   });

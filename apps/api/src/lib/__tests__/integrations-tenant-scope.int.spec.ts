@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@calibra-facil/db";
 import {
@@ -52,11 +53,16 @@ describe("markContaAzulReconnectRequired — tenant scope", () => {
       orgA.userId,
     );
 
-    await markContaAzulReconnectRequired({
-      integrationId,
-      organizationId: orgA.orgId,
-      message: "reconnect",
-    });
+    await orgDb(orgA.orgId).transaction((o) =>
+      markContaAzulReconnectRequired(
+        {
+          integrationId,
+          organizationId: orgA.orgId,
+          message: "reconnect",
+        },
+        o,
+      ),
+    );
 
     expect(await statusOf(integrationId)).toBe("ACTION_REQUIRED");
     const events = await db
@@ -73,11 +79,18 @@ describe("markContaAzulReconnectRequired — tenant scope", () => {
 
     // The follow-up event insert is rejected by the composite
     // (integration_id, organization_id) FK; only the foreign row's state matters.
-    await markContaAzulReconnectRequired({
-      integrationId: foreignId,
-      organizationId: orgA.orgId,
-      message: "reconnect",
-    }).catch(() => undefined);
+    await orgDb(orgA.orgId)
+      .transaction((o) =>
+        markContaAzulReconnectRequired(
+          {
+            integrationId: foreignId,
+            organizationId: orgA.orgId,
+            message: "reconnect",
+          },
+          o,
+        ),
+      )
+      .catch(() => undefined);
 
     expect(await statusOf(foreignId)).toBe("ACTIVE");
   });

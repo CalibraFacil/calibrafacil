@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
 import { writeComplianceAuditEvent } from "../lib/compliance-audit";
@@ -68,7 +68,7 @@ function diffScopeLine(
  * managers and leave an append-only audit trail. The org-level enforcement mode
  * is the exception: it needs the organization `settings:update` permission.
  */
-export const accreditedScopeRouter = new Hono<{
+export const accreditedScopeRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   // ===========================================================================

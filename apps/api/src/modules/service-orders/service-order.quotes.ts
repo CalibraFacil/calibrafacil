@@ -295,10 +295,10 @@ export async function sendServiceOrderQuote(
   // (OS, quote) pair then answers exactly like an unknown OS, instead of
   // revealing through "quote not found" vs "OS not found" that the quote exists.
   const detail = await getServiceOrderDetail(
+    ctx.o,
     serviceOrderId,
     ctx.org,
     buildUnitScopeCondition(serviceOrder.unitId, scope),
-    ctx.o,
   );
   if (!detail) throw serviceOrderNotFound();
 

@@ -65,15 +65,10 @@ import {
   changeJobBeforeNextTransaction,
   jobRow,
 } from "../../../test/integration/job-cas";
-import { jobsRouter as bareJobsRouter } from "../../routes/jobs";
+import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
-import { visitJobsRouter as bareVisitJobsRouter } from "../../routes/visits";
+import { visitJobsRouter } from "../../routes/visits";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
-
-const visitJobsRouter = withErrorHandling(bareVisitJobsRouter);
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 // The requests below arrive as from behind one trusted reverse proxy (the Caddy of
 // deploy/compose.yaml), which writes X-Forwarded-For: lib/client-ip.ts.

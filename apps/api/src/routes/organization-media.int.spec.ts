@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { organizationMediaRouter as bareOrganizationMediaRouter } from "./organization-media";
+import { organizationMediaRouter } from "./organization-media";
 import { db } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const organizationMediaRouter = withErrorHandling(bareOrganizationMediaRouter);
 
 // Real-DB + real-RBAC integration tests for the organizationMediaRouter.
 // Only the better-auth lab session is mocked (see test/integration/setup.ts).

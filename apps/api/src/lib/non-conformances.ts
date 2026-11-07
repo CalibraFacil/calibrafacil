@@ -20,7 +20,7 @@ import { insertWithSequentialNumber } from "./sequential-number";
 /**
  * What the creator needs of a write context: the org-bound handle, the actor
  * the audit row is recorded against, and where the notification waits for the
- * commit. A full `OrgContext` fits; a lib still on an `OrgScope` builds one.
+ * commit. A full `OrgContext` fits.
  */
 export type NonConformanceWriteContext = Pick<
   OrgContext,

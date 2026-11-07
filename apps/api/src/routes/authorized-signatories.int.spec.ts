@@ -32,7 +32,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { authorizedSignatoriesRouter as bareAuthorizedSignatoriesRouter } from "./authorized-signatories";
+import { authorizedSignatoriesRouter } from "./authorized-signatories";
 import { db } from "@calibra-facil/db";
 import {
   authorizedSignatory,
@@ -45,11 +45,6 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const authorizedSignatoriesRouter = withErrorHandling(
-  bareAuthorizedSignatoriesRouter,
-);
 
 // ---------------------------------------------------------------------------
 // Constants

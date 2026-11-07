@@ -1,5 +1,5 @@
+import { createRouter } from "../server/router";
 import { uniqueSlug } from "../lib/unique-slug";
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
   asset,
@@ -63,7 +63,7 @@ function getStringProperty(value: unknown, key: string) {
  * organization (its own portal tenant); the portal fans a group-org session
  * out to every branch (see lib/portal-customer-scope).
  */
-export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
+export const customerGroupsRouter = createRouter<{ Variables: AuthVariables }>()
   // =========================================================================
   // POST / - Create a group (provisions its CLIENT org; optional manager invite)
   // =========================================================================

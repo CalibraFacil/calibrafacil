@@ -135,6 +135,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("@calibra-facil/db", () => ({
   db: mocks.db,
   runInTransactionScope: async (work: () => Promise<unknown>) => work(),
+  isInTransactionScope: () => false,
   afterTransactionCommit: (callback: () => unknown) => {
     void callback();
   },

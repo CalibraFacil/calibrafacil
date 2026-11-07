@@ -1,3 +1,4 @@
+import { createRouter } from "../server/router";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   ListAssetsQuerySchema,
@@ -11,7 +12,6 @@ import {
   requirePortalLabScope,
   resolvePortalLabScope,
 } from "../lib/portal-lab-scope";
-import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import {
@@ -580,7 +580,7 @@ async function withMatchingPortalStandardDocuments(
  * These routes handle client-facing functionality.
  * Uses Portal auth (portal_session cookie) for authentication.
  */
-export const portalRouter = new Hono<{
+export const portalRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env;
 }>()

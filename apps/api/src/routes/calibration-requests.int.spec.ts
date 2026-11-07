@@ -41,7 +41,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
-import { calibrationRequestsRouter as bareCalibrationRequestsRouter } from "./calibration-requests";
+import { calibrationRequestsRouter } from "./calibration-requests";
 import { db } from "@calibra-facil/db";
 import {
   calibrationRequest,
@@ -64,11 +64,6 @@ import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const calibrationRequestsRouter = withErrorHandling(
-  bareCalibrationRequestsRouter,
-);
 
 // ---------------------------------------------------------------------------
 // Mock notification side-effects — no email/SMS during workflow tests.

@@ -10,13 +10,10 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { createLabAccountSetupToken } from "@calibra-facil/auth/lab-access";
-import { labSetupRouter as bareLabSetupRouter } from "./lab-setup";
+import { labSetupRouter } from "./lab-setup";
 import { loginAs, logout, sessionFor } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const labSetupRouter = withErrorHandling(bareLabSetupRouter);
 
 // Real-DB integration test for the lab ONBOARDING / account-claim surface.
 //

@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getContaAzulScheduleState,
@@ -708,11 +709,16 @@ describe("Conta Azul schedule state", () => {
 
   it("reports awaiting-first-run rows without a next due timestamp", async () => {
     await expect(
-      getContaAzulScheduleState({
-        integrationId: "int-1",
-        organizationId: "org-1",
-        now: new Date("2026-05-24T12:00:00.000Z"),
-      }),
+      orgDb("org-1").transaction((o) =>
+        getContaAzulScheduleState(
+          {
+            integrationId: "int-1",
+            organizationId: "org-1",
+            now: new Date("2026-05-24T12:00:00.000Z"),
+          },
+          o,
+        ),
+      ),
     ).resolves.toMatchObject({
       protocols: {
         enabled: true,
@@ -737,11 +743,16 @@ describe("Conta Azul schedule state", () => {
     );
 
     await expect(
-      getContaAzulScheduleState({
-        integrationId: "int-1",
-        organizationId: "org-1",
-        now: new Date("2026-05-24T12:00:00.000Z"),
-      }),
+      orgDb("org-1").transaction((o) =>
+        getContaAzulScheduleState(
+          {
+            integrationId: "int-1",
+            organizationId: "org-1",
+            now: new Date("2026-05-24T12:00:00.000Z"),
+          },
+          o,
+        ),
+      ),
     ).resolves.toMatchObject({
       protocols: {
         enabled: false,
@@ -765,11 +776,16 @@ describe("Conta Azul schedule state", () => {
     ]);
 
     await expect(
-      getContaAzulScheduleState({
-        integrationId: "int-1",
-        organizationId: "org-1",
-        now: new Date("2026-05-24T12:05:00.000Z"),
-      }),
+      orgDb("org-1").transaction((o) =>
+        getContaAzulScheduleState(
+          {
+            integrationId: "int-1",
+            organizationId: "org-1",
+            now: new Date("2026-05-24T12:05:00.000Z"),
+          },
+          o,
+        ),
+      ),
     ).resolves.toMatchObject({
       protocols: {
         enabled: true,
@@ -796,11 +812,16 @@ describe("Conta Azul schedule state", () => {
     ]);
 
     await expect(
-      getContaAzulScheduleState({
-        integrationId: "int-1",
-        organizationId: "org-1",
-        now: new Date("2026-05-24T12:30:00.000Z"),
-      }),
+      orgDb("org-1").transaction((o) =>
+        getContaAzulScheduleState(
+          {
+            integrationId: "int-1",
+            organizationId: "org-1",
+            now: new Date("2026-05-24T12:30:00.000Z"),
+          },
+          o,
+        ),
+      ),
     ).resolves.toMatchObject({
       protocols: {
         enabled: true,
@@ -834,11 +855,16 @@ describe("Conta Azul schedule state", () => {
     ]);
 
     await expect(
-      getContaAzulScheduleState({
-        integrationId: "int-1",
-        organizationId: "org-1",
-        now: new Date("2026-05-24T12:30:00.000Z"),
-      }),
+      orgDb("org-1").transaction((o) =>
+        getContaAzulScheduleState(
+          {
+            integrationId: "int-1",
+            organizationId: "org-1",
+            now: new Date("2026-05-24T12:30:00.000Z"),
+          },
+          o,
+        ),
+      ),
     ).resolves.toMatchObject({
       protocols: {
         enabled: true,
@@ -873,11 +899,16 @@ describe("Conta Azul schedule state", () => {
     ]);
 
     await expect(
-      getContaAzulScheduleState({
-        integrationId: "int-1",
-        organizationId: "org-1",
-        now: new Date("2026-05-24T12:30:00.000Z"),
-      }),
+      orgDb("org-1").transaction((o) =>
+        getContaAzulScheduleState(
+          {
+            integrationId: "int-1",
+            organizationId: "org-1",
+            now: new Date("2026-05-24T12:30:00.000Z"),
+          },
+          o,
+        ),
+      ),
     ).resolves.toMatchObject({
       protocols: {
         lastErrorAt: "2026-05-24T12:21:00.000Z",

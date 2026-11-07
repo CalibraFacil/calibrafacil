@@ -34,17 +34,14 @@ export async function listAssetTypes(query: string | undefined) {
 }
 
 /**
- * `executor` is the caller's org-bound transaction: a handler already inside
- * one reads the catalog through it (the handle passes a global table through
- * untouched) instead of taking a second connection from the pool.
+ * `executor` is the caller's org-bound handle (it passes a global table
+ * through untouched).
  */
-export async function findAssetTypeById(id: number, executor?: OrgDb) {
-  const [foundType] = executor
-    ? await executor
-        .select()
-        .from(assetType)
-        .where(eq(assetType.id, id))
-        .limit(1)
-    : await db.select().from(assetType).where(eq(assetType.id, id)).limit(1);
+export async function findAssetTypeById(id: number, executor: OrgDb) {
+  const [foundType] = await executor
+    .select()
+    .from(assetType)
+    .where(eq(assetType.id, id))
+    .limit(1);
   return foundType ?? null;
 }

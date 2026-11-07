@@ -24,7 +24,6 @@ import type {
 import { deriveFinancialContinuityStatus } from "@calibra-facil/shared";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { CERTIFICATE_RELEASE_MACHINE } from "@calibra-facil/schemas/machines";
-import { inOrgTransaction } from "./org-transaction";
 
 // ---------------------------------------------------------------------------
 // Pure evaluator. Decides target release status from policy mode + payment
@@ -116,11 +115,9 @@ const FALLBACK_POLICY: ResolvedCertificateReleasePolicy = {
 export async function resolveCertificateReleasePolicy(
   input: CertificateReleasePolicyResolutionInput,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<ResolvedCertificateReleasePolicy> {
-  return inOrgTransaction(input.organizationId, executor, (o) =>
-    resolvePolicyOn(o, input),
-  );
+  return resolvePolicyOn(executor, input);
 }
 
 async function resolvePolicyOn(
@@ -253,11 +250,9 @@ export interface RecomputedCertificateRelease {
 export async function recomputeCertificateRelease(
   input: RecomputeCertificateReleaseInput,
   // The caller's org-bound handle, when it is inside a transaction already.
-  executor?: OrgDb,
+  executor: OrgDb,
 ): Promise<RecomputedCertificateRelease | null> {
-  return inOrgTransaction(input.organizationId, executor, (o) =>
-    recomputeOn(o, input),
-  );
+  return recomputeOn(executor, input);
 }
 
 async function recomputeOn(

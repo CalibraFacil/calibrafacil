@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { type SyncRouterEnv } from "./env";
 import { bootstrapRoutes } from "./bootstrap";
 import { pushRoutes } from "./push";
@@ -6,7 +6,7 @@ import { pullRoutes } from "./pull";
 import { conflictRoutes } from "./conflicts";
 import { attachmentRoutes } from "./attachments";
 
-export const syncRouter = new Hono<SyncRouterEnv>();
+export const syncRouter = createRouter<SyncRouterEnv>();
 
 syncRouter
   .route("/", bootstrapRoutes)

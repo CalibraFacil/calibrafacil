@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import {
@@ -24,8 +24,10 @@ import { resolveExternalResourceId } from "./resolvers";
 import { withIdempotentCommand } from "./idempotency";
 import { jobStatusConflictBody, publicApiJobActor } from "./job-support";
 import { orgDb } from "../../lib/org-db";
+import { withOrg } from "../../lib/org-context";
+import { apiKeyActor } from "./actor";
 
-export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
+export const jobDecisionRoutes = createRouter<PublicApiV2Env>()
   .post(
     "/jobs/:id/approve",
     requireApiScope("jobs:write"),
@@ -33,11 +35,16 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "job",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "job",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
 
       if (!resolvedId) {
         return c.json(
@@ -79,11 +86,16 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         // signatory authorization and separation of duties are checked by the
         // same command the cloud route and the desktop sync use, and the audit
         // row records the key the approval went through.
-        const approver = await resolveApiKeyApprover({
-          organizationId: apiKey.organizationId,
-          userId: apiKey.createdBy,
-          unitId: job.unitId,
-        });
+        const approver = await orgDb(apiKey.organizationId).transaction((o) =>
+          resolveApiKeyApprover(
+            {
+              organizationId: apiKey.organizationId,
+              userId: apiKey.createdBy,
+              unitId: job.unitId,
+            },
+            o,
+          ),
+        );
 
         const result = await approveJob({
           jobId: resolvedId,
@@ -212,7 +224,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
             const updated = result.job;
             if (updated) {
               afterCommit(() =>
-                emitPublicApiWebhookEvent({
+                emitPublicApiWebhookEvent(apiKeyActor(apiKey, c), {
                   organizationId: apiKey.organizationId,
                   eventType: "job.approved",
                   payload: {
@@ -242,11 +254,16 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "job",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "job",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
       if (!resolvedId) {
         return c.json(
           buildPublicApiError({
@@ -304,11 +321,16 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const resolvedId = await resolveExternalResourceId({
-        organizationId: apiKey.organizationId,
-        resourceType: "job",
-        value: c.req.param("id"),
-      });
+      const resolvedId = await orgDb(apiKey.organizationId).transaction((o) =>
+        resolveExternalResourceId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "job",
+            value: c.req.param("id"),
+          },
+          o,
+        ),
+      );
       if (!resolvedId) {
         return c.json(
           buildPublicApiError({
@@ -322,13 +344,18 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
       return withIdempotentCommand(c, input, async (afterCommit) => {
         // Transport only: the policy is `cancelJob` (the same command the
         // cloud route and the visit's remove-job run).
-        const result = await cancelJob({
-          actor: publicApiJobActor(apiKey, c),
-          jobId: resolvedId,
-          organizationId: apiKey.organizationId,
-          unitScope: null,
-          reason: input.reason,
-        });
+        const result = await withOrg(
+          apiKey.organizationId,
+          apiKeyActor(apiKey, c),
+          (ctx) =>
+            cancelJob(ctx, {
+              actor: publicApiJobActor(apiKey, c),
+              jobId: resolvedId,
+              organizationId: apiKey.organizationId,
+              unitScope: null,
+              reason: input.reason,
+            }),
+        );
         switch (result.status) {
           case "not_found":
             return {
@@ -357,7 +384,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         const updated = result.job;
 
         afterCommit(() =>
-          emitPublicApiWebhookEvent({
+          emitPublicApiWebhookEvent(apiKeyActor(apiKey, c), {
             organizationId: apiKey.organizationId,
             eventType: "job.canceled",
             payload: {

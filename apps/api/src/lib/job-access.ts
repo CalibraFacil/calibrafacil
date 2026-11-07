@@ -5,7 +5,7 @@ import { and, eq, or } from "drizzle-orm";
 import type { AuthVariables } from "../middleware/permission";
 import { decodeRouteIdentifier } from "../modules/jobs/helpers";
 import { notFound } from "./domain-errors";
-import { withOrgReader } from "./org-transaction";
+import { orgDb } from "./org-db";
 import { buildUnitScopeCondition } from "./units";
 
 /** The 404 of every job route: no job of this laboratory and unit scope matches. */
@@ -19,43 +19,41 @@ export function jobNotFound() {
  * through the caller's org-bound handle when it passes one, else in a short
  * transaction of its own that names the laboratory (row-level security).
  */
-export function resolveJobRouteId(
+export async function resolveJobRouteId(
   identifier: string,
   memberData: AuthVariables["member"],
-  executor?: Pick<OrgExecutor, "select">,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const routeIdentifier = decodeRouteIdentifier(identifier);
   const legacyId = parseNumericRouteIdentifier(routeIdentifier);
 
-  return withOrgReader(memberData.organizationId, executor, async (reader) => {
-    const [job] = await reader
-      .select({ id: calibrationJob.id })
-      .from(calibrationJob)
-      .where(
-        and(
-          legacyId
-            ? or(
-                eq(calibrationJob.id, legacyId),
-                eq(calibrationJob.jobId, routeIdentifier),
-              )
-            : eq(calibrationJob.jobId, routeIdentifier),
-          eq(calibrationJob.organizationId, memberData.organizationId),
-          buildUnitScopeCondition(calibrationJob.unitId, memberData),
-        ),
-      )
-      .limit(1);
-
-    return job?.id ?? null;
-  });
+  const [job] = await executor
+    .select({ id: calibrationJob.id })
+    .from(calibrationJob)
+    .where(
+      and(
+        legacyId
+          ? or(
+              eq(calibrationJob.id, legacyId),
+              eq(calibrationJob.jobId, routeIdentifier),
+            )
+          : eq(calibrationJob.jobId, routeIdentifier),
+        eq(calibrationJob.organizationId, memberData.organizationId),
+        buildUnitScopeCondition(calibrationJob.unitId, memberData),
+      ),
+    )
+    .limit(1);
+  return job?.id ?? null;
 }
 
 /** The id of the job a route parameter names; throws 404 when none matches. */
 export async function requireJobRouteId(
   identifier: string,
   memberData: AuthVariables["member"],
-  executor?: Pick<OrgExecutor, "select">,
 ): Promise<number> {
-  const id = await resolveJobRouteId(identifier, memberData, executor);
+  const id = await orgDb(memberData.organizationId).transaction((o) =>
+    resolveJobRouteId(identifier, memberData, o),
+  );
   if (id === null) throw jobNotFound();
   return id;
 }

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { organizationCustomDomain } from "@calibra-facil/db/schema";
@@ -176,7 +176,7 @@ function buildPortalDomainStatusSummary(params: {
   };
 }
 
-export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
+export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const member = c.get("member");
     const record = await getOrganizationCustomDomain(member.organizationId);

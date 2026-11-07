@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
@@ -159,7 +159,9 @@ async function requireLabStandard(
   }
 }
 
-export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
+export const proficiencyTestsRouter = createRouter<{
+  Variables: AuthVariables;
+}>()
   // =========================================================================
   // GET / - List PT rounds with pagination and filtering
   // =========================================================================

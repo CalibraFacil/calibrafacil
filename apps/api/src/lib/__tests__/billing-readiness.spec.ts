@@ -1,3 +1,4 @@
+import { orgDb } from "../org-db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isServiceOrderBillable } from "@calibra-facil/shared";
 
@@ -254,14 +255,19 @@ describe("computeBillingReadinessQueue", () => {
       [{ id: 55, status: "ISSUED", exportStatus: "EXPORTED" }],
     );
 
-    const queue = await computeBillingReadinessQueue({
-      organizationId: "org-1",
-      scope: {
-        activeUnitId: 7,
-        accessibleUnitIds: [7],
-        selectedUnitScope: "unit",
-      },
-    });
+    const queue = await orgDb("org-1").transaction((o) =>
+      computeBillingReadinessQueue(
+        {
+          organizationId: "org-1",
+          scope: {
+            activeUnitId: 7,
+            accessibleUnitIds: [7],
+            selectedUnitScope: "unit",
+          },
+        },
+        o,
+      ),
+    );
 
     expect(queue.items).toHaveLength(1);
     expect(queue.items[0]).toMatchObject({
@@ -304,14 +310,19 @@ describe("computeBillingReadinessQueue", () => {
       [],
     );
 
-    const queue = await computeBillingReadinessQueue({
-      organizationId: "org-1",
-      scope: {
-        activeUnitId: 7,
-        accessibleUnitIds: [7],
-        selectedUnitScope: "unit",
-      },
-    });
+    const queue = await orgDb("org-1").transaction((o) =>
+      computeBillingReadinessQueue(
+        {
+          organizationId: "org-1",
+          scope: {
+            activeUnitId: 7,
+            accessibleUnitIds: [7],
+            selectedUnitScope: "unit",
+          },
+        },
+        o,
+      ),
+    );
 
     expect(queue.items).toHaveLength(1);
     expect(queue.items[0]?.readinessStatus).toBe("BLOCKED");

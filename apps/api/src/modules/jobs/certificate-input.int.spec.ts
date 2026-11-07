@@ -47,12 +47,9 @@ import {
   setJobStatus,
 } from "../../../test/integration/job-fixtures";
 import { seedOrg } from "../../../test/integration/seed";
-import { jobsRouter as bareJobsRouter } from "../../routes/jobs";
-import { withErrorHandling } from "../../../test/integration/with-error-handling";
+import { jobsRouter } from "../../routes/jobs";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
-
-const jobsRouter = withErrorHandling(bareJobsRouter);
 
 const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),

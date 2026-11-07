@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../../server/router";
 import {
   syncConflictResolutionRequestSchema,
   syncConflictResolutionResponseSchema,
@@ -8,7 +8,7 @@ import { orgDb } from "../../lib/org-db";
 import { withLabPermission } from "../../middleware/permission";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
-export const conflictRoutes = new Hono<SyncRouterEnv>().post(
+export const conflictRoutes = createRouter<SyncRouterEnv>().post(
   "/conflicts/:id/resolve",
   ...withLabPermission({ calibration: ["create"] }),
   async (c) => {

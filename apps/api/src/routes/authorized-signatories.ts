@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { orgDb } from "../lib/org-db";
@@ -54,7 +54,7 @@ const RevokeSignatorySchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-export const authorizedSignatoriesRouter = new Hono<{
+export const authorizedSignatoriesRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   // =========================================================================

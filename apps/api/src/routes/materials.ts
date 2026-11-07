@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { material } from "@calibra-facil/db/schema";
 import {
@@ -76,7 +76,7 @@ async function requireLabMaterial(
 
 const DUPLICATE_SKU = "Já existe um material com este código";
 
-export const materialsRouter = new Hono<{
+export const materialsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
 }>()

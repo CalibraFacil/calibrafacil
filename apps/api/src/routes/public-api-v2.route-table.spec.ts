@@ -30,6 +30,18 @@ vi.mock("@hono/zod-validator", () => ({
     named(async () => undefined, `zValidator(${target}:${schemaKeys(schema)})`),
 }));
 
+// A router mounted with its own error handler (`createRouter`) has each handler
+// wrapped by Hono; the wrapper keeps the original under this key. Unwrap to the
+// handler the module registered.
+function registered(handler: (...args: never[]) => unknown) {
+  let current = handler;
+  for (;;) {
+    const inner: unknown = Reflect.get(current, "__COMPOSED_HANDLER");
+    if (typeof inner !== "function") return current;
+    current = inner;
+  }
+}
+
 function describeRoutes(
   label: string,
   routes: readonly {
@@ -39,7 +51,7 @@ function describeRoutes(
   }[],
 ) {
   return routes.map(({ method, path, handler }) => {
-    return `${label} ${method} ${path} ${handler.name || "<anonymous>"}`;
+    return `${label} ${method} ${path} ${registered(handler).name || "<anonymous>"}`;
   });
 }
 
@@ -69,6 +81,7 @@ describe("public API v2 route table", () => {
       method: "ALL",
       path: "/*",
     });
-    expect(publicApiV2Router.routes[0]?.handler.name).toBe("requireApiKeyAuth");
+    const first = publicApiV2Router.routes[0];
+    expect(first && registered(first.handler).name).toBe("requireApiKeyAuth");
   });
 });

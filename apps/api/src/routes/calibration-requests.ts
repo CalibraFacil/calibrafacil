@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { createRouter } from "../server/router";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -189,7 +189,7 @@ async function getRequestDetail(
   };
 }
 
-export const calibrationRequestsRouter = new Hono<{
+export const calibrationRequestsRouter = createRouter<{
   Variables: AuthVariables;
 }>()
   .get(

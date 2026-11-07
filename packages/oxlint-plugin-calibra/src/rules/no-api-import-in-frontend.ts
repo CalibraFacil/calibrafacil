@@ -1,9 +1,7 @@
 import {
-  createRatchet,
   importSourceOf,
   normalizedFilename,
   resolveRelativeImport,
-  type Baseline,
   type RuleContext,
   type RuleModule,
 } from "../lib/rule-support.ts";
@@ -14,11 +12,6 @@ import {
 // deterministic in `pnpm lint`.
 
 const FRONTEND_PATTERN = /(^|\/)apps\/(web|portal)\//;
-
-// No known violations today — this rule is pure prevention. If a violation
-// must ever be grandfathered, add "<repo-relative path>": <count> here; new
-// occurrences beyond the listed count still fail (baseline ratchet).
-const LEGACY_BASELINE: Baseline = new Map<string, number>([]);
 
 function isApiImport(filename: string, source: string): boolean {
   if (
@@ -46,11 +39,9 @@ const rule: RuleModule = {
     const filename = normalizedFilename(context);
     if (!FRONTEND_PATTERN.test(filename)) return {};
 
-    const ratchet = createRatchet(LEGACY_BASELINE, filename);
     const check = (node: unknown) => {
       const source = importSourceOf(node);
       if (source === null || !isApiImport(filename, source)) return;
-      if (!ratchet.exceeds()) return;
       context.report({ node, message: MESSAGE });
     };
 

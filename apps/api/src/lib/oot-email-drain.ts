@@ -11,6 +11,7 @@
  * Invoked by the `oot-emails` cron handler in src/cron/dispatch.ts.
  */
 
+import { withOrg, SYSTEM_ACTOR } from "./org-context";
 import { readOriginsConfig } from "@calibra-facil/config";
 import { systemDb } from "@calibra-facil/db";
 import {
@@ -33,7 +34,6 @@ import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { OOT_NOTIFICATION_MACHINE } from "@calibra-facil/schemas/machines";
 import { isReleaseExhausting } from "./outbox-release";
 import { orgDb } from "./org-db";
-import { orgTransactionWithExecutor } from "./org-transaction";
 import {
   createR2Client,
   downloadFromR2,
@@ -63,9 +63,10 @@ async function claimOutboxRow(
   organizationId: string,
   rowId: number,
 ): Promise<boolean> {
-  const result: unknown = await orgTransactionWithExecutor(
+  const result: unknown = await withOrg(
     organizationId,
-    async (_o, tx) =>
+    SYSTEM_ACTOR,
+    async ({ tx }) =>
       tx.execute(
         sql`UPDATE oot_email_outbox
         SET claimed_at = now()
@@ -89,7 +90,7 @@ async function releaseOutboxRow(
   errorMessage: string,
   deadLetter: boolean,
 ): Promise<void> {
-  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+  await withOrg(organizationId, SYSTEM_ACTOR, async ({ tx }) => {
     if (deadLetter) {
       await tx.execute(
         sql`UPDATE oot_email_outbox
@@ -116,7 +117,7 @@ async function deferOutboxRow(
   organizationId: string,
   rowId: number,
 ): Promise<void> {
-  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+  await withOrg(organizationId, SYSTEM_ACTOR, async ({ tx }) => {
     await tx.execute(
       sql`UPDATE oot_email_outbox
         SET claimed_at = NULL,
@@ -130,7 +131,7 @@ async function markOutboxRowProcessed(
   organizationId: string,
   rowId: number,
 ): Promise<void> {
-  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+  await withOrg(organizationId, SYSTEM_ACTOR, async ({ tx }) => {
     await tx.execute(
       sql`UPDATE oot_email_outbox
         SET processed_at = now()

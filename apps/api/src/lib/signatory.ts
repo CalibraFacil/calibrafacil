@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { authorizedSignatory, asset } from "@calibra-facil/db/schema";
 import { and, count, eq, isNull } from "drizzle-orm";
@@ -70,7 +69,7 @@ export async function checkApproverIsAuthorizedSignatory(
     mandatory?: boolean;
   },
   /** The org-bound handle of the caller's transaction (row-level security). */
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<SignatoryGateResult> {
   const [orgCount] = await executor
     .select({ total: count() })

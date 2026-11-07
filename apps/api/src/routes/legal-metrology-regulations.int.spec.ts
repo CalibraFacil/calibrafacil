@@ -11,16 +11,11 @@ import {
   seedLegalMetrologyRegulations,
 } from "@calibra-facil/db/seed-legal-metrology-regulations";
 
-import { legalMetrologyRegulationsRouter as bareLegalMetrologyRegulationsRouter } from "./legal-metrology-regulations";
+import { legalMetrologyRegulationsRouter } from "./legal-metrology-regulations";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedCustomer } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
-import { withErrorHandling } from "../../test/integration/with-error-handling";
-
-const legalMetrologyRegulationsRouter = withErrorHandling(
-  bareLegalMetrologyRegulationsRouter,
-);
 
 // Real-DB integration tests for the legal-metrology regulation catalog (deferred #3 of
 // #423). Covers the GLOBAL seed (REQ-CATALOG-002), the read endpoint + auth gate
