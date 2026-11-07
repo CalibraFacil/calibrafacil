@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createCloudEndpointTransport } from "../transport/endpoint-client";
+import {
+  createCloudEndpointTransport,
+  endpointClient,
+} from "../transport/endpoint-client";
 import { CalibraApiError } from "../transport/errors";
-import { createOrganizationLifecycleApi } from "./organization-lifecycle";
+import { organizationLifecycleEndpoints } from "@calibra-facil/contracts";
 
 function apiReplying(response: Response) {
   const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
@@ -10,7 +13,8 @@ function apiReplying(response: Response) {
     requests.push({ url: String(input), init });
     return response;
   };
-  const api = createOrganizationLifecycleApi(
+  const api = endpointClient(
+    organizationLifecycleEndpoints,
     createCloudEndpointTransport({
       baseUrl: "https://api.example.test",
       fetch: fetchImpl,

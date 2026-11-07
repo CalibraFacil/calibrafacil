@@ -33,12 +33,12 @@ import {
   syncStatusSnapshotSchema,
   type SyncBootstrapResponse,
 } from "@calibra-facil/contracts";
-import { buildJobRow } from "@calibra-facil/contracts/jobs-fixtures";
 import {
+  buildJobRow,
   buildEnvironmentalLimitRow,
   buildMassCompositionProfile,
   buildStandardRecord,
-} from "@calibra-facil/contracts/standards-fixtures";
+} from "@calibra-facil/contracts/fixtures";
 import {
   compileMethodDraft,
   fingerprintJson,

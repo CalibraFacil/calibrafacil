@@ -7,7 +7,7 @@ import {
   fingerprintJson,
   createMethodExecutionEngine,
 } from "@calibra-facil/method-definition";
-import { buildJobRow } from "@calibra-facil/contracts/jobs-fixtures";
+import { buildJobRow } from "@calibra-facil/contracts/fixtures";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import {
   applySyncBootstrap,

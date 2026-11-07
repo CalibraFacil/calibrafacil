@@ -138,13 +138,12 @@ their type graph. See `docs/architecture/api-client-contract.md`.
 - **Frontend code (`apps/web`, `apps/portal`) must never import `@calibra-facil/api` or `apps/api/*`.**
   Call product-level methods on the client from `@calibra-facil/client-runtime`
   (e.g. `calibraApi.jobs.approve(...)`), not raw Hono RPC paths.
-- `packages/contracts` owns the stable client-facing DTOs and the Hono `AppType`
-  (`packages/contracts/src/api-app.ts`). It must **not** import `apps/api/*`, and `AppType` must
-  never be `any`. When a browser-facing raw Hono route is added/removed/renamed, update the route
-  list in `api-app.ts` in the same change.
-- Raw Hono RPC usage and transport helpers (`readJson`, `ensureOk`, form-data) stay inside
-  `packages/client-runtime` (`src/modules/*` for domains, `src/transport/*` for shared helpers,
-  including the cloud vs. desktop transport switch).
+- `packages/contracts` owns the stable client-facing DTOs and the endpoint definitions
+  (`ENDPOINT_GROUPS`). It must **not** import `apps/api/*`. The client-facing routes are the
+  definitions; `apps/api/src/server/api-app-routes.spec.ts` checks that every one is served.
+- The HTTP transport (the generic endpoint client, `readJson`, `ensureOk`, form-data) stays inside
+  `packages/client-runtime` (`src/modules/*` only for a domain whose client adds logic to its
+  endpoint group, `src/transport/*` for shared helpers, including the cloud vs. desktop switch).
 
 ## Architecture: web frontend (feature-first, enforced)
 
@@ -224,7 +223,7 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
 ## Packages quick reference
 
 `db` (Drizzle schema + migrations + seeds), `schemas` (Zod), `contracts` (client-facing DTOs +
-AppType), `client-runtime` (frontend SDK + transport), `auth` (Better-Auth), `math-engine` (GUM
+endpoint definitions), `client-runtime` (frontend SDK + transport), `auth` (Better-Auth), `math-engine` (GUM
 uncertainty engine, versioned with dossiers in `validation/`), `method-definition` (method
 compiler), `method-templates` (catalog of calibration methods), `certificate-data` +
 `documents` (certificate/label data and templates), `signing` (PAdES / ICP-Brasil),

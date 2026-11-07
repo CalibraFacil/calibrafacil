@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MaterialsListData } from '@calibra-facil/client-runtime'
-import { buildMaterialRecord } from '@calibra-facil/contracts/materials-fixtures'
+import { buildMaterialRecord } from '@calibra-facil/contracts/fixtures'
 
 const queryMocks = vi.hoisted(() => ({
   useServiceOrderMaterialsData: vi.fn(),

@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import {
   buildExecutableJobDetail,
   buildJobMutationResponse,
-} from '@calibra-facil/contracts/jobs-fixtures'
-import { buildStandardsList } from '@calibra-facil/contracts/standards-fixtures'
+  buildStandardsList,
+} from '@calibra-facil/contracts/fixtures'
 
 import {
   labOrganization,

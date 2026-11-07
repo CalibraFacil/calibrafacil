@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import {
   buildApprovedJobDetail,
   buildJobDownloadUrlResponse,
-} from '@calibra-facil/contracts/jobs-fixtures'
+} from '@calibra-facil/contracts/fixtures'
 
 import {
   labOrganization,

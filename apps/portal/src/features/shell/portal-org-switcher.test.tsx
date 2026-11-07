@@ -9,7 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { buildPortalOverview } from "@calibra-facil/contracts/jobs-fixtures";
+import { buildPortalOverview } from "@calibra-facil/contracts/fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // A tiny external store stands in for better-auth's active-organization atom

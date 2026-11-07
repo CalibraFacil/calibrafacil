@@ -10,7 +10,7 @@ import {
   buildStandardCertificateDocumentUploadResponse,
   buildStandardRecord,
   buildStandardsList,
-} from "@calibra-facil/contracts/standards-fixtures";
+} from "@calibra-facil/contracts/fixtures";
 import { describe, expect, it, vi } from "vitest";
 
 import { createCloudApiClient } from "../index";

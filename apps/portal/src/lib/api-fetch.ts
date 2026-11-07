@@ -19,7 +19,7 @@ import { resolveApiBaseUrl } from "@calibra-facil/shared/api-base-url";
  * production (one structured warning, the body is returned as received so the
  * page keeps working). Unit tests run strict too, so a stubbed `fetch` must
  * serve a contract-valid body: build it from
- * `@calibra-facil/contracts/jobs-fixtures` / `portal-fixtures`.
+ * `@calibra-facil/contracts/fixtures` / `portal-fixtures`.
  */
 
 function defaultResponseValidation(): ResponseValidationMode {

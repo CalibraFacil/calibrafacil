@@ -68,6 +68,25 @@ export function endpointClient<const TGroup extends EndpointGroup>(
   return asEndpointClient<TGroup>(methods);
 }
 
+/** The clients of every group, keyed by namespace (`CalibraApi` before its client modules). */
+export type EndpointClients<TGroups extends Record<string, EndpointGroup>> = {
+  [Namespace in keyof TGroups]: EndpointClient<TGroups[Namespace]>;
+};
+
+export function endpointClients<
+  const TGroups extends Record<string, EndpointGroup>,
+>(
+  groups: TGroups,
+  transport: EndpointTransport,
+  options: ResponseValidationOptions = {},
+): EndpointClients<TGroups> {
+  const clients: Record<string, unknown> = {};
+  for (const [namespace, group] of Object.entries(groups)) {
+    clients[namespace] = endpointClient(group, transport, options);
+  }
+  return asEndpointClients<TGroups>(clients);
+}
+
 async function callEndpoint(
   def: EndpointDef,
   transport: EndpointTransport,
@@ -154,6 +173,13 @@ function asEndpointClient<TGroup extends EndpointGroup>(
 ): EndpointClient<TGroup> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- the single trust point of the generic client: `methods` holds exactly one function per definition of the group, each returning the definition's schema-validated response, which is what `EndpointClient` computes from the group.
   return methods as EndpointClient<TGroup>;
+}
+
+function asEndpointClients<TGroups extends Record<string, EndpointGroup>>(
+  clients: Record<string, unknown>,
+): EndpointClients<TGroups> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- one entry per group, each built by `endpointClient` from that group; this is the single trust point tying the runtime map to `EndpointClients`.
+  return clients as EndpointClients<TGroups>;
 }
 
 // ---------------------------------------------------------------------------

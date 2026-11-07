@@ -936,9 +936,6 @@ importers:
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../shared
-      hono:
-        specifier: ^4.13.7
-        version: 4.13.13
       zod:
         specifier: 4.6.7
         version: 4.6.7

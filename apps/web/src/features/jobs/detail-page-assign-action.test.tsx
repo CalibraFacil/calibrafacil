@@ -5,7 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { buildJobDetail } from '@calibra-facil/contracts/jobs-fixtures'
+import { buildJobDetail } from '@calibra-facil/contracts/fixtures'
 import { JobStatusSchema, type JobStatus } from '@calibra-facil/schemas'
 import { allowedFrom } from '@calibra-facil/schemas/job-transitions'
 
