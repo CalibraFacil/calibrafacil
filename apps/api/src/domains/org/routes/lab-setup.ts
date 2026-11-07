@@ -16,7 +16,6 @@ import {
   session as authSession,
 } from "@calibra-facil/db/schema";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 import {
   DomainError,
   forbidden,
@@ -24,24 +23,8 @@ import {
 } from "../../../lib/domain-errors";
 import { recordPlatformEvent } from "../../../lib/identity";
 import { orgDb } from "../../../lib/org-db";
-import { toRecord } from "@calibra-facil/shared/record";
 import { mount } from "../../../lib/endpoint-mount";
-
-function getEnvValue(c: { env?: unknown }, key: string) {
-  return toRecord(c.env)[key];
-}
-
-function resolveTrustedAppUrl(c: { env?: unknown }) {
-  const configuredAppUrl =
-    getEnvValue(c, "APP_URL") ?? process.env.APP_URL ?? process.env.WEB_URL;
-
-  if (typeof configuredAppUrl === "string") {
-    const trimmed = configuredAppUrl.trim().replace(/\/+$/, "");
-    if (trimmed) return trimmed;
-  }
-
-  return appBaseUrl();
-}
+import { resolveTrustedAppUrl } from "../trusted-app-url";
 
 /** The ways a claim can go on when the passkey is not used. */
 const CLAIM_FALLBACK_METHODS = ["magic_link", "email_otp"] as const;

@@ -27,8 +27,8 @@ import {
   findLabProvisioningUser,
   provisionLabAccount,
 } from "../lab-provisioning";
-import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 import { mount } from "../../../lib/endpoint-mount";
+import { resolveTrustedAppUrl } from "../trusted-app-url";
 
 /**
  * Public, UNAUTHENTICATED self-serve sign-up for a laboratory.
@@ -66,21 +66,6 @@ function envValue(c: { env?: unknown }, key: string): string | undefined {
 
 function publicSignupEnabled(c: { env?: unknown }) {
   return envValue(c, "PUBLIC_SIGNUP_ENABLED")?.toLowerCase() === "true";
-}
-
-/**
- * The claim link carries the account-setup secret, and this endpoint is
- * unauthenticated: anyone can submit a stranger's corporate address. Reading
- * the host from `Origin` or `Referer` would let the caller choose where that
- * secret is sent, and a non-browser client sets those headers freely regardless
- * of CORS. Only configuration decides. Same resolution the lab-setup and
- * invitation flows use.
- */
-function resolveTrustedAppUrl(c: { env?: unknown }) {
-  const configured = envValue(c, "APP_URL") ?? envValue(c, "WEB_URL");
-  if (configured) return configured.replace(/\/+$/, "");
-
-  return appBaseUrl();
 }
 
 /** True when this e-mail already belongs to a laboratory team (see `hasLabMembership`). */
