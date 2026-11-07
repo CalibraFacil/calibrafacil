@@ -4906,7 +4906,7 @@ export const automaticSendAuditLog = pgTable(
 
 // Phase 2 slice 9 - batch / consolidated billing groups. Many service
 // orders can share one billing document via this group; compatibility
-// rules live in apps/api/src/lib/billing-group.ts.
+// rules live in apps/api/src/domains/finance/billing-group.ts.
 
 export const billingGroup = pgTable(
   "billing_group",

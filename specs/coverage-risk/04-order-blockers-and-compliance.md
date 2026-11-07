@@ -1,8 +1,8 @@
 # Mini-spec [HIGH RISK — money/compliance]: billing gate + compliance sync
 
-Target: `apps/api/src/lib/finance.ts` — `evaluateOrderBlockers`,
+Target: `apps/api/src/domains/finance/finance.ts` — `evaluateOrderBlockers`,
 `syncComplianceWithActiveAgreement` (both PURE). Test file:
-`apps/api/src/lib/__tests__/finance.spec.ts` (apps/api uses `.spec.ts` in `__tests__/`).
+`apps/api/src/domains/finance/__tests__/finance.spec.ts` (apps/api uses `.spec.ts` in `__tests__/`).
 The async DB functions in this file are OUT OF SCOPE.
 
 ## Discipline

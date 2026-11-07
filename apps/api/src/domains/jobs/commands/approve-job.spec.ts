@@ -176,7 +176,7 @@ vi.mock("../oot/asset-oot-events", () => ({
   recordAssetOotEvent: mockRecordOotEvent,
   withdrawAssetOotEvent: mockWithdrawOotEvent,
 }));
-vi.mock("../../../lib/automatic-send", () => ({
+vi.mock("../../finance/automatic-send", () => ({
   findServiceOrdersForCalibrationJob: mockFindServiceOrders,
   triggerAutomaticSendForMilestone: mockTriggerAutomaticSend,
 }));

@@ -54,7 +54,7 @@ import { readCertificateImage } from "../certificates/certificate-input-images";
 import {
   findServiceOrdersForCalibrationJob,
   triggerAutomaticSendForMilestone,
-} from "../../../lib/automatic-send";
+} from "../../finance";
 import { orgDb } from "../../../lib/org-db";
 import { orgTransactionWithExecutor } from "../../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../../lib/units";

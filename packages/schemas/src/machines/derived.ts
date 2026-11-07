@@ -77,7 +77,7 @@ export const SPC_MACHINE = defineStateMachine({
 });
 
 // certificate_release.status: whether a customer may download an issued
-// certificate, `evaluateReleaseStatus` in apps/api/src/lib/certificate-release.ts
+// certificate, `evaluateReleaseStatus` in apps/api/src/domains/finance/certificate-release.ts
 // (the release policy against the job's billing and payments).
 //   create               the first evaluation of an approved job
 //   evaluate             every re-evaluation (billing or payment changed): the

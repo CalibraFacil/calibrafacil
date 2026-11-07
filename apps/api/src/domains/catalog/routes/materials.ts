@@ -1,10 +1,7 @@
 import { createRouter } from "../../../server/router";
 import { materialEndpoints } from "@calibra-facil/contracts";
 import { material } from "@calibra-facil/db/schema";
-import {
-  adjustMaterialErpStock,
-  type IntegrationsEnv,
-} from "../../../modules/integrations";
+import { adjustMaterialErpStock, type IntegrationsEnv } from "../../finance";
 import {
   withLabPermission,
   type AuthVariables,

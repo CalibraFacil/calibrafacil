@@ -22,8 +22,8 @@ import { requestActor } from "../../../middleware/request-actor";
 import {
   sendServiceOrdersToFinance,
   loadJobFinancialContexts,
-} from "../../../lib/finance";
-import type { IntegrationsEnv } from "../../../modules/integrations";
+} from "../../finance";
+import type { IntegrationsEnv } from "../../finance";
 import {
   calibrationJob,
   jobAuditLog,

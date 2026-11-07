@@ -26,15 +26,17 @@ import type {
   ServiceOrderEventType,
   ServiceOrderItemType,
 } from "@calibra-facil/shared";
-import { DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS } from "@calibra-facil/shared";
-import { formatSpecificationsForDisplay } from "@calibra-facil/shared";
+import {
+  DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+  formatSpecificationsForDisplay,
+  calculateFinancialDueDate,
+} from "@calibra-facil/shared";
 import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import {
   DEFAULT_SERVICE_ORDER_NUMBERING_SETTINGS,
   generateServiceOrderNumber,
 } from "./service-order-numbering";
-import { calculateFinancialDueDate } from "@calibra-facil/shared";
-import { generateBillingDocumentNumber } from "../../lib/finance";
+import { generateBillingDocumentNumber } from "../finance";
 import type { OrgContext } from "../../lib/org-context";
 
 /**

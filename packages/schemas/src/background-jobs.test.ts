@@ -87,7 +87,7 @@ const PRODUCER_FIXTURES = {
     organizationId: "org_1",
     userId: "user_1",
   },
-  // apps/api/src/routes/integrations.ts (generic ERP, no provider)
+  // apps/api/src/domains/finance/routes/integrations.ts (generic ERP, no provider)
   "integration sync without provider": {
     type: "INTEGRATION_SYNC",
     integrationId: "int_1",

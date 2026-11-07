@@ -4,7 +4,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * What the signed-in member may do in the finance area. The response schema is
- * the wire body of `apps/api/src/routes/finance/access.ts`. Cloud-only: the
+ * the wire body of `apps/api/src/domains/finance/routes/access.ts`. Cloud-only: the
  * desktop answers a fixed "no finance rights" (`desktop-client.ts`).
  */
 

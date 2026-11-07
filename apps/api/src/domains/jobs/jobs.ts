@@ -19,7 +19,7 @@ import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { addLabBusinessDays } from "@calibra-facil/shared";
 import { and, count, eq, inArray, isNull } from "drizzle-orm";
-import { ensureJobCommercialSnapshot } from "../../lib/finance";
+import { ensureJobCommercialSnapshot } from "../finance";
 import { generateCertificateIdentity } from "./certificates/certificate-numbering";
 import { invalid, notFound } from "../../lib/domain-errors";
 import { toRecord } from "@calibra-facil/shared/record";

@@ -247,7 +247,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/modules/integrations/active-connections.ts",
+    file: "apps/api/src/domains/finance/integrations/active-connections.ts",
     tables: ["organization_integration", "integration_connection"],
     kinds: ["select"],
     reason:

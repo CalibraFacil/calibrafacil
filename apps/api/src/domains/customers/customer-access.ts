@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import {
   loadCustomerActiveCommercialAgreement,
   loadCustomerFinancialSummary,
-} from "../../lib/finance";
+} from "../finance";
 import { invalid, notFound } from "../../lib/domain-errors";
 import { resolveCustomerRouteId } from "../../lib/customer-route-id";
 

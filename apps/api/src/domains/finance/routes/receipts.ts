@@ -1,0 +1,222 @@
+import { createRouter } from "../../../server/router";
+import { financeEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../../../lib/endpoint-mount";
+import { and, desc, eq } from "drizzle-orm";
+import {
+  BILLING_DOCUMENT_MACHINE,
+  RECEIVABLE_INSTALLMENT_MACHINE,
+} from "@calibra-facil/schemas/machines";
+
+import {
+  billingDocument,
+  customer,
+  paymentReceipt,
+  receivableInstallment,
+} from "@calibra-facil/db/schema";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../../../middleware/permission";
+import { invalid, notFound } from "../../../lib/domain-errors";
+import { withOrg } from "../../../lib/org-context";
+import { orgDb } from "../../../lib/org-db";
+import { buildUnitScopeCondition } from "../../../lib/units";
+import { requestActor } from "../../../middleware/request-actor";
+
+const RECEIPTS_PREFIX = "/api/finance/receipts";
+
+export const financeReceiptsRouter = createRouter<{
+  Variables: AuthVariables;
+}>();
+mount(
+  financeReceiptsRouter,
+  RECEIPTS_PREFIX,
+  financeEndpoints.listReceipts,
+  withLabPermission({ financial: ["read"] }),
+  async (c) => {
+    const member = c.get("member");
+
+    const data = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select({
+          installmentId: receivableInstallment.id,
+          documentId: billingDocument.id,
+          documentNumber: billingDocument.documentNumber,
+          documentStatus: billingDocument.status,
+          customerName: customer.name,
+          dueDate: receivableInstallment.dueDate,
+          amountCents: receivableInstallment.amountCents,
+          installmentStatus: receivableInstallment.status,
+          paidAt: receivableInstallment.paidAt,
+          paymentMethod: receivableInstallment.paymentMethod,
+          paymentReference: receivableInstallment.paymentReference,
+        })
+        .from(receivableInstallment)
+        .innerJoin(
+          billingDocument,
+          eq(receivableInstallment.documentId, billingDocument.id),
+        )
+        .innerJoin(customer, eq(billingDocument.customerId, customer.id))
+        .where(
+          and(
+            eq(billingDocument.organizationId, member.organizationId),
+            buildUnitScopeCondition(billingDocument.unitId, member),
+          ),
+        )
+        .orderBy(
+          desc(receivableInstallment.dueDate),
+          desc(receivableInstallment.id),
+        ),
+    );
+
+    return { data };
+  },
+);
+
+const INSTALLMENTS_PREFIX = "/api/finance/installments";
+
+export const financeInstallmentsRouter = createRouter<{
+  Variables: AuthVariables;
+}>();
+mount(
+  financeInstallmentsRouter,
+  INSTALLMENTS_PREFIX,
+  financeEndpoints.receiveInstallment,
+  withLabPermission({ financial: ["receipt_record"] }),
+  async (c, { params, body: input }) => {
+    const member = c.get("member");
+    const installmentId = params.id;
+
+    const receivedAt = input.receivedAt
+      ? new Date(input.receivedAt)
+      : new Date();
+
+    // The checks and the receipt (installment, document and audit rows) are one
+    // transaction naming the laboratory.
+    const receipt = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [installment] = await ctx.o
+          .select({
+            id: receivableInstallment.id,
+            amountCents: receivableInstallment.amountCents,
+            status: receivableInstallment.status,
+            documentId: billingDocument.id,
+            documentStatus: billingDocument.status,
+          })
+          .from(receivableInstallment)
+          .innerJoin(
+            billingDocument,
+            eq(receivableInstallment.documentId, billingDocument.id),
+          )
+          .where(
+            and(
+              eq(receivableInstallment.id, installmentId),
+              eq(billingDocument.organizationId, member.organizationId),
+              buildUnitScopeCondition(billingDocument.unitId, member),
+            ),
+          )
+          .limit(1)
+          // Both rows locked: two receipts for one installment serialise, and
+          // the second sees it PAID.
+          .for("update");
+
+        if (!installment) {
+          throw notFound("installment_not_found", "Parcela nao encontrada");
+        }
+
+        if (
+          !RECEIVABLE_INSTALLMENT_MACHINE.canTransition(
+            installment.status,
+            "pay",
+          )
+        ) {
+          throw invalid(
+            "installment_not_receivable",
+            "Parcela nao pode ser baixada",
+          );
+        }
+
+        if (
+          !BILLING_DOCUMENT_MACHINE.canTransition(
+            installment.documentStatus,
+            "record_payment",
+          )
+        ) {
+          throw invalid(
+            "installment_document_void",
+            "Documento anulado nao pode receber baixa",
+          );
+        }
+
+        if (input.amountCents !== installment.amountCents) {
+          throw invalid(
+            "installment_partial_receipt_unsupported",
+            "O MVP aceita apenas baixa integral do valor em aberto",
+          );
+        }
+
+        const [createdReceipt] = await ctx.o
+          .insert(paymentReceipt)
+          .values({
+            organizationId: member.organizationId,
+            installmentId,
+            recordedBy: ctx.actor.userId,
+            receivedAt,
+            amountCents: input.amountCents,
+            paymentMethod: input.paymentMethod,
+            reference: input.reference?.trim() || null,
+            notes: input.notes?.trim() || null,
+          })
+          .returning();
+
+        await ctx.o
+          .update(receivableInstallment)
+          .set({
+            status: RECEIVABLE_INSTALLMENT_MACHINE.requireTargetOf(
+              installment.status,
+              "pay",
+            ),
+            paidAt: receivedAt,
+            paymentMethod: input.paymentMethod,
+            paymentReference: input.reference?.trim() || null,
+            updatedAt: new Date(),
+          })
+          .where(eq(receivableInstallment.id, installmentId));
+
+        await ctx.o
+          .update(billingDocument)
+          .set({
+            status: BILLING_DOCUMENT_MACHINE.requireTargetOf(
+              installment.documentStatus,
+              "record_payment",
+            ),
+            updatedAt: new Date(),
+            updatedBy: ctx.actor.userId,
+          })
+          .where(eq(billingDocument.id, installment.documentId));
+
+        await ctx.audit(
+          "financialReceipt",
+          createdReceipt?.id ?? installmentId,
+          {
+            action: "receipt.record",
+            changes: {
+              installmentId,
+              amountCents: input.amountCents,
+              paymentMethod: input.paymentMethod,
+              receivedAt: receivedAt.toISOString(),
+            },
+            reason: input.notes?.trim() || null,
+          },
+        );
+
+        if (!createdReceipt) throw new Error("Falha ao registrar recebimento");
+        return createdReceipt;
+      },
+    );
+
+    return { data: receipt };
+  },
+);
