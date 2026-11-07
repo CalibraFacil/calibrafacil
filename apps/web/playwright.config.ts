@@ -4,6 +4,13 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173)
 const host = process.env.PLAYWRIGHT_HOST ?? '127.0.0.1'
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://${host}:${port}`
 const shouldStartWebServer = !process.env.PLAYWRIGHT_BASE_URL
+// The specs run against the production bundle, not the Vite dev server: the dev
+// server serves the app as hundreds of unbundled modules and compiles them on
+// demand, so a dozen workers opening the heavy execution page at once starve it
+// past the 15 s heading waits (method-execution and execution-unsaved-guard
+// failed on a 16-core machine, passed alone). Built, the same suite is 3x faster
+// and stable under any worker count. A separate outDir keeps `dist` untouched.
+const previewDir = 'node_modules/.cache/e2e-dist'
 
 export default defineConfig({
   testDir: './e2e',
@@ -19,7 +26,7 @@ export default defineConfig({
   },
   webServer: shouldStartWebServer
     ? {
-        command: `pnpm exec vite --host ${host} --port ${port}`,
+        command: `pnpm exec vite build --outDir ${previewDir} --emptyOutDir && pnpm exec vite preview --outDir ${previewDir} --host ${host} --port ${port} --strictPort`,
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

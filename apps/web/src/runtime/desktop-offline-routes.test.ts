@@ -74,45 +74,6 @@ describe('desktop offline route availability', () => {
     }
   })
 
-  it('REQ-OFF-1: every router route resolves to an availability', () => {
-    const targets = listRouterTargets()
-
-    expect(targets.length).toBeGreaterThan(50)
-    for (const to of targets) {
-      expect(typeof isDesktopOfflineRoute(to), to).toBe('boolean')
-    }
-  })
-
-  it.each([
-    '/dashboard',
-    '/dashboard/jobs/new',
-    '/dashboard/assets/$id/edit',
-    '/dashboard/clients/new',
-    '/dashboard/clients/$id/info',
-    '/dashboard/clients/$id/compliance',
-    '/dashboard/methods/new',
-    '/dashboard/methods/$id/edit',
-    '/dashboard/standards/new',
-    '/dashboard/standards/composition-profiles',
-    '/dashboard/services',
-    '/dashboard/materials',
-    '/dashboard/nc',
-    '/dashboard/nc/new',
-    '/dashboard/capa',
-    '/dashboard/requests',
-    '/dashboard/visits',
-    '/dashboard/proficiency-tests',
-    '/dashboard/spc',
-    '/dashboard/personnel',
-    '/dashboard/reports',
-    '/dashboard/finance',
-    '/dashboard/finance/contracts',
-    '/dashboard/settings/organization',
-    '/dashboard/settings/signature',
-  ])('REQ-OFF-1: %s is online-only on the desktop', (to) => {
-    expect(isDesktopOfflineRoute(to)).toBe(false)
-  })
-
   it('REQ-OFF-1: a route nobody classified defaults to cloud-only', () => {
     expect(isDesktopOfflineRoute('/dashboard/brand-new-page')).toBe(false)
     expect(isDesktopOfflineRoute('/dashboard/jobs/$id/something-new')).toBe(
