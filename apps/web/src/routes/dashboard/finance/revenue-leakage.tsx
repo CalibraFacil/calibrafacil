@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { RevenueLeakagePage } from '@/features/finance/revenue-leakage-page'
+import { routeHead } from '@/app/router/route-registry'
 
 type RevenueLeakageSearch = { class?: string }
 
@@ -17,9 +18,7 @@ function parseRevenueLeakageSearch(
 
 export const Route = createFileRoute('/dashboard/finance/revenue-leakage')({
   validateSearch: parseRevenueLeakageSearch,
-  head: () => ({
-    meta: [{ title: 'Alertas de receita | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/finance/revenue-leakage'),
   component: RevenueLeakageRoute,
 })
 

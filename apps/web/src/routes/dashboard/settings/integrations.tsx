@@ -5,11 +5,10 @@ import {
   contaAzulOAuthErrorFromSearch,
   validateIntegrationsSearch,
 } from '@/features/settings/integrations/search'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/settings/integrations')({
-  head: () => ({
-    meta: [{ title: 'Integrações | Configurações | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/settings/integrations'),
   validateSearch: validateIntegrationsSearch,
   component: IntegrationsSettingsRoute,
 })

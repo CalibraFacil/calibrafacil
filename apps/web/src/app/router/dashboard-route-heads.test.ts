@@ -26,6 +26,16 @@ describe('dashboard route head metadata', () => {
 
     expect(missingHeadRoutes).toEqual([])
   })
+
+  it('takes every tab title from the route registry, not from a literal', () => {
+    const literalTitleRoutes = dashboardRouteFiles()
+      .filter((filePath) =>
+        /\btitle:\s*['"`]/.test(readFileSync(filePath, 'utf8')),
+      )
+      .map(relativeDashboardRoute)
+
+    expect(literalTitleRoutes).toEqual([])
+  })
 })
 
 function dashboardRouteFiles(dir = dashboardRoutesDir): string[] {

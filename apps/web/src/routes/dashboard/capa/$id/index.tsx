@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { CAPADetailPage } from '@/features/quality/capa-detail-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/capa/$id/')({
-  head: () => ({
-    meta: [{ title: 'Detalhes CAPA | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/capa/$id'),
   component: CAPADetailRoute,
 })
 

@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { JobDetailPage } from '@/features/jobs/detail-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/')({
-  head: () => ({
-    meta: [{ title: 'Detalhes do Job | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/jobs/$id'),
   component: JobDetailRoute,
 })
 

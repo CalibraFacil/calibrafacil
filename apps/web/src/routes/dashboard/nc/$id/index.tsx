@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { NCDetailPage } from '@/features/quality/nc-detail-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/nc/$id/')({
-  head: () => ({
-    meta: [{ title: 'Detalhes da NC | CalibraFacil' }],
-  }),
+  head: () => routeHead('/dashboard/nc/$id'),
   component: NCDetailRoute,
 })
 

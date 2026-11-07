@@ -2,13 +2,12 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { ClientComplianceTab } from '@/features/customers/compliance-page'
 import { loadCustomerComplianceData } from '@/features/customers/queries'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/clients/$id/compliance')({
   loader: ({ context, params }) =>
     loadCustomerComplianceData(context.queryClient, params.id),
-  head: () => ({
-    meta: [{ title: 'Cliente | Compliance | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/clients/$id/compliance'),
   component: ClientComplianceRoute,
 })
 

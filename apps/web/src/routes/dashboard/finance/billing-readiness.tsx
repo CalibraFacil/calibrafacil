@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { FinanceBillingReadinessPage } from '@/features/finance/billing-readiness-page'
 import { loadFinanceBillingReadinessData } from '@/features/finance/queries'
+import { routeHead } from '@/app/router/route-registry'
 
 type BillingReadinessSearch = { status?: string }
 
@@ -19,9 +20,7 @@ function parseBillingReadinessSearch(
 export const Route = createFileRoute('/dashboard/finance/billing-readiness')({
   validateSearch: parseBillingReadinessSearch,
   loader: ({ context }) => loadFinanceBillingReadinessData(context.queryClient),
-  head: () => ({
-    meta: [{ title: 'Pronto para faturar | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/finance/billing-readiness'),
   component: FinanceBillingReadinessRoute,
 })
 

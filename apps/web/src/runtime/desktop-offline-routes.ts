@@ -4,7 +4,7 @@ import {
   type CalibraApiNamespace,
 } from '@calibra-facil/client-runtime'
 
-import type { FileRouteTypes } from '@/routeTree.gen'
+import { toRouteTo, type DashboardRouteId } from '@/app/router/route-registry'
 
 /**
  * Which dashboard routes work without the cloud on the desktop.
@@ -37,7 +37,8 @@ type ApiMethodRef = {
 }
 
 type DesktopOfflineRoute = {
-  to: FileRouteTypes['to']
+  /** A registry id, so an entry for a route that no longer exists fails to compile. */
+  to: DashboardRouteId
   renders: readonly ApiMethodRef[]
 }
 
@@ -129,16 +130,6 @@ function isLocalMethod({ namespace, method }: ApiMethodRef): boolean {
       entry.method === method &&
       entry.policy !== 'cloud-only',
   )
-}
-
-/**
- * Router `to` for a TanStack route id: ids end with a slash for index routes
- * (`/dashboard/jobs/`); `to` does not.
- */
-export function toRouteTo(routeId: string): string {
-  return routeId.length > 1 && routeId.endsWith('/')
-    ? routeId.slice(0, -1)
-    : routeId
 }
 
 /** True when the route renders from local data, so it works without the cloud. */

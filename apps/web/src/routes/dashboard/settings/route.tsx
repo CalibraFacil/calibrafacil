@@ -1,5 +1,9 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
+import {
+  getDashboardRedirectTarget,
+  routeHead,
+} from '@/app/router/route-registry'
 import { SettingsLayout } from '@/features/settings/layout'
 
 export const Route = createFileRoute('/dashboard/settings')({
@@ -8,17 +12,15 @@ export const Route = createFileRoute('/dashboard/settings')({
       location.pathname === '/dashboard/settings' ||
       location.pathname === '/dashboard/settings/'
     ) {
-      throw redirect({ to: '/dashboard/settings/profile' })
+      throw redirect({ to: getDashboardRedirectTarget('/dashboard/settings') })
     }
   },
-  head: () => ({
-    meta: [
+  head: () =>
+    routeHead('/dashboard/settings', [
       {
-        title: 'Configurações | CalibraFácil',
         name: 'description',
         content: 'Configurações da sua conta CalibraFácil',
       },
-    ],
-  }),
+    ]),
   component: SettingsLayout,
 })

@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ProficiencyTestDetailPage } from '@/features/proficiency-tests/detail-page'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/proficiency-tests/$id/')({
-  head: () => ({
-    meta: [{ title: 'Detalhes do Ensaio | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/proficiency-tests/$id'),
   component: ProficiencyTestDetailRoute,
 })
 

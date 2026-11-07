@@ -5,14 +5,13 @@ import { validateOnboardingSearch } from '@/features/onboarding/search'
 import { MethodsListPage } from '@/features/methods/list-page'
 import { loadMethodsIndexData } from '@/features/methods/queries'
 import { routeLocationToUrl } from '@/lib/route-data'
+import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/methods/')({
   validateSearch: validateOnboardingSearch,
   loader: ({ context, location }) =>
     loadMethodsIndexData(context.queryClient, routeLocationToUrl(location)),
-  head: () => ({
-    meta: [{ title: 'Métodos de Calibração | CalibraFácil' }],
-  }),
+  head: () => routeHead('/dashboard/methods'),
   component: MethodsListPageRoute,
 })
 
