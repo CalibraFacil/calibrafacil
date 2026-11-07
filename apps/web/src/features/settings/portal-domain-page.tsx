@@ -68,7 +68,7 @@ export function PortalDomainSettingsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.portalDomains.create({ hostname })
+      return calibraApi.portalDomains.create({ body: { hostname } })
     },
     onSuccess: async () => {
       toast.success('Domínio salvo. Configure o TXT e valide o lifecycle.')

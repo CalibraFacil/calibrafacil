@@ -61,9 +61,11 @@ describe('SsoSignInForm', () => {
 
     await waitFor(() => {
       expect(ssoMocks.ssoStart).toHaveBeenCalledWith({
-        organizationSlug: 'lab-acreditado',
-        email: 'tecnico@lab.test',
-        redirectPath: '/dashboard/jobs',
+        body: {
+          organizationSlug: 'lab-acreditado',
+          email: 'tecnico@lab.test',
+          redirectPath: '/dashboard/jobs',
+        },
       })
     })
     expect(

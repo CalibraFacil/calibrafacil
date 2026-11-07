@@ -1,6 +1,5 @@
 import { createRouter } from "../server/router";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { portalDomainEndpoints } from "@calibra-facil/contracts";
 import { organizationCustomDomain } from "@calibra-facil/db/schema";
 import {
   buildPortalDomainVerificationHost,
@@ -12,6 +11,7 @@ import {
 } from "../lib/portal-domains";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { conflict, invalid, notFound } from "../lib/domain-errors";
+import { mount } from "../lib/endpoint-mount";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
 import {
@@ -22,10 +22,6 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { eq } from "drizzle-orm";
-
-const CreatePortalDomainSchema = z.object({
-  hostname: z.string().trim().min(3).max(255),
-});
 
 function stripTxtQuotes(value: string): string {
   return value.replace(/^"+|"+$/g, "");
@@ -176,8 +172,16 @@ function buildPortalDomainStatusSummary(params: {
   };
 }
 
-export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>()
-  .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+const PREFIX = "/api/portal-domains";
+
+export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>();
+
+mount(
+  portalDomainsRouter,
+  PREFIX,
+  portalDomainEndpoints.get,
+  [...requireLabProtected, requireOrgType("LAB")],
+  async (c) => {
     const member = c.get("member");
     const record = await getOrganizationCustomDomain(member.organizationId);
     const portalBaseUrl = await getPortalBaseUrlForLabOrganization(
@@ -189,7 +193,7 @@ export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>()
         )
       : [];
 
-    return c.json({
+    return {
       domain: serializeDomain(record ?? null),
       portalBaseUrl,
       statusSummary: buildPortalDomainStatusSummary({
@@ -197,100 +201,63 @@ export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>()
         portalBaseUrl,
         observedTxtValues,
       }),
-    });
-  })
-  .post(
-    "/",
+    };
+  },
+);
+
+mount(
+  portalDomainsRouter,
+  PREFIX,
+  portalDomainEndpoints.create,
+  [
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    zValidator("json", CreatePortalDomainSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
-      const hostname = sanitizePortalHostname(input.hostname);
+  ],
+  async (c, { body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const input = body;
+    const hostname = sanitizePortalHostname(input.hostname);
 
-      if (!hostname) {
-        throw invalid(
-          "invalid_request",
-          "Hostname inválido para domínio personalizado",
-        );
-      }
-
-      const collision = await findPortalHostnameOwnedByOtherOrganization(
-        hostname,
-        member.organizationId,
+    if (!hostname) {
+      throw invalid(
+        "invalid_request",
+        "Hostname inválido para domínio personalizado",
       );
+    }
 
-      if (collision) {
-        throw conflict(
-          "portal_domain_in_use",
-          "Este domínio já está em uso por outra organização",
-        );
-      }
+    const collision = await findPortalHostnameOwnedByOtherOrganization(
+      hostname,
+      member.organizationId,
+    );
 
-      const existing = await getOrganizationCustomDomain(member.organizationId);
-      const verificationToken = createPortalDomainVerificationToken();
+    if (collision) {
+      throw conflict(
+        "portal_domain_in_use",
+        "Este domínio já está em uso por outra organização",
+      );
+    }
 
-      if (existing) {
-        const updated = await withOrg(
-          member.organizationId,
-          requestActor(c),
-          async (ctx) => {
-            const [row] = await ctx.o
-              .update(organizationCustomDomain)
-              .set({
-                hostname,
-                verificationToken,
-                verifiedAt: null,
-                lastVerifiedAt: null,
-                activatedAt: null,
-                isActive: false,
-                updatedAt: new Date(),
-              })
-              .where(eq(organizationCustomDomain.id, existing.id))
-              .returning();
+    const existing = await getOrganizationCustomDomain(member.organizationId);
+    const verificationToken = createPortalDomainVerificationToken();
 
-            if (row) {
-              await writeOrganizationAuditEvent(
-                {
-                  organizationId: member.organizationId,
-                  actorUserId: session.user.id,
-                  actorMemberId: member.id,
-                  action: "portal_domain.updated",
-                  entityType: "portal_domain",
-                  entityId: row.id,
-                  details: {
-                    hostname: row.hostname,
-                    verificationHost: buildPortalDomainVerificationHost(
-                      row.hostname,
-                    ),
-                    previousHostname: existing.hostname,
-                  },
-                },
-                ctx.o,
-              );
-            }
-            return row;
-          },
-        );
-
-        return c.json({ domain: serializeDomain(updated || null) });
-      }
-
-      const created = await withOrg(
+    if (existing) {
+      const updated = await withOrg(
         member.organizationId,
         requestActor(c),
         async (ctx) => {
           const [row] = await ctx.o
-            .insert(organizationCustomDomain)
-            .values({
-              id: crypto.randomUUID(),
-              organizationId: member.organizationId,
+            .update(organizationCustomDomain)
+            .set({
               hostname,
               verificationToken,
-              createdBy: session.user.id,
+              verifiedAt: null,
+              lastVerifiedAt: null,
+              activatedAt: null,
+              isActive: false,
+              updatedAt: new Date(),
             })
+            .where(eq(organizationCustomDomain.id, existing.id))
             .returning();
 
           if (row) {
@@ -299,7 +266,7 @@ export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>()
                 organizationId: member.organizationId,
                 actorUserId: session.user.id,
                 actorMemberId: member.id,
-                action: "portal_domain.created",
+                action: "portal_domain.updated",
                 entityType: "portal_domain",
                 entityId: row.id,
                 details: {
@@ -307,6 +274,7 @@ export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>()
                   verificationHost: buildPortalDomainVerificationHost(
                     row.hostname,
                   ),
+                  previousHostname: existing.hostname,
                 },
               },
               ctx.o,
@@ -316,181 +284,238 @@ export const portalDomainsRouter = createRouter<{ Variables: AuthVariables }>()
         },
       );
 
-      return c.json({ domain: serializeDomain(created || null) }, 201);
-    },
-  )
-  .post(
-    "/verify",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const record = await getOrganizationCustomDomain(member.organizationId);
+      return { domain: serializeDomain(updated || null) };
+    }
 
-      if (!record) {
-        throw notFound(
-          "portal_domain_not_configured",
-          "Nenhum domínio configurado",
-        );
-      }
-
-      const answers = await fetchTxtAnswers(
-        buildPortalDomainVerificationHost(record.hostname),
-      );
-      const verified = answers.includes(record.verificationToken);
-
-      if (!verified) {
-        throw invalid(
-          "portal_domain_txt_not_found",
-          "Registro TXT ainda não propagado ou token incorreto",
-          {
-            legacyBody: {
-              verification: {
-                host: buildPortalDomainVerificationHost(record.hostname),
-                value: record.verificationToken,
-              },
-            },
-          },
-        );
-      }
-
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [row] = await ctx.o
-            .update(organizationCustomDomain)
-            .set({
-              verifiedAt: record.verifiedAt ?? new Date(),
-              lastVerifiedAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationCustomDomain.id, record.id))
-            .returning();
-
-          if (row) {
-            await writeOrganizationAuditEvent(
-              {
-                organizationId: member.organizationId,
-                actorUserId: session.user.id,
-                actorMemberId: member.id,
-                action: "portal_domain.verified",
-                entityType: "portal_domain",
-                entityId: row.id,
-                details: {
-                  hostname: row.hostname,
-                  verificationHost: buildPortalDomainVerificationHost(
-                    row.hostname,
-                  ),
-                },
-              },
-              ctx.o,
-            );
-          }
-          return row;
-        },
-      );
-
-      return c.json({ domain: serializeDomain(updated ?? null) });
-    },
-  )
-  .post(
-    "/activate",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const record = await getOrganizationCustomDomain(member.organizationId);
-
-      if (!record) {
-        throw notFound(
-          "portal_domain_not_configured",
-          "Nenhum domínio configurado",
-        );
-      }
-
-      if (!record.verifiedAt) {
-        throw invalid(
-          "portal_domain_not_verified",
-          "Verifique o domínio antes de ativá-lo",
-        );
-      }
-
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [row] = await ctx.o
-            .update(organizationCustomDomain)
-            .set({
-              isActive: true,
-              activatedAt: record.activatedAt ?? new Date(),
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationCustomDomain.id, record.id))
-            .returning();
-
-          if (row) {
-            await writeOrganizationAuditEvent(
-              {
-                organizationId: member.organizationId,
-                actorUserId: session.user.id,
-                actorMemberId: member.id,
-                action: "portal_domain.activated",
-                entityType: "portal_domain",
-                entityId: row.id,
-                details: {
-                  hostname: row.hostname,
-                },
-              },
-              ctx.o,
-            );
-          }
-          return row;
-        },
-      );
-
-      return c.json({ domain: serializeDomain(updated ?? null) });
-    },
-  )
-  .delete(
-    "/",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const record = await getOrganizationCustomDomain(member.organizationId);
-
-      if (!record) {
-        return c.json({ success: true });
-      }
-
-      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
-        await ctx.o
-          .delete(organizationCustomDomain)
-          .where(eq(organizationCustomDomain.id, record.id));
-
-        await writeOrganizationAuditEvent(
-          {
+    const created = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [row] = await ctx.o
+          .insert(organizationCustomDomain)
+          .values({
+            id: crypto.randomUUID(),
             organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "portal_domain.deleted",
-            entityType: "portal_domain",
-            entityId: record.id,
-            details: {
-              hostname: record.hostname,
-              wasVerified: Boolean(record.verifiedAt),
-              wasActive: record.isActive,
+            hostname,
+            verificationToken,
+            createdBy: session.user.id,
+          })
+          .returning();
+
+        if (row) {
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "portal_domain.created",
+              entityType: "portal_domain",
+              entityId: row.id,
+              details: {
+                hostname: row.hostname,
+                verificationHost: buildPortalDomainVerificationHost(
+                  row.hostname,
+                ),
+              },
+            },
+            ctx.o,
+          );
+        }
+        return row;
+      },
+    );
+
+    // 201 for a new domain: a status the definition (200) does not describe.
+    return c.json({ domain: serializeDomain(created || null) }, 201);
+  },
+);
+
+mount(
+  portalDomainsRouter,
+  PREFIX,
+  portalDomainEndpoints.verify,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+  ],
+  async (c) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const record = await getOrganizationCustomDomain(member.organizationId);
+
+    if (!record) {
+      throw notFound(
+        "portal_domain_not_configured",
+        "Nenhum domínio configurado",
+      );
+    }
+
+    const answers = await fetchTxtAnswers(
+      buildPortalDomainVerificationHost(record.hostname),
+    );
+    const verified = answers.includes(record.verificationToken);
+
+    if (!verified) {
+      throw invalid(
+        "portal_domain_txt_not_found",
+        "Registro TXT ainda não propagado ou token incorreto",
+        {
+          legacyBody: {
+            verification: {
+              host: buildPortalDomainVerificationHost(record.hostname),
+              value: record.verificationToken,
             },
           },
-          ctx.o,
-        );
-      });
+        },
+      );
+    }
 
-      return c.json({ success: true });
-    },
-  );
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [row] = await ctx.o
+          .update(organizationCustomDomain)
+          .set({
+            verifiedAt: record.verifiedAt ?? new Date(),
+            lastVerifiedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationCustomDomain.id, record.id))
+          .returning();
+
+        if (row) {
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "portal_domain.verified",
+              entityType: "portal_domain",
+              entityId: row.id,
+              details: {
+                hostname: row.hostname,
+                verificationHost: buildPortalDomainVerificationHost(
+                  row.hostname,
+                ),
+              },
+            },
+            ctx.o,
+          );
+        }
+        return row;
+      },
+    );
+
+    return { domain: serializeDomain(updated ?? null) };
+  },
+);
+
+mount(
+  portalDomainsRouter,
+  PREFIX,
+  portalDomainEndpoints.activate,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+  ],
+  async (c) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const record = await getOrganizationCustomDomain(member.organizationId);
+
+    if (!record) {
+      throw notFound(
+        "portal_domain_not_configured",
+        "Nenhum domínio configurado",
+      );
+    }
+
+    if (!record.verifiedAt) {
+      throw invalid(
+        "portal_domain_not_verified",
+        "Verifique o domínio antes de ativá-lo",
+      );
+    }
+
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [row] = await ctx.o
+          .update(organizationCustomDomain)
+          .set({
+            isActive: true,
+            activatedAt: record.activatedAt ?? new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationCustomDomain.id, record.id))
+          .returning();
+
+        if (row) {
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "portal_domain.activated",
+              entityType: "portal_domain",
+              entityId: row.id,
+              details: {
+                hostname: row.hostname,
+              },
+            },
+            ctx.o,
+          );
+        }
+        return row;
+      },
+    );
+
+    return { domain: serializeDomain(updated ?? null) };
+  },
+);
+
+mount(
+  portalDomainsRouter,
+  PREFIX,
+  portalDomainEndpoints.delete,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+  ],
+  async (c) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const record = await getOrganizationCustomDomain(member.organizationId);
+
+    if (!record) {
+      return { success: true as const };
+    }
+
+    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+      await ctx.o
+        .delete(organizationCustomDomain)
+        .where(eq(organizationCustomDomain.id, record.id));
+
+      await writeOrganizationAuditEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "portal_domain.deleted",
+          entityType: "portal_domain",
+          entityId: record.id,
+          details: {
+            hostname: record.hostname,
+            wasVerified: Boolean(record.verifiedAt),
+            wasActive: record.isActive,
+          },
+        },
+        ctx.o,
+      );
+    });
+
+    return { success: true as const };
+  },
+);

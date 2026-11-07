@@ -2200,9 +2200,11 @@ describe("sso runtime adapter", () => {
 
     await expect(
       client.sso.start({
-        organizationSlug: "laboratorio-central",
-        email: "ana@example.test",
-        redirectPath: "/dashboard",
+        body: {
+          organizationSlug: "laboratorio-central",
+          email: "ana@example.test",
+          redirectPath: "/dashboard",
+        },
       }),
     ).resolves.toEqual({
       url: "https://idp.example.test/login",
@@ -2293,24 +2295,30 @@ describe("sso runtime adapter", () => {
     });
     await expect(
       client.sso.createProvider({
-        providerId: "okta",
-        issuer: "https://idp.example.test",
-        domain: "example.test",
-        clientId: "client-id",
-        clientSecret: "client-secret",
-        scopes: ["openid", "email", "profile"],
+        body: {
+          providerId: "okta",
+          issuer: "https://idp.example.test",
+          domain: "example.test",
+          clientId: "client-id",
+          clientSecret: "client-secret",
+          scopes: ["openid", "email", "profile"],
+        },
       }),
     ).resolves.toMatchObject({
       provider: { providerId: "okta" },
       verificationRecord,
     });
-    await expect(client.sso.requestDomainVerification("okta")).resolves.toEqual(
-      { verificationRecord },
-    );
-    await expect(client.sso.verifyDomain("okta")).resolves.toMatchObject({
+    await expect(
+      client.sso.requestDomainVerification({ params: { providerId: "okta" } }),
+    ).resolves.toEqual({ verificationRecord });
+    await expect(
+      client.sso.verifyDomain({ params: { providerId: "okta" } }),
+    ).resolves.toMatchObject({
       provider: { domainVerified: true },
     });
-    await expect(client.sso.deleteProvider("okta")).resolves.toBeUndefined();
+    await expect(
+      client.sso.deleteProvider({ params: { providerId: "okta" } }),
+    ).resolves.toBeUndefined();
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/sso/providers",
@@ -2331,18 +2339,20 @@ describe("sso runtime adapter", () => {
     });
 
     await expect(
-      client.sso.start({ organizationSlug: "laboratorio-central" }),
+      client.sso.start({ body: { organizationSlug: "laboratorio-central" } }),
     ).rejects.toThrow("Login SSO requer a API web/nuvem");
     await expect(client.sso.getProviders()).resolves.toMatchObject({
       provider: null,
     });
     await expect(
       client.sso.createProvider({
-        providerId: "okta",
-        issuer: "https://idp.example.test",
-        domain: "example.test",
-        clientId: "client-id",
-        clientSecret: "client-secret",
+        body: {
+          providerId: "okta",
+          issuer: "https://idp.example.test",
+          domain: "example.test",
+          clientId: "client-id",
+          clientSecret: "client-secret",
+        },
       }),
     ).rejects.toThrow("Configuração SSO requer a API web/nuvem");
   });
@@ -4261,7 +4271,7 @@ describe("portal domains runtime adapter", () => {
       fetchCalls.push([input, init]);
 
       if (init?.method === "DELETE") {
-        return new Response(null, { status: 204 });
+        return Response.json({ success: true });
       }
 
       return Response.json(payload);
@@ -4275,7 +4285,9 @@ describe("portal domains runtime adapter", () => {
       domain: { hostname: "portal.lab.example.test" },
     });
     await expect(
-      client.portalDomains.create({ hostname: "portal.lab.example.test" }),
+      client.portalDomains.create({
+        body: { hostname: "portal.lab.example.test" },
+      }),
     ).resolves.toMatchObject({ domain: { id: "domain-1" } });
     await expect(client.portalDomains.verify()).resolves.toMatchObject({
       statusSummary: { status: "waiting_dns" },
@@ -4283,7 +4295,9 @@ describe("portal domains runtime adapter", () => {
     await expect(client.portalDomains.activate()).resolves.toMatchObject({
       portalBaseUrl: "https://portal.example.test",
     });
-    await expect(client.portalDomains.delete()).resolves.toBeUndefined();
+    await expect(client.portalDomains.delete()).resolves.toEqual({
+      success: true,
+    });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/portal-domains",
@@ -4307,7 +4321,9 @@ describe("portal domains runtime adapter", () => {
       statusSummary: { status: "not_configured" },
     });
     await expect(
-      client.portalDomains.create({ hostname: "portal.lab.example.test" }),
+      client.portalDomains.create({
+        body: { hostname: "portal.lab.example.test" },
+      }),
     ).rejects.toThrow("Domínio do portal requer a API web/nuvem");
     await expect(client.portalDomains.verify()).rejects.toThrow(
       "Domínio do portal requer a API web/nuvem",
@@ -4844,7 +4860,9 @@ describe("signing certificates runtime adapter", () => {
             status: "valid",
           },
         ],
-        unit: { unitId: 10 },
+        unit: { unitId: 10, unitName: "Matriz" },
+        requireSignature: false,
+        unsignedIssuance: { enabled: false, reason: null },
       });
     };
     const client = createCloudApiClient({
@@ -4857,19 +4875,26 @@ describe("signing certificates runtime adapter", () => {
     });
     await expect(
       client.signingCertificates.upload({
-        name: "Certificado Principal",
-        p12Base64: "base64",
-        password: "secret",
-        setAsDefault: true,
+        body: {
+          name: "Certificado Principal",
+          p12Base64: "base64",
+          password: "secret",
+          setAsDefault: true,
+        },
       }),
     ).resolves.toMatchObject({
       certificate: { id: 1, isDefault: true },
     });
-    await expect(client.signingCertificates.setDefault(1)).resolves.toEqual({
+    await expect(
+      client.signingCertificates.setDefault({ params: { id: 1 } }),
+    ).resolves.toEqual({
       message: "Certificado definido como padrão",
     });
     await expect(
-      client.signingCertificates.revoke(1, "Rotacao de certificado"),
+      client.signingCertificates.revoke({
+        params: { id: 1 },
+        body: { reason: "Rotacao de certificado" },
+      }),
     ).resolves.toEqual({
       message: "Certificado revogado com sucesso",
     });
@@ -4891,22 +4916,27 @@ describe("signing certificates runtime adapter", () => {
       fetch: fetchMock,
     });
 
-    await expect(client.signingCertificates.list()).resolves.toEqual({
+    await expect(client.signingCertificates.list()).resolves.toMatchObject({
       certificates: [],
     });
     await expect(
       client.signingCertificates.upload({
-        name: "Certificado",
-        p12Base64: "base64",
-        password: "secret",
-        setAsDefault: true,
+        body: {
+          name: "Certificado",
+          p12Base64: "base64",
+          password: "secret",
+          setAsDefault: true,
+        },
       }),
     ).rejects.toThrow("Certificado ICP-Brasil requer sincronização");
-    await expect(client.signingCertificates.setDefault(1)).rejects.toThrow(
-      "Certificado ICP-Brasil requer sincronização",
-    );
     await expect(
-      client.signingCertificates.revoke(1, "Rotacao"),
+      client.signingCertificates.setDefault({ params: { id: 1 } }),
+    ).rejects.toThrow("Certificado ICP-Brasil requer sincronização");
+    await expect(
+      client.signingCertificates.revoke({
+        params: { id: 1 },
+        body: { reason: "Rotacao" },
+      }),
     ).rejects.toThrow("Certificado ICP-Brasil requer sincronização");
   });
 });

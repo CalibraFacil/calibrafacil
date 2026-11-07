@@ -5,9 +5,6 @@ import type {
   EmailDomainResponse,
   EnvironmentalLimitsResponse,
   NotificationPreferencesResponse,
-  PortalDomainResponse,
-  SigningCertificatesListResponse,
-  SsoSettingsResponse,
 } from '@calibra-facil/client-runtime'
 import type {
   FinancialErpConnectionConfig,
@@ -24,14 +21,8 @@ import type {
 
 export type ApiKeysData = ApiKeysListResponse
 
-export type SettingsSsoData = SsoSettingsResponse
-
 export type SettingsCertificateNumberingData =
   CertificateNumberingProfileResponse
-
-export type SettingsSigningCertificatesData = SigningCertificatesListResponse
-
-export type SettingsPortalDomainData = PortalDomainResponse
 
 export type SettingsEmailDomainData = EmailDomainResponse
 

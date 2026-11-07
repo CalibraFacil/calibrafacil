@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { endpoint, routeId } from "@calibra-facil/contracts";
+import { endpoint, noContent, routeId } from "@calibra-facil/contracts";
 
 import { mount } from "./endpoint-mount";
 
@@ -55,6 +55,15 @@ const endpoints = {
     policy: "cloud-only",
     desktopLabel: "Coisas",
   }),
+  remove: endpoint({
+    method: "delete",
+    path: "/api/things/:id",
+    response: noContent,
+    status: 204,
+    failure: "Falha ao remover",
+    policy: "cloud-only",
+    desktopLabel: "Coisas",
+  }),
   teapot: endpoint({
     method: "get",
     path: "/api/things/:id/teapot",
@@ -100,6 +109,7 @@ function buildRouter() {
     // @ts-expect-error -- the handler drifts from its response schema on purpose
     ({ id: "not-a-number", name: "x" }),
   );
+  mount(router, "/api/things", endpoints.remove, [], async () => undefined);
   mount(router, "/api/things", endpoints.teapot, [], async (c) =>
     c.json({ error: "bad gateway" }, 502),
   );
@@ -119,6 +129,17 @@ describe("mount", () => {
       page: 3,
     });
     expect(calls).toEqual(["guard"]);
+  });
+
+  it("answers a 204 without a body when the definition says so", async () => {
+    const { router } = buildRouter();
+
+    const response = await router.request("/api/things/7", {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
   });
 
   it("applies the schema defaults of the query", async () => {

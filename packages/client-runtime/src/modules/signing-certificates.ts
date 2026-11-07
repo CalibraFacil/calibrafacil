@@ -1,65 +1,20 @@
-import type {
-  SigningCertificateActionResponse,
-  SigningCertificatesApi,
-  SigningCertificatesListResponse,
-  UploadSigningCertificateInput,
-  UnsignedIssuanceSetting,
-  UploadSigningCertificateResponse,
-} from "../types";
-import { readJsonResponse } from "../transport/response";
+import { signingCertificateEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
+
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The signing certificates client is its endpoint group (`signingCertificateEndpoints` in `@calibra-facil/contracts`). */
+export type SigningCertificatesApi = EndpointClient<
+  typeof signingCertificateEndpoints
+>;
 
 export function createSigningCertificatesApi(
-  rawCloudClient: any,
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
 ): SigningCertificatesApi {
-  return {
-    async list() {
-      return readJsonResponse<SigningCertificatesListResponse>(
-        await rawCloudClient.api.signing.certificates.$get(),
-        "Failed to fetch certificates",
-      );
-    },
-    async upload(input: UploadSigningCertificateInput) {
-      return readJsonResponse<UploadSigningCertificateResponse>(
-        await rawCloudClient.api.signing.certificates.$post({
-          json: input,
-        }),
-        "Upload failed",
-      );
-    },
-    async setDefault(id) {
-      return readJsonResponse<SigningCertificateActionResponse>(
-        await rawCloudClient.api.signing.certificates[":id"][
-          "set-default"
-        ].$post({
-          param: { id: String(id) },
-        }),
-        "Failed to set default",
-      );
-    },
-    async revoke(id, reason) {
-      return readJsonResponse<SigningCertificateActionResponse>(
-        await rawCloudClient.api.signing.certificates[":id"].$delete({
-          param: { id: String(id) },
-          json: { reason },
-        }),
-        "Failed to revoke",
-      );
-    },
-    async setPolicy(requireSignature) {
-      return readJsonResponse<{ requireSignature: boolean }>(
-        await rawCloudClient.api.signing.policy.$patch({
-          json: { requireSignature },
-        }),
-        "Failed to update signing policy",
-      );
-    },
-    async setUnsignedIssuance(input) {
-      return readJsonResponse<{ unsignedIssuance: UnsignedIssuanceSetting }>(
-        await rawCloudClient.api.signing["unsigned-issuance"].$patch({
-          json: input,
-        }),
-        "Failed to update unsigned issuance",
-      );
-    },
-  };
+  return endpointClient(signingCertificateEndpoints, transport, options);
 }

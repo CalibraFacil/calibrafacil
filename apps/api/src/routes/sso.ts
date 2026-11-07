@@ -1,5 +1,5 @@
 import { createRouter } from "../server/router";
-import { zValidator } from "@hono/zod-validator";
+import { ssoEndpoints } from "@calibra-facil/contracts";
 import { z } from "zod";
 import { ssoProvider } from "@calibra-facil/db/schema";
 import { createLabAuth } from "@calibra-facil/auth";
@@ -19,33 +19,10 @@ import {
   notFound,
 } from "../lib/domain-errors";
 import { withOrg, type OrgActor } from "../lib/org-context";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { requestActor } from "../middleware/request-actor";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
-
-const createProviderSchema = z.object({
-  providerId: z
-    .string()
-    .trim()
-    .min(3)
-    .max(64)
-    .regex(/^[a-zA-Z0-9_-]+$/, "providerId invalido"),
-  issuer: z.string().trim().url("Issuer invalido"),
-  domain: z.string().trim().min(1, "Dominio obrigatorio"),
-  clientId: z.string().trim().min(1, "Client ID obrigatorio"),
-  clientSecret: z.string().trim().min(1, "Client Secret obrigatorio"),
-  scopes: z.array(z.string().trim().min(1)).optional(),
-});
-
-const providerParamSchema = z.object({
-  providerId: z.string().trim().min(1),
-});
-
-const startSsoSchema = z.object({
-  organizationSlug: z.string().trim().min(1),
-  email: z.string().trim().email().optional(),
-  redirectPath: z.string().trim().optional(),
-});
 
 const providerOidcConfigSchema = z.object({
   discoveryEndpoint: z.string().optional(),
@@ -275,320 +252,141 @@ function writeSsoAuditEvent(
   );
 }
 
-export const ssoRouter = createRouter<{ Variables: AuthVariables }>()
-  .get(
-    "/providers",
+const PREFIX = "/api/sso";
+
+export const ssoRouter = createRouter<{ Variables: AuthVariables }>();
+
+mount(
+  ssoRouter,
+  PREFIX,
+  ssoEndpoints.getProviders,
+  [
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const provider = await getOrganizationProvider(member.organizationId);
-      return c.json({
-        provider: provider ? serializeProvider(provider) : null,
-        access: {
-          role: member.role,
-          canCreate: member.role === "owner",
-          canManage: member.role === "owner",
-          canDelete: member.role === "owner",
-        },
-      });
-    },
-  )
-  .post(
-    "/providers",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["owner"]),
-    zValidator("json", createProviderSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
-      const normalizedDomain = normalizeDomain(input.domain);
+  ],
+  async (c) => {
+    const member = c.get("member");
+    const provider = await getOrganizationProvider(member.organizationId);
+    return {
+      provider: provider ? serializeProvider(provider) : null,
+      access: {
+        role: member.role,
+        canCreate: member.role === "owner",
+        canManage: member.role === "owner",
+        canDelete: member.role === "owner",
+      },
+    };
+  },
+);
 
-      if (!normalizedDomain) {
-        throw invalid("invalid_request", "Dominio invalido");
-      }
+mount(
+  ssoRouter,
+  PREFIX,
+  ssoEndpoints.createProvider,
+  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  async (c, { body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const input = body;
+    const normalizedDomain = normalizeDomain(input.domain);
 
-      const existingProvider = await getOrganizationProvider(
-        member.organizationId,
-      );
-
-      if (existingProvider) {
-        throw conflict(
-          "conflict",
-          "Esta organizacao ja possui um provedor SSO configurado.",
-        );
-      }
-
-      const auth = createLabAuth();
-      const issuerOrigin = new URL(input.issuer).origin;
-      const response = await auth.api.registerSSOProvider({
-        body: {
-          providerId: input.providerId,
-          issuer: input.issuer,
-          domain: normalizedDomain,
-          organizationId: member.organizationId,
-          oidcConfig: {
-            clientId: input.clientId,
-            clientSecret: input.clientSecret,
-            discoveryEndpoint: buildDiscoveryEndpoint(input.issuer),
-            pkce: true,
-            scopes: parseScopes(input.scopes),
-          },
-        },
-        headers: buildAuthHeaders(c.req.raw.headers, issuerOrigin),
-        asResponse: true,
-      });
-
-      if (!response.ok) {
-        return forwardBetterAuthError(
-          c,
-          response,
-          "Falha ao registrar provedor SSO",
-        );
-      }
-
-      const data = domainVerificationResponseSchema.parse(
-        await response.json(),
-      );
-      const provider = await getOrganizationProvider(member.organizationId);
-
-      if (!provider) {
-        throw new DomainError({
-          code: "sso_provider_reload_failed",
-          status: 500,
-          message:
-            "Provedor criado, mas nao foi possivel recarregar a configuracao.",
-        });
-      }
-
-      await writeSsoAuditEvent(requestActor(c), {
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "sso.provider.created",
-        entityType: "sso_provider",
-        entityId: provider.providerId,
-        details: {
-          providerId: provider.providerId,
-          issuer: provider.issuer,
-          domain: provider.domain,
-          domainVerified: provider.domainVerified ?? false,
-        },
-      });
-
-      return c.json(
-        {
-          provider: serializeProvider(provider),
-          verificationRecord: data.domainVerificationToken
-            ? buildVerificationRecord(provider, data.domainVerificationToken)
-            : null,
-        },
-        201,
-      );
-    },
-  )
-  .post(
-    "/providers/:providerId/request-domain-verification",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["owner"]),
-    zValidator("param", providerParamSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const { providerId } = c.req.valid("param");
-      const provider = await getProviderById(member.organizationId, providerId);
-
-      if (!provider) {
-        throw ssoProviderNotFound();
-      }
-
-      const auth = createLabAuth();
-      const response = await auth.api.requestDomainVerification({
-        body: { providerId },
-        headers: buildAuthHeaders(c.req.raw.headers),
-        asResponse: true,
-      });
-
-      if (!response.ok) {
-        return forwardBetterAuthError(
-          c,
-          response,
-          "Falha ao gerar novo token de verificacao",
-        );
-      }
-
-      const data = requiredDomainVerificationResponseSchema.parse(
-        await response.json(),
-      );
-
-      await writeSsoAuditEvent(requestActor(c), {
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "sso.provider.domain_verification.requested",
-        entityType: "sso_provider",
-        entityId: provider.providerId,
-        details: {
-          providerId: provider.providerId,
-          domain: provider.domain,
-          verificationHost: getProviderDnsHost(provider),
-          verificationTokenIssued: Boolean(data.domainVerificationToken),
-        },
-      });
-
-      return c.json({
-        verificationRecord: buildVerificationRecord(
-          provider,
-          data.domainVerificationToken,
-        ),
-      });
-    },
-  )
-  .post(
-    "/providers/:providerId/verify-domain",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["owner"]),
-    zValidator("param", providerParamSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const { providerId } = c.req.valid("param");
-      const provider = await getProviderById(member.organizationId, providerId);
-
-      if (!provider) {
-        throw ssoProviderNotFound();
-      }
-
-      const auth = createLabAuth();
-      const response = await auth.api.verifyDomain({
-        body: { providerId },
-        headers: buildAuthHeaders(c.req.raw.headers),
-        asResponse: true,
-      });
-
-      if (!response.ok && response.status !== 204) {
-        return forwardBetterAuthError(
-          c,
-          response,
-          "Falha ao verificar dominio",
-        );
-      }
-
-      const refreshedProvider = await getOrganizationProvider(
-        member.organizationId,
-      );
-
-      if (!refreshedProvider) {
-        throw new DomainError({
-          code: "sso_provider_reload_failed",
-          status: 500,
-          message:
-            "Dominio verificado, mas o provedor nao foi encontrado apos a atualizacao.",
-        });
-      }
-
-      await writeSsoAuditEvent(requestActor(c), {
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "sso.provider.domain_verified",
-        entityType: "sso_provider",
-        entityId: refreshedProvider.providerId,
-        details: {
-          providerId: refreshedProvider.providerId,
-          domain: refreshedProvider.domain,
-          domainVerified: refreshedProvider.domainVerified ?? false,
-        },
-      });
-
-      return c.json({ provider: serializeProvider(refreshedProvider) });
-    },
-  )
-  .delete(
-    "/providers/:providerId",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["owner"]),
-    zValidator("param", providerParamSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const { providerId } = c.req.valid("param");
-      // Intentionally allow deletion after downgrade so organizations can
-      // clean up stale SSO configuration even when SSO sign-in is blocked.
-      const provider = await getProviderById(member.organizationId, providerId);
-
-      if (!provider) {
-        throw ssoProviderNotFound();
-      }
-
-      const auth = createLabAuth();
-      const response = await auth.api.deleteSSOProvider({
-        body: { providerId },
-        headers: buildAuthHeaders(c.req.raw.headers),
-        asResponse: true,
-      });
-
-      if (!response.ok) {
-        return forwardBetterAuthError(
-          c,
-          response,
-          "Falha ao remover provedor SSO",
-        );
-      }
-
-      await writeSsoAuditEvent(requestActor(c), {
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "sso.provider.deleted",
-        entityType: "sso_provider",
-        entityId: provider.providerId,
-        details: {
-          providerId: provider.providerId,
-          issuer: provider.issuer,
-          domain: provider.domain,
-          domainVerified: provider.domainVerified ?? false,
-        },
-      });
-
-      return c.body(null, 204);
-    },
-  )
-  .post("/start", zValidator("json", startSsoSchema), async (c) => {
-    const input = c.req.valid("json");
-    const redirectPath = normalizeDashboardRedirectPath(input.redirectPath);
-
-    const org = await findLabOrganizationBySlug(input.organizationSlug);
-
-    if (!org) {
-      throw notFound("not_found", "Laboratorio nao encontrado");
+    if (!normalizedDomain) {
+      throw invalid("invalid_request", "Dominio invalido");
     }
 
-    const provider = await getOrganizationProvider(org.id);
+    const existingProvider = await getOrganizationProvider(
+      member.organizationId,
+    );
 
-    if (!provider) {
-      throw notFound(
-        "sso_provider_not_found",
-        "Esta organizacao ainda nao configurou SSO.",
-      );
-    }
-
-    if (!provider.domainVerified) {
-      throw forbidden(
-        "sso_domain_not_verified",
-        "O dominio SSO desta organizacao ainda nao foi verificado.",
+    if (existingProvider) {
+      throw conflict(
+        "conflict",
+        "Esta organizacao ja possui um provedor SSO configurado.",
       );
     }
 
     const auth = createLabAuth();
-    const response = await auth.api.signInSSO({
+    const issuerOrigin = new URL(input.issuer).origin;
+    const response = await auth.api.registerSSOProvider({
       body: {
-        organizationSlug: org.slug,
-        providerType: "oidc",
-        callbackURL: `${getDashboardBaseURL()}${redirectPath}`,
-        ...(input.email ? { loginHint: input.email } : {}),
+        providerId: input.providerId,
+        issuer: input.issuer,
+        domain: normalizedDomain,
+        organizationId: member.organizationId,
+        oidcConfig: {
+          clientId: input.clientId,
+          clientSecret: input.clientSecret,
+          discoveryEndpoint: buildDiscoveryEndpoint(input.issuer),
+          pkce: true,
+          scopes: parseScopes(input.scopes),
+        },
       },
+      headers: buildAuthHeaders(c.req.raw.headers, issuerOrigin),
+      asResponse: true,
+    });
+
+    if (!response.ok) {
+      return forwardBetterAuthError(
+        c,
+        response,
+        "Falha ao registrar provedor SSO",
+      );
+    }
+
+    const data = domainVerificationResponseSchema.parse(await response.json());
+    const provider = await getOrganizationProvider(member.organizationId);
+
+    if (!provider) {
+      throw new DomainError({
+        code: "sso_provider_reload_failed",
+        status: 500,
+        message:
+          "Provedor criado, mas nao foi possivel recarregar a configuracao.",
+      });
+    }
+
+    await writeSsoAuditEvent(requestActor(c), {
+      organizationId: member.organizationId,
+      actorUserId: session.user.id,
+      actorMemberId: member.id,
+      action: "sso.provider.created",
+      entityType: "sso_provider",
+      entityId: provider.providerId,
+      details: {
+        providerId: provider.providerId,
+        issuer: provider.issuer,
+        domain: provider.domain,
+        domainVerified: provider.domainVerified ?? false,
+      },
+    });
+
+    return {
+      provider: serializeProvider(provider),
+      verificationRecord: data.domainVerificationToken
+        ? buildVerificationRecord(provider, data.domainVerificationToken)
+        : null,
+    };
+  },
+);
+
+mount(
+  ssoRouter,
+  PREFIX,
+  ssoEndpoints.requestDomainVerification,
+  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const { providerId } = params;
+    const provider = await getProviderById(member.organizationId, providerId);
+
+    if (!provider) {
+      throw ssoProviderNotFound();
+    }
+
+    const auth = createLabAuth();
+    const response = await auth.api.requestDomainVerification({
+      body: { providerId },
       headers: buildAuthHeaders(c.req.raw.headers),
       asResponse: true,
     });
@@ -597,11 +395,193 @@ export const ssoRouter = createRouter<{ Variables: AuthVariables }>()
       return forwardBetterAuthError(
         c,
         response,
-        "Falha ao iniciar login via SSO",
+        "Falha ao gerar novo token de verificacao",
       );
     }
 
-    const payload = ssoStartResponseSchema.parse(await response.json());
+    const data = requiredDomainVerificationResponseSchema.parse(
+      await response.json(),
+    );
 
-    return c.json(payload);
+    await writeSsoAuditEvent(requestActor(c), {
+      organizationId: member.organizationId,
+      actorUserId: session.user.id,
+      actorMemberId: member.id,
+      action: "sso.provider.domain_verification.requested",
+      entityType: "sso_provider",
+      entityId: provider.providerId,
+      details: {
+        providerId: provider.providerId,
+        domain: provider.domain,
+        verificationHost: getProviderDnsHost(provider),
+        verificationTokenIssued: Boolean(data.domainVerificationToken),
+      },
+    });
+
+    return {
+      verificationRecord: buildVerificationRecord(
+        provider,
+        data.domainVerificationToken,
+      ),
+    };
+  },
+);
+
+mount(
+  ssoRouter,
+  PREFIX,
+  ssoEndpoints.verifyDomain,
+  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const { providerId } = params;
+    const provider = await getProviderById(member.organizationId, providerId);
+
+    if (!provider) {
+      throw ssoProviderNotFound();
+    }
+
+    const auth = createLabAuth();
+    const response = await auth.api.verifyDomain({
+      body: { providerId },
+      headers: buildAuthHeaders(c.req.raw.headers),
+      asResponse: true,
+    });
+
+    if (!response.ok && response.status !== 204) {
+      return forwardBetterAuthError(c, response, "Falha ao verificar dominio");
+    }
+
+    const refreshedProvider = await getOrganizationProvider(
+      member.organizationId,
+    );
+
+    if (!refreshedProvider) {
+      throw new DomainError({
+        code: "sso_provider_reload_failed",
+        status: 500,
+        message:
+          "Dominio verificado, mas o provedor nao foi encontrado apos a atualizacao.",
+      });
+    }
+
+    await writeSsoAuditEvent(requestActor(c), {
+      organizationId: member.organizationId,
+      actorUserId: session.user.id,
+      actorMemberId: member.id,
+      action: "sso.provider.domain_verified",
+      entityType: "sso_provider",
+      entityId: refreshedProvider.providerId,
+      details: {
+        providerId: refreshedProvider.providerId,
+        domain: refreshedProvider.domain,
+        domainVerified: refreshedProvider.domainVerified ?? false,
+      },
+    });
+
+    return { provider: serializeProvider(refreshedProvider) };
+  },
+);
+
+mount(
+  ssoRouter,
+  PREFIX,
+  ssoEndpoints.deleteProvider,
+  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const { providerId } = params;
+    // Intentionally allow deletion after downgrade so organizations can
+    // clean up stale SSO configuration even when SSO sign-in is blocked.
+    const provider = await getProviderById(member.organizationId, providerId);
+
+    if (!provider) {
+      throw ssoProviderNotFound();
+    }
+
+    const auth = createLabAuth();
+    const response = await auth.api.deleteSSOProvider({
+      body: { providerId },
+      headers: buildAuthHeaders(c.req.raw.headers),
+      asResponse: true,
+    });
+
+    if (!response.ok) {
+      return forwardBetterAuthError(
+        c,
+        response,
+        "Falha ao remover provedor SSO",
+      );
+    }
+
+    await writeSsoAuditEvent(requestActor(c), {
+      organizationId: member.organizationId,
+      actorUserId: session.user.id,
+      actorMemberId: member.id,
+      action: "sso.provider.deleted",
+      entityType: "sso_provider",
+      entityId: provider.providerId,
+      details: {
+        providerId: provider.providerId,
+        issuer: provider.issuer,
+        domain: provider.domain,
+        domainVerified: provider.domainVerified ?? false,
+      },
+    });
+
+    return c.body(null, 204);
+  },
+);
+
+mount(ssoRouter, PREFIX, ssoEndpoints.start, [], async (c, { body }) => {
+  const input = body;
+  const redirectPath = normalizeDashboardRedirectPath(input.redirectPath);
+
+  const org = await findLabOrganizationBySlug(input.organizationSlug);
+
+  if (!org) {
+    throw notFound("not_found", "Laboratorio nao encontrado");
+  }
+
+  const provider = await getOrganizationProvider(org.id);
+
+  if (!provider) {
+    throw notFound(
+      "sso_provider_not_found",
+      "Esta organizacao ainda nao configurou SSO.",
+    );
+  }
+
+  if (!provider.domainVerified) {
+    throw forbidden(
+      "sso_domain_not_verified",
+      "O dominio SSO desta organizacao ainda nao foi verificado.",
+    );
+  }
+
+  const auth = createLabAuth();
+  const response = await auth.api.signInSSO({
+    body: {
+      organizationSlug: org.slug,
+      providerType: "oidc",
+      callbackURL: `${getDashboardBaseURL()}${redirectPath}`,
+      ...(input.email ? { loginHint: input.email } : {}),
+    },
+    headers: buildAuthHeaders(c.req.raw.headers),
+    asResponse: true,
   });
+
+  if (!response.ok) {
+    return forwardBetterAuthError(
+      c,
+      response,
+      "Falha ao iniciar login via SSO",
+    );
+  }
+
+  const payload = ssoStartResponseSchema.parse(await response.json());
+
+  return payload;
+});

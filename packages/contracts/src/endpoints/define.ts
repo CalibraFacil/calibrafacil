@@ -41,8 +41,11 @@ type EndpointBase = {
   body?: z.ZodType;
   /** The success body, as it is on the wire (what the handler returns). */
   response: z.ZodType;
-  /** The success status (default 200). */
-  status?: 200 | 201;
+  /**
+   * The success status (default 200). 204 answers no body: the definition's
+   * `response` is then {@link noContent}.
+   */
+  status?: 200 | 201 | 204;
   /** pt-BR message of the `CalibraApiError` when the body carries no `error`. */
   failure: string;
 };
@@ -68,6 +71,9 @@ export type EndpointDef = EndpointBase & EndpointPolicy;
  * `params`: `params: z.object({ id: routeId })`.
  */
 export const routeId = z.coerce.number().int().positive();
+
+/** The `response` of a definition whose success status is 204 (no body). */
+export const noContent = z.undefined();
 
 /** A domain's endpoints keyed by the SDK method name. */
 export type EndpointGroup = Record<string, EndpointDef>;

@@ -17,9 +17,6 @@ import type {
   ContaAzulCatalogResponse,
   SettingsNotificationPreferencesData,
   SettingsEmailDomainData,
-  SettingsPortalDomainData,
-  SettingsSigningCertificatesData,
-  SettingsSsoData,
   IntegrationRunItemsResponse,
   SyncPreviewResponse,
   SyncTarget,
@@ -64,8 +61,7 @@ export function apiKeysQueryOptions() {
 export function ssoSettingsQueryOptions(organizationKey: string | null) {
   return queryOptions({
     queryKey: ['sso-settings', organizationKey ?? 'no-org'],
-    queryFn: () =>
-      trustedApiResult<SettingsSsoData>(calibraApi.sso.getProviders()),
+    queryFn: () => calibraApi.sso.getProviders(),
   })
 }
 
@@ -79,10 +75,7 @@ export function certificateNumberingProfileQueryOptions() {
 export function signingCertificatesQueryOptions(unitId: number | null) {
   return queryOptions({
     queryKey: ['signing-certificates', unitId ?? 'no-unit'],
-    queryFn: () =>
-      trustedApiResult<SettingsSigningCertificatesData>(
-        calibraApi.signingCertificates.list(),
-      ),
+    queryFn: () => calibraApi.signingCertificates.list(),
   })
 }
 
@@ -96,10 +89,7 @@ export function mySignatureQueryOptions() {
 export function portalDomainQueryOptions() {
   return queryOptions({
     queryKey: ['portal-domain'],
-    queryFn: () =>
-      trustedApiResult<SettingsPortalDomainData>(
-        calibraApi.portalDomains.get(),
-      ),
+    queryFn: () => calibraApi.portalDomains.get(),
   })
 }
 

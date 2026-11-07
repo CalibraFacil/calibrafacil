@@ -96,7 +96,8 @@ export function CertificatesSettingsPage({
   const certificates = data?.certificates ?? []
 
   const setDefaultMutation = useMutation({
-    mutationFn: (id: number) => calibraApi.signingCertificates.setDefault(id),
+    mutationFn: (id: number) =>
+      calibraApi.signingCertificates.setDefault({ params: { id: id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
@@ -110,7 +111,9 @@ export function CertificatesSettingsPage({
 
   const policyMutation = useMutation({
     mutationFn: (requireSignature: boolean) =>
-      calibraApi.signingCertificates.setPolicy(requireSignature),
+      calibraApi.signingCertificates.setPolicy({
+        body: { requireSignature: requireSignature },
+      }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
@@ -129,7 +132,7 @@ export function CertificatesSettingsPage({
   const unsignedIssuanceMutation = useMutation({
     mutationFn: (
       input: { enabled: true; reason: string } | { enabled: false },
-    ) => calibraApi.signingCertificates.setUnsignedIssuance(input),
+    ) => calibraApi.signingCertificates.setUnsignedIssuance({ body: input }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
@@ -154,7 +157,10 @@ export function CertificatesSettingsPage({
 
   const revokeMutation = useMutation({
     mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      calibraApi.signingCertificates.revoke(id, reason),
+      calibraApi.signingCertificates.revoke({
+        params: { id: id },
+        body: { reason: reason },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
@@ -623,10 +629,12 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
       })
 
       return calibraApi.signingCertificates.upload({
-        name: name.trim(),
-        p12Base64: base64,
-        password,
-        setAsDefault,
+        body: {
+          name: name.trim(),
+          p12Base64: base64,
+          password,
+          setAsDefault,
+        },
       })
     },
     onSuccess: () => {

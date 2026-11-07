@@ -275,10 +275,7 @@ export function createDesktopApiClient(
     }),
     finance: desktopEndpointStubs("finance"),
     sso: {
-      ...desktopCloudOnlyStubs("sso", {
-        action: "Configuração SSO",
-        actionByMethod: { start: "Login SSO" },
-      }),
+      ...desktopEndpointStubs("sso"),
       async getProviders() {
         return desktopSsoSettings();
       },
@@ -314,9 +311,7 @@ export function createDesktopApiClient(
       },
     },
     portalDomains: {
-      ...desktopCloudOnlyStubs("portalDomains", {
-        action: "Domínio do portal",
-      }),
+      ...desktopEndpointStubs("portalDomains"),
       async get() {
         return desktopPortalDomain();
       },
@@ -378,13 +373,14 @@ export function createDesktopApiClient(
       flavor: "cloud-sync",
     }),
     signingCertificates: {
-      ...desktopCloudOnlyStubs("signingCertificates", {
-        action: "Certificado ICP-Brasil",
-        flavor: "cloud-sync",
-        actionByMethod: { setPolicy: "Política de assinatura" },
-      }),
+      ...desktopEndpointStubs("signingCertificates"),
       async list() {
-        return { certificates: [] };
+        return {
+          certificates: [],
+          unit: { unitId: null, unitName: null },
+          requireSignature: false,
+          unsignedIssuance: { enabled: false, reason: null },
+        };
       },
     },
     customers: {
