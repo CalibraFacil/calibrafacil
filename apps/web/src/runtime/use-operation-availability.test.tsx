@@ -134,8 +134,8 @@ describe('useOperationAvailability', () => {
   })
 
   it('allows approving a job on a connected desktop', async () => {
-    // PAR-05: this used to be denied outright by `!runtime.isDesktop`, which
-    // sent the approver to the browser for a command the desktop can run.
+    // The desktop can run this command, so it must not send the approver to
+    // the browser.
     renderProbe(<ApproveProbe />, { isDesktop: true })
 
     expect(await screen.findByText('available:cloud')).toBeTruthy()
@@ -203,8 +203,8 @@ describe('useAvailability', () => {
   })
 
   it('shows a cloud-only section on a connected desktop', async () => {
-    // Finance used to be hidden by a bare `!isDesktopRuntime()` although its
-    // calls reach the cloud through the hybrid client.
+    // Finance stays visible on the desktop: its calls reach the cloud through
+    // the hybrid client.
     renderProbe(<SectionProbe operations={FINANCE_SECTION} />, {
       isDesktop: true,
     })

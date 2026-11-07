@@ -36,7 +36,7 @@ describe('getSyncConflictEditTarget', () => {
     ).toBeNull()
   })
 
-  // REL-01 slice 3 (REQ-REL-RES-003): an execution conflict edits the OWNING
+  // REQ-REL-RES-003: an execution conflict edits the OWNING
   // service order (the desktop edits execution notes from the OS detail page),
   // so the target routes to the service order the execution belongs to. The
   // owning service order id is read from the conflict payload.
@@ -195,7 +195,7 @@ describe('buildSyncConflictFieldDiffs', () => {
     ])
   })
 
-  // REL-01 slice 3 (REQ-REL-RES-003): a service_order_execution conflict now
+  // REQ-REL-RES-003: a service_order_execution conflict
   // renders an entity-specific diff over the execution fields the desktop edits,
   // instead of the generic top-level fallback.
   it('builds service_order_execution field diffs over the execution fields', () => {

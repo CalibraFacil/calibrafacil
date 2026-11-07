@@ -10,7 +10,7 @@ import {
 /**
  * REQ-OFF-1 / REQ-OFF-5: the desktop's offline route availability is derived
  * from the data-policy registry, new routes default to cloud-only, and the set
- * of offline routes is exactly the Q13 scope (field capture, intake, reference
+ * of offline routes is exactly the offline scope (field capture, intake, reference
  * reads).
  */
 

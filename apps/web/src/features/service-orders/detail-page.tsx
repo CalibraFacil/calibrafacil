@@ -430,7 +430,7 @@ export function ServiceOrderFinancialStatusBlock({
   )
 }
 
-// #343 — per-OS customer notification log. Answers "we told customer X on
+// Per-OS customer notification log. Answers "we told customer X on
 // date Y via channel Z" from the email ledger/outbox; printable via the
 // browser as the dispute-proof trail.
 function ServiceOrderCommunicationsBlock({ id }: { id: string }) {
@@ -627,7 +627,7 @@ function ServiceOrderDetailContent({
     orderTarget,
   )
   // Saving a quote draft, recording the execution and issuing the delivery
-  // document are online-only (Q13): gated like every other cloud command on
+  // document are online-only: gated like every other cloud command on
   // this page.
   const saveQuoteAvailability = useOperationAvailability(
     'serviceOrders',
@@ -1194,7 +1194,7 @@ function ServiceOrderDetailContent({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {execution?.calibrationRequiredAfterRepair && (
-                // DOM-02 (#655) — REQ-DOM-REP-001/002: this repair OS needs a
+                // DOM-02 — REQ-DOM-REP-001/002: this repair OS needs a
                 // calibration afterward. Open it pre-filled with the OS's
                 // customer + asset (and record the back-link on the job).
                 <Button

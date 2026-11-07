@@ -57,7 +57,6 @@ export function NewCompetencePage() {
     Partial<Record<CompetenceRequestFormField, string>>
   >({})
 
-  // Fetch org members (technicians/admins/owners)
   const { data: matrixData } = useNewCompetenceMatrixData()
 
   const createMutation = useMutation({

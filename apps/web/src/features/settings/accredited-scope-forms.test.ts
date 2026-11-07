@@ -142,7 +142,7 @@ describe('scopeLineToFormState', () => {
     })
     for (const [validFrom, validUntil] of [
       ['2026-01-15T03:00:00.000Z', '2027-01-01T02:59:59.999Z'],
-      // Legacy UTC anchor: the start used to read as the evening before.
+      // Legacy UTC anchor: must not read as the evening before.
       ['2026-01-15T00:00:00.000Z', '2026-12-31T23:59:59.999Z'],
     ]) {
       const state = scopeLineToFormState({ ...base, validFrom, validUntil })

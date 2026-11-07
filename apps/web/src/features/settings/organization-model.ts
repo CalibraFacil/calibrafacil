@@ -176,7 +176,7 @@ export function buildOrganizationIdentityPayload(
 }
 
 /**
- * #647: hydrate a stored window bound into the <input type="date"> value: the
+ * Hydrate a stored window bound into the <input type="date"> value: the
  * laboratory calendar day it names (legacy UTC-anchored values included).
  */
 function toDateInputValue(value: Date | string | null | undefined): string {
@@ -184,7 +184,7 @@ function toDateInputValue(value: Date | string | null | undefined): string {
 }
 
 /**
- * #647: form date ("2027-03-01") → ISO instant for the Better Auth payload;
+ * Form date ("2027-03-01") → ISO instant for the Better Auth payload;
  * empty stays "" so the field clears (the server transform stores "" as
  * NULL; undefined would be skipped by the partial update, leaving a stale
  * date in place). `validFrom` anchors at 00:00 and `validUntil` at 23:59:59.999

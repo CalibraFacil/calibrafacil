@@ -1,5 +1,5 @@
 /**
- * CAPA verification independence (decision Q50).
+ * CAPA verification independence.
  *
  * The API refuses a verifier tied to the CAPA (its owner now or ever, or whoever
  * implemented it) with 403 `self_approval_blocked`. When that person is also the

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// Records retention (decision Q16): the "delete organization" action is a
+// Records retention: the "delete organization" action is a
 // soft delete. The dialog says so, asks for the typed name AND a reason, and
 // after success signs the owner out.
 
@@ -75,7 +75,7 @@ describe('DeleteOrganizationCard', () => {
     expect(text).toContain('período de retenção')
     expect(text).toContain('10 anos')
     expect(text).toMatch(/será bloqueada/)
-    // The old copy promised a permanent erasure; that is no longer true.
+    // Records are retained, never permanently erased.
     expect(text).not.toMatch(/irrevers/i)
     expect(text).not.toMatch(/permanentemente/i)
   })

@@ -23,7 +23,6 @@ export function SecuritySettingsPage() {
   } = useSettings()
   const parseUserAgent = (userAgent: string | null | undefined) => {
     if (!userAgent) return 'Dispositivo desconhecido'
-    // Simple user agent parsing
     if (userAgent.includes('Chrome')) return 'Chrome'
     if (userAgent.includes('Firefox')) return 'Firefox'
     if (userAgent.includes('Safari')) return 'Safari'

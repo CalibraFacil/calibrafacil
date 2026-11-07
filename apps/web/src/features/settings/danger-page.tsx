@@ -33,7 +33,6 @@ export function DangerSettingsPage() {
     setIsSigningOut(true)
     try {
       await revokeAllSessions()
-      // Redirect to sign-in after global logout
       window.location.href = '/sign-in'
     } catch (err) {
       console.error('Failed to sign out everywhere:', err)

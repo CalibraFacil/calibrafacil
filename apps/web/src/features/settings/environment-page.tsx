@@ -88,11 +88,9 @@ export function EnvironmentSettingsPage() {
   const limits = limitsData?.limits ?? []
   const assetTypes = assetTypesData?.data ?? []
 
-  // Separate unit default from asset-type overrides
   const unitDefault = limits.find((l) => l.assetTypeId === null)
   const overrides = limits.filter((l) => l.assetTypeId !== null)
 
-  // Upsert mutation
   const upsertMutation = useMutation({
     mutationFn: async (data: LimitFormState) => {
       return calibraApi.environmentalLimits.save({
@@ -173,7 +171,6 @@ export function EnvironmentSettingsPage() {
     }
   }
 
-  // Asset types that already have overrides
   const usedAssetTypeIds = new Set(overrides.map((o) => o.assetTypeId))
   const availableAssetTypes = assetTypes.filter(
     (at) => !usedAssetTypeIds.has(at.id),

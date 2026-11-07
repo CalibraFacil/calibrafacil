@@ -8,7 +8,7 @@ import {
 
 // REQ-DROPBOOL-001: the repair-mark (Marca de Reparo) / marca-de-selagem gating on a
 // service-order document renders IFF the instrument's `metrology_regime === 'LEGAL'` —
-// byte-identical to the old `subject_to_legal_metrology` boolean (kept in lock-step = LEGAL).
+// the regime replaced the `subject_to_legal_metrology` boolean (LEGAL).
 // This renders the REAL document component to markup and asserts the regulated fields appear
 // for a LEGAL instrument and are absent otherwise. Mutation check: drop the regime gate from
 // `ServiceOrderHtml.tsx` (render the seal cells unconditionally / never) and this goes red.

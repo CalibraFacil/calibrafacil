@@ -19,7 +19,7 @@ const SESSION_EXPIRED_TOAST_ID = 'session-expired'
 
 export const getRouter = () => {
   const isDesktop = isDesktopRuntime()
-  // Roadmap 2 F4: an expired session is one notice with a way back in, not a
+  // An expired session is one notice with a way back in, not a
   // generic error on whichever screen asked first (cloud and desktop alike; see
   // `session-expiry.ts`). The router is created below; the handler only runs
   // after a request, so it is set by then.

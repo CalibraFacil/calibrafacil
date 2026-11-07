@@ -38,7 +38,7 @@ export function StandardCertificateDocumentPanel({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null)
   const document = standard.certificateDocument
-  // The standard's certificate PDF lives in the cloud (online-only since Q13).
+  // The standard's certificate PDF lives in the cloud (online-only).
   const uploadAvailability = useOperationAvailability(
     'standards',
     'uploadCertificateDocument',

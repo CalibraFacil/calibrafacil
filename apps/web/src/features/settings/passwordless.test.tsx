@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// SEC-09 (#669): the lab settings UI must not surface any password affordance
+// SEC-09: the lab settings UI must not surface any password affordance
 // (change-password form, "password login is active" status). These render the
 // real page components and assert the affordances are ABSENT from the output.
 

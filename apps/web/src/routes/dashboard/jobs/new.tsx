@@ -5,7 +5,7 @@ import { parseNewJobSearch } from '@/features/jobs/new-job-search'
 import { routeHead } from '@/app/router/route-registry'
 
 export const Route = createFileRoute('/dashboard/jobs/new')({
-  // DOM-02 (#655): accept customerId/assetId/serviceOrderId so a repair OS can
+  // DOM-02: accept customerId/assetId/serviceOrderId so a repair OS can
   // open a pre-filled calibration. Search is validated here and passed as a
   // prop — the feature module never calls useSearch.
   validateSearch: parseNewJobSearch,

@@ -92,7 +92,6 @@ export function CompetenceDetailPage({ id }: { id: string }) {
     queryClient.invalidateQueries({ queryKey: competenceKeys.matrices })
   }
 
-  // Workflow transition mutations
   const transitionMutation = useMutation({
     mutationFn: async ({
       action,
@@ -116,7 +115,6 @@ export function CompetenceDetailPage({ id }: { id: string }) {
     onError: (error) => toast.error(error.message),
   })
 
-  // Evaluate mutation
   const evaluateMutation = useMutation({
     mutationFn: async (data: {
       passed: boolean
@@ -132,7 +130,6 @@ export function CompetenceDetailPage({ id }: { id: string }) {
     onError: (error) => toast.error(error.message),
   })
 
-  // Renew mutation
   const renewMutation = useMutation({
     mutationFn: async (data: {
       passed: boolean

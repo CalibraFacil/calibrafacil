@@ -197,7 +197,7 @@ describe('organization-model', () => {
       technicalManagerName: 'Ana',
     })
 
-    // #647: vigência travels as an ISO string (Better Auth rejects Date-typed
+    // Vigência travels as an ISO string (Better Auth rejects Date-typed
     // fields on JSON bodies), start-of-day / end-of-day anchored in the
     // laboratory's zone (America/Sao_Paulo, -03:00). Empty stays
     // "" so the server clears the stored date (undefined would be skipped by

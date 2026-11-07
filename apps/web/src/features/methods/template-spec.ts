@@ -122,7 +122,7 @@ export function disciplineLabel(discipline: string): string {
 /**
  * Compact source sigla for chips/lines — e.g. "EURAMET cg-18" + "v4.0" → "cg-18
  * v4.0"; "UKAS LAB 14" → "LAB 14"; "EA-4/02" + "M:2022" → "EA-4/02". Derived from
- * the (already canonical, post-PR-A) `title`, so no `as`.
+ * the (already canonical) `title`, so no `as`.
  */
 export function shortSourceSigla(source: {
   title: string

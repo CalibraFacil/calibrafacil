@@ -97,7 +97,7 @@ describe('mass composition utils', () => {
     expect(arithmetic.totals.expandedUncertainty).toBeCloseTo(0.005)
 
     // The arithmetic sum is the conservative bound: always ≥ RSS, so it can
-    // only over-state, never under-state (this is the fix for issue #506).
+    // only over-state, never under-state.
     const arithmeticU = arithmetic.totals.expandedUncertainty ?? 0
     const rssU = rss.totals.expandedUncertainty ?? 0
     expect(arithmeticU).toBeGreaterThan(rssU)

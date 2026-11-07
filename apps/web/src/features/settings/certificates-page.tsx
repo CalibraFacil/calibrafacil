@@ -82,7 +82,7 @@ export function CertificatesSettingsPage({
   // The revoke dialog is open exactly when a certificate is chosen for it: one
   // state, so "open with nothing to revoke" cannot happen.
   const [certToRevoke, setCertToRevoke] = useState<Certificate | null>(null)
-  // Q51: the justification being typed to issue unsigned on purpose (null = form closed)
+  // The justification being typed to issue unsigned on purpose (null = form closed)
   const [unsignedReasonDraft, setUnsignedReasonDraft] = useState<string | null>(
     null,
   )
@@ -439,7 +439,6 @@ export function CertificatesSettingsPage({
   )
 }
 
-// Certificate card component
 function CertificateCard({
   certificate,
   onView,
@@ -604,7 +603,6 @@ function CertificateCard({
   )
 }
 
-// Upload certificate dialog
 function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -618,7 +616,6 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
       if (!name.trim()) throw new Error('Informe um nome para o certificado')
       if (!password) throw new Error('Informe a senha do certificado')
 
-      // Convert file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => {
@@ -742,7 +739,6 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
   )
 }
 
-// Certificate detail dialog
 function CertificateDetailDialog({
   certificate,
 }: {
@@ -809,7 +805,6 @@ function CertificateDetailDialog({
   )
 }
 
-// Revoke confirmation dialog
 function RevokeDialog({
   certificate,
   open,
