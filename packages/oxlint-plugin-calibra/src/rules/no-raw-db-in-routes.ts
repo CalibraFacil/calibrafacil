@@ -1,6 +1,4 @@
 import {
-  type Baseline,
-  baselineFor,
   importSourceOf,
   isTestFile,
   normalizedFilename,
@@ -17,13 +15,8 @@ import {
 // apps/api/src/lib/org-db.ts, i.e. `forOrg(db, organizationId)` from
 // @calibra-facil/db/for-org - which adds the predicate itself.
 //
-// So apps/api/src/routes may not use the `db` exported by @calibra-facil/db.
-// A route that still did would be grandfathered as an exact per-file count of
-// references to the binding (the rule option `baseline`, same ratchet as
-// no-json-error-body-in-routes): a file may never gain one, and - unlike the
-// other ratchets - a count that is higher than the file's real number of uses
-// is reported too, so the allowance shrinks in the same change that migrates a
-// handler. An unlisted file must have zero.
+// So apps/api/src/routes may not use the `db` exported by @calibra-facil/db. No
+// route is grandfathered.
 //
 // Statements that are cross-organization by design (sign-in memberships, the
 // portal scope resolver, public tokens) live in a lib module with a reason in
@@ -209,23 +202,6 @@ function collectReferences(
   return found;
 }
 
-/**
- * The baseline in force: none, or `{ baseline: { "<path suffix>": <count> } }`
- * from the rule options. The option exists for the rule's own tests (they inject
- * entries so the exact-count / +1 / stale branches stay covered while no route is
- * grandfathered); the repo config never sets it.
- */
-function baselineInForce(context: RuleContext): Baseline {
-  const options = toRecord(context.options?.[0]);
-  const injected = toRecord(options?.baseline);
-  if (!injected) return new Map<string, number>();
-  const entries: Array<[string, number]> = [];
-  for (const [file, count] of Object.entries(injected)) {
-    if (typeof count === "number") entries.push([file, count]);
-  }
-  return new Map(entries);
-}
-
 const USE_MESSAGE =
   "Routes do not query through the global db: take an org-bound handle with orgDb(organizationId) from apps/api/src/lib/org-db.ts (forOrg from @calibra-facil/db/for-org), which adds the organization predicate to every statement. Cross-organization lookups belong in a lib module with a reason in tenant-sql-allowlist.ts.";
 
@@ -236,38 +212,19 @@ const rule: RuleModule = {
       description:
         "Ratchet: apps/api routes may not use the raw global db; use the org-bound handle (forOrg).",
     },
-    schema: [
-      {
-        type: "object",
-        properties: {
-          baseline: {
-            type: "object",
-            additionalProperties: { type: "number" },
-          },
-        },
-        additionalProperties: false,
-      },
-    ],
   },
   create(context: RuleContext) {
     const filename = normalizedFilename(context);
     if (!ROUTES_PATTERN.test(filename) || isTestFile(filename)) return {};
 
-    const allowed = baselineFor(baselineInForce(context), filename);
     return {
       Program(program: unknown) {
         const root = toRecord(program);
         if (!root) return;
         const found = collectReferences(root, dbBindings(root));
 
-        for (const reference of found.slice(allowed)) {
+        for (const reference of found) {
           context.report({ node: reference, message: USE_MESSAGE });
-        }
-        if (found.length < allowed) {
-          context.report({
-            node: program,
-            message: `The raw-db baseline for this file is stale: it allows ${allowed} references to the global db but only ${found.length} remain. Lower (or delete) its entry in packages/oxlint-plugin-calibra/src/lib/raw-db-baseline.ts to ${found.length}.`,
-          });
         }
       },
     };

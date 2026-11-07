@@ -1,5 +1,7 @@
 import { describe, it } from "vitest";
+import { LEGACY_BASELINE } from "../src/rules/no-calibration-job-update-outside-owner.ts";
 import { expectClean, expectViolation } from "./harness.ts";
+import { ratchetSuite } from "./ratchet.ts";
 
 const RULE = "no-calibration-job-update-outside-owner";
 
@@ -67,28 +69,6 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
     });
   });
 
-  it("REQ-TR-4: grandfathers the exact legacy count and fails above it", async () => {
-    // apps/api/src/cli/seed-demo/jobs.ts is baselined at 1.
-    await expectClean(RULE, { "apps/api/src/cli/seed-demo/jobs.ts": UPDATE });
-    await expectViolation(RULE, {
-      "apps/api/src/cli/seed-demo/jobs.ts": updates(2),
-    });
-  });
-
-  it("REQ-TR-4: baselines the live legacy files at their exact counts", async () => {
-    const legacy: Record<string, number> = {
-      "apps/api/src/cli/seed-demo/jobs.ts": 1,
-      "apps/api/src/cli/seed-demo/timeline.ts": 1,
-    };
-    for (const [file, count] of Object.entries(legacy)) {
-      // eslint-disable-next-line no-await-in-loop -- sequential spawns keep the output readable
-      await expectClean(RULE, { [file]: updates(count) });
-      // eslint-disable-next-line no-await-in-loop -- see above
-      await expectViolation(RULE, { [file]: updates(count + 1) });
-    }
-    // Four real oxlint spawns.
-  }, 60_000);
-
   it("REQ-LC-2: the cloud jobs routes, the public API and the visits routes no longer write the job themselves (reject, cancel, assign, edit and amend moved into the jobs module)", async () => {
     for (const file of [
       "apps/api/src/routes/jobs.ts",
@@ -113,4 +93,10 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
       "apps/api/src/modules/jobs/submit-job.ts": UPDATE,
     });
   });
+});
+
+ratchetSuite({
+  rule: RULE,
+  baseline: LEGACY_BASELINE,
+  source: (count) => updates(count),
 });

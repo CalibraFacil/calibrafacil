@@ -112,8 +112,7 @@ that no longer exist (`inOrgTransaction`, `withOrgReader`, `OrgScope`, `afterCom
 `apps/api/src/routes/**`: `db` and `getDb()` from `@calibra-facil/db`, a namespace import reaching
 them (`import * as x`, `x.db`), a dynamic `import("@calibra-facil/db")`, and importing `db` or
 `getDb` by name from ANY module (so a lib that re-exports the raw handle is no way around it). No route is
-grandfathered since P2-18j (the committed baseline file is gone; the rule keeps a `baseline` option that
-only its own tests use, to cover the exact-count / +1 / stale branches): a route that needs a statement
+grandfathered since P2-18j (the baseline is gone, and so is the rule's `baseline` option): a route that needs a statement
 outside an organization calls a named lib function (`lib/identity.ts`, `lib/public-signup-store.ts`, ...),
 never the raw handle.
 

@@ -1,10 +1,6 @@
 import {
-  BASELINE_OPTION_SCHEMA,
-  baselineInForce,
-  createRatchet,
   isTestFile,
   normalizedFilename,
-  type Baseline,
   type RuleContext,
   type RuleModule,
   toRecord,
@@ -21,8 +17,7 @@ import {
 // Flagged: `<x>.json(..., <status >= 400>)` or `<x>.body(..., <status >= 400>)`
 // anywhere inside a function passed to `<db>.transaction(...)`,
 // `orgTransactionWithExecutor(...)` or `withOrg(...)` in apps/api/src. No site is
-// grandfathered: the committed baseline is empty, and `baseline` in the rule
-// options exists only for the rule's own tests.
+// grandfathered.
 
 const API_SRC_PATTERN = /(^|\/)apps\/api\/src\//;
 
@@ -30,8 +25,6 @@ const TRANSACTION_FUNCTIONS = new Set([
   "orgTransactionWithExecutor",
   "withOrg",
 ]);
-
-const NO_COMMITTED_BASELINE: Baseline = new Map<string, number>();
 
 const MESSAGE =
   "Do not return an error response from inside a transaction callback: the return commits every write made before it. Throw a DomainError (apps/api/src/lib/domain-errors.ts) so the transaction rolls back.";
@@ -102,22 +95,16 @@ const rule: RuleModule = {
       description:
         "Disallow returning an error response from inside a transaction callback (it commits partial writes); throw a DomainError.",
     },
-    schema: BASELINE_OPTION_SCHEMA,
   },
   create(context: RuleContext) {
     const filename = normalizedFilename(context);
     if (!API_SRC_PATTERN.test(filename) || isTestFile(filename)) return {};
 
-    const ratchet = createRatchet(
-      baselineInForce(context, NO_COMMITTED_BASELINE),
-      filename,
-    );
     return {
       CallExpression(node: unknown) {
         const call = toRecord(node);
         if (!call || !isErrorResponseCall(call)) return;
         if (!insideTransactionCallback(call)) return;
-        if (!ratchet.exceeds()) return;
         context.report({ node, message: MESSAGE });
       },
     };
