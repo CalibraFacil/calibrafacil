@@ -10,7 +10,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 /**
  * The laboratory's accredited scope (CMC lines, ISO/IEC 17025 7.6 and 7.8.3,
  * ILAC P14) and the organization's scope-guard mode. Response schemas are wire
- * schemas written from what `apps/api/src/routes/accredited-scope.ts` returns.
+ * schemas written from what `apps/api/src/domains/quality/routes/accredited-scope.ts` returns.
  * The whole domain is managed on the cloud-only settings surface.
  */
 

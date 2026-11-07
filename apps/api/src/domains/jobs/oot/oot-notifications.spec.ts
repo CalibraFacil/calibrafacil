@@ -142,7 +142,7 @@ vi.mock("../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: mockEnqueue,
 }));
 
-vi.mock("../../../lib/non-conformances", () => ({
+vi.mock("../../quality/non-conformances", () => ({
   createNonConformanceRecord: mockCreateNcRecord,
 }));
 

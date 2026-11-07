@@ -95,9 +95,9 @@ vi.mock("../../../lib/storage", async (importOriginal) => {
 
 // The CMC classification itself is covered by its own specs; here it is the
 // switch that makes every entry point see an enforced, adverse verdict.
-vi.mock("../../../lib/scope-compliance", async (importOriginal) => {
+vi.mock("../../quality/scope-compliance", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../../lib/scope-compliance")>();
+    await importOriginal<typeof import("../../quality/scope-compliance")>();
   return {
     ...actual,
     classifyJobScopeCompliance: vi.fn(async () => {

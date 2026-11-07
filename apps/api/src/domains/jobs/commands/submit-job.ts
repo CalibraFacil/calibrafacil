@@ -41,7 +41,7 @@ import { syncJobStandardLinks } from "../job-standards";
 import { orgDb } from "../../../lib/org-db";
 import { withOrg, type OrgContext } from "../../../lib/org-context";
 import { reconcileMethodSnapshotEngine } from "../method-snapshot-engine";
-import { classifyJobScopeCompliance } from "../../../lib/scope-compliance";
+import { classifyJobScopeCompliance } from "../../quality";
 import { buildUnitScopeCondition } from "../../../lib/units";
 import { syncVisitStatusFromJobs } from "../visit-status-sync";
 import {

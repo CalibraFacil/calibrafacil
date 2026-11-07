@@ -15,7 +15,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 /**
  * Statistical process control (ISO/IEC 17025 7.7.1): check-standard readings and
  * the control chart per standard and parameter. Response schemas are wire
- * schemas written from what `apps/api/src/routes/spc.ts` returns.
+ * schemas written from what `apps/api/src/domains/quality/routes/spc.ts` returns.
  */
 
 // ---------------------------------------------------------------------------

@@ -50,11 +50,11 @@ describe("sourceModuleFromStack", () => {
       ),
       frame("packages/db/src/for-org.ts"),
       frame("apps/api/src/lib/org-db.ts"),
-      frame("apps/api/src/routes/assets.ts"),
+      frame("apps/api/src/domains/assets/routes/assets.ts"),
       frame("apps/api/src/app.ts"),
     ].join("\n");
     expect(sourceModuleFromStack(stack, ROOT)).toBe(
-      "apps/api/src/routes/assets.ts",
+      "apps/api/src/domains/assets/routes/assets.ts",
     );
   });
 
@@ -100,7 +100,7 @@ describe("parseViolations", () => {
         file: "/api/src/routes/a.int.spec.ts",
         test: "t1",
         statement: "select  *\n from asset",
-        source: "apps/api/src/routes/assets.ts",
+        source: "apps/api/src/domains/assets/routes/assets.ts",
         path: "/api/assets/1",
       }),
       line({
@@ -108,7 +108,7 @@ describe("parseViolations", () => {
         file: "/api/src/routes/a.int.spec.ts",
         test: "t2",
         statement: "select * from asset",
-        source: "apps/api/src/routes/assets.ts",
+        source: "apps/api/src/domains/assets/routes/assets.ts",
         path: "/api/assets/2",
       }),
       line({
@@ -127,7 +127,7 @@ describe("parseViolations", () => {
         statement: "select * from asset",
         count: 2,
         tests: ["t1", "t2"],
-        module: "apps/api/src/routes/assets.ts",
+        module: "apps/api/src/domains/assets/routes/assets.ts",
         pathGroup: "/api/assets",
       },
       {
@@ -252,7 +252,7 @@ describe("buildSpecRows and summarizeGroups", () => {
 
 describe("layerOf and normalizeTestName", () => {
   it("names the layer of a module", () => {
-    expect(layerOf("apps/api/src/routes/assets.ts")).toBe("routes");
+    expect(layerOf("apps/api/src/routes/example.ts")).toBe("routes");
     expect(layerOf("apps/api/src/lib/units.ts")).toBe("lib");
     expect(layerOf("apps/api/src/modules/jobs/service.ts")).toBe(
       "modules/jobs",

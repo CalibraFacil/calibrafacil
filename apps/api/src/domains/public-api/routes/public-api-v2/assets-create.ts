@@ -8,8 +8,10 @@ import { stagePublicApiWebhookEvent } from "../../public-api-webhooks";
 import { isUniqueViolation } from "../../../../lib/db-errors";
 import { notFound } from "../../../../lib/domain-errors";
 import { requireApiScope } from "../../../../middleware/api-key-auth";
-import { createLabAsset } from "../../../../lib/asset-writes";
-import { denormalizeAssetSpecificationsForResponse } from "../../../../lib/asset-measurement";
+import {
+  createLabAsset,
+  denormalizeAssetSpecificationsForResponse,
+} from "../../../assets";
 import { type PublicApiV2Env } from "./env";
 import { AssetCreatePublicSchema } from "./schemas";
 import { withIdempotentMutation } from "./idempotency";

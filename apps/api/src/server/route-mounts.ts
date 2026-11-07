@@ -1,8 +1,21 @@
 import type { Hono } from "hono";
-import { accreditedScopeRouter } from "../routes/accredited-scope";
+import {
+  accreditedScopeRouter,
+  authorizedSignatoriesRouter,
+  capaRouter,
+  proficiencyTestsRouter,
+  spcRouter,
+  competencesRouter,
+  environmentalLimitsRouter,
+  nonConformancesRouter,
+  trainingRecordsRouter,
+} from "../domains/quality/routes";
 import { apiKeysRouter } from "../routes/api-keys";
-import { assetTypesRouter } from "../routes/asset-types";
-import { assetsRouter } from "../routes/assets";
+import {
+  assetTypesRouter,
+  assetsRouter,
+  legalMetrologyRegulationsRouter,
+} from "../domains/assets/routes";
 import { onboardingRouter } from "../routes/onboarding";
 import {
   calibrationRequestsRouter,
@@ -10,34 +23,26 @@ import {
   visitRescheduleRequestsRouter,
   visitsRouter,
 } from "../domains/visits/routes";
-import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
-import { capaRouter } from "../routes/capa";
-import { proficiencyTestsRouter } from "../routes/proficiency-tests";
-import { spcRouter } from "../routes/spc";
 import {
   certificateNumberingRouter,
   jobsRouter,
   ootAckRouter,
 } from "../domains/jobs/routes";
-import { competencesRouter } from "../routes/competences";
 import {
   customerGroupsRouter,
   customersRouter,
 } from "../domains/customers/routes";
 import { dashboardRouter, reportsRouter } from "../domains/reports/routes";
-import { environmentalLimitsRouter } from "../routes/environmental-limits";
 import { financeRouter } from "../routes/finance";
 import { integrationsRouter } from "../routes/integrations";
 import { invitationsRouter } from "../routes/invitations";
 import { labSetupRouter } from "../routes/lab-setup";
-import { legalMetrologyRegulationsRouter } from "../routes/legal-metrology-regulations";
 import { runApiHealthCheck } from "../lib/health";
 import { methodsRouter } from "../domains/methods/routes";
 import {
   notificationsRouter,
   webhooksRouter,
 } from "../domains/notifications/routes";
-import { nonConformancesRouter } from "../routes/non-conformances";
 import { organizationLifecycleRouter } from "../routes/organization-lifecycle";
 import { organizationProfileRouter } from "../routes/organization-profile";
 import { organizationMediaRouter } from "../routes/organization-media";
@@ -68,7 +73,6 @@ import { signingRouter } from "../routes/signing";
 import { ssoRouter } from "../routes/sso";
 import { standardsRouter } from "../domains/standards/routes";
 import { syncRouter } from "../domains/sync/routes";
-import { trainingRecordsRouter } from "../routes/training-records";
 import { unitsRouter } from "../routes/units";
 import { magicLinkRouter } from "../routes/magic-link";
 import { verifyRouter } from "../domains/verify/routes";

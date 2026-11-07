@@ -153,7 +153,7 @@ vi.mock("../../../lib/org-transaction", async () => {
   };
 });
 
-vi.mock("../../../lib/signatory", () => ({
+vi.mock("../../quality/signatory", () => ({
   checkApproverIsAuthorizedSignatory: mockCheckSignatory,
 }));
 // The standards judgement itself is covered by its own specs and against a real
@@ -165,7 +165,7 @@ vi.mock("./standards-judgement", async (importOriginal) => {
 vi.mock("../as-found-reliability-verdict", () => ({
   buildAsFoundReliabilityVerdict: mockBuildVerdict,
 }));
-vi.mock("../../../lib/asset-calibration-advance", () => ({
+vi.mock("../../assets/asset-calibration-advance", () => ({
   advanceAssetCalibrationDates: mockAdvanceDates,
   revertAssetCalibrationAdvance: mockRevertAdvance,
 }));

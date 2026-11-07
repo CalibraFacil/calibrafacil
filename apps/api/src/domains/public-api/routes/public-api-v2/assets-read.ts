@@ -11,7 +11,7 @@ import {
   getResourceExternalIdMap,
 } from "../../public-api";
 import { requireApiScope } from "../../../../middleware/api-key-auth";
-import { denormalizeAssetSpecificationsForResponse } from "../../../../lib/asset-measurement";
+import { denormalizeAssetSpecificationsForResponse } from "../../../assets";
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
 import { resolveCustomerId, resolveExternalResourceId } from "./resolvers";

@@ -12,7 +12,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * Training records (ISO/IEC 17025 6.2.3 training evidence). Response schemas
  * are wire schemas written from what
- * `apps/api/src/routes/training-records.ts` returns.
+ * `apps/api/src/domains/quality/routes/training-records.ts` returns.
  *
  * Not client-facing, so not defined here: `GET /:id`, `PUT /:id`,
  * `POST /:id/complete` and `DELETE /:id` (nothing calls them).

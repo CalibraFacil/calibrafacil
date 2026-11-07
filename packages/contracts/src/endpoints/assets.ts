@@ -13,7 +13,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The customers' instruments. Response schemas are wire schemas written from
- * what the handlers in `apps/api/src/routes/assets.ts` return; the desktop
+ * what the handlers in `apps/api/src/domains/assets/routes/assets.ts` return; the desktop
  * local-server answers `list` and `get` (and the `create` stub) with the same
  * ones (`apps/local-server/src/contract.test.ts`). Fields the offline mirror
  * does not keep are optional.

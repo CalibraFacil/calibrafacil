@@ -15,13 +15,13 @@ import { isUniqueViolation } from "../../../../lib/db-errors";
 import { invalid, notFound } from "../../../../lib/domain-errors";
 import { withOrg } from "../../../../lib/org-context";
 import { requireApiScope } from "../../../../middleware/api-key-auth";
-import { deriveNextCalibrationDate } from "../../../../lib/portal-asset-interval";
 import {
+  deriveNextCalibrationDate,
   assertAssetTagFree,
   deleteLabAsset,
   planAssetRegimeUpdate,
-} from "../../../../lib/asset-writes";
-import { normalizeAssetSpecificationsFromInput } from "../../../../lib/asset-measurement";
+  normalizeAssetSpecificationsFromInput,
+} from "../../../assets";
 import { type PublicApiV2Env } from "./env";
 import { apiKeyActor } from "./actor";
 import { answeringRefusals } from "./refusals";

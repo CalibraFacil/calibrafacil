@@ -11,7 +11,7 @@ import {
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { enqueueBackgroundJob } from "../../../lib/background-jobs";
-import { createNonConformanceRecord } from "../../../lib/non-conformances";
+import { createNonConformanceRecord } from "../../quality";
 import type { OrgContext } from "../../../lib/org-context";
 
 /**

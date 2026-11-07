@@ -424,7 +424,7 @@ describe('asset feature forms', () => {
   // date — periodicity is the customer's decision in the portal (§7.8.4.3 +
   // ILAC-G24). The former "calibration periodicity presets" tests were removed
   // with the feature. Next-date derivation now lives in the portal API
-  // (apps/api/src/lib/portal-asset-interval.ts + .spec.ts).
+  // (apps/api/src/domains/assets/portal-asset-interval.ts + .spec.ts).
 })
 
 function validAssetForm(): AssetFormData {

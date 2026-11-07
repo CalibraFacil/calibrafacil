@@ -61,9 +61,9 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyAssetFoundOutOfTolerance: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../../lib/scope-compliance", async (importOriginal) => {
+vi.mock("../../quality/scope-compliance", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../../lib/scope-compliance")>();
+    await importOriginal<typeof import("../../quality/scope-compliance")>();
   return {
     ...actual,
     classifyJobScopeCompliance: vi.fn(async () => ({

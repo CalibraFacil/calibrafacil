@@ -167,17 +167,17 @@ binds the real portal scope; tenant isolation tested.
 
 ## Decomposition
 
-| Mini-spec                    | Layer (real path)                                                                                     | Depends on | Risk                            | Mode                                      |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- | ----------------------------------------- |
-| A1 as-found verdict (pure)   | `apps/api/src/domains/jobs/as-found-reliability-verdict.ts` (mirror `portal-certificate-verdict.ts`)  | —          | med (metrology rule)            | loopable-with-verifier (oracle)           |
-| A2 persist verdict on job    | `packages/db` schema + approval wiring (`apps/api/src/domains/jobs/routes/jobs.ts`)                   | A1         | **high (approval-adjacent)**    | **pair-don't-loop**                       |
-| B1 asset interval columns    | `packages/db/src/schema.ts` + hand migration                                                          | —          | med                             | pair-don't-loop (migration review)        |
-| B2 portal write endpoint     | `apps/api/src/domains/portal/routes/portal.ts` + portal scope                                         | B1, B3     | **high + critical (new authz)** | **pair-don't-loop**                       |
-| B3 interval payload Zod      | `packages/schemas`                                                                                    | —          | low                             | loopable-with-verifier                    |
-| B4 lab demotion              | `apps/web/src/features/assets/*` + `apps/api/src/routes/assets.ts` + `CreateAsset/UpdateAsset` schema | B1         | **high (compliance flip)**      | **pair-don't-loop** (API contract change) |
-| B5 legal-metrology lock      | `apps/portal` editor + B2 endpoint (REQ-ACCESS-INT-005)                                               | B2         | **high (regulatory)**           | **pair-don't-loop**                       |
-| B6 certificate guard test    | `packages/documents`, `packages/label-rendering` tests                                                | —          | high (regulatory)               | loopable-with-verifier (guard test)       |
-| B7 portal interval editor UI | `apps/portal/src/features/fleet` (Base UI / Watermelon-derived)                                       | B2, B3     | low                             | loopable-with-verifier                    |
+| Mini-spec                    | Layer (real path)                                                                                                    | Depends on | Risk                            | Mode                                      |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- | ----------------------------------------- |
+| A1 as-found verdict (pure)   | `apps/api/src/domains/jobs/as-found-reliability-verdict.ts` (mirror `portal-certificate-verdict.ts`)                 | —          | med (metrology rule)            | loopable-with-verifier (oracle)           |
+| A2 persist verdict on job    | `packages/db` schema + approval wiring (`apps/api/src/domains/jobs/routes/jobs.ts`)                                  | A1         | **high (approval-adjacent)**    | **pair-don't-loop**                       |
+| B1 asset interval columns    | `packages/db/src/schema.ts` + hand migration                                                                         | —          | med                             | pair-don't-loop (migration review)        |
+| B2 portal write endpoint     | `apps/api/src/domains/portal/routes/portal.ts` + portal scope                                                        | B1, B3     | **high + critical (new authz)** | **pair-don't-loop**                       |
+| B3 interval payload Zod      | `packages/schemas`                                                                                                   | —          | low                             | loopable-with-verifier                    |
+| B4 lab demotion              | `apps/web/src/features/assets/*` + `apps/api/src/domains/assets/routes/assets.ts` + `CreateAsset/UpdateAsset` schema | B1         | **high (compliance flip)**      | **pair-don't-loop** (API contract change) |
+| B5 legal-metrology lock      | `apps/portal` editor + B2 endpoint (REQ-ACCESS-INT-005)                                                              | B2         | **high (regulatory)**           | **pair-don't-loop**                       |
+| B6 certificate guard test    | `packages/documents`, `packages/label-rendering` tests                                                               | —          | high (regulatory)               | loopable-with-verifier (guard test)       |
+| B7 portal interval editor UI | `apps/portal/src/features/fleet` (Base UI / Watermelon-derived)                                                      | B2, B3     | low                             | loopable-with-verifier                    |
 
 **Pairing note:** A2, B1, B2, B4, B5 touch the approval flow, the asset migration, a new
 RBAC boundary, or the compliance flip → **pair-don't-loop** (implement in-session with the
