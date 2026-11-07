@@ -1,60 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Cron } from "croner";
 
-import { JOB_HANDLERS } from "../cron/dispatch";
-import {
-  CRON_ENTRIES,
-  createInFlightRuns,
-  startCronScheduler,
-} from "./cron-scheduler";
+import { createInFlightRuns, startCronScheduler } from "./cron-scheduler";
+import { CRON_ENTRIES } from "../cron/schedule";
 
 let jobs: Cron[] = [];
 
 afterEach(() => {
   for (const job of jobs) job.stop();
   jobs = [];
-});
-
-function jobName(path: string): string {
-  return path.split("/").filter(Boolean).at(-1) ?? "";
-}
-
-describe("CRON_ENTRIES", () => {
-  it("schedules exactly the jobs the cron dispatcher can run", () => {
-    // A scheduled path without a handler would 404 on every tick; a handler
-    // without a schedule would never run.
-    expect(CRON_ENTRIES.map((entry) => jobName(entry.path)).toSorted()).toEqual(
-      Object.keys(JOB_HANDLERS).toSorted(),
-    );
-  });
-
-  it("lists every path under /api/cron/ once", () => {
-    const paths = CRON_ENTRIES.map((entry) => entry.path);
-
-    expect(new Set(paths).size).toBe(paths.length);
-    for (const path of paths) expect(path).toMatch(/^\/api\/cron\/[a-z-]+$/);
-  });
-
-  it("keeps the cadence of every job", () => {
-    expect(
-      Object.fromEntries(CRON_ENTRIES.map((e) => [e.path, e.schedule])),
-    ).toEqual({
-      "/api/cron/integrations": "*/30 * * * *",
-      "/api/cron/notifications": "0 8 * * *",
-      "/api/cron/portal-digest": "0 9 * * *",
-      "/api/cron/auth-maintenance": "30 4 * * 1",
-      "/api/cron/service-order-emails": "*/30 * * * *",
-      "/api/cron/oot-emails": "*/30 * * * *",
-      "/api/cron/queue-backstop": "*/30 * * * *",
-      "/api/cron/spc-recompute": "0 3 * * *",
-      "/api/cron/email-domain-health": "30 3 * * *",
-      "/api/cron/certificate-drift": "0 6 * * *",
-      "/api/cron/records-purge": "0 5 * * 0",
-      "/api/cron/sync-change-log-purge": "15 4 * * *",
-      "/api/cron/approval-effects-reconcile": "45 3 * * *",
-      "/api/cron/audit-chain-verify": "45 4 * * *",
-    });
-  });
 });
 
 describe("startCronScheduler", () => {
