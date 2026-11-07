@@ -87,9 +87,6 @@ export const AddressSchema = z.object({
   state: z.string().optional(),
 }) satisfies z.ZodType<Address>;
 
-/**
- * Schema for creating a new customer
- */
 export const CreateCustomerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   // Nome Fantasia (trade name). Display-only; the legal `name` stays the
@@ -269,9 +266,6 @@ export const AssetTypeFieldSchema = z.object({
   required: z.boolean().optional(),
 });
 
-/**
- * Schema for listing asset types
- */
 export const ListAssetTypesQuerySchema = z.object({
   query: z.string().optional(),
 });
@@ -356,9 +350,6 @@ export const MeasurementUnitSchema = z.enum([
 ]);
 export type MeasurementUnit = z.infer<typeof MeasurementUnitSchema>;
 
-/**
- * Schema for creating a new asset
- */
 export const CreateAssetSchema = z.object({
   customerId: z.coerce.number().min(1, "Cliente é obrigatório"),
   assetTypeId: z.coerce.number().min(1, "Tipo de instrumento é obrigatório"),
@@ -701,7 +692,7 @@ export const ListVisitsQuerySchema = z.object({
   rescheduleRequested: queryFlag.optional(),
 });
 
-// #739: portal two-way visit scheduling ------------------------------------
+// Portal two-way visit scheduling ------------------------------------
 
 export const VisitReschedulePreferredPeriodSchema = z.enum([
   "MORNING",
@@ -1210,7 +1201,7 @@ export const MethodCertificateContentSchema = z.object({
   decisionRuleStatement: z.string().max(2000).optional(),
   /**
    * The decision rule the method's conformity is judged by (ISO/IEC 17025
-   * 7.8.6, ILAC-G8; roadmap 2 C4): the as-found verdict and the
+   * 7.8.6, ILAC-G8): the as-found verdict and the
    * out-of-tolerance alert follow it. Absent: undeclared (simple acceptance).
    */
   decisionRuleKind: z
@@ -1223,9 +1214,6 @@ export type MethodCertificateContent = z.infer<
   typeof MethodCertificateContentSchema
 >;
 
-/**
- * Schema for creating a new method
- */
 export const CreateMethodSchema = z.object({
   assetTypeId: z.coerce.number().nullable().optional(),
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -1567,7 +1555,7 @@ const CertifiedValueSchema = z.object({
 });
 
 /**
- * Roadmap 2 C2: who calibrated the standard, as evidence for the SI-traceability
+ * Who calibrated the standard, as evidence for the SI-traceability
  * sentence. The sentence is printed only when the provider is recorded as
  * accredited by an ILAC-MRA signatory (Cgcre/RBC in Brazil) WITH its
  * accreditation number; `mraRecognized` without a number is refused by
@@ -1622,7 +1610,6 @@ export const CreateReferenceStandardSchema = z
     // Multi-value metrology data (for sets)
     certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
     metrologyData: ReferenceStandardMetrologyDataSchema.optional().nullable(),
-    // Status
     status: ReferenceStandardStatusSchema.default("ACTIVE"),
   })
   .refine(
@@ -1708,7 +1695,7 @@ export const RenewCertificateSchema = z
       "Informe o número de acreditação do laboratório que calibrou o padrão",
     path: ["calibrationProviderAccreditationNumber"],
   })
-  // Roadmap 2 C3: a renewal is a new certificate, so it brings its own values;
+  // A renewal is a new certificate, so it brings its own values;
   // keeping the previous certificate's values under a new number is refused.
   .refine((data) => renewalCarriesValues(data), {
     message:
@@ -1785,7 +1772,7 @@ export const CreateJobSchema = z.object({
   serviceId: z.coerce.number().min(1, "Serviço é obrigatório"),
   technicianId: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(), // ISO date string
-  // DOM-02 (#655): when this calibration is opened from a repair service order
+  // When this calibration is opened from a repair service order
   // flagged "calibration required after repair", record the source OS so the
   // pending-after-repair queue can tell the follow-up was opened. Server
   // re-validates the OS belongs to the caller's org before persisting the link.
@@ -1874,22 +1861,16 @@ export const SubmitForReviewSchema = z.object({
 export const ApproveJobSchema = z.object({
   reason: z.string().optional(), // Optional approval notes
   environmentalJustification: z.string().optional(), // Required if env conditions out of limits
-  // #427 Phase 1: documented scope-violation override. Only honored when the
+  // Documented scope-violation override. Only honored when the
   // org enforces the CMC guard and the classification is adverse; approving
   // with it downgrades the issuance to non-accredited (seal suppressed).
   scopeOverrideJustification: z.string().max(1000).optional(),
 });
 
-/**
- * Schema for rejecting a job
- */
 export const RejectJobSchema = z.object({
   reason: z.string().min(1, "Motivo da rejeição é obrigatório"),
 });
 
-/**
- * Schema for canceling a job
- */
 export const CancelJobSchema = z.object({
   reason: z.string().min(1, "Motivo do cancelamento é obrigatório"),
 });
@@ -1962,7 +1943,7 @@ export const QuantityKindSchema = z.enum([
 ]);
 
 /**
- * Accredited-scope line (CMC) — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427).
+ * Accredited-scope line (CMC) — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14.
  * CMC(x) = cmcA + cmcB·|x| with x in rangeUnit and the result in cmcUnit;
  * "fixed" ignores cmcB. Upsert payload: `id` present = update.
  */
@@ -2087,9 +2068,6 @@ export const ListNotificationsQuerySchema = z.object({
   priority: NotificationPrioritySchema.optional(),
 });
 
-/**
- * Schema for marking notifications as read
- */
 export const MarkNotificationsReadSchema = z.object({
   notificationIds: z
     .array(z.number())
@@ -2192,9 +2170,6 @@ export const NonConformanceDispositionSchema = z.enum([
  */
 export const NonConformanceStatusSchema = z.enum(NON_CONFORMANCE_STATUSES);
 
-/**
- * Schema for creating a new non-conformance
- */
 export const CreateNonConformanceSchema = z.object({
   jobId: z.coerce.number().optional().nullable(),
   type: NonConformanceTypeSchema,
@@ -2307,9 +2282,6 @@ const CorrectiveActionCategorySchema = z.enum([
   "other",
 ]);
 
-/**
- * Root cause analysis method
- */
 const RootCauseAnalysisMethodSchema = z.enum([
   "5_whys",
   "fishbone",
@@ -2317,9 +2289,6 @@ const RootCauseAnalysisMethodSchema = z.enum([
   "other",
 ]);
 
-/**
- * Schema for creating a new CAPA
- */
 export const CreateCorrectiveActionSchema = z.object({
   title: z.string().min(5, "Título deve ter pelo menos 5 caracteres"),
   description: z
@@ -2382,7 +2351,7 @@ export const VerifyCorrectiveActionSchema = z.object({
     .min(10, "Notas de verificação devem ter pelo menos 10 caracteres"),
   /**
    * Only honoured when the verifier is not independent of the CAPA AND no other
-   * eligible verifier exists in the laboratory (decision Q50): why the sole
+   * eligible verifier exists in the laboratory: why the sole
    * verifier verifies it anyway. Ignored for an independent verifier.
    */
   independenceJustification: z
@@ -2443,9 +2412,6 @@ export const TrainingTypeSchema = z.enum([
  */
 const TrainingStatusSchema = z.enum(TRAINING_STATUSES);
 
-/**
- * Schema for creating a new competence request
- */
 export const CreateCompetenceRequestSchema = z.object({
   userId: z.string().min(1, "Técnico é obrigatório"),
   assetTypeId: z.coerce.number().optional().nullable(),
@@ -2505,9 +2471,6 @@ export const ListPersonnelCompetenceQuerySchema = z.object({
 // TRAINING RECORD SCHEMAS - ISO 17025:2017 Clause 6.2.3
 // =============================================================================
 
-/**
- * Schema for creating a new training record
- */
 export const CreateTrainingRecordSchema = z.object({
   userId: z.string().min(1, "Técnico é obrigatório"),
   competenceId: z.coerce.number().optional().nullable(),

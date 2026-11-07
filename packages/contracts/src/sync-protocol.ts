@@ -16,8 +16,8 @@ import { syncEventSchema } from "./sync";
  *   that predates versioning: the cloud refuses it as "update required".
  * - Every member below is an operation a desktop build of today writes. The operations
  *   older builds wrote (customers, instrument edits, job drafts, non-conformances, quote,
- *   delivery and execution-notes documents, certificate drafts and PDFs) were retired in
- *   Q69 (`RETIRED_SYNC_OPERATIONS`): the cloud no longer applies them, and an event of
+ *   delivery and execution-notes documents, certificate drafts and PDFs) were retired
+ *   (`RETIRED_SYNC_OPERATIONS`): the cloud no longer applies them, and an event of
  *   one left in an upgraded outbox is refused for good like any operation outside the
  *   union (`UNSUPPORTED_SYNC_OPERATION`), readable in the desktop's refused list.
  * - An operation outside the union is not a schema failure: it is an operation
@@ -215,8 +215,8 @@ export type SyncOperationPermission = {
  * - `follow`: the event acts on a record that already exists (an edit, an execution
  *   save, an audit marker).
  *
- * This was the naming convention `create_local_*`; it is a field so a rename cannot
- * change the ordering.
+ * Ordering is a field, not a naming convention (`create_local_*`), so a rename cannot
+ * change it.
  */
 export type SyncOperationOrdering = "create" | "follow";
 
@@ -323,7 +323,7 @@ export function syncOperationUploadsFile(operation: string): boolean {
 }
 
 /**
- * The operations older builds wrote and the cloud no longer applies (Q69), with the label
+ * The operations older builds wrote and the cloud no longer applies, with the label
  * the desktop shows when one of them, left in an upgraded outbox, is refused, and how it is
  * ordered there (a refused creation still holds back the events that refer to it). They are
  * not members of the protocol: an event of one is `UNSUPPORTED_SYNC_OPERATION`.
@@ -512,7 +512,7 @@ const pushRequestHeaderShape = {
   /** The desktop app version (`app.getVersion()`), compared with the cloud's minimum. */
   desktopVersion: z.string().min(1).optional(),
   /**
-   * The device clock when the push was sent (roadmap 2 E2). The cloud compares
+   * The device clock when the push was sent. The cloud compares
    * it with its own clock and records the skew with what the push changes; the
    * device clock still never moves an instant past the server's.
    */
@@ -538,7 +538,7 @@ export const syncPushRequestEnvelopeSchema = z.object({
 export type SyncPushRequest = z.infer<typeof syncPushRequestSchema>;
 
 // ---------------------------------------------------------------------------
-// Minimum desktop version (Q28)
+// Minimum desktop version
 // ---------------------------------------------------------------------------
 
 /**

@@ -8,7 +8,7 @@ export const syncStateSchema = z.enum([
   "conflict",
   /**
    * The cloud answered 401: the desktop's session expired or was revoked. Not a
-   * failure to retry: the user signs in again (roadmap 2 E2).
+   * failure to retry: the user signs in again.
    */
   "auth_required",
 ]);

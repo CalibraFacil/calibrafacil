@@ -47,7 +47,7 @@ export type ScopeEnforcementMode = z.infer<typeof scopeEnforcementModeSchema>;
 export const accreditedScopeResponseSchema = z.object({
   lines: z.array(accreditedScopeLineSchema),
   unit: unitContextSchema,
-  /** The EFFECTIVE mode (Q45): a lab that never chose gets the default. */
+  /** The EFFECTIVE mode: a lab that never chose gets the default. */
   enforcementMode: scopeEnforcementModeSchema,
   /**
    * True when the lab never chose a mode and the default applies (`enforce` for
@@ -73,7 +73,7 @@ export type SaveAccreditedScopeLineResponse = z.infer<
 // Endpoints
 // ---------------------------------------------------------------------------
 
-// #427 Phase 0: managed on the cloud-only settings surface and enforced
+// Managed on the cloud-only settings surface and enforced
 // server-side at submit/approve; nothing consumes scope lines on the desktop
 // yet, so the whole group stays cloud-only until the offline execution
 // warning lands.

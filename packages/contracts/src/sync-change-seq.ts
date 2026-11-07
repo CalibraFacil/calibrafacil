@@ -23,7 +23,7 @@ export const SYNC_CHANGE_SEQ_PROTOCOL_VERSION = 3;
 export const SYNC_PULL_PROTOCOL_PARAM = "protocolVersion";
 
 // An optional 4th part is the fingerprint of the scope the cursor was handed out
-// for (roadmap 2 E2): a pull under another scope must start over.
+// for, so a pull under another scope must start over.
 const CURSOR_PATTERN = /^v3\|(\d{1,20})\|(\d{1,19})(?:\|([0-9a-z]{1,16}))?$/;
 const MAX_XID = 18_446_744_073_709_551_615n; // 2^64 - 1 (xid8)
 const MAX_SEQ = 9_223_372_036_854_775_807n; // 2^63 - 1 (bigserial)

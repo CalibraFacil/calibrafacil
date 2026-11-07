@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Soft delete of a laboratory (records retention, decision Q16).
+ * Soft delete of a laboratory (records retention).
  *
  * The owner types the organization's name to confirm and gives the reason that
  * is kept on the organization record and its event log. The confirmation is

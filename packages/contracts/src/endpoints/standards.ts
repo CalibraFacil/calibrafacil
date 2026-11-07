@@ -84,8 +84,8 @@ export const standardRecordSchema = z.object({
   model: nullableString,
   certificateNumber: z.string(),
   calibratedBy: nullableString,
-  /** Roadmap 2 C2: the provider's accreditation, evidence for the SI-traceability sentence. */
-  // The provider's accreditation (roadmap 2 C2): cloud data only; the desktop
+  /** The provider's accreditation, evidence for the SI-traceability sentence. */
+  // The provider's accreditation: cloud data only; the desktop
   // local server's standards carry none (absent there, never asserted).
   calibrationProviderAccreditationNumber: nullableString.optional(),
   calibrationProviderMraRecognized: z.boolean().optional(),
@@ -171,7 +171,7 @@ export type MassCompositionProfilesResponse = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// Audit log, recall and reverse traceability (#426)
+// Audit log, recall and reverse traceability
 // ---------------------------------------------------------------------------
 
 const standardAuditEntrySchema = z.object({

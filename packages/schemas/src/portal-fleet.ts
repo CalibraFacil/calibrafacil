@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Portal fleet reliability analytics + asset OOT impact assessment (#740).
+ * Portal fleet reliability analytics + asset OOT impact assessment.
  * The assessment is a regulated record (ISO 9001 §7.1.5.2 / IATF 16949
  * §7.1.5.2.1) → schema-first; the API validates every write through these.
  */

@@ -20,7 +20,7 @@ const bodyText = (max: number) =>
     .optional();
 
 /**
- * Roadmap 2 C2: the unit as a distinct calibrating body (legal name, CNPJ,
+ * The unit as a distinct calibrating body (legal name, CNPJ,
  * address). A unit that declares a CNPJ is a distinct establishment: its block
  * is what the certificates it issues print as the calibrating body.
  */

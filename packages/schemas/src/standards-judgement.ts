@@ -1,6 +1,6 @@
 /**
  * The ONE judgement of whether the reference standards a calibration is
- * recorded with may be used (owner decisions Q12). Cloud submit, the public
+ * recorded with may be used. Cloud submit, the public
  * API submit, the desktop sync apply and the offline local database all call
  * this function, each with the standards it loaded from its own store, so the
  * desktop cannot record what the cloud would refuse (nor refuse what it would
@@ -73,7 +73,7 @@ export type JudgedStandardFacts = {
   /** The certificate's last valid day; null/unreadable is never valid. */
   nextCalibrationDate: Date | string | null;
   /**
-   * The standard's calibration history (roadmap 2 C3), when the store keeps it:
+   * The standard's calibration history, when the store keeps it:
    * the standard is valid on a day one of these certificates covered. Absent
    * (the desktop's local store), the current certificate alone decides.
    */

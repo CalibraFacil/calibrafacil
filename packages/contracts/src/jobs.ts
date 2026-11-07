@@ -551,8 +551,8 @@ const scopeComplianceStatusSchema = z.enum([
 ]);
 
 /**
- * The accreditation-seal decision frozen at approval (`certificate_input.seal`,
- * Q42): whether the certificate carries the seal and, when it does not, the
+ * The accreditation-seal decision frozen at approval (`certificate_input.seal`):
+ * whether the certificate carries the seal and, when it does not, the
  * code of the reason (see `ACCREDITATION_SEAL_WITHHELD_MESSAGES_PT` in
  * `@calibra-facil/shared`). Null until the job is approved, and for records
  * approved before the decision was frozen.
@@ -666,7 +666,7 @@ const jobAllowedActionsSchema = z.object({
   assign: jobActionVerdictSchema,
   amend: jobActionVerdictSchema,
   withdraw: jobActionVerdictSchema,
-  /** Render again a certificate whose render failed (RENDER_FAILED, roadmap 2 C5). */
+  /** Render again a certificate whose render failed (RENDER_FAILED). */
   retry_render: jobActionVerdictSchema,
 });
 export type JobAllowedActions = z.infer<typeof jobAllowedActionsSchema>;
@@ -707,7 +707,7 @@ export const jobDetailSchema = z.object({
   scopeComplianceStatus: scopeComplianceStatusSchema.nullable(),
   scopeComplianceFindings: z.array(scopeComplianceFindingSchema).nullable(),
   scopeOverrideJustification: nullableString,
-  // Q42: the seal decision frozen at approval, with the reason it was withheld.
+  // The seal decision frozen at approval, with the reason it was withheld.
   // Absent from the desktop local server (cloud-frozen data only).
   accreditationSeal: jobAccreditationSealSchema.nullable().optional(),
   // The lifecycle of the issued certificate, derived from its append-only
@@ -718,7 +718,7 @@ export const jobDetailSchema = z.object({
   // The open amendment of this certificate, when there is one: the original
   // stays APPROVED (the valid certificate) until the replacement is issued.
   amendmentInProgress: jobAmendmentInProgressSchema.nullable().optional(),
-  // What the signed-in member may do with the job now (roadmap 2 F1): decided by
+  // What the signed-in member may do with the job now: decided by
   // the server (status machine, RBAC, separation of duties, certificate
   // lifecycle). Absent from the desktop local server: it keeps its own rules.
   allowedActions: jobAllowedActionsSchema.optional(),

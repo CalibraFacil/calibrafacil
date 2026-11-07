@@ -15,9 +15,9 @@ import { isRegulatedSyncOperation } from "./sync-protocol";
  *   retried with exponential backoff.
  *
  * This table is the one place the decision lives. The codes are the ones
- * `apps/api/src/routes/sync.ts` puts in a push response's `rejected` list; a
- * spec reads that source and fails when a code is emitted that is not listed
- * here, so a new refusal cannot silently fall into the default.
+ * sync routes in `apps/api/src/domains/sync` put in a push response's
+ * `rejected` list; a code missing here falls into the default class, so list
+ * every new refusal.
  *
  * Network failures, HTTP 5xx and rate limits never reach this table: they fail
  * the whole push request, not a single event, and always back off.

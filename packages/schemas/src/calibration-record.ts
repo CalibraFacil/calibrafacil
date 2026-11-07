@@ -66,7 +66,7 @@ export function validateCalibrationRecordForSubmit(record: {
  * by a build that refused to submit without the record.
  *
  * The legacy exemption ends once the cloud enforces a minimum desktop version
- * (`SYNC_MIN_DESKTOP_VERSION`, Q28; see DEPLOYMENT.md): from then on an unstamped
+ * (`SYNC_MIN_DESKTOP_VERSION`; see DEPLOYMENT.md): from then on an unstamped
  * submit is held to the rule like every other.
  */
 export const DESKTOP_EXECUTION_PAYLOAD_VERSION = 2;

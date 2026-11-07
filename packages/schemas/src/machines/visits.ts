@@ -6,7 +6,7 @@
 //                 CONFIRMED when the lab scheduled it, else PROPOSED)
 //   confirm     routes/visits.ts POST /:id/confirm: a proposed visit is
 //                 confirmed; on a confirmed or started visit it only updates the
-//                 date / technician (it used to rewind IN_PROGRESS to CONFIRMED)
+//                 date / technician (it never rewinds IN_PROGRESS to CONFIRMED)
 //   edit        routes/visits.ts reschedule, assign, the reschedule-request
 //                 accept: any open visit, status unchanged
 //   start       apps/api/src/domains/jobs/visit-status-sync.ts `syncVisitStatusFromJobs`: a job of

@@ -63,7 +63,7 @@ export function standardDaysUntilExpiry(
 }
 
 /**
- * Whether a calibration certificate covered `performedAt` (roadmap 2 C3): the
+ * Whether a calibration certificate covered `performedAt`: the
  * work was done on or after the calibration day and on or before the last
  * valid day, in laboratory days. A certificate issued after the work does not
  * make it valid.

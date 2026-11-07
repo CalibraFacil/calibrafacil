@@ -27,7 +27,7 @@ export type CreateNonConformanceInput = z.infer<
 
 /**
  * Payload for flagging an approved job as out-of-tolerance (as found).
- * Opens a typed NC and generates the §7.10 customer notification (#426).
+ * Opens a typed NC and generates the §7.10 customer notification.
  */
 export const FlagJobOutOfToleranceSchema = z.object({
   description: z
@@ -41,7 +41,7 @@ export const FlagJobOutOfToleranceSchema = z.object({
 });
 
 /**
- * Reverse-traceability impact query (#426 Phase 1): certificates issued using
+ * Reverse-traceability impact query: certificates issued using
  * a reference standard between dates. Both bounds optional — the API defaults
  * `from` to the standard's calibrationDate and `to` to now.
  */
@@ -61,7 +61,7 @@ export const ImpactedCertificatesQuerySchema = z.object({
 });
 
 /**
- * Approval-gated batch send of a standard recall (#426 Phase 1). The reviewed
+ * Approval-gated batch send of a standard recall. The reviewed
  * job list is explicit — deselected certificates are simply not sent.
  */
 export const SendStandardRecallSchema = z.object({
@@ -84,7 +84,7 @@ export const SendStandardRecallSchema = z.object({
 });
 
 /**
- * Guided §7.10 impact assessment (#426 Phase 2): structured evaluation of an
+ * Guided §7.10 impact assessment: structured evaluation of an
  * out-of-tolerance event's effect on the customer's measurements. Regulated
  * workflow → schema-first; the web form parses through this schema.
  */

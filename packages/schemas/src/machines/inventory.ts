@@ -27,8 +27,7 @@ function createdIn<S extends string>(
 //   create      routes/assets.ts POST, public-api-v2/assets-create.ts, the
 //                 desktop asset create (sync apply-asset-create.ts)
 //   set_status  routes/assets.ts PUT, public-api-v2/assets-update.ts
-// SCRAPPED is reversible by design today (audit decision Q60: asset statuses
-// stay free classifications).
+// SCRAPPED is reversible by design: asset statuses are free classifications.
 export const ASSET_STATUSES = [
   "ACTIVE",
   "INACTIVE",
@@ -90,7 +89,7 @@ export const REFERENCE_STANDARD_MACHINE = defineStateMachine({
     ...createdIn(REFERENCE_STANDARD_STATUSES),
     // Out of tolerance or away for calibration, a standard comes back to use
     // only through `renew` (a new certificate, a reason, its audit entry; ISO/IEC
-    // 17025 §6.4.9), never by picking ACTIVE (decision Q60).
+    // 17025 §6.4.9), never by picking ACTIVE.
     ...everyPair(REFERENCE_STANDARD_STATUSES, "set_status").filter(
       (row) =>
         !(
