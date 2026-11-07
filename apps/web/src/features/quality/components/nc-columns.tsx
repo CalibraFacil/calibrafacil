@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import type {
   NonConformanceDisposition,
   NonConformanceRow,

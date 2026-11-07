@@ -10,7 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@calibra-facil/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import {
   useDesktopManualSyncAction,
   useOptionalSyncStatus,

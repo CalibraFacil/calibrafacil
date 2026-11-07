@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /**
  * A small numbered-circle stepper for the from-template wizard. Net-new — NOT the

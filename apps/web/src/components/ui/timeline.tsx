@@ -12,7 +12,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { useIsomorphicLayoutEffect } from '@/hooks/use-isomorphic-layout-effect'
 import { useLazyRef } from '@/hooks/use-lazy-ref'
 import { useComposedRefs } from '@/lib/compose-refs'

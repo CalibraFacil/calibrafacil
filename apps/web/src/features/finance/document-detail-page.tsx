@@ -9,7 +9,7 @@ import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
 } from '@/components/finance-status-badges'
-import { dateOnlyToInputValue } from '@/lib/date-only'
+import { dateOnlyToInputValue } from '@calibra-facil/shared/calendar-date'
 import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import {
   Money,

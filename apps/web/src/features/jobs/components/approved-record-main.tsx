@@ -12,7 +12,7 @@ import {
   formatCalibrationValue,
   normalizeAccreditationNumber,
 } from '@calibra-facil/shared'
-import { AccreditationSeal } from '@/components/accreditation-seal'
+import { AccreditationSeal } from '@calibra-facil/ui/accreditation-seal'
 import {
   buildApprovedJobRecordModel,
   type ApprovedJobRecordData,

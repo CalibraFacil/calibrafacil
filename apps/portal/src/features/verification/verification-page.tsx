@@ -11,10 +11,10 @@ import {
   SecurityCheckIcon,
 } from "@hugeicons/core-free-icons";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { Button } from "@calibra-facil/ui/button";
 import { Spinner } from "@calibra-facil/ui/spinner";
-import { AccreditationSeal } from "@/components/accreditation-seal";
+import { AccreditationSeal } from "@calibra-facil/ui/accreditation-seal";
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,

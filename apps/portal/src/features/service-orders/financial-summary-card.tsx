@@ -5,13 +5,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@calibra-facil/ui/card";
-import { dateOnlyDaysBetween } from "../../lib/date-only";
+import { dateOnlyDaysBetween } from "@calibra-facil/shared/calendar-date";
 import {
   formatCalendarDate,
   formatInstant,
   formatMoneyBRL,
 } from "@calibra-facil/shared/format";
-import { cn } from "../../lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 
 export type PortalFinancialSummary = {
   state: "INVOICE_AVAILABLE" | "PAYMENT_PENDING" | "PAID" | "OVERDUE" | null;

@@ -327,3 +327,24 @@ export function pluralize(
 ): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
+
+/**
+ * A file's size for a list row: whole kilobytes under 1 MB (never "0 KB"),
+ * one decimal of megabytes above. "512 KB", "2.4 MB".
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * A service's list price in integer cents: "R$ 1.234,56", or "Sob consulta"
+ * when it has none. An empty currency reads as BRL.
+ */
+export function formatPrice(
+  priceInCents: number | null,
+  currency: string,
+): string {
+  if (priceInCents === null) return "Sob consulta";
+  return formatMoney(priceInCents, currency || "BRL");
+}

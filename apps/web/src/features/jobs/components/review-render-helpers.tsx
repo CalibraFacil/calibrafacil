@@ -18,7 +18,7 @@ import {
   type ReviewFormula,
   type ReviewMethodField,
 } from '@/features/jobs/detail-model'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 import { findValidationFor } from '@/features/jobs/detail-model/validation-targets'
 

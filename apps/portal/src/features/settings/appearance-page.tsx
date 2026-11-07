@@ -6,7 +6,7 @@ import {
   Sun02Icon,
 } from "@hugeicons/core-free-icons";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import { getStoredTheme, setTheme, type Theme } from "./theme";
 

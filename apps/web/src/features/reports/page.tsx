@@ -39,7 +39,7 @@ import {
   StaggerItem,
   type SignalTone,
 } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,

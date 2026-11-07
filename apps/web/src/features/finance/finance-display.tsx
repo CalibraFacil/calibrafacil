@@ -7,7 +7,7 @@ import {
 } from '@calibra-facil/shared'
 
 import { formatFinanceMoney } from '@/lib/finance-formatters'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 // — Tone map. The finance statuses with a vocabulary (document, installment, export,
 //   agreement) read it from `@calibra-facil/shared`; this one is `satisfies Record<Union, SignalTone>` so that if a

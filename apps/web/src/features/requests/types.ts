@@ -1,3 +1,4 @@
+import type { Address } from '@calibra-facil/shared/address'
 import type { CalibrationRequestStatus } from '@calibra-facil/schemas/machines'
 
 export type { CalibrationRequestStatus }
@@ -59,15 +60,7 @@ export type CalibrationRequestDetail = {
   internalNotes: string | null
   requestedDueDate: string | null
   deliveryMethod: 'dropoff' | 'carrier' | 'onsite'
-  onsiteAddress: {
-    cep?: string
-    number?: string
-    street?: string
-    complement?: string
-    neighbourhood?: string
-    city?: string
-    state?: string
-  } | null
+  onsiteAddress: Address | null
   preferredVisitDate: string | null
   submittedAt: string
   reviewedAt: string | null

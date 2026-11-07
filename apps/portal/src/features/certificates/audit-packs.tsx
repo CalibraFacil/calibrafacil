@@ -1,4 +1,5 @@
 import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
+import { formatFileSize } from "@calibra-facil/shared/format";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -98,11 +99,6 @@ function formatPeriod(dateFrom: string, dateTo: string): string {
     return year && month && day ? `${day}/${month}/${year}` : value;
   };
   return `${br(dateFrom)} – ${br(dateTo)}`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function defaultDateRange(): DateRange {
@@ -367,7 +363,7 @@ function AuditPackRow({ pack }: { pack: AuditPack }) {
             ? `${pack.certificateCount} certificado(s)`
             : null}
           {pack.status === "COMPLETED" && pack.fileSizeBytes
-            ? ` · ${formatBytes(pack.fileSizeBytes)}`
+            ? ` · ${formatFileSize(pack.fileSizeBytes)}`
             : null}
           {pack.status === "FAILED"
             ? "Não foi possível gerar o pacote. Tente novamente."

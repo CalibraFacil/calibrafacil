@@ -5,7 +5,7 @@ import {
   MultiplicationSignCircleIcon,
 } from '@hugeicons/core-free-icons'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 type AuthStatusTone = 'error' | 'info' | 'success'
 

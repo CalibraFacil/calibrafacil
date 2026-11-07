@@ -4,7 +4,7 @@ import { getLabCalendarDay } from '@calibra-facil/shared/calendar-date'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 import type { DashboardJob, DashboardStats } from '@/features/dashboard/queries'
-import { dateOnlyDaysBetween } from '@/lib/date-only'
+import { dateOnlyDaysBetween } from '@calibra-facil/shared/calendar-date'
 
 /**
  * Pure view-model for the lab dashboard. Everything the page renders is derived

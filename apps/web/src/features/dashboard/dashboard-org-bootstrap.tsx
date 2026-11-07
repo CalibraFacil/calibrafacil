@@ -1,6 +1,6 @@
 import { organization } from '@calibra-facil/auth/client'
 
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 import { setStoredDashboardOrganizationId } from './dashboard-scope-storage'
 import {
   DASHBOARD_CONTEXT_END_MARK,

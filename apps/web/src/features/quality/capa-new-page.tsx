@@ -22,7 +22,7 @@ import {
   SelectTrigger,
 } from '@calibra-facil/ui/select'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,

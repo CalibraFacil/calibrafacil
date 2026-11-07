@@ -3,6 +3,7 @@ import {
   createDesktopHybridApiClient,
   isDesktopRuntime,
 } from '@calibra-facil/client-runtime'
+import { resolveApiBaseUrl } from '@calibra-facil/shared/api-base-url'
 import {
   createDesktopLocalFetch,
   createLocalApiEndpointResolver,
@@ -34,17 +35,10 @@ function getCloudApiBaseUrl(): string {
     return import.meta.env.VITE_DESKTOP_AUTH_API_URL || getDefaultCloudApiUrl()
   }
 
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL
-  }
-  if (typeof window !== 'undefined') {
-    // Without VITE_API_URL the API is reached on the same origin: the Vite dev
-    // server proxies /api to DEV_API_ORIGIN (http://localhost:3000 by default),
-    // and deployments put a reverse proxy in front of both.
-    return window.location.origin
-  }
-
-  return getDefaultCloudApiUrl()
+  return resolveApiBaseUrl({
+    configuredUrl: import.meta.env.VITE_API_URL,
+    fallbackUrl: getDefaultCloudApiUrl(),
+  })
 }
 
 export function resolveCloudApiUrl(): string

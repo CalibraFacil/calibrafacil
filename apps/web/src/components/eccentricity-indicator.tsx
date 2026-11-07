@@ -4,7 +4,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@calibra-facil/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 export const ECCENTRICITY_INDICATOR_SPEC_KEY = 'eccentricityIndicatorPosition'
 

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 
 /**
  * Consistent page title row: balanced title, description, and

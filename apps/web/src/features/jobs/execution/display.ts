@@ -1,4 +1,5 @@
 import { isMassMeasurementUnit } from '@calibra-facil/shared'
+import { formatAddressLine } from '@calibra-facil/shared/address'
 import {
   resolveDisplayUnit,
   type MeasurementUnit,
@@ -7,11 +8,7 @@ import type {
   FormulaResult,
   MethodInputField,
 } from '@/components/method-runtime/types'
-import {
-  type AddressData,
-  type CalibrationPhaseMode,
-  type JobData,
-} from './types'
+import { type CalibrationPhaseMode, type JobData } from './types'
 import { resolvePointDisplayUnit } from './formulas'
 
 export function previewFormulaErrorMessage(result: FormulaResult): string {
@@ -46,23 +43,8 @@ export function phaseModeLabel(mode: CalibrationPhaseMode) {
   }
 }
 
-export function formatAddress(address: AddressData | null | undefined) {
-  if (!address) return ''
-  return [
-    address.street,
-    address.number,
-    address.complement,
-    address.neighbourhood,
-    address.city,
-    address.state,
-    address.cep,
-  ]
-    .filter(Boolean)
-    .join(', ')
-}
-
 export function formatLabAddress(job: JobData) {
-  return formatAddress({
+  return formatAddressLine({
     street: job.labStreet,
     number: job.labNumber,
     complement: job.labComplement,

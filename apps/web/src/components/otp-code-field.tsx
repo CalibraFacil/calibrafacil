@@ -1,7 +1,7 @@
 import type { Ref } from 'react'
 import { REGEXP_ONLY_DIGITS } from 'input-otp'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import {
   InputOTP,
   InputOTPGroup,

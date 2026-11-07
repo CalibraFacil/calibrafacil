@@ -23,22 +23,14 @@ import {
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
 import type { ServiceListItem } from '@/features/services/types'
-import { cn } from '@/lib/utils'
-import { formatFinanceMoney } from '@/lib/finance-formatters'
+import { cn } from '@calibra-facil/ui/utils'
+import { formatPrice } from '@calibra-facil/shared/format'
 
 export type Service = ServiceListItem
 
 export interface ServicesTableMeta {
   onDeactivate?: (id: number) => void
   onReactivate?: (id: number) => void
-}
-
-function formatPrice(priceInCents: number | null, currency: string): string {
-  if (priceInCents === null) {
-    return 'Sob consulta'
-  }
-
-  return formatFinanceMoney(priceInCents, currency || 'BRL')
 }
 
 function formatTat(tat: number | null): string {

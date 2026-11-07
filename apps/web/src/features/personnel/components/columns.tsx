@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import type { CompetenceRow } from '@/features/personnel/types'
 import { CompetenceStatusBadge } from '@/features/personnel/components/status-badges'
 import { formatInstant } from '@calibra-facil/shared/format'

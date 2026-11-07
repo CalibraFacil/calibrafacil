@@ -1,7 +1,7 @@
 import { ChangeEvent, ComponentProps, FocusEvent, useId, useState } from 'react'
 import { FieldError } from '@calibra-facil/ui/field'
 import { Input } from '@calibra-facil/ui/input'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import {
   MONEY_PARSE_FAILURE_MESSAGES,
   formatCentsForEditing,

@@ -24,7 +24,7 @@ import {
   StaggerGroup,
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { CertificateReleaseControl } from '@/features/finance/certificate-release'
 
 export function ApprovedRecordHero({

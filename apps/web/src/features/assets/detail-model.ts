@@ -9,7 +9,7 @@
 import { SignalTone } from '@calibra-facil/shared/status-vocabulary'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
-import { dateOnlyDaysBetween } from '@/lib/date-only'
+import { dateOnlyDaysBetween } from '@calibra-facil/shared/calendar-date'
 
 export type AssetCalibrationLevel =
   | 'valid'

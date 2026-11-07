@@ -8,7 +8,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { Link } from '@tanstack/react-router'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { RefreshIcon } from '@hugeicons/core-free-icons'
@@ -26,7 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@calibra-facil/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { getDeadEventsBannerLabel } from '@/runtime/sync-dead-events'
 import {
   getDataSourceIndicatorModel,

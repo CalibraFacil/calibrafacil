@@ -5,7 +5,7 @@ import { AnimatePresence, motion, MotionConfig } from 'motion/react'
 import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 type SaveButtonStatus = 'idle' | 'loading' | 'success' | 'saved'
 type SaveButtonSize = 'sm' | 'md' | 'lg'

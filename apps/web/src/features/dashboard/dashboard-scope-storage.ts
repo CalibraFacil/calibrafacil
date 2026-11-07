@@ -1,7 +1,5 @@
-import {
-  DASHBOARD_ORG_KEY,
-  DASHBOARD_UNIT_KEY_PREFIX,
-} from '@/app/config/runtime'
+import { DASHBOARD_ORG_KEY } from '@calibra-facil/shared/client-storage-keys'
+import { DASHBOARD_UNIT_KEY_PREFIX } from '@/app/config/runtime'
 
 function getLocalStorage() {
   if (typeof window === 'undefined') return null

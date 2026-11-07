@@ -11,7 +11,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@calibra-facil/ui/native-select";
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 
 /**
  * Vertical settings navigation, the portal mirror of the lab dashboard's

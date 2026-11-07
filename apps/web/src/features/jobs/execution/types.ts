@@ -2,6 +2,7 @@ import type {
   CalibrationLocationType,
   CalibrationPhaseMode,
 } from '@calibra-facil/shared/calibration-record'
+import type { AddressLike } from '@calibra-facil/shared/address'
 import { type MeasurementUnit } from '@calibra-facil/shared/units'
 import type {
   MethodFormula,
@@ -166,15 +167,7 @@ export type EnvironmentalFormData = {
   pressure: number | null
 }
 
-export interface AddressData {
-  street?: string | null
-  number?: string | null
-  complement?: string | null
-  neighbourhood?: string | null
-  city?: string | null
-  state?: string | null
-  cep?: string | null
-}
+export type AddressData = AddressLike
 
 export interface AssetSnapshot {
   assetId: number

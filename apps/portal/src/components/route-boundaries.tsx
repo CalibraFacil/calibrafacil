@@ -6,8 +6,8 @@ import {
   ACTION_BUTTON_CLASS,
   PANEL_CLASS,
 } from "@calibra-facil/ui/panel-styles";
-import { cn } from "@/lib/utils";
-import { reportClientError } from "@/lib/report-client-error";
+import { cn } from "@calibra-facil/ui/utils";
+import { reportClientError } from "@calibra-facil/shared/client-error";
 
 /*
  * These boundaries are wired into the router, so they ship in the initial
@@ -190,6 +190,7 @@ export const routeBoundaryOptions = {
   defaultNotFoundComponent: RouteNotFoundFallback,
   defaultOnCatch: (error: Error, info: { componentStack?: string | null }) => {
     reportClientError(error, {
+      app: "portal",
       route: typeof window === "undefined" ? "" : window.location.pathname,
       componentStack: info.componentStack,
     });

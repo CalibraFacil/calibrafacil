@@ -1,7 +1,7 @@
 import { useRouter } from '@tanstack/react-router'
 
 import { useSidebar } from '@calibra-facil/ui/sidebar'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
 /**
  * Dismisses the mobile sidebar sheet on navigation.

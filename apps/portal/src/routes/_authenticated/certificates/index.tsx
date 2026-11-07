@@ -37,7 +37,7 @@ import {
   portalDownloadLinkResponseSchema,
 } from "@calibra-facil/contracts";
 import { fetchPortalJson } from "@/lib/api-fetch";
-import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
+import { keepPreviousDataInScope } from "@calibra-facil/shared/query-scope";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
 import { formatInstant } from "@calibra-facil/shared/format";

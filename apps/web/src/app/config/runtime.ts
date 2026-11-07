@@ -1,6 +1,5 @@
 import { runtimeEnv } from './runtime-env'
 
-export const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 export const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 
 const DEFAULT_LOCAL_API_URL = 'http://localhost:3000'

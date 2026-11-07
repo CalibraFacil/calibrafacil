@@ -30,7 +30,10 @@ import {
   PanelHeader,
   type SignalTone,
 } from "@calibra-facil/ui/instrument-panel";
-import { dateInputToNoonIso, instantToDateInputValue } from "@/lib/date-only";
+import {
+  dateInputToNoonIso,
+  instantToDateInputValue,
+} from "@calibra-facil/shared/calendar-date";
 import { useOotEvents } from "./queries";
 import { isOotDecision, type OotDecision, type OotEvent } from "./types";
 import { formatInstant } from "@calibra-facil/shared/format";

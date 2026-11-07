@@ -27,7 +27,7 @@ import { Button } from '@calibra-facil/ui/button'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 export function EditServicePage({ id }: { id: string }) {
   const {

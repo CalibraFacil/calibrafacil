@@ -9,7 +9,7 @@ import type { MassCompositionProfileWriteInput } from '@calibra-facil/client-run
 
 import { REFERENCE_STANDARD_STATUS } from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
-import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
+import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,

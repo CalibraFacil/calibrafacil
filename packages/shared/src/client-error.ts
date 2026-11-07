@@ -1,7 +1,9 @@
 export type ClientErrorContext = {
-  route: string
-  componentStack?: string | null
-}
+  /** Which frontend raised it. */
+  app: "web" | "portal";
+  route: string;
+  componentStack?: string | null;
+};
 
 /**
  * Self-hosted error reporting: one structured line on the browser console
@@ -10,10 +12,10 @@ export type ClientErrorContext = {
  */
 export function reportClientError(
   error: unknown,
-  { route, componentStack }: ClientErrorContext,
+  { app, route, componentStack }: ClientErrorContext,
 ): void {
   try {
-    const failure = error instanceof Error ? error : new Error(String(error))
+    const failure = error instanceof Error ? error : new Error(String(error));
     console.error(
       JSON.stringify({
         message: failure.message,
@@ -21,10 +23,10 @@ export function reportClientError(
         stack: failure.stack ?? null,
         route,
         componentStack: componentStack ?? null,
-        app: 'web',
+        app,
         timestamp: new Date().toISOString(),
       }),
-    )
+    );
   } catch {
     // Reporting must never throw out of the router's error handler.
   }

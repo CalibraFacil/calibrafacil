@@ -93,7 +93,7 @@ vi.mock('./dashboard-performance', () => ({
   measure: vi.fn(),
 }))
 
-import { DASHBOARD_ORG_KEY } from '@/app/config/runtime'
+import { DASHBOARD_ORG_KEY } from '@calibra-facil/shared/client-storage-keys'
 import { DashboardLayout } from './dashboard-shell'
 
 function renderDashboard() {

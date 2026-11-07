@@ -18,7 +18,7 @@ import { InstallmentsBlock } from '@/features/finance/installments-block'
 import { jobsColumns } from '@/features/jobs/components/columns'
 import type { Job } from '@/features/jobs/types'
 import { formatDate as formatServiceOrderDate } from '@/features/service-orders/detail-model'
-import { dateOnlyToLocalDate } from '@/lib/date-only'
+import { dateOnlyToLocalDate } from '@calibra-facil/shared/calendar-date'
 
 // REQ-CAL-001: the calendar-date columns are Postgres `date` columns, so the
 // API always returns them as UTC midnight of the day they name ("2026-10-15T00:

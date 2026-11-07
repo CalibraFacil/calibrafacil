@@ -7,7 +7,7 @@ import {
   RefreshIcon,
 } from '@hugeicons/core-free-icons'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { Button } from '@calibra-facil/ui/button'
 import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
 import { Spinner } from '@calibra-facil/ui/spinner'

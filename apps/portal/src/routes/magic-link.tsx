@@ -12,8 +12,11 @@ import {
   magicLinkPreviewResponseSchema,
   type MagicLinkPreviewResponse,
 } from "@calibra-facil/contracts";
-import { fetchPortalResponse, readPortalJsonResult } from "@/lib/api-fetch";
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  fetchPortalResponse,
+  getApiBaseUrl,
+  readPortalJsonResult,
+} from "@/lib/api-fetch";
 
 const searchSchema = z.object({
   token: z.string().optional(),

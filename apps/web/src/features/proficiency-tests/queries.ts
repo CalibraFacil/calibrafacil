@@ -12,7 +12,7 @@ import type {
 } from '@calibra-facil/schemas'
 
 import { calibraApi } from '@/utils/api'
-import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
+import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,

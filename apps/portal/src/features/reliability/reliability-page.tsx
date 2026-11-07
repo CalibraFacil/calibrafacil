@@ -9,7 +9,7 @@ import {
   RefreshIcon,
 } from "@hugeicons/core-free-icons";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { Button } from "@calibra-facil/ui/button";
 import { Label } from "@calibra-facil/ui/label";
 import { Skeleton } from "@calibra-facil/ui/skeleton";

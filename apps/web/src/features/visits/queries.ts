@@ -1,7 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
-import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
+import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import type { VisitDetail, VisitsListData, VisitStatus } from './types'
 
 const VISITS_LIST_LIMIT = 20

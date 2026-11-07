@@ -6,6 +6,7 @@ import {
   CALIBRATION_REQUEST_MACHINE,
   CALIBRATION_REQUEST_STATUS,
 } from '@calibra-facil/schemas/machines'
+import { formatAddress } from '@calibra-facil/shared/address'
 import { calibraApi } from '@/utils/api'
 import { Button } from '@calibra-facil/ui/button'
 import { StatusBadge } from '@calibra-facil/ui/status-badge'
@@ -618,20 +619,7 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
       : request.deliveryMethod === 'onsite'
         ? 'No local (em loco)'
         : 'Levar ao laboratório'
-  const onsiteAddress = request.onsiteAddress
-  const onsiteAddressText = onsiteAddress
-    ? [
-        [onsiteAddress.street, onsiteAddress.number].filter(Boolean).join(', '),
-        onsiteAddress.complement,
-        [onsiteAddress.neighbourhood, onsiteAddress.city, onsiteAddress.state]
-          .filter(Boolean)
-          .join(' - '),
-        onsiteAddress.cep,
-      ]
-        .map((part) => (part ?? '').trim())
-        .filter(Boolean)
-        .join(' · ')
-    : ''
+  const onsiteAddressText = formatAddress(request.onsiteAddress)
 
   const triagePanelKey = [
     organizationQueryKey,

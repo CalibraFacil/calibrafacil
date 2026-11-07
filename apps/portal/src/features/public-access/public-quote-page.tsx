@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from "@calibra-facil/ui/dialog";
 import { Textarea } from "@calibra-facil/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { usePublicServiceOrder, submitQuoteDecision } from "./queries";
 import type { QuoteDecision } from "./queries";
 import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";

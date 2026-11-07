@@ -14,7 +14,7 @@ import {
 } from '@calibra-facil/ui/empty'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { ACTION_BUTTON_CLASS } from '@calibra-facil/ui/instrument-panel'
-import { reportClientError } from '@/lib/report-client-error'
+import { reportClientError } from '@calibra-facil/shared/client-error'
 
 const BOUNDARY_WRAPPER_CLASS =
   'flex min-h-[60vh] w-full items-center justify-center p-6'
@@ -109,6 +109,7 @@ export const routeBoundaryOptions = {
   defaultNotFoundComponent: RouteNotFoundFallback,
   defaultOnCatch: (error: Error, info: { componentStack?: string | null }) => {
     reportClientError(error, {
+      app: 'web',
       route: typeof window === 'undefined' ? '' : window.location.pathname,
       componentStack: info.componentStack,
     })

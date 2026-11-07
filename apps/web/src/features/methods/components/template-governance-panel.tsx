@@ -3,7 +3,7 @@ import type { MethodGovernance } from '@calibra-facil/client-runtime'
 
 import { Badge } from '@calibra-facil/ui/badge'
 import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /**
  * Renders a template's metrology governance — the "informed, not trust-me"

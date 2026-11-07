@@ -27,7 +27,6 @@ const SURFACE = [
   'evaluateExecutionValidationResults',
   'filterActiveCalculationItems',
   'findMissingNotPerformedPhaseReasons',
-  'formatAddress',
   'formatLabAddress',
   'getAssetIndicatorPosition',
   'getCalculationFormulas',

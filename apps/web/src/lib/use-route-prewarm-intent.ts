@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 import { isDesktopRuntime } from '@/runtime/desktop'
 
 const PREWARM_DEBOUNCE_MS = 120

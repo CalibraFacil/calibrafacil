@@ -25,8 +25,7 @@ import {
   type SignalTone,
 } from "@calibra-facil/ui/instrument-panel";
 import { portalIntervalUpdateResponseSchema } from "@calibra-facil/contracts";
-import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
-import { getApiBaseUrl } from "@/lib/utils";
+import { fetchPortalJson, getApiBaseUrl, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { useIntervalInsight } from "./queries";
 import type { IntervalInsight } from "./types";

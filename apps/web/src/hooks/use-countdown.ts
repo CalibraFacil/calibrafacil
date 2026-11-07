@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
 const TICK_MS = 250
 

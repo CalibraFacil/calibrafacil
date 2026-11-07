@@ -17,7 +17,7 @@ import {
   type StandardFormField,
 } from '@/features/standards/forms'
 import type { CreateReferenceStandardInput } from '@calibra-facil/schemas'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 export function NewStandardPage() {
   const navigate = useNavigate()

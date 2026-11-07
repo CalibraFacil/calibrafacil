@@ -387,9 +387,6 @@ importers:
       "@calibra-facil/contracts":
         specifier: workspace:^
         version: link:../../packages/contracts
-      "@calibra-facil/documents":
-        specifier: workspace:^
-        version: link:../../packages/documents
       "@calibra-facil/schemas":
         specifier: workspace:^
         version: link:../../packages/schemas
@@ -1387,6 +1384,9 @@ importers:
       "@calibra-facil/config":
         specifier: workspace:^
         version: link:../config
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       "@repo/typescript-config":
         specifier: workspace:^
@@ -1454,6 +1454,9 @@ importers:
       "@base-ui/react":
         specifier: ^1.5.0
         version: 1.5.0(@date-fns/tz@1.5.0)(@types/react@19.2.16)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      "@calibra-facil/documents":
+        specifier: workspace:^
+        version: link:../documents
       "@calibra-facil/shared":
         specifier: workspace:^
         version: link:../shared

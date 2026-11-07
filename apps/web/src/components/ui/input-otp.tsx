@@ -1,7 +1,7 @@
 import { ComponentProps, useContext } from 'react'
 import { OTPInput, OTPInputContext } from 'input-otp'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 function InputOTP({
   className,

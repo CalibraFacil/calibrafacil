@@ -12,10 +12,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { calibraApi } from '@/utils/api'
-import type {
-  CustomerAddress,
-  CustomerDetail,
-} from '@/features/customers/types'
+import type { CustomerDetail } from '@/features/customers/types'
 import {
   Field,
   FieldDescription,
@@ -40,12 +37,13 @@ import {
 } from '@calibra-facil/ui/collapsible'
 import { ACTION_BUTTON_CLASS } from '@calibra-facil/ui/instrument-panel'
 import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
+import type { Address } from '@calibra-facil/shared/address'
 import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import {
   mergeViaCepAddress,
   type ViaCepAddress,
-  useViaCepLookup,
-} from '@/lib/viacep'
+} from '@calibra-facil/shared/viacep'
+import { useViaCepLookup } from '@/lib/viacep'
 import {
   keepOrFill,
   useCnpjLookup,
@@ -55,7 +53,7 @@ import {
   ClientPanelBody,
   ClientSection,
 } from '@/features/customers/components/client-detail-ui'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 const NO_GROUP_VALUE = 'none'
 
@@ -95,9 +93,7 @@ export function CustomerEditForm({
   const [taxId, setTaxId] = useState(customer.taxId || '')
   const [email, setEmail] = useState(customer.email || '')
   const [phone, setPhone] = useState(customer.phone || '')
-  const [address, setAddress] = useState<CustomerAddress>(
-    customer.address || {},
-  )
+  const [address, setAddress] = useState<Address>(customer.address || {})
   const [groupId, setGroupId] = useState<number | null>(
     customer.group?.id ?? customer.groupId ?? null,
   )
@@ -110,7 +106,7 @@ export function CustomerEditForm({
       taxId?: string
       email?: string
       phone?: string
-      address?: CustomerAddress
+      address?: Address
       groupId?: number | null
     }) => {
       return calibraApi.customers.update<CustomerDetail>(customerId, data)
@@ -155,7 +151,7 @@ export function CustomerEditForm({
     })
   }
 
-  const updateAddress = (field: keyof CustomerAddress, value: string) => {
+  const updateAddress = (field: keyof Address, value: string) => {
     setAddress((prev) => ({ ...prev, [field]: value }))
   }
 

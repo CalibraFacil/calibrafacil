@@ -11,6 +11,7 @@
     "./panel-styles": "./src/lib/panel-styles.ts",
     "./button-variants": "./src/lib/button-variants.ts",
     "./use-mobile": "./src/hooks/use-mobile.ts",
+    "./use-mount-effect": "./src/hooks/use-mount-effect.ts",
     "./tokens.css": "./src/styles/tokens.css",
     "./*": "./src/components/*.tsx"
   },
@@ -22,6 +23,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
+    "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@hugeicons/core-free-icons": "^4.2.0",
     "@hugeicons/react": "^1.1.6",

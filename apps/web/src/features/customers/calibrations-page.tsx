@@ -41,7 +41,7 @@ import {
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
 import { DataTable } from '@calibra-facil/ui/data-table'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { jobRouteId } from '@/lib/route-identifiers'
 import {
   ClientPanel,

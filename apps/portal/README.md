@@ -22,7 +22,7 @@ pnpm dev
 
 Runs at `http://localhost:5174`. Set `VITE_DEV_HTTPS=true` if you explicitly need
 local HTTPS. The app talks to the API at `/api/portal/*` (see `getApiBaseUrl` in
-`src/lib/utils.ts`).
+`src/lib/api-fetch.ts`).
 
 ## Routes
 
@@ -91,6 +91,6 @@ src/
 │   ├── instrument-panel.tsx   # The shared "metrology console" design system
 │   ├── status-pill, timeline, page-header, command-menu, …
 │   └── ui/            # base-ui primitives (button, card, dialog, checkbox, …)
-├── lib/               # calibration-status, status-labels, format, platform, utils
-└── hooks/             # use-mount-effect, use-mobile
+├── lib/               # calibration-status, status-labels, format, platform, api-fetch
+└── hooks/             # use-large-screen
 ```

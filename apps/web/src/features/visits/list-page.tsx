@@ -16,7 +16,7 @@ import {
   EmptyTitle,
 } from '@calibra-facil/ui/empty'
 import { Panel } from '@calibra-facil/ui/instrument-panel'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   CloudOnlyOfflineState,
@@ -24,7 +24,8 @@ import {
 } from '@/runtime/sync-status'
 import { formatVisitDay } from '@/features/visits/forms'
 import { useVisitsListData } from '@/features/visits/queries'
-import { formatVisitAddress, type VisitStatus } from '@/features/visits/types'
+import { formatAddress } from '@calibra-facil/shared/address'
+import type { VisitStatus } from '@/features/visits/types'
 
 const STATUS_FILTERS: Array<{ value: VisitStatus | ''; label: string }> = [
   { value: '', label: 'Todas' },
@@ -151,7 +152,7 @@ export function VisitsPage() {
           ) : (
             <div className="space-y-2">
               {visits.map((visit) => {
-                const addressText = formatVisitAddress(visit.address)
+                const addressText = formatAddress(visit.address)
                 return (
                   <div
                     key={visit.id}

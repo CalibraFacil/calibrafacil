@@ -60,12 +60,12 @@ import {
 } from '@/features/visits/forms'
 import { useVisitDetailData } from '@/features/visits/queries'
 import {
-  formatVisitAddress,
   PREFERRED_PERIOD_LABELS,
   type VisitDetail,
   type VisitDetailJob,
   type VisitPendingRescheduleRequest,
 } from '@/features/visits/types'
+import { formatAddress } from '@calibra-facil/shared/address'
 import { formatInstant } from '@calibra-facil/shared/format'
 
 export function VisitDetailPage({ visitId }: { visitId: number }) {
@@ -294,7 +294,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const canComplete = VISIT_MACHINE.canTransition(visit.status, 'complete')
 
-  const addressText = formatVisitAddress(visit.address)
+  const addressText = formatAddress(visit.address)
   const technicianChanged = (visit.technicianId ?? '') !== technicianId
   const dateChanged = visitDateInputValue(visit.scheduledAt) !== scheduledAt
   const pendingReschedule = visit.pendingRescheduleRequest

@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   reportClientError: vi.fn(),
 }));
 
-vi.mock("@/lib/report-client-error", () => ({
+vi.mock("@calibra-facil/shared/client-error", () => ({
   reportClientError: mocks.reportClientError,
 }));
 

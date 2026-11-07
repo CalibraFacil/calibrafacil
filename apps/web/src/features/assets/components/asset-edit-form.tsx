@@ -7,7 +7,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { FloppyDiskIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
-import { dateOnlyToLocalDate } from '@/lib/date-only'
+import { dateOnlyToLocalDate } from '@calibra-facil/shared/calendar-date'
 import type { AssetDetail } from '@/features/assets/types'
 import {
   isAssetSpecificationErrorField,
@@ -47,7 +47,7 @@ import {
 } from '@/components/eccentricity-indicator'
 import { isMassAssetTypeDefinition } from '@calibra-facil/shared'
 import type { UpdateAssetInput } from '@calibra-facil/schemas'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /** The asset record returned by `assets.update` (used to refresh selection). */
 export type UpdatedAsset = AssetDetail

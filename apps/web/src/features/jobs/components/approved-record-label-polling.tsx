@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 
 export function LabelReadyNotifier({ onReady }: { onReady: () => void }) {
   useMountEffect(() => {

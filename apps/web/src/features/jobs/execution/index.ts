@@ -1,5 +1,4 @@
 export {
-  formatAddress,
   formatLabAddress,
   phaseModeLabel,
   previewFormulaErrorMessage,

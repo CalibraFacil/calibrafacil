@@ -1,6 +1,7 @@
 import type { JobStatus } from '@calibra-facil/schemas'
 import type { AssetStatus } from '@calibra-facil/schemas/machines'
 import type { CustomersListData as ClientRuntimeCustomersListData } from '@calibra-facil/client-runtime'
+import type { Address } from '@calibra-facil/shared/address'
 import type { CustomerFinancialTimeline } from '@calibra-facil/shared'
 
 export type CustomerListItem =
@@ -17,16 +18,6 @@ export type CustomersListQueryInput = {
   page: number
   limit: number
   search: string
-}
-
-export type CustomerAddress = {
-  cep?: string
-  number?: string
-  street?: string
-  complement?: string
-  neighbourhood?: string
-  city?: string
-  state?: string
 }
 
 type CustomerFinancialSummary = {
@@ -71,7 +62,7 @@ export type CustomerDetail = {
   taxId?: string
   email?: string
   phone?: string
-  address?: CustomerAddress
+  address?: Address
   financialSummary?: CustomerFinancialSummary
   compliance?: CustomerCompliance
   activeCommercialAgreement?: ActiveCommercialAgreement | null

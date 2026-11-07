@@ -5,7 +5,7 @@ import {
 } from "@calibra-facil/contracts";
 import type { z } from "zod";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import { resolveApiBaseUrl } from "@calibra-facil/shared/api-base-url";
 
 /**
  * The portal's ONE door to the network. Every request to `/api/*` (and the one
@@ -58,6 +58,14 @@ type FetchPortalJsonOptions = ResponseValidationOptions &
      */
     serverErrorMessage?: boolean;
   };
+
+/** The API's origin: `VITE_API_URL`, else this page's own origin (see `resolveApiBaseUrl`). */
+export function getApiBaseUrl(): string {
+  return resolveApiBaseUrl({
+    configuredUrl: import.meta.env.VITE_API_URL,
+    fallbackUrl: "http://localhost:3000",
+  });
+}
 
 function apiUrl(path: string): string {
   return `${getApiBaseUrl()}${path}`;

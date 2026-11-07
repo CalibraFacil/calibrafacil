@@ -10,7 +10,7 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { Button } from "@calibra-facil/ui/button";
 import { Input } from "@calibra-facil/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { redeemAccessCode } from "./queries";
 
 type EntryError = "invalid" | "throttled" | "unavailable" | null;

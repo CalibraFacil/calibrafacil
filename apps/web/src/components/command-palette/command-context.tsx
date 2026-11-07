@@ -11,7 +11,7 @@ import {
   useState,
 } from 'react'
 import { useLocation } from '@tanstack/react-router'
-import { useMountEffect } from '@/hooks/use-mount-effect'
+import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 type CommandAction = {
   id: string
   label: string

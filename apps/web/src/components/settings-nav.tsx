@@ -35,7 +35,7 @@ import {
   getSettingsNavGroups,
   type SettingsNavRouteId,
 } from '@/app/router/route-registry'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 const settingsNavIcons = {
   '/dashboard/settings/profile': UserIcon,

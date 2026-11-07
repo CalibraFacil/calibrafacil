@@ -5,7 +5,7 @@ import { format, isValid, parse } from 'date-fns'
 import { Calendar01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { Button } from '@calibra-facil/ui/button'
 import { Calendar } from '@calibra-facil/ui/calendar'
 import type { DatePickerPreset } from '@calibra-facil/ui/date-picker'

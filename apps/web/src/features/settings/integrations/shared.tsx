@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 /**
  * Compact read-only metric. Numbers use tabular-nums so live counters and

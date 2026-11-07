@@ -51,7 +51,7 @@ import {
   EccentricityIndicator,
   isEccentricityIndicatorPosition,
 } from '@/components/eccentricity-indicator'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 type HugeIcon = Parameters<typeof HugeiconsIcon>[0]['icon']
 

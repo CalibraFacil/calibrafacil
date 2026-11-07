@@ -45,7 +45,7 @@ import {
 } from '@calibra-facil/ui/dialog'
 import { Input } from '@calibra-facil/ui/input'
 import { Kbd } from '@calibra-facil/ui/kbd'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 
 interface MassCompositionCellProps {
   value: unknown

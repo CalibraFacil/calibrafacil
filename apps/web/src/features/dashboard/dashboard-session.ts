@@ -3,7 +3,8 @@ import { authClient } from '@calibra-facil/auth/client'
 
 import { hasDesktopSession } from '@/runtime/desktop-auth'
 import { isDesktopRuntime } from '@/runtime/desktop'
-import { getClientSession, readSessionWithRetry } from '@/lib/auth-session'
+import { readSessionWithRetry } from '@calibra-facil/shared/session-retry'
+import { getClientSession } from '@/lib/auth-session'
 
 // Inference through readSessionWithRetry's naked type parameter widens
 // TSession to `{}`, so name it explicitly off the auth client.

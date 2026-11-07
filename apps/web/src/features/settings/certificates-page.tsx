@@ -62,7 +62,7 @@ import {
 } from '@calibra-facil/ui/empty'
 import { Switch } from '@calibra-facil/ui/switch'
 import { Textarea } from '@calibra-facil/ui/textarea'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { useSigningCertificatesData } from '@/features/settings/queries'
 import { formatInstant } from '@calibra-facil/shared/format'
 import { buildUnsignedIssuancePayload } from '@/features/settings/unsigned-issuance-form'

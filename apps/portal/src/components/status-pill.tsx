@@ -1,7 +1,7 @@
 import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@calibra-facil/ui/utils";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 
 /**

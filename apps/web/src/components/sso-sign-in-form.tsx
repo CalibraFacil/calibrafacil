@@ -3,7 +3,7 @@ import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { calibraApi } from '@/utils/api'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { sanitizeLabRedirect } from '@/lib/auth-redirect'
 import {
   AuthStatusMessage,

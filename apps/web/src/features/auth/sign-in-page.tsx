@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { motion } from 'motion/react'
-import { cn } from '@/lib/utils'
+import { cn } from '@calibra-facil/ui/utils'
 import { BrandLockup } from '@/components/brand'
 import { SignInForm } from '@/components/sign-in-form'
 import { SsoSignInForm } from '@/components/sso-sign-in-form'
