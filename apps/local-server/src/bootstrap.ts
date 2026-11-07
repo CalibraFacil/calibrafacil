@@ -1,5 +1,8 @@
 import path from "node:path";
-import { loadLocalServerConfig } from "@calibra-facil/config";
+import {
+  LOCAL_SERVER_BOOTSTRAP_ENV,
+  loadLocalServerConfig,
+} from "@calibra-facil/config";
 import { Buffer } from "node:buffer";
 import {
   localServerBootstrapConfigSchema,
@@ -61,9 +64,7 @@ export function resolveLocalServerDbPath(config: LocalServerConfig): string {
 export function readLocalServerConfig(
   env: Record<string, string | undefined>,
 ): LocalServerConfig {
-  const bootstrapConfig = readBootstrapConfig(
-    env.CALIBRA_LOCAL_SERVER_BOOTSTRAP,
-  );
+  const bootstrapConfig = readBootstrapConfig(env[LOCAL_SERVER_BOOTSTRAP_ENV]);
   if (bootstrapConfig) {
     return bootstrapConfig;
   }

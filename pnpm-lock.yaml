@@ -220,6 +220,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@calibra-facil/config':
+        specifier: workspace:^
+        version: link:../../packages/config
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
@@ -570,6 +573,9 @@ importers:
       '@calibra-facil/client-runtime':
         specifier: workspace:^
         version: link:../../packages/client-runtime
+      '@calibra-facil/config':
+        specifier: workspace:^
+        version: link:../../packages/config
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts

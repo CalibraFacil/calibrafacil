@@ -12,32 +12,17 @@ import {
   type LocalServerBootstrapConfig,
 } from "@calibra-facil/contracts";
 
-import { installDeviceId } from "./device-id";
-const DEFAULT_LOCAL_HOST = "127.0.0.1";
-const DEFAULT_LOCAL_PORT = 4317;
-const LOCAL_PORT_ATTEMPTS = 20;
-const LOCAL_SERVER_BOOTSTRAP_ENV = "CALIBRA_LOCAL_SERVER_BOOTSTRAP";
-const LOCAL_SERVER_BOOTSTRAP_STDIN_ENV = "CALIBRA_LOCAL_SERVER_BOOTSTRAP_STDIN";
-const LOCAL_SERVER_ENV_KEYS = [
-  LOCAL_SERVER_BOOTSTRAP_ENV,
+import {
   LOCAL_SERVER_BOOTSTRAP_STDIN_ENV,
-  "CALIBRA_LOCAL_HOST",
-  "CALIBRA_LOCAL_PORT",
-  "CALIBRA_LOCAL_BOOTSTRAP_TOKEN",
-  "CALIBRA_APP_VERSION",
-  "CALIBRA_LOCAL_SERVER_VERSION",
-  "CALIBRA_LOCAL_DB_PATH",
-  "CALIBRA_LOCAL_STORAGE_DIR",
-  "CALIBRA_DEVICE_ID",
-  "CALIBRA_TENANT_ID",
-  "CALIBRA_ORGANIZATION_ID",
-  "CALIBRA_UNIT_ID",
-  "CALIBRA_USER_ID",
-  "CALIBRA_SYNC_ENABLED",
-  "CALIBRA_CLOUD_API_URL",
-  "CALIBRA_CLOUD_AUTH_TOKEN",
-  "CALIBRA_CLOUD_PROXY_TOKEN",
-] as const;
+  localServerEnvNames,
+  rawEnv,
+  readLocalServerEnvironment,
+  type EnvSource,
+  type LocalServerSettings,
+} from "@calibra-facil/config";
+
+import { installDeviceId } from "./device-id";
+const LOCAL_PORT_ATTEMPTS = 20;
 
 type LocalServerStartOptions = {
   cloudAuthToken?: string | null;
@@ -102,6 +87,13 @@ export function canMoveLocalServer(
   return from === to || LOCAL_SERVER_TRANSITIONS[from].includes(to);
 }
 
+type LocalServerManagerOptions = {
+  /** What the local-server variables are read from (default: the process). */
+  env?: EnvSource;
+  /** Never spawn: a smoke script runs its own server (`skipLocalServer`). */
+  skipLocalServer?: boolean;
+};
+
 export class LocalServerManager {
   #process: ChildProcessWithoutNullStreams | null = null;
   #bootstrap: LocalEnvironmentBootstrap | null = null;
@@ -115,9 +107,24 @@ export class LocalServerManager {
   #startPromise: Promise<LocalEnvironmentBootstrap> | null = null;
   #state: LocalServerManagerState = "stopped";
   #stopping = false;
-  #port = Number(process.env.CALIBRA_LOCAL_PORT ?? DEFAULT_LOCAL_PORT);
+  #port: number;
+  readonly #env: EnvSource;
+  readonly #skipSpawn: boolean;
+  /** The operator's own variables: they override what the host would derive. */
+  readonly #explicit: Partial<LocalServerSettings>;
+  readonly #syncEnabled: boolean;
 
-  readonly host = process.env.CALIBRA_LOCAL_HOST ?? DEFAULT_LOCAL_HOST;
+  readonly host: string;
+
+  constructor(options: LocalServerManagerOptions = {}) {
+    this.#env = options.env ?? rawEnv();
+    this.#skipSpawn = options.skipLocalServer ?? false;
+    const { settings, explicit } = readLocalServerEnvironment(this.#env);
+    this.#port = settings.port;
+    this.host = settings.host;
+    this.#syncEnabled = settings.syncEnabled;
+    this.#explicit = explicit;
+  }
 
   get state() {
     return this.#state;
@@ -180,7 +187,7 @@ export class LocalServerManager {
     this.#moveTo("starting");
     const startAttemptId = ++this.#startAttemptId;
 
-    if (!process.env.CALIBRA_DESKTOP_SKIP_LOCAL_SERVER) {
+    if (!this.#skipSpawn) {
       this.#port = await findAvailablePort(this.host, this.#port);
       this.#spawn(options);
     }
@@ -231,7 +238,7 @@ export class LocalServerManager {
     this.#process = spawn(command.executable, command.args, {
       cwd: command.cwd,
       env: {
-        ...sanitizeLocalServerEnvironment(process.env),
+        ...sanitizeLocalServerEnvironment(this.#env),
         ...command.env,
         [LOCAL_SERVER_BOOTSTRAP_STDIN_ENV]: "1",
       },
@@ -270,7 +277,7 @@ export class LocalServerManager {
   }
 
   #scheduleRestart() {
-    if (this.#restartTimer || process.env.CALIBRA_DESKTOP_SKIP_LOCAL_SERVER) {
+    if (this.#restartTimer || this.#skipSpawn) {
       return;
     }
 
@@ -347,41 +354,32 @@ export class LocalServerManager {
     command: LocalServerCommand,
     options: LocalServerStartOptions,
   ): LocalServerBootstrapConfig {
+    const explicit = this.#explicit;
     return localServerBootstrapConfigSchema.parse({
       host: this.host,
       port: this.port,
       appVersion: app.getVersion(),
       localServerVersion: app.getVersion(),
-      dbPath: process.env.CALIBRA_LOCAL_DB_PATH ?? command.dbPath,
-      storageRoot: process.env.CALIBRA_LOCAL_STORAGE_DIR ?? command.storageRoot,
-      deviceId:
-        process.env.CALIBRA_DEVICE_ID ??
-        installDeviceId(app.getPath("userData")),
-      tenantId: process.env.CALIBRA_TENANT_ID ?? null,
+      dbPath: explicit.dbPath ?? command.dbPath,
+      storageRoot: explicit.storageDir ?? command.storageRoot,
+      deviceId: explicit.deviceId ?? installDeviceId(app.getPath("userData")),
+      tenantId: explicit.tenantId ?? null,
       dataRoot: command.dataRoot,
       legacyDbPath: command.dbPath,
       // A packaged build must never open a database that belongs to nobody.
       // The server enforces this too; passing it is the host's half.
       requirePartition: app.isPackaged,
       organizationId:
-        options.partition?.organizationId ??
-        process.env.CALIBRA_ORGANIZATION_ID ??
-        null,
-      unitId: process.env.CALIBRA_UNIT_ID
-        ? Number(process.env.CALIBRA_UNIT_ID)
-        : null,
-      userId: options.partition?.userId ?? process.env.CALIBRA_USER_ID ?? null,
-      syncEnabled: process.env.CALIBRA_SYNC_ENABLED !== "false",
+        options.partition?.organizationId ?? explicit.organizationId ?? null,
+      unitId: explicit.unitId ?? null,
+      userId: options.partition?.userId ?? explicit.userId ?? null,
+      syncEnabled: this.#syncEnabled,
       autoStartSync: options.autoStartSync ?? true,
       bootstrapToken: this.#localApiToken,
-      cloudApiUrl:
-        options.cloudApiUrl ?? process.env.CALIBRA_CLOUD_API_URL ?? null,
-      cloudAuthToken:
-        options.cloudAuthToken ?? process.env.CALIBRA_CLOUD_AUTH_TOKEN ?? null,
+      cloudApiUrl: options.cloudApiUrl ?? explicit.cloudApiUrl ?? null,
+      cloudAuthToken: options.cloudAuthToken ?? explicit.cloudAuthToken ?? null,
       cloudProxyToken:
-        options.cloudProxyToken ??
-        process.env.CALIBRA_CLOUD_PROXY_TOKEN ??
-        null,
+        options.cloudProxyToken ?? explicit.cloudProxyToken ?? null,
       desktopRunId: this.#desktopRunId,
       localServerRunId: this.#localServerRunId,
     });
@@ -476,11 +474,9 @@ function isPortAvailable(host: string, port: number) {
   });
 }
 
-function sanitizeLocalServerEnvironment(
-  env: NodeJS.ProcessEnv,
-): NodeJS.ProcessEnv {
+function sanitizeLocalServerEnvironment(env: EnvSource): EnvSource {
   const sanitized = { ...env };
-  for (const key of LOCAL_SERVER_ENV_KEYS) {
+  for (const key of localServerEnvNames) {
     delete sanitized[key];
   }
   return sanitized;

@@ -242,6 +242,19 @@ export function flag(opts: FlagOptions): z.ZodType<boolean> {
   return register(schema, { ...opts, kind: "boolean", default: opts.default });
 }
 
+/**
+ * A switch that is on when the variable is set to anything but blank
+ * (`CALIBRA_X=1`), whatever the value says. For variables whose contract has
+ * always been "set it to turn it on".
+ */
+export function presence(opts: VarOptions): z.ZodType<boolean> {
+  const schema = z.preprocess(
+    blankToUndefined,
+    z.unknown().transform((value) => value !== undefined),
+  );
+  return register(schema, { ...opts, kind: "boolean", default: false });
+}
+
 export interface ChoiceOptions<V extends string> extends VarOptions {
   readonly values: readonly [V, ...V[]];
   readonly tolerant?: boolean;

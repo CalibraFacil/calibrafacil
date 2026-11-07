@@ -1,6 +1,7 @@
 import { defineReader, defineRuntime, type ConfigIssue } from "./define";
 import { authGroup } from "./groups/auth";
 import { databaseGroup } from "./groups/database";
+import { desktopGroup } from "./groups/desktop";
 import { emailGroup } from "./groups/email";
 import { portalGroup, webGroup } from "./groups/frontends";
 import {
@@ -198,6 +199,7 @@ export const RUNTIME_SPECS = [
 // ---------------------------------------------------------------------------
 
 export const readRuntimeConfig = defineReader(runtimeGroup);
+export const readDesktopConfig = defineReader(desktopGroup);
 export const readDatabaseConfig = defineReader(databaseGroup);
 export const readOriginsConfig = defineReader(originsGroup);
 export const readAuthConfig = defineReader(authGroup);

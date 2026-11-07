@@ -5,7 +5,10 @@ import {
   createLocalServerFromEnv,
 } from "./server";
 import { serve } from "@hono/node-server";
-import { rawEnv } from "@calibra-facil/config";
+import {
+  LOCAL_SERVER_BOOTSTRAP_STDIN_ENV,
+  rawEnv,
+} from "@calibra-facil/config";
 
 void main().catch((error) => {
   console.error(
@@ -20,7 +23,7 @@ async function main() {
   // above). A bootstrap envelope takes precedence over the individual variables.
   const env = rawEnv();
   const { app, config, database } =
-    env.CALIBRA_LOCAL_SERVER_BOOTSTRAP_STDIN === "1"
+    env[LOCAL_SERVER_BOOTSTRAP_STDIN_ENV] === "1"
       ? createLocalServerFromConfig(
           parseLocalServerBootstrapConfig(await readStdin()),
         )

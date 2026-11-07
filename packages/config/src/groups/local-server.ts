@@ -1,4 +1,22 @@
-import { defineGroup, flag, integer, text, url } from "../define";
+import type { z } from "zod";
+import {
+  defineGroup,
+  flag,
+  integer,
+  text,
+  url,
+  varMetaOf,
+  currentEnv,
+  defineReader,
+  groupMetaOf,
+  type EnvSource,
+} from "../define";
+import {
+  LOCAL_SERVER_BOOTSTRAP_ENV,
+  LOCAL_SERVER_BOOTSTRAP_STDIN_ENV,
+  LOCAL_SERVER_DEFAULT_HOST,
+  LOCAL_SERVER_DEFAULT_PORT,
+} from "../local-server-defaults";
 
 /**
  * The offline desktop server (apps/local-server). The Electron host normally
@@ -14,13 +32,13 @@ export const localServerGroup = defineGroup({
   ],
   vars: {
     bootstrap: text({
-      env: "CALIBRA_LOCAL_SERVER_BOOTSTRAP",
+      env: LOCAL_SERVER_BOOTSTRAP_ENV,
       description:
         "base64url JSON bootstrap envelope from the desktop host; takes precedence over every other variable.",
       secret: true,
     }),
     bootstrapFromStdin: text({
-      env: "CALIBRA_LOCAL_SERVER_BOOTSTRAP_STDIN",
+      env: LOCAL_SERVER_BOOTSTRAP_STDIN_ENV,
       description: "`1` reads the bootstrap envelope from standard input.",
     }),
     dbPath: text({
@@ -41,14 +59,14 @@ export const localServerGroup = defineGroup({
     host: text({
       env: "CALIBRA_LOCAL_HOST",
       description: "Address the local server binds to.",
-      default: "127.0.0.1",
+      default: LOCAL_SERVER_DEFAULT_HOST,
     }),
     port: integer({
       env: "CALIBRA_LOCAL_PORT",
       description: "Port the local server listens on.",
       min: 1,
       max: 65_535,
-      default: 4317,
+      default: LOCAL_SERVER_DEFAULT_PORT,
     }),
     appVersion: text({
       env: "CALIBRA_APP_VERSION",
@@ -129,3 +147,53 @@ export const localServerGroup = defineGroup({
     }),
   },
 });
+
+export type LocalServerSettings = z.output<typeof localServerGroup>;
+
+const readLocalServerSettings = defineReader(localServerGroup);
+
+const localServerVars = groupMetaOf(localServerGroup)?.vars ?? {};
+
+/**
+ * Every environment variable the local server reads, derived from the group:
+ * the desktop host uses it to keep its own copies out of the child process.
+ */
+export const localServerEnvNames: readonly string[] = Object.values(
+  localServerVars,
+).flatMap((schema) => {
+  const env = varMetaOf(schema)?.env;
+  return env ? [env] : [];
+});
+
+function copySetting<K extends keyof LocalServerSettings>(
+  target: Partial<LocalServerSettings>,
+  source: LocalServerSettings,
+  key: K,
+) {
+  target[key] = source[key];
+}
+
+/**
+ * The local-server settings of an environment, plus the subset the
+ * environment actually sets. The settings carry the group's defaults; the
+ * subset is for a caller that has a better fallback than the default (the
+ * desktop host derives a device id and the data directories itself, and only
+ * an operator's explicit variable overrides them).
+ */
+export function readLocalServerEnvironment(env: EnvSource = currentEnv()): {
+  readonly settings: LocalServerSettings;
+  readonly explicit: Partial<LocalServerSettings>;
+} {
+  const settings = readLocalServerSettings(env);
+  const explicit: Partial<LocalServerSettings> = {};
+  for (const [key, schema] of Object.entries(localServerVars)) {
+    const name = varMetaOf(schema)?.env;
+    if (!name || (env[name]?.trim() ?? "") === "") continue;
+    if (isSettingKey(key)) copySetting(explicit, settings, key);
+  }
+  return { settings, explicit };
+}
+
+function isSettingKey(key: string): key is keyof LocalServerSettings {
+  return key in localServerVars;
+}
