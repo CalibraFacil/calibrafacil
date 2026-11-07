@@ -1,4 +1,6 @@
 import {
+  BASELINE_OPTION_SCHEMA,
+  baselineInForce,
   createRatchet,
   isTestFile,
   normalizedFilename,
@@ -29,12 +31,7 @@ const TRANSACTION_FUNCTIONS = new Set([
   "inOrgTransaction",
 ]);
 
-const LEGACY_BASELINE: Baseline = new Map<string, number>([
-  ["apps/api/src/routes/dashboard.ts", 1],
-
-  ["apps/api/src/routes/reports.ts", 8],
-  ["apps/api/src/routes/signing.ts", 9],
-]);
+const LEGACY_BASELINE: Baseline = new Map<string, number>([]);
 
 const MESSAGE =
   "Do not return an error response from inside a transaction callback: the return commits every write made before it. Throw a DomainError (apps/api/src/lib/domain-errors.ts) so the transaction rolls back.";
@@ -105,12 +102,16 @@ const rule: RuleModule = {
       description:
         "Disallow returning an error response from inside a transaction callback (it commits partial writes); throw a DomainError.",
     },
+    schema: BASELINE_OPTION_SCHEMA,
   },
   create(context: RuleContext) {
     const filename = normalizedFilename(context);
     if (!API_SRC_PATTERN.test(filename) || isTestFile(filename)) return {};
 
-    const ratchet = createRatchet(LEGACY_BASELINE, filename);
+    const ratchet = createRatchet(
+      baselineInForce(context, LEGACY_BASELINE),
+      filename,
+    );
     return {
       CallExpression(node: unknown) {
         const call = toRecord(node);

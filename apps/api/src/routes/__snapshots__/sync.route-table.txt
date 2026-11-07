@@ -11,8 +11,8 @@ POST /ack <anonymous> #09e67813da
 POST /conflicts/:id/resolve withLabPermission({"calibration":["create"]})
 POST /conflicts/:id/resolve <anonymous> #a9d76582bc
 POST /attachments/init-upload withLabPermission({"calibration":["create"]})
-POST /attachments/init-upload <anonymous> #ca614fba5e
+POST /attachments/init-upload <anonymous> #c45970a2ef
 POST /attachments/complete-upload withLabPermission({"calibration":["create"]})
-POST /attachments/complete-upload <anonymous> #a733bb793c
+POST /attachments/complete-upload <anonymous> #87fe98d4ed
 GET /attachments/:attachmentId/download withLabPermission({"calibration":["read"]})
-GET /attachments/:attachmentId/download <anonymous> #7ebcbc20b9
+GET /attachments/:attachmentId/download <anonymous> #4457319ba2

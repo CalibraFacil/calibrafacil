@@ -24,10 +24,17 @@ import type { Context } from "hono";
 
 /**
  * 4xx are domain outcomes. A 5xx is accepted by the constructor only so a
- * deliberate server-side failure can still carry a code; the error handler
- * reports those as defects.
+ * deliberate server-side failure (a dependency that is down: 502/503) can still
+ * carry a code; the error handler reports those as defects.
  */
-export type DomainErrorStatus = ApiErrorStatus | 500 | 503;
+export type DomainErrorStatus =
+  | ApiErrorStatus
+  | 410
+  | 413
+  | 429
+  | 500
+  | 502
+  | 503;
 
 export type DomainErrorInit = {
   code: ApiErrorCode;

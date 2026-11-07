@@ -58,7 +58,10 @@ import { jobRow } from "../../test/integration/job-cas";
 import { failEventAuditInsert } from "../../test/integration/sync-faults";
 import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
 import { getExecuteRows } from "../lib/db";
-import { syncRouter } from "./sync";
+import { syncRouter as bareSyncRouter } from "./sync";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const syncRouter = withErrorHandling(bareSyncRouter);
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

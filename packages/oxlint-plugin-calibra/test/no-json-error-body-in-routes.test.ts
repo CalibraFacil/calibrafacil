@@ -37,14 +37,24 @@ describe("calibra/no-json-error-body-in-routes (real oxlint)", () => {
   });
 
   it("REQ-DE-5: grandfathers the exact legacy count and fails above it", async () => {
-    // apps/api/src/routes/dashboard.ts is baselined at 1.
-    await expectClean(RULE, {
-      "apps/api/src/routes/dashboard.ts":
-        'export const h = (c: any) => c.json({ error: "x" }, 400);\n',
-    });
-    await expectViolation(RULE, {
-      "apps/api/src/routes/dashboard.ts":
-        'export const h = (c: any) => c.json({ error: "x" }, 400);\nexport const g = (c: any) => c.json({ error: "y" }, 400);\n',
-    });
+    // The committed baseline shrinks toward empty, so the ratchet is exercised
+    // with a baseline INJECTED through the rule options (the repo config never sets it).
+    const options = { baseline: { "apps/api/src/routes/legacy.ts": 1 } };
+    await expectClean(
+      RULE,
+      {
+        "apps/api/src/routes/legacy.ts":
+          'export const h = (c: any) => c.json({ error: "x" }, 400);\n',
+      },
+      options,
+    );
+    await expectViolation(
+      RULE,
+      {
+        "apps/api/src/routes/legacy.ts":
+          'export const h = (c: any) => c.json({ error: "x" }, 400);\nexport const g = (c: any) => c.json({ error: "y" }, 400);\n',
+      },
+      options,
+    );
   });
 });

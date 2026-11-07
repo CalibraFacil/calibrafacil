@@ -1,4 +1,4 @@
-import { type Context, Hono } from "hono";
+import { Hono } from "hono";
 import {
   syncAttachmentCompleteUploadRequestSchema,
   syncAttachmentCompleteUploadResponseSchema,
@@ -11,11 +11,7 @@ import {
   generateBoundPresignedUploadUrl,
   generatePresignedUrl,
 } from "../../lib/storage";
-import {
-  DomainError,
-  domainErrorResponse,
-  invalid,
-} from "../../lib/domain-errors";
+import { DomainError, invalid } from "../../lib/domain-errors";
 import { withLabPermission } from "../../middleware/permission";
 import {
   checkStoredSyncAttachment,
@@ -36,19 +32,13 @@ import { type SyncRouterEnv, getMemberData } from "./env";
 
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
 
-/** A refusal of the upload leg as the endpoints' `{ error, code }` body. */
-function refusalResponse(
-  c: Context<SyncRouterEnv>,
-  refusal: SyncAttachmentRefusal,
-) {
-  return domainErrorResponse(
-    c,
-    new DomainError({
-      code: refusal.apiCode,
-      status: refusal.status,
-      message: refusal.reason,
-    }),
-  );
+/** A refusal of the upload leg as the endpoints' `{ error, code }` error. */
+function refusalError(refusal: SyncAttachmentRefusal) {
+  return new DomainError({
+    code: refusal.apiCode,
+    status: refusal.status,
+    message: refusal.reason,
+  });
 }
 
 export const attachmentRoutes = new Hono<SyncRouterEnv>()
@@ -62,7 +52,7 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
       );
       const declaration = checkSyncAttachmentDeclaration(body);
       if (!declaration.ok) {
-        return refusalResponse(c, declaration.refusal);
+        throw refusalError(declaration.refusal);
       }
       const { mimeType } = declaration;
 
@@ -108,13 +98,13 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
           memberData.organizationId,
         )
       ) {
-        return c.json({ error: "Invalid attachment id." }, 400);
+        throw invalid("invalid_request", "Invalid attachment id.");
       }
 
       if (objectKey !== body.objectKey) {
-        return c.json(
-          { error: "Attachment id does not match object key." },
-          400,
+        throw invalid(
+          "invalid_request",
+          "Attachment id does not match object key.",
         );
       }
 
@@ -128,18 +118,15 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
         contentHash: body.contentHash,
       });
       if (!syncAttachmentObjectKeyMatches(objectKey, expectedKey)) {
-        return domainErrorResponse(
-          c,
-          invalid(
-            "invalid_request",
-            "Attachment does not match its declaration.",
-          ),
+        throw invalid(
+          "invalid_request",
+          "Attachment does not match its declaration.",
         );
       }
 
       const declaration = checkSyncAttachmentDeclaration(body);
       if (!declaration.ok) {
-        return refusalResponse(c, declaration.refusal);
+        throw refusalError(declaration.refusal);
       }
 
       // Nothing is recorded as present until the stored object is read back and
@@ -149,7 +136,7 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
         if (stored.discard) {
           await discardStoredSyncAttachment(c.env, objectKey);
         }
-        return refusalResponse(c, stored.refusal);
+        throw refusalError(stored.refusal);
       }
 
       await recordSyncAttachmentUploadCompleted({
@@ -192,7 +179,7 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
           memberData.organizationId,
         )
       ) {
-        return c.json({ error: "Invalid attachment id." }, 400);
+        throw invalid("invalid_request", "Invalid attachment id.");
       }
 
       const downloadUrl = await generatePresignedUrl(

@@ -241,6 +241,27 @@ export const API_ERROR_CODES = [
   // Webhooks.
   "webhook_not_found",
   "webhook_delivery_not_found",
+  "payload_too_large",
+
+  // Laboratory settings and access: API keys, e-mail sending domains, SSO,
+  // sessions, notifications, invitations, the account-setup link, self-serve
+  // sign-up and the signing credential's server configuration.
+  "api_key_not_found",
+  "email_domain_not_found",
+  "email_domain_not_verified",
+  "email_domain_provider_failed",
+  "email_domain_server_config",
+  "sso_provider_not_found",
+  "sso_provider_reload_failed",
+  "sso_domain_not_verified",
+  "session_not_found",
+  "notification_not_found",
+  "invitation_not_found",
+  "lab_setup_token_invalid",
+  "lab_setup_delivery_failed",
+  "signup_domain_cap_reached",
+  "signup_unavailable",
+  "signing_not_configured",
 
   // Client portal and public verification: audit packs, out-of-tolerance
   // notices and events, the portal's own host and domain.
@@ -275,6 +296,8 @@ export const API_ERROR_CODES = [
   "ALREADY_ACKNOWLEDGED",
   "ASSESSMENT_SIGNED",
   "CONCLUSION_REQUIRED",
+  // Shipped with public self-serve sign-up and asserted by the sign-up page.
+  "ALREADY_REGISTERED",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

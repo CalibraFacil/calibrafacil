@@ -64,6 +64,7 @@ describe("DomainError (REQ-DE-1)", () => {
     expect([...nonSnake].sort()).toEqual(
       [
         "ALREADY_ACKNOWLEDGED",
+        "ALREADY_REGISTERED",
         "ASSESSMENT_SIGNED",
         "CONCLUSION_REQUIRED",
         "DIMENSIONAL_ERROR",

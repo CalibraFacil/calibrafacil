@@ -5,8 +5,9 @@ import { organization } from "@calibra-facil/db/schema";
 import { UpdateOrganizationProfileSchema } from "@calibra-facil/schemas";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { writeComplianceAuditEvent } from "../lib/compliance-audit";
-import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
-import { orgDb } from "../lib/org-db";
+import { invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import {
   type AuthVariables,
   requireRole,
@@ -92,6 +93,10 @@ function auditValue(value: Date | string | boolean | null) {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function orgNotFound() {
+  return notFound("not_found", "Organização não encontrada");
+}
+
 function isoOrNull(value: Date | null) {
   return value ? value.toISOString() : null;
 }
@@ -105,7 +110,6 @@ export const organizationProfileRouter = new Hono<{
   zValidator("json", UpdateOrganizationProfileSchema),
   async (c) => {
     const member = c.get("member");
-    const session = c.get("session");
     const input = c.req.valid("json");
 
     const set: Partial<typeof organization.$inferInsert> = {};
@@ -130,14 +134,16 @@ export const organizationProfileRouter = new Hono<{
       (key): key is ProfileField => key in PROFILE_COLUMNS,
     );
 
-    const outcome = await orgDb(member.organizationId).transaction(
-      async (tx) => {
-        const [before] = await tx
+    const outcome = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [before] = await ctx.o
           .select(PROFILE_COLUMNS)
           .from(organization)
           .where(eq(organization.id, member.organizationId))
           .limit(1);
-        if (!before) return null;
+        if (!before) throw orgNotFound();
         if (fields.length === 0) return before;
 
         // The window must stay ordered once the change is merged with what is
@@ -151,20 +157,23 @@ export const organizationProfileRouter = new Hono<{
             ? before.accreditationValidUntil
             : set.accreditationValidUntil;
         if (from && until && from.getTime() > until.getTime()) {
-          return "invalid_window" as const;
+          throw invalid(
+            "invalid_request",
+            "O início da vigência não pode ser posterior ao fim",
+          );
         }
 
-        const [after] = await tx
+        const [after] = await ctx.o
           .update(organization)
           .set(set)
           .where(eq(organization.id, member.organizationId))
           .returning(PROFILE_COLUMNS);
-        if (!after) return null;
+        if (!after) throw orgNotFound();
 
         await writeOrganizationAuditEvent(
           {
             organizationId: member.organizationId,
-            actorUserId: session.user.id,
+            actorUserId: ctx.actor.userId,
             actorMemberId: member.id,
             action: "organization.profile.updated",
             entityType: "organization",
@@ -180,7 +189,7 @@ export const organizationProfileRouter = new Hono<{
               })),
             },
           },
-          tx,
+          ctx.o,
         );
 
         // B4a: the append-only compliance trail records the accreditation claim
@@ -211,31 +220,15 @@ export const organizationProfileRouter = new Hono<{
                   ]),
                 ),
               },
-              performedBy: session.user.id,
+              performedBy: ctx.actor.userId,
               ipAddress: c.req.header("x-forwarded-for") ?? null,
             },
-            tx,
+            ctx.o,
           );
         }
         return after;
       },
     );
-
-    if (outcome === "invalid_window") {
-      return domainErrorResponse(
-        c,
-        invalid(
-          "invalid_request",
-          "O início da vigência não pode ser posterior ao fim",
-        ),
-      );
-    }
-    if (!outcome) {
-      return domainErrorResponse(
-        c,
-        notFound("not_found", "Organização não encontrada"),
-      );
-    }
 
     return c.json({
       ...outcome,

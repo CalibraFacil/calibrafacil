@@ -1,5 +1,6 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DomainError, domainErrorBody } from "../../lib/domain-errors";
 import { labSetupRouter } from "../lab-setup";
 
 const mocks = vi.hoisted(() => ({
@@ -38,10 +39,19 @@ vi.mock("@calibra-facil/db", () => ({
   },
 }));
 
+/** The error hook `app.ts` installs, reduced to the domain failures a route throws. */
+function mapDomainErrors(error: Error, c: Context) {
+  if (error instanceof DomainError) {
+    return c.json(domainErrorBody(error), error.status);
+  }
+  return c.json({ error: "Erro interno do servidor" }, 500);
+}
+
 function createApp(env: Record<string, string> = {}) {
   return {
     request(path: string, init?: RequestInit) {
       return new Hono()
+        .onError(mapDomainErrors)
         .route("/api/lab-setup", labSetupRouter)
         .request(`/api/lab-setup${path}`, init, env);
     },
@@ -167,6 +177,7 @@ describe("labSetupRouter", () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
       error: "Sessão não corresponde ao convite",
+      code: "forbidden",
     });
     expect(mocks.dbInsertValues).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -16,6 +16,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
+import { DomainError, forbidden, unauthenticated } from "../lib/domain-errors";
 import { recordPlatformEvent } from "../lib/identity";
 import { orgDb } from "../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
@@ -46,6 +47,15 @@ function tokenStatusHttpCode(status: string) {
   }
 
   return 400;
+}
+
+/** Setup mail could not be sent: the auth service answered with a failure. */
+function setupDeliveryFailed(message: string) {
+  return new DomainError({
+    code: "lab_setup_delivery_failed",
+    status: 500,
+    message,
+  });
 }
 
 async function logClaimEvent(input: {
@@ -122,7 +132,7 @@ export const labSetupRouter = new Hono()
     });
 
     if (!response.ok) {
-      return c.json({ error: "Falha ao enviar link mágico" }, 500);
+      throw setupDeliveryFailed("Falha ao enviar link mágico");
     }
 
     await logClaimEvent({
@@ -162,7 +172,7 @@ export const labSetupRouter = new Hono()
     });
 
     if (!response.ok) {
-      return c.json({ error: "Falha ao enviar código" }, 500);
+      throw setupDeliveryFailed("Falha ao enviar código");
     }
 
     await logClaimEvent({
@@ -186,10 +196,11 @@ export const labSetupRouter = new Hono()
         action: "lab_account.claim_failed",
         details: { reason: validation.status },
       });
-      return c.json(
-        { error: "Link de configuração inválido ou expirado" },
-        tokenStatusHttpCode(validation.status),
-      );
+      throw new DomainError({
+        code: "lab_setup_token_invalid",
+        status: tokenStatusHttpCode(validation.status),
+        message: "Link de configuração inválido ou expirado",
+      });
     }
 
     const auth = createLabAuth();
@@ -198,7 +209,7 @@ export const labSetupRouter = new Hono()
     });
 
     if (!session?.user?.id) {
-      return c.json({ error: "Sessão obrigatória" }, 401);
+      throw unauthenticated("unauthenticated", "Sessão obrigatória");
     }
 
     if (
@@ -215,7 +226,7 @@ export const labSetupRouter = new Hono()
           organizationId: validation.token.organizationId,
         },
       });
-      return c.json({ error: "Sessão não corresponde ao convite" }, 403);
+      throw forbidden("forbidden", "Sessão não corresponde ao convite");
     }
 
     try {
@@ -349,6 +360,10 @@ export const labSetupRouter = new Hono()
         },
       });
 
-      return c.json({ error: "Não foi possível concluir o acesso" }, status);
+      throw new DomainError({
+        code: status === 409 ? "conflict" : "invalid_request",
+        status,
+        message: "Não foi possível concluir o acesso",
+      });
     }
   });

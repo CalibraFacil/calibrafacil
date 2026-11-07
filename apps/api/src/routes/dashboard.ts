@@ -620,9 +620,6 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           spcChartsWithSignals: spcSignalsResult[0]?.count ?? 0,
           dueSoonJobs,
         });
-      } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
-        return c.json({ error: "Erro ao carregar estatisticas" }, 500);
       } finally {
         addServerTiming(c, "dashboard_handler", handlerStartedAt);
       }

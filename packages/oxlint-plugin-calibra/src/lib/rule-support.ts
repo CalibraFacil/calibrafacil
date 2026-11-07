@@ -101,6 +101,40 @@ export function baselineFor(baseline: Baseline, filename: string): number {
   return 0;
 }
 
+/**
+ * The baseline in force: the committed one, or `{ baseline: { "<path suffix>":
+ * <count> } }` from the rule options. The option exists for a rule's own tests
+ * (they inject entries so the exact-count / +1 branches stay covered however far
+ * the committed baseline has shrunk); the repo config never sets it.
+ */
+export function baselineInForce(
+  context: RuleContext,
+  committed: Baseline,
+): Baseline {
+  const options = toRecord(context.options?.[0]);
+  const injected = toRecord(options?.baseline);
+  if (!injected) return committed;
+  const entries: Array<[string, number]> = [];
+  for (const [file, count] of Object.entries(injected)) {
+    if (typeof count === "number") entries.push([file, count]);
+  }
+  return new Map(entries);
+}
+
+/** The rule `meta.schema` that accepts the injectable `baseline` option. */
+export const BASELINE_OPTION_SCHEMA = [
+  {
+    type: "object",
+    properties: {
+      baseline: {
+        type: "object",
+        additionalProperties: { type: "number" },
+      },
+    },
+    additionalProperties: false,
+  },
+];
+
 /** Per-file occurrence counter honoring the baseline allowance. */
 export function createRatchet(baseline: Baseline, filename: string) {
   const allowed = baselineFor(baseline, filename);

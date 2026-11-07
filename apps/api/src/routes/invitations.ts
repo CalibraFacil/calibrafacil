@@ -7,6 +7,7 @@ import {
 } from "@calibra-facil/auth/lab-access";
 import { userCreateErrorWasDuplicate } from "../lib/auth-user-errors";
 import { withDbWakeRetry } from "../lib/db-retry";
+import { invalid, notFound } from "../lib/domain-errors";
 import {
   findLabInvitationForSetupLink,
   findPublicInvitation,
@@ -126,93 +127,81 @@ export const invitationsRouter = new Hono()
     const id = c.req.param("id");
 
     if (!id) {
-      return c.json({ error: "ID de convite não fornecido" }, 400);
+      throw invalid("invalid_request", "ID de convite não fornecido");
     }
 
-    try {
-      // Fetch invitation with organization + inviter details. This endpoint is
-      // public so a not-yet-signed-up invitee can render the accept page; keep
-      // the projection limited to what that page needs. Wrap the first DB touch
-      // in withDbWakeRetry so a Neon cold start is a brief delay, not a 500.
-      const inv = await withDbWakeRetry(() => findPublicInvitation(id));
-      if (!inv) {
-        return c.json({ error: "Convite não encontrado" }, 404);
-      }
-
-      return c.json({
-        id: inv.id,
-        email: inv.email,
-        role: inv.role,
-        status: inv.status,
-        expiresAt: inv.expiresAt,
-        organizationId: inv.organizationId,
-        organizationName: inv.organizationName,
-        organizationSlug: inv.organizationSlug,
-        inviterEmail: inv.inviterEmail ?? "",
-      });
-    } catch (error) {
-      console.error("Error fetching invitation:", error);
-      return c.json({ error: "Erro ao buscar convite" }, 500);
+    // Fetch invitation with organization + inviter details. This endpoint is
+    // public so a not-yet-signed-up invitee can render the accept page; keep
+    // the projection limited to what that page needs. Wrap the first DB touch
+    // in withDbWakeRetry so a Neon cold start is a brief delay, not a 500.
+    const inv = await withDbWakeRetry(() => findPublicInvitation(id));
+    if (!inv) {
+      throw notFound("invitation_not_found", "Convite não encontrado");
     }
+
+    return c.json({
+      id: inv.id,
+      email: inv.email,
+      role: inv.role,
+      status: inv.status,
+      expiresAt: inv.expiresAt,
+      organizationId: inv.organizationId,
+      organizationName: inv.organizationName,
+      organizationSlug: inv.organizationSlug,
+      inviterEmail: inv.inviterEmail ?? "",
+    });
   })
   .post("/:id/request-setup-link", async (c) => {
     const id = c.req.param("id");
 
     if (!id) {
-      return c.json({ error: "ID de convite não fornecido" }, 400);
+      throw invalid("invalid_request", "ID de convite não fornecido");
     }
 
-    try {
-      // First DB touch — retry through a Neon cold start so the invitee's
-      // "Enviar link" click doesn't 500 on a freshly-woken compute.
-      const inv = await withDbWakeRetry(() =>
-        findLabInvitationForSetupLink(id),
-      );
-      if (!inv) {
-        return c.json({ error: "Convite não encontrado" }, 404);
-      }
+    // First DB touch — retry through a Neon cold start so the invitee's
+    // "Enviar link" click doesn't 500 on a freshly-woken compute.
+    const inv = await withDbWakeRetry(() => findLabInvitationForSetupLink(id));
+    if (!inv) {
+      throw notFound("invitation_not_found", "Convite não encontrado");
+    }
 
-      const invitedEmail = normalizeEmail(inv.email);
-      const invitedUser = await ensureInvitationUser(invitedEmail);
-      const appUrl = resolveTrustedAppUrl(c);
-      const setupToken = await createLabAccountSetupToken({
-        userId: invitedUser.user.id,
+    const invitedEmail = normalizeEmail(inv.email);
+    const invitedUser = await ensureInvitationUser(invitedEmail);
+    const appUrl = resolveTrustedAppUrl(c);
+    const setupToken = await createLabAccountSetupToken({
+      userId: invitedUser.user.id,
+      organizationId: inv.organizationId,
+      invitationId: inv.id,
+      email: invitedEmail,
+      purpose: "member_invite_claim",
+      createdByUserId: null,
+      source: "lab.invitation.setup_link_request",
+    });
+
+    await sendLabAccountSetupEmail({
+      email: invitedEmail,
+      recipientName: invitedUser.user.name,
+      organizationName: inv.organizationName,
+      claimUrl: buildLabClaimUrl(appUrl, setupToken.token),
+    });
+
+    await recordPlatformEvent({
+      actorUserId: null,
+      targetUserId: invitedUser.user.id,
+      action: "invitation.setup_link_requested",
+      entityType: "invitation",
+      entityId: inv.id,
+      details: {
         organizationId: inv.organizationId,
-        invitationId: inv.id,
-        email: invitedEmail,
-        purpose: "member_invite_claim",
-        createdByUserId: null,
-        source: "lab.invitation.setup_link_request",
-      });
-
-      await sendLabAccountSetupEmail({
-        email: invitedEmail,
-        recipientName: invitedUser.user.name,
         organizationName: inv.organizationName,
-        claimUrl: buildLabClaimUrl(appUrl, setupToken.token),
-      });
-
-      await recordPlatformEvent({
-        actorUserId: null,
-        targetUserId: invitedUser.user.id,
-        action: "invitation.setup_link_requested",
-        entityType: "invitation",
-        entityId: inv.id,
-        details: {
-          organizationId: inv.organizationId,
-          organizationName: inv.organizationName,
-          userCreated: invitedUser.created,
-          email: invitedEmail,
-          role: inv.role,
-        },
-      });
-
-      return c.json({
-        setupLinkRequested: true,
         userCreated: invitedUser.created,
-      });
-    } catch (error) {
-      console.error("Error requesting invitation setup link:", error);
-      return c.json({ error: "Erro ao enviar link de acesso" }, 500);
-    }
+        email: invitedEmail,
+        role: inv.role,
+      },
+    });
+
+    return c.json({
+      setupLinkRequested: true,
+      userCreated: invitedUser.created,
+    });
   });

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DomainError, domainErrorBody } from "../lib/domain-errors";
 import {
   syncAckResponseSchema,
   syncAttachmentCompleteUploadResponseSchema,
@@ -227,8 +228,16 @@ vi.mock("@calibra-facil/math-engine", () => ({
   },
 }));
 
+/** The error hook `app.ts` installs, reduced to the domain failures a route throws. */
+function mapDomainErrors(error: Error, c: Context) {
+  if (error instanceof DomainError) {
+    return c.json(domainErrorBody(error), error.status);
+  }
+  return c.json({ error: "Erro interno do servidor" }, 500);
+}
+
 function createApp() {
-  return new Hono().route("/api/sync", syncRouter);
+  return new Hono().onError(mapDomainErrors).route("/api/sync", syncRouter);
 }
 
 const testR2Env = {
@@ -1603,6 +1612,7 @@ describe("syncRouter", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: "Attachment id does not match object key.",
+      code: "invalid_request",
     });
   });
 

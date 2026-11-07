@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { ListAssetTypesQuerySchema } from "@calibra-facil/schemas";
 import { withPermission, type AuthVariables } from "../middleware/permission";
 import { findAssetTypeById, listAssetTypes } from "../lib/asset-types";
+import { invalid, notFound } from "../lib/domain-errors";
 
 /**
  * READ-ONLY lab-facing view of the GLOBAL asset-type catalog (#637).
@@ -28,16 +29,11 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const { query } = c.req.valid("query");
 
-      try {
-        const types = await listAssetTypes(query);
+      const types = await listAssetTypes(query);
 
-        return c.json({
-          data: types,
-        } satisfies ServerShape<AssetTypesResponse>);
-      } catch (error) {
-        console.error("Error listing asset types:", error);
-        return c.json({ error: "Erro ao listar tipos de ativo" }, 500);
-      }
+      return c.json({
+        data: types,
+      } satisfies ServerShape<AssetTypesResponse>);
     },
   )
 
@@ -48,19 +44,14 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
     const id = parseInt(c.req.param("id"), 10);
 
     if (isNaN(id)) {
-      return c.json({ error: "ID inválido" }, 400);
+      throw invalid("invalid_request", "ID inválido");
     }
 
-    try {
-      const foundType = await findAssetTypeById(id);
+    const foundType = await findAssetTypeById(id);
 
-      if (!foundType) {
-        return c.json({ error: "Tipo de ativo não encontrado" }, 404);
-      }
-
-      return c.json(foundType);
-    } catch (error) {
-      console.error("Error getting asset type:", error);
-      return c.json({ error: "Erro ao buscar tipo de ativo" }, 500);
+    if (!foundType) {
+      throw notFound("asset_type_not_found", "Tipo de ativo não encontrado");
     }
+
+    return c.json(foundType);
   });

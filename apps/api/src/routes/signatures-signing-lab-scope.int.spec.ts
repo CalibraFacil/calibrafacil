@@ -22,11 +22,15 @@ import {
   memberVisualSignature,
   organizationSigningCertificate,
 } from "@calibra-facil/db/schema";
-import { signaturesRouter } from "./signatures";
-import { signingRouter } from "./signing";
+import { signaturesRouter as bareSignaturesRouter } from "./signatures";
+import { signingRouter as bareSigningRouter } from "./signing";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const signingRouter = withErrorHandling(bareSigningRouter);
+const signaturesRouter = withErrorHandling(bareSignaturesRouter);
 
 vi.mock("../lib/storage", () => ({
   createR2Client: () => ({}),
@@ -150,7 +154,10 @@ describe("signatures router: own visual signature (P2-18e)", () => {
     });
     const foreign = await signaturesRouter.request(`/member/${b.memberId}`);
     expect(foreign.status).toBe(404);
-    expect(await foreign.json()).toEqual({ error: "Membro não encontrado" });
+    expect(await foreign.json()).toEqual({
+      error: "Membro não encontrado",
+      code: "member_not_found",
+    });
   });
 });
 

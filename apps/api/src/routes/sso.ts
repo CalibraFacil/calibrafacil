@@ -11,7 +11,16 @@ import {
 } from "../middleware/permission";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { findLabOrganizationBySlug } from "../lib/identity";
+import {
+  DomainError,
+  conflict,
+  forbidden,
+  invalid,
+  notFound,
+} from "../lib/domain-errors";
+import { withOrg, type OrgActor } from "../lib/org-context";
 import { orgDb } from "../lib/org-db";
+import { requestActor } from "../middleware/request-actor";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 const createProviderSchema = z.object({
@@ -252,12 +261,17 @@ async function getProviderById(organizationId: string, providerId: string) {
   return provider;
 }
 
+function ssoProviderNotFound() {
+  return notFound("sso_provider_not_found", "Provedor SSO nao encontrado");
+}
+
 /** The audit entry of a provider change, in a transaction that names the laboratory. */
 function writeSsoAuditEvent(
+  actor: OrgActor,
   params: Parameters<typeof writeOrganizationAuditEvent>[0],
 ) {
-  return orgDb(params.organizationId).transaction((tx) =>
-    writeOrganizationAuditEvent(params, tx),
+  return withOrg(params.organizationId, actor, (ctx) =>
+    writeOrganizationAuditEvent(params, ctx.o),
   );
 }
 
@@ -292,7 +306,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const normalizedDomain = normalizeDomain(input.domain);
 
       if (!normalizedDomain) {
-        return c.json({ error: "Dominio invalido" }, 400);
+        throw invalid("invalid_request", "Dominio invalido");
       }
 
       const existingProvider = await getOrganizationProvider(
@@ -300,9 +314,9 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       );
 
       if (existingProvider) {
-        return c.json(
-          { error: "Esta organizacao ja possui um provedor SSO configurado." },
-          409,
+        throw conflict(
+          "conflict",
+          "Esta organizacao ja possui um provedor SSO configurado.",
         );
       }
 
@@ -340,16 +354,15 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const provider = await getOrganizationProvider(member.organizationId);
 
       if (!provider) {
-        return c.json(
-          {
-            error:
-              "Provedor criado, mas nao foi possivel recarregar a configuracao.",
-          },
-          500,
-        );
+        throw new DomainError({
+          code: "sso_provider_reload_failed",
+          status: 500,
+          message:
+            "Provedor criado, mas nao foi possivel recarregar a configuracao.",
+        });
       }
 
-      await writeSsoAuditEvent({
+      await writeSsoAuditEvent(requestActor(c), {
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -387,7 +400,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const provider = await getProviderById(member.organizationId, providerId);
 
       if (!provider) {
-        return c.json({ error: "Provedor SSO nao encontrado" }, 404);
+        throw ssoProviderNotFound();
       }
 
       const auth = createLabAuth();
@@ -409,7 +422,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         await response.json(),
       );
 
-      await writeSsoAuditEvent({
+      await writeSsoAuditEvent(requestActor(c), {
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -444,7 +457,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const provider = await getProviderById(member.organizationId, providerId);
 
       if (!provider) {
-        return c.json({ error: "Provedor SSO nao encontrado" }, 404);
+        throw ssoProviderNotFound();
       }
 
       const auth = createLabAuth();
@@ -467,16 +480,15 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       );
 
       if (!refreshedProvider) {
-        return c.json(
-          {
-            error:
-              "Dominio verificado, mas o provedor nao foi encontrado apos a atualizacao.",
-          },
-          500,
-        );
+        throw new DomainError({
+          code: "sso_provider_reload_failed",
+          status: 500,
+          message:
+            "Dominio verificado, mas o provedor nao foi encontrado apos a atualizacao.",
+        });
       }
 
-      await writeSsoAuditEvent({
+      await writeSsoAuditEvent(requestActor(c), {
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -507,7 +519,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const provider = await getProviderById(member.organizationId, providerId);
 
       if (!provider) {
-        return c.json({ error: "Provedor SSO nao encontrado" }, 404);
+        throw ssoProviderNotFound();
       }
 
       const auth = createLabAuth();
@@ -525,7 +537,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      await writeSsoAuditEvent({
+      await writeSsoAuditEvent(requestActor(c), {
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -550,22 +562,22 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     const org = await findLabOrganizationBySlug(input.organizationSlug);
 
     if (!org) {
-      return c.json({ error: "Laboratorio nao encontrado" }, 404);
+      throw notFound("not_found", "Laboratorio nao encontrado");
     }
 
     const provider = await getOrganizationProvider(org.id);
 
     if (!provider) {
-      return c.json(
-        { error: "Esta organizacao ainda nao configurou SSO." },
-        404,
+      throw notFound(
+        "sso_provider_not_found",
+        "Esta organizacao ainda nao configurou SSO.",
       );
     }
 
     if (!provider.domainVerified) {
-      return c.json(
-        { error: "O dominio SSO desta organizacao ainda nao foi verificado." },
-        403,
+      throw forbidden(
+        "sso_domain_not_verified",
+        "O dominio SSO desta organizacao ainda nao foi verificado.",
       );
     }
 

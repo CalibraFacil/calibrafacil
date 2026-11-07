@@ -17,13 +17,15 @@ import {
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { writeComplianceAuditEvent } from "../lib/compliance-audit";
 import {
+  DomainError,
   conflict,
-  domainErrorResponse,
   invalid,
   notFound,
   unprocessable,
 } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
 import { orgDb } from "../lib/org-db";
+import { requestActor } from "../middleware/request-actor";
 import {
   parsePkcs12,
   resolveSigningTrustAnchors,
@@ -36,7 +38,6 @@ import {
   requireUnitOperationalSettingsManager,
   resolveAccessibleUnitContext,
 } from "../lib/unit-operational-settings";
-import { clientIp } from "../lib/client-ip";
 
 import { requireFreshSession } from "../middleware/fresh-session";
 // =============================================================================
@@ -59,6 +60,18 @@ interface SigningEnv {
   SIGNING_MASTER_KEY_ID?: string; // Id of the current KEK (unset: k1)
   SIGNING_MASTER_KEY_PREVIOUS?: string; // Previous KEKs, `id:base64key,...`
   SIGNING_TRUST_STORE_FILE?: string; // PEM bundle replacing the bundled ICP-Brasil roots
+}
+
+function signingNotConfigured() {
+  return new DomainError({
+    code: "signing_not_configured",
+    status: 500,
+    message: "Assinatura digital não configurada no servidor",
+  });
+}
+
+function certificateNotFound() {
+  return notFound("certificate_not_found", "Certificado não encontrado");
 }
 
 // =============================================================================
@@ -180,122 +193,116 @@ export const signingRouter = new Hono<{
     async (c) => {
       const input = c.req.valid("json");
       const memberData = c.get("member");
-      const session = c.get("session");
 
-      return orgDb(memberData.organizationId).transaction(async (o) => {
-        const unit = resolveAccessibleUnitContext(memberData);
-        if (unit.unitId === null) {
-          return domainErrorResponse(
-            c,
-            invalid("invalid_request", "Selecione uma unidade"),
+      return withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const unit = resolveAccessibleUnitContext(memberData);
+          if (unit.unitId === null) {
+            throw invalid("invalid_request", "Selecione uma unidade");
+          }
+          const scope = and(
+            eq(organizationUnit.id, unit.unitId),
+            eq(organizationUnit.organizationId, memberData.organizationId),
           );
-        }
-        const scope = and(
-          eq(organizationUnit.id, unit.unitId),
-          eq(organizationUnit.organizationId, memberData.organizationId),
-        );
 
-        const [before] = await o
-          .select({
-            requireSignature: organizationUnit.requireSignature,
-            reason: organizationUnit.unsignedIssuanceReason,
-          })
-          .from(organizationUnit)
-          .where(scope)
-          .limit(1)
-          // Row lock: "assinatura obrigatória" (PATCH /policy) takes the same lock
-          // before it reads this setting, so two concurrent writes cannot leave
-          // both switched on.
-          .for("update");
-        if (!before) {
-          return domainErrorResponse(
-            c,
-            notFound("unit_not_found", "Unidade não encontrada"),
-          );
-        }
-        // "Assinatura obrigatória" and "emitir sem assinatura" contradict each
-        // other: the stricter one wins, so the second cannot be switched on.
-        if (input.enabled && before.requireSignature) {
-          return domainErrorResponse(
-            c,
-            conflict(
+          const [before] = await ctx.o
+            .select({
+              requireSignature: organizationUnit.requireSignature,
+              reason: organizationUnit.unsignedIssuanceReason,
+            })
+            .from(organizationUnit)
+            .where(scope)
+            .limit(1)
+            // Row lock: "assinatura obrigatória" (PATCH /policy) takes the same lock
+            // before it reads this setting, so two concurrent writes cannot leave
+            // both switched on.
+            .for("update");
+          if (!before) {
+            throw notFound("unit_not_found", "Unidade não encontrada");
+          }
+          // "Assinatura obrigatória" and "emitir sem assinatura" contradict each
+          // other: the stricter one wins, so the second cannot be switched on.
+          if (input.enabled && before.requireSignature) {
+            throw conflict(
               "conflict",
               "A assinatura é obrigatória nesta unidade: desative-a antes de permitir a emissão sem assinatura digital",
-            ),
-          );
-        }
+            );
+          }
 
-        const now = new Date();
-        await o
-          .update(organizationUnit)
-          .set(
-            input.enabled
-              ? {
-                  unsignedIssuanceReason: input.reason,
-                  unsignedIssuanceSetBy: session.user.id,
-                  unsignedIssuanceSetAt: now,
-                }
-              : {
-                  unsignedIssuanceReason: null,
-                  unsignedIssuanceSetBy: null,
-                  unsignedIssuanceSetAt: null,
+          const now = new Date();
+          await ctx.o
+            .update(organizationUnit)
+            .set(
+              input.enabled
+                ? {
+                    unsignedIssuanceReason: input.reason,
+                    unsignedIssuanceSetBy: ctx.actor.userId,
+                    unsignedIssuanceSetAt: now,
+                  }
+                : {
+                    unsignedIssuanceReason: null,
+                    unsignedIssuanceSetBy: null,
+                    unsignedIssuanceSetAt: null,
+                  },
+            )
+            .where(scope);
+
+          await writeComplianceAuditEvent(
+            {
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              action: "signing_policy.unsigned_issuance_changed",
+              entityType: "organization_unit",
+              entityId: String(unit.unitId),
+              changes: {
+                before: {
+                  enabled: Boolean(before.reason),
+                  reason: before.reason,
                 },
-          )
-          .where(scope);
-
-        await writeComplianceAuditEvent(
-          {
-            organizationId: memberData.organizationId,
-            unitId: unit.unitId,
-            action: "signing_policy.unsigned_issuance_changed",
-            entityType: "organization_unit",
-            entityId: String(unit.unitId),
-            changes: {
-              before: {
-                enabled: Boolean(before.reason),
-                reason: before.reason,
+                after: {
+                  enabled: input.enabled,
+                  reason: input.enabled ? input.reason : null,
+                },
               },
-              after: {
+              performedBy: ctx.actor.userId,
+              ipAddress: c.req.header("x-forwarded-for") ?? null,
+            },
+            ctx.o,
+          );
+
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              actorUserId: ctx.actor.userId,
+              actorMemberId: memberData.id,
+              action: input.enabled
+                ? "signing.unsigned_issuance_enabled"
+                : "signing.unsigned_issuance_disabled",
+              entityType: "organization_unit",
+              entityId: String(unit.unitId),
+              details: {
                 enabled: input.enabled,
-                reason: input.enabled ? input.reason : null,
+                wasEnabled: Boolean(before.reason),
+                ...(input.enabled ? { reason: input.reason } : {}),
+                previousReason: before.reason,
+                ipAddress: ctx.actor.ipAddress,
               },
             },
-            performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") ?? null,
-          },
-          o,
-        );
+            ctx.o,
+          );
 
-        await writeOrganizationAuditEvent(
-          {
-            organizationId: memberData.organizationId,
-            unitId: unit.unitId,
-            actorUserId: session.user.id,
-            actorMemberId: memberData.id,
-            action: input.enabled
-              ? "signing.unsigned_issuance_enabled"
-              : "signing.unsigned_issuance_disabled",
-            entityType: "organization_unit",
-            entityId: String(unit.unitId),
-            details: {
+          return c.json({
+            unsignedIssuance: {
               enabled: input.enabled,
-              wasEnabled: Boolean(before.reason),
-              ...(input.enabled ? { reason: input.reason } : {}),
-              previousReason: before.reason,
-              ipAddress: clientIp(c),
+              reason: input.enabled ? input.reason : null,
+              setAt: input.enabled ? now : null,
             },
-          },
-          o,
-        );
-
-        return c.json({
-          unsignedIssuance: {
-            enabled: input.enabled,
-            reason: input.enabled ? input.reason : null,
-            setAt: input.enabled ? now : null,
-          },
-        });
-      });
+          });
+        },
+      );
     },
   )
 
@@ -309,77 +316,77 @@ export const signingRouter = new Hono<{
     requireOrgType("LAB"),
     zValidator("json", z.object({ requireSignature: z.boolean() })),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const memberData = c.get("member");
-        const session = c.get("session");
-        requireUnitOperationalSettingsManager(memberData);
-        const unit = resolveAccessibleUnitContext(memberData);
-        const { requireSignature } = c.req.valid("json");
+      const memberData = c.get("member");
+      return withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          requireUnitOperationalSettingsManager(memberData);
+          const unit = resolveAccessibleUnitContext(memberData);
+          const { requireSignature } = c.req.valid("json");
 
-        // Row lock, taken for both values of the flag and shared with
-        // PATCH /unsigned-issuance: the exclusion with "emitir sem assinatura"
-        // is checked and written under it, so a race cannot set both.
-        const [current] = await o
-          .select({
-            reason: organizationUnit.unsignedIssuanceReason,
-            requireSignature: organizationUnit.requireSignature,
-          })
-          .from(organizationUnit)
-          .where(
-            and(
-              eq(organizationUnit.id, unit.unitId),
-              eq(organizationUnit.organizationId, memberData.organizationId),
-            ),
-          )
-          .limit(1)
-          .for("update");
-        if (requireSignature && current?.reason) {
-          return domainErrorResponse(
-            c,
-            conflict(
+          // Row lock, taken for both values of the flag and shared with
+          // PATCH /unsigned-issuance: the exclusion with "emitir sem assinatura"
+          // is checked and written under it, so a race cannot set both.
+          const [current] = await ctx.o
+            .select({
+              reason: organizationUnit.unsignedIssuanceReason,
+              requireSignature: organizationUnit.requireSignature,
+            })
+            .from(organizationUnit)
+            .where(
+              and(
+                eq(organizationUnit.id, unit.unitId),
+                eq(organizationUnit.organizationId, memberData.organizationId),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          if (requireSignature && current?.reason) {
+            throw conflict(
               "conflict",
               "Esta unidade emite sem assinatura digital: desative essa opção antes de tornar a assinatura obrigatória",
-            ),
-          );
-        }
+            );
+          }
 
-        const updated = await o
-          .update(organizationUnit)
-          .set({ requireSignature })
-          .where(
-            and(
-              eq(organizationUnit.id, unit.unitId),
-              eq(organizationUnit.organizationId, memberData.organizationId),
-            ),
-          )
-          .returning();
+          const updated = await ctx.o
+            .update(organizationUnit)
+            .set({ requireSignature })
+            .where(
+              and(
+                eq(organizationUnit.id, unit.unitId),
+                eq(organizationUnit.organizationId, memberData.organizationId),
+              ),
+            )
+            .returning();
 
-        const row = updated[0];
-        if (!row) {
-          return c.json({ error: "Unidade não encontrada" }, 404);
-        }
-        if ((current?.requireSignature ?? false) !== row.requireSignature) {
-          await writeComplianceAuditEvent(
-            {
-              organizationId: memberData.organizationId,
-              unitId: unit.unitId,
-              action: "signing_policy.require_signature_changed",
-              entityType: "organization_unit",
-              entityId: String(unit.unitId),
-              changes: {
-                before: {
-                  requireSignature: current?.requireSignature ?? false,
+          const row = updated[0];
+          if (!row) {
+            throw notFound("unit_not_found", "Unidade não encontrada");
+          }
+          if ((current?.requireSignature ?? false) !== row.requireSignature) {
+            await writeComplianceAuditEvent(
+              {
+                organizationId: memberData.organizationId,
+                unitId: unit.unitId,
+                action: "signing_policy.require_signature_changed",
+                entityType: "organization_unit",
+                entityId: String(unit.unitId),
+                changes: {
+                  before: {
+                    requireSignature: current?.requireSignature ?? false,
+                  },
+                  after: { requireSignature: row.requireSignature },
                 },
-                after: { requireSignature: row.requireSignature },
+                performedBy: ctx.actor.userId,
+                ipAddress: c.req.header("x-forwarded-for") ?? null,
               },
-              performedBy: session.user.id,
-              ipAddress: c.req.header("x-forwarded-for") ?? null,
-            },
-            o,
-          );
-        }
-        return c.json({ requireSignature: row.requireSignature });
-      });
+              ctx.o,
+            );
+          }
+          return c.json({ requireSignature: row.requireSignature });
+        },
+      );
     },
   )
 
@@ -395,68 +402,102 @@ export const signingRouter = new Hono<{
     async (c) => {
       const input = c.req.valid("json");
       const memberData = c.get("member");
-      const session = c.get("session");
       const env = c.env;
       requireUnitOperationalSettingsManager(memberData);
       const unit = resolveAccessibleUnitContext(memberData);
 
       if (!env.SIGNING_MASTER_KEY) {
         console.error("SIGNING_MASTER_KEY not configured");
-        return c.json(
-          { error: "Assinatura digital não configurada no servidor" },
-          500,
-        );
+        throw signingNotConfigured();
       }
 
+      // The key ring (current KEK + previous ones). A malformed setting is a
+      // server misconfiguration, not the caller's mistake.
+      const keyring = signingKeyringFromEnv(env);
+      if (!keyring) {
+        throw signingNotConfigured();
+      }
+
+      // 1. Decode and validate certificate
+      const p12Buffer = Buffer.from(input.p12Base64, "base64");
+
+      let certInfo;
       try {
-        // The key ring (current KEK + previous ones). A malformed setting is a
-        // server misconfiguration, not the caller's mistake.
-        const keyring = signingKeyringFromEnv(env);
-        if (!keyring) {
-          return c.json(
-            { error: "Assinatura digital não configurada no servidor" },
-            500,
-          );
-        }
-
-        // 1. Decode and validate certificate
-        const p12Buffer = Buffer.from(input.p12Base64, "base64");
-
-        let certInfo;
-        try {
-          certInfo = parsePkcs12(p12Buffer, input.password);
-        } catch (error) {
-          if (error instanceof SigningError) {
-            if (error.code === "WRONG_PASSWORD") {
-              return c.json({ error: "Senha do certificado inválida" }, 400);
-            }
-            return c.json({ error: error.message }, 400);
+        certInfo = parsePkcs12(p12Buffer, input.password);
+      } catch (error) {
+        if (error instanceof SigningError) {
+          if (error.code === "WRONG_PASSWORD") {
+            throw invalid("invalid_request", "Senha do certificado inválida");
           }
-          throw error;
+          throw invalid("invalid_request", error.message);
         }
+        throw error;
+      }
 
-        // 2. REQ-B4A-3: validity window, key usage and the chain to the
-        // configured trust store (the bundled ICP-Brasil roots by default).
-        // Rejected with 422 and a pt-BR reason before anything is stored.
-        const verdict = await validateSigningCredential(certInfo, {
-          trustAnchors: resolveSigningTrustAnchors(env),
+      // 2. REQ-B4A-3: validity window, key usage and the chain to the
+      // configured trust store (the bundled ICP-Brasil roots by default).
+      // Rejected with 422 and a pt-BR reason before anything is stored.
+      const verdict = await validateSigningCredential(certInfo, {
+        trustAnchors: resolveSigningTrustAnchors(env),
+      });
+      if (!verdict.ok) {
+        throw unprocessable("unprocessable", verdict.message, {
+          details: { reason: verdict.code },
         });
-        if (!verdict.ok) {
-          return domainErrorResponse(
-            c,
-            unprocessable("unprocessable", verdict.message, {
-              details: { reason: verdict.code },
-            }),
-          );
-        }
+      }
 
-        // 3. + 5. Check for a duplicate serial number and insert the
-        // certificate in one organization-bound transaction (it also keeps the
-        // "default" flag race-free).
-        const saved = await orgDb(memberData.organizationId).transaction(
-          async (o) => {
-            const [existing] = await o
-              .select({ id: organizationSigningCertificate.id })
+      // 3. + 5. Check for a duplicate serial number and insert the
+      // certificate in one organization-bound transaction (it also keeps the
+      // "default" flag race-free).
+      const newCert = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [existing] = await ctx.o
+            .select({ id: organizationSigningCertificate.id })
+            .from(organizationSigningCertificate)
+            .where(
+              and(
+                eq(
+                  organizationSigningCertificate.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(organizationSigningCertificate.unitId, unit.unitId),
+                eq(
+                  organizationSigningCertificate.serialNumber,
+                  certInfo.serialNumber,
+                ),
+              ),
+            )
+            .limit(1);
+
+          if (existing) {
+            throw invalid(
+              "invalid_request",
+              "Certificado com este número de série já existe",
+            );
+          }
+
+          // 4. Seal the P12 and its password: a data key per field, wrapped
+          // by the current KEK, AAD = organization + unit + serial.
+          const sealed = sealSigningCredential(
+            { p12: p12Buffer, password: input.password },
+            {
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              serialNumber: certInfo.serialNumber,
+            },
+            keyring,
+          );
+
+          // Unset current default if setting this as default
+          let displaced: { id: number; serialNumber: string } | null = null;
+          if (input.setAsDefault) {
+            const [previous] = await ctx.o
+              .select({
+                id: organizationSigningCertificate.id,
+                serialNumber: organizationSigningCertificate.serialNumber,
+              })
               .from(organizationSigningCertificate)
               .where(
                 and(
@@ -465,175 +506,123 @@ export const signingRouter = new Hono<{
                     memberData.organizationId,
                   ),
                   eq(organizationSigningCertificate.unitId, unit.unitId),
-                  eq(
-                    organizationSigningCertificate.serialNumber,
-                    certInfo.serialNumber,
-                  ),
+                  eq(organizationSigningCertificate.isDefault, true),
                 ),
               )
               .limit(1);
+            displaced = previous ?? null;
+            await ctx.o
+              .update(organizationSigningCertificate)
+              .set({ isDefault: false })
+              .where(
+                and(
+                  eq(
+                    organizationSigningCertificate.organizationId,
+                    memberData.organizationId,
+                  ),
+                  eq(organizationSigningCertificate.unitId, unit.unitId),
+                  eq(organizationSigningCertificate.isDefault, true),
+                ),
+              );
+          }
 
-            if (existing) return { duplicate: true as const };
+          const [inserted] = await ctx.o
+            .insert(organizationSigningCertificate)
+            .values({
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              name: input.name,
+              serialNumber: certInfo.serialNumber,
+              issuerCn: certInfo.issuerCn,
+              subjectCn: certInfo.subjectCn,
+              subjectCpfCnpj: certInfo.subjectCpfCnpj,
+              validFrom: certInfo.validFrom,
+              validUntil: certInfo.validUntil,
+              encryptedP12: sealed.encryptedP12,
+              encryptedPassword: sealed.encryptedPassword,
+              passwordIv: sealed.passwordIv,
+              kekId: sealed.kekId,
+              custodyFormatVersion: sealed.formatVersion,
+              isActive: true,
+              isDefault: input.setAsDefault,
+              createdBy: ctx.actor.userId,
+            })
+            .returning();
 
-            // 4. Seal the P12 and its password: a data key per field, wrapped
-            // by the current KEK, AAD = organization + unit + serial.
-            const sealed = sealSigningCredential(
-              { p12: p12Buffer, password: input.password },
+          if (!inserted) throw new Error("Erro ao inserir certificado");
+
+          {
+            const ipAddress = c.req.header("x-forwarded-for") ?? null;
+            await writeComplianceAuditEvent(
               {
                 organizationId: memberData.organizationId,
                 unitId: unit.unitId,
-                serialNumber: certInfo.serialNumber,
+                action: "signing_credential.created",
+                entityType: "organization_signing_certificate",
+                entityId: String(inserted.id),
+                changes: {
+                  before: null,
+                  after: {
+                    name: inserted.name,
+                    serialNumber: inserted.serialNumber,
+                    issuerCn: inserted.issuerCn,
+                    subjectCn: inserted.subjectCn,
+                    validFrom: inserted.validFrom.toISOString(),
+                    validUntil: inserted.validUntil.toISOString(),
+                    isDefault: inserted.isDefault,
+                    kekId: sealed.kekId,
+                    custodyFormatVersion: sealed.formatVersion,
+                  },
+                },
+                performedBy: ctx.actor.userId,
+                ipAddress,
               },
-              keyring,
+              ctx.o,
             );
-
-            // Unset current default if setting this as default
-            let displaced: { id: number; serialNumber: string } | null = null;
-            if (input.setAsDefault) {
-              const [previous] = await o
-                .select({
-                  id: organizationSigningCertificate.id,
-                  serialNumber: organizationSigningCertificate.serialNumber,
-                })
-                .from(organizationSigningCertificate)
-                .where(
-                  and(
-                    eq(
-                      organizationSigningCertificate.organizationId,
-                      memberData.organizationId,
-                    ),
-                    eq(organizationSigningCertificate.unitId, unit.unitId),
-                    eq(organizationSigningCertificate.isDefault, true),
-                  ),
-                )
-                .limit(1);
-              displaced = previous ?? null;
-              await o
-                .update(organizationSigningCertificate)
-                .set({ isDefault: false })
-                .where(
-                  and(
-                    eq(
-                      organizationSigningCertificate.organizationId,
-                      memberData.organizationId,
-                    ),
-                    eq(organizationSigningCertificate.unitId, unit.unitId),
-                    eq(organizationSigningCertificate.isDefault, true),
-                  ),
-                );
-            }
-
-            const [inserted] = await o
-              .insert(organizationSigningCertificate)
-              .values({
-                organizationId: memberData.organizationId,
-                unitId: unit.unitId,
-                name: input.name,
-                serialNumber: certInfo.serialNumber,
-                issuerCn: certInfo.issuerCn,
-                subjectCn: certInfo.subjectCn,
-                subjectCpfCnpj: certInfo.subjectCpfCnpj,
-                validFrom: certInfo.validFrom,
-                validUntil: certInfo.validUntil,
-                encryptedP12: sealed.encryptedP12,
-                encryptedPassword: sealed.encryptedPassword,
-                passwordIv: sealed.passwordIv,
-                kekId: sealed.kekId,
-                custodyFormatVersion: sealed.formatVersion,
-                isActive: true,
-                isDefault: input.setAsDefault,
-                createdBy: session.user.id,
-              })
-              .returning();
-
-            if (inserted) {
-              const ipAddress = c.req.header("x-forwarded-for") ?? null;
+            if (displaced) {
               await writeComplianceAuditEvent(
                 {
                   organizationId: memberData.organizationId,
                   unitId: unit.unitId,
-                  action: "signing_credential.created",
+                  action: "signing_credential.default_replaced",
                   entityType: "organization_signing_certificate",
                   entityId: String(inserted.id),
                   changes: {
-                    before: null,
+                    before: {
+                      defaultCertificateId: displaced.id,
+                      serialNumber: displaced.serialNumber,
+                    },
                     after: {
-                      name: inserted.name,
+                      defaultCertificateId: inserted.id,
                       serialNumber: inserted.serialNumber,
-                      issuerCn: inserted.issuerCn,
-                      subjectCn: inserted.subjectCn,
-                      validFrom: inserted.validFrom.toISOString(),
-                      validUntil: inserted.validUntil.toISOString(),
-                      isDefault: inserted.isDefault,
-                      kekId: sealed.kekId,
-                      custodyFormatVersion: sealed.formatVersion,
                     },
                   },
-                  performedBy: session.user.id,
+                  performedBy: ctx.actor.userId,
                   ipAddress,
                 },
-                o,
+                ctx.o,
               );
-              if (displaced) {
-                await writeComplianceAuditEvent(
-                  {
-                    organizationId: memberData.organizationId,
-                    unitId: unit.unitId,
-                    action: "signing_credential.default_replaced",
-                    entityType: "organization_signing_certificate",
-                    entityId: String(inserted.id),
-                    changes: {
-                      before: {
-                        defaultCertificateId: displaced.id,
-                        serialNumber: displaced.serialNumber,
-                      },
-                      after: {
-                        defaultCertificateId: inserted.id,
-                        serialNumber: inserted.serialNumber,
-                      },
-                    },
-                    performedBy: session.user.id,
-                    ipAddress,
-                  },
-                  o,
-                );
-              }
             }
+          }
 
-            return { duplicate: false as const, inserted };
-          },
-        );
+          return inserted;
+        },
+      );
 
-        if (saved.duplicate) {
-          return c.json(
-            { error: "Certificado com este número de série já existe" },
-            400,
-          );
-        }
-
-        const newCert = saved.inserted;
-        if (!newCert) {
-          return c.json({ error: "Erro ao inserir certificado" }, 500);
-        }
-
-        return c.json({
-          message: "Certificado adicionado com sucesso",
-          certificate: {
-            id: newCert.id,
-            unitId: newCert.unitId,
-            name: newCert.name,
-            serialNumber: newCert.serialNumber,
-            issuerCn: newCert.issuerCn,
-            subjectCn: newCert.subjectCn,
-            validFrom: newCert.validFrom,
-            validUntil: newCert.validUntil,
-            isDefault: newCert.isDefault,
-          },
-        });
-      } catch (error) {
-        console.error("Error uploading certificate:", error);
-        return c.json({ error: "Erro ao processar certificado" }, 500);
-      }
+      return c.json({
+        message: "Certificado adicionado com sucesso",
+        certificate: {
+          id: newCert.id,
+          unitId: newCert.unitId,
+          name: newCert.name,
+          serialNumber: newCert.serialNumber,
+          issuerCn: newCert.issuerCn,
+          subjectCn: newCert.subjectCn,
+          validFrom: newCert.validFrom,
+          validUntil: newCert.validUntil,
+          isDefault: newCert.isDefault,
+        },
+      });
     },
   )
 
@@ -646,128 +635,131 @@ export const signingRouter = new Hono<{
     requireFreshSession,
     requireOrgType("LAB"),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const id = parseInt(c.req.param("id"));
-        const memberData = c.get("member");
-        const session = c.get("session");
-        requireUnitOperationalSettingsManager(memberData);
-        const unit = resolveAccessibleUnitContext(memberData);
+      const memberData = c.get("member");
+      return withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const id = parseInt(c.req.param("id"));
+          requireUnitOperationalSettingsManager(memberData);
+          const unit = resolveAccessibleUnitContext(memberData);
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID inválido" }, 400);
-        }
+          if (isNaN(id)) {
+            throw invalid("invalid_request", "ID inválido");
+          }
 
-        // Verify certificate belongs to organization
-        const [cert] = await o
-          .select({
-            id: organizationSigningCertificate.id,
-            isActive: organizationSigningCertificate.isActive,
-            serialNumber: organizationSigningCertificate.serialNumber,
-          })
-          .from(organizationSigningCertificate)
-          .where(
-            and(
-              eq(organizationSigningCertificate.id, id),
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
+          // Verify certificate belongs to organization
+          const [cert] = await ctx.o
+            .select({
+              id: organizationSigningCertificate.id,
+              isActive: organizationSigningCertificate.isActive,
+              serialNumber: organizationSigningCertificate.serialNumber,
+            })
+            .from(organizationSigningCertificate)
+            .where(
+              and(
+                eq(organizationSigningCertificate.id, id),
+                eq(
+                  organizationSigningCertificate.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(organizationSigningCertificate.unitId, unit.unitId),
               ),
-              eq(organizationSigningCertificate.unitId, unit.unitId),
-            ),
-          )
-          .limit(1);
+            )
+            .limit(1);
 
-        if (!cert) {
-          return c.json({ error: "Certificado não encontrado" }, 404);
-        }
+          if (!cert) {
+            throw certificateNotFound();
+          }
 
-        if (!cert.isActive) {
-          return c.json(
-            { error: "Certificado revogado não pode ser padrão" },
-            400,
-          );
-        }
+          if (!cert.isActive) {
+            throw invalid(
+              "invalid_request",
+              "Certificado revogado não pode ser padrão",
+            );
+          }
 
-        const [previousDefault] = await o
-          .select({
-            id: organizationSigningCertificate.id,
-            serialNumber: organizationSigningCertificate.serialNumber,
-          })
-          .from(organizationSigningCertificate)
-          .where(
-            and(
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
+          const [previousDefault] = await ctx.o
+            .select({
+              id: organizationSigningCertificate.id,
+              serialNumber: organizationSigningCertificate.serialNumber,
+            })
+            .from(organizationSigningCertificate)
+            .where(
+              and(
+                eq(
+                  organizationSigningCertificate.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(organizationSigningCertificate.unitId, unit.unitId),
+                eq(organizationSigningCertificate.isDefault, true),
               ),
-              eq(organizationSigningCertificate.unitId, unit.unitId),
-              eq(organizationSigningCertificate.isDefault, true),
-            ),
-          )
-          .limit(1);
+            )
+            .limit(1);
 
-        // Unset current default and set new default (one organization-bound
-        // transaction with the read above)
-        await o
-          .update(organizationSigningCertificate)
-          .set({ isDefault: false })
-          .where(
-            and(
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
+          // Unset current default and set new default (one organization-bound
+          // transaction with the read above)
+          await ctx.o
+            .update(organizationSigningCertificate)
+            .set({ isDefault: false })
+            .where(
+              and(
+                eq(
+                  organizationSigningCertificate.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(organizationSigningCertificate.unitId, unit.unitId),
+                eq(organizationSigningCertificate.isDefault, true),
               ),
-              eq(organizationSigningCertificate.unitId, unit.unitId),
-              eq(organizationSigningCertificate.isDefault, true),
-            ),
-          );
+            );
 
-        await o
-          .update(organizationSigningCertificate)
-          .set({ isDefault: true })
-          // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
-          // SELECT above so this custody UPDATE stays tenant-scoped even if the
-          // guarding read is refactored away. Reuses the in-scope member values.
-          .where(
-            and(
-              eq(organizationSigningCertificate.id, id),
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
+          await ctx.o
+            .update(organizationSigningCertificate)
+            .set({ isDefault: true })
+            // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
+            // SELECT above so this custody UPDATE stays tenant-scoped even if the
+            // guarding read is refactored away. Reuses the in-scope member values.
+            .where(
+              and(
+                eq(organizationSigningCertificate.id, id),
+                eq(
+                  organizationSigningCertificate.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(organizationSigningCertificate.unitId, unit.unitId),
               ),
-              eq(organizationSigningCertificate.unitId, unit.unitId),
-            ),
-          );
+            );
 
-        if (previousDefault?.id !== id) {
-          await writeComplianceAuditEvent(
-            {
-              organizationId: memberData.organizationId,
-              unitId: unit.unitId,
-              action: "signing_credential.default_replaced",
-              entityType: "organization_signing_certificate",
-              entityId: String(id),
-              changes: {
-                before: previousDefault
-                  ? {
-                      defaultCertificateId: previousDefault.id,
-                      serialNumber: previousDefault.serialNumber,
-                    }
-                  : null,
-                after: {
-                  defaultCertificateId: id,
-                  serialNumber: cert.serialNumber,
+          if (previousDefault?.id !== id) {
+            await writeComplianceAuditEvent(
+              {
+                organizationId: memberData.organizationId,
+                unitId: unit.unitId,
+                action: "signing_credential.default_replaced",
+                entityType: "organization_signing_certificate",
+                entityId: String(id),
+                changes: {
+                  before: previousDefault
+                    ? {
+                        defaultCertificateId: previousDefault.id,
+                        serialNumber: previousDefault.serialNumber,
+                      }
+                    : null,
+                  after: {
+                    defaultCertificateId: id,
+                    serialNumber: cert.serialNumber,
+                  },
                 },
+                performedBy: ctx.actor.userId,
+                ipAddress: c.req.header("x-forwarded-for") ?? null,
               },
-              performedBy: session.user.id,
-              ipAddress: c.req.header("x-forwarded-for") ?? null,
-            },
-            o,
-          );
-        }
+              ctx.o,
+            );
+          }
 
-        return c.json({ message: "Certificado definido como padrão" });
-      });
+          return c.json({ message: "Certificado definido como padrão" });
+        },
+      );
     },
   )
 
@@ -786,96 +778,99 @@ export const signingRouter = new Hono<{
       }),
     ),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const id = parseInt(c.req.param("id"));
-        const { reason } = c.req.valid("json");
-        const memberData = c.get("member");
-        const session = c.get("session");
-        requireUnitOperationalSettingsManager(memberData);
-        const unit = resolveAccessibleUnitContext(memberData);
+      const memberData = c.get("member");
+      return withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const id = parseInt(c.req.param("id"));
+          const { reason } = c.req.valid("json");
+          requireUnitOperationalSettingsManager(memberData);
+          const unit = resolveAccessibleUnitContext(memberData);
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID inválido" }, 400);
-        }
+          if (isNaN(id)) {
+            throw invalid("invalid_request", "ID inválido");
+          }
 
-        // Verify certificate belongs to organization
-        const [cert] = await o
-          .select({
-            id: organizationSigningCertificate.id,
-            isActive: organizationSigningCertificate.isActive,
-            isDefault: organizationSigningCertificate.isDefault,
-            serialNumber: organizationSigningCertificate.serialNumber,
-            validUntil: organizationSigningCertificate.validUntil,
-          })
-          .from(organizationSigningCertificate)
-          .where(
-            and(
-              eq(organizationSigningCertificate.id, id),
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
+          // Verify certificate belongs to organization
+          const [cert] = await ctx.o
+            .select({
+              id: organizationSigningCertificate.id,
+              isActive: organizationSigningCertificate.isActive,
+              isDefault: organizationSigningCertificate.isDefault,
+              serialNumber: organizationSigningCertificate.serialNumber,
+              validUntil: organizationSigningCertificate.validUntil,
+            })
+            .from(organizationSigningCertificate)
+            .where(
+              and(
+                eq(organizationSigningCertificate.id, id),
+                eq(
+                  organizationSigningCertificate.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(organizationSigningCertificate.unitId, unit.unitId),
               ),
-              eq(organizationSigningCertificate.unitId, unit.unitId),
-            ),
-          )
-          .limit(1);
+            )
+            .limit(1);
 
-        if (!cert) {
-          return c.json({ error: "Certificado não encontrado" }, 404);
-        }
+          if (!cert) {
+            throw certificateNotFound();
+          }
 
-        if (!cert.isActive) {
-          return c.json({ error: "Certificado já está revogado" }, 400);
-        }
+          if (!cert.isActive) {
+            throw invalid("invalid_request", "Certificado já está revogado");
+          }
 
-        // Revoke certificate
-        await o
-          .update(organizationSigningCertificate)
-          .set({
-            isActive: false,
-            isDefault: false,
-            revokedAt: new Date(),
-            revokedBy: session.user.id,
-            revokedReason: reason,
-          })
-          // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
-          // SELECT above so this custody UPDATE stays tenant-scoped even if the
-          // guarding read is refactored away. Reuses the in-scope member values.
-          .where(
-            and(
-              eq(organizationSigningCertificate.id, id),
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
+          // Revoke certificate
+          await ctx.o
+            .update(organizationSigningCertificate)
+            .set({
+              isActive: false,
+              isDefault: false,
+              revokedAt: new Date(),
+              revokedBy: ctx.actor.userId,
+              revokedReason: reason,
+            })
+            // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
+            // SELECT above so this custody UPDATE stays tenant-scoped even if the
+            // guarding read is refactored away. Reuses the in-scope member values.
+            .where(
+              and(
+                eq(organizationSigningCertificate.id, id),
+                eq(
+                  organizationSigningCertificate.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(organizationSigningCertificate.unitId, unit.unitId),
               ),
-              eq(organizationSigningCertificate.unitId, unit.unitId),
-            ),
+            );
+
+          await writeComplianceAuditEvent(
+            {
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              action: "signing_credential.deleted",
+              entityType: "organization_signing_certificate",
+              entityId: String(id),
+              changes: {
+                before: {
+                  serialNumber: cert.serialNumber,
+                  validUntil: cert.validUntil.toISOString(),
+                  isActive: true,
+                  isDefault: cert.isDefault,
+                },
+                after: { isActive: false, isDefault: false, reason },
+              },
+              performedBy: ctx.actor.userId,
+              ipAddress: c.req.header("x-forwarded-for") ?? null,
+            },
+            ctx.o,
           );
 
-        await writeComplianceAuditEvent(
-          {
-            organizationId: memberData.organizationId,
-            unitId: unit.unitId,
-            action: "signing_credential.deleted",
-            entityType: "organization_signing_certificate",
-            entityId: String(id),
-            changes: {
-              before: {
-                serialNumber: cert.serialNumber,
-                validUntil: cert.validUntil.toISOString(),
-                isActive: true,
-                isDefault: cert.isDefault,
-              },
-              after: { isActive: false, isDefault: false, reason },
-            },
-            performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") ?? null,
-          },
-          o,
-        );
-
-        return c.json({ message: "Certificado revogado com sucesso" });
-      });
+          return c.json({ message: "Certificado revogado com sucesso" });
+        },
+      );
     },
   )
 
@@ -894,7 +889,7 @@ export const signingRouter = new Hono<{
         const unit = resolveAccessibleUnitContext(memberData);
 
         if (isNaN(id)) {
-          return c.json({ error: "ID inválido" }, 400);
+          throw invalid("invalid_request", "ID inválido");
         }
 
         const [cert] = await o
@@ -930,7 +925,7 @@ export const signingRouter = new Hono<{
           .limit(1);
 
         if (!cert) {
-          return c.json({ error: "Certificado não encontrado" }, 404);
+          throw certificateNotFound();
         }
 
         const now = new Date();

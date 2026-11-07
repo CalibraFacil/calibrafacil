@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
+import { Hono, type Context } from "hono";
 
 const { dbMock, suppressEmailMock } = vi.hoisted(() => ({
   dbMock: { insert: vi.fn() },
@@ -23,6 +24,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   suppressEmail: suppressEmailMock,
 }));
 
+import { DomainError, domainErrorBody } from "../lib/domain-errors";
 import { webhooksRouter } from "./webhooks";
 
 const SECRET = "whsec_dGVzdHNlY3JldA=="; // base64("testsecret")
@@ -47,12 +49,23 @@ function sign(secret: string, id: string, ts: string, body: string): string {
   return `v1,${sig}`;
 }
 
+/** The error hook `app.ts` installs, reduced to the domain failures a route throws. */
+function mapDomainErrors(error: Error, c: Context) {
+  if (error instanceof DomainError) {
+    return c.json(domainErrorBody(error), error.status);
+  }
+  return c.json({ error: "Erro interno do servidor" }, 500);
+}
+
 function post(body: string, headers: Record<string, string>) {
-  return webhooksRouter.request("/resend", {
-    method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body,
-  });
+  return new Hono()
+    .onError(mapDomainErrors)
+    .route("/", webhooksRouter)
+    .request("/resend", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body,
+    });
 }
 
 async function postSigned(payload: unknown, id = "msg_1") {

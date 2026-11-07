@@ -13,12 +13,7 @@ import {
   requireOrgType,
   requireRole,
 } from "../middleware/permission";
-import {
-  conflict,
-  domainErrorResponse,
-  invalid,
-  notFound,
-} from "../lib/domain-errors";
+import { conflict, invalid, notFound } from "../lib/domain-errors";
 import { softDeleteLabOrganization } from "../lib/records-retention";
 
 /**
@@ -50,19 +45,13 @@ export const organizationLifecycleRouter = new Hono<{
       .where(eq(organization.id, member.organizationId))
       .limit(1);
     if (!lab) {
-      return domainErrorResponse(
-        c,
-        notFound("not_found", "Organização não encontrada"),
-      );
+      throw notFound("not_found", "Organização não encontrada");
     }
 
     if (!confirmationMatchesOrganizationName(input.confirmName, lab.name)) {
-      return domainErrorResponse(
-        c,
-        invalid(
-          "organization_confirmation_mismatch",
-          "O nome digitado não confere com o nome da organização",
-        ),
+      throw invalid(
+        "organization_confirmation_mismatch",
+        "O nome digitado não confere com o nome da organização",
       );
     }
 
@@ -80,19 +69,13 @@ export const organizationLifecycleRouter = new Hono<{
           deletedAt: outcome.deletedAt.toISOString(),
         });
       case "already_deleted":
-        return domainErrorResponse(
-          c,
-          conflict(
-            "organization_already_deleted",
-            "Esta organização já foi excluída",
-          ),
+        throw conflict(
+          "organization_already_deleted",
+          "Esta organização já foi excluída",
         );
       case "not_found":
       case "not_lab":
-        return domainErrorResponse(
-          c,
-          notFound("not_found", "Organização não encontrada"),
-        );
+        throw notFound("not_found", "Organização não encontrada");
     }
   },
 );
