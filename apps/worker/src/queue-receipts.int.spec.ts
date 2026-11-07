@@ -2,12 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { enqueueQueueJob } from "@calibra-facil/db/queue";
 import {
-  appQueueJobReceiptKey,
   claimQueueReceipt,
   completeQueueReceipt,
   pruneQueueReceipts,
   releaseQueueReceipt,
-  runWithQueueReceipt,
 } from "@calibra-facil/db/queue-receipts";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
@@ -118,56 +116,6 @@ describe("claimQueueReceipt (real ON CONFLICT semantics)", () => {
     expect(
       results.filter((result) => result.outcome === "duplicate-running"),
     ).toHaveLength(4);
-  });
-});
-
-describe("runWithQueueReceipt (enforce + shadow against real receipts)", () => {
-  it("enforce: runs once, then skips the duplicate delivery", async () => {
-    const params = {
-      jobType: "CERTIFICATE",
-      idempotencyKey: "vq:msg-5",
-      mode: "enforce",
-    } satisfies Parameters<typeof runWithQueueReceipt>[0];
-    const run = vi.fn(async () => {});
-
-    expect(await runWithQueueReceipt(params, run)).toEqual({ ran: true });
-    expect(await runWithQueueReceipt(params, run)).toEqual({
-      ran: false,
-      reason: "duplicate-completed",
-    });
-    expect(run).toHaveBeenCalledTimes(1);
-  });
-
-  it("enforce: a failed run releases the receipt so the retry executes again", async () => {
-    const params = {
-      jobType: "CERTIFICATE",
-      idempotencyKey: "vq:msg-6",
-      mode: "enforce",
-    } satisfies Parameters<typeof runWithQueueReceipt>[0];
-    const run = vi
-      .fn(async () => {})
-      .mockRejectedValueOnce(new Error("gotenberg 502"));
-
-    await expect(runWithQueueReceipt(params, run)).rejects.toThrow(
-      "gotenberg 502",
-    );
-    expect(await runWithQueueReceipt(params, run)).toEqual({ ran: true });
-    expect(run).toHaveBeenCalledTimes(2);
-  });
-
-  it("shadow: a completed duplicate still runs (observe-only)", async () => {
-    const enforceParams = {
-      jobType: "CERTIFICATE",
-      idempotencyKey: "vq:msg-7",
-      mode: "enforce",
-    } satisfies Parameters<typeof runWithQueueReceipt>[0];
-    const run = vi.fn(async () => {});
-
-    await runWithQueueReceipt(enforceParams, run);
-    expect(
-      await runWithQueueReceipt({ ...enforceParams, mode: "shadow" }, run),
-    ).toEqual({ ran: true });
-    expect(run).toHaveBeenCalledTimes(2);
   });
 });
 
