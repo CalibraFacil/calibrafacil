@@ -21,8 +21,11 @@ export function sanitizeMailHeader(value: string): string {
 
 /** The bare address of `Name <address>`, or the trimmed value itself. */
 export function getEmailAddress(value: string): string {
-  const match = value.match(/<([^>]+)>/);
-  return match?.[1]?.trim() ?? value.trim();
+  // Index scan, not a regex: linear on any input (CodeQL js/polynomial-redos).
+  const open = value.indexOf("<");
+  const close = open === -1 ? -1 : value.indexOf(">", open + 1);
+  if (close > open + 1) return value.slice(open + 1, close).trim();
+  return value.trim();
 }
 
 /**
