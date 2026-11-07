@@ -441,17 +441,9 @@ export function createDesktopApiClient(
     calibrationRequests: desktopEndpointStubs("calibrationRequests"),
     visits: desktopEndpointStubs("visits"),
     integrations: {
-      ...desktopCloudOnlyStubs("integrations", { action: "Integrações" }),
-      async list<TResponse = unknown>() {
-        return assumeDesktopPayload<TResponse>({
-          billing: {
-            planId: "desktop-local",
-            planName: "Desktop local",
-            status: "active",
-            hasFinancialIntegrations: false,
-          },
-          data: [],
-        });
+      ...desktopEndpointStubs("integrations"),
+      async list() {
+        return { data: [] };
       },
     },
     materials: {

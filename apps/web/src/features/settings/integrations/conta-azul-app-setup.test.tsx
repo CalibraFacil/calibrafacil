@@ -79,8 +79,10 @@ describe('Conta Azul application setup', () => {
 
     await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1))
     expect(mocks.saveContaAzulApp).toHaveBeenCalledWith({
-      clientId: 'lab-client-id',
-      clientSecret: 'lab-client-secret-9f3a',
+      body: {
+        clientId: 'lab-client-id',
+        clientSecret: 'lab-client-secret-9f3a',
+      },
     })
   })
 

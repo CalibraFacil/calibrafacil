@@ -1,4 +1,9 @@
 import { createRouter } from "../server/router";
+import {
+  integrationEndpoints,
+  type ContaAzulCatalogKey,
+} from "@calibra-facil/contracts";
+import { mount } from "../lib/endpoint-mount";
 import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -115,7 +120,6 @@ import {
   resolveContaAzulOAuthConfig,
   saveContaAzulAppCredentials,
 } from "../lib/conta-azul-app";
-import { ContaAzulAppCredentialsSchema } from "@calibra-facil/schemas";
 import {
   assertActiveContaAzulIntegration,
   assertProviderSupportsSyncTarget,
@@ -130,276 +134,6 @@ import {
   requireRole,
 } from "../middleware/permission";
 import { requestActor } from "../middleware/request-actor";
-
-const BaseUrlSchema = z
-  .string()
-  .trim()
-  .url()
-  .transform((value, ctx) => {
-    try {
-      return normalizeIntegrationBaseUrl(value);
-    } catch (error) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: error instanceof Error ? error.message : "Base URL inválida",
-      });
-      return z.NEVER;
-    }
-  });
-
-const MappingRuleSchema = z.object({
-  id: z.string().trim().min(1),
-  destinationField: z.string().trim().min(1),
-  enabled: z.boolean(),
-  valueMode: z.enum(["source", "constant"]),
-  sourceField: z
-    .string()
-    .trim()
-    .nullable()
-    .optional()
-    .transform((value) => value ?? null),
-  constantValue: z
-    .string()
-    .nullable()
-    .optional()
-    .transform((value) => value ?? null),
-  formatter: z.enum([
-    "none",
-    "string",
-    "number",
-    "boolean",
-    "upper_case",
-    "lower_case",
-    "digits_only",
-    "date_only",
-    "iso_datetime",
-    "currency_major",
-  ]),
-});
-
-const TargetMappingSchema = z.object({
-  fields: z.array(MappingRuleSchema),
-});
-
-const IntegrationBodySchema = z.object({
-  name: z.string().trim().min(3).max(80),
-  baseUrl: BaseUrlSchema,
-  authToken: z.string().trim().min(8),
-  healthPath: z.string().trim().optional(),
-  customerPath: z.string().trim().optional(),
-  serviceOrderPath: z.string().trim().optional(),
-  billingDocumentPath: z.string().trim().optional(),
-  mappings: z
-    .object({
-      catalog_item: TargetMappingSchema.optional(),
-      contract: TargetMappingSchema.optional(),
-      customer: TargetMappingSchema.optional(),
-      supplier: TargetMappingSchema.optional(),
-      transporter: TargetMappingSchema.optional(),
-      service_order: TargetMappingSchema.optional(),
-      billing_document: TargetMappingSchema.optional(),
-      payable: TargetMappingSchema.optional(),
-    })
-    .optional(),
-});
-
-const UpdateIntegrationBodySchema = z.object({
-  name: z.string().trim().min(3).max(80).optional(),
-  baseUrl: BaseUrlSchema.optional(),
-  authToken: z.string().trim().min(8).optional(),
-  healthPath: z.string().trim().optional(),
-  customerPath: z.string().trim().optional(),
-  serviceOrderPath: z.string().trim().optional(),
-  billingDocumentPath: z.string().trim().optional(),
-  mappings: z
-    .object({
-      catalog_item: TargetMappingSchema.optional(),
-      contract: TargetMappingSchema.optional(),
-      customer: TargetMappingSchema.optional(),
-      supplier: TargetMappingSchema.optional(),
-      transporter: TargetMappingSchema.optional(),
-      service_order: TargetMappingSchema.optional(),
-      billing_document: TargetMappingSchema.optional(),
-      payable: TargetMappingSchema.optional(),
-    })
-    .optional(),
-});
-
-const SyncRequestSchema = z.object({
-  target: z.enum([
-    "catalog_item",
-    "contract",
-    "customer",
-    "supplier",
-    "transporter",
-    "service_order",
-    "billing_document",
-    "payable",
-  ]),
-  limit: z.coerce.number().min(1).max(250).default(50),
-  mappings: z
-    .object({
-      catalog_item: TargetMappingSchema.optional(),
-      contract: TargetMappingSchema.optional(),
-      customer: TargetMappingSchema.optional(),
-      supplier: TargetMappingSchema.optional(),
-      transporter: TargetMappingSchema.optional(),
-      service_order: TargetMappingSchema.optional(),
-      billing_document: TargetMappingSchema.optional(),
-      payable: TargetMappingSchema.optional(),
-    })
-    .optional(),
-});
-
-const ToggleSchema = z.object({
-  enabled: z.boolean(),
-});
-
-const ScheduleSchema = z.object({
-  target: z.enum([
-    "catalog_item",
-    "contract",
-    "customer",
-    "supplier",
-    "transporter",
-    "service_order",
-    "billing_document",
-    "payable",
-  ]),
-  mode: z.enum(["disabled", "manual_only", "scheduled"]),
-  frequency: z.enum(["daily", "weekly"]).optional(),
-});
-
-const OAuthStartBodySchema = z.object({
-  returnTo: z
-    .string()
-    .trim()
-    .max(500)
-    .refine(
-      (value) => value.startsWith("/") && !value.startsWith("//"),
-      "returnTo inválido",
-    )
-    .nullable()
-    .optional()
-    .transform((value) => value ?? null),
-});
-
-const ContaAzulPollBodySchema = z.object({
-  limit: z.number().int().min(1).max(100).optional(),
-});
-
-const SyncItemsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(250).default(100),
-});
-
-const ContaAzulMdfeLinkBodySchema = z.object({
-  externalId: z.string().trim().min(1).max(160),
-  fiscalDocumentAccessKeys: z
-    .array(z.string().trim().min(1).max(80))
-    .min(1)
-    .max(50),
-  mdfeIdentifier: z.string().trim().min(1).max(120),
-  status: z
-    .enum(["AUTORIZADO", "ENCERRADO", "CANCELADO"])
-    .nullable()
-    .optional(),
-});
-
-const ContaAzulExportModeSchema = z.enum([
-  "budget_to_sale",
-  "contract_generated",
-  "receivable_event",
-  "sale",
-  "sale_and_receivable",
-]);
-
-const ContaAzulBudgetModeSchema = z.enum(["sales_search_link"]);
-
-const ContaAzulFiscalModeSchema = z.enum(["consultation_only", "disabled"]);
-
-const ContaAzulProtocolModeSchema = z.enum([
-  "api_lookup_verified",
-  "metadata_only",
-]);
-
-const ContaAzulSaleTriggerSchema = z.enum([
-  "billing_document_issued",
-  "certificate_approved",
-  "manual",
-  "quote_approved",
-  "service_order_approved",
-  "service_order_completed",
-]);
-
-const ContaAzulConfigBodySchema = z.object({
-  budgetMode: ContaAzulBudgetModeSchema.optional(),
-  defaultFinancialAccountId: z.string().trim().min(1).nullable().optional(),
-  defaultCategoryId: z.string().trim().min(1).nullable().optional(),
-  defaultCostCenterId: z.string().trim().min(1).nullable().optional(),
-  defaultDreCategoryId: z.string().trim().min(1).nullable().optional(),
-  defaultExpenseCategoryId: z.string().trim().min(1).nullable().optional(),
-  defaultPaymentMethodId: z.string().trim().min(1).nullable().optional(),
-  defaultProductCategoryId: z.string().trim().min(1).nullable().optional(),
-  defaultSellerId: z.string().trim().min(1).nullable().optional(),
-  defaultServiceCategoryId: z.string().trim().min(1).nullable().optional(),
-  defaultUnitOfMeasureId: z.string().trim().min(1).nullable().optional(),
-  defaultFiscalTaxonomy: z
-    .record(z.string(), z.unknown())
-    .nullable()
-    .optional(),
-  fiscalMode: ContaAzulFiscalModeSchema.optional(),
-  protocolMode: ContaAzulProtocolModeSchema.optional(),
-  saleTrigger: ContaAzulSaleTriggerSchema.optional(),
-  exportMode: ContaAzulExportModeSchema.optional(),
-  enabledTargets: z
-    .object({
-      baixas: z.boolean().optional(),
-      balances: z.boolean().optional(),
-      billingDocuments: z.boolean().optional(),
-      budgets: z.boolean().optional(),
-      categories: z.boolean().optional(),
-      contracts: z.boolean().optional(),
-      costCenters: z.boolean().optional(),
-      customers: z.boolean().optional(),
-      dreCategories: z.boolean().optional(),
-      driftChecks: z.boolean().optional(),
-      expenses: z.boolean().optional(),
-      financialAccounts: z.boolean().optional(),
-      fiscalDocuments: z.boolean().optional(),
-      inventoryTaxonomy: z.boolean().optional(),
-      payables: z.boolean().optional(),
-      paymentStatusPolling: z.boolean().optional(),
-      products: z.boolean().optional(),
-      protocols: z.boolean().optional(),
-      receivables: z.boolean().optional(),
-      remoteDocuments: z.boolean().optional(),
-      sales: z.boolean().optional(),
-      sellers: z.boolean().optional(),
-      services: z.boolean().optional(),
-      suppliers: z.boolean().optional(),
-      transfers: z.boolean().optional(),
-      transporters: z.boolean().optional(),
-    })
-    .optional(),
-});
-
-const ContaAzulCatalogSchema = z.enum([
-  "accounts",
-  "balances",
-  "categories",
-  "cost-centers",
-  "dre-categories",
-  "product-categories",
-  "product-cest",
-  "product-ecommerce-brands",
-  "product-ecommerce-categories",
-  "product-ncm",
-  "products",
-  "product-units",
-  "sellers",
-  "services",
-  "transfers",
-]);
 
 const OAuthCallbackQuerySchema = z.object({
   code: z.string().trim().min(1),
@@ -838,79 +572,159 @@ function decryptContaAzulTokenBundle(params: {
   );
 }
 
+const adminOnly = [
+  ...requireLabProtected,
+  requireOrgType("LAB"),
+  requireRole(["admin", "owner"]),
+];
+
+/** What the catalog dropdowns show when Conta Azul fails without saying why. */
+const CATALOG_FAILURE_MESSAGE: Record<ContaAzulCatalogKey, string> = {
+  accounts: "Falha ao carregar contas financeiras",
+  categories: "Falha ao carregar categorias",
+  "cost-centers": "Falha ao carregar centros de custo",
+  balances: "Falha ao carregar catálogo da Conta Azul",
+  "dre-categories": "Falha ao carregar catálogo da Conta Azul",
+  "product-categories": "Falha ao carregar catálogo da Conta Azul",
+  "product-cest": "Falha ao carregar catálogo da Conta Azul",
+  "product-ecommerce-brands": "Falha ao carregar catálogo da Conta Azul",
+  "product-ecommerce-categories": "Falha ao carregar catálogo da Conta Azul",
+  "product-ncm": "Falha ao carregar catálogo da Conta Azul",
+  products: "Falha ao carregar catálogo da Conta Azul",
+  "product-units": "Falha ao carregar catálogo da Conta Azul",
+  sellers: "Falha ao carregar catálogo da Conta Azul",
+  services: "Falha ao carregar catálogo da Conta Azul",
+  transfers: "Falha ao carregar catálogo da Conta Azul",
+};
+
 export const integrationsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsBindings;
-}>()
-  .get(
-    "/",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      return c.json(await buildListPayload(member.organizationId));
-    },
-  )
-  .get(
-    "/conta-azul/app",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      return c.json(
-        await getContaAzulAppSummary({
-          organizationId: member.organizationId,
-          env: c.env,
-        }),
+}>();
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.list,
+  adminOnly,
+  async (c) => {
+    const member = c.get("member");
+    return await buildListPayload(member.organizationId);
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.getContaAzulApp,
+  adminOnly,
+  async (c) => {
+    const member = c.get("member");
+    return await getContaAzulAppSummary({
+      organizationId: member.organizationId,
+      env: c.env,
+    });
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.saveContaAzulApp,
+  adminOnly,
+  async (c, { body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const credentials = body;
+
+    // Conta Azul answers a made-up code differently for a wrong pair, so a
+    // typo is caught here instead of after a round trip through its login.
+    const check = await checkContaAzulAppCredentials({
+      credentials,
+      redirectUri: resolveContaAzulRedirectUri(c.env),
+    });
+    if (check === "rejected") {
+      throw unprocessable(
+        "conta_azul_app_rejected",
+        "O Conta Azul recusou este Client ID e Client Secret. Copie os dois de novo do seu aplicativo no Portal do Desenvolvedor.",
+        { legacyBody: { check } },
       );
-    },
-  )
-  .put(
-    "/conta-azul/app",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulAppCredentialsSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const credentials = c.req.valid("json");
+    }
 
-      // Conta Azul answers a made-up code differently for a wrong pair, so a
-      // typo is caught here instead of after a round trip through its login.
-      const check = await checkContaAzulAppCredentials({
-        credentials,
-        redirectUri: resolveContaAzulRedirectUri(c.env),
-      });
-      if (check === "rejected") {
-        throw unprocessable(
-          "conta_azul_app_rejected",
-          "O Conta Azul recusou este Client ID e Client Secret. Copie os dois de novo do seu aplicativo no Portal do Desenvolvedor.",
-          { legacyBody: { check } },
-        );
-      }
+    const before = await getContaAzulAppSummary({
+      organizationId: member.organizationId,
+      env: c.env,
+    });
+    await orgDb(member.organizationId).transaction((o) =>
+      saveContaAzulAppCredentials(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          credentials,
+          env: c.env,
+        },
+        o,
+      ),
+    );
+    await requireContaAzulReconnectAfterAppChange({
+      organizationId: member.organizationId,
+      clientIdBefore: effectiveContaAzulClientId(before, c.env),
+      clientIdAfter: credentials.clientId,
+    });
+    await orgDb(member.organizationId).transaction((o) =>
+      writeOrganizationIntegrationEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.conta_azul.app_saved",
+          entityId: "conta_azul",
+          details: {
+            provider: "conta_azul",
+            clientId: credentials.clientId,
+            check,
+          },
+        },
+        o,
+      ),
+    );
 
-      const before = await getContaAzulAppSummary({
+    return {
+      app: await getContaAzulAppSummary({
         organizationId: member.organizationId,
         env: c.env,
-      });
-      await orgDb(member.organizationId).transaction((o) =>
-        saveContaAzulAppCredentials(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            credentials,
-            env: c.env,
-          },
-          o,
-        ),
-      );
+      }),
+      check,
+    };
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.removeContaAzulApp,
+  adminOnly,
+  async (c) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const before = await getContaAzulAppSummary({
+      organizationId: member.organizationId,
+      env: c.env,
+    });
+    const removed = await orgDb(member.organizationId).transaction((o) =>
+      deleteContaAzulAppCredentials(
+        {
+          organizationId: member.organizationId,
+        },
+        o,
+      ),
+    );
+
+    if (removed) {
       await requireContaAzulReconnectAfterAppChange({
         organizationId: member.organizationId,
         clientIdBefore: effectiveContaAzulClientId(before, c.env),
-        clientIdAfter: credentials.clientId,
+        clientIdAfter: getServerContaAzulCredentials(c.env)?.clientId ?? null,
       });
       await orgDb(member.organizationId).transaction((o) =>
         writeOrganizationIntegrationEvent(
@@ -918,611 +732,367 @@ export const integrationsRouter = createRouter<{
             organizationId: member.organizationId,
             actorUserId: session.user.id,
             actorMemberId: member.id,
-            action: "integration.conta_azul.app_saved",
+            action: "integration.conta_azul.app_removed",
             entityId: "conta_azul",
-            details: {
-              provider: "conta_azul",
-              clientId: credentials.clientId,
-              check,
-            },
+            details: { provider: "conta_azul" },
           },
           o,
         ),
       );
+    }
 
-      return c.json({
-        app: await getContaAzulAppSummary({
-          organizationId: member.organizationId,
-          env: c.env,
-        }),
-        check,
-      });
-    },
-  )
-  .delete(
-    "/conta-azul/app",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const before = await getContaAzulAppSummary({
+    return await getContaAzulAppSummary({
+      organizationId: member.organizationId,
+      env: c.env,
+    });
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.startContaAzulOAuth,
+  adminOnly,
+  async (c, { body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const input = body;
+    let config: Awaited<ReturnType<typeof requireContaAzulOAuthConfig>>;
+    let authorization: Awaited<
+      ReturnType<typeof buildContaAzulAuthorizationUrl>
+    >;
+
+    try {
+      config = await requireContaAzulOAuthConfig({
         organizationId: member.organizationId,
         env: c.env,
       });
-      const removed = await orgDb(member.organizationId).transaction((o) =>
-        deleteContaAzulAppCredentials(
-          {
-            organizationId: member.organizationId,
+      authorization = await buildContaAzulAuthorizationUrl({
+        config,
+        organizationId: member.organizationId,
+        userId: session.user.id,
+        sessionId: session.session.id,
+        returnTo: input.returnTo,
+      });
+    } catch (error) {
+      if (error instanceof ContaAzulAppMissingError) {
+        throw conflict("conta_azul_app_missing", error.message);
+      }
+      throw new DomainError({
+        code: "conta_azul_oauth_unavailable",
+        status: 503,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Configuração OAuth da Conta Azul inválida",
+      });
+    }
+
+    await orgDb(member.organizationId).transaction((o) =>
+      writeOrganizationIntegrationEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.conta_azul.oauth_started",
+          entityId: "conta_azul",
+          details: {
+            provider: "conta_azul",
+            redirectUri: config.redirectUri,
+            returnTo: input.returnTo,
           },
-          o,
-        ),
+        },
+        o,
+      ),
+    );
+
+    return {
+      authorizationUrl: authorization.url,
+      expiresInSeconds: 600,
+    };
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.create,
+  adminOnly,
+  async (c, { body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const input = body;
+    const config = buildGenericConnectionConfig(input);
+    const mappingIssues = validateIntegrationMappings(config.mappings);
+
+    if (mappingIssues.length > 0) {
+      throw invalid(
+        "integration_mappings_invalid",
+        mappingIssues.map((issue) => issue.message).join(" "),
+      );
+    }
+    const encrypted = encryptIntegrationSecret(input.authToken, c.env);
+    const integrationId = crypto.randomUUID();
+    const connectionId = crypto.randomUUID();
+
+    // The integration, its connection and the events that record them commit
+    // together.
+    await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+      await o.insert(organizationIntegration).values({
+        id: integrationId,
+        organizationId: member.organizationId,
+        type: "financial_erp",
+        provider: "generic_http",
+        name: input.name,
+        status: "ACTIVE",
+        createdBy: session.user.id,
+        updatedBy: session.user.id,
+      });
+
+      await o.insert(integrationConnection).values({
+        id: connectionId,
+        integrationId,
+        organizationId: member.organizationId,
+        credentialType: "bearer",
+        config,
+        encryptedSecret: encrypted.encryptedSecret,
+        secretIv: encrypted.secretIv,
+        createdBy: session.user.id,
+        updatedBy: session.user.id,
+      });
+
+      await writeIntegrationEvent(
+        {
+          integrationId,
+          organizationId: member.organizationId,
+          level: "info",
+          event: "integration.created",
+          message: "Integração criada",
+          details: {
+            provider: "generic_http",
+            type: "financial_erp",
+            name: input.name,
+          },
+        },
+        o,
       );
 
-      if (removed) {
-        await requireContaAzulReconnectAfterAppChange({
+      await writeOrganizationIntegrationEvent(
+        {
           organizationId: member.organizationId,
-          clientIdBefore: effectiveContaAzulClientId(before, c.env),
-          clientIdAfter: getServerContaAzulCredentials(c.env)?.clientId ?? null,
-        });
-        await orgDb(member.organizationId).transaction((o) =>
-          writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.conta_azul.app_removed",
-              entityId: "conta_azul",
-              details: { provider: "conta_azul" },
-            },
-            o,
-          ),
-        );
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.created",
+          entityId: integrationId,
+          details: {
+            provider: "generic_http",
+            type: "financial_erp",
+            name: input.name,
+          },
+        },
+        o,
+      );
+    });
+
+    return await buildListPayload(member.organizationId);
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.update,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+    const record = await requireLabIntegration(member.organizationId, id);
+
+    if (record.integration.provider !== "generic_http") {
+      throw invalid(
+        "integration_provider_mismatch",
+        "Use as rotas nativas da Conta Azul para esta integração",
+      );
+    }
+
+    const currentConfig = buildGenericConnectionConfig(
+      record.connection.config,
+    );
+    const mergedConfig = buildGenericConnectionConfig({
+      baseUrl: input.baseUrl ?? currentConfig.baseUrl,
+      healthPath: input.healthPath ?? currentConfig.healthPath,
+      customerPath: input.customerPath ?? currentConfig.customerPath,
+      serviceOrderPath:
+        input.serviceOrderPath ?? currentConfig.serviceOrderPath,
+      billingDocumentPath:
+        input.billingDocumentPath ?? currentConfig.billingDocumentPath,
+      schedules: currentConfig.schedules,
+      mappings: input.mappings
+        ? {
+            ...currentConfig.mappings,
+            ...input.mappings,
+          }
+        : currentConfig.mappings,
+    });
+    const mappingIssues = validateIntegrationMappings(mergedConfig.mappings);
+
+    if (mappingIssues.length > 0) {
+      throw invalid(
+        "integration_mappings_invalid",
+        mappingIssues.map((issue) => issue.message).join(" "),
+      );
+    }
+
+    await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+      await o
+        .update(organizationIntegration)
+        .set({
+          name: input.name ?? record.integration.name,
+          updatedBy: session.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationIntegration.id, id));
+
+      const connectionUpdate: Partial<
+        typeof integrationConnection.$inferInsert
+      > = {
+        config: mergedConfig,
+        updatedBy: session.user.id,
+        updatedAt: new Date(),
+      };
+
+      if (input.authToken) {
+        const encrypted = encryptIntegrationSecret(input.authToken, c.env);
+        connectionUpdate.encryptedSecret = encrypted.encryptedSecret;
+        connectionUpdate.secretIv = encrypted.secretIv;
       }
 
-      return c.json(
-        await getContaAzulAppSummary({
+      await o
+        .update(integrationConnection)
+        .set(connectionUpdate)
+        .where(eq(integrationConnection.integrationId, id));
+
+      await writeIntegrationEvent(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+          level: "info",
+          event: "integration.updated",
+          message: "Integração atualizada",
+        },
+        o,
+      );
+
+      await writeOrganizationIntegrationEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.updated",
+          entityId: id,
+        },
+        o,
+      );
+    });
+
+    return await buildListPayload(member.organizationId);
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.getContaAzulSchedule,
+  adminOnly,
+  async (c, { params }) => {
+    const member = c.get("member");
+    const id = params.id;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    return await orgDb(member.organizationId).transaction((o) =>
+      getContaAzulScheduleState(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+        },
+        o,
+      ),
+    );
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.refreshContaAzul,
+  adminOnly,
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const record = await requireLabContaAzulIntegration(
+      member.organizationId,
+      id,
+    );
+
+    try {
+      const tokenBundle = decryptContaAzulTokenBundle({
+        encryptedSecret: record.connection.encryptedSecret,
+        secretIv: record.connection.secretIv,
+        env: c.env,
+      });
+      const refreshed = await refreshContaAzulAccessToken(
+        await requireContaAzulOAuthConfig({
           organizationId: member.organizationId,
           env: c.env,
         }),
+        {
+          refreshToken: tokenBundle.refreshToken,
+        },
       );
-    },
-  )
-  .post(
-    "/conta-azul/oauth/start",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", OAuthStartBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
-      let config: Awaited<ReturnType<typeof requireContaAzulOAuthConfig>>;
-      let authorization: Awaited<
-        ReturnType<typeof buildContaAzulAuthorizationUrl>
-      >;
-
-      try {
-        config = await requireContaAzulOAuthConfig({
-          organizationId: member.organizationId,
-          env: c.env,
-        });
-        authorization = await buildContaAzulAuthorizationUrl({
-          config,
-          organizationId: member.organizationId,
-          userId: session.user.id,
-          sessionId: session.session.id,
-          returnTo: input.returnTo,
-        });
-      } catch (error) {
-        if (error instanceof ContaAzulAppMissingError) {
-          throw conflict("conta_azul_app_missing", error.message);
-        }
-        throw new DomainError({
-          code: "conta_azul_oauth_unavailable",
-          status: 503,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Configuração OAuth da Conta Azul inválida",
-        });
-      }
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.conta_azul.oauth_started",
-            entityId: "conta_azul",
-            details: {
-              provider: "conta_azul",
-              redirectUri: config.redirectUri,
-              returnTo: input.returnTo,
-            },
-          },
-          o,
-        ),
+      const encrypted = encryptIntegrationSecret(
+        serializeContaAzulTokenBundle(refreshed),
+        c.env,
       );
-
-      return c.json({
-        authorizationUrl: authorization.url,
-        expiresInSeconds: 600,
+      const config = normalizeContaAzulConnectionConfig({
+        ...record.connection.config,
+        accessTokenExpiresAt: refreshed.expiresAt,
+        scopes: refreshed.scopes,
       });
-    },
-  )
-  .get(
-    "/conta-azul/oauth/callback",
-    zValidator("query", OAuthCallbackQuerySchema),
-    async (c) => {
-      const input = c.req.valid("query");
-      const stateSecret = getContaAzulStateSecret(c.env);
-
-      let state: Awaited<ReturnType<typeof verifyContaAzulOAuthState>>;
-      try {
-        state = await verifyContaAzulOAuthState({
-          state: input.state,
-          stateSecret,
-        });
-      } catch {
-        // Expired/tampered/replayed state is a client error, not a server fault.
-        return c.redirect(
-          buildContaAzulOAuthErrorUrl(c.env, null, "invalid_state"),
-        );
-      }
-
-      const callbackContext = await resolveContaAzulOAuthCallbackContext(state);
-      // The laboratory's application; removed since the flow started → nothing
-      // can redeem the code.
-      const config = await resolveContaAzulOAuthConfig({
-        organizationId: callbackContext.organizationId,
-        env: c.env,
-      });
-      if (!config) {
-        return c.redirect(
-          buildContaAzulOAuthErrorUrl(c.env, state.returnTo, "app_missing"),
-        );
-      }
-
-      let tokenBundle: Awaited<
-        ReturnType<typeof exchangeContaAzulAuthorizationCode>
-      >;
-      try {
-        tokenBundle = await exchangeContaAzulAuthorizationCode(config, {
-          code: input.code,
-        });
-      } catch (error) {
-        // Provider-rejected code (invalid/expired) → recoverable client error.
-        if (error instanceof ContaAzulOAuthError) {
-          return c.redirect(
-            buildContaAzulOAuthErrorUrl(
-              c.env,
-              state.returnTo,
-              "exchange_failed",
-            ),
-          );
-        }
-        throw error;
-      }
-      const connection = await upsertContaAzulConnection({
-        organizationId: callbackContext.organizationId,
-        actorUserId: callbackContext.userId,
-        tokenBundle,
-        env: c.env,
-      });
-
-      await orgDb(callbackContext.organizationId).transaction((o) =>
-        writeIntegrationEvent(
-          {
-            integrationId: connection.integrationId,
-            organizationId: callbackContext.organizationId,
-            level: "info",
-            event: "integration.conta_azul.connected",
-            message: "Conta Azul conectada via OAuth",
-            details: {
-              provider: "conta_azul",
-              accessTokenExpiresAt: connection.accessTokenExpiresAt,
-            },
-          },
-          o,
-        ),
-      );
-
-      await orgDb(callbackContext.organizationId).transaction((o) =>
-        writeOrganizationIntegrationEvent(
-          {
-            organizationId: callbackContext.organizationId,
-            actorUserId: callbackContext.userId,
-            actorMemberId: callbackContext.memberId,
-            action: "integration.conta_azul.connected",
-            entityId: connection.integrationId,
-            details: {
-              provider: "conta_azul",
-              accessTokenExpiresAt: connection.accessTokenExpiresAt,
-            },
-          },
-          o,
-        ),
-      );
-
-      return c.redirect(buildContaAzulOAuthReturnUrl(c.env, state.returnTo));
-    },
-  )
-  .post(
-    "/",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", IntegrationBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
-      const config = buildGenericConnectionConfig(input);
-      const mappingIssues = validateIntegrationMappings(config.mappings);
-
-      if (mappingIssues.length > 0) {
-        throw invalid(
-          "integration_mappings_invalid",
-          mappingIssues.map((issue) => issue.message).join(" "),
-        );
-      }
-      const encrypted = encryptIntegrationSecret(input.authToken, c.env);
-      const integrationId = crypto.randomUUID();
-      const connectionId = crypto.randomUUID();
-
-      // The integration, its connection and the events that record them commit
-      // together.
-      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-        await o.insert(organizationIntegration).values({
-          id: integrationId,
-          organizationId: member.organizationId,
-          type: "financial_erp",
-          provider: "generic_http",
-          name: input.name,
-          status: "ACTIVE",
-          createdBy: session.user.id,
-          updatedBy: session.user.id,
-        });
-
-        await o.insert(integrationConnection).values({
-          id: connectionId,
-          integrationId,
-          organizationId: member.organizationId,
-          credentialType: "bearer",
-          config,
-          encryptedSecret: encrypted.encryptedSecret,
-          secretIv: encrypted.secretIv,
-          createdBy: session.user.id,
-          updatedBy: session.user.id,
-        });
-
-        await writeIntegrationEvent(
-          {
-            integrationId,
-            organizationId: member.organizationId,
-            level: "info",
-            event: "integration.created",
-            message: "Integração criada",
-            details: {
-              provider: "generic_http",
-              type: "financial_erp",
-              name: input.name,
-            },
-          },
-          o,
-        );
-
-        await writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.created",
-            entityId: integrationId,
-            details: {
-              provider: "generic_http",
-              type: "financial_erp",
-              name: input.name,
-            },
-          },
-          o,
-        );
-      });
-
-      return c.json(await buildListPayload(member.organizationId), 201);
-    },
-  )
-  .put(
-    "/:id",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", UpdateIntegrationBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-      const record = await requireLabIntegration(member.organizationId, id);
-
-      if (record.integration.provider !== "generic_http") {
-        throw invalid(
-          "integration_provider_mismatch",
-          "Use as rotas nativas da Conta Azul para esta integração",
-        );
-      }
-
-      const currentConfig = buildGenericConnectionConfig(
-        record.connection.config,
-      );
-      const mergedConfig = buildGenericConnectionConfig({
-        baseUrl: input.baseUrl ?? currentConfig.baseUrl,
-        healthPath: input.healthPath ?? currentConfig.healthPath,
-        customerPath: input.customerPath ?? currentConfig.customerPath,
-        serviceOrderPath:
-          input.serviceOrderPath ?? currentConfig.serviceOrderPath,
-        billingDocumentPath:
-          input.billingDocumentPath ?? currentConfig.billingDocumentPath,
-        schedules: currentConfig.schedules,
-        mappings: input.mappings
-          ? {
-              ...currentConfig.mappings,
-              ...input.mappings,
-            }
-          : currentConfig.mappings,
-      });
-      const mappingIssues = validateIntegrationMappings(mergedConfig.mappings);
-
-      if (mappingIssues.length > 0) {
-        throw invalid(
-          "integration_mappings_invalid",
-          mappingIssues.map((issue) => issue.message).join(" "),
-        );
-      }
 
       await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o
-          .update(organizationIntegration)
+          .update(integrationConnection)
           .set({
-            name: input.name ?? record.integration.name,
+            credentialType: "oauth2",
+            config,
+            encryptedSecret: encrypted.encryptedSecret,
+            secretIv: encrypted.secretIv,
             updatedBy: session.user.id,
             updatedAt: new Date(),
           })
-          .where(eq(organizationIntegration.id, id));
-
-        const connectionUpdate: Partial<
-          typeof integrationConnection.$inferInsert
-        > = {
-          config: mergedConfig,
-          updatedBy: session.user.id,
-          updatedAt: new Date(),
-        };
-
-        if (input.authToken) {
-          const encrypted = encryptIntegrationSecret(input.authToken, c.env);
-          connectionUpdate.encryptedSecret = encrypted.encryptedSecret;
-          connectionUpdate.secretIv = encrypted.secretIv;
-        }
-
-        await o
-          .update(integrationConnection)
-          .set(connectionUpdate)
-          .where(eq(integrationConnection.integrationId, id));
-
-        await writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "info",
-            event: "integration.updated",
-            message: "Integração atualizada",
-          },
-          o,
-        );
-
-        await writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.updated",
-            entityId: id,
-          },
-          o,
-        );
-      });
-
-      return c.json(await buildListPayload(member.organizationId));
-    },
-  )
-  .get(
-    "/:id/conta-azul/schedule",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      return c.json(
-        await orgDb(member.organizationId).transaction((o) =>
-          getContaAzulScheduleState(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-            },
-            o,
-          ),
-        ),
-      );
-    },
-  )
-  .post(
-    "/:id/conta-azul/refresh",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const record = await requireLabContaAzulIntegration(
-        member.organizationId,
-        id,
-      );
-
-      try {
-        const tokenBundle = decryptContaAzulTokenBundle({
-          encryptedSecret: record.connection.encryptedSecret,
-          secretIv: record.connection.secretIv,
-          env: c.env,
-        });
-        const refreshed = await refreshContaAzulAccessToken(
-          await requireContaAzulOAuthConfig({
-            organizationId: member.organizationId,
-            env: c.env,
-          }),
-          {
-            refreshToken: tokenBundle.refreshToken,
-          },
-        );
-        const encrypted = encryptIntegrationSecret(
-          serializeContaAzulTokenBundle(refreshed),
-          c.env,
-        );
-        const config = normalizeContaAzulConnectionConfig({
-          ...record.connection.config,
-          accessTokenExpiresAt: refreshed.expiresAt,
-          scopes: refreshed.scopes,
-        });
-
-        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-          await o
-            .update(integrationConnection)
-            .set({
-              credentialType: "oauth2",
-              config,
-              encryptedSecret: encrypted.encryptedSecret,
-              secretIv: encrypted.secretIv,
-              updatedBy: session.user.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(integrationConnection.integrationId, id));
-
-          await o
-            .update(organizationIntegration)
-            .set({
-              // `recover` (INTEGRATION_MACHINE): an integration that needed
-              // the lab is active again; any other status is kept.
-              status: INTEGRATION_MACHINE.canTransition(
-                record.integration.status,
-                "recover",
-              )
-                ? INTEGRATION_MACHINE.requireTargetOf(
-                    record.integration.status,
-                    "recover",
-                  )
-                : record.integration.status,
-              lastValidationError: null,
-              updatedBy: session.user.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationIntegration.id, id));
-
-          await writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "info",
-              event: "integration.conta_azul.token_refreshed",
-              message: "Token OAuth da Conta Azul renovado",
-              details: {
-                provider: "conta_azul",
-                accessTokenExpiresAt: refreshed.expiresAt,
-              },
-            },
-            o,
-          );
-        });
-
-        return c.json({
-          success: true,
-          accessTokenExpiresAt: refreshed.expiresAt,
-        });
-      } catch (error) {
-        const failure = buildContaAzulRefreshFailurePolicy(error);
-
-        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-          await o
-            .update(organizationIntegration)
-            .set({
-              status: failure.status,
-              lastValidationError: failure.message,
-              updatedBy: session.user.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationIntegration.id, id));
-
-          await writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.conta_azul.refresh_failed",
-              message: failure.message,
-              details: {
-                provider: "conta_azul",
-                reason: failure.reason,
-              },
-            },
-            o,
-          );
-        });
-
-        throw invalid("integration_request_failed", failure.message);
-      }
-    },
-  )
-  .post(
-    "/:id/conta-azul/disconnect",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      await requireLabContaAzulIntegration(member.organizationId, id);
-
-      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-        // Clear remote-link state so a fresh reconnect cannot reuse stale
-        // links that belong to the prior Conta Azul account.
-        await o
-          .delete(integrationObjectLink)
-          .where(eq(integrationObjectLink.integrationId, id));
-
-        await o
-          .delete(integrationSyncCursor)
-          .where(eq(integrationSyncCursor.integrationId, id));
-
-        await o
-          .delete(integrationConnection)
           .where(eq(integrationConnection.integrationId, id));
 
         await o
           .update(organizationIntegration)
           .set({
-            status: "DISABLED",
-            disabledAt: new Date(),
+            // `recover` (INTEGRATION_MACHINE): an integration that needed
+            // the lab is active again; any other status is kept.
+            status: INTEGRATION_MACHINE.canTransition(
+              record.integration.status,
+              "recover",
+            )
+              ? INTEGRATION_MACHINE.requireTargetOf(
+                  record.integration.status,
+                  "recover",
+                )
+              : record.integration.status,
             lastValidationError: null,
             updatedBy: session.user.id,
             updatedAt: new Date(),
@@ -1534,274 +1104,764 @@ export const integrationsRouter = createRouter<{
             integrationId: id,
             organizationId: member.organizationId,
             level: "info",
-            event: "integration.conta_azul.disconnected",
-            message: "Conta Azul desconectada",
+            event: "integration.conta_azul.token_refreshed",
+            message: "Token OAuth da Conta Azul renovado",
             details: {
               provider: "conta_azul",
+              accessTokenExpiresAt: refreshed.expiresAt,
             },
           },
           o,
         );
+      });
 
-        await writeOrganizationIntegrationEvent(
+      return {
+        success: true,
+        accessTokenExpiresAt: refreshed.expiresAt,
+      };
+    } catch (error) {
+      const failure = buildContaAzulRefreshFailurePolicy(error);
+
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+        await o
+          .update(organizationIntegration)
+          .set({
+            status: failure.status,
+            lastValidationError: failure.message,
+            updatedBy: session.user.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationIntegration.id, id));
+
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "error",
+            event: "integration.conta_azul.refresh_failed",
+            message: failure.message,
+            details: {
+              provider: "conta_azul",
+              reason: failure.reason,
+            },
+          },
+          o,
+        );
+      });
+
+      throw invalid("integration_request_failed", failure.message);
+    }
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.disconnectContaAzul,
+  adminOnly,
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    await requireLabContaAzulIntegration(member.organizationId, id);
+
+    await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+      // Clear remote-link state so a fresh reconnect cannot reuse stale
+      // links that belong to the prior Conta Azul account.
+      await o
+        .delete(integrationObjectLink)
+        .where(eq(integrationObjectLink.integrationId, id));
+
+      await o
+        .delete(integrationSyncCursor)
+        .where(eq(integrationSyncCursor.integrationId, id));
+
+      await o
+        .delete(integrationConnection)
+        .where(eq(integrationConnection.integrationId, id));
+
+      await o
+        .update(organizationIntegration)
+        .set({
+          status: "DISABLED",
+          disabledAt: new Date(),
+          lastValidationError: null,
+          updatedBy: session.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationIntegration.id, id));
+
+      await writeIntegrationEvent(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+          level: "info",
+          event: "integration.conta_azul.disconnected",
+          message: "Conta Azul desconectada",
+          details: {
+            provider: "conta_azul",
+          },
+        },
+        o,
+      );
+
+      await writeOrganizationIntegrationEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.conta_azul.disconnected",
+          entityId: id,
+          details: {
+            provider: "conta_azul",
+          },
+        },
+        o,
+      );
+    });
+
+    return { success: true };
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.listContaAzulCatalog,
+  adminOnly,
+  async (c, { params }) => {
+    const member = c.get("member");
+    const { id, catalog } = params;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    try {
+      return await listContaAzulCatalog({
+        integrationId: id,
+        organizationId: member.organizationId,
+        env: c.env,
+        catalog,
+      });
+    } catch (error) {
+      throw invalid(
+        "integration_request_failed",
+        error instanceof Error
+          ? error.message
+          : CATALOG_FAILURE_MESSAGE[catalog],
+      );
+    }
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.updateContaAzulConfig,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+    const record = await requireLabContaAzulIntegration(
+      member.organizationId,
+      id,
+    );
+
+    const currentConfig = normalizeContaAzulConnectionConfig(
+      record.connection.config,
+    );
+    const nextConfig = normalizeContaAzulConnectionConfig({
+      ...currentConfig,
+      defaultFinancialAccountId:
+        input.defaultFinancialAccountId === undefined
+          ? currentConfig.defaultFinancialAccountId
+          : input.defaultFinancialAccountId,
+      defaultCategoryId:
+        input.defaultCategoryId === undefined
+          ? currentConfig.defaultCategoryId
+          : input.defaultCategoryId,
+      defaultCostCenterId:
+        input.defaultCostCenterId === undefined
+          ? currentConfig.defaultCostCenterId
+          : input.defaultCostCenterId,
+      defaultDreCategoryId:
+        input.defaultDreCategoryId === undefined
+          ? currentConfig.defaultDreCategoryId
+          : input.defaultDreCategoryId,
+      defaultExpenseCategoryId:
+        input.defaultExpenseCategoryId === undefined
+          ? currentConfig.defaultExpenseCategoryId
+          : input.defaultExpenseCategoryId,
+      defaultPaymentMethodId:
+        input.defaultPaymentMethodId === undefined
+          ? currentConfig.defaultPaymentMethodId
+          : input.defaultPaymentMethodId,
+      defaultProductCategoryId:
+        input.defaultProductCategoryId === undefined
+          ? currentConfig.defaultProductCategoryId
+          : input.defaultProductCategoryId,
+      defaultSellerId:
+        input.defaultSellerId === undefined
+          ? currentConfig.defaultSellerId
+          : input.defaultSellerId,
+      defaultServiceCategoryId:
+        input.defaultServiceCategoryId === undefined
+          ? currentConfig.defaultServiceCategoryId
+          : input.defaultServiceCategoryId,
+      defaultUnitOfMeasureId:
+        input.defaultUnitOfMeasureId === undefined
+          ? currentConfig.defaultUnitOfMeasureId
+          : input.defaultUnitOfMeasureId,
+      budgetMode: input.budgetMode ?? currentConfig.budgetMode,
+      defaultFiscalTaxonomy:
+        input.defaultFiscalTaxonomy === undefined
+          ? currentConfig.defaultFiscalTaxonomy
+          : input.defaultFiscalTaxonomy,
+      fiscalMode: input.fiscalMode ?? currentConfig.fiscalMode,
+      protocolMode: input.protocolMode ?? currentConfig.protocolMode,
+      saleTrigger: input.saleTrigger ?? currentConfig.saleTrigger,
+      exportMode: input.exportMode ?? currentConfig.exportMode,
+      enabledTargets: input.enabledTargets
+        ? {
+            ...currentConfig.enabledTargets,
+            ...input.enabledTargets,
+          }
+        : currentConfig.enabledTargets,
+    });
+
+    await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+      await o
+        .update(integrationConnection)
+        .set({
+          config: nextConfig,
+          updatedBy: session.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationConnection.integrationId, id));
+
+      await writeIntegrationEvent(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+          level: "info",
+          event: "integration.conta_azul.config_updated",
+          message: "Configuração da Conta Azul atualizada",
+          details: {
+            provider: "conta_azul",
+            exportMode: nextConfig.exportMode,
+            enabledTargets: nextConfig.enabledTargets,
+          },
+        },
+        o,
+      );
+
+      await writeOrganizationIntegrationEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.conta_azul.config_updated",
+          entityId: id,
+        },
+        o,
+      );
+    });
+
+    return await buildListPayload(member.organizationId);
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.pollContaAzul,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    try {
+      const result = await pollContaAzulBillingStatus({
+        integrationId: id,
+        organizationId: member.organizationId,
+        env: c.env,
+        limit: input.limit,
+      });
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
           {
             organizationId: member.organizationId,
             actorUserId: session.user.id,
             actorMemberId: member.id,
-            action: "integration.conta_azul.disconnected",
+            action: "integration.conta_azul.payment_poll",
             entityId: id,
+            details: {
+              processedCount: result.processedCount,
+              updatedCount: result.updatedCount,
+              warningCount: result.warnings.length,
+            },
+          },
+          o,
+        ),
+      );
+
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao consultar pagamentos da Conta Azul";
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "error",
+            event: "integration.conta_azul.payment_poll.failed",
+            message,
             details: {
               provider: "conta_azul",
             },
           },
           o,
-        );
-      });
-
-      return c.json({ success: true });
-    },
-  )
-  .get(
-    "/:id/conta-azul/catalog/accounts",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      try {
-        return c.json(
-          await listContaAzulCatalog({
-            integrationId: id,
-            organizationId: member.organizationId,
-            env: c.env,
-            catalog: "accounts",
-          }),
-        );
-      } catch (error) {
-        throw invalid(
-          "integration_request_failed",
-          error instanceof Error
-            ? error.message
-            : "Falha ao carregar contas financeiras",
-        );
-      }
-    },
-  )
-  .get(
-    "/:id/conta-azul/catalog/categories",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      try {
-        return c.json(
-          await listContaAzulCatalog({
-            integrationId: id,
-            organizationId: member.organizationId,
-            env: c.env,
-            catalog: "categories",
-          }),
-        );
-      } catch (error) {
-        throw invalid(
-          "integration_request_failed",
-          error instanceof Error
-            ? error.message
-            : "Falha ao carregar categorias",
-        );
-      }
-    },
-  )
-  .get(
-    "/:id/conta-azul/catalog/cost-centers",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      try {
-        return c.json(
-          await listContaAzulCatalog({
-            integrationId: id,
-            organizationId: member.organizationId,
-            env: c.env,
-            catalog: "cost-centers",
-          }),
-        );
-      } catch (error) {
-        throw invalid(
-          "integration_request_failed",
-          error instanceof Error
-            ? error.message
-            : "Falha ao carregar centros de custo",
-        );
-      }
-    },
-  )
-  .get(
-    "/:id/conta-azul/catalog/:catalog",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-      const parsedCatalog = ContaAzulCatalogSchema.safeParse(
-        c.req.param("catalog"),
+        ),
       );
 
-      if (!parsedCatalog.success) {
-        throw invalid(
-          "integration_catalog_invalid",
-          "Catálogo Conta Azul inválido",
-        );
-      }
+      throw invalid("integration_request_failed", message);
+    }
+  },
+);
 
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.pollContaAzulPayables,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    try {
+      const result = await pollContaAzulPayableStatus({
         integrationId: id,
+        organizationId: member.organizationId,
+        env: c.env,
+        limit: input.limit,
       });
 
-      try {
-        return c.json(
-          await listContaAzulCatalog({
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.payable_poll",
+            entityId: id,
+            details: {
+              processedCount: result.processedCount,
+              updatedCount: result.updatedCount,
+              warningCount: result.warnings.length,
+            },
+          },
+          o,
+        ),
+      );
+
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao consultar contas a pagar da Conta Azul";
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
             integrationId: id,
             organizationId: member.organizationId,
-            env: c.env,
-            catalog: parsedCatalog.data,
-          }),
-        );
-      } catch (error) {
-        throw invalid(
-          "integration_request_failed",
-          error instanceof Error
-            ? error.message
-            : "Falha ao carregar catálogo da Conta Azul",
-        );
-      }
-    },
-  )
-  .put(
-    "/:id/conta-azul/config",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulConfigBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-      const record = await requireLabContaAzulIntegration(
-        member.organizationId,
-        id,
+            level: "error",
+            event: "integration.conta_azul.payable_poll.failed",
+            message,
+            details: {
+              provider: "conta_azul",
+            },
+          },
+          o,
+        ),
       );
 
-      const currentConfig = normalizeContaAzulConnectionConfig(
-        record.connection.config,
-      );
-      const nextConfig = normalizeContaAzulConnectionConfig({
-        ...currentConfig,
-        defaultFinancialAccountId:
-          input.defaultFinancialAccountId === undefined
-            ? currentConfig.defaultFinancialAccountId
-            : input.defaultFinancialAccountId,
-        defaultCategoryId:
-          input.defaultCategoryId === undefined
-            ? currentConfig.defaultCategoryId
-            : input.defaultCategoryId,
-        defaultCostCenterId:
-          input.defaultCostCenterId === undefined
-            ? currentConfig.defaultCostCenterId
-            : input.defaultCostCenterId,
-        defaultDreCategoryId:
-          input.defaultDreCategoryId === undefined
-            ? currentConfig.defaultDreCategoryId
-            : input.defaultDreCategoryId,
-        defaultExpenseCategoryId:
-          input.defaultExpenseCategoryId === undefined
-            ? currentConfig.defaultExpenseCategoryId
-            : input.defaultExpenseCategoryId,
-        defaultPaymentMethodId:
-          input.defaultPaymentMethodId === undefined
-            ? currentConfig.defaultPaymentMethodId
-            : input.defaultPaymentMethodId,
-        defaultProductCategoryId:
-          input.defaultProductCategoryId === undefined
-            ? currentConfig.defaultProductCategoryId
-            : input.defaultProductCategoryId,
-        defaultSellerId:
-          input.defaultSellerId === undefined
-            ? currentConfig.defaultSellerId
-            : input.defaultSellerId,
-        defaultServiceCategoryId:
-          input.defaultServiceCategoryId === undefined
-            ? currentConfig.defaultServiceCategoryId
-            : input.defaultServiceCategoryId,
-        defaultUnitOfMeasureId:
-          input.defaultUnitOfMeasureId === undefined
-            ? currentConfig.defaultUnitOfMeasureId
-            : input.defaultUnitOfMeasureId,
-        budgetMode: input.budgetMode ?? currentConfig.budgetMode,
-        defaultFiscalTaxonomy:
-          input.defaultFiscalTaxonomy === undefined
-            ? currentConfig.defaultFiscalTaxonomy
-            : input.defaultFiscalTaxonomy,
-        fiscalMode: input.fiscalMode ?? currentConfig.fiscalMode,
-        protocolMode: input.protocolMode ?? currentConfig.protocolMode,
-        saleTrigger: input.saleTrigger ?? currentConfig.saleTrigger,
-        exportMode: input.exportMode ?? currentConfig.exportMode,
-        enabledTargets: input.enabledTargets
-          ? {
-              ...currentConfig.enabledTargets,
-              ...input.enabledTargets,
-            }
-          : currentConfig.enabledTargets,
+      throw invalid("integration_request_failed", message);
+    }
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.pollContaAzulFiscal,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    try {
+      const result = await pollContaAzulFiscalDocuments({
+        integrationId: id,
+        organizationId: member.organizationId,
+        env: c.env,
+        limit: input.limit,
       });
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.fiscal_poll",
+            entityId: id,
+            details: {
+              processedCount: result.processedCount,
+              updatedCount: result.updatedCount,
+              warningCount: result.warnings.length,
+            },
+          },
+          o,
+        ),
+      );
+
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao consultar documentos fiscais da Conta Azul";
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "error",
+            event: "integration.conta_azul.fiscal_poll.failed",
+            message,
+            details: {
+              provider: "conta_azul",
+            },
+          },
+          o,
+        ),
+      );
+
+      throw invalid("integration_request_failed", message);
+    }
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.linkContaAzulInvoicesToMdfe,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    try {
+      const result = await linkContaAzulFiscalDocumentsToMdfe({
+        integrationId: id,
+        organizationId: member.organizationId,
+        env: c.env,
+        payload: {
+          externalId: input.externalId,
+          organizationId: member.organizationId,
+          fiscalDocumentAccessKeys: input.fiscalDocumentAccessKeys,
+          mdfeIdentifier: input.mdfeIdentifier,
+          status: input.status ?? null,
+        },
+      });
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.mdfe_link",
+            entityId: id,
+            details: {
+              remoteEntityId: result.remoteEntityId,
+              accessKeyCount: input.fiscalDocumentAccessKeys.length,
+              status: input.status ?? null,
+            },
+          },
+          o,
+        ),
+      );
+
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao vincular MDF-e na Conta Azul";
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "error",
+            event: "integration.conta_azul.mdfe_link.failed",
+            message,
+            details: {
+              provider: "conta_azul",
+            },
+          },
+          o,
+        ),
+      );
+
+      throw invalid("integration_request_failed", message);
+    }
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.pollContaAzulProtocols,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    try {
+      const result = await pollContaAzulProtocols({
+        integrationId: id,
+        organizationId: member.organizationId,
+        env: c.env,
+        limit: input.limit,
+      });
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.protocol_poll",
+            entityId: id,
+            details: {
+              processedCount: result.processedCount,
+              updatedCount: result.updatedCount,
+              warningCount: result.warnings.length,
+            },
+          },
+          o,
+        ),
+      );
+
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao consultar protocolos da Conta Azul";
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "error",
+            event: "integration.conta_azul.protocol_poll.failed",
+            message,
+            details: {
+              provider: "conta_azul",
+            },
+          },
+          o,
+        ),
+      );
+
+      throw invalid("integration_request_failed", message);
+    }
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.pollContaAzulDrift,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+
+    await assertActiveContaAzulIntegration({
+      organizationId: member.organizationId,
+      integrationId: id,
+    });
+
+    try {
+      const result = await pollContaAzulRemoteDrift({
+        integrationId: id,
+        organizationId: member.organizationId,
+        env: c.env,
+        limit: input.limit,
+      });
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.drift_poll",
+            entityId: id,
+            details: {
+              processedCount: result.processedCount,
+              updatedCount: result.updatedCount,
+              warningCount: result.warnings.length,
+            },
+          },
+          o,
+        ),
+      );
+
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao verificar drift da Conta Azul";
+
+      await orgDb(member.organizationId).transaction((o) =>
+        writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "error",
+            event: "integration.conta_azul.drift_poll.failed",
+            message,
+            details: {
+              provider: "conta_azul",
+            },
+          },
+          o,
+        ),
+      );
+
+      throw invalid("integration_request_failed", message);
+    }
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.validate,
+  adminOnly,
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const record = await requireLabIntegration(member.organizationId, id);
+
+    try {
+      if (record.integration.provider === "generic_http") {
+        const secret = decryptIntegrationSecret(
+          record.connection.encryptedSecret,
+          record.connection.secretIv,
+          c.env,
+        );
+
+        await validateGenericConnection(
+          buildGenericConnectionConfig(record.connection.config),
+          secret,
+        );
+      } else {
+        await validateContaAzulConnection({
+          record,
+          env: c.env,
+        });
+      }
 
       await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o
-          .update(integrationConnection)
+          .update(organizationIntegration)
           .set({
-            config: nextConfig,
+            // `recover` (INTEGRATION_MACHINE): an integration that needed
+            // the lab is active again; any other status is kept.
+            status: INTEGRATION_MACHINE.canTransition(
+              record.integration.status,
+              "recover",
+            )
+              ? INTEGRATION_MACHINE.requireTargetOf(
+                  record.integration.status,
+                  "recover",
+                )
+              : record.integration.status,
+            lastValidatedAt: new Date(),
+            lastValidationError: null,
             updatedBy: session.user.id,
             updatedAt: new Date(),
           })
-          .where(eq(integrationConnection.integrationId, id));
+          .where(eq(organizationIntegration.id, id));
 
         await writeIntegrationEvent(
           {
             integrationId: id,
             organizationId: member.organizationId,
             level: "info",
-            event: "integration.conta_azul.config_updated",
-            message: "Configuração da Conta Azul atualizada",
+            event: "integration.validation_succeeded",
+            message: "Conexão validada com sucesso",
             details: {
-              provider: "conta_azul",
-              exportMode: nextConfig.exportMode,
-              enabledTargets: nextConfig.enabledTargets,
+              provider: record.integration.provider,
             },
           },
           o,
@@ -1812,571 +1872,60 @@ export const integrationsRouter = createRouter<{
             organizationId: member.organizationId,
             actorUserId: session.user.id,
             actorMemberId: member.id,
-            action: "integration.conta_azul.config_updated",
+            action: "integration.validated",
             entityId: id,
           },
           o,
         );
       });
 
-      return c.json(await buildListPayload(member.organizationId));
-    },
-  )
-  .post(
-    "/:id/conta-azul/poll",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulPollBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
+      return { success: true };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Falha ao validar conexão";
 
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
+      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+        await o
+          .update(organizationIntegration)
+          .set({
+            lastValidationError: message,
+            updatedBy: session.user.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationIntegration.id, id));
 
-      try {
-        const result = await pollContaAzulBillingStatus({
-          integrationId: id,
-          organizationId: member.organizationId,
-          env: c.env,
-          limit: input.limit,
-        });
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.conta_azul.payment_poll",
-              entityId: id,
-              details: {
-                processedCount: result.processedCount,
-                updatedCount: result.updatedCount,
-                warningCount: result.warnings.length,
-              },
-            },
-            o,
-          ),
-        );
-
-        return c.json(result);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao consultar pagamentos da Conta Azul";
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.conta_azul.payment_poll.failed",
-              message,
-              details: {
-                provider: "conta_azul",
-              },
-            },
-            o,
-          ),
-        );
-
-        throw invalid("integration_request_failed", message);
-      }
-    },
-  )
-  .post(
-    "/:id/conta-azul/poll-payables",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulPollBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      try {
-        const result = await pollContaAzulPayableStatus({
-          integrationId: id,
-          organizationId: member.organizationId,
-          env: c.env,
-          limit: input.limit,
-        });
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.conta_azul.payable_poll",
-              entityId: id,
-              details: {
-                processedCount: result.processedCount,
-                updatedCount: result.updatedCount,
-                warningCount: result.warnings.length,
-              },
-            },
-            o,
-          ),
-        );
-
-        return c.json(result);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao consultar contas a pagar da Conta Azul";
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.conta_azul.payable_poll.failed",
-              message,
-              details: {
-                provider: "conta_azul",
-              },
-            },
-            o,
-          ),
-        );
-
-        throw invalid("integration_request_failed", message);
-      }
-    },
-  )
-  .post(
-    "/:id/conta-azul/poll-fiscal",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulPollBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      try {
-        const result = await pollContaAzulFiscalDocuments({
-          integrationId: id,
-          organizationId: member.organizationId,
-          env: c.env,
-          limit: input.limit,
-        });
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.conta_azul.fiscal_poll",
-              entityId: id,
-              details: {
-                processedCount: result.processedCount,
-                updatedCount: result.updatedCount,
-                warningCount: result.warnings.length,
-              },
-            },
-            o,
-          ),
-        );
-
-        return c.json(result);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao consultar documentos fiscais da Conta Azul";
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.conta_azul.fiscal_poll.failed",
-              message,
-              details: {
-                provider: "conta_azul",
-              },
-            },
-            o,
-          ),
-        );
-
-        throw invalid("integration_request_failed", message);
-      }
-    },
-  )
-  .post(
-    "/:id/conta-azul/link-mdfe",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulMdfeLinkBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      try {
-        const result = await linkContaAzulFiscalDocumentsToMdfe({
-          integrationId: id,
-          organizationId: member.organizationId,
-          env: c.env,
-          payload: {
-            externalId: input.externalId,
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
             organizationId: member.organizationId,
-            fiscalDocumentAccessKeys: input.fiscalDocumentAccessKeys,
-            mdfeIdentifier: input.mdfeIdentifier,
-            status: input.status ?? null,
+            level: "error",
+            event: "integration.validation_failed",
+            message,
           },
-        });
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.conta_azul.mdfe_link",
-              entityId: id,
-              details: {
-                remoteEntityId: result.remoteEntityId,
-                accessKeyCount: input.fiscalDocumentAccessKeys.length,
-                status: input.status ?? null,
-              },
-            },
-            o,
-          ),
+          o,
         );
-
-        return c.json(result);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao vincular MDF-e na Conta Azul";
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.conta_azul.mdfe_link.failed",
-              message,
-              details: {
-                provider: "conta_azul",
-              },
-            },
-            o,
-          ),
-        );
-
-        throw invalid("integration_request_failed", message);
-      }
-    },
-  )
-  .post(
-    "/:id/conta-azul/poll-protocols",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulPollBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
       });
 
-      try {
-        const result = await pollContaAzulProtocols({
-          integrationId: id,
-          organizationId: member.organizationId,
-          env: c.env,
-          limit: input.limit,
-        });
+      throw invalid("integration_request_failed", message);
+    }
+  },
+);
 
-        await orgDb(member.organizationId).transaction((o) =>
-          writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.conta_azul.protocol_poll",
-              entityId: id,
-              details: {
-                processedCount: result.processedCount,
-                updatedCount: result.updatedCount,
-                warningCount: result.warnings.length,
-              },
-            },
-            o,
-          ),
-        );
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.previewSync,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const id = params.id;
+    const input = body;
+    const record = await requireLabIntegration(member.organizationId, id);
 
-        return c.json(result);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao consultar protocolos da Conta Azul";
+    assertProviderSupportsSyncTarget(record.integration.provider, input.target);
 
-        await orgDb(member.organizationId).transaction((o) =>
-          writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.conta_azul.protocol_poll.failed",
-              message,
-              details: {
-                provider: "conta_azul",
-              },
-            },
-            o,
-          ),
-        );
-
-        throw invalid("integration_request_failed", message);
-      }
-    },
-  )
-  .post(
-    "/:id/conta-azul/poll-drift",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ContaAzulPollBodySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-
-      await assertActiveContaAzulIntegration({
-        organizationId: member.organizationId,
-        integrationId: id,
-      });
-
-      try {
-        const result = await pollContaAzulRemoteDrift({
-          integrationId: id,
-          organizationId: member.organizationId,
-          env: c.env,
-          limit: input.limit,
-        });
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.conta_azul.drift_poll",
-              entityId: id,
-              details: {
-                processedCount: result.processedCount,
-                updatedCount: result.updatedCount,
-                warningCount: result.warnings.length,
-              },
-            },
-            o,
-          ),
-        );
-
-        return c.json(result);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao verificar drift da Conta Azul";
-
-        await orgDb(member.organizationId).transaction((o) =>
-          writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.conta_azul.drift_poll.failed",
-              message,
-              details: {
-                provider: "conta_azul",
-              },
-            },
-            o,
-          ),
-        );
-
-        throw invalid("integration_request_failed", message);
-      }
-    },
-  )
-  .post(
-    "/:id/validate",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const record = await requireLabIntegration(member.organizationId, id);
-
-      try {
-        if (record.integration.provider === "generic_http") {
-          const secret = decryptIntegrationSecret(
-            record.connection.encryptedSecret,
-            record.connection.secretIv,
-            c.env,
-          );
-
-          await validateGenericConnection(
-            buildGenericConnectionConfig(record.connection.config),
-            secret,
-          );
-        } else {
-          await validateContaAzulConnection({
-            record,
-            env: c.env,
-          });
-        }
-
-        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-          await o
-            .update(organizationIntegration)
-            .set({
-              // `recover` (INTEGRATION_MACHINE): an integration that needed
-              // the lab is active again; any other status is kept.
-              status: INTEGRATION_MACHINE.canTransition(
-                record.integration.status,
-                "recover",
-              )
-                ? INTEGRATION_MACHINE.requireTargetOf(
-                    record.integration.status,
-                    "recover",
-                  )
-                : record.integration.status,
-              lastValidatedAt: new Date(),
-              lastValidationError: null,
-              updatedBy: session.user.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationIntegration.id, id));
-
-          await writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "info",
-              event: "integration.validation_succeeded",
-              message: "Conexão validada com sucesso",
-              details: {
-                provider: record.integration.provider,
-              },
-            },
-            o,
-          );
-
-          await writeOrganizationIntegrationEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "integration.validated",
-              entityId: id,
-            },
-            o,
-          );
-        });
-
-        return c.json({ success: true });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Falha ao validar conexão";
-
-        await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-          await o
-            .update(organizationIntegration)
-            .set({
-              lastValidationError: message,
-              updatedBy: session.user.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationIntegration.id, id));
-
-          await writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              level: "error",
-              event: "integration.validation_failed",
-              message,
-            },
-            o,
-          );
-        });
-
-        throw invalid("integration_request_failed", message);
-      }
-    },
-  )
-  .post(
-    "/:id/sync/preview",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", SyncRequestSchema),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-      const record = await requireLabIntegration(member.organizationId, id);
-
-      assertProviderSupportsSyncTarget(
-        record.integration.provider,
-        input.target,
-      );
-
-      const preview = await orgDb(
-        record.integration.organizationId,
-      ).transaction((o) =>
+    const preview = await orgDb(record.integration.organizationId).transaction(
+      (o) =>
         previewIntegrationSync(
           {
             record,
@@ -2386,606 +1935,553 @@ export const integrationsRouter = createRouter<{
           },
           o,
         ),
-      );
+    );
 
-      return c.json(preview);
-    },
-  )
-  .post(
-    "/:id/sync",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", SyncRequestSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-      const record = await requireLabIntegration(member.organizationId, id);
+    return preview;
+  },
+);
 
-      assertProviderSupportsSyncTarget(
-        record.integration.provider,
-        input.target,
-      );
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.sync,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+    const record = await requireLabIntegration(member.organizationId, id);
 
-      if (record.integration.status !== "ACTIVE") {
-        throw conflict("integration_inactive", "Integração desativada");
-      }
+    assertProviderSupportsSyncTarget(record.integration.provider, input.target);
 
-      const preview = await orgDb(
-        record.integration.organizationId,
-      ).transaction((o) =>
+    if (record.integration.status !== "ACTIVE") {
+      throw conflict("integration_inactive", "Integração desativada");
+    }
+
+    const preview = await orgDb(record.integration.organizationId).transaction(
+      (o) =>
         previewIntegrationSync(
           { record, target: input.target, limit: input.limit },
           o,
         ),
-      );
+    );
 
-      if (preview.blocked) {
-        throw conflict(
-          "integration_sync_blocked",
-          preview.warnings[0]?.message ??
-            "A integração ainda não está pronta para este alvo",
-          {
-            legacyBody: {
-              blocked: true,
-              warnings: preview.warnings.map((warning) => ({ ...warning })),
-              coverage: { ...preview.coverage },
-            },
+    if (preview.blocked) {
+      throw conflict(
+        "integration_sync_blocked",
+        preview.warnings[0]?.message ??
+          "A integração ainda não está pronta para este alvo",
+        {
+          legacyBody: {
+            blocked: true,
+            warnings: preview.warnings.map((warning) => ({ ...warning })),
+            coverage: { ...preview.coverage },
           },
-        );
-      }
-
-      const activeRun = await orgDb(member.organizationId).transaction((o) =>
-        hasActiveSyncRun(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            target: input.target,
-          },
-          o,
-        ),
-      );
-
-      if (activeRun) {
-        throw conflict(
-          "integration_sync_in_progress",
-          "Já existe uma sincronização em andamento para este alvo",
-          { legacyBody: { runId: activeRun.id } },
-        );
-      }
-
-      // The run row and the event that requests it commit together; the
-      // dispatch below (queue, remote calls) runs after.
-      const runId = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async ({ o }) => {
-          const created = await createSyncRun(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              trigger: "manual",
-              target: input.target,
-              initiatedBy: session.user.id,
-              requestedLimit: input.limit,
-            },
-            o,
-          );
-
-          await writeIntegrationEvent(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              runId: created,
-              level: "info",
-              event: "sync.requested",
-              message: "Sincronização solicitada",
-              details: {
-                target: input.target,
-                limit: input.limit,
-              },
-            },
-            o,
-          );
-          return created;
         },
       );
+    }
 
-      let result;
-      try {
-        result = await dispatchSyncRun({
-          env: c.env,
+    const activeRun = await orgDb(member.organizationId).transaction((o) =>
+      hasActiveSyncRun(
+        {
           integrationId: id,
           organizationId: member.organizationId,
-          runId,
           target: input.target,
-          limit: input.limit,
-          trigger: "manual",
-        });
-      } catch (error) {
-        throw new DomainError({
-          code: "integration_sync_dispatch_failed",
-          status: 500,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Falha ao processar sincronização",
-        });
-      }
+        },
+        o,
+      ),
+    );
 
-      return c.json({
-        success: true,
-        queued: result.queued,
+    if (activeRun) {
+      throw conflict(
+        "integration_sync_in_progress",
+        "Já existe uma sincronização em andamento para este alvo",
+        { legacyBody: { runId: activeRun.id } },
+      );
+    }
+
+    // The run row and the event that requests it commit together; the
+    // dispatch below (queue, remote calls) runs after.
+    const runId = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async ({ o }) => {
+        const created = await createSyncRun(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            trigger: "manual",
+            target: input.target,
+            initiatedBy: session.user.id,
+            requestedLimit: input.limit,
+          },
+          o,
+        );
+
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            runId: created,
+            level: "info",
+            event: "sync.requested",
+            message: "Sincronização solicitada",
+            details: {
+              target: input.target,
+              limit: input.limit,
+            },
+          },
+          o,
+        );
+        return created;
+      },
+    );
+
+    let result;
+    try {
+      result = await dispatchSyncRun({
+        env: c.env,
+        integrationId: id,
+        organizationId: member.organizationId,
         runId,
-        status: result.status,
-        warnings: preview.warnings,
-      });
-    },
-  )
-  .post(
-    "/:id/schedule",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ScheduleSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-      const record = await requireLabIntegration(member.organizationId, id);
-
-      assertProviderSupportsSyncTarget(
-        record.integration.provider,
-        input.target,
-      );
-
-      const nextScheduledRunAt =
-        input.mode === "scheduled"
-          ? buildInitialNextScheduledRunAt(input.frequency)
-          : null;
-      const currentSchedule = getTargetScheduleConfig(
-        record.connection.config,
-        input.target,
-      );
-      const updatedConfig = updateTargetScheduleConfig({
-        config: record.connection.config,
         target: input.target,
-        mode: input.mode,
-        frequency:
-          input.mode === "scheduled"
-            ? (input.frequency ?? currentSchedule.frequency)
-            : undefined,
-        nextScheduledRunAt,
-        lastScheduledRunAt: currentSchedule.lastScheduledRunAt,
+        limit: input.limit,
+        trigger: "manual",
       });
+    } catch (error) {
+      throw new DomainError({
+        code: "integration_sync_dispatch_failed",
+        status: 500,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Falha ao processar sincronização",
+      });
+    }
 
-      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-        await o
-          .update(integrationConnection)
-          .set({
-            config: updatedConfig,
-            updatedBy: session.user.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(integrationConnection.integrationId, id));
+    return {
+      success: true,
+      queued: result.queued,
+      runId,
+      status: result.status,
+      warnings: preview.warnings,
+    };
+  },
+);
 
-        await writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "info",
-            event: "integration.schedule_updated",
-            message: "Agendamento do alvo atualizado",
-            details: {
-              target: input.target,
-              mode: input.mode,
-              frequency:
-                input.mode === "scheduled"
-                  ? updatedConfig.schedules[input.target].frequency
-                  : null,
-              nextScheduledRunAt,
-            },
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.schedule,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+    const record = await requireLabIntegration(member.organizationId, id);
+
+    assertProviderSupportsSyncTarget(record.integration.provider, input.target);
+
+    const nextScheduledRunAt =
+      input.mode === "scheduled"
+        ? buildInitialNextScheduledRunAt(input.frequency)
+        : null;
+    const currentSchedule = getTargetScheduleConfig(
+      record.connection.config,
+      input.target,
+    );
+    const updatedConfig = updateTargetScheduleConfig({
+      config: record.connection.config,
+      target: input.target,
+      mode: input.mode,
+      frequency:
+        input.mode === "scheduled"
+          ? (input.frequency ?? currentSchedule.frequency)
+          : undefined,
+      nextScheduledRunAt,
+      lastScheduledRunAt: currentSchedule.lastScheduledRunAt,
+    });
+
+    await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+      await o
+        .update(integrationConnection)
+        .set({
+          config: updatedConfig,
+          updatedBy: session.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationConnection.integrationId, id));
+
+      await writeIntegrationEvent(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+          level: "info",
+          event: "integration.schedule_updated",
+          message: "Agendamento do alvo atualizado",
+          details: {
+            target: input.target,
+            mode: input.mode,
+            frequency:
+              input.mode === "scheduled"
+                ? updatedConfig.schedules[input.target].frequency
+                : null,
+            nextScheduledRunAt,
           },
-          o,
-        );
-
-        await writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.schedule.updated",
-            entityId: id,
-            details: {
-              target: input.target,
-              mode: input.mode,
-              frequency:
-                input.mode === "scheduled"
-                  ? updatedConfig.schedules[input.target].frequency
-                  : null,
-            },
-          },
-          o,
-        );
-      });
-
-      return c.json(await buildListPayload(member.organizationId));
-    },
-  )
-  .post(
-    "/:id/toggle",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("json", ToggleSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-      const record = await requireLabIntegration(member.organizationId, id);
-
-      // `enable` leaves DISABLED only; ACTION_REQUIRED must reconnect first.
-      if (
-        input.enabled &&
-        !INTEGRATION_MACHINE.canTransition(
-          record.integration.status,
-          "enable",
-        ) &&
-        record.integration.status !== "ACTIVE"
-      ) {
-        throw conflict(
-          "integration_action_required",
-          "Reconecte a integração antes de ativá-la",
-        );
-      }
-
-      await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
-        await o
-          .update(organizationIntegration)
-          .set({
-            status: input.enabled ? "ACTIVE" : "DISABLED",
-            disabledAt: input.enabled ? null : new Date(),
-            updatedBy: session.user.id,
-            updatedAt: new Date(),
-          })
-          // Compare-and-set on the status the toggle was checked against: a
-          // concurrent refresh failure (ACTION_REQUIRED) is not overwritten.
-          .where(
-            and(
-              eq(organizationIntegration.id, id),
-              eq(organizationIntegration.status, record.integration.status),
-            ),
-          );
-
-        await writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "info",
-            event: input.enabled
-              ? "integration.enabled"
-              : "integration.disabled",
-            message: input.enabled
-              ? "Integração ativada"
-              : "Integração desativada",
-          },
-          o,
-        );
-      });
-
-      return c.json(await buildListPayload(member.organizationId));
-    },
-  )
-  .get(
-    "/:id/overview",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-      const record = await requireLabIntegration(member.organizationId, id);
-
-      return c.json({
-        data: await orgDb(record.integration.organizationId).transaction((o) =>
-          buildIntegrationOverview(record, o),
-        ),
-      });
-    },
-  )
-  .get(
-    "/:id/runs",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-      await requireLabIntegration(member.organizationId, id);
-
-      const runs = await orgDb(member.organizationId).transaction((o) =>
-        o
-          .select()
-          .from(integrationSyncRun)
-          .where(
-            and(
-              eq(integrationSyncRun.integrationId, id),
-              eq(integrationSyncRun.organizationId, member.organizationId),
-            ),
-          )
-          .orderBy(desc(integrationSyncRun.createdAt))
-          .limit(20),
-      );
-
-      return c.json({ data: runs });
-    },
-  )
-  .get(
-    "/:id/runs/:runId/items",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator("query", SyncItemsQuerySchema),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-      const runId = c.req.param("runId");
-      const input = c.req.valid("query");
-      await requireLabIntegration(member.organizationId, id);
-
-      const found = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const [run] = await o
-            .select()
-            .from(integrationSyncRun)
-            .where(
-              and(
-                eq(integrationSyncRun.id, runId),
-                eq(integrationSyncRun.integrationId, id),
-                eq(integrationSyncRun.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-          if (!run) return null;
-
-          const items = await o
-            .select()
-            .from(integrationSyncItem)
-            .where(
-              and(
-                eq(integrationSyncItem.runId, runId),
-                eq(integrationSyncItem.integrationId, id),
-                eq(integrationSyncItem.organizationId, member.organizationId),
-              ),
-            )
-            .orderBy(desc(integrationSyncItem.updatedAt))
-            .limit(input.limit);
-          return { run, items };
         },
+        o,
       );
 
-      if (!found) {
-        throw notFound("integration_run_not_found", "Execução não encontrada");
-      }
-      const { run, items } = found;
-      const statusCounts = items.reduce<Record<string, number>>((acc, item) => {
-        acc[item.status] = (acc[item.status] ?? 0) + 1;
-        return acc;
-      }, {});
-
-      return c.json({
-        runId,
-        target: run.target,
-        data: items,
-        summary: {
-          returnedCount: items.length,
-          statusCounts,
-        },
-      });
-    },
-  )
-  .post(
-    "/:id/runs/:runId/retry",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = c.req.param("id");
-      const runId = c.req.param("runId");
-      const record = await requireLabIntegration(member.organizationId, id);
-
-      const [originalRun] = await orgDb(member.organizationId).transaction(
-        (o) =>
-          o
-            .select()
-            .from(integrationSyncRun)
-            .where(
-              and(
-                eq(integrationSyncRun.id, runId),
-                eq(integrationSyncRun.integrationId, id),
-                eq(integrationSyncRun.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1),
-      );
-
-      if (!originalRun) {
-        throw notFound("integration_run_not_found", "Execução não encontrada");
-      }
-
-      assertProviderSupportsSyncTarget(
-        record.integration.provider,
-        originalRun.target,
-      );
-
-      if (
-        originalRun.status === "PENDING" ||
-        originalRun.status === "RUNNING"
-      ) {
-        throw conflict(
-          "integration_run_in_progress",
-          "Não é possível reprocessar uma execução ainda em andamento",
-        );
-      }
-
-      const activeRun = await orgDb(member.organizationId).transaction((o) =>
-        hasActiveSyncRun(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            target: originalRun.target,
+      await writeOrganizationIntegrationEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.schedule.updated",
+          entityId: id,
+          details: {
+            target: input.target,
+            mode: input.mode,
+            frequency:
+              input.mode === "scheduled"
+                ? updatedConfig.schedules[input.target].frequency
+                : null,
           },
-          o,
-        ),
+        },
+        o,
       );
+    });
 
-      if (activeRun) {
-        throw conflict(
-          "integration_sync_in_progress",
-          "Já existe uma sincronização em andamento para este alvo",
-          { legacyBody: { runId: activeRun.id } },
+    return await buildListPayload(member.organizationId);
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.toggle,
+  adminOnly,
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const input = body;
+    const record = await requireLabIntegration(member.organizationId, id);
+
+    // `enable` leaves DISABLED only; ACTION_REQUIRED must reconnect first.
+    if (
+      input.enabled &&
+      !INTEGRATION_MACHINE.canTransition(record.integration.status, "enable") &&
+      record.integration.status !== "ACTIVE"
+    ) {
+      throw conflict(
+        "integration_action_required",
+        "Reconecte a integração antes de ativá-la",
+      );
+    }
+
+    await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
+      await o
+        .update(organizationIntegration)
+        .set({
+          status: input.enabled ? "ACTIVE" : "DISABLED",
+          disabledAt: input.enabled ? null : new Date(),
+          updatedBy: session.user.id,
+          updatedAt: new Date(),
+        })
+        // Compare-and-set on the status the toggle was checked against: a
+        // concurrent refresh failure (ACTION_REQUIRED) is not overwritten.
+        .where(
+          and(
+            eq(organizationIntegration.id, id),
+            eq(organizationIntegration.status, record.integration.status),
+          ),
         );
-      }
 
-      const requestedLimit = getRequestedLimitFromRun(originalRun);
-      const preview = await orgDb(
-        record.integration.organizationId,
-      ).transaction((o) =>
+      await writeIntegrationEvent(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+          level: "info",
+          event: input.enabled ? "integration.enabled" : "integration.disabled",
+          message: input.enabled
+            ? "Integração ativada"
+            : "Integração desativada",
+        },
+        o,
+      );
+    });
+
+    return await buildListPayload(member.organizationId);
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.listRunItems,
+  adminOnly,
+  async (c, { params, query }) => {
+    const member = c.get("member");
+    const id = params.id;
+    const runId = params.runId;
+    const input = query;
+    await requireLabIntegration(member.organizationId, id);
+
+    const found = await orgDb(member.organizationId).transaction(async (o) => {
+      const [run] = await o
+        .select()
+        .from(integrationSyncRun)
+        .where(
+          and(
+            eq(integrationSyncRun.id, runId),
+            eq(integrationSyncRun.integrationId, id),
+            eq(integrationSyncRun.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!run) return null;
+
+      const items = await o
+        .select()
+        .from(integrationSyncItem)
+        .where(
+          and(
+            eq(integrationSyncItem.runId, runId),
+            eq(integrationSyncItem.integrationId, id),
+            eq(integrationSyncItem.organizationId, member.organizationId),
+          ),
+        )
+        .orderBy(desc(integrationSyncItem.updatedAt))
+        .limit(input.limit);
+      return { run, items };
+    });
+
+    if (!found) {
+      throw notFound("integration_run_not_found", "Execução não encontrada");
+    }
+    const { run, items } = found;
+    const statusCounts = items.reduce<Record<string, number>>((acc, item) => {
+      acc[item.status] = (acc[item.status] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      runId,
+      target: run.target,
+      data: items,
+      summary: {
+        returnedCount: items.length,
+        statusCounts,
+      },
+    };
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.retryRun,
+  adminOnly,
+  async (c, { params }) => {
+    const member = c.get("member");
+    const session = c.get("session");
+    const id = params.id;
+    const runId = params.runId;
+    const record = await requireLabIntegration(member.organizationId, id);
+
+    const [originalRun] = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(integrationSyncRun)
+        .where(
+          and(
+            eq(integrationSyncRun.id, runId),
+            eq(integrationSyncRun.integrationId, id),
+            eq(integrationSyncRun.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1),
+    );
+
+    if (!originalRun) {
+      throw notFound("integration_run_not_found", "Execução não encontrada");
+    }
+
+    assertProviderSupportsSyncTarget(
+      record.integration.provider,
+      originalRun.target,
+    );
+
+    if (originalRun.status === "PENDING" || originalRun.status === "RUNNING") {
+      throw conflict(
+        "integration_run_in_progress",
+        "Não é possível reprocessar uma execução ainda em andamento",
+      );
+    }
+
+    const activeRun = await orgDb(member.organizationId).transaction((o) =>
+      hasActiveSyncRun(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+          target: originalRun.target,
+        },
+        o,
+      ),
+    );
+
+    if (activeRun) {
+      throw conflict(
+        "integration_sync_in_progress",
+        "Já existe uma sincronização em andamento para este alvo",
+        { legacyBody: { runId: activeRun.id } },
+      );
+    }
+
+    const requestedLimit = getRequestedLimitFromRun(originalRun);
+    const preview = await orgDb(record.integration.organizationId).transaction(
+      (o) =>
         previewIntegrationSync(
           { record, target: originalRun.target, limit: requestedLimit },
           o,
         ),
-      );
+    );
 
-      const retryRunId = await orgDb(member.organizationId).transaction((o) =>
-        createSyncRun(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            trigger: "retry",
-            target: originalRun.target,
-            initiatedBy: session.user.id,
-            requestedLimit,
-            retryOfRunId: originalRun.id,
-          },
-          o,
-        ),
-      );
+    const retryRunId = await orgDb(member.organizationId).transaction((o) =>
+      createSyncRun(
+        {
+          integrationId: id,
+          organizationId: member.organizationId,
+          trigger: "retry",
+          target: originalRun.target,
+          initiatedBy: session.user.id,
+          requestedLimit,
+          retryOfRunId: originalRun.id,
+        },
+        o,
+      ),
+    );
 
-      if (preview.blocked) {
-        const message =
-          preview.warnings[0]?.message ??
-          "A integração ainda não está pronta para este alvo";
-
-        await orgDb(member.organizationId).transaction((o) =>
-          failSyncRunAsBlocked(
-            {
-              integrationId: id,
-              organizationId: member.organizationId,
-              runId: retryRunId,
-              target: originalRun.target,
-              requestedLimit,
-              message,
-            },
-            o,
-          ),
-        );
-
-        throw conflict("integration_sync_blocked", message, {
-          legacyBody: {
-            blocked: true,
-            warnings: preview.warnings.map((warning) => ({ ...warning })),
-            runId: retryRunId,
-          },
-        });
-      }
+    if (preview.blocked) {
+      const message =
+        preview.warnings[0]?.message ??
+        "A integração ainda não está pronta para este alvo";
 
       await orgDb(member.organizationId).transaction((o) =>
-        writeIntegrationEvent(
+        failSyncRunAsBlocked(
           {
             integrationId: id,
             organizationId: member.organizationId,
             runId: retryRunId,
-            level: "info",
-            event: "sync.retry_requested",
-            message: "Reprocessamento solicitado",
-            details: {
-              target: originalRun.target,
-              requestedLimit,
-              retryOfRunId: originalRun.id,
-            },
+            target: originalRun.target,
+            requestedLimit,
+            message,
           },
           o,
         ),
       );
 
-      let result;
-      try {
-        result = await dispatchSyncRun({
-          env: c.env,
+      throw conflict("integration_sync_blocked", message, {
+        legacyBody: {
+          blocked: true,
+          warnings: preview.warnings.map((warning) => ({ ...warning })),
+          runId: retryRunId,
+        },
+      });
+    }
+
+    await orgDb(member.organizationId).transaction((o) =>
+      writeIntegrationEvent(
+        {
           integrationId: id,
           organizationId: member.organizationId,
           runId: retryRunId,
-          target: originalRun.target,
-          limit: requestedLimit,
-          trigger: "retry",
-        });
-      } catch (error) {
-        throw new DomainError({
-          code: "integration_sync_dispatch_failed",
-          status: 500,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Falha ao processar sincronização",
-        });
-      }
+          level: "info",
+          event: "sync.retry_requested",
+          message: "Reprocessamento solicitado",
+          details: {
+            target: originalRun.target,
+            requestedLimit,
+            retryOfRunId: originalRun.id,
+          },
+        },
+        o,
+      ),
+    );
 
-      return c.json({
-        success: true,
-        queued: result.queued,
+    let result;
+    try {
+      result = await dispatchSyncRun({
+        env: c.env,
+        integrationId: id,
+        organizationId: member.organizationId,
         runId: retryRunId,
-        status: result.status,
+        target: originalRun.target,
+        limit: requestedLimit,
+        trigger: "retry",
       });
-    },
-  )
-  .get(
-    "/:id/events",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const id = c.req.param("id");
-      await requireLabIntegration(member.organizationId, id);
+    } catch (error) {
+      throw new DomainError({
+        code: "integration_sync_dispatch_failed",
+        status: 500,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Falha ao processar sincronização",
+      });
+    }
 
-      const events = await orgDb(member.organizationId).transaction((o) =>
-        o
-          .select()
-          .from(integrationEventLog)
-          .where(
-            and(
-              eq(integrationEventLog.integrationId, id),
-              eq(integrationEventLog.organizationId, member.organizationId),
-            ),
-          )
-          .orderBy(desc(integrationEventLog.createdAt))
-          .limit(30),
-      );
+    return {
+      success: true,
+      queued: result.queued,
+      runId: retryRunId,
+      status: result.status,
+    };
+  },
+);
 
-      return c.json({ data: events });
-    },
-  )
-  // Phase 2 slice 3: remote drift detection queue.
-  .get("/drift", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.acknowledgeDrift,
+  adminOnly,
+  async (c, { params, body }) => {
     const member = c.get("member");
-    const target = c.req.query("target");
+    const session = c.get("session");
+    const linkId = params.linkId;
+    const { reason } = body;
+    const result = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      ({ o }) =>
+        acknowledgeIntegrationDrift(
+          {
+            organizationId: member.organizationId,
+            linkId,
+            actorUserId: session.user.id,
+            reason,
+          },
+          o,
+        ),
+    );
+    if (!result.ok) {
+      throw invalid("integration_reason_required", "Motivo é obrigatório");
+    }
+    return { data: { ok: true } };
+  },
+);
+
+mount(
+  integrationsRouter,
+  "/api/integrations",
+  integrationEndpoints.listDrift,
+  [...requireLabProtected, requireOrgType("LAB")],
+  async (c, { query }) => {
+    const member = c.get("member");
+    const { target } = query;
     const rows = await orgDb(member.organizationId).transaction((o) =>
       buildIntegrationDriftQueue(
         {
@@ -2995,46 +2491,178 @@ export const integrationsRouter = createRouter<{
         o,
       ),
     );
-    return c.json({ data: rows });
-  })
-  .post(
-    "/drift/:linkId/acknowledge",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireRole(["admin", "owner"]),
-    zValidator(
-      "json",
-      z.object({
-        reason: z
-          .string()
-          .min(1)
-          .max(500)
-          .transform((value) => value.trim())
-          .refine((value) => value.length > 0, "Motivo é obrigatório"),
-      }),
-    ),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const linkId = c.req.param("linkId");
-      const { reason } = c.req.valid("json");
-      const result = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        ({ o }) =>
-          acknowledgeIntegrationDrift(
-            {
-              organizationId: member.organizationId,
-              linkId,
-              actorUserId: session.user.id,
-              reason,
-            },
-            o,
-          ),
+    return { data: rows };
+  },
+);
+
+// Not an SDK endpoint: the browser lands here from Conta Azul's authorization
+// page (the redirect URI) and is answered with a redirect, never JSON.
+integrationsRouter.get(
+  "/conta-azul/oauth/callback",
+  zValidator("query", OAuthCallbackQuerySchema),
+  async (c) => {
+    const input = c.req.valid("query");
+    const stateSecret = getContaAzulStateSecret(c.env);
+
+    let state: Awaited<ReturnType<typeof verifyContaAzulOAuthState>>;
+    try {
+      state = await verifyContaAzulOAuthState({
+        state: input.state,
+        stateSecret,
+      });
+    } catch {
+      // Expired/tampered/replayed state is a client error, not a server fault.
+      return c.redirect(
+        buildContaAzulOAuthErrorUrl(c.env, null, "invalid_state"),
       );
-      if (!result.ok) {
-        throw invalid("integration_reason_required", "Motivo é obrigatório");
+    }
+
+    const callbackContext = await resolveContaAzulOAuthCallbackContext(state);
+    // The laboratory's application; removed since the flow started → nothing
+    // can redeem the code.
+    const config = await resolveContaAzulOAuthConfig({
+      organizationId: callbackContext.organizationId,
+      env: c.env,
+    });
+    if (!config) {
+      return c.redirect(
+        buildContaAzulOAuthErrorUrl(c.env, state.returnTo, "app_missing"),
+      );
+    }
+
+    let tokenBundle: Awaited<
+      ReturnType<typeof exchangeContaAzulAuthorizationCode>
+    >;
+    try {
+      tokenBundle = await exchangeContaAzulAuthorizationCode(config, {
+        code: input.code,
+      });
+    } catch (error) {
+      // Provider-rejected code (invalid/expired) → recoverable client error.
+      if (error instanceof ContaAzulOAuthError) {
+        return c.redirect(
+          buildContaAzulOAuthErrorUrl(c.env, state.returnTo, "exchange_failed"),
+        );
       }
-      return c.json({ data: { ok: true } });
-    },
-  );
+      throw error;
+    }
+    const connection = await upsertContaAzulConnection({
+      organizationId: callbackContext.organizationId,
+      actorUserId: callbackContext.userId,
+      tokenBundle,
+      env: c.env,
+    });
+
+    await orgDb(callbackContext.organizationId).transaction((o) =>
+      writeIntegrationEvent(
+        {
+          integrationId: connection.integrationId,
+          organizationId: callbackContext.organizationId,
+          level: "info",
+          event: "integration.conta_azul.connected",
+          message: "Conta Azul conectada via OAuth",
+          details: {
+            provider: "conta_azul",
+            accessTokenExpiresAt: connection.accessTokenExpiresAt,
+          },
+        },
+        o,
+      ),
+    );
+
+    await orgDb(callbackContext.organizationId).transaction((o) =>
+      writeOrganizationIntegrationEvent(
+        {
+          organizationId: callbackContext.organizationId,
+          actorUserId: callbackContext.userId,
+          actorMemberId: callbackContext.memberId,
+          action: "integration.conta_azul.connected",
+          entityId: connection.integrationId,
+          details: {
+            provider: "conta_azul",
+            accessTokenExpiresAt: connection.accessTokenExpiresAt,
+          },
+        },
+        o,
+      ),
+    );
+
+    return c.redirect(buildContaAzulOAuthReturnUrl(c.env, state.returnTo));
+  },
+);
+
+// Plain routes below: nothing in the frontends calls them (the list already
+// carries each integration's overview, last runs and last events).
+integrationsRouter.get(
+  "/:id/overview",
+  ...requireLabProtected,
+  requireOrgType("LAB"),
+  requireRole(["admin", "owner"]),
+  async (c) => {
+    const member = c.get("member");
+    const id = c.req.param("id");
+    const record = await requireLabIntegration(member.organizationId, id);
+
+    return c.json({
+      data: await orgDb(record.integration.organizationId).transaction((o) =>
+        buildIntegrationOverview(record, o),
+      ),
+    });
+  },
+);
+
+integrationsRouter.get(
+  "/:id/runs",
+  ...requireLabProtected,
+  requireOrgType("LAB"),
+  requireRole(["admin", "owner"]),
+  async (c) => {
+    const member = c.get("member");
+    const id = c.req.param("id");
+    await requireLabIntegration(member.organizationId, id);
+
+    const runs = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(integrationSyncRun)
+        .where(
+          and(
+            eq(integrationSyncRun.integrationId, id),
+            eq(integrationSyncRun.organizationId, member.organizationId),
+          ),
+        )
+        .orderBy(desc(integrationSyncRun.createdAt))
+        .limit(20),
+    );
+
+    return c.json({ data: runs });
+  },
+);
+
+integrationsRouter.get(
+  "/:id/events",
+  ...requireLabProtected,
+  requireOrgType("LAB"),
+  requireRole(["admin", "owner"]),
+  async (c) => {
+    const member = c.get("member");
+    const id = c.req.param("id");
+    await requireLabIntegration(member.organizationId, id);
+
+    const events = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(integrationEventLog)
+        .where(
+          and(
+            eq(integrationEventLog.integrationId, id),
+            eq(integrationEventLog.organizationId, member.organizationId),
+          ),
+        )
+        .orderBy(desc(integrationEventLog.createdAt))
+        .limit(30),
+    );
+
+    return c.json({ data: events });
+  },
+);

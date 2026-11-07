@@ -61,6 +61,7 @@ import type { ServiceOrdersApi } from "./modules/service-orders";
 import type { SignaturesApi } from "./modules/signatures";
 import type { SigningCertificatesApi } from "./modules/signing-certificates";
 import type { SpcApi } from "./modules/spc";
+import type { IntegrationsApi } from "./modules/integrations";
 import type { SsoApi } from "./modules/sso";
 import type { StandardsApi } from "./modules/standards";
 import type { TrainingRecordsApi } from "./modules/training-records";
@@ -363,88 +364,9 @@ export type { CompetencesApi, TrainingRecordsApi };
 // `endpoints/visits.ts`; `modules/calibration-requests.ts`, `modules/visits.ts`).
 export type { CalibrationRequestsApi, VisitsApi };
 
-export interface IntegrationsApi {
-  list<TResponse = unknown>(): Promise<TResponse>;
-  create<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  startContaAzulOAuth<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  getContaAzulApp<TResponse = unknown>(): Promise<TResponse>;
-  saveContaAzulApp<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  removeContaAzulApp<TResponse = unknown>(): Promise<TResponse>;
-  validate<TResponse = unknown>(id: string): Promise<TResponse>;
-  update<TResponse = unknown>(id: string, input: unknown): Promise<TResponse>;
-  updateContaAzulConfig<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  listContaAzulCatalog<TResponse = unknown>(
-    id: string,
-    catalog:
-      | "accounts"
-      | "balances"
-      | "categories"
-      | "cost-centers"
-      | "dre-categories"
-      | "product-categories"
-      | "product-cest"
-      | "product-ecommerce-brands"
-      | "product-ecommerce-categories"
-      | "product-ncm"
-      | "products"
-      | "product-units"
-      | "sellers"
-      | "services"
-      | "transfers",
-  ): Promise<TResponse>;
-  pollContaAzul<TResponse = unknown>(
-    id: string,
-    input?: unknown,
-  ): Promise<TResponse>;
-  pollContaAzulFiscal<TResponse = unknown>(
-    id: string,
-    input?: unknown,
-  ): Promise<TResponse>;
-  linkContaAzulInvoicesToMdfe<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  pollContaAzulPayables<TResponse = unknown>(
-    id: string,
-    input?: unknown,
-  ): Promise<TResponse>;
-  pollContaAzulProtocols<TResponse = unknown>(
-    id: string,
-    input?: unknown,
-  ): Promise<TResponse>;
-  pollContaAzulDrift<TResponse = unknown>(
-    id: string,
-    input?: unknown,
-  ): Promise<TResponse>;
-  getContaAzulSchedule<TResponse = unknown>(id: string): Promise<TResponse>;
-  refreshContaAzul<TResponse = unknown>(id: string): Promise<TResponse>;
-  disconnectContaAzul<TResponse = unknown>(id: string): Promise<TResponse>;
-  toggle<TResponse = unknown>(
-    id: string,
-    input: { enabled: boolean },
-  ): Promise<TResponse>;
-  previewSync<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  sync<TResponse = unknown>(id: string, input: unknown): Promise<TResponse>;
-  schedule<TResponse = unknown>(id: string, input: unknown): Promise<TResponse>;
-  listRunItems<TResponse = unknown>(
-    id: string,
-    runId: string,
-  ): Promise<TResponse>;
-  retryRun<TResponse = unknown>(id: string, runId: string): Promise<TResponse>;
-  listDrift<TResponse = unknown>(input?: {
-    target?: string;
-  }): Promise<TResponse>;
-  acknowledgeDrift<TResponse = unknown>(
-    linkId: string,
-    input: { reason: string },
-  ): Promise<TResponse>;
-}
+// Integrations: the DTOs are the contract schemas' types (`endpoints/integrations.ts`);
+// the client is generated from the endpoint definitions (`modules/integrations.ts`).
+export type { IntegrationsApi };
 
 // =============================================================================
 // SERVICE ORDERS: the DTOs are the contract schemas' types

@@ -12,6 +12,7 @@
     "./standards-fixtures": "./src/standards.fixtures.ts",
     "./assets-fixtures": "./src/endpoints/assets.fixtures.ts",
     "./customers-fixtures": "./src/endpoints/customers.fixtures.ts",
+    "./integrations-fixtures": "./src/endpoints/integrations.fixtures.ts",
     "./non-conformances-fixtures": "./src/endpoints/non-conformances.fixtures.ts",
     "./capa-fixtures": "./src/endpoints/capa.fixtures.ts",
     "./finance-fixtures": "./src/endpoints/finance.fixtures.ts",

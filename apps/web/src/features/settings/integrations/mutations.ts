@@ -21,7 +21,8 @@ export function useConnectorMutations({
   onRefresh: () => Promise<void>
 }) {
   const validate = useMutation({
-    mutationFn: async () => calibraApi.integrations.validate(integrationId),
+    mutationFn: async () =>
+      calibraApi.integrations.validate({ params: { id: integrationId } }),
     onSuccess: async () => {
       toast.success('Conexão validada')
       await onRefresh()
@@ -35,7 +36,10 @@ export function useConnectorMutations({
 
   const toggle = useMutation({
     mutationFn: async ({ enabled }: { enabled: boolean }) =>
-      calibraApi.integrations.toggle(integrationId, { enabled }),
+      calibraApi.integrations.toggle({
+        params: { id: integrationId },
+        body: { enabled },
+      }),
     onSuccess: async () => {
       toast.success('Status da integração atualizado')
       await onRefresh()
@@ -49,7 +53,10 @@ export function useConnectorMutations({
 
   const sync = useMutation({
     mutationFn: async ({ target }: { target: SyncTarget }) =>
-      calibraApi.integrations.sync(integrationId, { target, limit: 50 }),
+      calibraApi.integrations.sync({
+        params: { id: integrationId },
+        body: { target, limit: 50 },
+      }),
     onSuccess: async (data, variables) => {
       const queued =
         data && typeof data === 'object' && 'queued' in data && data.queued
@@ -77,10 +84,9 @@ export function useConnectorMutations({
       mode: IntegrationRunMode
       frequency?: IntegrationScheduleFrequency
     }) =>
-      calibraApi.integrations.schedule(integrationId, {
-        target,
-        mode,
-        frequency,
+      calibraApi.integrations.schedule({
+        params: { id: integrationId },
+        body: { target, mode, frequency },
       }),
     onSuccess: async () => {
       toast.success('Agendamento atualizado')
@@ -95,7 +101,9 @@ export function useConnectorMutations({
 
   const retry = useMutation({
     mutationFn: async ({ runId }: { runId: string }) =>
-      calibraApi.integrations.retryRun(integrationId, runId),
+      calibraApi.integrations.retryRun({
+        params: { id: integrationId, runId },
+      }),
     onSuccess: async () => {
       toast.success('Reprocessamento disparado')
       await onRefresh()

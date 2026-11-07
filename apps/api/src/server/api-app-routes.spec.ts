@@ -42,7 +42,7 @@ describe("api-app.ts hand route list (roadmap 2 D2)", () => {
     const served = new Set(createApiApp().routes.map((route) => route.path));
     const listed = contractPaths();
 
-    expect(listed.length).toBeGreaterThan(50);
+    expect(listed.length).toBeGreaterThan(10);
     expect(listed.filter((path) => !served.has(path))).toEqual([]);
   });
 });

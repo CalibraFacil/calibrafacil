@@ -1,8 +1,5 @@
 import type { CalibraApi } from "./types";
-import {
-  createRawCloudClient,
-  type CreateCloudApiClientOptions,
-} from "./transport/cloud";
+import type { CreateCloudApiClientOptions } from "./transport/cloud";
 import { createCloudEndpointTransport } from "./transport/endpoint-client";
 import type { CreateDesktopHybridApiClientOptions } from "./transport/desktop";
 import {
@@ -69,57 +66,6 @@ export function createCloudApiClient(
   options: CreateCloudApiClientOptions,
 ): CalibraApi {
   const endpointTransport = createCloudEndpointTransport(options);
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- the raw Hono client type is narrowed to the browser-supported route subset used by runtime modules.
-  const rawCloudClient = createRawCloudClient(options) as unknown as {
-    api: {
-      integrations: {
-        $get(): Promise<Response>;
-        $post(input: { json: unknown }): Promise<Response>;
-        ":id": {
-          $put(input: {
-            param: { id: string };
-            json: unknown;
-          }): Promise<Response>;
-          validate: {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          toggle: {
-            $post(input: {
-              param: { id: string };
-              json: { enabled: boolean };
-            }): Promise<Response>;
-          };
-          sync: {
-            $post(input: {
-              param: { id: string };
-              json: unknown;
-            }): Promise<Response>;
-            preview: {
-              $post(input: {
-                param: { id: string };
-                json: unknown;
-              }): Promise<Response>;
-            };
-          };
-          schedule: {
-            $post(input: {
-              param: { id: string };
-              json: unknown;
-            }): Promise<Response>;
-          };
-          runs: {
-            ":runId": {
-              retry: {
-                $post(input: {
-                  param: { id: string; runId: string };
-                }): Promise<Response>;
-              };
-            };
-          };
-        };
-      };
-    };
-  };
 
   return {
     dashboard: createDashboardApi(endpointTransport, options),
@@ -162,7 +108,7 @@ export function createCloudApiClient(
       options,
     ),
     accreditedScope: createAccreditedScopeApi(endpointTransport, options),
-    integrations: createIntegrationsApi(rawCloudClient),
+    integrations: createIntegrationsApi(endpointTransport, options),
     services: createServicesApi(endpointTransport, options),
     materials: createMaterialsApi(endpointTransport, options),
     methods: createMethodsApi(endpointTransport, options),

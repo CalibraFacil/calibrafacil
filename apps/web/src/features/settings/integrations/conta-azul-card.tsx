@@ -50,11 +50,7 @@ import {
   integrationReadinessBadgeVariant,
 } from '@/features/settings/integrations-model'
 import { contaAzulAppQueryOptions } from '@/features/settings/queries'
-import type {
-  ContaAzulScheduleResponse,
-  ContaAzulOAuthStartResponse,
-  IntegrationSummary,
-} from '@/features/settings/types'
+import type { IntegrationSummary } from '@/features/settings/types'
 import {
   ContaAzulAppDialog,
   ContaAzulAppSetup,
@@ -164,8 +160,8 @@ function ContaAzulConnect({
   const appQuery = useQuery(contaAzulAppQueryOptions())
   const oauthMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.integrations.startContaAzulOAuth<ContaAzulOAuthStartResponse>({
-        returnTo: '/dashboard/settings/integrations',
+      calibraApi.integrations.startContaAzulOAuth({
+        body: { returnTo: '/dashboard/settings/integrations' },
       }),
     onSuccess: (data) => {
       window.location.assign(data.authorizationUrl)
@@ -324,9 +320,9 @@ function ContaAzulPanel({
   const scheduleQuery = useQuery({
     queryKey: ['integrations', integration.id, 'conta-azul', 'schedule'],
     queryFn: () =>
-      calibraApi.integrations.getContaAzulSchedule<ContaAzulScheduleResponse>(
-        integration.id,
-      ),
+      calibraApi.integrations.getContaAzulSchedule({
+        params: { id: integration.id },
+      }),
     enabled: integration.status === 'ACTIVE',
   })
 
