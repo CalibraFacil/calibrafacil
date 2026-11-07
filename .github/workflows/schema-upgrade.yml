@@ -55,17 +55,23 @@ jobs:
           node-version-file: .nvmrc
           cache: "pnpm"
 
-      - name: Start PostgreSQL and install the matching client
+      - name: Read the server image
+        id: pg
         run: |
           image=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*(postgres:[^[:space:]]+).*/\1/p' deploy/compose.yaml | head -1)
-          major=$(echo "$image" | sed -E 's/^postgres:([0-9]+).*/\1/')
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "major=$(echo "$image" | sed -E 's/^postgres:([0-9]+).*/\1/')" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/postgres-client
+        with:
+          major: ${{ steps.pg.outputs.major }}
+
+      - name: Start PostgreSQL
+        env:
+          IMAGE: ${{ steps.pg.outputs.image }}
+        run: |
           docker run --detach --name schema-pg --env POSTGRES_PASSWORD=postgres \
-            --publish 127.0.0.1:5432:5432 "$image"
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install -y "postgresql-client-${major}"
+            --publish 127.0.0.1:5432:5432 "$IMAGE"
           for attempt in $(seq 1 30); do
             pg_isready -h 127.0.0.1 -U postgres && break
             sleep 2
