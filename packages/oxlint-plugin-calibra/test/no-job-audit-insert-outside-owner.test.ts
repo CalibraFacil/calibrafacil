@@ -9,7 +9,7 @@ const DRIZZLE_INSERT =
 describe("calibra/no-job-audit-insert-outside-owner (real oxlint)", () => {
   it("REQ-AUD-3: reports insert(jobAuditLog) in a job command, a route and the worker", async () => {
     await expectViolation(RULE, {
-      "apps/api/src/modules/jobs/new-command.ts": DRIZZLE_INSERT,
+      "apps/api/src/domains/jobs/commands/new-command.ts": DRIZZLE_INSERT,
     });
     await expectViolation(RULE, {
       "apps/api/src/domains/jobs/routes/jobs.ts": DRIZZLE_INSERT,
@@ -55,7 +55,7 @@ describe("calibra/no-job-audit-insert-outside-owner (real oxlint)", () => {
 
   it("REQ-AUD-3: reads, updates, deletes and other tables are not inserts to guard", async () => {
     await expectClean(RULE, {
-      "apps/api/src/routes/other.ts":
+      "apps/api/src/domains/example/routes/other.ts":
         "export const a = (db: any) => db.select().from(jobAuditLog);\n" +
         "export const b = (db: any) => db.update(jobAuditLog).set({});\n" +
         "export const c = (db: any) => db.insert(assetAuditLog).values({});\n" +
@@ -67,8 +67,8 @@ describe("calibra/no-job-audit-insert-outside-owner (real oxlint)", () => {
 
   it("REQ-AUD-3: tests and test helpers are allowlisted explicitly", async () => {
     await expectClean(RULE, {
-      "apps/api/src/routes/foo.spec.ts": DRIZZLE_INSERT,
-      "apps/api/src/routes/foo.int.spec.ts": DRIZZLE_INSERT,
+      "apps/api/src/domains/example/routes/foo.spec.ts": DRIZZLE_INSERT,
+      "apps/api/src/domains/example/routes/foo.int.spec.ts": DRIZZLE_INSERT,
       "apps/api/src/lib/__tests__/bar.ts": DRIZZLE_INSERT,
       "apps/api/test/integration/tenancy-fixture.ts": DRIZZLE_INSERT,
       "apps/worker/test/integration/db.ts": DRIZZLE_INSERT,

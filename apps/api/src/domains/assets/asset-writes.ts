@@ -17,7 +17,7 @@ import { deriveRegulatedNextDate } from "./regulated-interval";
 
 /**
  * The asset writes of a laboratory, shared by the lab routes
- * (`routes/assets.ts`) and the public API v2 (`routes/public-api-v2/assets-*.ts`).
+ * (`domains/assets/routes/assets.ts`) and the public API v2 (`routes/public-api-v2/assets-*.ts`).
  */
 
 type AssetRow = typeof asset.$inferSelect;

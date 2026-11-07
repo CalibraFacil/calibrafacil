@@ -13,7 +13,7 @@
  * How the lists were derived: every Better Auth client call in `apps/web`,
  * `apps/portal` and `apps/desktop` (`labAuthClient`, `portalAuthClient` and the
  * hooks of `@calibra-facil/auth/client`), the two raw fetches of the magic-link
- * verification pages and the OIDC redirect URI built in `routes/sso.ts`, each
+ * verification pages and the OIDC redirect URI built in `domains/org/routes/sso.ts`, each
  * mapped to its endpoint path with the endpoint inventory of the instances
  * (`Object.values(createLabAuth().api).map((endpoint) => endpoint.path)`).
  * `auth-route-allowlist.spec.ts` pins the lists; add an entry here, with the
@@ -79,7 +79,7 @@ const LAB_ROUTES: readonly AllowedAuthRoute[] = [
   get("/list-sessions"),
   post("/revoke-other-sessions"),
   post("/revoke-sessions"),
-  // OIDC redirect URI of a laboratory's SSO provider (`routes/sso.ts`).
+  // OIDC redirect URI of a laboratory's SSO provider (`domains/org/routes/sso.ts`).
   get("/sso/callback/:providerId"),
 ];
 

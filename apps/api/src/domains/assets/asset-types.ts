@@ -4,7 +4,7 @@ import { assetType } from "@calibra-facil/db/schema";
 import { eq, ilike, or } from "drizzle-orm";
 
 /**
- * Reads of the GLOBAL asset-type catalog (routes/asset-types.ts). `asset_type`
+ * Reads of the GLOBAL asset-type catalog (domains/assets/routes/asset-types.ts). `asset_type`
  * has no organization column and no row-level-security policy (tenancy.ts), so
  * these statements are not bound to a laboratory: any connection role may read
  * the catalog, which is why they stay on the plain `db` handle, in a lib.

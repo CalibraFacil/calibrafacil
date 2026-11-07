@@ -20,7 +20,7 @@ function moves<S extends string, C extends string>(
 }
 
 // commercial_agreement.status: a customer's price agreement.
-//   create      routes/finance/contracts.ts POST /
+//   create      domains/finance/routes/contracts.ts POST /
 //   set_status  PUT /:id (the form's status: any)
 //   activate    POST /:id/activate (needs service terms)
 //   cancel      POST /:id/cancel
@@ -51,11 +51,11 @@ export const COMMERCIAL_AGREEMENT_MACHINE = defineStateMachine({
 });
 
 // billing_document.status: an invoice / receivable document.
-//   create          routes/finance/documents.ts POST / and the service-order
-//                     billing (lib/service-order-workflow.ts): DRAFT; the
-//                     job-batch billing (lib/finance.ts) issues on creation
-//   issue           POST /:id/issue, lib/finance.ts
-//   record_payment  routes/finance/receipts.ts: the document of a paid
+//   create          domains/finance/routes/documents.ts POST / and the service-order
+//                     billing (domains/service-orders/service-order-workflow.ts): DRAFT; the
+//                     job-batch billing (domains/finance/finance.ts) issues on creation
+//   issue           POST /:id/issue, domains/finance/finance.ts
+//   record_payment  domains/finance/routes/receipts.ts: the document of a paid
 //                     installment (any document but a void one)
 //   void            POST /:id/void (any document but a void one)
 //   sync_remote     the Conta Azul poll: the status the ERP's installments add
@@ -93,7 +93,7 @@ export const BILLING_DOCUMENT_MACHINE = defineStateMachine({
   ],
 });
 
-// billing_document.export_status: the push to the lab's ERP (lib/finance.ts).
+// billing_document.export_status: the push to the lab's ERP (domains/finance/finance.ts).
 //   create  NOT_EXPORTED
 //   export  a successful push (a re-export keeps EXPORTED)
 //   fail    a refused push or an adapter error (retried by exporting again)
@@ -114,7 +114,7 @@ export const BILLING_EXPORT_MACHINE = defineStateMachine({
 
 // receivable_installment.status
 //   create       with its document: OPEN
-//   pay          routes/finance/receipts.ts (an open or overdue installment)
+//   pay          domains/finance/routes/receipts.ts (an open or overdue installment)
 //   void         POST /documents/:id/void: every installment of the document
 //   sync_remote  the Conta Azul poll: the ERP's status, whatever it was
 export const RECEIVABLE_INSTALLMENT_MACHINE = defineStateMachine({

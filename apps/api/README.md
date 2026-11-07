@@ -80,13 +80,19 @@ Or via CI/CD on push to main branch.
 
 ```
 src/
-├── index.ts           # App entry, route composition
-├── routes/            # API route handlers
-│   ├── customers.ts
-│   ├── assets.ts
-│   ├── jobs.ts
-│   ├── finance/
+├── index.ts           # App entry
+├── app.ts             # Hono app wiring
+├── domains/<domain>/  # one folder per business domain: routes/, commands, queries, cron work,
+│   │                  # notifications, specs; index.ts is the library entry, routes/index.ts the mount entry
+│   ├── jobs/          # (certificates/, commands/, oot/)
+│   ├── finance/       # (integrations/: ERP and Conta Azul)
+│   ├── service-orders/
 │   └── ...
-├── services/          # Business logic
-└── lib/               # Utilities
+├── lib/               # cross-domain platform: org-db, audit, background jobs, storage, errors, ...
+├── middleware/        # permission, request-actor, api-key-auth
+├── server/            # CORS, rate limit, error handling, route mounts
+├── cron/              # schedule table, runner, dispatcher
+└── cli/               # operator commands
 ```
+
+See `docs/architecture/api-domains.md` for the rules (a lint rule keeps domains behind their entries).

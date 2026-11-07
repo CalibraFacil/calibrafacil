@@ -112,7 +112,9 @@ keep these in parity:
   queue (`app_queue_job`) drained by the always-on worker in production (`BACKGROUND_JOBS_MODE=queue`).
   The API is self-hosted only: `apps/api/src/bun.ts` serves the app plus the `/api/cron/*` handlers,
   and `apps/api/src/lib/cron-scheduler.ts` schedules them in-process (`CRON_SCHEDULER=internal`). The Hono app itself
-  is wired in `apps/api/src/app.ts` with route handlers in `apps/api/src/routes/`. Deployment
+  is wired in `apps/api/src/app.ts` and mounts each domain's routers (`apps/api/src/server/route-mounts.ts`); the code is organised
+  by domain under `apps/api/src/domains/<domain>/`, with `lib/` keeping only cross-domain infrastructure
+  (`docs/architecture/api-domains.md`, enforced by `calibra/no-api-domain-boundary-violations`). Deployment
   URLs, CORS and auth origins all come from environment variables (see `DEPLOYMENT.md`).
 - **Desktop/offline:** `apps/desktop` (Electron) embeds the web UI and talks to `apps/local-server`,
   a local Hono server backed by SQLite via `packages/local-db`. `packages/local-db` keeps an

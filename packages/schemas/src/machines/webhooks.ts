@@ -6,7 +6,7 @@ import {
 import { defineStateMachine } from "../state-machine";
 
 // public_api_webhook_subscription.status
-//   create        routes/public-api-v2/webhooks.ts POST (ACTIVE or INACTIVE)
+//   create        domains/public-api/routes/public-api-v2/webhooks.ts POST (ACTIVE or INACTIVE)
 //   set_status    the same route's PATCH (switched on or off by the integrator)
 //   auto_disable  the delivery worker (packages/jobs-core webhook-delivery.ts),
 //                   after PUBLIC_API_WEBHOOK_AUTO_DISABLE_AFTER exhausted deliveries

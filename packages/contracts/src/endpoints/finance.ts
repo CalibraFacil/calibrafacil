@@ -18,7 +18,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
  * certificate-release policies and automatic-send rules, and the dashboards
  * (overview, operations-to-cash, revenue leakage, cash forecast, margins).
  * Response schemas are wire schemas written from what the handlers in
- * `apps/api/src/routes/finance/` return; the request schemas the server
+ * `apps/api/src/domains/finance/routes/` return; the request schemas the server
  * validated with live here now.
  *
  * Not client-facing, so not defined here: `GET /api/finance/access` and

@@ -2,11 +2,11 @@
 // (portal, public API), reviewed by the lab and converted into jobs.
 //   create   apps/api/src/domains/portal/routes/portal-requests.ts, public-api-v2/requests-write.ts
 //   edit     public-api-v2/requests-write.ts PATCH (observations, due date)
-//   review   routes/calibration-requests.ts POST /:id/review (internal notes)
-//   approve  routes/calibration-requests.ts POST /:id/approve
-//   reject   routes/calibration-requests.ts POST /:id/reject, and the public
+//   review   domains/visits/routes/calibration-requests.ts POST /:id/review (internal notes)
+//   approve  domains/visits/routes/calibration-requests.ts POST /:id/approve
+//   reject   domains/visits/routes/calibration-requests.ts POST /:id/reject, and the public
 //              API cancel (DELETE), which records a rejection
-//   convert  routes/calibration-requests.ts POST /:id/convert (jobs created)
+//   convert  domains/visits/routes/calibration-requests.ts POST /:id/convert (jobs created)
 import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine } from "../state-machine";
 

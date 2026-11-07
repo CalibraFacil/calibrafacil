@@ -19,7 +19,7 @@ import { uniqueSlug } from "../../lib/unique-slug";
 
 /**
  * The customer writes of a laboratory, shared by the lab routes
- * (`routes/customers.ts`) and the public API v2 (`routes/public-api-v2/customers.ts`):
+ * (`domains/customers/routes/customers.ts`) and the public API v2 (`domains/public-api/routes/public-api-v2/customers.ts`):
  * one place for the CLIENT organization, the insert and its audit row, the
  * field-level update audit and the delete that keeps the ISO/IEC 17025 trail.
  */

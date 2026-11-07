@@ -72,7 +72,8 @@ describe("calibra/no-process-env (real oxlint)", () => {
 
   it("REQ-CFG-5: an unlisted file in the same directory is not grandfathered", async () => {
     await expectViolation(RULE, {
-      "apps/api/src/routes/new-route.ts": "export const a = process.env.A;\n",
+      "apps/api/src/domains/example/routes/new-route.ts":
+        "export const a = process.env.A;\n",
     });
   });
 });

@@ -884,7 +884,7 @@ mount(
 
 // =========================================================================
 // POST /:id/submit - Submit job for review (transition from DRAFT/IN_PROGRESS to REVIEW)
-// Transport only: the policy is `submitJob` (modules/jobs/submit-job.ts).
+// Transport only: the policy is `submitJob` (domains/jobs/commands/submit-job.ts).
 // =========================================================================
 mount(
   jobsRouter,
@@ -933,7 +933,7 @@ mount(
 
 // =========================================================================
 // POST /:id/execute - Save execution data (worksheet auto-save / manual save)
-// Transport only: the policy is `executeJob` (modules/jobs/submit-job.ts).
+// Transport only: the policy is `executeJob` (domains/jobs/commands/submit-job.ts).
 // =========================================================================
 mount(
   jobsRouter,

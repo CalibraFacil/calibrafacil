@@ -2,8 +2,8 @@
 // tool): which application statements reach a tenant table without an organization.
 //
 //   pnpm --filter @calibra-facil/api rls:shadow-report \
-//     [--files src/routes/a.int.spec.ts,src/routes/b.int.spec.ts] \
-//     [--group src/routes/jobs,modules/sync] [--json out.json] [--markdown]
+//     [--files src/domains/jobs/routes/a.int.spec.ts,src/domains/jobs/routes/b.int.spec.ts] \
+//     [--group src/domains/jobs,domains/sync] [--json out.json] [--markdown]
 //
 // It runs every API integration spec (`apps/api/**/*.int.spec.ts`; the include of
 // apps/api/vitest.integration.config.ts is `src/**`, nothing lives elsewhere) three
@@ -25,13 +25,13 @@
 // `orgDb(...).transaction`). The statements are also grouped by the application
 // module that issued them (the innermost source file that obtained the database
 // handle, outside drizzle, packages/db, lib/org-db.ts and the harness) and by layer
-// (`routes`, `lib`, `middleware`, `modules/jobs`, `domains/jobs`). The request path is recorded too
+// (`lib`, `middleware`, `domains/jobs`). The request path is recorded too
 // (`--json-full`), but specs mount a router at `/`, so it is no usable group. It
 // changes nothing: it only reads test output.
 //
 // Narrowing: `--files` lists exact spec paths (relative to apps/api); `--group` keeps
 // the specs whose path starts with one of the comma-separated prefixes (`src/` is
-// optional: `routes/jobs`, `modules`, `lib/org-db`). Both given: `--files` wins.
+// optional: `domains/jobs`, `domains`, `lib/org-db`). Both given: `--files` wins.
 //
 // `--json <file>` writes the summary a later slice diffs against
 // docs/architecture/rls-shadow-baseline.json: counts per spec / module / layer

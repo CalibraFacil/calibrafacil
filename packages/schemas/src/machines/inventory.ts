@@ -24,9 +24,9 @@ function createdIn<S extends string>(
 
 // asset.status: the customer instrument's condition, a classification the lab
 // edits freely. Every status may be created and set from every other:
-//   create      routes/assets.ts POST, public-api-v2/assets-create.ts, the
+//   create      domains/assets/routes/assets.ts POST, public-api-v2/assets-create.ts, the
 //                 desktop asset create (sync apply-asset-create.ts)
-//   set_status  routes/assets.ts PUT, public-api-v2/assets-update.ts
+//   set_status  domains/assets/routes/assets.ts PUT, public-api-v2/assets-update.ts
 // SCRAPPED is reversible by design: asset statuses are free classifications.
 export const ASSET_STATUSES = [
   "ACTIVE",
@@ -55,13 +55,13 @@ export const ASSET_MACHINE = defineStateMachine({
 
 // reference_standard.status: whether a standard may be used in a measurement
 // (judgeExecutionStandards refuses any status but ACTIVE).
-//   create      routes/standards.ts POST (any status)
-//   set_status  routes/standards.ts PUT /:id (the status picker, the "flag out
+//   create      domains/standards/routes/standards.ts POST (any status)
+//   set_status  domains/standards/routes/standards.ts PUT /:id (the status picker, the "flag out
 //                 of tolerance" and "send for calibration" actions of the list);
 //                 never back to ACTIVE from OUT_OF_TOLERANCE/SENT_FOR_CALIBRATION
-//   renew       routes/standards.ts POST /:id/renew-certificate: a new
+//   renew       domains/standards/routes/standards.ts POST /:id/renew-certificate: a new
 //                 certificate brings an out-of-tolerance or sent standard back
-//   retire      routes/standards.ts DELETE /:id (soft delete)
+//   retire      domains/standards/routes/standards.ts DELETE /:id (soft delete)
 export const REFERENCE_STANDARD_STATUSES = [
   "ACTIVE",
   "INACTIVE",
@@ -110,9 +110,9 @@ export const REFERENCE_STANDARD_MACHINE = defineStateMachine({
 // mass_composition_profile.status: INACTIVE exactly when soft-deleted
 // (deletedAt set). Saving a profile for the same class and nominal reactivates
 // the deleted row.
-//   create      routes/standards.ts PUT /mass-profiles (new row)
+//   create      domains/standards/routes/standards.ts PUT /mass-profiles (new row)
 //   reactivate  the same, on a deleted row
-//   retire      routes/standards.ts DELETE /mass-profiles/:id
+//   retire      domains/standards/routes/standards.ts DELETE /mass-profiles/:id
 const MASS_PROFILE_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 export type MassProfileStatus = (typeof MASS_PROFILE_STATUSES)[number];
 

@@ -32,7 +32,14 @@ apps/api/src/
 - Specs are exempt (a spec may reach any module; `vi.mock` needs the real module id) and live next
   to the file they test. Cross-cutting specs live in `lib/` (database level) or `server/` (request
   level).
-- Domains form a DAG (`pnpm check:cycles` enforces no import cycles). See the map below.
+- Domains form a DAG (`pnpm check:cycles` enforces no import cycles): `customers -> portal -> {jobs, visits,
+assets, org}`, `visits -> jobs`, `jobs -> {assets, finance, org, quality}`, `quality -> org`, `standards -> jobs`,
+  `verify -> jobs`, `service-orders -> finance`, `catalog -> finance`, `sync -> {jobs, assets, service-orders}`,
+  `public-api -> {jobs, assets, customers, visits, finance}`; `org`, `finance`, `assets`, `methods`,
+  `notifications` and `reports` import no other domain. Two things that look like they belong to one
+  domain are not split because both directions exist (finance and the ERP integration are one domain).
+- Code that `middleware/` or `server/` needs from a domain moves down into `lib/` (the portal service
+  account's error class is in `lib/portal-service-account-error.ts` because the server maps it).
 
 ## Domains
 

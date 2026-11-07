@@ -11,7 +11,7 @@ import { runIntegrationSync } from "./sync-run";
  * Conta Azul's client (OAuth refresh, catalog, push) lives in the API's
  * integrations module, not in `@calibra-facil/jobs-core`, so these syncs are
  * never `app_queue_job` rows and the worker cannot run them. The producers
- * (`routes/integrations.ts`, the scheduled-sync cron) call this directly. The
+ * (`domains/finance/routes/integrations.ts`, the scheduled-sync cron) call this directly. The
  * message is not a `BackgroundJobMessage` (see `ContaAzulSyncMessageSchema`), so
  * it cannot be passed to `enqueueBackgroundJob` by accident.
  *

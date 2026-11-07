@@ -19,7 +19,7 @@ import {
 import { orgDb } from "../../lib/org-db";
 
 /**
- * Lookups of the PUBLIC certificate verification routes (routes/verify.ts, no
+ * Lookups of the PUBLIC certificate verification routes (domains/verify/routes/verify.ts, no
  * session). The unguessable verification token IS the credential, and it yields
  * the laboratory that issued the certificate, so the lookup by token cannot be
  * bound to an organization yet: it runs on the SYSTEM path (`systemDb`, the

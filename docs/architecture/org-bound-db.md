@@ -66,7 +66,7 @@ fan-out, cron and queue sweeps. They run on the named **system path**: `systemDb
   unset, and then it IS the application connection, which is the owner ([runbook](../operations/row-level-security.md)).
 - It lives in lib modules, each with a comment saying why the statement cannot name an organization yet
   and an entry in `apps/api/test/integration/tenant-sql-allowlist.ts`; `calibra/no-raw-db-in-routes`
-  forbids `systemDb` / `getSystemDb` in `apps/api/src/routes/**` exactly like `db`, so a route reaches it
+  forbids `systemDb` / `getSystemDb` in `apps/api/src/domains/*/routes/**` exactly like `db`, so a route reaches it
   only through a named lib function.
 - Keep it small: a statement that learns the laboratory runs on it, and everything after that runs on
   `orgDb(thatLaboratory).transaction(...)`. The portal does exactly this: `resolvePortalCustomerScope`
@@ -78,7 +78,7 @@ fan-out, cron and queue sweeps. They run on the named **system path**: `systemDb
 - **`asset_type` writes.** `asset_type` is a global catalog; the change-log trigger of migration 0122 copies
   every write into the change log of EVERY laboratory, which a `calibra_app` session may not do (those rows
   belong to other organizations). The only writer is the seed (`seedAssetTypes`, run by `init` and `seed-demo`;
-  `routes/asset-types.ts` is read-only), and it now writes through `systemDb`: the owner connection, named
+  `domains/assets/routes/asset-types.ts` is read-only), and it now writes through `systemDb`: the owner connection, named
   and explicit. Chosen over a `SECURITY DEFINER` function because it needs no migration, no new privilege
   and no second copy of the write logic, and the catalog is maintained by the platform operator, not by a
   laboratory's session. Reads of the catalog stay on the application pool (no policy on a global table). If a
@@ -99,7 +99,7 @@ that no longer exist (`inOrgTransaction`, `withOrgReader`, `OrgScope`, `afterCom
   `ctx.tx` when that is all it needs); a lib that reads takes `ctx.o`, an `OrgDb` or a `Pick<OrgExecutor,
 "select">`. A caller with no transaction of its own opens `withOrg` (writes) or `orgDb(org).transaction`
   (reads). There is no "inside or outside" mode: no optional `executor`, no `scope`, no default to the raw `db`.
-- **`orgTransactionWithExecutor` is kept for the job approval only** (`modules/jobs/approve-job.ts`): its write
+- **`orgTransactionWithExecutor` is kept for the job approval only** (`domains/jobs/commands/approve-job.ts`): its write
   transaction sits between an object-storage read and the queue dispatch, and its compensation is a second
   transaction that must see a dispatch failure, so neither can be one `withOrg`.
 - **Routers render what they throw.** Route modules build their router with `createRouter`
@@ -109,11 +109,11 @@ that no longer exist (`inOrgTransaction`, `withOrgReader`, `OrgScope`, `afterCom
 ## The lint ratchet
 
 `calibra/no-raw-db-in-routes` (`packages/oxlint-plugin-calibra`) forbids the raw handle in
-`apps/api/src/routes/**`: `db` and `getDb()` from `@calibra-facil/db`, a namespace import reaching
+`apps/api/src/domains/*/routes/**`: `db` and `getDb()` from `@calibra-facil/db`, a namespace import reaching
 them (`import * as x`, `x.db`), a dynamic `import("@calibra-facil/db")`, and importing `db` or
 `getDb` by name from ANY module (so a lib that re-exports the raw handle is no way around it). No route is
 grandfathered since P2-18j (the baseline is gone, and so is the rule's `baseline` option): a route that needs a statement
-outside an organization calls a named lib function (`lib/identity.ts`, `lib/public-signup-store.ts`, ...),
+outside an organization calls a named lib function (`lib/identity.ts`, `domains/org/public-signup-store.ts`, ...),
 never the raw handle.
 
 ## Row-level security (enforced since P2-18k)
@@ -165,7 +165,7 @@ added or removed without a migration.
     (`orgDb(customer.authOrganizationId).transaction`), after the lab-scoped lookup proved the customer is its own.
   - A lib function that reads for a handler takes an optional `executor` (the handler's `o`) or opens its own
     transaction (`inOrgTransaction`, `lib/org-transaction.ts`); `asset_type` is a global catalog and is read
-    through `lib/asset-types.ts` on the plain handle.
+    through `domains/assets/asset-types.ts` on the plain handle.
   - Job creation (`createCalibrationJob`) still takes a Drizzle executor with `execute` (advisory locks,
     certificate numbering), which the org-bound handle does not offer. `orgTransactionWithExecutor` opens a
     `db.transaction`, names the laboratory, and hands the handler both the handle and the raw transaction; the
@@ -199,14 +199,14 @@ added or removed without a migration.
   remote HTTP calls) holds no transaction across a call: each of its statements is a short transaction naming the
   laboratory. The billing numbering (`generateBillingDocumentNumber`) needs raw SQL for its advisory lock, so
   the handlers that issue a document use `orgTransactionWithExecutor` (handle + raw transaction). The libs they call
-  (`lib/finance.ts`, `service-order-workflow.ts`, `tenant-refs.ts`, `certificate-release.ts`, `automatic-send.ts`,
+  (`domains/finance/finance.ts`, `service-order-workflow.ts`, `tenant-refs.ts`, `certificate-release.ts`, `automatic-send.ts`,
   `billing-readiness.ts`, the cash / margin / operations-to-cash / revenue-leakage readers, `supplier.ts`,
   `outsourced-cost.ts`) take an optional org-bound handle and, without one, open an org-bound transaction of
   their own, so the jobs, sync, integration and desktop callers need no change and are scoped as well. The one
   system-path statement of the slice is the lookup of a public quote link by its token / approval-code hash
   (`service-order.tokens.ts`, `service_order_public_access_token`, select only): the grant row names the
   laboratory and everything after it runs on `orgDb(grant.organizationId)`. Not in this slice: the service-order
-  e-mail drain (`lib/service-order-email-drain.ts`, `service-order-email-once.ts`, a cron/worker sweep) and the
+  e-mail drain (`domains/service-orders/email/service-order-email-drain.ts`, `service-order-email-once.ts`, a cron/worker sweep) and the
   Conta Azul callees (`requireContaAzulOAuthConfig`); inside a transaction an error is rethrown (never turned into
   a response in the callback), so a failure after the first write rolls the whole command back.
 - **NC / CAPA, dashboard, reports, signatures (P2-18e).** The non-conformance, CAPA, dashboard, consolidated
@@ -220,14 +220,14 @@ added or removed without a migration.
     bucket and the `FILTER` counts, so the handle adds the organization predicate.
   - The handlers that talk to object storage (visual signatures) keep the storage call outside the database
     transaction: read, then store, then write, as before.
-  - The public out-of-tolerance acknowledgement link (`routes/oot-ack.ts`) learns the laboratory from the
-    unguessable ack token: that one lookup is `findOotNotificationByAckToken` in `lib/oot-acknowledgement.ts`
+  - The public out-of-tolerance acknowledgement link (`domains/jobs/routes/oot-ack.ts`) learns the laboratory from the
+    unguessable ack token: that one lookup is `findOotNotificationByAckToken` in `domains/jobs/oot/oot-acknowledgement.ts`
     on the system path (allowlisted, "public-token"), and the stamp runs in `orgDb(laboratory).transaction`.
   - Specs: `nc-capa-lab-scope.int.spec.ts` and `signatures-signing-lab-scope.int.spec.ts` cover the success
     paths the per-router specs do not reach, each with a cross-laboratory negative, plus an escalation that
     rolls back as a whole.
 - **Integrations, public API, webhooks, API keys, notifications (P2-18h).** The ERP integration routes and
-  modules (`modules/integrations/*`, `lib/conta-azul-app.ts`, `lib/integration-drift.ts`, material stock adjustment),
+  modules (`modules/integrations/*`, `domains/finance/integrations/conta-azul-app.ts`, `domains/finance/integrations/integration-drift.ts`, material stock adjustment),
   the API-key routes, the public API v1 and v2 (including webhook delivery and replay), the notification routes and
   `packages/notifications`, the e-mail sender resolution (`packages/email-sender/src/sender.ts`) and the e-mail drains
   run every statement in a transaction that names an organization; the `routes/**` raw-`db` entries for these files
@@ -258,12 +258,12 @@ added or removed without a migration.
   - `flagJobOutOfTolerance` / `ensureOotNotificationForNc` without a caller's scope now run the whole workflow in one
     organization-bound transaction (PDF job after the commit) instead of the plain `db`.
   - Not in this slice (done in P2-18j, below): the raw-`pg` compliance sweep of `packages/jobs-core/src/scheduled/*`
-    and the e-mail-domain settings routes (`routes/email-domains.ts`, `lib/email-domain*.ts`); the job modules the v2
+    and the e-mail-domain settings routes (`domains/org/routes/email-domains.ts`, `lib/email-domain*.ts`); the job modules the v2
     job endpoints call were P2-18f.
   - Specs: `public-api-lab-scope`, `integrations-lab-scope` and `notifications-sweeps-lab-scope` (the sweeps and
     senders run as `calibra_app`) cover the success paths the per-router specs do not reach, each with a
     cross-laboratory negative.
-- **Calibration jobs (P2-18f).** `routes/jobs.ts` (no raw-`db` entry left), the job commands of
+- **Calibration jobs (P2-18f).** `domains/jobs/routes/jobs.ts` (no raw-`db` entry left), the job commands of
   `modules/jobs/*` and the job libraries run every statement in a transaction that names the laboratory. Only
   where the statements run changed: the status machine, the compare-and-set predicates, `appendJobEvent`, the
   frozen certificate input, the approval, signing and the numbering formats are untouched. Details worth
@@ -285,7 +285,7 @@ added or removed without a migration.
     on the transaction's own handle) and stages the notifications as queue jobs (`JOB_APPROVED_NOTIFICATION`,
     `ASSET_OOT_NOTIFICATION`): an approval cannot commit without them, a failed write rolls the approval back,
     and a rolled-back approval stages nothing. The nightly `approval-effects-reconcile` cron
-    (`lib/approval-effects-reconciler.ts`: candidates on the system path, each repair in the job's own
+    (`domains/jobs/approval-effects-reconciler.ts`: candidates on the system path, each repair in the job's own
     laboratory) repairs what an approval from before that change can still be missing. The financial
     automatic-send (ERP env, the member's unit scope) stays a post-commit step.
   - **Lib functions take an optional reader.** `loadScopedJob`, the technician and competence gates, the
@@ -315,8 +315,8 @@ added or removed without a migration.
     `calibra_app` pool the request runs on (the other actor runs on the owner: `outsideApplication`). The
     assertions of the specs are unchanged.
   - **Not done here (other slices).** The jobs specs that go through the public API or the desktop sync apply
-    still break as `calibra_app` on `middleware/api-key-auth.ts`, `lib/api-key-approver.ts`,
-    `lib/public-api.ts` (idempotency), `lib/audit.ts`, `routes/public-api-v2/jobs-decisions.ts` and
+    still break as `calibra_app` on `middleware/api-key-auth.ts`, `domains/public-api/api-key-approver.ts`,
+    `domains/public-api/public-api.ts` (idempotency), `lib/audit.ts`, `domains/public-api/routes/public-api-v2/jobs-decisions.ts` and
     `modules/sync/*`: the integrations / public API and desktop sync slices.
   - Specs: `jobs-lab-scope.int.spec.ts` (success paths the other job specs do not reach, each with a
     cross-laboratory negative, plus the flag-oot atomicity) and `apps/worker`
@@ -410,15 +410,15 @@ added or removed without a migration.
     laboratory and writes its audit entry in one (the Better Auth calls in between run on their own connection,
     never inside a transaction); `organization-media` commits the new logo and its audit entry together and
     removes the previous object from storage after the commit; `email-domains` verify / activate commit the
-    change with its audit entry. `organization-lifecycle` and `lib/records-retention.ts` soft-delete in one
+    change with its audit entry. `organization-lifecycle` and `domains/org/records-retention.ts` soft-delete in one
     organization-naming transaction (stamp, key revocations, audit rows), and `removeLabOrganization` (the hard
     delete of a just-created, record-less laboratory) runs on the system path: the guard of the `organization`
-    row yields to `calibra.allow_org_purge` for the table owner only (migration 0127), never for `calibra_app`. `services/lab-provisioning.ts` creates the first membership in the new
-    laboratory's transaction; `services/activation-checklist.ts` reads one laboratory in one transaction.
+    row yields to `calibra.allow_org_purge` for the table owner only (migration 0127), never for `calibra_app`. `domains/org/lab-provisioning.ts` creates the first membership in the new
+    laboratory's transaction; `domains/org/activation-checklist.ts` reads one laboratory in one transaction.
     Public self-serve sign-up keeps its slot ledger in the global `platform_event_log`
-    (`lib/public-signup-store.ts`); its one tenant read ("is this person already in a laboratory") is a system-path
+    (`domains/org/public-signup-store.ts`); its one tenant read ("is this person already in a laboratory") is a system-path
     statement.
-  - **E-mail domain.** `lib/email-domain-lifecycle.ts` stays ONE transaction that names the laboratory and holds the
+  - **E-mail domain.** `domains/org/email-domain-lifecycle.ts` stays ONE transaction that names the laboratory and holds the
     tenant lock across the provider call: that is deliberate (it serialises a concurrent create for the same
     organization and lets a rejected database write be compensated before the lock is released; the specs pin
     both), so it is the one place a transaction spans I/O. The one cross-organization question, "does ANOTHER

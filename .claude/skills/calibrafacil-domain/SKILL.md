@@ -28,7 +28,7 @@ regulated boundaries.
 | Repo gates              | `pnpm format:check`, `pnpm knip` (unused files/deps), `pnpm check:cycles` (madge), `pnpm build`; the architecture rules are lint rules too (`calibra/*` plugin)                                                                                                                                                                              |
 | All tests               | `pnpm turbo test` (Vitest, per package; there is no root `test` script)                                                                                                                                                                                                                                                                      |
 | One package, no watch   | `pnpm --dir apps/api test:run`                                                                                                                                                                                                                                                                                                               |
-| **One file + one test** | `pnpm --dir apps/api test:run src/routes/__tests__/signatures.spec.ts -t "test name"`                                                                                                                                                                                                                                                        |
+| **One file + one test** | `pnpm --dir apps/api test:run src/domains/org/routes/__tests__/signatures.spec.ts -t "test name"`                                                                                                                                                                                                                                            |
 | Migrations              | Hand-written: `packages/db/drizzle/NNNN_name.sql` + an entry in `drizzle/meta/_journal.json`; apply with `cd packages/db && pnpm db:bootstrap` (new DB: schema push + `sql/schema-extras.sql`; existing DB: migrate) or `pnpm db:migrate`. **Never** `drizzle-kit generate` / `pnpm db:generate` (unusable past the early snapshots)         |
 
 - **Regulated test files are `*.spec.ts`** (e.g. `apps/api/vitest.config.ts` →
@@ -52,8 +52,8 @@ regulated boundaries.
   `packages/label-rendering`, `packages/certificate-data`,
   `packages/method-definition`, `packages/method-templates`.
 - **Auth / access:** `packages/auth` (`access.ts`, `lab-access.ts`, Better-Auth).
-- **API:** `apps/api` (Hono — `src/app.ts`, `src/routes/`, `src/modules/`,
-  `src/middleware/`, `src/services/`, `src/lib/`); runs under Bun
+- **API:** `apps/api` (Hono — `src/app.ts`, `src/domains/<domain>/` (routes, commands,
+  cron work), `src/middleware/`, `src/server/`, `src/lib/` for cross-domain infrastructure); runs under Bun
   (`src/bun.ts`), self-hosted.
 - **Frontends:** `apps/web` (lab dashboard; thin `src/routes/` adapters +
   `src/features/<domain>/`), `apps/portal` (cloud-only client portal),
@@ -124,7 +124,7 @@ rewrite evidence already pinned for a version.
   `calibra_app` (`DATABASE_URL`), and every tenant policy binds it. Route handlers query
   through `orgDb(organizationId)` (`apps/api/src/lib/org-db.ts`), or `forOrg` /
   `orgDb(lab).transaction(...)`, so each statement runs in an org-scoped transaction;
-  the raw `db` is a lint error in `apps/api/src/routes`. Only the named `systemDb`
+  the raw `db` is a lint error in `apps/api/src/domains/*/routes`. Only the named `systemDb`
   path uses the table owner (`DATABASE_OWNER_URL`): identity, cross-laboratory lookups
   and sweeps, migrations, seeds, the CLI. Each use is a reviewed entry in
   `apps/api/test/integration/tenant-sql-allowlist.ts`. `shadow` is a diagnosis mode,

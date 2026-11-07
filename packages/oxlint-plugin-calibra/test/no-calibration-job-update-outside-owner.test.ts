@@ -18,7 +18,9 @@ const UPDATE = updates(1);
 
 describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => {
   it("REQ-TR-4: reports .update(calibrationJob) in a new route file", async () => {
-    await expectViolation(RULE, { "apps/api/src/routes/brand-new.ts": UPDATE });
+    await expectViolation(RULE, {
+      "apps/api/src/domains/example/routes/brand-new.ts": UPDATE,
+    });
   });
 
   it("REQ-TR-4: reports the transaction and namespaced forms", async () => {
@@ -51,7 +53,7 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
 
   it("REQ-TR-4: other tables, reads and inserts are not writes to guard", async () => {
     await expectClean(RULE, {
-      "apps/api/src/routes/other.ts":
+      "apps/api/src/domains/example/routes/other.ts":
         "export const a = (db: any) => db.update(asset).set({});\n" +
         "export const b = (db: any) => db.select().from(calibrationJob);\n" +
         "export const c = (db: any) => db.insert(calibrationJob).values({});\n" +
@@ -62,8 +64,8 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
 
   it("REQ-TR-4: does not guard tests or test helpers", async () => {
     await expectClean(RULE, {
-      "apps/api/src/routes/foo.spec.ts": UPDATE,
-      "apps/api/src/routes/foo.int.spec.ts": UPDATE,
+      "apps/api/src/domains/example/routes/foo.spec.ts": UPDATE,
+      "apps/api/src/domains/example/routes/foo.int.spec.ts": UPDATE,
       "apps/api/src/lib/__tests__/bar.ts": UPDATE,
       "apps/api/test/integration/job-cas.ts": UPDATE,
     });
@@ -72,7 +74,7 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
   it("REQ-LC-2: the cloud jobs routes, the public API and the visits routes no longer write the job themselves (reject, cancel, assign, edit and amend moved into the jobs module)", async () => {
     for (const file of [
       "apps/api/src/domains/jobs/routes/jobs.ts",
-      "apps/api/src/routes/public-api-v2.ts",
+      "apps/api/src/domains/example/routes/public-api-v2.ts",
       "apps/api/src/domains/visits/routes/visits.ts",
     ]) {
       // eslint-disable-next-line no-await-in-loop -- sequential spawns keep the output readable
@@ -88,7 +90,9 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
   }, 60_000);
 
   it("REQ-SUB-4: the desktop sync apply no longer writes the job itself (its grandfathered write moved into the submit/execute command)", async () => {
-    await expectViolation(RULE, { "apps/api/src/routes/sync.ts": UPDATE });
+    await expectViolation(RULE, {
+      "apps/api/src/domains/example/routes/sync.ts": UPDATE,
+    });
     await expectClean(RULE, {
       "apps/api/src/domains/jobs/commands/submit-job.ts": UPDATE,
     });

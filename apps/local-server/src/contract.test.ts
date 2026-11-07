@@ -5,7 +5,7 @@
  * service-order create/list/get, asset create/list/get, asset types, customers /
  * standards / methods reads, sync) answer with the SAME response schemas in
  * `@calibra-facil/contracts` that the cloud API is held to
- * (`apps/api/src/routes/*-contract.int.spec.ts`). The local mirror is fed the
+ * (`apps/api/src/domains/<d>/routes/*-contract.int.spec.ts`). The local mirror is fed the
  * rows the cloud sync hands out (`applySyncBootstrap`), so a local read model
  * that drops or renames a field the clients rely on fails here.
  */

@@ -71,18 +71,17 @@ export function sourceModuleFromStack(
 }
 
 /**
- * `apps/api/src/domains/assets/routes/assets.ts` -> `routes`; `apps/api/src/modules/jobs/x.ts` ->
- * `modules/jobs`; anything outside apps/api/src keeps its package directory.
+ * `apps/api/src/lib/units.ts` -> `lib`; `apps/api/src/domains/jobs/x.ts` ->
+ * `domains/jobs`; anything outside apps/api/src keeps its package directory.
  */
 export function layerOf(module: string): string {
   const api = "apps/api/src/";
   if (module.startsWith(api)) {
     const segments = module.slice(api.length).split("/");
     if (segments.length === 1) return "(root)";
-    // `domains/<d>` and `modules/<m>` are the layers that have sub-areas.
-    return (segments[0] === "modules" || segments[0] === "domains") &&
-      segments.length > 2
-      ? `${segments[0]}/${segments[1]}`
+    // `domains/<d>` is the layer that has sub-areas.
+    return segments[0] === "domains" && segments.length > 2
+      ? `domains/${segments[1]}`
       : (segments[0] ?? "(root)");
   }
   if (module === UNATTRIBUTED) return UNATTRIBUTED;
