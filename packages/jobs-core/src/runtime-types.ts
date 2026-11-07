@@ -1,5 +1,3 @@
-import type { BackgroundJobMessage } from "@calibra-facil/schemas";
-
 export interface R2BucketBinding {
   get(key: string): Promise<{
     arrayBuffer(): Promise<ArrayBuffer>;
@@ -55,24 +53,6 @@ export interface Env {
   APP_URL?: string;
 }
 
-export type QueueMessage = BackgroundJobMessage;
-
-/**
- * The slice of a Workers-style execution context the handlers below accept.
- * Declared here so the worker does not need `@cloudflare/workers-types`: no
- * handler reads from it, the DB-queue runtime passes a stub.
- */
-export interface ExecutionContext {
-  readonly props?: unknown;
-  waitUntil(promise: Promise<unknown>): void;
-  passThroughOnException(): void;
-}
-
-/** The slice of a Workers-style cron event the `scheduled` handler reads. */
-export interface ScheduledEvent {
-  readonly cron: string;
-}
-
 /**
  * Which delivery of a queue message this is. Runtimes that redeliver a failed
  * message (the DB queue) supply it; runtimes that never redeliver
@@ -89,18 +69,4 @@ export interface DeliveryAttempt {
 /** Whether a failure on this delivery is the last one the queue will make. */
 export function isFinalDelivery(delivery?: DeliveryAttempt): boolean {
   return !delivery || delivery.attempt >= delivery.maxAttempts;
-}
-
-export interface MessageBatch<T> {
-  messages: {
-    body: T;
-    /** Delivery metadata, when the runtime redelivers failed messages. */
-    attempt?: number;
-    maxAttempts?: number;
-    ack: () => void;
-    // Optional error (REQ-REL-OBS-002): the DB-queue runtime records it as the
-    // job's real last_error. Cloudflare's native retry ignores extra args, so
-    // this stays compatible if the handler is ever bound to a real CF queue.
-    retry: (error?: unknown) => void;
-  }[];
 }

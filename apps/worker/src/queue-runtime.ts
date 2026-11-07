@@ -4,7 +4,7 @@
 //                  `services/document-worker` Cloudflare Container
 //
 // Both build the worker `Env` from process env, claim `app_queue_job` rows
-// (`FOR UPDATE SKIP LOCKED`), run them through `worker.queue`, then
+// (`FOR UPDATE SKIP LOCKED`), run them through `processBackgroundJob`, then
 // complete/fail with backoff. Keeping the runtime in one place means the
 // container and the local poller stay byte-for-byte identical in how they
 // process a job.
@@ -39,9 +39,9 @@ import {
   type QueueReceiptsMode,
 } from "@calibra-facil/db/queue-receipts";
 import { resolveS3EndpointConfig } from "@calibra-facil/shared/storage-endpoint";
-import worker, { type ExecutionContext } from "@calibra-facil/jobs-core";
+import { processBackgroundJob, type Env } from "@calibra-facil/jobs-core";
 
-export type WorkerEnv = Parameters<typeof worker.queue>[1];
+export type WorkerEnv = Env;
 
 export type QueueRuntimeConfig = {
   workerId: string;
@@ -151,33 +151,6 @@ export function createWorkerEnv(): WorkerEnv {
     EMAIL_LOGO_URL: config.email.emailLogoUrl,
     WEB_URL: config.origins.webUrl,
     APP_URL: config.origins.appUrl,
-  };
-}
-
-function createBatch(jobs: ClaimedQueueJob[]) {
-  const states = new Map<number, "acked" | "retry">();
-  // REQ-REL-OBS-002: capture the REAL error the worker's queue handler caught so
-  // it is written to app_queue_job.last_error instead of a generic placeholder.
-  const errors = new Map<number, unknown>();
-
-  return {
-    batch: {
-      messages: jobs.map((job) => ({
-        body: job.payload,
-        // claimQueueJobs already counted this delivery in `attempts`;
-        // failQueueJob dead-letters the row once it reaches `maxAttempts`, so
-        // that is exactly the delivery whose failure must be final.
-        attempt: job.attempts,
-        maxAttempts: job.maxAttempts,
-        ack: () => states.set(job.id, "acked"),
-        retry: (error?: unknown) => {
-          states.set(job.id, "retry");
-          if (error !== undefined) errors.set(job.id, error);
-        },
-      })),
-    },
-    states,
-    errors,
   };
 }
 
@@ -296,18 +269,6 @@ async function claimAndProcessBatch(
   return claimedCount;
 }
 
-const executionContext: ExecutionContext = {
-  props: {},
-  waitUntil(promise) {
-    void promise.catch((error) => {
-      console.error("[Worker] waitUntil task failed", error);
-    });
-  },
-  passThroughOnException() {
-    // Local queue processing has no upstream request to pass through.
-  },
-};
-
 // Settle the row FIRST, fenced by this worker's lease, and settle the receipt
 // only when that applied. A fenced-out worker (its lease expired and the row was
 // reclaimed) no longer owns the row — and by extension not the receipt the new
@@ -319,32 +280,27 @@ async function processClaimedJob(
   workerId: string,
 ): Promise<void> {
   const { job } = decision;
-  const { batch, states, errors } = createBatch([job]);
 
   try {
-    await worker.queue(batch, env, executionContext);
+    // claimQueueJobs already counted this delivery in `attempts`; failQueueJob
+    // dead-letters the row once it reaches `maxAttempts`, so that delivery's
+    // failure is final.
+    await processBackgroundJob(env, job.payload, {
+      attempt: job.attempts,
+      maxAttempts: job.maxAttempts,
+    });
   } catch (error) {
+    console.error(`[Worker] Queue job ${job.id} failed`, error);
+    // The real error is recorded as the job's last_error.
     if (await failQueueJob(job.id, workerId, error)) {
       await settleReceipt(decision, false);
     }
     return;
   }
 
-  if (states.get(job.id) === "acked") {
-    if (await completeQueueJob(job.id, workerId)) {
-      await settleReceipt(decision, true);
-    }
-    return;
+  if (await completeQueueJob(job.id, workerId)) {
+    await settleReceipt(decision, true);
   }
-  const applied = await failQueueJob(
-    job.id,
-    workerId,
-    // Prefer the real error the handler retried with; the generic string
-    // is only a fallback for a job that was neither acked nor retried
-    // with an error (should not happen, but never lose the failure).
-    errors.get(job.id) ?? "Job was not acknowledged by worker",
-  );
-  if (applied) await settleReceipt(decision, false);
 }
 
 // Reclaim expired PROCESSING leases. A row whose lease expired on its final

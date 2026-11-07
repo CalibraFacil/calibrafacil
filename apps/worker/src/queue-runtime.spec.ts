@@ -64,7 +64,7 @@ vi.mock("@calibra-facil/db/queue-receipts", () => ({
 }));
 
 vi.mock("@calibra-facil/jobs-core", () => ({
-  default: { queue: workerQueue },
+  processBackgroundJob: workerQueue,
 }));
 
 import {
@@ -81,7 +81,7 @@ const CONFIG = {
   staleAfterMs: 0,
 };
 
-// drainQueue passes env straight to the (mocked) worker.queue; it is never read.
+// drainQueue passes env straight to the (mocked) job handler; it is never read.
 const bucket = { get: async () => null, put: async () => undefined };
 const fakeEnv: WorkerEnv = {
   CERTIFICATES_BUCKET: bucket,
@@ -124,8 +124,8 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
     claimOnce(job);
     const realError = new Error("gotenberg 502: upstream timeout");
     // The worker's queue handler retries with the real error on failure.
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.retry(realError);
+    workerQueue.mockImplementationOnce(async () => {
+      throw realError;
     });
 
     await drainQueue(fakeEnv, CONFIG);
@@ -145,9 +145,7 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
   it("an acked job is completed and never failed", async () => {
     const job = makeJob(2);
     claimOnce(job);
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -155,26 +153,10 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
     expect(failQueueJob).not.toHaveBeenCalled();
   });
 
-  it("falls back to the generic message only when retry captured no error", async () => {
-    const job = makeJob(3);
-    claimOnce(job);
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.retry(); // no error argument
-    });
-
-    await drainQueue(fakeEnv, CONFIG);
-
-    expect(failQueueJob).toHaveBeenCalledWith(
-      3,
-      CONFIG.workerId,
-      "Job was not acknowledged by worker",
-    );
-  });
-
-  it("when the whole batch throws, each job is failed with the thrown error", async () => {
+  it("a job that throws is failed with the thrown error", async () => {
     const job = makeJob(4);
     claimOnce(job);
-    const batchError = new Error("worker.queue exploded");
+    const batchError = new Error("handler exploded");
     workerQueue.mockRejectedValueOnce(batchError);
 
     await drainQueue(fakeEnv, CONFIG);
@@ -188,11 +170,11 @@ describe("queue-runtime delivery attempt", () => {
     const job = { ...makeJob(20), attempts: 2, maxAttempts: 3 };
     claimOnce(job);
     let seen: { attempt?: number; maxAttempts?: number } | undefined;
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      const message = batch.messages[0];
-      seen = { attempt: message?.attempt, maxAttempts: message?.maxAttempts };
-      message?.ack();
-    });
+    workerQueue.mockImplementationOnce(
+      async (_env: unknown, _message: unknown, delivery: typeof seen) => {
+        seen = delivery;
+      },
+    );
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -205,9 +187,7 @@ describe("queue-runtime idempotency receipts", () => {
     const job = makeJob(10);
     claimOnce(job);
     readQueueReceiptsMode.mockReturnValue("off");
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -220,9 +200,7 @@ describe("queue-runtime idempotency receipts", () => {
     const job = makeJob(11);
     claimOnce(job);
     readQueueReceiptsMode.mockReturnValue("enforce");
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -243,8 +221,8 @@ describe("queue-runtime idempotency receipts", () => {
     claimOnce(job);
     readQueueReceiptsMode.mockReturnValue("enforce");
     const realError = new Error("render failed");
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.retry(realError);
+    workerQueue.mockImplementationOnce(async () => {
+      throw realError;
     });
 
     await drainQueue(fakeEnv, CONFIG);
@@ -297,9 +275,7 @@ describe("queue-runtime idempotency receipts", () => {
     claimOnce(job);
     readQueueReceiptsMode.mockReturnValue("enforce");
     completeQueueJob.mockResolvedValueOnce(false);
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -313,8 +289,8 @@ describe("queue-runtime idempotency receipts", () => {
     claimOnce(job);
     readQueueReceiptsMode.mockReturnValue("enforce");
     failQueueJob.mockResolvedValueOnce(false);
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.retry(new Error("late"));
+    workerQueue.mockImplementationOnce(async () => {
+      throw new Error("late");
     });
 
     await drainQueue(fakeEnv, CONFIG);
@@ -335,9 +311,7 @@ describe("queue-runtime idempotency receipts", () => {
     claimQueueReceipt.mockResolvedValueOnce({
       outcome: "duplicate-completed",
     });
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -354,9 +328,7 @@ describe("queue-runtime idempotency receipts", () => {
     claimQueueReceipt.mockRejectedValueOnce(
       new Error('relation "queue_job_receipt" does not exist'),
     );
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -369,7 +341,7 @@ describe("queue-runtime idempotency receipts", () => {
     const job = makeJob(17);
     claimOnce(job);
     readQueueReceiptsMode.mockReturnValue("enforce");
-    const batchError = new Error("worker.queue exploded");
+    const batchError = new Error("handler exploded");
     workerQueue.mockRejectedValueOnce(batchError);
 
     await drainQueue(fakeEnv, CONFIG);
@@ -408,9 +380,7 @@ describe("queue-runtime dead-letter handling (REQ-QDL-001, REQ-QDL-002)", () => 
       new Error("db down"),
     );
     claimOnce(makeJob(50));
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await expect(drainQueue(fakeEnv, CONFIG)).resolves.toBe(1);
     expect(completeQueueJob).toHaveBeenCalledWith(50, CONFIG.workerId);
@@ -454,13 +424,10 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
   it("REQ-QDL-001: a slow first job does not leave a second row PROCESSING while it runs", async () => {
     const status = useInMemoryQueue([80, 81]);
     let secondWhileFirstRuns: string | undefined;
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+    workerQueue.mockImplementationOnce(async () => {
       secondWhileFirstRuns = status.get(81);
-      batch.messages[0]?.ack();
     });
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -473,9 +440,7 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
 
   it("REQ-QDL-001: every claim asks for exactly one row", async () => {
     useInMemoryQueue([82, 83, 84]);
-    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementation(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -487,9 +452,7 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
 
   it("REQ-QDL-001: no more than batchSize rows are claimed per batch", async () => {
     useInMemoryQueue([85, 86, 87]);
-    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
-      batch.messages[0]?.ack();
-    });
+    workerQueue.mockImplementation(async () => {});
 
     await expect(
       processQueueBatch(fakeEnv, { ...CONFIG, batchSize: 2 }),
@@ -501,12 +464,10 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
 
   it("REQ-QDL-001: one job's failure does not fail the rows behind it", async () => {
     useInMemoryQueue([88, 89]);
-    const boom = new Error("worker.queue exploded");
+    const boom = new Error("handler exploded");
     workerQueue
       .mockRejectedValueOnce(boom)
-      .mockImplementationOnce(async (batch: MessageBatchLike) => {
-        batch.messages[0]?.ack();
-      });
+      .mockImplementationOnce(async () => {});
 
     await drainQueue(fakeEnv, CONFIG);
 
@@ -532,10 +493,9 @@ describe("queue-runtime graceful shutdown", () => {
   it("claims nothing more once a shutdown has begun, after the job in hand settles", async () => {
     useInMemoryQueue([301, 302, 303]);
     let stopping = false;
-    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+    workerQueue.mockImplementation(async () => {
       // The signal arrives while the first job is running.
       stopping = true;
-      batch.messages[0]?.ack();
     });
 
     const claimed = await processQueueBatch(fakeEnv, CONFIG, () => stopping);
@@ -557,9 +517,8 @@ describe("queue-runtime graceful shutdown", () => {
   it("drainQueue stops between batches", async () => {
     useInMemoryQueue([321, 322]);
     let stopping = false;
-    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+    workerQueue.mockImplementation(async () => {
       stopping = true;
-      batch.messages[0]?.ack();
     });
 
     const processed = await drainQueue(fakeEnv, CONFIG, 1_000, () => stopping);
@@ -587,13 +546,3 @@ describe("worker id", () => {
     }
   });
 });
-
-// Minimal structural type for the mocked batch the worker handler receives.
-interface MessageBatchLike {
-  messages: Array<{
-    attempt?: number;
-    maxAttempts?: number;
-    ack: () => void;
-    retry: (error?: unknown) => void;
-  }>;
-}
