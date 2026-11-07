@@ -69,7 +69,7 @@ const PRODUCER_FIXTURES = {
     notificationId: 11,
     userId: "user_1",
   },
-  // apps/api/src/lib/public-api-webhooks.ts (staged with the event's transaction)
+  // apps/api/src/domains/public-api/public-api-webhooks.ts (staged with the event's transaction)
   "public API webhook delivery": {
     type: "WEBHOOK_DELIVERY",
     deliveryId: "5c2f2c1e-0000-4000-8000-000000000001",

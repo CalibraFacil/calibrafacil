@@ -52,8 +52,8 @@ import {
 import { executableMethodSnapshot } from "../../../test/integration/executable-method";
 import { auditActions, jobRow } from "../../../test/integration/job-cas";
 import { jobsRouter } from "../../routes/jobs";
-import { publicApiV2Router } from "../../routes/public-api-v2";
-import { syncRouter } from "../../routes/sync";
+import { publicApiV2Router } from "../../domains/public-api/routes/public-api-v2";
+import { syncRouter } from "../../domains/sync/routes";
 import { executeOfficialCompiledSnapshot } from "./official-execution";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 

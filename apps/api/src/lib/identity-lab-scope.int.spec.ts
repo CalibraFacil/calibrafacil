@@ -82,7 +82,7 @@ import {
   signInWithMagicLink,
 } from "../../test/integration/identity-fixtures";
 import { cleanupExpiredAuthRecords } from "./auth-maintenance";
-import { purgeSyncChangeLog } from "./sync-change-log-purge";
+import { purgeSyncChangeLog } from "../domains/sync/sync-change-log-purge";
 import { invitationsRouter } from "../routes/invitations";
 import { labSetupRouter } from "../routes/lab-setup";
 import {

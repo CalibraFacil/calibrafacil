@@ -35,7 +35,7 @@ import { loginAs, loginAsPortal } from "../../test/integration/setup";
 import { createApiKeySecret } from "../lib/api-keys";
 import { jobsRouter } from "./jobs";
 import { portalRouter } from "./portal";
-import { publicApiV2Router } from "./public-api-v2";
+import { publicApiV2Router } from "../domains/public-api/routes/public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
 

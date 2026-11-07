@@ -68,7 +68,7 @@ import { createRoleDatabase } from "@calibra-facil/db/role-connection";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { applyJobTimeline } from "../cli/seed-demo/timeline";
 import { jobsRouter } from "./jobs";
-import { publicApiV2Router } from "./public-api-v2";
+import { publicApiV2Router } from "../domains/public-api/routes/public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
 
