@@ -630,8 +630,7 @@ export async function dispatchSyncRun(params: {
   if (record?.integration.provider === "conta_azul") {
     try {
       await dispatchContaAzulSync({
-        type: "INTEGRATION_SYNC",
-        provider: "conta_azul",
+        type: "CONTA_AZUL_SYNC",
         integrationId: params.integrationId,
         organizationId: params.organizationId,
         runId: params.runId,

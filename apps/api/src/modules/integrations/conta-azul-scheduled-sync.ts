@@ -4,7 +4,7 @@ import {
   normalizeContaAzulConnectionConfig,
   type IntegrationSyncTarget,
 } from "@calibra-facil/shared";
-import type { IntegrationSyncBackgroundJobMessage } from "@calibra-facil/schemas";
+import type { ContaAzulSyncMessage } from "@calibra-facil/schemas";
 import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
 import { listActiveContaAzulConnections } from "./active-connections";
@@ -46,7 +46,7 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
   env: IntegrationsEnv;
   now?: Date;
   limit?: number;
-  dispatch?: (message: IntegrationSyncBackgroundJobMessage) => Promise<void>;
+  dispatch?: (message: ContaAzulSyncMessage) => Promise<void>;
 }): Promise<{
   scannedIntegrations: number;
   dueRuns: number;
@@ -147,9 +147,8 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
         });
         currentConfig = normalizeContaAzulConnectionConfig(nextConfig);
 
-        const message: IntegrationSyncBackgroundJobMessage = {
-          type: "INTEGRATION_SYNC",
-          provider: "conta_azul",
+        const message: ContaAzulSyncMessage = {
+          type: "CONTA_AZUL_SYNC",
           integrationId: row.integrationId,
           organizationId: row.organizationId,
           runId,

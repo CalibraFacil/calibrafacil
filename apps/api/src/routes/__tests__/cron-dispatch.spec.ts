@@ -162,8 +162,7 @@ describe("integrations cron", () => {
     const call =
       mocks.processScheduledContaAzulIntegrationSyncs.mock.calls[0]?.[0];
     await call.dispatch({
-      type: "INTEGRATION_SYNC",
-      provider: "conta_azul",
+      type: "CONTA_AZUL_SYNC",
       integrationId: "int-1",
       organizationId: "org-1",
       runId: "run-1",
@@ -173,7 +172,7 @@ describe("integrations cron", () => {
     });
 
     expect(mocks.dispatchContaAzulSync).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: "conta_azul", runId: "run-1" }),
+      expect.objectContaining({ type: "CONTA_AZUL_SYNC", runId: "run-1" }),
     );
     expect(mocks.enqueueBackgroundJob).not.toHaveBeenCalled();
   });

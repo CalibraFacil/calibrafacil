@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { IntegrationSyncBackgroundJobMessage } from "@calibra-facil/schemas";
+import type { ContaAzulSyncMessage } from "@calibra-facil/schemas";
 
 const mocks = vi.hoisted(() => ({ runIntegrationSync: vi.fn() }));
 
@@ -10,9 +10,8 @@ vi.mock("../../lib/runtime-env", () => ({
 
 import { dispatchContaAzulSync } from "./conta-azul-local-sync";
 
-const message: IntegrationSyncBackgroundJobMessage = {
-  type: "INTEGRATION_SYNC",
-  provider: "conta_azul",
+const message: ContaAzulSyncMessage = {
+  type: "CONTA_AZUL_SYNC",
   integrationId: "integration-1",
   organizationId: "org-1",
   runId: "run-1",
@@ -64,7 +63,7 @@ describe("dispatchContaAzulSync", () => {
   });
 
   it("rejects a malformed message", async () => {
-    const malformed: IntegrationSyncBackgroundJobMessage = JSON.parse(
+    const malformed: ContaAzulSyncMessage = JSON.parse(
       JSON.stringify({ ...message, limit: "many" }),
     );
 
