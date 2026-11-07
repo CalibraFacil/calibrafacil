@@ -7,6 +7,7 @@ import {
   CALIBRATION_PHASE_MODES,
 } from "@calibra-facil/shared/calibration-record";
 import { z } from "zod";
+import { queryFlag } from "./query-flag";
 import { VISIT_STATUSES } from "./machines/visits";
 import { NOTIFICATION_STATUSES } from "./machines/tenancy";
 import { COMPETENCE_STATUSES, TRAINING_STATUSES } from "./machines/people";
@@ -43,6 +44,7 @@ export * from "./quality";
 export * from "./reference-standard-kind";
 export * from "./reference-standard-kind-map";
 export * from "./service-orders";
+export * from "./query-flag";
 
 // =============================================================================
 // CUSTOMER SCHEMAS
@@ -664,8 +666,8 @@ export const ListVisitsQuerySchema = z.object({
   technicianId: z.string().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  mine: z.coerce.boolean().optional(),
-  rescheduleRequested: z.coerce.boolean().optional(),
+  mine: queryFlag.optional(),
+  rescheduleRequested: queryFlag.optional(),
 });
 
 // #739: portal two-way visit scheduling ------------------------------------
@@ -1279,7 +1281,7 @@ export const ListMethodsQuerySchema = z.object({
   status: MethodStatusSchema.optional(),
   assetTypeId: z.coerce.number().optional(),
   query: z.string().optional(),
-  includeArchived: z.coerce.boolean().optional().default(false),
+  includeArchived: queryFlag.optional().default(false),
 });
 
 /**
@@ -1337,14 +1339,7 @@ export const ListServicesQuerySchema = z.object({
   query: z.string().optional(),
   assetTypeId: z.coerce.number().optional(),
   methodId: z.coerce.number().optional(),
-  isActive: z
-    .string()
-    .optional()
-    .transform((val) => {
-      if (val === "true") return true;
-      if (val === "false") return false;
-      return undefined;
-    }),
+  isActive: queryFlag.optional(),
 });
 
 // =============================================================================
@@ -1399,22 +1394,8 @@ export const ListMaterialsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
   query: z.string().optional(),
-  controlsStock: z
-    .string()
-    .optional()
-    .transform((val) => {
-      if (val === "true") return true;
-      if (val === "false") return false;
-      return undefined;
-    }),
-  isActive: z
-    .string()
-    .optional()
-    .transform((val) => {
-      if (val === "true") return true;
-      if (val === "false") return false;
-      return undefined;
-    }),
+  controlsStock: queryFlag.optional(),
+  isActive: queryFlag.optional(),
 });
 
 /**
@@ -2072,8 +2053,8 @@ export const ListJobsQuerySchema = z.object({
   technicianId: z.string().optional(),
   dateFrom: z.string().optional(), // ISO date string
   dateTo: z.string().optional(), // ISO date string
-  dueSoon: z.coerce.boolean().optional(), // Filter jobs due in next 7 days
-  overdue: z.coerce.boolean().optional(), // Filter overdue jobs
+  dueSoon: queryFlag.optional(), // Filter jobs due in next 7 days
+  overdue: queryFlag.optional(), // Filter overdue jobs
 });
 
 // =============================================================================
@@ -2432,7 +2413,7 @@ export const ListCorrectiveActionsQuerySchema = z.object({
   source: CorrectiveActionSourceSchema.optional(),
   type: CorrectiveActionTypeSchema.optional(),
   responsibleId: z.string().optional(),
-  overdue: z.coerce.boolean().optional(),
+  overdue: queryFlag.optional(),
 });
 
 // =============================================================================
