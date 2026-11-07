@@ -24,6 +24,7 @@ import { dashboardEndpoints } from "./dashboard";
 import { entityLabelEndpoints } from "./entity-labels";
 import { environmentalLimitEndpoints } from "./environmental-limits";
 import { financeEndpoints } from "./finance";
+import { integrationEndpoints } from "./integrations";
 import { materialEndpoints } from "./materials";
 import { methodEndpoints } from "./methods";
 import { nonConformanceEndpoints } from "./non-conformances";
@@ -87,6 +88,7 @@ export * from "./accredited-scope";
 export * from "./environmental-limits";
 export * from "./materials";
 export * from "./units";
+export * from "./integrations";
 
 /**
  * Every converted domain, keyed by its `CalibraApi` namespace. This is the one
@@ -120,6 +122,7 @@ export const ENDPOINT_GROUPS = {
   environmentalLimits: environmentalLimitEndpoints,
   accreditedScope: accreditedScopeEndpoints,
   materials: materialEndpoints,
+  integrations: integrationEndpoints,
   portalDomains: portalDomainEndpoints,
   sso: ssoEndpoints,
   signingCertificates: signingCertificateEndpoints,

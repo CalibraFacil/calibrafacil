@@ -6,10 +6,8 @@ import {
   DatabaseSyncIcon,
 } from '@hugeicons/core-free-icons'
 
-import type {
-  ContaAzulConnectionConfig,
-  ContaAzulConnectionConfigInput,
-} from '@calibra-facil/shared'
+import type { ContaAzulConfigInput } from '@calibra-facil/contracts'
+import type { ContaAzulConnectionConfig } from '@calibra-facil/shared'
 import { Button } from '@calibra-facil/ui/button'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import {
@@ -53,7 +51,7 @@ import {
 import { IntegrationTargetList } from './target-list'
 import { ChecklistRow, MetricTile, SectionTitle } from './shared'
 
-type ConfigChange = (input: ContaAzulConnectionConfigInput) => void
+type ConfigChange = (input: ContaAzulConfigInput) => void
 
 // ── Overview ────────────────────────────────────────────────────────────────
 

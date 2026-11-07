@@ -45,7 +45,15 @@ vi.mock("../../lib/background-jobs", () => ({
 }));
 
 vi.mock("../../modules/integrations", () => ({
-  buildEmptyRemoteDocumentSummary: vi.fn(),
+  buildEmptyRemoteDocumentSummary: vi.fn(() => ({
+    totalCount: 0,
+    availableCount: 0,
+    unavailableCount: 0,
+    salePdfCount: 0,
+    fiscalXmlCount: 0,
+    otherCount: 0,
+    lastSyncedAt: null,
+  })),
   buildGenericConnectionConfig: vi.fn(),
   buildInitialNextScheduledRunAt: vi.fn(),
   buildIntegrationOverview: mocks.buildIntegrationOverview,
@@ -487,6 +495,10 @@ describe("integrations run items route", () => {
       {
         id: "item-1",
         runId: "run-1",
+        integrationId: "int-1",
+        organizationId: "org-1",
+        requestFingerprint: null,
+        metadata: null,
         target: "billing_document",
         localEntityId: "bill-1",
         remoteEntityId: "remote-1",
@@ -501,6 +513,10 @@ describe("integrations run items route", () => {
       {
         id: "item-2",
         runId: "run-1",
+        integrationId: "int-1",
+        organizationId: "org-1",
+        requestFingerprint: null,
+        metadata: null,
         target: "billing_document",
         localEntityId: "bill-2",
         remoteEntityId: null,
@@ -738,6 +754,14 @@ describe("Conta Azul active connection guards", () => {
         config: {},
       },
     });
+    const idleRow = {
+      enabled: false,
+      intervalMinutes: 0,
+      lastErrorAt: null,
+      lastErrorMessage: null,
+      lastSuccessAt: null,
+      nextDueAt: null,
+    };
     mocks.getContaAzulScheduleState.mockResolvedValue({
       paymentStatusPolling: {
         enabled: true,
@@ -747,6 +771,10 @@ describe("Conta Azul active connection guards", () => {
         lastSuccessAt: "2026-05-26T12:00:00.000Z",
         nextDueAt: "2026-05-26T12:30:00.000Z",
       },
+      payables: idleRow,
+      fiscalDocuments: idleRow,
+      protocols: idleRow,
+      driftChecks: idleRow,
     });
 
     const response = await createTestApp().request(

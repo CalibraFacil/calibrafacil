@@ -57,6 +57,24 @@ async function setupIntegrationsPage(
       return
     }
 
+    // The SDK parses every body with the endpoint's contract, so the
+    // application summary must be a real one (the server's own application).
+    if (path.endsWith('/conta-azul/app') && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          source: 'server',
+          clientId: null,
+          clientSecretLast4: null,
+          redirectUri:
+            'http://localhost:3000/api/integrations/conta-azul/oauth/callback',
+          updatedAt: null,
+        }),
+      })
+      return
+    }
+
     if (path.endsWith('/api/integrations') && request.method() === 'GET') {
       await route.fulfill({
         status: 200,

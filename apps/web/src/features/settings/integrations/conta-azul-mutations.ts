@@ -1,10 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import type {
-  ContaAzulConnectionConfig,
-  ContaAzulConnectionConfigInput,
-} from '@calibra-facil/shared'
+import type { ContaAzulConfigInput } from '@calibra-facil/contracts'
+import type { ContaAzulConnectionConfig } from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
 import type { SettingsIntegrationsData } from '@/features/settings/types'
 
@@ -13,7 +11,7 @@ const INTEGRATIONS_QUERY_KEY = ['integrations'] as const
 function applyOptimisticContaAzulConfig(
   cache: SettingsIntegrationsData | undefined,
   integrationId: string,
-  input: ContaAzulConnectionConfigInput,
+  input: ContaAzulConfigInput,
 ): SettingsIntegrationsData | undefined {
   // Domain toggles are the field the user mutates rapidly — and the only one
   // where the cache-vs-server-roundtrip lag is visible enough to matter.
@@ -86,11 +84,11 @@ export function useContaAzulMutations({
 }) {
   const queryClient = useQueryClient()
   const config = useMutation({
-    mutationFn: async (input: ContaAzulConnectionConfigInput) =>
-      calibraApi.integrations.updateContaAzulConfig<SettingsIntegrationsData>(
-        integrationId,
-        input,
-      ),
+    mutationFn: async (input: ContaAzulConfigInput) =>
+      calibraApi.integrations.updateContaAzulConfig({
+        params: { id: integrationId },
+        body: input,
+      }),
     // Optimistic update: write the partial change into the cache before the
     // server responds so the toggle/select moves at click-speed. The server is
     // the source of truth and its response overwrites the cache on success;
@@ -135,7 +133,10 @@ export function useContaAzulMutations({
       integrationId,
       onRefresh,
       request: (id) =>
-        calibraApi.integrations.pollContaAzul(id, { limit: 100 }),
+        calibraApi.integrations.pollContaAzul({
+          params: { id },
+          body: { limit: 100 },
+        }),
       successMessage: 'Consulta de pagamentos concluída',
       errorMessage: 'Falha ao consultar pagamentos da Conta Azul',
     }),
@@ -146,7 +147,10 @@ export function useContaAzulMutations({
       integrationId,
       onRefresh,
       request: (id) =>
-        calibraApi.integrations.pollContaAzulPayables(id, { limit: 100 }),
+        calibraApi.integrations.pollContaAzulPayables({
+          params: { id },
+          body: { limit: 100 },
+        }),
       successMessage: 'Consulta de contas a pagar concluída',
       errorMessage: 'Falha ao consultar contas a pagar da Conta Azul',
     }),
@@ -157,7 +161,10 @@ export function useContaAzulMutations({
       integrationId,
       onRefresh,
       request: (id) =>
-        calibraApi.integrations.pollContaAzulFiscal(id, { limit: 100 }),
+        calibraApi.integrations.pollContaAzulFiscal({
+          params: { id },
+          body: { limit: 100 },
+        }),
       successMessage: 'Consulta fiscal concluída',
       errorMessage: 'Falha ao consultar documentos fiscais da Conta Azul',
     }),
@@ -168,7 +175,10 @@ export function useContaAzulMutations({
       integrationId,
       onRefresh,
       request: (id) =>
-        calibraApi.integrations.pollContaAzulProtocols(id, { limit: 100 }),
+        calibraApi.integrations.pollContaAzulProtocols({
+          params: { id },
+          body: { limit: 100 },
+        }),
       successMessage: 'Consulta de protocolos concluída',
       errorMessage: 'Falha ao consultar protocolos da Conta Azul',
     }),
@@ -179,7 +189,10 @@ export function useContaAzulMutations({
       integrationId,
       onRefresh,
       request: (id) =>
-        calibraApi.integrations.pollContaAzulDrift(id, { limit: 100 }),
+        calibraApi.integrations.pollContaAzulDrift({
+          params: { id },
+          body: { limit: 100 },
+        }),
       successMessage: 'Verificação de drift concluída',
       errorMessage: 'Falha ao verificar drift da Conta Azul',
     }),
@@ -187,7 +200,9 @@ export function useContaAzulMutations({
 
   const refreshToken = useMutation({
     mutationFn: async () =>
-      calibraApi.integrations.refreshContaAzul(integrationId),
+      calibraApi.integrations.refreshContaAzul({
+        params: { id: integrationId },
+      }),
     onSuccess: async () => {
       toast.success('Token Conta Azul renovado')
       await refreshCatalogs()
@@ -204,7 +219,9 @@ export function useContaAzulMutations({
 
   const disconnect = useMutation({
     mutationFn: async () =>
-      calibraApi.integrations.disconnectContaAzul(integrationId),
+      calibraApi.integrations.disconnectContaAzul({
+        params: { id: integrationId },
+      }),
     onSuccess: async () => {
       toast.success('Conta Azul desconectada')
       await onRefresh()

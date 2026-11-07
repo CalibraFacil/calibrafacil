@@ -29,26 +29,10 @@ import { Textarea } from '@calibra-facil/ui/textarea'
 import { toast } from 'sonner'
 import { formatInstant } from '@calibra-facil/shared/format'
 
-interface IntegrationDriftRow {
-  linkId: string
-  integrationId: string
-  providerLabel: string
-  target: string
-  targetLabel: string
-  localEntityId: string
-  remoteEntityId: string | null
-  remoteDisplayId: string | null
-  driftStatus: 'REMOTE_MISSING'
-  driftCheckedAt: string | null
-  driftReason: string | null
-  lastSyncedAt: string | null
-}
-
 function driftQueueQueryOptions() {
-  return queryOptions<{ data: IntegrationDriftRow[] }>({
+  return queryOptions({
     queryKey: ['integrations', 'drift'],
-    queryFn: () =>
-      calibraApi.integrations.listDrift<{ data: IntegrationDriftRow[] }>(),
+    queryFn: () => calibraApi.integrations.listDrift({}),
   })
 }
 
@@ -67,8 +51,9 @@ function AcknowledgeDialog({ open, linkId, onClose }: AcknowledgeDialogProps) {
   const mutation = useMutation({
     mutationFn: () => {
       if (linkId === null) throw new Error('Drift inválido')
-      return calibraApi.integrations.acknowledgeDrift(linkId, {
-        reason: trimmed,
+      return calibraApi.integrations.acknowledgeDrift({
+        params: { linkId },
+        body: { reason: trimmed },
       })
     },
     onSuccess: () => {

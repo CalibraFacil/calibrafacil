@@ -87,8 +87,10 @@ export type ContaAzulCatalogQuery = {
 
 export function formatCatalogItemLabel(item: ContaAzulCatalogItem) {
   const code = item.code ? `${item.code} · ` : ''
-  const suffix =
-    item.active === false ? ' · inativo' : item.type ? ` · ${item.type}` : ''
+  // Conta Azul's own kind of item travels in `metadata.type`.
+  const type =
+    typeof item.metadata?.type === 'string' ? item.metadata.type : null
+  const suffix = item.active === false ? ' · inativo' : type ? ` · ${type}` : ''
 
   return `${code}${item.name}${suffix}`
 }

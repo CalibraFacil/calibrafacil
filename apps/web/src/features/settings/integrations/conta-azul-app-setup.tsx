@@ -43,10 +43,7 @@ import {
   FieldLabel,
 } from '@calibra-facil/ui/field'
 import { Input } from '@calibra-facil/ui/input'
-import type {
-  ContaAzulAppSaveResponse,
-  ContaAzulAppSummary,
-} from '@/features/settings/types'
+import type { ContaAzulAppSummary } from '@/features/settings/types'
 import {
   CONTA_AZUL_DEVELOPER_PORTAL_URL,
   contaAzulAppSavedMessage,
@@ -337,9 +334,7 @@ function ContaAzulAppForm({ onSaved }: { onSaved: () => Promise<void> }) {
 
   const save = useMutation({
     mutationFn: (credentials: { clientId: string; clientSecret: string }) =>
-      calibraApi.integrations.saveContaAzulApp<ContaAzulAppSaveResponse>(
-        credentials,
-      ),
+      calibraApi.integrations.saveContaAzulApp({ body: credentials }),
     onSuccess: async (result) => {
       toast.success(contaAzulAppSavedMessage(result.check))
       setDraft(emptyContaAzulAppDraft)
@@ -427,8 +422,7 @@ function RemoveContaAzulApp({
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const remove = useMutation({
-    mutationFn: () =>
-      calibraApi.integrations.removeContaAzulApp<ContaAzulAppSummary>(),
+    mutationFn: () => calibraApi.integrations.removeContaAzulApp(),
     onSuccess: async () => {
       toast.success('Aplicativo Conta Azul removido.')
       setConfirmOpen(false)

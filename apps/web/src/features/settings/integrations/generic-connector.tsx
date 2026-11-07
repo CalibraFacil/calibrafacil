@@ -71,7 +71,7 @@ export function NewGenericConnectorForm({
   const [baseUrlError, setBaseUrlError] = useState<string | null>(null)
 
   const createMutation = useMutation({
-    mutationFn: async () => calibraApi.integrations.create(draft),
+    mutationFn: async () => calibraApi.integrations.create({ body: draft }),
     onSuccess: async () => {
       toast.success('Conector criado')
       setDraft(defaultIntegrationDraft)
@@ -194,7 +194,10 @@ export function GenericConnectorCard({
 
   const updateMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.integrations.update(integration.id, { mappings }),
+      calibraApi.integrations.update({
+        params: { id: integration.id },
+        body: { mappings },
+      }),
     onSuccess: async () => {
       toast.success('Mapeamento salvo')
       setDraftMappings(null)
