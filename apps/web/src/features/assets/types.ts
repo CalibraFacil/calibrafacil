@@ -9,6 +9,8 @@ import type { MassUnit } from '@calibra-facil/shared'
 
 import type { SpecFieldDefinition } from '@/components/dynamic-specs-form'
 
+import type { StoredRegulatedInterval } from './forms'
+
 export type { AssetStatus }
 
 export type AssetListItem = ClientRuntimeAssetsListData['data'][number] & {
@@ -30,10 +32,11 @@ export type AssetsListQueryInput = {
 
 export type AssetDetail = Omit<
   ClientRuntimeAssetDetailData,
-  'assetTypeDefinition' | 'baseMeasurementUnit'
+  'assetTypeDefinition' | 'baseMeasurementUnit' | 'regulatedInterval'
 > & {
   assetTypeDefinition?: SpecFieldDefinition[] | null
   baseMeasurementUnit?: MassUnit | null
+  regulatedInterval?: StoredRegulatedInterval | null
 }
 
 type AssetType = Omit<ClientRuntimeAssetTypeListItem, 'definition'> & {

@@ -1,3 +1,4 @@
+import { assetEndpoints } from "./assets";
 import { calibrationRequestEndpoints } from "./calibration-requests";
 import { certificateNumberingEndpoints } from "./certificate-numbering";
 import { capaEndpoints } from "./capa";
@@ -14,6 +15,7 @@ import { signatureEndpoints } from "./signatures";
 import { visitEndpoints } from "./visits";
 
 export * from "./define";
+export * from "./assets";
 export * from "./customers";
 export * from "./capa";
 export * from "./non-conformances";
@@ -34,6 +36,7 @@ export * from "./calibration-requests";
  * route-drift spec read; converting a domain adds its group here.
  */
 export const ENDPOINT_GROUPS = {
+  assets: assetEndpoints,
   customers: customerEndpoints,
   nonConformances: nonConformanceEndpoints,
   capas: capaEndpoints,

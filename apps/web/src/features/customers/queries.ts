@@ -112,10 +112,12 @@ export function customerAssetsQueryOptions({
       }
 
       return calibraApi.assets.list({
-        page,
-        limit,
-        customerId,
-        query: search || undefined,
+        query: {
+          page,
+          limit,
+          customerId,
+          query: search || undefined,
+        },
       })
     },
     placeholderData: keepPreviousDataInScope([

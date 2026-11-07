@@ -227,13 +227,15 @@ describe('AssetCreateForm', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1))
     expect(mocks.create.mock.calls[0]?.[0]).toMatchObject({
-      customerId: 10,
-      assetTypeId: 2,
-      name: 'Manômetro 0–10 bar',
-      tag: 'MAN-001',
-      serialNumber: 'SN-77',
-      metrologyRegime: 'INDUSTRIAL',
-      specifications: { range: '0 a 10 bar' },
+      body: {
+        customerId: 10,
+        assetTypeId: 2,
+        name: 'Manômetro 0–10 bar',
+        tag: 'MAN-001',
+        serialNumber: 'SN-77',
+        metrologyRegime: 'INDUSTRIAL',
+        specifications: { range: '0 a 10 bar' },
+      },
     })
   })
 

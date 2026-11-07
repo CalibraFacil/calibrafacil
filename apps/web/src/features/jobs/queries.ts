@@ -83,15 +83,17 @@ export function newJobCustomersQueryOptions(search = '') {
 export function newJobCustomerAssetsQueryOptions(customerId: number | null) {
   return queryOptions({
     queryKey: ['assets', 'customer', customerId],
-    queryFn: () => {
+    queryFn: (): Promise<NewJobAssetsData> => {
       if (!customerId) {
         return Promise.resolve({ data: [] } satisfies NewJobAssetsData)
       }
 
       return calibraApi.assets.list({
-        page: 1,
-        limit: 100,
-        customerId,
+        query: {
+          page: 1,
+          limit: 100,
+          customerId,
+        },
       })
     },
   })

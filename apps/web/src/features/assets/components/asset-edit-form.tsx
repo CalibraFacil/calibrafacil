@@ -154,12 +154,18 @@ export function AssetEditForm({
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateAssetInput) =>
-      calibraApi.assets.update<AssetDetail>(assetId, data),
+      calibraApi.assets.update({ params: { id: assetId }, body: data }),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
       queryClient.invalidateQueries({ queryKey: ['asset', assetId] })
       toast.success('Ativo atualizado com sucesso!')
-      onSaved(updated)
+      // The API answers with the bare stored row: keep the joined names the
+      // form already has so callers can show the asset right away.
+      onSaved({
+        ...asset,
+        ...updated,
+        baseMeasurementUnit: asset.baseMeasurementUnit,
+      })
     },
     onError: (error) => {
       toast.error(error.message)

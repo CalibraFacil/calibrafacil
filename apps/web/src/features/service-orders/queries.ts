@@ -137,16 +137,18 @@ export function newServiceOrderAssetsQueryOptions({
 }) {
   return queryOptions({
     queryKey: ['assets', 'service-order-open', customerId, search],
-    queryFn: () => {
+    queryFn: (): Promise<NewServiceOrderAssetsData> => {
       if (!customerId) {
         return Promise.resolve({ data: [] } satisfies NewServiceOrderAssetsData)
       }
 
       return calibraApi.assets.list({
-        page: 1,
-        limit: 100,
-        customerId,
-        query: search.trim() || undefined,
+        query: {
+          page: 1,
+          limit: 100,
+          customerId,
+          query: search.trim() || undefined,
+        },
       })
     },
   })

@@ -1,10 +1,16 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import type { AssetDetail as ContractAssetDetail } from '@calibra-facil/contracts'
 import { AssetTypeFieldSchema } from '@calibra-facil/schemas'
+import { isMassUnit } from '@calibra-facil/shared/mass-units'
+import { isRecord } from '@calibra-facil/shared/record'
 import { z } from 'zod'
 
 import { calibraApi, getApiBaseURL } from '@/utils/api'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
-import type { LegalMetrologyRegulationCatalogEntry } from './forms'
+import {
+  readStoredRegulatedInterval,
+  type LegalMetrologyRegulationCatalogEntry,
+} from './forms'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -58,28 +64,59 @@ export function assetsListQueryOptions(input: AssetsListQueryInput) {
     ],
     queryFn: (): Promise<AssetsListData> =>
       calibraApi.assets.list({
-        page: input.page,
-        limit: input.limit,
-        query: input.search || undefined,
-        status: input.statusFilter || undefined,
-        customerId: input.customerId ?? undefined,
+        query: {
+          page: input.page,
+          limit: input.limit,
+          query: input.search || undefined,
+          status: input.statusFilter || undefined,
+          customerId: input.customerId ?? undefined,
+        },
       }),
     placeholderData: keepPreviousDataInScope(['assets', input.organizationId]),
   })
 }
 
+/**
+ * The detail as the pages read it: the untyped columns (the type's field
+ * definitions, the base unit, the regulated interval) are narrowed here, once.
+ */
+function toAssetDetail(detail: ContractAssetDetail): AssetDetail {
+  const definition = AssetTypeFieldSchema.array().safeParse(
+    detail.assetTypeDefinition,
+  )
+  return {
+    ...detail,
+    assetTypeDefinition: definition.success ? definition.data : null,
+    baseMeasurementUnit: isMassUnit(detail.baseMeasurementUnit)
+      ? detail.baseMeasurementUnit
+      : null,
+    regulatedInterval: readStoredRegulatedInterval(detail.regulatedInterval),
+  }
+}
+
 export function assetDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['asset', id],
-    queryFn: () => calibraApi.assets.get<AssetDetail>(id),
+    queryFn: async (): Promise<AssetDetail> =>
+      toAssetDetail(await calibraApi.assets.get({ params: { id } })),
   })
 }
 
 export function assetAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['asset', id, 'audit-log'],
-    queryFn: (): Promise<AssetAuditLogData> =>
-      calibraApi.assets.auditLog<AssetAuditLogRecord>(id),
+    queryFn: async (): Promise<AssetAuditLogData> => {
+      const log = await calibraApi.assets.auditLog({ params: { id } })
+      return {
+        data: log.data.map(
+          (entry): AssetAuditLogRecord => ({
+            ...entry,
+            // The column is untyped JSON; the timeline reads it as a record.
+            changes: isRecord(entry.changes) ? entry.changes : null,
+          }),
+        ),
+      }
+    },
   })
 }
 

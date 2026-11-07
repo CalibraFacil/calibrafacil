@@ -10,7 +10,6 @@ import type {
 } from "@calibra-facil/schemas/machines";
 import type {
   AdjustMaterialStockSchema,
-  CreateAssetSchema,
   CreateCustomerSchema,
   CreateCustomerGroupSchema,
   CreateJobSchema,
@@ -19,13 +18,13 @@ import type {
   CreateServiceSchema,
   SoftDeleteOrganizationSchema,
   UpdateOrganizationProfileSchema,
-  UpdateAssetSchema,
   UpdateCustomerSchema,
   UpdateMaterialSchema,
   UpdateNotificationPreferencesSchema,
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
+import type { AssetsApi } from "./modules/assets";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
 import type { CapasApi } from "./modules/capa";
 import type { CompetencesApi } from "./modules/competences";
@@ -42,7 +41,6 @@ import type { VisitsApi } from "./modules/visits";
 export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
 >;
-export type CreateAssetInput = z.input<typeof CreateAssetSchema>;
 export type SoftDeleteOrganizationRequest = z.input<
   typeof SoftDeleteOrganizationSchema
 >;
@@ -59,7 +57,6 @@ export type CreateNonConformanceInput = z.input<
   typeof CreateNonConformanceSchema
 >;
 export type CreateServiceInput = z.input<typeof CreateServiceSchema>;
-export type UpdateAssetInput = z.input<typeof UpdateAssetSchema>;
 export type UpdateCustomerInput = z.input<typeof UpdateCustomerSchema>;
 export type UpdateMaterialInput = z.input<typeof UpdateMaterialSchema>;
 export type UpdateNotificationPreferencesInput = z.input<
@@ -76,12 +73,10 @@ export type AdjustMaterialStockData = {
   stockSyncedAt: string | Date;
 };
 
-export type AssetAuditLogData<TRecord = unknown> = {
-  data: TRecord[];
-};
-
 import type {
-  AssetRecord,
+  AssetAuditLogEntry,
+  AssetDetail,
+  AssetsListResponse,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
   CnpjLookupResult,
@@ -806,86 +801,12 @@ export interface CustomerGroupsApi {
   removeMember(id: string | number, memberId: string): Promise<unknown>;
 }
 
-export type AssetsListInput = {
-  page: number;
-  limit: number;
-  customerId?: number;
-  status?: string;
-  query?: string;
-};
-
+// ASSETS: the DTOs are the contract schemas' types (`endpoints/assets.ts`);
+// the client is generated from the endpoint definitions (`modules/assets.ts`).
 export type { AssetStatus };
-
-export type AssetsListData = {
-  data: Array<{
-    id: number;
-    customerId: number;
-    customerName: string;
-    customerTaxId?: string | null;
-    name: string;
-    tag: string;
-    serialNumber: string;
-    manufacturer: string | null;
-    model: string | null;
-    assetTypeId?: number;
-    assetTypeName: string;
-    status: AssetStatus;
-    nextCalibrationDate?: string | null;
-    // Legal-metrology regime (Track 2). The service-order repair-mark / lacre gating
-    // renders for `metrologyRegime === 'LEGAL'`.
-    metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
-  }>;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-export type AssetDetailData = AssetsListData["data"][number] & {
-  assetTypeSlug?: string | null;
-  assetTypeDefinition?: unknown;
-  baseMeasurementUnit?: "mg" | "g" | "kg" | string | null;
-  lastCalibrationDate?: string | Date | null;
-  nextCalibrationDate?: string | Date | null;
-  installedAt?: string | Date | null;
-  comments?: string | null;
-  specifications?: Record<string, unknown> | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-  // Legal-metrology regime (Track 2) + the regulation-fixed verification periodicity,
-  // independent of the customer-owned calibration interval. See specs/legal-metrology-regime.
-  metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
-  regulatedInterval?: {
-    kind:
-      | "fixed_months"
-      | "max_months_from_install"
-      | "per_technology"
-      | "not_nationally_fixed";
-    valueMonths?: number;
-    anchor?: string;
-    technology?: string;
-    regulationReference: string;
-    operationalizedByDelegate: boolean;
-    note?: string;
-  } | null;
-  nextLegalVerificationDate?: string | Date | null;
-};
-
-export interface AssetsApi {
-  list(input: AssetsListInput): Promise<AssetsListData>;
-  /** The stored asset (no joined customer or type names). */
-  create(input: CreateAssetInput): Promise<AssetRecord>;
-  get<TAsset = AssetDetailData>(id: string | number): Promise<TAsset>;
-  update<TAsset = AssetDetailData>(
-    id: string | number,
-    input: UpdateAssetInput,
-  ): Promise<TAsset>;
-  auditLog<TRecord = unknown>(
-    id: string | number,
-  ): Promise<AssetAuditLogData<TRecord>>;
-}
+export type AssetsListData = AssetsListResponse;
+export type AssetDetailData = AssetDetail;
+export type { AssetAuditLogEntry, AssetsApi };
 
 export type AssetTypeListItem = {
   id: number;

@@ -10,6 +10,7 @@
     "./desktop-bridge": "./src/desktop-bridge.ts",
     "./jobs-fixtures": "./src/jobs.fixtures.ts",
     "./standards-fixtures": "./src/standards.fixtures.ts",
+    "./assets-fixtures": "./src/endpoints/assets.fixtures.ts",
     "./customers-fixtures": "./src/endpoints/customers.fixtures.ts",
     "./non-conformances-fixtures": "./src/endpoints/non-conformances.fixtures.ts",
     "./capa-fixtures": "./src/endpoints/capa.fixtures.ts",

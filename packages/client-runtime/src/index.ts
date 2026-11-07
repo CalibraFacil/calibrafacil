@@ -2,7 +2,6 @@ import type {
   AdjustMaterialStockInput,
   CalibraApi,
   CreateApiKeyInput,
-  CreateAssetInput,
   CreateMaterialInput,
   CreateServiceInput,
   CreateServiceOrderInput,
@@ -27,7 +26,6 @@ import type {
   UpdateServiceOrderInput,
   StandardWriteInput,
   StartSsoInput,
-  UpdateAssetInput,
   UpdateMaterialInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
@@ -518,31 +516,6 @@ export function createCloudApiClient(
         };
       };
 
-      assets: {
-        $get(input: {
-          query: {
-            page?: string;
-            limit?: string;
-            customerId?: string;
-            status?: string;
-            query?: string;
-          };
-        }): Promise<Response>;
-        $post(input: { json: CreateAssetInput }): Promise<Response>;
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $put(input: {
-            param: { id: string };
-            json: UpdateAssetInput;
-          }): Promise<Response>;
-          "audit-log": {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-        };
-      };
-      "asset-types": {
-        $get(input: { query?: Record<string, string> }): Promise<Response>;
-      };
       "service-orders": {
         $get(input: {
           query: {
@@ -656,7 +629,7 @@ export function createCloudApiClient(
     signingCertificates: createSigningCertificatesApi(rawCloudClient),
     customers: createCustomersApi(endpointTransport, options),
     customerGroups: createCustomerGroupsApi(rawCloudClient),
-    assets: createAssetsApi(rawCloudClient),
+    assets: createAssetsApi(endpointTransport, options),
     assetTypes: createAssetTypesApi(rawCloudClient),
     environmentalLimits: createEnvironmentalLimitsApi(rawCloudClient, options),
     accreditedScope: createAccreditedScopeApi(rawCloudClient),
