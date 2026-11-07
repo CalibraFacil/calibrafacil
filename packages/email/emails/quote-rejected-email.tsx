@@ -16,7 +16,6 @@ export interface QuoteRejectedEmailProps {
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
   serviceOrderNumber: string;
-  /** Customer name. */
   customerName: string;
   /**
    * REQ-SOEMAIL-032: Rejection reason — rendered when present; omitted when

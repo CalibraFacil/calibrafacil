@@ -5,7 +5,7 @@ import { stableLocalNumericId } from "./ids";
 
 /**
  * What an upgraded desktop's database looks like: a row with a queued local change that an
- * older build wrote (customer create/edit, instrument edit, repair-notes save). Since Q69 no
+ * older build wrote (customer create/edit, instrument edit, repair-notes save). No current
  * build writes them and the cloud refuses them (`UNSUPPORTED_SYNC_OPERATION`), so nothing in
  * the product calls these. The sync suites use them to put a pending change on a mirror row:
  * a pull must not overwrite it, a bootstrap must not drop it, and the push still drains it.

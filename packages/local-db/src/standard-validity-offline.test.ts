@@ -11,7 +11,7 @@ import {
   saveLocalJobExecution,
 } from "./index";
 
-// REQ-CAL-004 (Q12), offline: a reference standard is valid THROUGH the day its
+// REQ-CAL-004, offline: a reference standard is valid THROUGH the day its
 // certificate names, judged on the Sao Paulo day the calibration was performed.
 // The desktop must accept and refuse exactly what the cloud does.
 

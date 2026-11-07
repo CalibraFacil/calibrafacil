@@ -26,7 +26,7 @@ interface AssetOotEmailProps {
 }
 
 /**
- * Customer-facing alert (#740 Track B): the customer's own instrument was
+ * Customer-facing alert: the customer's own instrument was
  * reproved in the as-found ("como recebido") condition. The impact assessment
  * is the CUSTOMER'S obligation (ISO 9001:2015 §7.1.5.2) — the copy frames the
  * portal as the workspace for recording it, never as the lab assuming it.

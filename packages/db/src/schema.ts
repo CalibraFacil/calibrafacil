@@ -5925,7 +5925,7 @@ export const publicCodeRedeemThrottle = pgTable(
 );
 
 // =============================================================================
-// SERVICE ORDER EMAIL LOG - Idempotency / dedup (mini-spec H, REQ-SOEMAIL-007)
+// SERVICE ORDER EMAIL LOG - Idempotency / dedup (REQ-SOEMAIL-007)
 // =============================================================================
 
 /**
@@ -5983,7 +5983,7 @@ export const serviceOrderEmailLogRelations = relations(
 // =============================================================================
 // Rows are written in the SAME database transaction as the triggering status
 // change so that a rollback never produces an orphaned email dispatch.
-// A separate worker (mini-spec E2) drains this table and sends the actual email.
+// A separate worker drains this table and sends the actual email.
 
 export const serviceOrderEmailOutbox = pgTable(
   "service_order_email_outbox",

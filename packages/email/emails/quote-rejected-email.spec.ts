@@ -1,5 +1,5 @@
 /**
- * REQ-SOEMAIL-032 (template rendering) — mini-spec D "Orçamento Recusado".
+ * REQ-SOEMAIL-032 (template rendering) — "Orçamento Recusado".
  *
  * Renders the REAL QuoteRejectedEmail template to HTML and asserts the
  * required fields actually appear in the output.

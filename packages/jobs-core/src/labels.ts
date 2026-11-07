@@ -128,7 +128,6 @@ export async function processLabelJob(
   console.log(`[LABEL ${jobId}] Starting`);
 
   try {
-    // 1. Fetch label data
     const dbFetchStart = performance.now();
     // The message names a job, not its laboratory: learn the laboratory on the
     // system path, then read and write per job in transactions that name it.
@@ -146,7 +145,7 @@ export async function processLabelJob(
       return { success: false, error: "Job not found" };
     }
 
-    // 2. Generate QR code as SVG (canvas not available in Workers)
+    // The QR is an SVG: the worker has no canvas.
     const qrStart = performance.now();
     const verificationUrl = certificateVerificationUrl(data.verificationToken);
     const qrSvg = await QRCode.toString(verificationUrl, {
@@ -162,7 +161,6 @@ export async function processLabelJob(
       `[LABEL ${jobId}] QR generation: ${Math.round(performance.now() - qrStart)}ms`,
     );
 
-    // 3. Render HTML
     const renderStart = performance.now();
     const labelData: LabelData = {
       ...data.label,
@@ -175,14 +173,12 @@ export async function processLabelJob(
       `[LABEL ${jobId}] renderToString: ${Math.round(performance.now() - renderStart)}ms`,
     );
 
-    // 4. Generate PDF
     const pdfStart = performance.now();
     const pdfBuffer = await generateLabelPdf(env, html);
     console.log(
       `[LABEL ${jobId}] generatePdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`,
     );
 
-    // 5. Upload to R2
     const r2Start = performance.now();
     const orgId = data.organizationId;
     if (!orgId) {
@@ -207,10 +203,8 @@ export async function processLabelJob(
       `[LABEL ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`,
     );
 
-    // 6. Build public URL
     const labelUrl = storedObjectUrl(key);
 
-    // 7. Update DB
     const dbUpdateStart = performance.now();
     // The job update and its audit row commit together, in a transaction that
     // names the laboratory.

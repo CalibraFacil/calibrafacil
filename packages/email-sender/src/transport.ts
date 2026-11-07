@@ -12,7 +12,7 @@
  *    SDK at a compatible endpoint).
  *
  * EMAIL_TRANSPORT picks one explicitly. Unset, SMTP wins when SMTP_HOST is set
- * and Resend when RESEND_API_KEY is. Lab-owned sender domains (#584) are a
+ * and Resend when RESEND_API_KEY is. Lab-owned sender domains are a
  * Resend feature: those messages always go through the Resend API (send.ts).
  */
 

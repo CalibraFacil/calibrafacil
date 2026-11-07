@@ -12,7 +12,7 @@ import {
   saveLocalJobExecution,
 } from "./index";
 
-// P1-11, offline: a standard that went stale mid-job must not make every draft
+// Offline: a standard that went stale mid-job must not make every draft
 // save fail on the desktop either. The desktop applies the cloud's rule: a
 // standard already in the job's saved snapshot is kept (with a warning), one
 // the save adds is judged strictly, and the submit is still the hard gate.

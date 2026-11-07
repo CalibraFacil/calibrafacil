@@ -350,7 +350,6 @@ export interface ServiceOrderStatusEmailProps {
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
   serviceOrderNumber: string;
-  /** Customer name. */
   customerName: string;
 }
 

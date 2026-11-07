@@ -12,7 +12,7 @@ import {
 // CALENDAR DAYS. The desktop's job list judges them by the laboratory's
 // (Sao Paulo) day, also from 21:00 to 24:00 when the UTC day is already
 // tomorrow, so it agrees with the cloud. (The offline dashboard and its
-// standards watchlist are online-only since Q13.)
+// standards watchlist are online-only.)
 
 const tempDirectories: string[] = [];
 

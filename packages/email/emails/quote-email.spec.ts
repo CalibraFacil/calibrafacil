@@ -1,6 +1,6 @@
 /**
  * REQ-SOEMAIL-021, REQ-SOEMAIL-022, REQ-SOEMAIL-023, REQ-SOEMAIL-024
- * (template rendering) — mini-spec C "Novo Orçamento".
+ * (template rendering) — "Novo Orçamento".
  *
  * Renders the REAL QuoteEmail template to HTML and asserts the required
  * fields actually appear in the output.

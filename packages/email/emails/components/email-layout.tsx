@@ -37,7 +37,7 @@ export const styles = {
 } as const;
 
 /**
- * Present when the lab sends from its OWN verified domain (issue #584).
+ * Present when the lab sends from its OWN verified domain.
  * With a first-party envelope the "via CalibraFácil" wording is dropped —
  * it only exists because the default domain is shared.
  */

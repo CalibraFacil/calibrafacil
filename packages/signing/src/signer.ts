@@ -221,11 +221,9 @@ export async function signPdf(
   pdfBuffer: Uint8Array | Buffer,
   options: SigningOptions,
 ): Promise<SigningResult> {
-  // 1. Parse and validate certificate
   const certInfo = parsePkcs12(options.p12Buffer, options.password);
   validateCertificateValidity(certInfo);
 
-  // 2. Load PDF and add signature placeholder
   const pdfDoc = await PDFDocument.load(pdfBuffer);
 
   // Add signature placeholder with PAdES settings
@@ -239,10 +237,8 @@ export async function signPdf(
     signatureLength: 8192,
   });
 
-  // Save PDF with placeholder
   const pdfWithPlaceholder = await pdfDoc.save();
 
-  // 3. Sign the PDF using P12Signer
   const signer = new P12Signer(options.p12Buffer, {
     passphrase: options.password,
   });
@@ -253,10 +249,8 @@ export async function signPdf(
     signer,
   );
 
-  // 4. Calculate hash of signed PDF
   const pdfHash = calculateSha256(signedPdfBuffer);
 
-  // 5. Build metadata
   const metadata: SignatureMetadata = {
     signedAt: new Date().toISOString(),
     signerCertificateSerial: certInfo.serialNumber,

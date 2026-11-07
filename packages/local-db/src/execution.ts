@@ -478,7 +478,7 @@ function toJobDetail(job: LocalJobRow) {
       job.calibration_location_snapshot_json,
     ),
     calibrationPhaseSnapshot: parseJson(job.calibration_phase_snapshot_json),
-    // #427: frozen accredited-scope verdict, mirrored from the cloud row so
+    // Frozen accredited-scope verdict, mirrored from the cloud row so
     // the desktop review warnings and the seal-suppression decision match
     // the cloud exactly (an override-downgraded certificate must never show
     // the seal here either).
@@ -592,7 +592,7 @@ function localStandardFacts(
 }
 
 /**
- * The offline runtime of the one standards judgement (Q12, REQ-SJ-3): load the
+ * The offline runtime of the one standards judgement (REQ-SJ-3): load the
  * cached standards and call `judgeExecutionStandards`, which the cloud, the
  * public API and the desktop sync apply share. Exported for the parity test;
  * the offline paths use it through `judgeSubmittedLocalStandards` (a submit)
@@ -623,7 +623,7 @@ export function judgeLocalStandards(
 }
 
 /**
- * The draft-save judgement offline (P1-11): the cloud's rule on the cached
+ * The draft-save judgement offline: the cloud's rule on the cached
  * standards. A standard of the job's saved snapshot that went stale is
  * accepted with a warning; every other standard is judged strictly.
  */
@@ -675,7 +675,7 @@ function localStandardsRefusalError(
 }
 
 /**
- * Submit-time judgement of the standards a job is recorded with (Q12), offline:
+ * Submit-time judgement of the standards a job is recorded with, offline:
  * every standard of the FINAL snapshot, judged on the laboratory day of the
  * final performed date by the same function the cloud uses.
  */
@@ -727,8 +727,8 @@ function savedStandardEntries(snapshot: unknown): Map<number, JsonRecord> {
 }
 
 /**
- * The standards snapshot of a save, and the warnings a DRAFT save carries (P1-11,
- * the cloud's rule): `savedStandardsSnapshot` is what the job already has
+ * The standards snapshot of a save, and the warnings a DRAFT save carries (the
+ * cloud's rule): `savedStandardsSnapshot` is what the job already has
  * frozen; a standard of it that is named again and has since gone stale
  * (deleted, inactive, expired) is kept as frozen and reported in `warnings`
  * instead of failing the save. Every other standard is judged strictly, as is

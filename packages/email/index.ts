@@ -25,7 +25,7 @@ export {
   type PortalDueDigestItem,
 } from "./emails/portal-due-digest-email";
 
-// Service-order customer-facing email layout (mini-spec A foundation)
+// Service-order customer-facing email layout
 
 // Service-order lifecycle email templates
 export { ServiceOrderCreatedEmail } from "./emails/service-order-created-email";
@@ -33,7 +33,7 @@ export { QuoteEmail, type QuoteEmailItem } from "./emails/quote-email";
 export { QuoteApprovedEmail } from "./emails/quote-approved-email";
 export { QuoteRejectedEmail } from "./emails/quote-rejected-email";
 
-// Service-order status-transition emails (mini-spec E2/F/G): one template,
+// Service-order status-transition emails: one template,
 // the words per status in its table.
 export {
   ServiceOrderStatusEmail,
@@ -59,5 +59,5 @@ export {
   type ServiceInProgressStage,
 } from "./emails/service-order-status-email-aliases";
 
-// On-site visit (calibração in loco) email templates (mini-spec 2)
+// On-site visit (calibração in loco) email templates
 export { VisitNotificationEmail } from "./emails/visit-notification-email";

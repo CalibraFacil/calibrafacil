@@ -54,13 +54,11 @@ export interface QuoteEmailProps {
   customerTaxId?: string | null;
   /** Asset manufacturer / brand. */
   assetManufacturer?: string | null;
-  /** Asset model. */
   assetModel?: string | null;
   /** Asset inventory code (tag / código do cliente). */
   assetInventoryCode?: string | null;
   /** Intake (entrada) date, pre-formatted as a pt-BR string e.g. "19/06/2026". */
   intakeDate: string;
-  /** Asset serial number. */
   assetSerialNumber?: string | null;
   /**
    * REQ-SOEMAIL-025: instrument-agnostic spec rows, taken generically from
@@ -237,7 +235,7 @@ function ItemGroup({ label, items, subtotal }: ItemGroupProps) {
 // ---------------------------------------------------------------------------
 
 /**
- * "Novo Orçamento" customer-facing email (mini-spec C).
+ * "Novo Orçamento" customer-facing email.
  *
  * REQ-SOEMAIL-021: header with OS number, customer name, CNPJ/CPF,
  * brand/model/code, intake date, capacity/division, serial, portaria, defect.

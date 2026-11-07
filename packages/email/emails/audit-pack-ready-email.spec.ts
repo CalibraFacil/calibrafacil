@@ -1,5 +1,5 @@
 /**
- * Audit pack ready email (#738) — renders the REAL template to HTML and
+ * Audit pack ready email — renders the REAL template to HTML and
  * asserts the values a customer needs actually appear in the output (same
  * tautology guard as the service-order email specs: mocking the template and
  * asserting props cannot prove the fields reach the customer).

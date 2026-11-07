@@ -89,7 +89,7 @@ export interface ServiceOrderEmailInput {
   /**
    * Callback that renders the email React element given the context.
    * This keeps the dispatcher template-agnostic so each lifecycle event
-   * (mini-specs B–G) can supply its own template while sharing this path.
+   * can supply its own template while sharing this path.
    * Returns React.ReactNode (accepted by @react-email/render) or null to skip.
    */
   renderEmail: (ctx: ServiceOrderEmailRenderContext) => React.ReactNode;

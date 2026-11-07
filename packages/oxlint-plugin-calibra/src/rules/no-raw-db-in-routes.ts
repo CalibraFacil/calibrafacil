@@ -10,12 +10,12 @@ import {
 
 // A route handler that queries through the global Drizzle `db` has to remember
 // the organization predicate on every statement (the tenant SQL guard only
-// catches a forgotten one in the integration tier). P2-2: routes query through
+// catches a forgotten one in the integration tier). Routes query through
 // an org-bound handle instead - `orgDb(organizationId)` from
 // apps/api/src/lib/org-db.ts, i.e. `forOrg(db, organizationId)` from
 // @calibra-facil/db/for-org - which adds the predicate itself.
 //
-// So apps/api/src/routes may not use the `db` exported by @calibra-facil/db. No
+// So route files (apps/api/src/domains/*/routes) may not use the `db` exported by @calibra-facil/db. No
 // route is grandfathered.
 //
 // Statements that are cross-organization by design (sign-in memberships, the

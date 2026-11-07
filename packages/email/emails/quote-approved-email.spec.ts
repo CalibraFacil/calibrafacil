@@ -1,5 +1,5 @@
 /**
- * REQ-SOEMAIL-031 (template rendering) — mini-spec D "Orçamento Aprovado".
+ * REQ-SOEMAIL-031 (template rendering) — "Orçamento Aprovado".
  *
  * Renders the REAL QuoteApprovedEmail template to HTML and asserts the
  * required fields actually appear in the output.

@@ -16,7 +16,6 @@ export interface ServiceOrderCreatedEmailProps {
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2024-001". */
   serviceOrderNumber: string;
-  /** Customer name. */
   customerName: string;
   /** Asset manufacturer / brand (nullable). */
   assetManufacturer?: string | null;
