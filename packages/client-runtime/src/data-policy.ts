@@ -81,16 +81,9 @@ export const calibraApiPolicyRegistry = {
   // Derived from the endpoint definitions (`policy`), not listed here.
   dashboard: endpointPolicies(ENDPOINT_GROUPS.dashboard),
   units: endpointPolicies(ENDPOINT_GROUPS.units),
-  access: {
-    getFinanceAccess: "cloud-only",
-  },
-  onboarding: {
-    // Derived from cloud domain state; desktop has no self-serve activation.
-    getChecklist: "cloud-only",
-  },
-  sessions: {
-    revoke: "cloud-only",
-  },
+  access: endpointPolicies(ENDPOINT_GROUPS.access),
+  onboarding: endpointPolicies(ENDPOINT_GROUPS.onboarding),
+  sessions: endpointPolicies(ENDPOINT_GROUPS.sessions),
   finance: endpointPolicies(ENDPOINT_GROUPS.finance),
   sso: endpointPolicies(ENDPOINT_GROUPS.sso),
   apiKeys: endpointPolicies(ENDPOINT_GROUPS.apiKeys),
@@ -145,12 +138,7 @@ export const calibraApiPolicyRegistry = {
   reports: endpointPolicies(ENDPOINT_GROUPS.reports),
   publicSignup: endpointPolicies(ENDPOINT_GROUPS.publicSignup),
   publicInvitations: endpointPolicies(ENDPOINT_GROUPS.publicInvitations),
-  labSetup: {
-    get: "cloud-only",
-    requestMagicLink: "cloud-only",
-    requestOtp: "cloud-only",
-    complete: "cloud-only",
-  },
+  labSetup: endpointPolicies(ENDPOINT_GROUPS.labSetup),
   nonConformances: endpointPolicies(ENDPOINT_GROUPS.nonConformances),
   capas: endpointPolicies(ENDPOINT_GROUPS.capas),
   proficiencyTests: endpointPolicies(ENDPOINT_GROUPS.proficiencyTests),

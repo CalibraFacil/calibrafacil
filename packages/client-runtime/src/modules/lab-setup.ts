@@ -1,86 +1,51 @@
-import type { LabSetupApi, LabSetupMetadata } from "../types";
+import {
+  labSetupEndpoints,
+  labSetupMetadataSchema,
+  type LabSetupMetadata,
+  type EndpointClientInput,
+  type ResponseValidationOptions,
+} from "@calibra-facil/contracts";
+
 import { CalibraApiError } from "../transport/errors";
-import { readJsonResponse } from "../transport/response";
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
 
-export function createLabSetupApi(rawCloudClient: any): LabSetupApi {
+/**
+ * The lab-setup client is its endpoint group (`labSetupEndpoints` in
+ * `@calibra-facil/contracts`) plus the one thing that is client-side logic: a
+ * refused token answers 400, 404 or 410 with the metadata body saying why
+ * (`status`), which `get` hands back instead of throwing.
+ */
+export type LabSetupApi = Omit<
+  EndpointClient<typeof labSetupEndpoints>,
+  "get"
+> & {
+  get(
+    input: EndpointClientInput<typeof labSetupEndpoints.get>,
+  ): Promise<LabSetupMetadata>;
+};
+
+export function createLabSetupApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): LabSetupApi {
+  const client = endpointClient(labSetupEndpoints, transport, options);
+
   return {
-    async get(token) {
-      const response = await rawCloudClient.api["lab-setup"][":token"].$get({
-        param: { token },
-      });
-      const payload: unknown = await response.json().catch(() => null);
-
-      if (response.ok && isLabSetupMetadata(payload)) {
-        return payload;
+    ...client,
+    async get(input) {
+      try {
+        return await client.get(input);
+      } catch (error) {
+        if (error instanceof CalibraApiError) {
+          const refused = labSetupMetadataSchema.safeParse(error.payload);
+          if (refused.success) return refused.data;
+        }
+        throw error;
       }
-
-      if (!response.ok && isLabSetupMetadata(payload)) {
-        return payload;
-      }
-
-      throw new CalibraApiError(
-        "Falha ao carregar configuração de acesso",
-        response.status,
-        payload,
-      );
-    },
-    async requestMagicLink(token) {
-      return readJsonResponse(
-        await rawCloudClient.api["lab-setup"][":token"][
-          "request-magic-link"
-        ].$post({
-          param: { token },
-        }),
-        "Falha ao enviar link mágico",
-      );
-    },
-    async requestOtp(token) {
-      return readJsonResponse(
-        await rawCloudClient.api["lab-setup"][":token"]["request-otp"].$post({
-          param: { token },
-        }),
-        "Falha ao enviar código",
-      );
-    },
-    async complete(token) {
-      return readJsonResponse(
-        await rawCloudClient.api["lab-setup"][":token"].complete.$post({
-          param: { token },
-        }),
-        "Falha ao concluir acesso",
-      );
     },
   };
-}
-
-function isLabSetupMetadata(value: unknown): value is LabSetupMetadata {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const record = Object.fromEntries(Object.entries(value));
-  return (
-    isLabSetupStatus(record.status) &&
-    record.passkeyPreferred === true &&
-    Array.isArray(record.fallbackMethods) &&
-    record.fallbackMethods.every(isLabSetupFallbackMethod)
-  );
-}
-
-function isLabSetupStatus(value: unknown) {
-  return (
-    value === "ready" ||
-    value === "invalid" ||
-    value === "expired" ||
-    value === "consumed" ||
-    value === "user_invalid" ||
-    value === "email_mismatch" ||
-    value === "organization_invalid" ||
-    value === "membership_missing" ||
-    value === "invitation_invalid"
-  );
-}
-
-function isLabSetupFallbackMethod(value: unknown) {
-  return value === "magic_link" || value === "email_otp";
 }

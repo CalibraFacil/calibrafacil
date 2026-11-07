@@ -1,4 +1,5 @@
 import { createRouter } from "../server/router";
+import { labSetupEndpoints } from "@calibra-facil/contracts";
 import { randomBytes } from "node:crypto";
 import { createLabAuth } from "@calibra-facil/auth";
 import {
@@ -20,6 +21,7 @@ import { DomainError, forbidden, unauthenticated } from "../lib/domain-errors";
 import { recordPlatformEvent } from "../lib/identity";
 import { orgDb } from "../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
+import { mount } from "../lib/endpoint-mount";
 
 function getEnvValue(c: { env?: unknown }, key: string) {
   return toRecord(c.env)[key];
@@ -36,6 +38,9 @@ function resolveTrustedAppUrl(c: { env?: unknown }) {
 
   return appBaseUrl();
 }
+
+/** The ways a claim can go on when the passkey is not used. */
+const CLAIM_FALLBACK_METHODS = ["magic_link", "email_otp"] as const;
 
 function tokenStatusHttpCode(status: string) {
   if (status === "expired" || status === "consumed") {
@@ -74,12 +79,22 @@ async function logClaimEvent(input: {
   });
 }
 
-export const labSetupRouter = createRouter()
-  .get("/:token", async (c) => {
-    const rawToken = c.req.param("token");
+const PREFIX = "/api/lab-setup";
+
+export const labSetupRouter = createRouter();
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.get,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
     const validation = await validateLabAccountSetupToken(rawToken);
 
     if (!validation.ok) {
+      // A refused token answers 400, 404 or 410 with the metadata body: statuses
+      // the definition (200) does not describe.
       return c.json(
         {
           status: validation.status,
@@ -90,18 +105,25 @@ export const labSetupRouter = createRouter()
       );
     }
 
-    return c.json({
-      status: "ready",
+    return {
+      status: "ready" as const,
       email: validation.token.email,
       organizationName: validation.token.organizationName,
       organizationSlug: validation.token.organizationSlug,
       expiresAt: validation.token.expiresAt,
-      passkeyPreferred: true,
-      fallbackMethods: ["magic_link", "email_otp"],
-    });
-  })
-  .post("/:token/request-magic-link", async (c) => {
-    const rawToken = c.req.param("token");
+      passkeyPreferred: true as const,
+      fallbackMethods: [...CLAIM_FALLBACK_METHODS],
+    };
+  },
+);
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.requestMagicLink,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
     const validation = await validateLabAccountSetupToken(rawToken);
 
     if (!validation.ok) {
@@ -145,10 +167,17 @@ export const labSetupRouter = createRouter()
       },
     });
 
-    return c.json({ magicLinkRequested: true });
-  })
-  .post("/:token/request-otp", async (c) => {
-    const rawToken = c.req.param("token");
+    return { magicLinkRequested: true as const };
+  },
+);
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.requestOtp,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
     const validation = await validateLabAccountSetupToken(rawToken);
 
     if (!validation.ok) {
@@ -185,10 +214,17 @@ export const labSetupRouter = createRouter()
       },
     });
 
-    return c.json({ otpRequested: true });
-  })
-  .post("/:token/complete", async (c) => {
-    const rawToken = c.req.param("token");
+    return { otpRequested: true as const };
+  },
+);
+
+mount(
+  labSetupRouter,
+  PREFIX,
+  labSetupEndpoints.complete,
+  [],
+  async (c, { params }) => {
+    const rawToken = params.token;
     const validation = await validateLabAccountSetupToken(rawToken);
 
     if (!validation.ok) {
@@ -340,11 +376,11 @@ export const labSetupRouter = createRouter()
         .where(eq(organization.id, validation.token.organizationId))
         .limit(1);
 
-      return c.json({
-        claimed: true,
+      return {
+        claimed: true as const,
         organizationId: validation.token.organizationId,
         needsOnboarding: !org?.cnpj || !org.email || !org.phone,
-      });
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "UNKNOWN";
       const status = message === "TOKEN_CONSUMED" ? 409 : 400;
@@ -366,4 +402,5 @@ export const labSetupRouter = createRouter()
         message: "Não foi possível concluir o acesso",
       });
     }
-  });
+  },
+);

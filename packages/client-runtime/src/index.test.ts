@@ -2092,7 +2092,9 @@ describe("sessions runtime adapter", () => {
       fetch: fetchMock,
     });
 
-    await expect(client.sessions.revoke("session-1")).resolves.toEqual({
+    await expect(
+      client.sessions.revoke({ body: { sessionId: "session-1" } }),
+    ).resolves.toEqual({
       status: true,
     });
     expect(String(fetchCalls[0]?.[0])).toBe(
@@ -2112,9 +2114,9 @@ describe("sessions runtime adapter", () => {
       },
     });
 
-    await expect(client.sessions.revoke("session-1")).rejects.toThrow(
-      "Gerenciamento de sessoes requer a API web/nuvem",
-    );
+    await expect(
+      client.sessions.revoke({ body: { sessionId: "session-1" } }),
+    ).rejects.toThrow("Gerenciamento de sessoes requer a API web/nuvem");
   });
 });
 
@@ -2163,7 +2165,9 @@ describe("lab setup runtime adapter", () => {
       fetch: fetchMock,
     });
 
-    await expect(client.labSetup.get("setup-token")).resolves.toEqual({
+    await expect(
+      client.labSetup.get({ params: { token: "setup-token" } }),
+    ).resolves.toEqual({
       status: "ready",
       email: "owner@lab.test",
       organizationName: "Lab Acreditado",
@@ -2193,7 +2197,9 @@ describe("lab setup runtime adapter", () => {
       fetch: fetchMock,
     });
 
-    await expect(client.labSetup.get("expired-token")).resolves.toEqual({
+    await expect(
+      client.labSetup.get({ params: { token: "expired-token" } }),
+    ).resolves.toEqual({
       status: "expired",
       passkeyPreferred: true,
       fallbackMethods: ["magic_link", "email_otp"],

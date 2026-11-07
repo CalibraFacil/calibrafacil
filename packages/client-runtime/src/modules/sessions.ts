@@ -1,15 +1,18 @@
-import type { SessionsApi } from "../types";
-import { readMutationResponse } from "../transport/response";
+import { sessionEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
 
-export function createSessionsApi(rawCloudClient: any): SessionsApi {
-  return {
-    async revoke(sessionId) {
-      return readMutationResponse(
-        await rawCloudClient.api.sessions.revoke.$post({
-          json: { sessionId },
-        }),
-        "Falha ao encerrar sessao",
-      );
-    },
-  };
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The sessions client is its endpoint group (`sessionEndpoints` in `@calibra-facil/contracts`). */
+export type SessionsApi = EndpointClient<typeof sessionEndpoints>;
+
+export function createSessionsApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): SessionsApi {
+  return endpointClient(sessionEndpoints, transport, options);
 }

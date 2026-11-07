@@ -148,7 +148,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         (prev) => (prev ?? []).filter((s) => s.id !== sessionId),
       )
       try {
-        await calibraApi.sessions.revoke(sessionId)
+        await calibraApi.sessions.revoke({ body: { sessionId: sessionId } })
         await refreshSessions()
       } catch (err) {
         const message =

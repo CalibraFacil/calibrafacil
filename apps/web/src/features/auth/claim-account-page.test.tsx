@@ -117,7 +117,9 @@ describe('ClaimAccountPage', () => {
       })
     })
     expect(claimMocks.signInPasskey).toHaveBeenCalledTimes(1)
-    expect(claimMocks.completeSetup).toHaveBeenCalledWith('setup-token')
+    expect(claimMocks.completeSetup).toHaveBeenCalledWith({
+      params: { token: 'setup-token' },
+    })
     expect(claimMocks.startDesktopInitialSync).toHaveBeenCalledTimes(1)
     expect(claimMocks.navigate).toHaveBeenCalledWith({ to: '/dashboard' })
   })
@@ -169,7 +171,9 @@ describe('ClaimAccountPage', () => {
     )
 
     await waitFor(() => {
-      expect(claimMocks.requestOtp).toHaveBeenCalledWith('setup-token')
+      expect(claimMocks.requestOtp).toHaveBeenCalledWith({
+        params: { token: 'setup-token' },
+      })
     })
 
     // The sixth digit submits on its own; no button click needed.
@@ -184,7 +188,9 @@ describe('ClaimAccountPage', () => {
       })
     })
     await waitFor(() => {
-      expect(claimMocks.completeSetup).toHaveBeenCalledWith('setup-token')
+      expect(claimMocks.completeSetup).toHaveBeenCalledWith({
+        params: { token: 'setup-token' },
+      })
     })
     expect(claimMocks.navigate).toHaveBeenCalledWith({
       to: '/onboarding/organization',
@@ -210,7 +216,9 @@ describe('ClaimAccountPage', () => {
     expect(await screen.findByText('Concluindo acesso...')).toBeTruthy()
 
     await waitFor(() => {
-      expect(claimMocks.completeSetup).toHaveBeenCalledWith('setup-token')
+      expect(claimMocks.completeSetup).toHaveBeenCalledWith({
+        params: { token: 'setup-token' },
+      })
     })
     expect(claimMocks.startDesktopInitialSync).toHaveBeenCalledTimes(1)
     expect(claimMocks.navigate).toHaveBeenCalledWith({ to: '/dashboard' })
