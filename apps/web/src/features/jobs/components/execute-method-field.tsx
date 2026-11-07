@@ -1,3 +1,4 @@
+import { toRecordArray } from '@calibra-facil/shared/record'
 import { Input } from '@calibra-facil/ui/input'
 import { Field, FieldLabel } from '@calibra-facil/ui/field'
 import {
@@ -23,7 +24,7 @@ import {
   resolveSelectedIndicatorPosition,
   type CalibrationPhaseSnapshot,
 } from '@/features/jobs/execution'
-import { toRecordArray } from '../record-guards'
+
 import { toCalibrationPhaseMode, toStringValue } from '../execute-page-helpers'
 import type { AssetBaseMeasurementUnit } from '../use-asset-unit-conversion'
 import type { useExecutionFieldModel } from '../use-execution-field-model'

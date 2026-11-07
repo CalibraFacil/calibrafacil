@@ -1,8 +1,9 @@
+import { isRecord } from "@calibra-facil/shared/record";
 import { systemDb as ownerDb } from "@calibra-facil/db";
 import { calibrationJob, serviceOrder } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
-import { LAB_ID, isRecord, numberField, recordOf, stringField } from "./api";
+import { LAB_ID, numberField, recordOf, stringField } from "./api";
 import type { SeededAsset } from "./assets";
 import type { SeedContext } from "./context";
 import { DEMO_CUSTOMERS } from "./customers";

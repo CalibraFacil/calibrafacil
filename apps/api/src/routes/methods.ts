@@ -56,6 +56,7 @@ import {
   parseNumericRouteIdentifier,
 } from "../lib/route-identifiers";
 import { clientIp } from "../lib/client-ip";
+import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
 const approverUser = alias(user, "approverUser");
@@ -219,7 +220,7 @@ function unmodeledUncertaintyDiagnostics(params: {
 }
 
 function coerceMethodDraft(value: unknown): MethodDraft {
-  const candidate = recordFromUnknown(value);
+  const candidate = toRecord(value);
 
   if (
     typeof candidate.id === "string" &&
@@ -335,7 +336,7 @@ function methodPayloadToDefinitionDraft(
 function methodInputToDefinitionInput(
   input: unknown,
 ): MethodDraft["inputs"][number] {
-  const record = recordFromUnknown(input);
+  const record = toRecord(input);
   const key = typeof record.key === "string" ? record.key : "input";
   const label = typeof record.label === "string" ? record.label : key;
   const required = Boolean(record.required);
@@ -387,7 +388,7 @@ function methodInputToDefinitionInput(
       columns: Array.isArray(record.columns)
         ? record.columns
             .map((column) => {
-              const tableColumn = recordFromUnknown(column);
+              const tableColumn = toRecord(column);
               if (
                 typeof tableColumn.key !== "string" ||
                 typeof tableColumn.label !== "string"
@@ -510,10 +511,6 @@ function objectRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  return objectRecord(value) ?? {};
-}
-
 function methodTableColumnRoleToDefinitionRole(
   role: unknown,
 ): DefinitionTableColumn["role"] {
@@ -536,7 +533,7 @@ function methodTableColumnMassCompositionToDefinition(
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
-  const record = recordFromUnknown(value);
+  const record = toRecord(value);
   const targetColumns =
     record.targetColumns &&
     typeof record.targetColumns === "object" &&
@@ -565,7 +562,7 @@ function methodTableColumnMassCompositionToDefinition(
 function methodMassCompositionTargetColumnsToDefinition(
   value: object,
 ): DefinitionMassComposition["targetColumns"] {
-  const record = recordFromUnknown(value);
+  const record = toRecord(value);
   const normalized = {
     ...(typeof record.certifiedValue === "string"
       ? { certifiedValue: record.certifiedValue }
@@ -615,7 +612,7 @@ function isMassCompositionQuantityMode(
 // each optional field instead, mirroring `methodInputToDefinitionInput`'s
 // existing `...(metadata ? { metadata } : {})` convention above.
 function methodFormulaToDefinitionFormula(formula: unknown) {
-  const record = recordFromUnknown(formula);
+  const record = toRecord(formula);
   const key =
     typeof record.outputKey === "string"
       ? record.outputKey
@@ -651,7 +648,7 @@ function methodFormulaScopeToDefinitionScope(scope: unknown) {
   if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
     return undefined;
   }
-  const record = recordFromUnknown(scope);
+  const record = toRecord(scope);
   if (record.kind === "scalar") return { kind: "scalar" as const };
   if (record.kind === "table_row" && typeof record.tableKey === "string") {
     return { kind: "table_row" as const, tableKey: record.tableKey };
@@ -663,7 +660,7 @@ function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
   const bindings: Array<Record<string, unknown>> = [];
 
   for (const input of rawInputs) {
-    const record = recordFromUnknown(input);
+    const record = toRecord(input);
     if (typeof record.key !== "string") continue;
     const label = typeof record.label === "string" ? record.label : record.key;
 
@@ -680,7 +677,7 @@ function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
     if (record.type !== "table" || !Array.isArray(record.columns)) continue;
 
     for (const column of record.columns) {
-      const tableColumn = recordFromUnknown(column);
+      const tableColumn = toRecord(column);
       if (
         tableColumn.type !== "number" ||
         typeof tableColumn.key !== "string"
@@ -768,11 +765,11 @@ function buildStandardCompatibilityVariableBindings(
 ): unknown[] {
   const expressions = [
     ...rawFormulas.flatMap((formula) => {
-      const record = recordFromUnknown(formula);
+      const record = toRecord(formula);
       return typeof record.expression === "string" ? [record.expression] : [];
     }),
     ...rawValidations.flatMap((validation) => {
-      const record = recordFromUnknown(validation);
+      const record = toRecord(validation);
       if (typeof record.expression === "string") return [record.expression];
       return [
         typeof record.leftExpression === "string"
@@ -805,7 +802,7 @@ function buildStandardCompatibilityVariableBindings(
 }
 
 function methodFormulaReportingToDefinitionReporting(reporting: unknown) {
-  const record = recordFromUnknown(reporting);
+  const record = toRecord(reporting);
   if (!reporting || typeof reporting !== "object") return undefined;
   const normalized = {
     ...(typeof record.includeInCertificate === "boolean"
@@ -843,7 +840,7 @@ function isFormulaReportingGroup(
 function methodVariableBindingToDefinitionInput(
   binding: unknown,
 ): MethodDraft["inputs"][number] | null {
-  const record = recordFromUnknown(binding);
+  const record = toRecord(binding);
   if (typeof record.key !== "string") return null;
 
   return {
@@ -901,7 +898,7 @@ function methodValidationToAcceptanceCriterion(
   validation: unknown,
   index: number,
 ) {
-  const record = recordFromUnknown(validation);
+  const record = toRecord(validation);
 
   const expression =
     typeof record.expression === "string"
@@ -1076,10 +1073,6 @@ function buildAdhocPreviewScenarios(
   ];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function buildReviewPreviewEvidence(params: {
   compiledMethod: CompiledMethod;
   previewScenarios: MethodDraft["previewScenarios"] | undefined;
@@ -1129,7 +1122,7 @@ function reviewPreviewScenariosFromEvidence(
 function isMethodPreviewScenario(
   value: unknown,
 ): value is MethodDraft["previewScenarios"][number] {
-  const scenario = recordFromUnknown(value);
+  const scenario = toRecord(value);
   return (
     typeof scenario.key === "string" &&
     typeof scenario.label === "string" &&
@@ -1295,7 +1288,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .post("/compile", ...withLabPermission({ template: ["read"] }), async (c) => {
     try {
-      const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+      const body = toRecord(await c.req.json().catch(() => ({})));
       const draftResult = tryCoerceMethodDraft(
         body.draft ?? body.method ?? body,
       );
@@ -1329,7 +1322,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .post("/preview", ...withLabPermission({ template: ["read"] }), async (c) => {
     try {
-      const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+      const body = toRecord(await c.req.json().catch(() => ({})));
       const draftResult = tryCoerceMethodDraft(
         body.draft ?? body.method ?? body,
       );
@@ -1389,7 +1382,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             const modelResult = preview?.measurementModelResults.find(
               (item) => item.key === model.key,
             );
-            const resultRecord = recordFromUnknown(modelResult?.result);
+            const resultRecord = toRecord(modelResult?.result);
             const value = modelResult
               ? Array.isArray(modelResult.result)
                 ? modelResult.result.map((item) => item.value)
@@ -2109,7 +2102,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+          const body = toRecord(await c.req.json().catch(() => ({})));
           const previewScenarios = buildAdhocPreviewScenarios(
             objectRecord(body.sampleData) ?? undefined,
           );
@@ -2375,7 +2368,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+          const body = toRecord(await c.req.json().catch(() => ({})));
           const publishDraft = methodRecordToDraft({
             ...existing,
             status: "PUBLISHED",
@@ -2682,7 +2675,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             );
           }
 
-          const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+          const body = toRecord(await c.req.json().catch(() => ({})));
           const publishDraft = methodRecordToDraft({
             ...existing,
             status: "PUBLISHED",

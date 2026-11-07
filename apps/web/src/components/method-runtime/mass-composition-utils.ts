@@ -4,6 +4,7 @@ import {
   normalizeMassUnit,
   type MassUnit,
 } from '@calibra-facil/shared'
+import { toRecord } from '@calibra-facil/shared/record'
 
 // Re-exported so existing importers (mass-composition-suggest, etc.) keep their
 // import site. Mass composition stays mass-only; these delegate to the shared
@@ -81,14 +82,6 @@ export function isMassCompositionValue(
     record.kind === 'mass_standard_composition' &&
     Array.isArray(record.items)
   )
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {}
-  }
-
-  return Object.fromEntries(Object.entries(value))
 }
 
 export function formatMassCompositionLabel(

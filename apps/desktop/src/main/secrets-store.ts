@@ -9,6 +9,7 @@ import {
   type DesktopSecretName,
   type DesktopSecretStatus,
 } from "@calibra-facil/contracts";
+import { toRecord } from "@calibra-facil/shared/record";
 
 const secretsDirectory = "secrets";
 const secretsFileName = "desktop-secrets.json";
@@ -167,14 +168,6 @@ function readStoredSecrets(value: unknown): StoredSecretsFile {
     version: 1,
     secrets: parsedSecrets,
   };
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 function isMissingFileError(error: unknown): boolean {

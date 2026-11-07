@@ -3,6 +3,7 @@ import type {
   MethodDraftInput,
   MethodDraftMeasurementModelSource,
 } from './types'
+import { toRecordArray } from '@calibra-facil/shared/record'
 
 /**
  * Placeholder for every numeric slot of the generated sample data.
@@ -234,18 +235,4 @@ function addMeasurementSourceSample(
     row[source.columnKey] = row[source.columnKey] ?? sampleRowNumber(index)
   }
   sample[source.tableKey] = rows
-}
-
-function toRecordArray(value: unknown): Array<Record<string, unknown>> {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  return value.flatMap((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      return []
-    }
-
-    return [Object.fromEntries(Object.entries(item))]
-  })
 }

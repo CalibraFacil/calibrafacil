@@ -1,3 +1,4 @@
+import { toRecordArray } from '@calibra-facil/shared/record'
 import { Badge } from '@calibra-facil/ui/badge'
 import {
   Table,
@@ -18,7 +19,7 @@ import {
   type ReviewMethodField,
 } from '@/features/jobs/detail-model'
 import { cn } from '@/lib/utils'
-import { toRecordArray } from '../record-guards'
+
 import { findValidationFor } from '@/features/jobs/detail-model/validation-targets'
 
 export type JobReviewModel = ReturnType<typeof buildJobReviewModel>

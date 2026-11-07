@@ -18,6 +18,7 @@ import {
   syncAttachmentKey,
 } from "@calibra-facil/shared/storage-keys";
 import { type MemberData } from "../../middleware/permission";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export const DEFAULT_SYNC_PULL_LIMIT = 100;
 export const MAX_SYNC_PULL_LIMIT = 500;
@@ -122,12 +123,6 @@ export function safeAttachmentExtension(fileName: string) {
 
   const extension = fileName.slice(dotIndex, dotIndex + 16);
   return /^\.[a-zA-Z0-9]+$/.test(extension) ? extension : "";
-}
-
-export function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : {};
 }
 
 export function isIntegerNumber(value: unknown): value is number {

@@ -1,8 +1,8 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { createHash } from "node:crypto";
 import { db, systemDb } from "@calibra-facil/db";
 import { customer, organization } from "@calibra-facil/db/schema";
 import { and, eq, ne } from "drizzle-orm";
-import { asRecord } from "./helpers";
 
 // The pre-phase of a legacy `create_local_customer` event (see
 // PreparedDesktopEventSideEffects in modules/sync/desktop-event-support.ts): the client organization it
@@ -109,7 +109,7 @@ function readDesktopCustomerOrganizationStamp(metadata: string | null) {
   if (!metadata) return null;
   try {
     const parsed: unknown = JSON.parse(metadata);
-    const stamp = asRecord(asRecord(parsed).desktopSync);
+    const stamp = toRecord(toRecord(parsed).desktopSync);
     return typeof stamp.laboratoryId === "string" &&
       typeof stamp.eventId === "string"
       ? { laboratoryId: stamp.laboratoryId, eventId: stamp.eventId }

@@ -5,6 +5,8 @@ import {
   type Baseline,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 
 // Domain failures in apps/api/src/routes must be thrown as DomainErrors
@@ -79,12 +81,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
 
 const MESSAGE =
   'Do not build a domain failure by hand with c.json({ error }, status). Throw a DomainError (notFound/invalid/conflict/... from apps/api/src/lib/domain-errors.ts) with a code from @calibra-facil/contracts so clients get a stable "code". See docs/architecture/api-client-contract.md.';
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 function isJsonCallee(callee: UnknownRecord | null): boolean {
   if (callee?.type !== "MemberExpression" || callee.computed === true) {

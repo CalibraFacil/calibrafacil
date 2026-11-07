@@ -1,4 +1,5 @@
 import { CONTA_AZUL_API_BASE_URL } from "@calibra-facil/shared";
+import { isRecord } from "@calibra-facil/shared/record";
 
 // Conta Azul's OpenAPI specs restrict `tamanho_pagina` to this enum across
 // every paginated endpoint. Requests outside the set are rejected with 400.
@@ -567,10 +568,6 @@ function readSuccessNoContentResponse(response: Response): null {
   }
 
   return null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function extractErrorCode(body: unknown, fallback: string) {

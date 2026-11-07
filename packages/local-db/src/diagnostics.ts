@@ -5,6 +5,7 @@ import {
   countPendingOutbox,
   countPendingOutboxForOtherUsers,
 } from "./outbox";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export type LocalDatabaseDiagnostics = {
   schemaVersion: number;
@@ -47,14 +48,6 @@ export function getLocalDatabaseDiagnostics(
     activeCalibrationJobCount: countActiveCalibrationJobs(database),
     activeServiceOrderWorkflowCount: countActiveServiceOrderWorkflows(database),
   };
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 function countActiveCalibrationJobs(database: LocalDatabase) {

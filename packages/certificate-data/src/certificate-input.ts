@@ -44,6 +44,7 @@ import type {
   MethodSnapshot,
   StandardSnapshot,
 } from "./certificate-data.js";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * Identifies the layout that produces a certificate. Frozen with the input and
@@ -381,10 +382,6 @@ export function buildCertificateInput(
 function normalizeCertificateInput(input: CertificateInput): CertificateInput {
   const parsed: CertificateInput = JSON.parse(JSON.stringify(input));
   return parsed;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**

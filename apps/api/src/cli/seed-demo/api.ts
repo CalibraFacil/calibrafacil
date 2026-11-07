@@ -13,6 +13,7 @@ import { session } from "@calibra-facil/db/schema";
 import { inArray } from "drizzle-orm";
 
 import { createApiApp } from "../../app";
+import { isRecord } from "@calibra-facil/shared/record";
 
 export const LAB_ID = "demo-lab";
 
@@ -213,10 +214,6 @@ export async function createSeedApi(): Promise<SeedApi> {
 }
 
 // --- narrow readers for untyped JSON (no `as` assertions) -------------------
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function recordOf(
   value: unknown,

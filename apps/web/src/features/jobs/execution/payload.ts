@@ -1,3 +1,4 @@
+import { toRecord, toRecordArray } from '@calibra-facil/shared/record'
 import {
   validateCalibrationLocationForSubmit,
   validateCalibrationPhasesForSubmit,
@@ -8,8 +9,8 @@ import type {
 } from '@/components/method-runtime/types'
 import { applyTableWeighingRangeResolvers } from '@/components/method-runtime/table-input-renderer'
 import { collectMassCompositionStandardIds } from '@/components/method-runtime/mass-composition-utils'
-import { toRecord } from './official-execution'
-import { isNumericString, toRecordArray } from './paste'
+
+import { isNumericString } from './paste'
 import {
   type CalibrationLocationSnapshot,
   type CalibrationPhaseBlock,

@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import {
   serviceOrder,
   serviceOrderDeliveryDocument,
@@ -11,7 +12,7 @@ import {
 import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { and, desc, eq } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../../lib/units";
-import { asRecord } from "./helpers";
+
 import {
   recordServiceOrderEvent,
   replaceExecutionItems,
@@ -44,7 +45,7 @@ export async function applyCreateLocalServiceOrderQuoteDraft(
     return { ok: true, remoteEntityId: existingRemoteEntityId };
   }
 
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const remoteServiceOrderId = await getRemoteServiceOrderIdFromPayload(
     input,
     payload,
@@ -183,7 +184,7 @@ export async function applyLocalServiceOrderExecutionNotes(
   input: ApplyDesktopSyncEventInput,
   actorUserId: string,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const remoteServiceOrderId = await getRemoteServiceOrderIdFromPayload(
     input,
     payload,
@@ -399,7 +400,7 @@ export async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
     return { ok: true, remoteEntityId: existingRemoteEntityId };
   }
 
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const remoteServiceOrderId = await getRemoteServiceOrderIdFromPayload(
     input,
     payload,

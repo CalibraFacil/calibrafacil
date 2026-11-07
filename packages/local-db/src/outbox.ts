@@ -8,6 +8,7 @@ import type { LocalDatabase } from "./database";
 import { resetAttachmentUpload } from "./attachments";
 import { releaseSettledSkippedRows } from "./skipped-rows";
 import { OUTBOX_MACHINE } from "./state-machines";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type OutboxCommand = (typeof OUTBOX_MACHINE.commands)[number];
 import {
@@ -1003,7 +1004,7 @@ WHERE id = @localId
     event.aggregate_kind === "calibration_job" &&
     typeof accepted.remoteEntityId === "number"
   ) {
-    const remoteEntity = asRecord(accepted.remoteEntity);
+    const remoteEntity = toRecord(accepted.remoteEntity);
     const officialJobId = getString(remoteEntity, "jobId");
     const remoteUpdatedAt = getString(remoteEntity, "updatedAt");
     database
@@ -1053,7 +1054,7 @@ WHERE id = @localId
       .run({
         remoteId: accepted.remoteEntityId,
         remoteBaseUpdatedAt: getString(
-          asRecord(accepted.remoteEntity),
+          toRecord(accepted.remoteEntity),
           "updatedAt",
         ),
         localId: event.aggregate_id,
@@ -1078,7 +1079,7 @@ WHERE id = @localId
       .run({
         remoteId: accepted.remoteEntityId,
         remoteBaseUpdatedAt: getString(
-          asRecord(accepted.remoteEntity),
+          toRecord(accepted.remoteEntity),
           "updatedAt",
         ),
         localId: event.aggregate_id,
@@ -1089,7 +1090,7 @@ WHERE id = @localId
     event.aggregate_kind === "service_order" &&
     typeof accepted.remoteEntityId === "number"
   ) {
-    const remoteEntity = asRecord(accepted.remoteEntity);
+    const remoteEntity = toRecord(accepted.remoteEntity);
     const officialServiceOrderNumber = getString(
       remoteEntity,
       "serviceOrderNumber",
@@ -1137,10 +1138,10 @@ WHERE id = @localId
     event.aggregate_kind === "service_order_execution" &&
     typeof accepted.remoteEntityId === "number"
   ) {
-    const remoteEntity = asRecord(accepted.remoteEntity);
+    const remoteEntity = toRecord(accepted.remoteEntity);
     const status = getString(remoteEntity, "status");
     const localServiceOrderId = getString(
-      asRecord(parseJson(event.payload_json)),
+      toRecord(parseJson(event.payload_json)),
       "serviceOrderId",
     );
     // REL-01 slice 3 (REQ-REL-RES-002/003): the execution row has no pull path,
@@ -1181,7 +1182,7 @@ WHERE id = @localServiceOrderId
     event.aggregate_kind === "non_conformance" &&
     typeof accepted.remoteEntityId === "number"
   ) {
-    const remoteEntity = asRecord(accepted.remoteEntity);
+    const remoteEntity = toRecord(accepted.remoteEntity);
     const officialNcNumber = getString(remoteEntity, "ncNumber");
     database
       .prepare(
@@ -1204,7 +1205,7 @@ WHERE id = @localId
     event.aggregate_kind === "service_order_delivery_document" &&
     typeof accepted.remoteEntityId === "number"
   ) {
-    const remoteEntity = asRecord(accepted.remoteEntity);
+    const remoteEntity = toRecord(accepted.remoteEntity);
     const issuedAt = getString(remoteEntity, "issuedAt");
     database
       .prepare(
@@ -1254,14 +1255,6 @@ type DomainEventRow = {
   aggregate_id: string;
   payload_json: string;
 };
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
 
 function getString(row: Record<string, unknown>, key: string) {
   const value = row[key];

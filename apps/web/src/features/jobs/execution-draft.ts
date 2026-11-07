@@ -4,6 +4,7 @@ import type {
   CalibrationLocationSnapshot,
   CalibrationPhaseSnapshot,
 } from '@/features/jobs/execution'
+import { isRecord } from '@calibra-facil/shared/record'
 
 /**
  * The calibration execution worksheet keeps every typed reading in component
@@ -105,10 +106,6 @@ export type StoredExecutionDraft = z.infer<typeof storedDraftSchema>
 // Value comparison
 // ---------------------------------------------------------------------------
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 /** Own keys whose value is not `undefined`: `{a: 1, b: undefined}` equals `{a: 1}`. */
 function definedKeys(value: Record<string, unknown>) {
   return Object.keys(value).filter((key) => value[key] !== undefined)
@@ -133,7 +130,7 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
     return left.every((item, index) => isDeepEqual(item, right[index]))
   }
 
-  if (isPlainObject(left) && isPlainObject(right)) {
+  if (isRecord(left) && isRecord(right)) {
     const leftKeys = definedKeys(left)
     if (leftKeys.length !== definedKeys(right).length) return false
     return leftKeys.every(
@@ -149,7 +146,7 @@ function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableSerialize(item ?? null)).join(',')}]`
   }
-  if (isPlainObject(value)) {
+  if (isRecord(value)) {
     // definedKeys() returns a fresh array, so sorting in place is safe;
     // toSorted() is not in this project's TS lib target.
     // oxlint-disable-next-line unicorn/no-array-sort

@@ -3,6 +3,7 @@ import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -1348,17 +1349,9 @@ function parseJson(value: string | null | undefined) {
   }
 }
 
-function recordFromUnknown(value: unknown): JsonRecord {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 function parseJsonRecord(value: string | null | undefined) {
   const parsed = parseJson(value);
-  return recordFromUnknown(parsed);
+  return toRecord(parsed);
 }
 
 function parseJsonRecordOrNull(value: string | null | undefined) {

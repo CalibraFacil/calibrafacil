@@ -25,6 +25,7 @@ import {
   type UnitGovernanceAccess,
 } from "../lib/units";
 import { orgDb } from "../lib/org-db";
+import { toRecord } from "@calibra-facil/shared/record";
 
 // =============================================================================
 // CONTEXT TYPES
@@ -110,14 +111,6 @@ const requestPortalAuthCache = new WeakMap<
 >();
 const serverTimingCache = new WeakMap<object, ServerTimingMetric[]>();
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 function isDate(value: unknown): value is Date {
   return value instanceof Date;
 }
@@ -127,9 +120,9 @@ function isNullableDate(value: unknown): value is Date | null | undefined {
 }
 
 function isSessionData(value: unknown): value is SessionData {
-  const sessionData = recordFromUnknown(value);
-  const user = recordFromUnknown(sessionData.user);
-  const session = recordFromUnknown(sessionData.session);
+  const sessionData = toRecord(value);
+  const user = toRecord(sessionData.user);
+  const session = toRecord(sessionData.session);
 
   return (
     typeof user.id === "string" &&

@@ -4,6 +4,7 @@ import {
   type AccreditationSealEligibilityParams,
 } from "@calibra-facil/shared";
 import { and, eq, sql } from "drizzle-orm";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * The accreditation-seal decision of an issued certificate is the one frozen at
@@ -45,10 +46,6 @@ export type IssuedSeal = {
    */
   accreditationNumber: string | null;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * The frozen decision as the job detail DTO carries it (`accreditationSeal`),

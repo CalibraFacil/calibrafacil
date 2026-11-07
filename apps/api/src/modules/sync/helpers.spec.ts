@@ -1,8 +1,8 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { describe, expect, it } from "vitest";
 
 import { type MemberData } from "../../middleware/permission";
 import {
-  asRecord,
   buildSyncAttachmentObjectKey,
   DEFAULT_SYNC_PULL_LIMIT,
   encodeSyncAttachmentId,
@@ -295,19 +295,19 @@ describe("sync helpers — buildSyncAttachmentObjectKey", () => {
 });
 
 describe("sync helpers — record validators", () => {
-  it("asRecord copies a plain object's entries", () => {
-    expect(asRecord({ a: 1, b: "x" })).toEqual({ a: 1, b: "x" });
+  it("toRecord copies a plain object's entries", () => {
+    expect(toRecord({ a: 1, b: "x" })).toEqual({ a: 1, b: "x" });
   });
 
-  it("asRecord returns {} for arrays", () => {
-    expect(asRecord([1, 2, 3])).toEqual({});
+  it("toRecord returns {} for arrays", () => {
+    expect(toRecord([1, 2, 3])).toEqual({});
   });
 
-  it("asRecord returns {} for null and primitives", () => {
-    expect(asRecord(null)).toEqual({});
-    expect(asRecord(undefined)).toEqual({});
-    expect(asRecord(5)).toEqual({});
-    expect(asRecord("str")).toEqual({});
+  it("toRecord returns {} for null and primitives", () => {
+    expect(toRecord(null)).toEqual({});
+    expect(toRecord(undefined)).toEqual({});
+    expect(toRecord(5)).toEqual({});
+    expect(toRecord("str")).toEqual({});
   });
 
   it("isIntegerNumber accepts integers and rejects non-integers", () => {

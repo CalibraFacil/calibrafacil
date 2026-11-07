@@ -1,6 +1,7 @@
 import { standardDaysUntilExpiry } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export type LocalStandardStatus =
   | "ACTIVE"
@@ -333,7 +334,7 @@ function parseCertifiedValues(value: unknown): LocalCertifiedValue[] | null {
 
   for (const item of value) {
     if (!item || typeof item !== "object") continue;
-    const record = recordFromUnknown(item);
+    const record = toRecord(item);
     const nominal = getString(record, "nominal");
     const certifiedValue = getNumber(record, "value");
     const uncertainty = getNumber(record, "uncertainty");
@@ -385,18 +386,10 @@ function parseStatus(status: string): LocalStandardStatus {
 function safeParseRecord(value: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(value);
-    return recordFromUnknown(parsed);
+    return toRecord(parsed);
   } catch {
     return {};
   }
-}
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 function getString(record: Record<string, unknown>, key: string) {

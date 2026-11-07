@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import {
   SYNC_ATTACHMENT_MAX_BYTES,
   type SyncAttachmentMimeType,
@@ -17,7 +18,6 @@ import {
   headObject,
 } from "../../lib/storage";
 import { type MemberData } from "../../middleware/permission";
-import { asRecord } from "./helpers";
 
 /**
  * The cloud half of the offline attachment upload leg (roadmap P0-5).
@@ -274,7 +274,7 @@ export async function findCompletedSyncAttachment(
   );
   if (!row) return null;
 
-  const details = asRecord(row.details);
+  const details = toRecord(row.details);
   return {
     etag: typeof details.etag === "string" ? details.etag : null,
     contentHash:

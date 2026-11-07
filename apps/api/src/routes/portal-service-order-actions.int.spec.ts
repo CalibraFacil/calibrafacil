@@ -26,6 +26,7 @@ import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { isRecord } from "@calibra-facil/shared/record";
 
 const ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = { ...ORIGIN, "content-type": "application/json" };
@@ -164,10 +165,6 @@ async function request(method: "GET" | "POST", path: string, body?: unknown) {
   const text = await response.text();
   const json: unknown = JSON.parse(text);
   return { status: response.status, text, json };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 async function quoteStatus(quoteId: number) {

@@ -2,6 +2,7 @@ import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export type LocalCustomersListInput = {
   page: number;
@@ -559,15 +560,7 @@ function parseJson(value: string | null) {
   }
 }
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 function parseJsonRecordOrNull(value: string | null) {
-  const record = recordFromUnknown(parseJson(value));
+  const record = toRecord(parseJson(value));
   return Object.keys(record).length > 0 ? record : null;
 }

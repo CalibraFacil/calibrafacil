@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { integrationSyncRun } from "@calibra-facil/db/schema";
 import { normalizeContaAzulConnectionConfig } from "@calibra-facil/shared";
 import {
@@ -8,7 +9,6 @@ import {
   DEFAULT_CONTA_AZUL_PROTOCOL_POLLING_INTERVAL_MS,
 } from "./constants";
 import { type ContaAzulScheduledPollKind } from "./types";
-import { toRecord } from "./utils";
 
 export function formatContaAzulDateTime(value: Date) {
   return value.toISOString().replace(/\.\d{3}Z$/, "");

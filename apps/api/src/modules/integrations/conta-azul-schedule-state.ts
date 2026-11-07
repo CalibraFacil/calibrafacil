@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import {
@@ -21,7 +22,7 @@ import {
   type ContaAzulScheduleState,
   type ContaAzulScheduledPollKind,
 } from "./types";
-import { toRecord } from "./utils";
+
 import { getIntegrationRecord } from "./records";
 import { CONTA_AZUL_POLL_DEFINITIONS } from "./constants";
 

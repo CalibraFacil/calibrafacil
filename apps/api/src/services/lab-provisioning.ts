@@ -15,6 +15,7 @@ import {
 } from "../lib/auth-user-errors";
 import { orgDb } from "../lib/org-db";
 import { removeLabOrganization } from "../lib/records-retention";
+import { toRecord } from "@calibra-facil/shared/record";
 
 /**
  * Everything it takes to turn "a name and an e-mail" into a laboratory that
@@ -26,17 +27,9 @@ import { removeLabOrganization } from "../lib/records-retention";
  * audit entry; those stay at the call site.
  */
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 function platformUserFromUnknown(value: unknown) {
-  const candidate = recordFromUnknown(value);
-  const nested = recordFromUnknown(candidate.user);
+  const candidate = toRecord(value);
+  const nested = toRecord(candidate.user);
   const user = Object.keys(nested).length > 0 ? nested : candidate;
   if (
     typeof user.id !== "string" ||
@@ -133,7 +126,7 @@ export async function createLabOrganizationWithUniqueSlug(input: {
             },
           }),
       );
-      const org = recordFromUnknown(orgResult);
+      const org = toRecord(orgResult);
 
       if (typeof org.id !== "string") {
         throw new HTTPException(502, {

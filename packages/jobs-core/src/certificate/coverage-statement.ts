@@ -17,6 +17,7 @@
  */
 
 import { formatNumber } from "@calibra-facil/shared/format";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /** What the engine assumes when a calculation records no coverage probability. */
 const DEFAULT_COVERAGE_PROBABILITY = 0.95;
@@ -95,10 +96,6 @@ export function frozenCoverageProbability(
   return found.size === 1 && only !== undefined
     ? { kind: "recorded", value: only }
     : { kind: "conflict" };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function buildCoverageStatement(params: {

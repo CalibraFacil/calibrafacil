@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * Inbound Resend webhooks are Svix-signed. This module is pure (no I/O): the
@@ -83,10 +84,6 @@ export function verifyResendSignature(input: ResendSignatureInput): boolean {
   }
 
   return false;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 export interface ResendEvent {

@@ -5,6 +5,8 @@ import {
   type Baseline,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 
 // Environment variables are read in ONE place, packages/config: one Zod schema
@@ -71,12 +73,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
 
 const MESSAGE =
   "Do not read the environment directly. Add the variable to the schema in packages/config and read it through loadApiConfig()/loadWorkerConfig() or a concern reader (readDatabaseConfig(), readJobsConfig(), ...).";
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 function nameOf(node: unknown): string | null {
   const record = toRecord(node);

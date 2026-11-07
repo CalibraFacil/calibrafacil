@@ -5,6 +5,7 @@ import { prefetchBranding } from "@/features/branding/queries";
 import { portalOrganizationsResponseSchema } from "@calibra-facil/contracts";
 
 import { fetchPortalJson } from "@/lib/api-fetch";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * Authenticated portal startup.
@@ -53,10 +54,6 @@ export type PortalSessionData = {
   user: { id: string; name?: string | null };
   session?: unknown;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /** Narrows the untyped `getSession()` payload; anything else is "no session". */
 export function parsePortalSession(value: unknown): PortalSessionData | null {

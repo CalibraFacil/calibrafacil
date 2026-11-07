@@ -1,7 +1,7 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { syncAppliedEvent } from "@calibra-facil/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { asRecord } from "./helpers";
 
 export type LegacyAppliedEvent = {
   remoteEntityId?: number | string;
@@ -66,7 +66,7 @@ export async function claimDesktopSyncEvent(
       .limit(1);
 
     if (existing?.appliedAt) {
-      const result = asRecord(existing.result);
+      const result = toRecord(existing.result);
       const remoteEntityId = result.remoteEntityId;
       return {
         state: "applied",

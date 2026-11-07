@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import {
   integrationSyncRun,
   organizationIntegration,
@@ -19,7 +20,7 @@ import {
   type GenericConnectionRecord,
   type IntegrationSyncPayload,
 } from "./types";
-import { toRecord } from "./utils";
+
 import { parseDate, toIsoDate } from "./schedule-config";
 
 export function getIntegrationOverviewTargets(

@@ -37,6 +37,7 @@ import { jobsRouter } from "./jobs";
 import { portalRouter } from "./portal";
 import { publicApiV2Router } from "./public-api-v2";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { isRecord } from "@calibra-facil/shared/record";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -197,10 +198,6 @@ async function seedWorld() {
       superseded: superseded.id,
     },
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function rowsOf(body: unknown): Record<string, unknown>[] {

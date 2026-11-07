@@ -1,8 +1,8 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { integrationSyncRun } from "@calibra-facil/db/schema";
 import { type IntegrationSyncTarget } from "@calibra-facil/shared";
 import { type ContaAzulScheduledPollKind } from "./types";
 import { DEFAULT_INTEGRATION_SYNC_LIMIT } from "./constants";
-import { toRecord } from "./utils";
 
 export function buildRunSummary(params: {
   target: IntegrationSyncTarget;

@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { integrationConnection } from "@calibra-facil/db/schema";
 import {
   normalizeContaAzulConnectionConfig,
@@ -18,7 +19,6 @@ import {
   CONTA_AZUL_PROTOCOLS_CURSOR_TYPE,
 } from "./constants";
 import { createContaAzulAdapterForRecord } from "./conta-azul-auth";
-import { toRecord } from "./utils";
 
 export async function pollContaAzulFiscalDocuments(params: {
   integrationId: string;

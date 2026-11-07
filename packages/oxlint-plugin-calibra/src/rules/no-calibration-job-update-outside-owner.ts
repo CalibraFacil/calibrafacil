@@ -5,6 +5,8 @@ import {
   type Baseline,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 
 // calibration_job.status is a state machine
@@ -35,12 +37,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
 
 const MESSAGE =
   "calibration_job is written only from apps/api/src/modules/jobs/ (or packages/db/src/queue-render-recovery.ts), so the transition table, the compare-and-set and the audit row stay together. Move this write into the jobs module and take its allowed statuses from packages/schemas/src/job-transitions.ts.";
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 /** `calibrationJob` or `<anything>.calibrationJob`. */
 function isCalibrationJobTable(node: unknown): boolean {

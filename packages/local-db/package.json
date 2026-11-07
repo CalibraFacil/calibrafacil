@@ -17,6 +17,7 @@
   "dependencies": {
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
     "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {

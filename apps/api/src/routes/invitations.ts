@@ -14,17 +14,10 @@ import {
   recordPlatformEvent,
 } from "../lib/identity";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
+import { toRecord } from "@calibra-facil/shared/record";
 
 function getEnvValue(c: { env?: unknown }, key: string) {
-  return recordFromUnknown(c.env)[key];
+  return toRecord(c.env)[key];
 }
 
 function resolveTrustedAppUrl(c: { env?: unknown }) {
@@ -57,8 +50,8 @@ async function findInvitationUser(email: string) {
 }
 
 function invitationUserFromAuthResponse(value: unknown) {
-  const candidate = recordFromUnknown(value);
-  const nestedUser = recordFromUnknown(candidate.user);
+  const candidate = toRecord(value);
+  const nestedUser = toRecord(candidate.user);
   const createdUser =
     Object.keys(nestedUser).length > 0 ? nestedUser : candidate;
 

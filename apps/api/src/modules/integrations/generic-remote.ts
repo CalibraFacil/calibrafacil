@@ -1,10 +1,10 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { type GenericFinancialErpConnectionConfig } from "@calibra-facil/shared";
 import {
   REMOTE_API_OUTBOUND_OPTIONS,
   createOutboundFetch,
 } from "@calibra-facil/shared/safe-outbound-fetch";
 import { createFinancialErpAdapter } from "../../lib/financial-erp-adapters";
-import { toRecord } from "./utils";
 
 export function buildAuthHeaders(secret: string) {
   return {

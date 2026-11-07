@@ -1,3 +1,4 @@
+import { isRecord } from "@calibra-facil/shared/record";
 /**
  * The calibration record a submit must carry: where the work was done, and a
  * written reason for every phase block that was not performed.
@@ -8,10 +9,6 @@
  * cloud's typed snapshots and on the JSON the desktop reads back from SQLite
  * without a cast.
  */
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function validateCalibrationLocationForSubmit(
   snapshot: unknown,

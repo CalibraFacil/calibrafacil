@@ -21,6 +21,7 @@ import {
   seedSyncedReferenceData,
 } from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";
+import { toRecord } from "@calibra-facil/shared/record";
 
 const tempDirectories: string[] = [];
 
@@ -61,16 +62,8 @@ function createConfig(dbPath: string): LocalServerConfig {
   };
 }
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
 function dataRecordFromJson(value: unknown) {
-  return recordFromUnknown(recordFromUnknown(value).data);
+  return toRecord(toRecord(value).data);
 }
 
 function stringFromRecord(record: Record<string, unknown>, key: string) {
@@ -89,9 +82,9 @@ function maybeNumberFromRecord(record: Record<string, unknown>, key: string) {
 }
 
 function parseSyncPushBody(body: unknown) {
-  const parsed = recordFromUnknown(JSON.parse(String(body)));
+  const parsed = toRecord(JSON.parse(String(body)));
   const events = Array.isArray(parsed.events)
-    ? parsed.events.map(recordFromUnknown)
+    ? parsed.events.map(toRecord)
     : [];
 
   return {
@@ -172,7 +165,7 @@ describe("local server", () => {
       syncState: "local",
     });
 
-    const row = recordFromUnknown(
+    const row = toRecord(
       database
         .prepare(
           `
@@ -783,7 +776,7 @@ INSERT INTO assets (
       status: "ACTIVE",
     });
 
-    const assetOutbox = recordFromUnknown(
+    const assetOutbox = toRecord(
       database
         .prepare(
           `
@@ -1034,9 +1027,7 @@ INSERT INTO assets (
       method: "POST",
       body: intakeAttachmentForm,
     });
-    const intakeAttachment = recordFromUnknown(
-      await intakeAttachmentResponse.json(),
-    );
+    const intakeAttachment = toRecord(await intakeAttachmentResponse.json());
     expect(
       intakeAttachmentResponse.status,
       JSON.stringify(intakeAttachment),
@@ -1101,7 +1092,7 @@ INSERT INTO assets (
     const syncBody = await syncResponse.text();
     expect(syncResponse.status, syncBody).toBe(200);
 
-    const synced = recordFromUnknown(
+    const synced = toRecord(
       database
         .prepare(
           `
@@ -2059,14 +2050,14 @@ INSERT INTO environmental_limits (
 
     // Field capture starts from a job the cloud already assigned: it reaches
     // the device as a synced projection with its method frozen in the snapshot.
-    const methodRow = recordFromUnknown(
+    const methodRow = toRecord(
       database
         .prepare(
           "SELECT normalized_method_json FROM published_methods WHERE id = 'method:321'",
         )
         .get(),
     );
-    const normalizedMethod = recordFromUnknown(
+    const normalizedMethod = toRecord(
       JSON.parse(stringFromRecord(methodRow, "normalized_method_json")),
     );
     const createdId = 12345;
@@ -2219,7 +2210,7 @@ INSERT INTO environmental_limits (
       method: "POST",
       body: attachmentForm,
     });
-    const attachmentBody = recordFromUnknown(await attachmentResponse.json());
+    const attachmentBody = toRecord(await attachmentResponse.json());
     const attachmentId = stringFromRecord(attachmentBody, "id");
     const attachmentFileUrl = stringFromRecord(attachmentBody, "fileUrl");
     const attachmentLocalPath = stringFromRecord(attachmentBody, "localPath");
@@ -2326,10 +2317,10 @@ INSERT INTO environmental_limits (
       "measurement evidence",
     );
 
-    const audit = recordFromUnknown(
+    const audit = toRecord(
       database.prepare("SELECT COUNT(*) AS total FROM local_audit_log").get(),
     );
-    const outbox = recordFromUnknown(
+    const outbox = toRecord(
       database.prepare("SELECT COUNT(*) AS total FROM outbox").get(),
     );
     expect(numberFromRecord(audit, "total")).toBeGreaterThanOrEqual(3);
@@ -2340,7 +2331,7 @@ INSERT INTO environmental_limits (
     });
     const syncBody = await syncResponse.text();
     expect(syncResponse.status, syncBody).toBe(200);
-    const pendingOutbox = recordFromUnknown(
+    const pendingOutbox = toRecord(
       database
         .prepare(
           `
@@ -2352,7 +2343,7 @@ WHERE status != 'synced'
         .get(),
     );
     expect(numberFromRecord(pendingOutbox, "total")).toBe(0);
-    const syncedJob = recordFromUnknown(
+    const syncedJob = toRecord(
       database
         .prepare(
           `

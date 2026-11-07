@@ -23,6 +23,7 @@ import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
 import { orgTransactionWithExecutor } from "./org-transaction";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type JobDbExecutor = Pick<
   typeof db,
@@ -83,14 +84,6 @@ function hasSpecificationValue(
 
   const value = specifications[key];
   return value !== null && value !== undefined && value !== "";
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 function validateRequiredAssetSpecs(

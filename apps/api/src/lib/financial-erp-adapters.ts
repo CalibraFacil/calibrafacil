@@ -74,6 +74,7 @@ import {
   mapPessoaToContaAzulPessoa,
   mapSaleToContaAzulSale,
 } from "./conta-azul-mappers";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type SyncPayload =
   | IntegrationCustomerPayload
@@ -166,14 +167,6 @@ export type FinancialErpAdapterOptions =
   | ({
       provider: "conta_azul";
     } & ContaAzulAdapterOptions);
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
 
 async function callRemoteJson(
   fetchImpl: OutboundFetch,

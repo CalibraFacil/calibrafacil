@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { type Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -16,7 +17,7 @@ import {
   type OrgRawTransaction,
 } from "../../lib/org-transaction";
 import { type ApiKeyAuthVariables } from "../../middleware/api-key-auth";
-import { toIdempotencyResponseStatus, toRecord } from "./helpers";
+import { toIdempotencyResponseStatus } from "./helpers";
 
 /**
  * Idempotent public-API mutations (Idempotency-Key).

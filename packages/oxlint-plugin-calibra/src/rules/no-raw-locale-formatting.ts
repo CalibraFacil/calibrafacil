@@ -5,6 +5,8 @@ import {
   type Baseline,
   type RuleContext,
   type RuleModule,
+  toRecord,
+  type UnknownRecord,
 } from "../lib/rule-support.ts";
 
 // Dates, times, money and numbers are formatted by ONE layer,
@@ -40,12 +42,6 @@ const BANNED_INTL = new Set(["DateTimeFormat", "NumberFormat"]);
 
 const HINT =
   "Use the shared formatting layer instead: formatInstant / formatCalendarDate / formatMoneyBRL / formatNumber / formatPercent from @calibra-facil/shared/format.";
-
-type UnknownRecord = Record<string, unknown>;
-
-function toRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" ? Object(value) : null;
-}
 
 /** `obj.name` / `obj["name"]`: the property name when it is a plain key. */
 function propertyNameOf(member: UnknownRecord): string | null {

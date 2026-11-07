@@ -8,6 +8,7 @@ import {
   SelectTrigger,
 } from '@calibra-facil/ui/select'
 import { resolveMassDisplayUnit, type MassUnit } from '@calibra-facil/shared'
+import { toRecord } from '@calibra-facil/shared/record'
 
 /**
  * Field definition for dynamic asset specifications.
@@ -46,14 +47,6 @@ interface DynamicSpecsFormProps {
   activeMassUnit?: MassUnit | null
 }
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {}
-  }
-
-  return Object.fromEntries(Object.entries(value))
-}
-
 function numberOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -67,7 +60,7 @@ function numberInputValue(value: unknown) {
 }
 
 function weighingRangeFromUnknown(value: unknown): WeighingRangeSpec {
-  const record = recordFromUnknown(value)
+  const record = toRecord(value)
   return {
     label: stringValue(record.label),
     min: numberOrNull(record.min),

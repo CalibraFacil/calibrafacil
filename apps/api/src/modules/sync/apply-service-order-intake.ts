@@ -1,3 +1,4 @@
+import { toRecord } from "@calibra-facil/shared/record";
 import { asset, calibrationJob, customer } from "@calibra-facil/db/schema";
 import {
   CreateNonConformanceSchema,
@@ -8,7 +9,7 @@ import {
   isAssignableTechnician,
   serviceOrderBelongsToOrganization,
 } from "../../lib/tenant-refs";
-import { asRecord, getNumber } from "./helpers";
+import { getNumber } from "./helpers";
 import { createNonConformanceRecord } from "../../lib/non-conformances";
 import { ensureOotNotificationForNc } from "../../lib/oot-notifications";
 import { createInitialServiceOrderRecords } from "../../lib/service-order-workflow";
@@ -39,7 +40,7 @@ export async function applyCreateLocalServiceOrderIntake(
     return { ok: true, remoteEntityId: existingRemoteEntityId };
   }
 
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const parseResult = CreateServiceOrderSchema.safeParse(
     stripDesktopNullEntries(payload, DESKTOP_SERVICE_ORDER_NULLABLE_KEYS),
   );
@@ -210,7 +211,7 @@ export async function applyCreateLocalNonConformance(
     return { ok: true, remoteEntityId: existingRemoteEntityId };
   }
 
-  const payload = asRecord(input.event.payload);
+  const payload = toRecord(input.event.payload);
   const parseResult = CreateNonConformanceSchema.safeParse(
     stripDesktopNullEntries(payload, ["jobId"]),
   );

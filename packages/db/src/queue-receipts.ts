@@ -1,6 +1,7 @@
 import { readJobsConfig } from "@calibra-facil/config";
 import { sql } from "drizzle-orm";
 import { db } from "./db.js";
+import { toRecord } from "@calibra-facil/shared/record";
 
 // Idempotency ledger for queue consumers. Delivery is at-least-once:
 //   - the app_queue_job stale-lease reclaim re-queues a PROCESSING row whose
@@ -43,13 +44,6 @@ export type QueueReceiptClaim =
   | { outcome: "claimed"; attempts: number }
   | { outcome: "duplicate-completed" }
   | { outcome: "duplicate-running" };
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return Object.fromEntries(Object.entries(value));
-}
 
 function getExecuteRows(result: unknown): unknown[] {
   if (Array.isArray(result)) return result;

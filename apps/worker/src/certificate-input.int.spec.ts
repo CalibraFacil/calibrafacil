@@ -37,6 +37,7 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
 import { seedServiceOrder } from "../test/integration/seed-service-order";
 import { buildCertificateLayoutData } from "@calibra-facil/jobs-core/certificate/layout-data";
 import { fetchCertificateJobData } from "@calibra-facil/jobs-core/certificate/fetch-job-data";
+import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * Real-DB integration tier for the frozen certificate input (ISO/IEC 17025
@@ -119,10 +120,6 @@ function field(row: unknown, key: string): unknown {
   return row && typeof row === "object" && key in row
     ? Reflect.get(row, key)
     : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function jobStatus(jobId: number) {

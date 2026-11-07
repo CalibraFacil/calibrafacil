@@ -1,4 +1,5 @@
 import { DEFAULT_CONTA_AZUL_SCOPES } from "@calibra-facil/shared";
+import { isRecord } from "@calibra-facil/shared/record";
 
 export const CONTA_AZUL_AUTHORIZATION_URL = "https://auth.contaazul.com/login";
 
@@ -458,10 +459,6 @@ export async function buildContaAzulAuthorizationUrl(params: {
 
 function buildBasicAuthorizationHeader(credentials: ContaAzulAppCredentials) {
   return `Basic ${btoa(`${credentials.clientId}:${credentials.clientSecret}`)}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function getOAuthErrorCode(body: unknown) {
