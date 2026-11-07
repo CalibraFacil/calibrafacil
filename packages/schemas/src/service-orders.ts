@@ -1,5 +1,6 @@
 import { SERVICE_ORDER_STATUSES } from "@calibra-facil/shared";
 import { z } from "zod";
+import { queryFlag } from "./query-flag";
 const SERVICE_ORDER_PRIORITIES = [
   "normal",
   "urgent",
@@ -168,10 +169,10 @@ export const ListServiceOrdersQuerySchema = z.object({
   unitId: z.coerce.number().int().positive().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  warranty: z.coerce.boolean().optional(),
-  awaitingApproval: z.coerce.boolean().optional(),
-  readyForPickup: z.coerce.boolean().optional(),
-  overdue: z.coerce.boolean().optional(),
+  warranty: queryFlag.optional(),
+  awaitingApproval: queryFlag.optional(),
+  readyForPickup: queryFlag.optional(),
+  overdue: queryFlag.optional(),
 });
 
 export const AssignServiceOrderTechnicianSchema = z.object({
