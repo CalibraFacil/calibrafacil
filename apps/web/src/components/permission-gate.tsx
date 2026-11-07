@@ -1,4 +1,4 @@
-import { useCurrentRole } from '@/hooks/use-current-role'
+import { useCurrentRole, useIsLabManager } from '@/hooks/use-current-role'
 import { ReactNode } from 'react'
 import { checkRolePermission } from '@calibra-facil/auth/client'
 import type { PermissionCheck, RoleName } from '@calibra-facil/auth/access'
@@ -64,61 +64,24 @@ export function RoleGate({ roles, children, fallback = null }: RoleGateProps) {
 // UTILITY COMPONENTS
 // =============================================================================
 
-interface ShowForRoleProps {
-  /**
-   * Single role or array of roles that can see the content
-   */
-  role: RoleName | Array<RoleName>
-  /**
-   * Content to render for the specified role(s)
-   */
+interface ManagerGateProps {
   children: ReactNode
 }
 
 /**
- * Shorthand component for showing content to specific roles.
+ * Shows content to whoever manages the whole laboratory: the roles the access
+ * table lets update settings (see `isLabManagerRole`).
  *
  * @example
- * <ShowForRole role="owner">
- *   <DeleteOrganizationButton />
- * </ShowForRole>
- *
- * @example
- * <ShowForRole role={["admin", "owner"]}>
+ * <ShowForManager>
  *   <ManageTeamButton />
- * </ShowForRole>
+ * </ShowForManager>
  */
-export function ShowForRole({ role, children }: ShowForRoleProps) {
-  const roles = Array.isArray(role) ? role : [role]
-  return <RoleGate roles={roles}>{children}</RoleGate>
+export function ShowForManager({ children }: ManagerGateProps) {
+  return useIsLabManager() ? <>{children}</> : null
 }
 
-interface HideFromRoleProps {
-  /**
-   * Single role or array of roles that should NOT see the content
-   */
-  role: RoleName | Array<RoleName>
-  /**
-   * Content to hide from the specified role(s)
-   */
-  children: ReactNode
-}
-
-/**
- * Shorthand component for hiding content from specific roles.
- *
- * @example
- * <HideFromRole role="client_user">
- *   <InternalNotesSection />
- * </HideFromRole>
- */
-export function HideFromRole({ role, children }: HideFromRoleProps) {
-  const currentRole = useCurrentRole()
-  const rolesToHide = Array.isArray(role) ? role : [role]
-
-  if (rolesToHide.includes(currentRole)) {
-    return null
-  }
-
-  return <>{children}</>
+/** The counterpart of `ShowForManager`: content for everyone else. */
+export function HideFromManager({ children }: ManagerGateProps) {
+  return useIsLabManager() ? null : <>{children}</>
 }

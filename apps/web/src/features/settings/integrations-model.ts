@@ -32,12 +32,6 @@ export const defaultIntegrationDraft = {
 
 export type IntegrationMappingDrafts = Record<string, IntegrationMappingsConfig>
 
-export type IntegrationMemberSource = {
-  userId?: string
-  user?: { id?: string }
-  role?: string
-}
-
 export const integrationTargetMeta: Record<
   SyncTarget,
   {
@@ -112,22 +106,6 @@ export function getIntegrationVisibleTargets(
   return integration.provider === 'conta_azul'
     ? contaAzulTargets
     : genericHttpTargets
-}
-
-export function getIntegrationSettingsRole(
-  currentUserId: string | undefined,
-  members: readonly IntegrationMemberSource[] | undefined,
-) {
-  const currentMember = members?.find(
-    (member) =>
-      member.userId === currentUserId || member.user?.id === currentUserId,
-  )
-
-  return typeof currentMember?.role === 'string' ? currentMember.role : 'member'
-}
-
-export function canManageIntegrationSettings(role: string) {
-  return role === 'owner' || role === 'admin'
 }
 
 export function buildIntegrationActiveSummaries(

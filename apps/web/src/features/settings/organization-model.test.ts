@@ -12,7 +12,6 @@ import {
   buildOrganizationIsoPayload,
   buildDraftAssignmentsForMember,
   canDeleteOrganization,
-  canManageOrganizationSettings,
   createAssignmentDrafts,
   createOrganizationIdentityDraft,
   createOrganizationIsoDraft,
@@ -161,9 +160,6 @@ describe('organization-model', () => {
   })
 
   it('builds organization profile and ISO drafts and payloads', () => {
-    expect(canManageOrganizationSettings('owner')).toBe(true)
-    expect(canManageOrganizationSettings('member')).toBe(false)
-
     expect(
       createOrganizationIdentityDraft({
         name: 'Lab',

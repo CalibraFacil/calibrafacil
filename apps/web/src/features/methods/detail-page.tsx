@@ -39,7 +39,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@calibra-facil/ui/accordion'
-import { RoleGate } from '@/components/permission-gate'
+import { RoleGate, ShowForManager } from '@/components/permission-gate'
 import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
 import { useOperationAvailability } from '@/runtime/use-operation-availability'
 import {
@@ -460,7 +460,7 @@ function MethodActions({
         </RoleGate>
       )}
 
-      <RoleGate roles={['admin', 'owner']}>
+      <ShowForManager>
         {METHOD_MACHINE.canTransition(method.status, 'return_to_draft') && (
           <ActionAvailabilityGate availability={returnToDraftAvailability}>
             {({ disabled }) => (
@@ -494,7 +494,7 @@ function MethodActions({
             )}
           </ActionAvailabilityGate>
         )}
-      </RoleGate>
+      </ShowForManager>
     </div>
   )
 }

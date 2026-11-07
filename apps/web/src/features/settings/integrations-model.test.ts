@@ -12,7 +12,6 @@ import {
   appendIntegrationMappingRule,
   buildIntegrationActiveSummaries,
   buildIntegrationChecklist,
-  canManageIntegrationSettings,
   clearIntegrationMappingDraft,
   clearIntegrationPreviewsForIntegration,
   cloneIntegrationMappings,
@@ -22,7 +21,6 @@ import {
   formatIntegrationDuration,
   formatIntegrationPreviewPayload,
   getIntegrationMappingDraft,
-  getIntegrationSettingsRole,
   getIntegrationTargetSummary,
   getIntegrationVisibleTargets,
   integrationCoveragePercentage,
@@ -93,22 +91,6 @@ function createIntegrationSummary(): IntegrationSummary {
 }
 
 describe('integrations-model', () => {
-  it('derives integration management permission from organization members', () => {
-    expect(
-      getIntegrationSettingsRole('user-1', [
-        { userId: 'user-1', role: 'admin' },
-      ]),
-    ).toBe('admin')
-    expect(
-      getIntegrationSettingsRole('user-2', [
-        { user: { id: 'user-2' }, role: 'owner' },
-      ]),
-    ).toBe('owner')
-    expect(getIntegrationSettingsRole('missing', [])).toBe('member')
-    expect(canManageIntegrationSettings('admin')).toBe(true)
-    expect(canManageIntegrationSettings('member')).toBe(false)
-  })
-
   it('summarizes configured integrations for the settings header', () => {
     const ready = createIntegrationSummary()
     const degraded = createIntegrationSummary()

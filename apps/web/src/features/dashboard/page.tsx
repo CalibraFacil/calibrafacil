@@ -17,7 +17,7 @@ import {
   ChartLineData01Icon,
 } from '@hugeicons/core-free-icons'
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
-import { useActiveOrganization, useSession } from '@calibra-facil/auth/client'
+import { useIsLabManager } from '@/hooks/use-current-role'
 
 import { Button } from '@calibra-facil/ui/button'
 import {
@@ -125,28 +125,13 @@ function measure(name: string, startMark: string, endMark: string) {
   }
 }
 
-function getCurrentMemberRole(
-  currentUserId: string | undefined,
-  members:
-    | ReadonlyArray<{ userId?: string; user?: { id?: string }; role?: string }>
-    | undefined,
-): string {
-  const member = members?.find(
-    (item) => item.userId === currentUserId || item.user?.id === currentUserId,
-  )
-  return typeof member?.role === 'string' ? member.role : 'member'
-}
-
 export function DashboardIndex() {
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
-  const { data: session } = useSession()
-  const { data: activeOrg } = useActiveOrganization()
   const [updatedAt, setUpdatedAt] = useState('agora')
   const [refreshMessage, setRefreshMessage] = useState('')
 
-  const role = getCurrentMemberRole(session?.user?.id, activeOrg?.members)
-  const isManager = role === 'owner' || role === 'admin'
+  const isManager = useIsLabManager()
   const { data, isPending, isFetching, refetch, isRefetching } =
     useDashboardIndexData({
       activeOrganizationId,

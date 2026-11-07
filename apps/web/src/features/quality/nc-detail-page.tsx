@@ -11,7 +11,7 @@ import {
   useNonConformanceOotNotificationData,
 } from '@/features/quality/queries'
 import { ImpactAssessmentCard } from '@/features/quality/components/impact-assessment-card'
-import { ShowForRole } from '@/components/permission-gate'
+import { ShowForManager } from '@/components/permission-gate'
 import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
@@ -572,14 +572,14 @@ export function NCDetailPage({ id }: { id: string }) {
                 </p>
               )}
               {nc.job && nc.job.status === 'APPROVED' && (
-                <ShowForRole role={['owner', 'admin']}>
+                <ShowForManager>
                   <div className="border-t pt-4">
                     <OotAmendCertificateDialog
                       job={nc.job}
                       ncNumber={nc.ncNumber}
                     />
                   </div>
-                </ShowForRole>
+                </ShowForManager>
               )}
               {nc.job && nc.job.status === 'SUPERSEDED' && (
                 <p className="border-t pt-4 text-sm text-muted-foreground">

@@ -1,4 +1,4 @@
-import { useCurrentRole } from '@/hooks/use-current-role'
+import { useIsLabManager } from '@/hooks/use-current-role'
 import { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -82,8 +82,7 @@ export function ConsolidatedReportsPage() {
   )
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
-  const currentRole = useCurrentRole()
-  const canAccessReports = currentRole === 'owner' || currentRole === 'admin'
+  const canAccessReports = useIsLabManager()
   const unitIdsParam =
     selectedUnitIds.length > 0 ? selectedUnitIds.join(',') : undefined
   const reportsInput = {

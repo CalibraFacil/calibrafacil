@@ -31,6 +31,9 @@ vi.mock('@/utils/api', () => ({ calibraApi: { methods: {} } }))
 
 vi.mock('@/components/permission-gate', () => ({
   RoleGate: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  ShowForManager: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 vi.mock('@/features/methods/components/method-spec-preview', () => ({

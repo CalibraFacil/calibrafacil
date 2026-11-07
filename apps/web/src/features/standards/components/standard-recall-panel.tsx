@@ -27,7 +27,7 @@ import {
   PanelHeader,
   SignalTile,
 } from '@calibra-facil/ui/instrument-panel'
-import { HideFromRole, ShowForRole } from '@/components/permission-gate'
+import { HideFromManager, ShowForManager } from '@/components/permission-gate'
 import { OperationUnavailableNotice } from '@/components/availability/action-availability-gate'
 import {
   formatStandardDate,
@@ -280,7 +280,7 @@ function RecallDraftWizard({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        <ShowForRole role={['owner', 'admin']}>
+        <ShowForManager>
           <Button
             onClick={() => setConfirmOpen(true)}
             disabled={
@@ -293,12 +293,12 @@ function RecallDraftWizard({
             Aprovar e enviar notificações ({selectedJobIds.length})
           </Button>
           <OperationUnavailableNotice availability={sendAvailability} />
-        </ShowForRole>
-        <HideFromRole role={['owner', 'admin']}>
+        </ShowForManager>
+        <HideFromManager>
           <p className="text-sm text-muted-foreground">
             O envio requer aprovação de um administrador ou responsável.
           </p>
-        </HideFromRole>
+        </HideFromManager>
       </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
