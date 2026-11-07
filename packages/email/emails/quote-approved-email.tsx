@@ -18,7 +18,6 @@ export interface QuoteApprovedEmailProps {
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
   serviceOrderNumber: string;
-  /** Customer name. */
   customerName: string;
   /**
    * REQ-SOEMAIL-031: The approved total from serviceOrder.totalApprovedCents.

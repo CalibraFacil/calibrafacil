@@ -1,5 +1,5 @@
 /**
- * Send-with-fallback core (issue #584).
+ * Send-with-fallback core.
  *
  * One attempt via the lab's own Resend account when a usable sender resolves;
  * on any key/domain-class failure the SAME call re-renders and re-sends via
@@ -95,7 +95,7 @@ async function sendOnce(
 
 /**
  * Send an email from the lab's own domain when possible, falling back to the
- * platform sender per the #584 fallback matrix. Never throws.
+ * platform sender per the fallback matrix below. Never throws.
  *
  * @param params.organizationId lab org whose sender should be tried; pass
  *   `undefined` to send via the platform directly (non-white-label mail).

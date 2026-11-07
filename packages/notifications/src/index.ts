@@ -61,7 +61,7 @@ export { suppressEmail, isEmailSuppressed } from "./suppression";
 // §7.10 out-of-tolerance customer-facing email dispatcher (#426 Phase 0)
 export { sendOotCustomerEmail } from "./oot-customer-email";
 
-// Service-order customer-facing email dispatcher (mini-spec A)
+// Service-order customer-facing email dispatcher
 export {
   sendServiceOrderCustomerEmail,
   resolveServiceOrderRecipient,

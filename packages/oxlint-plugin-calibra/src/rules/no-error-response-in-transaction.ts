@@ -9,8 +9,8 @@ import {
 
 // An error response RETURNED from inside a transaction callback commits the
 // transaction: `return c.json({ error }, 400)` is a normal return, so every write
-// made before it in the same callback is kept (roadmap 2 D4, review 3.2: the
-// `assign-training` route linked half of the training records and answered 400).
+// made before it in the same callback is kept (e.g. a route that linked half
+// of the training records and answered 400).
 // Throw a DomainError instead (apps/api/src/lib/domain-errors.ts): the throw
 // rolls the transaction back and the error handler maps it to the same body.
 //

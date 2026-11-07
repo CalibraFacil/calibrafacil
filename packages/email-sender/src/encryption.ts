@@ -1,5 +1,5 @@
 /**
- * Key custody for the lab's BYOK Resend API key (issue #584).
+ * Key custody for the lab's BYOK Resend API key.
  *
  * AES-256-GCM, mirroring the certificate-password pattern in
  * `packages/signing/src/encryption.ts`, but under its OWN master key

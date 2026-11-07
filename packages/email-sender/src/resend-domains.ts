@@ -1,7 +1,7 @@
 /**
  * Typed wrapper over the Resend Domains API, parameterized by API key so the
  * same code serves `byok` mode (lab key) today and `managed` mode (platform
- * key) later (issue #584).
+ * key) later.
  *
  * The Resend SDK resolves with `{ data, error }` instead of throwing on API
  * rejections; network failures DO throw. Both are normalized into the

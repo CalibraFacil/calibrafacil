@@ -59,7 +59,7 @@ export function getReplyToEmail(
   return sanitizeMailHeader(email);
 }
 
-/** Platform-variant brand (shared envelope): see #584 fallback semantics. */
+/** Platform-variant brand (shared envelope): see the fallback semantics in send.ts. */
 export function stripBrandSender<B extends { name: string; sender?: unknown }>(
   brand: B | undefined,
 ): B | undefined {

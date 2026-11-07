@@ -1,10 +1,10 @@
 /**
- * REQ-SOEMAIL-011 (template rendering) — mini-spec B "Nova OS".
+ * REQ-SOEMAIL-011 (template rendering) — "Nova OS".
  *
  * Renders the real ServiceOrderCreatedEmail template to HTML and asserts the required fields
  * actually appear in the output. This is the tautology guard: asserting props
  * passed to a mocked template (as the apps/api dispatch spec does) cannot prove
- * the fields reach the customer. Mirrors mini-spec A's REQ-006 fix.
+ * the fields reach the customer.
  */
 
 import { describe, it, expect } from "vitest";

@@ -14,7 +14,7 @@ import {
 } from "./index";
 import { currentLocalDbSchemaVersion } from "./migrations";
 
-// Legal-metrology offline / local-db parity — deferred item #5 of #423.
+// Legal-metrology offline / local-db parity.
 // Spec: specs/legal-metrology-offline-parity/spec.md (REQ-OFFLINE-001..004).
 // The cloud Postgres asset columns (metrology_regime, regulated_interval,
 // next_legal_verification_date, installed_at) must mirror into the offline SQLite
