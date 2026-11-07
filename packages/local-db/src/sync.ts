@@ -1,10 +1,10 @@
-import { syncBootstrapResponseSchema } from "@calibra-facil/contracts";
-import type {
+import {
   CloudSyncEvent,
-  SyncBootstrapPageResponse,
   SyncBootstrapResponse,
   SyncPullResponse,
-} from "@calibra-facil/contracts";
+  syncBootstrapResponseSchema,
+} from "@calibra-facil/contracts/sync";
+import { SyncBootstrapPageResponse } from "@calibra-facil/contracts/sync-change-seq";
 import type { LocalDatabase } from "./database";
 import { setSyncCursor } from "./outbox";
 import { resolveServiceOrdersForAggregates } from "./service-orders";

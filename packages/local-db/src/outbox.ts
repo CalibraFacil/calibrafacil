@@ -1,9 +1,11 @@
-import type { SyncPushResponse } from "@calibra-facil/contracts";
+import {
+  SyncPushResponse,
+  stringifySyncConflictPayload,
+} from "@calibra-facil/contracts/sync";
 import {
   classifyOutboxRejection,
   isRegulatedOutboxOperation,
-  stringifySyncConflictPayload,
-} from "@calibra-facil/contracts";
+} from "@calibra-facil/contracts/outbox-rejections";
 import type { LocalDatabase } from "./database";
 import { resetAttachmentUpload } from "./attachments";
 import { releaseSettledSkippedRows } from "./skipped-rows";

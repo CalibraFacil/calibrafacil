@@ -1,8 +1,6 @@
 /** @jsxImportSource react */
+import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";
 import type { ReactNode } from "react";
-
-import { formatMoneyBRL } from "@calibra-facil/shared/format";
-import { formatInstant } from "./dates.js";
 
 type ServiceOrderDocumentItem = {
   description: string;

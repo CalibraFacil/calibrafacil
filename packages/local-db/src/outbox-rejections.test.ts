@@ -1,12 +1,12 @@
+import {
+  OUTBOX_REJECTION_CLASSES,
+  classifyOutboxRejection,
+  isRegulatedOutboxOperation,
+  parseOutboxErrorCode,
+} from "@calibra-facil/contracts/outbox-rejections";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  classifyOutboxRejection,
-  isRegulatedOutboxOperation,
-  OUTBOX_REJECTION_CLASSES,
-  parseOutboxErrorCode,
-} from "@calibra-facil/contracts";
 
 const apiSource = (relative: string) =>
   fileURLToPath(new URL(`../../../apps/api/src/${relative}`, import.meta.url));

@@ -1,12 +1,12 @@
+import {
+  CloudSyncEvent,
+  SyncBootstrapResponse,
+} from "@calibra-facil/contracts/sync";
+import { SyncBootstrapPageResponse } from "@calibra-facil/contracts/sync-change-seq";
 import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import type {
-  CloudSyncEvent,
-  SyncBootstrapPageResponse,
-  SyncBootstrapResponse,
-} from "@calibra-facil/contracts";
 import {
   applySyncBootstrap,
   applySyncBootstrapPage,

@@ -1,10 +1,4 @@
 export { LabelHtml, type LabelData } from "./LabelHtml.js";
-export {
-  LAB_TIME_ZONE,
-  getLabCalendarDay,
-  formatLabDayKey,
-  startOfLabMonth,
-} from "./dates.js";
 export { renderIntervalReportHtml } from "./IntervalReportHtml.js";
 export {
   renderFleetStatusReportHtml,

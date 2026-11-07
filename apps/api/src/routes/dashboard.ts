@@ -1,7 +1,7 @@
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
+import { LAB_TIME_ZONE } from "@calibra-facil/shared/calendar-date";
 import { Hono } from "hono";
-import { LAB_TIME_ZONE } from "@calibra-facil/documents";
 import { isCalendarDatePast } from "@calibra-facil/shared";
 import {
   calibrationJob,

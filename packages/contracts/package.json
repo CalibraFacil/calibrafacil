@@ -10,7 +10,10 @@
     "./jobs-fixtures": "./src/jobs.fixtures.ts",
     "./standards-fixtures": "./src/standards.fixtures.ts",
     "./portal-fixtures": "./src/portal.fixtures.ts",
-    "./sync": "./src/sync.ts"
+    "./sync": "./src/sync.ts",
+    "./sync-protocol": "./src/sync-protocol.ts",
+    "./sync-change-seq": "./src/sync-change-seq.ts",
+    "./outbox-rejections": "./src/outbox-rejections.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

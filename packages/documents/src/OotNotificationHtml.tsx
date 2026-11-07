@@ -1,6 +1,9 @@
 /** @jsxImportSource react */
-import { formatNumber } from "@calibra-facil/shared/format";
-import { formatCalendarDate, formatInstant } from "./dates.js";
+import {
+  formatCalendarDate,
+  formatInstant,
+  formatNumber,
+} from "@calibra-facil/shared/format";
 
 /**
  * Out-of-tolerance customer notification (ABNT NBR ISO/IEC 17025:2017 §7.10 —

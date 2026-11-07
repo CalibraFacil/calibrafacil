@@ -1,4 +1,5 @@
 import { slugify } from "@calibra-facil/shared/text";
+import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -10,7 +11,6 @@ import {
   type CertificateNumberingSnapshot,
   type CertificateSequenceResetScope,
 } from "@calibra-facil/db/schema";
-import { getLabCalendarDay } from "@calibra-facil/documents";
 import { CertificateNumberingConfigSchema } from "@calibra-facil/schemas";
 import { and, eq, sql } from "drizzle-orm";
 

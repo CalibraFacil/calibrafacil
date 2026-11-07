@@ -1,4 +1,5 @@
 import { slugify } from "@calibra-facil/shared/text";
+import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
@@ -7,7 +8,6 @@ import {
   organization,
   type CertificateNumberingConfig,
 } from "@calibra-facil/db/schema";
-import { getLabCalendarDay } from "@calibra-facil/documents";
 import { UpdateCertificateNumberingProfileSchema } from "@calibra-facil/schemas";
 import { and, desc, eq } from "drizzle-orm";
 import {
