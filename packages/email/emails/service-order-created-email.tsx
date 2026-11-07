@@ -3,6 +3,7 @@
 import { ServiceOrderEmailLayout } from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
+  emailBrandName,
   EmailCard,
   Title,
   Paragraph,
@@ -45,7 +46,7 @@ export function ServiceOrderCreatedEmail({
   intakeDate,
   claimedDefect,
 }: ServiceOrderCreatedEmailProps) {
-  const labName = brand?.name ?? "CalibraFácil";
+  const labName = emailBrandName(brand);
 
   // Build a concise asset description for the preview text
   const assetParts = [assetManufacturer, assetModel].filter(Boolean).join(" ");

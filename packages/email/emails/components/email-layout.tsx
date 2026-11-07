@@ -56,6 +56,14 @@ export interface EmailBrand {
   sender?: EmailBrandSender;
 }
 
+/** The platform name shown when a lab sends without its own brand. */
+const DEFAULT_BRAND_NAME = "CalibraFácil";
+
+/** The name an email speaks as: the lab's brand, else the platform's. */
+export function emailBrandName(brand?: EmailBrand): string {
+  return brand?.name ?? DEFAULT_BRAND_NAME;
+}
+
 interface EmailLayoutProps {
   previewText: string;
   children: ReactNode;
@@ -71,7 +79,7 @@ export function EmailLayout({
   logoSrc = "/static/calibrafacil-logo.png",
   brand,
 }: EmailLayoutProps) {
-  const brandName = brand?.name ?? "CalibraFácil";
+  const brandName = emailBrandName(brand);
   const brandLogoSrc = brand?.logoSrc ?? logoSrc;
   const isWordmarkLogo = Boolean(brand?.isWhiteLabel);
   const headerLogoWidth = isWordmarkLogo ? 112 : 24;
@@ -164,7 +172,7 @@ export function EmailCard({
   logoSrc = "/static/calibrafacil-logo.png",
   brand,
 }: EmailCardProps) {
-  const brandName = brand?.name ?? "CalibraFácil";
+  const brandName = emailBrandName(brand);
   const brandLogoSrc = brand?.logoSrc ?? logoSrc;
   const isWordmarkLogo = Boolean(brand?.isWhiteLabel);
   const cardLogoWidth = isWordmarkLogo ? 132 : 48;

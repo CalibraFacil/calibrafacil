@@ -3,6 +3,7 @@
 import { ServiceOrderEmailLayout } from "./service-order-email-layout";
 import type { EmailBrand } from "./components/email-layout";
 import {
+  emailBrandName,
   EmailCard,
   Title,
   Paragraph,
@@ -269,7 +270,7 @@ export function QuoteEmail({
   approvalCode,
   codeEntryUrl,
 }: QuoteEmailProps) {
-  const labName = brand?.name ?? "CalibraFácil";
+  const labName = emailBrandName(brand);
 
   const { services, parts, optionals } = groupItems(items);
 
