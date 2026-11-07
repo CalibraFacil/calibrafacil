@@ -26,22 +26,15 @@ import { isUniqueViolation } from "../lib/db-errors";
 import { conflict, forbidden, invalid, notFound } from "../lib/domain-errors";
 import { withOrg } from "../lib/org-context";
 import { requestActor } from "../middleware/request-actor";
-import { calibrationWorkflowPermissions } from "@calibra-facil/auth/access";
+import { rolesAllowedTo } from "@calibra-facil/auth/access";
 import type { RoleName } from "@calibra-facil/auth/access";
 
 /**
- * Roles capable of APPROVING a calibration, derived from the real ISO 17025
- * separation-of-duties matrix (`calibrationWorkflowPermissions.canApprove`)
- * rather than a hand-written "is admin" rule — so it stays in sync if the
- * workflow authority ever changes. Today this resolves to `["admin", "owner"]`.
+ * Roles capable of APPROVING a calibration, derived from the role definitions
+ * (`rolesAllowedTo`) rather than a hand-written "is admin" rule, so it stays in
+ * sync if the workflow authority ever changes. Today this is `["admin", "owner"]`.
  */
-const CALIBRATION_APPROVER_ROLES: RoleName[] = Array.from(
-  new Set(
-    Object.values(calibrationWorkflowPermissions).flatMap(
-      (permissions) => permissions.canApprove,
-    ),
-  ),
-);
+const CALIBRATION_APPROVER_ROLES: RoleName[] = rolesAllowedTo("approve");
 
 /**
  * Whether a (possibly free-form) member role can approve calibrations. Uses a

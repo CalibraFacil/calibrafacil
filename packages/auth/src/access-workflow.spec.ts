@@ -7,17 +7,20 @@
  * production code ever disagrees with a value here, a test will fail.  Do NOT
  * relax or remove an assertion to silence a failure — escalate to a human.
  *
- * The spec file is test-only.  `access.ts` MUST NOT be modified.
+ * `canPerformCalibrationAction` is derived from the job status machine
+ * (`@calibra-facil/schemas/job-transitions`) and the role definitions, not from
+ * a table of its own; the oracle below is written by hand on purpose, so a
+ * change to either source that moves a cell fails here.
  */
 
 import { describe, expect, it } from "vitest";
+import type { JobStatus } from "@calibra-facil/schemas";
 import {
   type CalibrationAction,
-  type CalibrationState,
   type RoleName,
-  calibrationWorkflowPermissions,
   canPerformCalibrationAction,
   getAllowedCalibrationActions,
+  rolesAllowedTo,
 } from "./access.js";
 
 // ---------------------------------------------------------------------------
@@ -33,12 +36,16 @@ const ALL_ROLES: RoleName[] = [
   "owner",
 ];
 
-const ALL_STATES: CalibrationState[] = [
-  "draft",
-  "submitted",
-  "in_review",
-  "approved",
-  "rejected",
+const ALL_STATES: JobStatus[] = [
+  "DRAFT",
+  "IN_PROGRESS",
+  "REVIEW",
+  "GENERATING_PDF",
+  "RENDER_FAILED",
+  "APPROVED",
+  "REJECTED",
+  "CANCELED",
+  "SUPERSEDED",
 ];
 
 const ALL_ACTIONS: CalibrationAction[] = [
@@ -50,62 +57,72 @@ const ALL_ACTIONS: CalibrationAction[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// REQ-CAL-011: calibrationWorkflowPermissions deep-equality guard
+// REQ-CAL-011: the (role, status, action) oracle
 // ---------------------------------------------------------------------------
 
-// REQ-CAL-011 [HIGH RISK]: The calibrationWorkflowPermissions object SHALL equal
-// the oracle matrix.  Any future edit to a single cell fails this test.
-describe("REQ-CAL-011: calibrationWorkflowPermissions matches oracle matrix", () => {
-  it("draft row matches oracle", () => {
-    expect(calibrationWorkflowPermissions.draft).toStrictEqual({
-      canEdit: ["operator", "technician", "admin", "owner"],
-      canDelete: ["technician", "admin", "owner"],
-      canSubmit: ["operator", "technician", "admin", "owner"],
-      canApprove: [],
-      canReject: [],
-    });
-  });
+// REQ-CAL-011 [HIGH RISK]: For the statuses a person works a job in, the actions
+// each role may perform SHALL equal the oracle.  Any change to a single cell
+// fails this test.
+describe("REQ-CAL-011: allowed actions match the oracle", () => {
+  const ORACLE: Record<
+    "DRAFT" | "REVIEW" | "REJECTED",
+    Record<RoleName, CalibrationAction[]>
+  > = {
+    DRAFT: {
+      owner: ["edit", "delete", "submit"],
+      admin: ["edit", "delete", "submit"],
+      technician: ["edit", "delete", "submit"],
+      operator: ["edit", "submit"],
+      member: [],
+      client_user: [],
+    },
+    // Only the review decision and a cancellation: the worksheet is not
+    // editable in review (the job machine has no `execute` from REVIEW).
+    REVIEW: {
+      owner: ["delete", "approve", "reject"],
+      admin: ["delete", "approve", "reject"],
+      technician: ["delete"],
+      operator: [],
+      member: [],
+      client_user: [],
+    },
+    REJECTED: {
+      owner: ["edit", "delete", "submit"],
+      admin: ["edit", "delete", "submit"],
+      technician: ["edit", "delete", "submit"],
+      operator: ["edit", "submit"],
+      member: [],
+      client_user: [],
+    },
+  };
 
-  it("submitted row matches oracle", () => {
-    expect(calibrationWorkflowPermissions.submitted).toStrictEqual({
-      canEdit: [],
-      canDelete: ["admin", "owner"],
-      canSubmit: [],
-      canApprove: ["admin", "owner"],
-      canReject: ["admin", "owner"],
-    });
-  });
+  for (const [status, byRole] of Object.entries(ORACLE)) {
+    for (const [role, expected] of Object.entries(byRole)) {
+      it(`status=${status} role=${role}`, () => {
+        expect(
+          getAllowedCalibrationActions(roleOf(role), jobStatusOf(status)),
+        ).toStrictEqual(expected);
+      });
+    }
+  }
 
-  it("in_review row matches oracle", () => {
-    expect(calibrationWorkflowPermissions.in_review).toStrictEqual({
-      canEdit: ["admin", "owner"],
-      canDelete: [],
-      canSubmit: [],
-      canApprove: ["admin", "owner"],
-      canReject: ["admin", "owner"],
-    });
-  });
-
-  it("approved row matches oracle (immutable — all empty)", () => {
-    expect(calibrationWorkflowPermissions.approved).toStrictEqual({
-      canEdit: [],
-      canDelete: [],
-      canSubmit: [],
-      canApprove: [],
-      canReject: [],
-    });
-  });
-
-  it("rejected row matches oracle", () => {
-    expect(calibrationWorkflowPermissions.rejected).toStrictEqual({
-      canEdit: ["operator", "technician", "admin", "owner"],
-      canDelete: ["technician", "admin", "owner"],
-      canSubmit: ["operator", "technician", "admin", "owner"],
-      canApprove: [],
-      canReject: [],
-    });
+  it("approve and reject are held by admin and owner only", () => {
+    expect(rolesAllowedTo("approve")).toStrictEqual(["admin", "owner"]);
+    expect(rolesAllowedTo("reject")).toStrictEqual(["admin", "owner"]);
   });
 });
+
+function roleOf(value: string): RoleName {
+  const role = ALL_ROLES.find((candidate) => candidate === value);
+  if (!role) throw new Error(`not a role: ${value}`);
+  return role;
+}
+
+function jobStatusOf(value: string): JobStatus {
+  const status = ALL_STATES.find((candidate) => candidate === value);
+  if (!status) throw new Error(`not a job status: ${value}`);
+  return status;
+}
 
 // ---------------------------------------------------------------------------
 // REQ-CAL-001: approved state is immutable for ALL roles × ALL actions
@@ -114,13 +131,14 @@ describe("REQ-CAL-011: calibrationWorkflowPermissions matches oracle matrix", ()
 // REQ-CAL-001 [HIGH RISK]: WHEN evaluating any action in state `approved`,
 // canPerformCalibrationAction SHALL return false for EVERY role and EVERY action.
 describe("REQ-CAL-001: approved state is immutable (ISO 17025)", () => {
-  for (const role of ALL_ROLES) {
-    for (const action of ALL_ACTIONS) {
-      it(`role=${role} action=${action} → false`, () => {
-        expect(canPerformCalibrationAction(role, "approved", action)).toBe(
-          false,
-        );
-      });
+  const released: JobStatus[] = ["APPROVED", "SUPERSEDED"];
+  for (const status of released) {
+    for (const role of ALL_ROLES) {
+      for (const action of ALL_ACTIONS) {
+        it(`status=${status} role=${role} action=${action} → false`, () => {
+          expect(canPerformCalibrationAction(role, status, action)).toBe(false);
+        });
+      }
     }
   }
 });
@@ -170,26 +188,24 @@ describe("REQ-CAL-003: member and client_user cannot perform any calibration act
 // REQ-CAL-004: no role can edit once submitted
 // ---------------------------------------------------------------------------
 
-// REQ-CAL-004 [HIGH RISK]: If a calibration is `submitted`, edit SHALL return
+// REQ-CAL-004 [HIGH RISK]: If a calibration is in review, edit SHALL return
 // false for EVERY role.
 describe("REQ-CAL-004: no edits after submission", () => {
   for (const role of ALL_ROLES) {
-    it(`role=${role} state=submitted action=edit → false`, () => {
-      expect(canPerformCalibrationAction(role, "submitted", "edit")).toBe(
-        false,
-      );
+    it(`role=${role} status=REVIEW action=edit → false`, () => {
+      expect(canPerformCalibrationAction(role, "REVIEW", "edit")).toBe(false);
     });
   }
 });
 
 // ---------------------------------------------------------------------------
-// REQ-CAL-005: only admin/owner can approve or reject in submitted/in_review
+// REQ-CAL-005: only admin/owner can approve or reject a job in review
 // ---------------------------------------------------------------------------
 
-// REQ-CAL-005 [HIGH RISK]: approve/reject in submitted or in_review SHALL
-// return true ONLY for admin and owner, and false for all other roles.
-describe("REQ-CAL-005: only admin/owner can approve or reject in submitted or in_review", () => {
-  const approvalStates: CalibrationState[] = ["submitted", "in_review"];
+// REQ-CAL-005 [HIGH RISK]: approve/reject in REVIEW SHALL return true ONLY for
+// admin and owner, and false for all other roles.
+describe("REQ-CAL-005: only admin/owner can approve or reject in review", () => {
+  const approvalStates: JobStatus[] = ["REVIEW"];
   const approvalActions: CalibrationAction[] = ["approve", "reject"];
 
   const shouldBeTrue: RoleName[] = ["admin", "owner"];
@@ -219,18 +235,18 @@ describe("REQ-CAL-005: only admin/owner can approve or reject in submitted or in
 // {technician,admin,owner} and false for operator.
 describe("REQ-CAL-006: draft delete permissions", () => {
   it("technician can delete draft", () => {
-    expect(canPerformCalibrationAction("technician", "draft", "delete")).toBe(
+    expect(canPerformCalibrationAction("technician", "DRAFT", "delete")).toBe(
       true,
     );
   });
   it("admin can delete draft", () => {
-    expect(canPerformCalibrationAction("admin", "draft", "delete")).toBe(true);
+    expect(canPerformCalibrationAction("admin", "DRAFT", "delete")).toBe(true);
   });
   it("owner can delete draft", () => {
-    expect(canPerformCalibrationAction("owner", "draft", "delete")).toBe(true);
+    expect(canPerformCalibrationAction("owner", "DRAFT", "delete")).toBe(true);
   });
   it("operator cannot delete draft", () => {
-    expect(canPerformCalibrationAction("operator", "draft", "delete")).toBe(
+    expect(canPerformCalibrationAction("operator", "DRAFT", "delete")).toBe(
       false,
     );
   });
@@ -243,7 +259,7 @@ describe("REQ-CAL-006: draft delete permissions", () => {
 // REQ-CAL-007: In draft and rejected, canEdit and canSubmit SHALL be true for
 // {operator,technician,admin,owner} — rejected calibrations are revisable.
 describe("REQ-CAL-007: draft and rejected are revisable by operator/technician/admin/owner", () => {
-  const revisableStates: CalibrationState[] = ["draft", "rejected"];
+  const revisableStates: JobStatus[] = ["DRAFT", "REJECTED"];
   const revisableRoles: RoleName[] = [
     "operator",
     "technician",
@@ -272,32 +288,28 @@ describe("REQ-CAL-007: draft and rejected are revisable by operator/technician/a
 // In draft: operator → edit=true, delete=false (canEdit ≠ canDelete).
 describe("REQ-CAL-008: action correctly maps to distinct permission lists", () => {
   it("draft/operator: edit=true (canEdit) but delete=false (canDelete)", () => {
-    expect(canPerformCalibrationAction("operator", "draft", "edit")).toBe(true);
-    expect(canPerformCalibrationAction("operator", "draft", "delete")).toBe(
+    expect(canPerformCalibrationAction("operator", "DRAFT", "edit")).toBe(true);
+    expect(canPerformCalibrationAction("operator", "DRAFT", "delete")).toBe(
       false,
     );
   });
 
   it("draft/technician: edit=true, delete=true, approve=false (distinct lists)", () => {
-    expect(canPerformCalibrationAction("technician", "draft", "edit")).toBe(
+    expect(canPerformCalibrationAction("technician", "DRAFT", "edit")).toBe(
       true,
     );
-    expect(canPerformCalibrationAction("technician", "draft", "delete")).toBe(
+    expect(canPerformCalibrationAction("technician", "DRAFT", "delete")).toBe(
       true,
     );
-    expect(canPerformCalibrationAction("technician", "draft", "approve")).toBe(
+    expect(canPerformCalibrationAction("technician", "DRAFT", "approve")).toBe(
       false,
     );
   });
 
-  it("submitted/admin: edit=false, delete=true, approve=true (all from different lists)", () => {
-    expect(canPerformCalibrationAction("admin", "submitted", "edit")).toBe(
-      false,
-    );
-    expect(canPerformCalibrationAction("admin", "submitted", "delete")).toBe(
-      true,
-    );
-    expect(canPerformCalibrationAction("admin", "submitted", "approve")).toBe(
+  it("REVIEW/admin: edit=false, delete=true, approve=true (distinct)", () => {
+    expect(canPerformCalibrationAction("admin", "REVIEW", "edit")).toBe(false);
+    expect(canPerformCalibrationAction("admin", "REVIEW", "delete")).toBe(true);
+    expect(canPerformCalibrationAction("admin", "REVIEW", "approve")).toBe(
       true,
     );
   });
@@ -312,7 +324,7 @@ describe("REQ-CAL-008: action correctly maps to distinct permission lists", () =
 describe("REQ-CAL-009: getAllowedCalibrationActions returns [] for approved state", () => {
   for (const role of ALL_ROLES) {
     it(`role=${role} → []`, () => {
-      expect(getAllowedCalibrationActions(role, "approved")).toStrictEqual([]);
+      expect(getAllowedCalibrationActions(role, "APPROVED")).toStrictEqual([]);
     });
   }
 });
@@ -321,18 +333,18 @@ describe("REQ-CAL-009: getAllowedCalibrationActions returns [] for approved stat
 // REQ-CAL-010: getAllowedCalibrationActions specific oracle values
 // ---------------------------------------------------------------------------
 
-// REQ-CAL-010: Specific oracle outputs for owner/draft and admin/submitted.
+// REQ-CAL-010: Specific oracle outputs for owner/DRAFT and admin/REVIEW.
 describe("REQ-CAL-010: getAllowedCalibrationActions oracle values", () => {
-  it('owner + draft → ["edit","delete","submit"]', () => {
-    expect(getAllowedCalibrationActions("owner", "draft")).toStrictEqual([
+  it('owner + DRAFT → ["edit","delete","submit"]', () => {
+    expect(getAllowedCalibrationActions("owner", "DRAFT")).toStrictEqual([
       "edit",
       "delete",
       "submit",
     ]);
   });
 
-  it('admin + submitted → ["delete","approve","reject"]', () => {
-    expect(getAllowedCalibrationActions("admin", "submitted")).toStrictEqual([
+  it('admin + REVIEW → ["delete","approve","reject"]', () => {
+    expect(getAllowedCalibrationActions("admin", "REVIEW")).toStrictEqual([
       "delete",
       "approve",
       "reject",

@@ -70,6 +70,23 @@ describe("client-runtime response helpers", () => {
     });
   });
 
+  it("reports the legacy upper-case spelling as its canonical code and keeps the payload as sent", async () => {
+    const response = Response.json(
+      { error: "Fora do escopo", code: "SCOPE_VIOLATION" },
+      { status: 422 },
+    );
+
+    const error = await readJsonResponse(response, "Fallback").catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(CalibraApiError);
+    expect(error).toMatchObject({
+      code: "scope_violation",
+      payload: { code: "SCOPE_VIOLATION" },
+    });
+  });
+
   it("REQ-DE-4: surfaces the code from mutation responses too", async () => {
     const response = Response.json(
       { error: "Registro emitido", code: "record_immutable" },

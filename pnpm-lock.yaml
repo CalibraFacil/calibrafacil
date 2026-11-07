@@ -827,6 +827,9 @@ importers:
       '@calibra-facil/lab-email-domain':
         specifier: workspace:^
         version: link:../lab-email-domain
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../shared

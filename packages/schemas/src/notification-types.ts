@@ -43,7 +43,6 @@ export const NOTIFICATION_TYPES = [
   "VISIT_CUSTOMER_CONFIRMED", // Lab-bound (#739): portal customer confirmed attendance for a visit
   "VISIT_RESCHEDULE_REQUESTED", // Lab-bound (#739): portal customer asked to reschedule a visit
   "VISIT_RESCHEDULE_DECLINED", // Customer-bound (#739): lab declined the customer's reschedule request
-  "HIGH",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
