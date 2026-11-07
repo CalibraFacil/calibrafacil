@@ -17,7 +17,7 @@ import {
   rejectJob,
 } from "../../../jobs";
 import { resolveApiKeyApprover } from "../../api-key-approver";
-import { sendServiceOrdersToFinance } from "../../../../lib/finance";
+import { sendServiceOrdersToFinance } from "../../../finance";
 import { type PublicApiV2Env } from "./env";
 import { resolveExternalResourceId } from "./resolvers";
 import { withIdempotentCommand } from "./idempotency";

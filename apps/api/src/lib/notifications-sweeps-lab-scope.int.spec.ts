@@ -88,7 +88,7 @@ import {
   processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls,
   type IntegrationsEnv,
-} from "../modules/integrations";
+} from "../domains/finance/integrations";
 import { drainServiceOrderEmailOutbox } from "../domains/service-orders/email/service-order-email-drain";
 import { truncateAll } from "../../test/integration/db";
 import {

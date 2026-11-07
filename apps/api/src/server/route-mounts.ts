@@ -50,8 +50,7 @@ import {
   customersRouter,
 } from "../domains/customers/routes";
 import { dashboardRouter, reportsRouter } from "../domains/reports/routes";
-import { financeRouter } from "../routes/finance";
-import { integrationsRouter } from "../routes/integrations";
+import { financeRouter, integrationsRouter } from "../domains/finance/routes";
 import { runApiHealthCheck } from "../lib/health";
 import { methodsRouter } from "../domains/methods/routes";
 import {

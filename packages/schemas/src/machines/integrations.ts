@@ -46,7 +46,7 @@ export const INTEGRATION_MACHINE = defineStateMachine({
 });
 
 // integration_sync_run.status: one sync of one target.
-//   create  apps/api/src/modules/integrations/sync-run.ts and
+//   create  apps/api/src/domains/finance/integrations/sync-run.ts and
 //             packages/jobs-core/src/integrations/runs.ts: PENDING
 //   start   the API runner and the worker (process-sync.ts); a redelivered
 //             message restarts a run left RUNNING by a crash, and never revives

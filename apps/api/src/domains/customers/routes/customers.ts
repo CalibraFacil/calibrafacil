@@ -48,7 +48,7 @@ import { fetchCnpjRegistration } from "../cnpj-lookup";
 import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
-} from "../../../lib/finance";
+} from "../../finance";
 import {
   cancelPortalInvitationAsService,
   createPortalInvitationAsService,

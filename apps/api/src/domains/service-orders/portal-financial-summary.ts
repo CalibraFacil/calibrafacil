@@ -6,7 +6,7 @@ import {
 } from "@calibra-facil/shared";
 import { integrationObjectLink } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
-import { buildServiceOrderFinancialStatus } from "../../lib/financial-timeline";
+import { buildServiceOrderFinancialStatus } from "../finance";
 import { orgDb } from "../../lib/org-db";
 import type { buildUnitScopeCondition } from "../../lib/units";
 import { isRecord } from "@calibra-facil/shared/record";

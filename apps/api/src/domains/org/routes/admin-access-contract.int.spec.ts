@@ -23,7 +23,7 @@ import {
 } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { session as sessionTable } from "@calibra-facil/db/schema";
-import { financeAccessRouter } from "../../../routes/finance/access";
+import { financeAccessRouter } from "../../finance/routes/access";
 import { labSetupRouter } from "./lab-setup";
 import { onboardingRouter } from "./onboarding";
 import { sessionsRouter } from "./sessions";

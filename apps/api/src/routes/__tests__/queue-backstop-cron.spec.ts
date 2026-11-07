@@ -31,7 +31,7 @@ vi.mock("../../lib/runtime-env", () => ({
   createWorkerRuntimeEnv: mocks.createWorkerRuntimeEnv,
 }));
 
-vi.mock("../../modules/integrations", () => ({
+vi.mock("../../domains/finance/integrations", () => ({
   dispatchContaAzulSync: vi.fn(),
   processScheduledContaAzulIntegrationSyncs:
     mocks.processScheduledContaAzulIntegrationSyncs,

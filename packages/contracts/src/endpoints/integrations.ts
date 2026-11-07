@@ -23,7 +23,7 @@ import { endpoint, type EndpointGroup } from "./define";
  * The laboratory's ERP integrations (`/api/integrations/*`): the endpoint
  * definitions, the request schemas the server validates with and the response
  * contracts. Response schemas are wire schemas written from what
- * `apps/api/src/routes/integrations.ts` returns (see `jobs.ts` for the rules).
+ * `apps/api/src/domains/finance/routes/integrations.ts` returns (see `jobs.ts` for the rules).
  * Integration ids and run ids are text (UUIDs), so no definition needs a
  * `params` schema.
  *

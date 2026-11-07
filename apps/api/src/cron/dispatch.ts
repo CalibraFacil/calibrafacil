@@ -5,7 +5,7 @@ import {
   dispatchContaAzulSync,
   processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls,
-} from "../modules/integrations";
+} from "../domains/finance";
 import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
 import { cleanupExpiredAuthRecords, runRecordsPurge } from "../domains/org";
 import {
