@@ -8,6 +8,7 @@
 // belong to the CLIENT organization). No transaction is held across an e-mail
 // send. Global tables (user, organization, notification_preference) are read
 // on the plain handle.
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "@calibra-facil/schemas";
 import { db } from "@calibra-facil/db";
 
 import {
@@ -223,37 +224,6 @@ export interface NotificationResult {
   emailSent: boolean;
 }
 
-// Default preferences when user has none set
-const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
-  JOB_SUBMITTED_FOR_REVIEW: { inApp: true, email: true },
-  JOB_APPROVED: { inApp: true, email: true },
-  JOB_REJECTED: { inApp: true, email: true },
-  JOB_ASSIGNED: { inApp: true, email: false },
-  CERTIFICATE_READY: { inApp: true, email: true },
-  CERTIFICATE_AMENDED: { inApp: true, email: true },
-  AUDIT_PACK_READY: { inApp: true, email: true },
-  ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
-  ASSET_DUE_FOR_LEGAL_VERIFICATION: { inApp: true, email: true },
-  STANDARD_EXPIRING: { inApp: true, email: true },
-  STANDARD_EXPIRED: { inApp: true, email: true },
-  SIGNING_CERTIFICATE_EXPIRING: { inApp: true, email: true },
-  SIGNING_CERTIFICATE_LAPSED: { inApp: true, email: true },
-  AUDIT_CHAIN_BROKEN: { inApp: true, email: true },
-  JOB_OVERDUE: { inApp: true, email: true },
-  NC_CREATED: { inApp: true, email: true },
-  NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
-  OOT_NOTIFICATION_ACKNOWLEDGED: { inApp: true, email: true },
-  COMPETENCE_EXPIRING: { inApp: true, email: true },
-  COMPETENCE_EXPIRED: { inApp: true, email: true },
-  COMPETENCE_REQUESTED: { inApp: true, email: true },
-  COMPETENCE_APPROVED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_SUBMITTED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_UNDER_REVIEW: { inApp: true, email: true },
-  CALIBRATION_REQUEST_APPROVED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_REJECTED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_CONVERTED: { inApp: true, email: true },
-};
-
 // =============================================================================
 // CORE NOTIFICATION SERVICE
 // =============================================================================
@@ -274,7 +244,7 @@ async function getUserPreferences(userId: string): Promise<{
 
   if (!prefs) {
     return {
-      preferences: DEFAULT_PREFERENCES,
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
       emailEnabled: true,
       notifySelfActions: false,
     };
@@ -378,23 +348,22 @@ export async function sendNotification(
 /**
  * Map notification type to job notification email type
  */
-function getJobEmailType(
+const JOB_EMAIL_TYPES = {
+  JOB_SUBMITTED_FOR_REVIEW: "submitted",
+  JOB_APPROVED: "approved",
+  JOB_REJECTED: "rejected",
+  JOB_ASSIGNED: "assigned",
+  JOB_OVERDUE: "overdue",
+} as const satisfies Partial<Record<NotificationType, string>>;
+
+/** The job e-mail a notification type renders, or null when it is not a job notification. */
+function jobEmailType(
   type: NotificationType,
-): "submitted" | "approved" | "rejected" | "assigned" | "overdue" {
-  switch (type) {
-    case "JOB_SUBMITTED_FOR_REVIEW":
-      return "submitted";
-    case "JOB_APPROVED":
-      return "approved";
-    case "JOB_REJECTED":
-      return "rejected";
-    case "JOB_ASSIGNED":
-      return "assigned";
-    case "JOB_OVERDUE":
-      return "overdue";
-    default:
-      return "submitted";
+): (typeof JOB_EMAIL_TYPES)[keyof typeof JOB_EMAIL_TYPES] | null {
+  for (const [key, value] of Object.entries(JOB_EMAIL_TYPES)) {
+    if (key === type) return value;
   }
+  return null;
 }
 
 function getCompetenceEmailType(
@@ -651,20 +620,12 @@ function renderEmailTemplate(
   emailBrand: EmailBrand | undefined,
 ): React.ReactElement {
   // Job notifications
-  if (
-    emailContext?.type === "job" &&
-    [
-      "JOB_SUBMITTED_FOR_REVIEW",
-      "JOB_APPROVED",
-      "JOB_REJECTED",
-      "JOB_ASSIGNED",
-      "JOB_OVERDUE",
-    ].includes(type)
-  ) {
+  const jobType = jobEmailType(type);
+  if (emailContext?.type === "job" && jobType) {
     const { jobId, actorName, reason } = emailContext.data;
     return JobNotificationEmail({
       recipientName,
-      type: getJobEmailType(type),
+      type: jobType,
       jobId,
       message,
       actorName,

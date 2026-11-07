@@ -1,3 +1,8 @@
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  type NotificationChannels,
+  type NotificationType,
+} from '@calibra-facil/schemas'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -6,45 +11,6 @@ import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
 import { calibraApi } from '@/utils/api'
 import { useNotificationPreferencesData } from '@/features/settings/queries'
-
-type NotificationType =
-  | 'JOB_SUBMITTED_FOR_REVIEW'
-  | 'JOB_APPROVED'
-  | 'JOB_REJECTED'
-  | 'JOB_ASSIGNED'
-  | 'CERTIFICATE_READY'
-  | 'CERTIFICATE_AMENDED'
-  | 'ASSET_DUE_FOR_RECALIBRATION'
-  | 'STANDARD_EXPIRING'
-  | 'STANDARD_EXPIRED'
-  | 'JOB_OVERDUE'
-  | 'NC_CREATED'
-  | 'NC_ESCALATED_TO_CAPA'
-  | 'COMPETENCE_EXPIRING'
-  | 'COMPETENCE_EXPIRED'
-  | 'COMPETENCE_REQUESTED'
-  | 'COMPETENCE_APPROVED'
-  | 'CALIBRATION_REQUEST_SUBMITTED'
-  | 'CALIBRATION_REQUEST_UNDER_REVIEW'
-  | 'CALIBRATION_REQUEST_APPROVED'
-  | 'CALIBRATION_REQUEST_REJECTED'
-  | 'CALIBRATION_REQUEST_CONVERTED'
-  | 'VISIT_SCHEDULED'
-  | 'VISIT_CONFIRMED'
-  | 'VISIT_RESCHEDULED'
-  | 'VISIT_CANCELLED'
-  | 'VISIT_REMINDER'
-  | 'VISIT_CUSTOMER_CONFIRMED'
-  | 'VISIT_RESCHEDULE_REQUESTED'
-
-type NotificationPreference = {
-  inApp: boolean
-  email: boolean
-}
-
-type NotificationPreferencesMap = Partial<
-  Record<NotificationType, NotificationPreference>
->
 
 interface NotificationSetting {
   id: NotificationType
@@ -230,32 +196,6 @@ const notificationSettings: NotificationSetting[] = [
   },
 ]
 
-const defaultPreferences: NotificationPreferencesMap = {
-  JOB_SUBMITTED_FOR_REVIEW: { inApp: true, email: true },
-  JOB_APPROVED: { inApp: true, email: true },
-  JOB_REJECTED: { inApp: true, email: true },
-  JOB_ASSIGNED: { inApp: true, email: false },
-  CERTIFICATE_READY: { inApp: true, email: true },
-  CERTIFICATE_AMENDED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_SUBMITTED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_UNDER_REVIEW: { inApp: true, email: true },
-  CALIBRATION_REQUEST_APPROVED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_REJECTED: { inApp: true, email: true },
-  CALIBRATION_REQUEST_CONVERTED: { inApp: true, email: true },
-  ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
-  STANDARD_EXPIRING: { inApp: true, email: true },
-  STANDARD_EXPIRED: { inApp: true, email: true },
-  JOB_OVERDUE: { inApp: true, email: true },
-  NC_CREATED: { inApp: true, email: true },
-  NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
-  COMPETENCE_EXPIRING: { inApp: true, email: true },
-  COMPETENCE_EXPIRED: { inApp: true, email: true },
-  COMPETENCE_REQUESTED: { inApp: true, email: true },
-  COMPETENCE_APPROVED: { inApp: true, email: true },
-  VISIT_CUSTOMER_CONFIRMED: { inApp: true, email: false },
-  VISIT_RESCHEDULE_REQUESTED: { inApp: true, email: true },
-}
-
 export function NotificationsSettingsPage() {
   const queryClient = useQueryClient()
 
@@ -264,7 +204,7 @@ export function NotificationsSettingsPage() {
   // Update preferences mutation with optimistic updates
   const updateMutation = useMutation({
     mutationFn: async (data: {
-      preferences?: NotificationPreferencesMap
+      preferences?: Partial<Record<NotificationType, NotificationChannels>>
       emailEnabled?: boolean
       notifySelfActions?: boolean
     }) => calibraApi.notifications.updatePreferences(data),
@@ -314,7 +254,7 @@ export function NotificationsSettingsPage() {
     },
   })
 
-  const preferences = prefsData?.preferences ?? defaultPreferences
+  const preferences = prefsData?.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES
   const emailEnabled = prefsData?.emailEnabled ?? true
   const notifySelfActions = prefsData?.notifySelfActions ?? false
 
