@@ -31,12 +31,15 @@ import { sql } from "drizzle-orm";
 import { assetTypesRouter } from "./asset-types";
 import { assetsRouter } from "./assets";
 import { customersRouter } from "./customers";
-import { methodsRouter } from "./methods";
+import { methodsRouter as bareMethodsRouter } from "./methods";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { serviceOrdersRouter } from "./service-orders";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+const methodsRouter = withErrorHandling(bareMethodsRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 

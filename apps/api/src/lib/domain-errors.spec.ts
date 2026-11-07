@@ -57,11 +57,11 @@ describe("DomainError (REQ-DE-1)", () => {
     });
   });
 
-  it("REQ-DE-1: every registry code is unique snake_case, except the documented legacy one", () => {
+  it("REQ-DE-1: every registry code is unique snake_case, except the documented legacy ones", () => {
     const nonSnake = API_ERROR_CODES.filter(
       (code) => !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(code),
     );
-    expect(nonSnake).toEqual(["JOB_STATUS_CONFLICT"]);
+    expect(nonSnake).toEqual(["JOB_STATUS_CONFLICT", "DIMENSIONAL_ERROR"]);
     expect(new Set(API_ERROR_CODES).size).toBe(API_ERROR_CODES.length);
   });
 });

@@ -84,6 +84,26 @@ export const API_ERROR_CODES = [
   "service_not_found",
   "technician_not_found",
 
+  // Methods (the lifecycle machine, the dimensional gate, the template catalog)
+  // and the commercial services built on them.
+  "method_not_found",
+  "method_name_taken",
+  "method_not_editable",
+  "method_not_submittable",
+  "method_has_no_inputs",
+  "method_not_reviewable",
+  "method_not_publishable",
+  "method_review_required",
+  "method_not_returnable",
+  "method_not_archivable",
+  "method_not_versionable",
+  "method_draft_exists",
+  "method_not_deletable",
+  "method_compile_failed",
+  "method_asset_type_mismatch",
+  "template_not_found",
+  "template_acknowledgements_missing",
+
   // Service requests.
   "request_not_found",
   "request_not_editable",
@@ -113,6 +133,9 @@ export const API_ERROR_CODES = [
   // asserted by clients/tests of the job and visit routes. Kept verbatim so
   // existing clients keep working; new code must use `job_status_conflict`.
   "JOB_STATUS_CONFLICT",
+  // Shipped with the method routes' dimensional gate (DOM-10); the editor and
+  // the integration specs branch on it.
+  "DIMENSIONAL_ERROR",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
