@@ -3,6 +3,7 @@ import { IllegalTransitionError } from "@calibra-facil/schemas/state-machine";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { extractPgErrorCode } from "../lib/db-errors";
+import { PortalServiceAccountError } from "../lib/portal-service-account";
 import { DomainError, domainErrorBody } from "../lib/domain-errors";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
 import type { Env } from "./env";
@@ -83,6 +84,15 @@ export function applyErrorHandling(
       return c.json(domainErrorBody(error), error.status);
     }
 
+    // The portal service account refused (the CLIENT organization's membership
+    // rules, a duplicate invitation): its own status and code.
+    if (error instanceof PortalServiceAccountError) {
+      return c.json(
+        { error: error.message, code: error.code },
+        portalServiceStatus(error.status),
+      );
+    }
+
     // A command its state machine does not allow from the record's current
     // state (`requireTransition` / `requireTargetOf`): the client asked for a
     // move that does not exist, not a defect.
@@ -131,4 +141,16 @@ export function applyErrorHandling(
     return c.json({ error: "Erro interno do servidor" }, 500);
   });
   return app;
+}
+
+function portalServiceStatus(
+  status: number,
+): 400 | 401 | 403 | 404 | 409 | 500 {
+  return status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 409
+    ? status
+    : 500;
 }

@@ -40,9 +40,11 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { getLabCustomerById } from "../lib/customer-access";
+import { getLabCustomerById, requireLabCustomer } from "../lib/customer-access";
+import { invalid, conflict, domainErrorResponse } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import { isReferencedRowViolation } from "../lib/db-errors";
-import { conflict, domainErrorResponse } from "../lib/domain-errors";
 import { fetchCnpjRegistration } from "../lib/cnpj-lookup";
 import {
   loadCustomerActiveCommercialAgreement,
@@ -527,40 +529,28 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const input = c.req.valid("json");
       const session = c.get("session");
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      const existingCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
+      const id = existingCustomer.id;
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      try {
-        // Get existing customer for audit log
-        const existingCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
-        );
-
-        if (!existingCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        return await orgDb(memberData.organizationId).transaction(async (o) => {
+      const updatedCustomer = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
           // A group reassignment must target a group owned by the same lab.
           if (
             input.groupId != null &&
             !(await groupBelongsToLab(
               input.groupId,
               memberData.organizationId,
-              o,
+              ctx.o,
             ))
           ) {
-            return c.json({ error: "Grupo invalido" }, 400);
+            throw invalid("invalid_request", "Grupo invalido");
           }
 
-          // Build changes object for audit log
           const changes: Record<string, { old: unknown; new: unknown }> = {};
           const existingCustomerRecord = toRecord(existingCustomer);
           for (const [key, value] of Object.entries(input)) {
@@ -570,13 +560,9 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             }
           }
 
-          // Update customer
-          const [updatedCustomer] = await o
+          const [updated] = await ctx.o
             .update(customer)
-            .set({
-              ...input,
-              updatedAt: new Date(),
-            })
+            .set({ ...input, updatedAt: new Date() })
             .where(
               and(
                 eq(customer.id, id),
@@ -585,24 +571,14 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .returning();
 
-          // Log audit entry if there were changes
           if (Object.keys(changes).length > 0) {
-            await o.insert(customerAuditLog).values({
-              organizationId: memberData.organizationId,
-              customerId: id,
-              action: "update",
-              changes,
-              performedBy: session.user.id,
-              ipAddress: clientIp(c),
-            });
+            await ctx.audit("customer", id, { action: "update", changes });
           }
+          return updated;
+        },
+      );
 
-          return c.json(updatedCustomer);
-        });
-      } catch (error) {
-        console.error("Error updating customer:", error);
-        return c.json({ error: "Erro ao atualizar cliente" }, 500);
-      }
+      return c.json(updatedCustomer);
     },
   )
 
@@ -1218,72 +1194,55 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateComplianceSchema),
     async (c) => {
       const { compliance, reason } = c.req.valid("json");
-      const session = c.get("session");
       const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
+      const existingCustomer = await requireLabCustomer(
         c.req.param("id"),
         memberData.organizationId,
       );
+      const id = existingCustomer.id;
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      const baseCompliance = existingCustomer.compliance ?? {
+        qualificationStatus: "pending" as const,
+        qualityRequirementsAcknowledged: false,
+      };
 
-      try {
-        // Get existing customer for audit log
-        const existingCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
-        );
+      const mergedCompliance = {
+        ...baseCompliance,
+        ...compliance,
+        // Ensure qualificationStatus has a value
+        qualificationStatus:
+          compliance.qualificationStatus ??
+          baseCompliance.qualificationStatus ??
+          ("pending" as const),
+        qualityRequirementsAcknowledged:
+          compliance.qualityRequirementsAcknowledged ??
+          baseCompliance.qualityRequirementsAcknowledged ??
+          false,
+        // Auto-set acknowledgment timestamp if acknowledged
+        ...(compliance.qualityRequirementsAcknowledged &&
+        !baseCompliance.qualityRequirementsAcknowledged
+          ? { qualityRequirementsAcknowledgedAt: new Date().toISOString() }
+          : {}),
+      };
 
-        if (!existingCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        // Merge with existing compliance data, ensuring required fields have defaults
-        const baseCompliance = existingCustomer.compliance ?? {
-          qualificationStatus: "pending" as const,
-          qualityRequirementsAcknowledged: false,
-        };
-
-        const mergedCompliance = {
-          ...baseCompliance,
-          ...compliance,
-          // Ensure qualificationStatus has a value
-          qualificationStatus:
-            compliance.qualificationStatus ??
-            baseCompliance.qualificationStatus ??
-            ("pending" as const),
-          qualityRequirementsAcknowledged:
-            compliance.qualityRequirementsAcknowledged ??
-            baseCompliance.qualityRequirementsAcknowledged ??
-            false,
-          // Auto-set acknowledgment timestamp if acknowledged
-          ...(compliance.qualityRequirementsAcknowledged &&
-          !baseCompliance.qualityRequirementsAcknowledged
-            ? { qualityRequirementsAcknowledgedAt: new Date().toISOString() }
-            : {}),
-        };
-
-        return await orgDb(memberData.organizationId).transaction(async (o) => {
+      const updatedCustomer = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
           const activeCommercialAgreement =
             await loadCustomerActiveCommercialAgreement(
               memberData.organizationId,
               id,
-              o,
+              ctx.o,
             );
           const updatedCompliance = syncComplianceWithActiveAgreement(
             mergedCompliance,
             activeCommercialAgreement,
           );
 
-          // Update customer
-          const [updatedCustomer] = await o
+          const [updated] = await ctx.o
             .update(customer)
-            .set({
-              compliance: updatedCompliance,
-              updatedAt: new Date(),
-            })
+            .set({ compliance: updatedCompliance, updatedAt: new Date() })
             .where(
               and(
                 eq(customer.id, id),
@@ -1292,32 +1251,22 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .returning();
 
-          // Log audit entry with reason (required for compliance changes per ISO 17025)
-          await o.insert(customerAuditLog).values({
-            organizationId: memberData.organizationId,
-            customerId: id,
+          await ctx.audit("customer", id, {
             action: "compliance_change",
             changes: {
               old: existingCustomer.compliance,
               new: updatedCompliance,
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
             reason,
           });
+          return updated;
+        },
+      );
 
-          return c.json(updatedCustomer);
-        });
-      } catch (error) {
-        console.error("Error updating compliance:", error);
-        return c.json({ error: "Erro ao atualizar conformidade" }, 500);
-      }
+      return c.json(updatedCustomer);
     },
   )
 
-  // =========================================================================
-  // GET /:id/audit-log - Get audit trail for customer
-  // =========================================================================
   .get(
     "/:id/audit-log",
     ...withLabPermission({ client: ["manage_portal"] }),
