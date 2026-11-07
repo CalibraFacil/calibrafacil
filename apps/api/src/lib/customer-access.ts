@@ -70,6 +70,20 @@ export async function getLabCustomerById(
 }
 
 /**
+ * The id of the laboratory's customer a route parameter names (numeric id, tax
+ * id or slug). Throws 400 for an unreadable identifier; a customer that is not
+ * there is the caller's 404.
+ */
+export async function requireLabCustomerId(
+  routeIdentifier: string,
+  labOrganizationId: string,
+) {
+  const id = await resolveCustomerRouteId(routeIdentifier, labOrganizationId);
+  if (id === null) throw invalid("invalid_request", "ID invalido");
+  return id;
+}
+
+/**
  * The laboratory's customer a route parameter names (numeric id, tax id or
  * slug). Throws 400 for an unreadable identifier and 404 when no customer of
  * this laboratory matches.
@@ -78,8 +92,7 @@ export async function requireLabCustomer(
   routeIdentifier: string,
   labOrganizationId: string,
 ) {
-  const id = await resolveCustomerRouteId(routeIdentifier, labOrganizationId);
-  if (id === null) throw invalid("invalid_request", "ID invalido");
+  const id = await requireLabCustomerId(routeIdentifier, labOrganizationId);
   const found = await getLabCustomerById(id, labOrganizationId);
   if (!found) throw notFound("customer_not_found", "Cliente nao encontrado");
   return found;

@@ -57,7 +57,7 @@ import { magicLinkRouter } from "../routes/magic-link";
 import { publicApiRouter } from "../routes/public-api";
 import { publicApiV2Router } from "../routes/public-api-v2";
 import { verifyRouter } from "../routes/verify";
-import { customersRouter } from "../routes/customers";
+import { customersRouter as bareCustomersRouter } from "../routes/customers";
 import { loginAs } from "../../test/integration/setup";
 import { asApplicationRole } from "../../test/integration/application-role";
 import { truncateAll } from "../../test/integration/db";
@@ -81,6 +81,9 @@ import {
 import { cleanupFailedLabProvisioning } from "../services/lab-provisioning";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const customersRouter = withErrorHandling(bareCustomersRouter);
 
 // ---------------------------------------------------------------------------
 // Helpers
