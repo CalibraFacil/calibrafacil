@@ -53,7 +53,7 @@ const cancelPortalInvitationAsService = vi.fn(async () => ({ success: true }));
 const removePortalMemberAsService = vi.fn(async () => ({ success: true }));
 const enforceClientPortalMembershipBoundary = vi.fn(async () => undefined);
 
-vi.mock("../../../../lib/portal-service-account", () => ({
+vi.mock("../../../portal/portal-service-account", () => ({
   createClientOrganizationAsServiceOwner,
   createPortalInvitationAsService,
   cancelPortalInvitationAsService,

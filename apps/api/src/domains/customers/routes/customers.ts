@@ -54,7 +54,7 @@ import {
   createPortalInvitationAsService,
   enforceClientPortalMembershipBoundary,
   removePortalMemberAsService,
-} from "../../../lib/portal-service-account";
+} from "../../portal";
 import { orgDb } from "../../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 

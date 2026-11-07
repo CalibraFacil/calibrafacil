@@ -1,6 +1,6 @@
 // calibration_request.status as data: a customer's request for calibration
 // (portal, public API), reviewed by the lab and converted into jobs.
-//   create   apps/api/src/routes/portal-requests.ts, public-api-v2/requests-write.ts
+//   create   apps/api/src/domains/portal/routes/portal-requests.ts, public-api-v2/requests-write.ts
 //   edit     public-api-v2/requests-write.ts PATCH (observations, due date)
 //   review   routes/calibration-requests.ts POST /:id/review (internal notes)
 //   approve  routes/calibration-requests.ts POST /:id/approve

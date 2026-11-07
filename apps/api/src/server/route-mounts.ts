@@ -36,10 +36,10 @@ import { organizationProfileRouter } from "../routes/organization-profile";
 import { organizationMediaRouter } from "../routes/organization-media";
 import { emailDomainsRouter } from "../routes/email-domains";
 import { portalDomainsRouter } from "../routes/portal-domains";
-import { portalNotificationsRouter } from "../routes/portal-notifications";
-import { portalRequestsRouter } from "../routes/portal-requests";
-import { portalVisitsRouter } from "../routes/portal-visits";
-import { portalRouter } from "../routes/portal";
+import { portalNotificationsRouter } from "../domains/portal/routes";
+import { portalRequestsRouter } from "../domains/portal/routes";
+import { portalVisitsRouter } from "../domains/portal/routes";
+import { portalRouter } from "../domains/portal/routes";
 import { profileMediaRouter } from "../routes/profile-media";
 import { publicApiRouter } from "../domains/public-api/routes";
 import {

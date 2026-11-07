@@ -6,7 +6,7 @@ import type { StatementKind } from "./tenant-sql-analyzer";
 //
 // Matching: an entry covers a finding when `file` is a suffix of the path of
 // the application file that issued the statement (repo-relative, e.g.
-// "apps/api/src/routes/portal.ts"), every table of the finding is in `tables`,
+// "apps/api/src/domains/portal/routes/portal.ts"), every table of the finding is in `tables`,
 // `kinds` (if given) contains the statement kind, and `sql` (if given) matches
 // the normalized statement. Prefer narrow entries: name the table and, when the
 // file mixes scoped and unscoped statements, a `sql` pattern.
@@ -331,7 +331,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   // -------------------------------------------------------------------------
   {
     category: "portal-cross-org",
-    file: "apps/api/src/lib/portal-customer-scope.ts",
+    file: "apps/api/src/domains/portal/portal-customer-scope.ts",
     tables: ["member", "customer"],
     kinds: ["select"],
     reason:
@@ -339,7 +339,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "portal-cross-org",
-    file: "apps/api/src/lib/portal-customer-scope.ts",
+    file: "apps/api/src/domains/portal/portal-customer-scope.ts",
     tables: ["member", "customer", "customer_group"],
     kinds: ["select"],
     sql: /left join "customer_group" on/,

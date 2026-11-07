@@ -64,7 +64,7 @@ export const QUEUE_JOB_RECEIPT_MACHINE = defineStateMachine({
 });
 
 // portal_export_job.status: a customer's audit-pack export (portal).
-//   create    apps/api/src/routes/portal.ts: PENDING
+//   create    apps/api/src/domains/portal/routes/portal.ts: PENDING
 //   claim     packages/jobs-core/src/audit-pack.ts (a redelivery re-claims a
 //               PROCESSING one)
 //   complete  the pack was stored

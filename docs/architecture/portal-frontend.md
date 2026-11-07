@@ -185,7 +185,7 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   switcher also cancels in-flight portal queries and removes the previous
   org's entries when it switches.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint
-  in `apps/api/src/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
+  in `apps/api/src/domains/portal/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
   the sidebar badges reuse the same hook so counts cannot drift.
 - The server redacts what customers must not see — e.g. the portal service-order
   endpoints return client-visible projections, and the assets list accepts a

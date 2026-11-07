@@ -36,7 +36,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The client portal's own surface (`/api/portal/*`, served by
- * `apps/api/src/routes/portal.ts`). The portal frontend calls these through its
+ * `apps/api/src/domains/portal/routes/portal.ts`). The portal frontend calls these through its
  * transport (`apps/portal/src/lib/portal-api.ts`); they are NOT in
  * `ENDPOINT_GROUPS` (see `PORTAL_ENDPOINT_GROUPS`), because the lab app and the
  * desktop never call them. Every definition is `cloud-only` for that reason too:

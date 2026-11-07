@@ -26,7 +26,7 @@ import {
   createPortalInvitationAsService,
   enforceClientPortalMembershipBoundary,
   removePortalMemberAsService,
-} from "../../../lib/portal-service-account";
+} from "../../portal";
 import { requireGroupRouteId, requireLabGroup } from "../customer-group-access";
 import {
   DomainError,

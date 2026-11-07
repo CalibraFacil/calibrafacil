@@ -49,7 +49,7 @@ is computed for future reliability analysis — all test-backed.
 
 ### Mini-spec A1 — As-found reliability verdict (pure) — `REQ-RELIA`
 
-A pure module (mirror `apps/api/src/lib/portal-certificate-verdict.ts`) that derives a
+A pure module (mirror `apps/api/src/domains/portal/portal-certificate-verdict.ts`) that derives a
 per-job **as-found** conformity verdict from frozen `results`. The metrology rule
 (as-found only; never as-left) is regulated — `[HIGH RISK]` and confirmed by a human.
 
@@ -172,7 +172,7 @@ binds the real portal scope; tenant isolation tested.
 | A1 as-found verdict (pure)   | `apps/api/src/lib/as-found-reliability-verdict.ts` (mirror `portal-certificate-verdict.ts`)           | —          | med (metrology rule)            | loopable-with-verifier (oracle)           |
 | A2 persist verdict on job    | `packages/db` schema + approval wiring (`apps/api/src/routes/jobs.ts`)                                | A1         | **high (approval-adjacent)**    | **pair-don't-loop**                       |
 | B1 asset interval columns    | `packages/db/src/schema.ts` + hand migration                                                          | —          | med                             | pair-don't-loop (migration review)        |
-| B2 portal write endpoint     | `apps/api/src/routes/portal.ts` + portal scope                                                        | B1, B3     | **high + critical (new authz)** | **pair-don't-loop**                       |
+| B2 portal write endpoint     | `apps/api/src/domains/portal/routes/portal.ts` + portal scope                                         | B1, B3     | **high + critical (new authz)** | **pair-don't-loop**                       |
 | B3 interval payload Zod      | `packages/schemas`                                                                                    | —          | low                             | loopable-with-verifier                    |
 | B4 lab demotion              | `apps/web/src/features/assets/*` + `apps/api/src/routes/assets.ts` + `CreateAsset/UpdateAsset` schema | B1         | **high (compliance flip)**      | **pair-don't-loop** (API contract change) |
 | B5 legal-metrology lock      | `apps/portal` editor + B2 endpoint (REQ-ACCESS-INT-005)                                               | B2         | **high (regulatory)**           | **pair-don't-loop**                       |

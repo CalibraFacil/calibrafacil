@@ -34,7 +34,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * What the customer does in the portal: notifications, out-of-tolerance
  * notices, visits, calibration requests and service orders. Served by
- * `apps/api/src/routes/portal.ts`, `portal-notifications.ts`,
+ * `apps/api/src/domains/portal/routes/portal.ts`, `portal-notifications.ts`,
  * `portal-requests.ts`, `portal-visits.ts` and the `portalServiceOrdersRouter`
  * of `service-orders.ts`; see `./portal.ts` for why they are `cloud-only` and
  * outside `ENDPOINT_GROUPS`.

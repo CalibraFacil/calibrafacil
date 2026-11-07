@@ -14,7 +14,7 @@ import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { invalid } from "../../lib/domain-errors";
 import type { OrgContext } from "../../lib/org-context";
-import { createClientOrganizationAsServiceOwner } from "../../lib/portal-service-account";
+import { createClientOrganizationAsServiceOwner } from "../portal";
 import { uniqueSlug } from "../../lib/unique-slug";
 
 /**
