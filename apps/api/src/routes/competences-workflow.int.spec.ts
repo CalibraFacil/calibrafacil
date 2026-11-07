@@ -26,12 +26,15 @@ import {
   personnelCompetenceAuditLog,
   trainingRecord,
 } from "@calibra-facil/db/schema";
-import { competencesRouter } from "./competences";
+import { competencesRouter as bareCompetencesRouter } from "./competences";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const competencesRouter = withErrorHandling(bareCompetencesRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 

@@ -46,9 +46,12 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { capaRouter } from "./capa";
-import { competencesRouter } from "./competences";
+import { competencesRouter as bareCompetencesRouter } from "./competences";
 import { nonConformancesRouter } from "./non-conformances";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const competencesRouter = withErrorHandling(bareCompetencesRouter);
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),

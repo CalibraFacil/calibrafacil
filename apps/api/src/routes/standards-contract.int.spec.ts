@@ -23,11 +23,14 @@ import {
 } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { massCompositionProfile } from "@calibra-facil/db/schema";
-import { standardsRouter } from "./standards";
+import { standardsRouter as bareStandardsRouter } from "./standards";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const standardsRouter = withErrorHandling(bareStandardsRouter);
 
 vi.mock("../lib/storage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/storage")>();

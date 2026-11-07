@@ -1,5 +1,3 @@
-import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
-import { slugifyRouteIdentifier } from "@calibra-facil/shared/route-identifiers";
 import { Hono } from "hono";
 import { createHash, randomUUID } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
@@ -46,7 +44,7 @@ import {
   createStandardRecallNotifications,
   type RecallStandardIdentity,
 } from "../lib/oot-notifications";
-import { afterCommitQueue } from "../lib/after-commit";
+import type { OrgScope } from "../lib/after-commit";
 import {
   findImpactedCertificates,
   findInFlightJobsUsingStandard,
@@ -75,7 +73,13 @@ import {
   STANDARD_RECALL_MACHINE,
 } from "@calibra-facil/schemas/machines";
 import { buildUnitScopeCondition } from "../lib/units";
-import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
+import { conflict, forbidden, invalid, notFound } from "../lib/domain-errors";
+import {
+  requireLabStandard,
+  requireLabStandardId,
+} from "../lib/standard-access";
+import { withOrg, type OrgContext } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import {
   createR2Client,
   generatePresignedUrl,
@@ -91,7 +95,6 @@ import {
   labDaysUntil,
   labToday,
 } from "@calibra-facil/shared";
-import { clientIp } from "../lib/client-ip";
 
 const MAX_STANDARD_CERTIFICATE_FILE_SIZE = 25 * 1024 * 1024;
 const STANDARD_CERTIFICATE_CONTENT_TYPE = "application/pdf";
@@ -191,86 +194,6 @@ function nextProviderFacts(
   return issue
     ? { ok: false, message: issue }
     : { ok: true, number, mraRecognized };
-}
-
-async function resolveStandardRouteId(
-  identifier: string,
-  member: AuthVariables["member"],
-  executor: Pick<OrgExecutor, "select">,
-): Promise<number | null> {
-  const stableId =
-    parseNumericRouteIdentifier(identifier) ??
-    parseTrailingNumericRouteIdentifier(identifier);
-  const canMatchSerialNumber = !isPlaceholderSerialIdentifier(identifier);
-
-  const directConditions = [
-    eq(referenceStandard.organizationId, member.organizationId),
-    buildUnitScopeCondition(referenceStandard.unitId, member),
-    isNull(referenceStandard.deletedAt),
-  ];
-
-  const [directMatch] = await executor
-    .select({
-      id: referenceStandard.id,
-    })
-    .from(referenceStandard)
-    .where(
-      and(
-        ...directConditions,
-        stableId
-          ? or(
-              eq(referenceStandard.id, stableId),
-              ...(canMatchSerialNumber
-                ? [eq(referenceStandard.serialNumber, identifier)]
-                : []),
-              eq(referenceStandard.name, identifier),
-              eq(referenceStandard.certificateNumber, identifier),
-            )
-          : or(
-              ...(canMatchSerialNumber
-                ? [eq(referenceStandard.serialNumber, identifier)]
-                : []),
-              eq(referenceStandard.name, identifier),
-              eq(referenceStandard.certificateNumber, identifier),
-            ),
-      ),
-    )
-    .limit(1);
-
-  if (directMatch) return directMatch.id;
-
-  const standards = await executor
-    .select({
-      id: referenceStandard.id,
-      name: referenceStandard.name,
-      serialNumber: referenceStandard.serialNumber,
-    })
-    .from(referenceStandard)
-    .where(and(...directConditions));
-
-  return (
-    standards.find(
-      (standard) =>
-        (!isPlaceholderSerialIdentifier(standard.serialNumber) &&
-          slugifyRouteIdentifier(standard.serialNumber) === identifier) ||
-        slugifyRouteIdentifier(standard.name) === identifier,
-    )?.id ?? null
-  );
-}
-
-function parseTrailingNumericRouteIdentifier(
-  identifier: string,
-): number | null {
-  const match = /-(\d+)$/.exec(identifier);
-  if (!match?.[1]) return null;
-  const value = Number(match[1]);
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
-}
-
-function isPlaceholderSerialIdentifier(value: string | null | undefined) {
-  if (!value) return true;
-  const normalized = slugifyRouteIdentifier(value);
-  return normalized === "n-a" || normalized === "na";
 }
 
 function sanitizeStandardCertificateFileName(value: string) {
@@ -382,6 +305,11 @@ function calibrationRecordOf(
   };
 }
 
+/** What `lib/oot-notifications` takes to join the write's transaction and commit hooks. */
+function scopeOf(ctx: OrgContext): OrgScope {
+  return { executor: ctx.o, afterCommit: ctx.afterCommit };
+}
+
 export const standardsRouter = new Hono<{
   Variables: AuthVariables;
   Bindings: R2Env;
@@ -397,40 +325,35 @@ export const standardsRouter = new Hono<{
       const member = c.get("member");
       const { query, limit } = c.req.valid("query");
 
-      try {
-        return await orgDb(member.organizationId).transaction(async (tx) => {
-          const results = await tx
-            .select({
-              id: referenceStandard.id,
-              name: referenceStandard.name,
-              serialNumber: referenceStandard.serialNumber,
-              manufacturer: referenceStandard.manufacturer,
-            })
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.organizationId, member.organizationId),
-                buildUnitScopeCondition(referenceStandard.unitId, member),
-                isNull(referenceStandard.deletedAt),
-                or(
-                  ilike(referenceStandard.name, `%${query}%`),
-                  ilike(referenceStandard.serialNumber, `%${query}%`),
-                  ilike(referenceStandard.certificateNumber, `%${query}%`),
-                  ilike(referenceStandard.manufacturer, `%${query}%`),
-                  ilike(referenceStandard.model, `%${query}%`),
-                  ilike(referenceStandard.type, `%${query}%`),
-                )!,
-              ),
-            )
-            .orderBy(referenceStandard.name)
-            .limit(limit);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const results = await tx
+          .select({
+            id: referenceStandard.id,
+            name: referenceStandard.name,
+            serialNumber: referenceStandard.serialNumber,
+            manufacturer: referenceStandard.manufacturer,
+          })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+              isNull(referenceStandard.deletedAt),
+              or(
+                ilike(referenceStandard.name, `%${query}%`),
+                ilike(referenceStandard.serialNumber, `%${query}%`),
+                ilike(referenceStandard.certificateNumber, `%${query}%`),
+                ilike(referenceStandard.manufacturer, `%${query}%`),
+                ilike(referenceStandard.model, `%${query}%`),
+                ilike(referenceStandard.type, `%${query}%`),
+              )!,
+            ),
+          )
+          .orderBy(referenceStandard.name)
+          .limit(limit);
 
-          return c.json(results);
-        });
-      } catch (error) {
-        console.error("Error searching standards:", error);
-        return c.json({ error: "Erro ao buscar padrões" }, 500);
-      }
+        return c.json(results);
+      });
     },
   )
 
@@ -602,73 +525,81 @@ export const standardsRouter = new Hono<{
       const member = c.get("member");
       const input = c.req.valid("json");
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [existing] = await tx
-          .select({
-            id: massCompositionProfile.id,
-            status: massCompositionProfile.status,
-            deletedAt: massCompositionProfile.deletedAt,
-          })
-          .from(massCompositionProfile)
-          .where(
-            and(
-              eq(massCompositionProfile.organizationId, member.organizationId),
-              eq(massCompositionProfile.profileClass, input.profileClass),
-              eq(massCompositionProfile.nominalG, input.nominalG),
-            ),
-          )
-          .limit(1);
-
-        if (existing && existing.deletedAt === null) {
-          return c.json(
-            { error: "Já existe um perfil para esta classe e nominal." },
-            409,
-          );
-        }
-
-        const writableValues = {
-          profileKey: input.profileKey,
-          nominal: input.nominal,
-          value: input.value,
-          uncertainty: input.uncertainty,
-          unit: input.unit,
-          maxError: input.maxError ?? null,
-          drift: input.drift ?? null,
-          buoyancy: input.buoyancy ?? null,
-          coverageFactor: input.coverageFactor ?? null,
-          quantityAvailable: input.quantityAvailable ?? null,
-        };
-
-        const [row] = existing
-          ? await tx
-              .update(massCompositionProfile)
-              .set({
-                ...writableValues,
-                status: MASS_PROFILE_MACHINE.requireTargetOf(
-                  existing.status,
-                  "reactivate",
+      const row = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [existing] = await ctx.o
+            .select({
+              id: massCompositionProfile.id,
+              status: massCompositionProfile.status,
+              deletedAt: massCompositionProfile.deletedAt,
+            })
+            .from(massCompositionProfile)
+            .where(
+              and(
+                eq(
+                  massCompositionProfile.organizationId,
+                  member.organizationId,
                 ),
-                deletedAt: null,
-                updatedAt: new Date(),
-              })
-              .where(eq(massCompositionProfile.id, existing.id))
-              .returning()
-          : await tx
-              .insert(massCompositionProfile)
-              .values({
-                organizationId: member.organizationId,
-                profileClass: input.profileClass,
-                nominalG: input.nominalG,
-                status: "ACTIVE",
-                ...writableValues,
-              })
-              .returning();
+                eq(massCompositionProfile.profileClass, input.profileClass),
+                eq(massCompositionProfile.nominalG, input.nominalG),
+              ),
+            )
+            .limit(1);
 
-        if (!row) {
-          return c.json({ error: "Falha ao salvar perfil" }, 500);
-        }
-        return c.json(toCompositionProfileDto(row), 201);
-      });
+          if (existing && existing.deletedAt === null) {
+            throw conflict(
+              "conflict",
+              "Já existe um perfil para esta classe e nominal.",
+            );
+          }
+
+          const writableValues = {
+            profileKey: input.profileKey,
+            nominal: input.nominal,
+            value: input.value,
+            uncertainty: input.uncertainty,
+            unit: input.unit,
+            maxError: input.maxError ?? null,
+            drift: input.drift ?? null,
+            buoyancy: input.buoyancy ?? null,
+            coverageFactor: input.coverageFactor ?? null,
+            quantityAvailable: input.quantityAvailable ?? null,
+          };
+
+          const [saved] = existing
+            ? await ctx.o
+                .update(massCompositionProfile)
+                .set({
+                  ...writableValues,
+                  status: MASS_PROFILE_MACHINE.requireTargetOf(
+                    existing.status,
+                    "reactivate",
+                  ),
+                  deletedAt: null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(massCompositionProfile.id, existing.id))
+                .returning()
+            : await ctx.o
+                .insert(massCompositionProfile)
+                .values({
+                  organizationId: member.organizationId,
+                  profileClass: input.profileClass,
+                  nominalG: input.nominalG,
+                  status: "ACTIVE",
+                  ...writableValues,
+                })
+                .returning();
+
+          if (!saved) {
+            throw new Error("Falha ao salvar perfil");
+          }
+          return saved;
+        },
+      );
+      return c.json(toCompositionProfileDto(row), 201);
     },
   )
 
@@ -685,7 +616,7 @@ export const standardsRouter = new Hono<{
       const input = c.req.valid("json");
 
       if (!Number.isInteger(id)) {
-        return c.json({ error: "Perfil não encontrado" }, 404);
+        throw notFound("not_found", "Perfil não encontrado");
       }
 
       const updateData: Record<string, unknown> = { updatedAt: new Date() };
@@ -708,8 +639,8 @@ export const standardsRouter = new Hono<{
 
       let rows;
       try {
-        rows = await orgDb(member.organizationId).transaction((tx) =>
-          tx
+        rows = await withOrg(member.organizationId, requestActor(c), (ctx) =>
+          ctx.o
             .update(massCompositionProfile)
             .set(updateData)
             .where(
@@ -732,9 +663,9 @@ export const standardsRouter = new Hono<{
           "code" in error &&
           error.code === "23505"
         ) {
-          return c.json(
-            { error: "Já existe um perfil para esta classe e nominal." },
-            409,
+          throw conflict(
+            "conflict",
+            "Já existe um perfil para esta classe e nominal.",
           );
         }
         throw error;
@@ -742,7 +673,7 @@ export const standardsRouter = new Hono<{
 
       const [row] = rows;
       if (!row) {
-        return c.json({ error: "Perfil não encontrado" }, 404);
+        throw notFound("not_found", "Perfil não encontrado");
       }
       return c.json(toCompositionProfileDto(row));
     },
@@ -759,31 +690,39 @@ export const standardsRouter = new Hono<{
       const id = Number.parseInt(c.req.param("id"), 10);
 
       if (!Number.isInteger(id)) {
-        return c.json({ error: "Perfil não encontrado" }, 404);
+        throw notFound("not_found", "Perfil não encontrado");
       }
 
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [row] = await tx
-          .update(massCompositionProfile)
-          .set({
-            status: MASS_PROFILE_MACHINE.requireTargetOf("ACTIVE", "retire"),
-            deletedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(massCompositionProfile.id, id),
-              eq(massCompositionProfile.organizationId, member.organizationId),
-              isNull(massCompositionProfile.deletedAt),
-            ),
-          )
-          .returning();
+      const row = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [retired] = await ctx.o
+            .update(massCompositionProfile)
+            .set({
+              status: MASS_PROFILE_MACHINE.requireTargetOf("ACTIVE", "retire"),
+              deletedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(massCompositionProfile.id, id),
+                eq(
+                  massCompositionProfile.organizationId,
+                  member.organizationId,
+                ),
+                isNull(massCompositionProfile.deletedAt),
+              ),
+            )
+            .returning();
 
-        if (!row) {
-          return c.json({ error: "Perfil não encontrado" }, 404);
-        }
-        return c.json({ success: true, id: row.id });
-      });
+          if (!retired) {
+            throw notFound("not_found", "Perfil não encontrado");
+          }
+          return retired;
+        },
+      );
+      return c.json({ success: true, id: row.id });
     },
   )
 
@@ -796,33 +735,9 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
+        const found = await requireLabStandard(c.req.param("id"), member, tx);
 
-        if (id === null) {
-          return c.json({ error: "Padrão não encontrado" }, 404);
-        }
-
-        const [found] = await tx
-          .select({
-            id: referenceStandard.id,
-            label: referenceStandard.name,
-          })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.id, id),
-              eq(referenceStandard.organizationId, member.organizationId),
-              buildUnitScopeCondition(referenceStandard.unitId, member),
-              isNull(referenceStandard.deletedAt),
-            ),
-          )
-          .limit(1);
-
-        if (!found) {
-          return c.json({ error: "Padrão não encontrado" }, 404);
-        }
-
-        return c.json(found);
+        return c.json({ id: found.id, label: found.name });
       });
     },
   )
@@ -833,28 +748,7 @@ export const standardsRouter = new Hono<{
   .get("/:id", ...withLabPermission({ standard: ["read"] }), async (c) => {
     const member = c.get("member");
     return await orgDb(member.organizationId).transaction(async (tx) => {
-      const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
-
-      if (id === null) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
-
-      const [found] = await tx
-        .select()
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, id),
-            eq(referenceStandard.organizationId, member.organizationId),
-            buildUnitScopeCondition(referenceStandard.unitId, member),
-            isNull(referenceStandard.deletedAt),
-          ),
-        )
-        .limit(1);
-
-      if (!found) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
+      const found = await requireLabStandard(c.req.param("id"), member, tx);
 
       // Add computed fields
       const now = new Date();
@@ -882,73 +776,50 @@ export const standardsRouter = new Hono<{
       const session = c.get("session");
       const env = c.env;
       const lab = orgDb(member.organizationId);
-      const id = await lab.transaction((tx) =>
-        resolveStandardRouteId(c.req.param("id"), member, tx),
+      const standard = await lab.transaction((tx) =>
+        requireLabStandard(c.req.param("id"), member, tx),
       );
 
-      if (id === null) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
+      const formData = await c.req.formData();
+      const file = formData.get("certificate");
+
+      if (!(file instanceof File)) {
+        throw invalid("invalid_request", "Nenhum arquivo enviado");
       }
 
-      try {
-        const [standard] = await lab.transaction((tx) =>
-          tx
-            .select()
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.id, id),
-                eq(referenceStandard.organizationId, member.organizationId),
-                buildUnitScopeCondition(referenceStandard.unitId, member),
-                isNull(referenceStandard.deletedAt),
-              ),
-            )
-            .limit(1),
+      const safeFileName = sanitizeStandardCertificateFileName(file.name);
+      if (!safeFileName.toLowerCase().endsWith(".pdf")) {
+        throw invalid("invalid_request", "Apenas arquivos PDF são permitidos");
+      }
+
+      if (file.type && file.type !== STANDARD_CERTIFICATE_CONTENT_TYPE) {
+        throw invalid("invalid_request", "Apenas arquivos PDF são permitidos");
+      }
+
+      if (file.size > MAX_STANDARD_CERTIFICATE_FILE_SIZE) {
+        throw invalid(
+          "invalid_request",
+          `Arquivo muito grande. Máximo ${MAX_STANDARD_CERTIFICATE_FILE_SIZE / 1024 / 1024}MB.`,
         );
+      }
 
-        if (!standard) {
-          return c.json({ error: "Padrão não encontrado" }, 404);
-        }
+      const buffer = await file.arrayBuffer();
+      const header = new TextDecoder().decode(buffer.slice(0, 4));
+      if (header !== "%PDF") {
+        throw invalid("invalid_request", "Arquivo PDF inválido");
+      }
 
-        const formData = await c.req.formData();
-        const file = formData.get("certificate");
+      const sha256 = createHash("sha256")
+        .update(Buffer.from(buffer))
+        .digest("hex");
 
-        if (!(file instanceof File)) {
-          return c.json({ error: "Nenhum arquivo enviado" }, 400);
-        }
-
-        const safeFileName = sanitizeStandardCertificateFileName(file.name);
-        if (!safeFileName.toLowerCase().endsWith(".pdf")) {
-          return c.json({ error: "Apenas arquivos PDF são permitidos" }, 400);
-        }
-
-        if (file.type && file.type !== STANDARD_CERTIFICATE_CONTENT_TYPE) {
-          return c.json({ error: "Apenas arquivos PDF são permitidos" }, 400);
-        }
-
-        if (file.size > MAX_STANDARD_CERTIFICATE_FILE_SIZE) {
-          return c.json(
-            {
-              error: `Arquivo muito grande. Máximo ${MAX_STANDARD_CERTIFICATE_FILE_SIZE / 1024 / 1024}MB.`,
-            },
-            400,
-          );
-        }
-
-        const buffer = await file.arrayBuffer();
-        const header = new TextDecoder().decode(buffer.slice(0, 4));
-        if (header !== "%PDF") {
-          return c.json({ error: "Arquivo PDF inválido" }, 400);
-        }
-
-        const sha256 = createHash("sha256")
-          .update(Buffer.from(buffer))
-          .digest("hex");
-
-        // The pending row commits before the upload: a failed upload leaves a
-        // `pending/` row that is never current, as before.
-        const registered = await lab.transaction(async (tx) => {
-          const [created] = await tx
+      // The pending row commits before the upload: a failed upload leaves a
+      // `pending/` row that is never current, as before.
+      const registered = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [created] = await ctx.o
             .insert(referenceStandardCertificateDocument)
             .values({
               standardId: standard.id,
@@ -969,36 +840,40 @@ export const standardsRouter = new Hono<{
 
           if (!created) return null;
 
-          const [orgRow] = await tx
+          const [orgRow] = await ctx.o
             .select({ slug: organization.slug })
             .from(organization)
             .where(eq(organization.id, standard.organizationId))
             .limit(1);
           return { created, slug: orgRow?.slug ?? "" };
-        });
+        },
+      );
 
-        if (!registered) {
-          return c.json({ error: "Falha ao registrar certificado" }, 500);
-        }
-        const { created, slug } = registered;
-        const { bucket, key: r2Key } = standardCertificateKey({
-          org: { id: standard.organizationId, slug },
-          standardId: standard.id,
-          documentId: created.id,
-          fileName: safeFileName,
-        });
+      if (!registered) {
+        throw new Error("Falha ao registrar certificado");
+      }
+      const { created, slug } = registered;
+      const { bucket, key: r2Key } = standardCertificateKey({
+        org: { id: standard.organizationId, slug },
+        standardId: standard.id,
+        documentId: created.id,
+        fileName: safeFileName,
+      });
 
-        const r2Client = createR2Client(env);
-        await uploadToR2(
-          r2Client,
-          resolveBucketName(env, bucket),
-          r2Key,
-          buffer,
-          STANDARD_CERTIFICATE_CONTENT_TYPE,
-        );
+      const r2Client = createR2Client(env);
+      await uploadToR2(
+        r2Client,
+        resolveBucketName(env, bucket),
+        r2Key,
+        buffer,
+        STANDARD_CERTIFICATE_CONTENT_TYPE,
+      );
 
-        const activated = await lab.transaction(async (tx) => {
-          const [previousDocument] = await tx
+      const activated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [previousDocument] = await ctx.o
             .select()
             .from(referenceStandardCertificateDocument)
             .where(
@@ -1013,7 +888,7 @@ export const standardsRouter = new Hono<{
             )
             .limit(1);
 
-          await tx
+          await ctx.o
             .update(referenceStandardCertificateDocument)
             .set({ isCurrent: false })
             .where(
@@ -1026,7 +901,7 @@ export const standardsRouter = new Hono<{
               ),
             );
 
-          const [updated] = await tx
+          const [updated] = await ctx.o
             .update(referenceStandardCertificateDocument)
             .set({ r2Key, isCurrent: true })
             .where(
@@ -1042,9 +917,7 @@ export const standardsRouter = new Hono<{
 
           if (!updated) return null;
 
-          await tx.insert(referenceStandardAuditLog).values({
-            organizationId: member.organizationId,
-            standardId: standard.id,
+          await ctx.audit("referenceStandard", standard.id, {
             action: "certificate_document_upload",
             changes: {
               certificateDocument: {
@@ -1054,24 +927,19 @@ export const standardsRouter = new Hono<{
                 new: standardCertificateDocumentResponse(updated),
               },
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
           return updated;
-        });
+        },
+      );
 
-        if (!activated) {
-          return c.json({ error: "Falha ao ativar certificado" }, 500);
-        }
-
-        return c.json({
-          message: "Certificado enviado com sucesso",
-          document: standardCertificateDocumentResponse(activated),
-        } satisfies ServerShape<StandardCertificateDocumentUploadResponse>);
-      } catch (error) {
-        console.error("Error uploading standard certificate:", error);
-        return c.json({ error: "Erro ao enviar certificado" }, 500);
+      if (!activated) {
+        throw new Error("Falha ao ativar certificado");
       }
+
+      return c.json({
+        message: "Certificado enviado com sucesso",
+        document: standardCertificateDocumentResponse(activated),
+      } satisfies ServerShape<StandardCertificateDocumentUploadResponse>);
     },
   )
 
@@ -1086,61 +954,52 @@ export const standardsRouter = new Hono<{
       const env = c.env;
       const lab = orgDb(member.organizationId);
       const id = await lab.transaction((tx) =>
-        resolveStandardRouteId(c.req.param("id"), member, tx),
+        requireLabStandardId(c.req.param("id"), member, tx),
       );
 
-      if (id === null) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
+      const [document] = await lab.transaction((tx) =>
+        tx
+          .select({
+            fileName: referenceStandardCertificateDocument.fileName,
+            r2Key: referenceStandardCertificateDocument.r2Key,
+          })
+          .from(referenceStandardCertificateDocument)
+          .innerJoin(
+            referenceStandard,
+            eq(
+              referenceStandardCertificateDocument.standardId,
+              referenceStandard.id,
+            ),
+          )
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+              isNull(referenceStandard.deletedAt),
+              eq(referenceStandardCertificateDocument.isCurrent, true),
+              isFinalizedCertificateDocumentCondition(),
+            ),
+          )
+          .limit(1),
+      );
+
+      if (!document) {
+        throw notFound("not_found", "Certificado não encontrado");
       }
 
-      try {
-        const [document] = await lab.transaction((tx) =>
-          tx
-            .select({
-              fileName: referenceStandardCertificateDocument.fileName,
-              r2Key: referenceStandardCertificateDocument.r2Key,
-            })
-            .from(referenceStandardCertificateDocument)
-            .innerJoin(
-              referenceStandard,
-              eq(
-                referenceStandardCertificateDocument.standardId,
-                referenceStandard.id,
-              ),
-            )
-            .where(
-              and(
-                eq(referenceStandard.id, id),
-                eq(referenceStandard.organizationId, member.organizationId),
-                buildUnitScopeCondition(referenceStandard.unitId, member),
-                isNull(referenceStandard.deletedAt),
-                eq(referenceStandardCertificateDocument.isCurrent, true),
-                isFinalizedCertificateDocumentCondition(),
-              ),
-            )
-            .limit(1),
-        );
+      const r2Client = createR2Client(env);
+      const url = await generatePresignedUrl(
+        r2Client,
+        env.R2_BUCKET_NAME,
+        document.r2Key,
+        STANDARD_CERTIFICATE_URL_EXPIRY,
+      );
 
-        if (!document) {
-          return c.json({ error: "Certificado não encontrado" }, 404);
-        }
-
-        const r2Client = createR2Client(env);
-        const url = await generatePresignedUrl(
-          r2Client,
-          env.R2_BUCKET_NAME,
-          document.r2Key,
-          STANDARD_CERTIFICATE_URL_EXPIRY,
-        );
-
-        return c.json({
-          url,
-          filename: document.fileName,
-        } satisfies ServerShape<StandardCertificateDocumentDownloadResponse>);
-      } catch (error) {
-        console.error("Error downloading standard certificate:", error);
-        return c.json({ error: "Erro ao gerar link de download" }, 500);
-      }
+      return c.json({
+        url,
+        filename: document.fileName,
+      } satisfies ServerShape<StandardCertificateDocumentDownloadResponse>);
     },
   )
 
@@ -1157,76 +1016,79 @@ export const standardsRouter = new Hono<{
       const input = c.req.valid("json");
 
       if (!member.activeUnitId) {
-        return c.json(
-          { error: "Selecione uma unidade específica para criar padrões" },
-          400,
+        throw invalid(
+          "invalid_request",
+          "Selecione uma unidade específica para criar padrões",
         );
       }
 
       // Create the reference standard
       const activeUnitId = member.activeUnitId;
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const [newStandard] = await tx
-          .insert(referenceStandard)
-          .values({
-            unitId: activeUnitId,
-            organizationId: member.organizationId,
-            name: input.name,
-            kind: input.kind,
-            type: input.type || null,
-            serialNumber: input.serialNumber,
-            manufacturer: input.manufacturer || null,
-            model: input.model || null,
-            certificateNumber: input.certificateNumber,
-            calibratedBy: input.calibratedBy || null,
-            calibrationProviderAccreditationNumber:
-              input.calibrationProviderAccreditationNumber?.trim() || null,
-            calibrationProviderMraRecognized:
-              input.calibrationProviderMraRecognized ?? false,
-            calibrationDate: new Date(input.calibrationDate),
-            nextCalibrationDate: new Date(input.nextCalibrationDate),
-            referenceValue: input.referenceValue ?? null,
-            uncertainty: input.uncertainty ?? null,
-            uncertaintyUnit: input.uncertaintyUnit ?? null,
-            coverageFactor: input.coverageFactor,
-            distribution: input.distribution,
-            drift: input.drift ?? null,
-            certifiedValues: input.certifiedValues ?? null,
-            metrologyData: input.metrologyData ?? null,
-            status: input.status,
-            createdBy: session.user.id,
-          })
-          .returning();
+      const created = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [newStandard] = await ctx.o
+            .insert(referenceStandard)
+            .values({
+              unitId: activeUnitId,
+              organizationId: member.organizationId,
+              name: input.name,
+              kind: input.kind,
+              type: input.type || null,
+              serialNumber: input.serialNumber,
+              manufacturer: input.manufacturer || null,
+              model: input.model || null,
+              certificateNumber: input.certificateNumber,
+              calibratedBy: input.calibratedBy || null,
+              calibrationProviderAccreditationNumber:
+                input.calibrationProviderAccreditationNumber?.trim() || null,
+              calibrationProviderMraRecognized:
+                input.calibrationProviderMraRecognized ?? false,
+              calibrationDate: new Date(input.calibrationDate),
+              nextCalibrationDate: new Date(input.nextCalibrationDate),
+              referenceValue: input.referenceValue ?? null,
+              uncertainty: input.uncertainty ?? null,
+              uncertaintyUnit: input.uncertaintyUnit ?? null,
+              coverageFactor: input.coverageFactor,
+              distribution: input.distribution,
+              drift: input.drift ?? null,
+              certifiedValues: input.certifiedValues ?? null,
+              metrologyData: input.metrologyData ?? null,
+              status: input.status,
+              createdBy: session.user.id,
+            })
+            .returning();
 
-        if (!newStandard) {
-          return c.json({ error: "Falha ao criar padrão" }, 500);
-        }
+          if (!newStandard) {
+            throw new Error("Falha ao criar padrão");
+          }
 
-        // The standard's first certificate (roadmap 2 C3).
-        await tx
-          .insert(referenceStandardCalibration)
-          .values(calibrationRecordOf(newStandard, "create", session.user.id));
+          // The standard's first certificate (roadmap 2 C3).
+          await ctx.o
+            .insert(referenceStandardCalibration)
+            .values(
+              calibrationRecordOf(newStandard, "create", session.user.id),
+            );
 
-        // Audit log
-        await tx.insert(referenceStandardAuditLog).values({
-          organizationId: member.organizationId,
-          standardId: newStandard.id,
-          action: "create",
-          changes: {
-            initial: {
-              ...input,
-              id: newStandard.id,
-              unitId: newStandard.unitId,
-              organizationId: newStandard.organizationId,
-              createdBy: newStandard.createdBy,
+          // Audit log
+          await ctx.audit("referenceStandard", newStandard.id, {
+            action: "create",
+            changes: {
+              initial: {
+                ...input,
+                id: newStandard.id,
+                unitId: newStandard.unitId,
+                organizationId: newStandard.organizationId,
+                createdBy: newStandard.createdBy,
+              },
             },
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
+          });
 
-        return c.json(newStandard satisfies ServerShape<StandardRecord>, 201);
-      });
+          return newStandard;
+        },
+      );
+      return c.json(created satisfies ServerShape<StandardRecord>, 201);
     },
   )
 
@@ -1240,40 +1102,18 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const recallTarget: { standard: RecallStandardIdentity | null } = {
-        standard: null,
-      };
-      const response = await orgDb(member.organizationId).transaction(
-        async (tx) => {
-          const id = await resolveStandardRouteId(
+      const input = c.req.valid("json");
+
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const existing = await requireLabStandard(
             c.req.param("id"),
             member,
-            tx,
+            ctx.o,
           );
-          const input = c.req.valid("json");
-
-          if (id === null) {
-            return c.json({ error: "Padrão não encontrado" }, 404);
-          }
-
-          // Get existing standard
-          const [existing] = await tx
-            .select()
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.id, id),
-                eq(referenceStandard.organizationId, member.organizationId),
-                buildUnitScopeCondition(referenceStandard.unitId, member),
-                isNull(referenceStandard.deletedAt),
-              ),
-            )
-            .limit(1);
-
-          if (!existing) {
-            return c.json({ error: "Padrão não encontrado" }, 404);
-          }
-
+          const id = existing.id;
           // Build changes object for audit log
           const changes: Record<string, { old: unknown; new: unknown }> = {};
           const updateData: Record<string, unknown> = {};
@@ -1337,10 +1177,7 @@ export const standardsRouter = new Hono<{
           }
           const providerFacts = nextProviderFacts(existing, input);
           if (!providerFacts.ok) {
-            return domainErrorResponse(
-              c,
-              invalid("invalid_request", providerFacts.message),
-            );
+            throw invalid("invalid_request", providerFacts.message);
           }
           if (
             providerFacts.number !==
@@ -1478,80 +1315,64 @@ export const standardsRouter = new Hono<{
 
           // If no changes, return existing
           if (Object.keys(updateData).length === 0) {
-            return c.json(existing satisfies ServerShape<StandardRecord>);
+            return existing;
           }
 
           // Update the standard
-          const [updated] = await tx
+          const [row] = await ctx.o
             .update(referenceStandard)
             .set(updateData)
             .where(eq(referenceStandard.id, id))
             .returning();
 
           // Deleted between the read above and this write.
-          if (!updated) {
+          if (!row) {
             throw notFound("standard_not_found", "Padrão não encontrado");
           }
 
           // Audit log
-          await tx.insert(referenceStandardAuditLog).values({
-            organizationId: member.organizationId,
-            standardId: id,
+          await ctx.audit("referenceStandard", id, {
             action: changes.status ? "status_change" : "update",
             changes,
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
           });
 
           // #426 Phase 1: flagging a standard OUT_OF_TOLERANCE auto-opens the
-          // §7.10 recall workflow (typed NC + DRAFT recall). Best-effort — the
-          // status change itself must not fail if the hook does; the wizard's
-          // send endpoint re-ensures the recall exists.
+          // §7.10 recall workflow (typed NC + DRAFT recall). Best-effort, in its
+          // own transaction once the status change has committed: a failing
+          // hook never undoes the change (the wizard's send endpoint re-ensures
+          // the recall exists).
           if (
             changes.status &&
-            updated.status === "OUT_OF_TOLERANCE" &&
+            row.status === "OUT_OF_TOLERANCE" &&
             existing.status !== "OUT_OF_TOLERANCE"
           ) {
-            recallTarget.standard = {
-              id: updated.id,
-              name: updated.name,
-              serialNumber: updated.serialNumber,
-              certificateNumber: updated.certificateNumber,
-              calibrationDate: updated.calibrationDate,
+            const standardToRecall: RecallStandardIdentity = {
+              id: row.id,
+              name: row.name,
+              serialNumber: row.serialNumber,
+              certificateNumber: row.certificateNumber,
+              calibrationDate: row.calibrationDate,
             };
+            ctx.afterCommit(() =>
+              withOrg(member.organizationId, ctx.actor, (recallCtx) =>
+                ensureStandardRecall(
+                  {
+                    organizationId: member.organizationId,
+                    actorUserId: session.user.id,
+                    standard: standardToRecall,
+                    ipAddress: ctx.actor.ipAddress,
+                  },
+                  scopeOf(recallCtx),
+                ),
+              ),
+            );
           }
 
-          return c.json(updated satisfies ServerShape<StandardRecord>);
+          return row;
         },
       );
 
-      // Best-effort, in its own transaction once the status change has
-      // committed: a failing hook never undoes the change.
-      const standardToRecall = recallTarget.standard;
-      if (standardToRecall) {
-        const afterCommit = afterCommitQueue();
-        try {
-          await orgDb(member.organizationId).transaction((tx) =>
-            ensureStandardRecall(
-              {
-                organizationId: member.organizationId,
-                actorUserId: session.user.id,
-                standard: standardToRecall,
-                ipAddress: clientIp(c),
-              },
-              { executor: tx, afterCommit: afterCommit.add },
-            ),
-          );
-          await afterCommit.run();
-        } catch (err) {
-          console.error(
-            `[Standards] Failed to open recall for standard ${standardToRecall.id}:`,
-            err,
-          );
-        }
-      }
-
-      return response;
+      return c.json(updated satisfies ServerShape<StandardRecord>);
     },
   )
 
@@ -1566,12 +1387,13 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
+        const id = await requireLabStandardId(
+          c.req.param("id"),
+          member,
+          tx,
+          "Padrao nao encontrado",
+        );
         const query = c.req.valid("query");
-
-        if (id === null) {
-          return c.json({ error: "Padrao nao encontrado" }, 404);
-        }
 
         const [standard] = await tx
           .select({
@@ -1589,7 +1411,7 @@ export const standardsRouter = new Hono<{
           .limit(1);
 
         if (!standard) {
-          return c.json({ error: "Padrao nao encontrado" }, 404);
+          throw notFound("standard_not_found", "Padrao nao encontrado");
         }
 
         // Default window: the standard's (now suspect) certificate validity
@@ -1635,11 +1457,12 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
-
-        if (id === null) {
-          return c.json({ error: "Padrao nao encontrado" }, 404);
-        }
+        const id = await requireLabStandardId(
+          c.req.param("id"),
+          member,
+          tx,
+          "Padrao nao encontrado",
+        );
 
         const [recall] = await tx
           .select({
@@ -1755,168 +1578,146 @@ export const standardsRouter = new Hono<{
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
-      const lab = orgDb(member.organizationId);
-      const ensureQueue = afterCommitQueue();
-      const stamped: {
-        recall: typeof standardRecall.$inferSelect | null;
-      } = { recall: null };
       // Phase 1: the standard, the (re-ensured) recall, the reviewed list and the
       // approval stamp commit together.
-      const refused = await lab.transaction(async (tx) => {
-        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
+      const approvedRecall = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const id = await requireLabStandardId(
+            c.req.param("id"),
+            member,
+            ctx.o,
+            "Padrao nao encontrado",
+          );
 
-        if (id === null) {
-          return c.json({ error: "Padrao nao encontrado" }, 404);
-        }
+          // Elevated approval gate: same pattern as NC use_as_is/concession
+          // dispositions — org-level admin/owner only (a unit_admin elevation is
+          // not enough to approve a customer-facing batch recall).
+          if (member.role !== "admin" && member.role !== "owner") {
+            throw forbidden(
+              "forbidden",
+              "O envio de recall em lote requer aprovacao de um administrador ou responsavel",
+            );
+          }
 
-        // Elevated approval gate: same pattern as NC use_as_is/concession
-        // dispositions — org-level admin/owner only (a unit_admin elevation is
-        // not enough to approve a customer-facing batch recall).
-        if (member.role !== "admin" && member.role !== "owner") {
-          return c.json(
+          const [standard] = await ctx.o
+            .select()
+            .from(referenceStandard)
+            .where(
+              and(
+                eq(referenceStandard.id, id),
+                eq(referenceStandard.organizationId, member.organizationId),
+                isNull(referenceStandard.deletedAt),
+              ),
+            )
+            .limit(1);
+
+          if (!standard) {
+            throw notFound("standard_not_found", "Padrao nao encontrado");
+          }
+
+          if (standard.status !== "OUT_OF_TOLERANCE") {
+            throw conflict(
+              "standard_not_out_of_tolerance",
+              "Apenas padroes com status fora de tolerancia podem originar um recall",
+            );
+          }
+
+          // Re-ensure the recall exists (covers a failed status-change hook).
+          const { recall } = await ensureStandardRecall(
             {
-              error:
-                "O envio de recall em lote requer aprovacao de um administrador ou responsavel",
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              standard: {
+                id: standard.id,
+                name: standard.name,
+                serialNumber: standard.serialNumber,
+                certificateNumber: standard.certificateNumber,
+                calibrationDate: standard.calibrationDate,
+              },
+              ipAddress: ctx.actor.ipAddress,
             },
-            403,
+            scopeOf(ctx),
           );
-        }
 
-        const [standard] = await tx
-          .select()
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.id, id),
-              eq(referenceStandard.organizationId, member.organizationId),
-              isNull(referenceStandard.deletedAt),
-            ),
-          )
-          .limit(1);
+          // Every selected job must actually be linked to this standard — the
+          // reviewed list from the wizard is re-validated, never trusted.
+          const linkedRows = await ctx.o
+            .select({ jobId: jobStandard.jobId })
+            .from(jobStandard)
+            .innerJoin(calibrationJob, eq(jobStandard.jobId, calibrationJob.id))
+            .where(
+              and(
+                eq(jobStandard.standardId, id),
+                inArray(jobStandard.jobId, input.jobIds),
+                eq(calibrationJob.organizationId, member.organizationId),
+              ),
+            );
+          const linkedJobIds = new Set(linkedRows.map((row) => row.jobId));
+          const invalidIds = input.jobIds.filter(
+            (jobId) => !linkedJobIds.has(jobId),
+          );
+          if (invalidIds.length > 0) {
+            throw invalid(
+              "jobs_not_linked_to_standard",
+              `Certificados fora do escopo deste padrao: ${invalidIds.join(", ")}`,
+            );
+          }
 
-        if (!standard) {
-          return c.json({ error: "Padrao nao encontrado" }, 404);
-        }
+          // Stamp the approval + reviewed window before dispatching (§7.10.2
+          // evidence: who approved the batch and what window was reviewed).
+          const [stamped] = await ctx.o
+            .update(standardRecall)
+            .set({
+              status: STANDARD_RECALL_MACHINE.requireTargetOf(
+                recall.status,
+                "send",
+              ),
+              fromDate: input.from ? new Date(input.from) : recall.fromDate,
+              toDate: input.to ? new Date(input.to) : new Date(),
+              approvedBy: session.user.id,
+              approvedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(standardRecall.id, recall.id),
+                eq(standardRecall.organizationId, member.organizationId),
+                eq(standardRecall.status, recall.status),
+              ),
+            )
+            .returning();
 
-        if (standard.status !== "OUT_OF_TOLERANCE") {
-          return c.json(
-            {
-              error:
-                "Apenas padroes com status fora de tolerancia podem originar um recall",
-              code: "STANDARD_NOT_OUT_OF_TOLERANCE",
+          await ctx.audit("referenceStandard", id, {
+            action: "recall_send",
+            changes: {
+              recallId: recall.id,
+              jobIds: input.jobIds,
+              from: input.from ?? recall.fromDate?.toISOString() ?? null,
+              to: input.to ?? null,
             },
-            409,
-          );
-        }
+            reason: `Recall §7.10 aprovado: ${input.jobIds.length} certificado(s) notificado(s)`,
+          });
 
-        // Re-ensure the recall exists (covers a failed status-change hook).
-        const { recall } = await ensureStandardRecall(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            standard: {
-              id: standard.id,
-              name: standard.name,
-              serialNumber: standard.serialNumber,
-              certificateNumber: standard.certificateNumber,
-              calibrationDate: standard.calibrationDate,
-            },
-            ipAddress: clientIp(c),
-          },
-          { executor: tx, afterCommit: ensureQueue.add },
-        );
-
-        // Every selected job must actually be linked to this standard — the
-        // reviewed list from the wizard is re-validated, never trusted.
-        const linkedRows = await tx
-          .select({ jobId: jobStandard.jobId })
-          .from(jobStandard)
-          .innerJoin(calibrationJob, eq(jobStandard.jobId, calibrationJob.id))
-          .where(
-            and(
-              eq(jobStandard.standardId, id),
-              inArray(jobStandard.jobId, input.jobIds),
-              eq(calibrationJob.organizationId, member.organizationId),
-            ),
-          );
-        const linkedJobIds = new Set(linkedRows.map((row) => row.jobId));
-        const invalidIds = input.jobIds.filter(
-          (jobId) => !linkedJobIds.has(jobId),
-        );
-        if (invalidIds.length > 0) {
-          return c.json(
-            {
-              error: `Certificados fora do escopo deste padrao: ${invalidIds.join(", ")}`,
-              code: "JOBS_NOT_LINKED_TO_STANDARD",
-            },
-            400,
-          );
-        }
-
-        // Stamp the approval + reviewed window before dispatching (§7.10.2
-        // evidence: who approved the batch and what window was reviewed).
-        const [approvedRecall] = await tx
-          .update(standardRecall)
-          .set({
-            status: STANDARD_RECALL_MACHINE.requireTargetOf(
-              recall.status,
-              "send",
-            ),
-            fromDate: input.from ? new Date(input.from) : recall.fromDate,
-            toDate: input.to ? new Date(input.to) : new Date(),
-            approvedBy: session.user.id,
-            approvedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(standardRecall.id, recall.id),
-              eq(standardRecall.organizationId, member.organizationId),
-              eq(standardRecall.status, recall.status),
-            ),
-          )
-          .returning();
-
-        await tx.insert(referenceStandardAuditLog).values({
-          organizationId: member.organizationId,
-          standardId: id,
-          action: "recall_send",
-          changes: {
-            recallId: recall.id,
-            jobIds: input.jobIds,
-            from: input.from ?? recall.fromDate?.toISOString() ?? null,
-            to: input.to ?? null,
-          },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-          reason: `Recall §7.10 aprovado: ${input.jobIds.length} certificado(s) notificado(s)`,
-        });
-
-        stamped.recall = approvedRecall ?? recall;
-        return null;
-      });
-
-      // The notification of a recall opened just now waits for its commit.
-      await ensureQueue.run();
-      if (refused) return refused;
-      const approvedRecall = stamped.recall;
-      if (!approvedRecall) {
-        throw new Error("recall/send: the approved recall is missing");
-      }
+          return stamped ?? recall;
+        },
+      );
 
       // Phase 2: one notification per certificate (the PDF jobs run after the commit).
-      const sendQueue = afterCommitQueue();
-      const result = await lab.transaction((tx) =>
-        createStandardRecallNotifications(
-          {
-            recall: approvedRecall,
-            jobIds: input.jobIds,
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-          },
-          { executor: tx, afterCommit: sendQueue.add },
-        ),
+      const result = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) =>
+          createStandardRecallNotifications(
+            {
+              recall: approvedRecall,
+              jobIds: input.jobIds,
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+            },
+            scopeOf(ctx),
+          ),
       );
-      await sendQueue.run();
 
       return c.json({
         message: "Recall aprovado e notificacoes em envio",
@@ -1934,58 +1735,43 @@ export const standardsRouter = new Hono<{
   // =========================================================================
   .delete("/:id", ...withLabPermission({ standard: ["delete"] }), async (c) => {
     const member = c.get("member");
-    const session = c.get("session");
-    return await orgDb(member.organizationId).transaction(async (tx) => {
-      const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const existing = await requireLabStandard(
+          c.req.param("id"),
+          member,
+          ctx.o,
+        );
+        const id = existing.id;
 
-      if (id === null) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
+        // Soft delete
+        const [row] = await ctx.o
+          .update(referenceStandard)
+          .set({
+            deletedAt: new Date(),
+            status: REFERENCE_STANDARD_MACHINE.requireTargetOf(
+              existing.status,
+              "retire",
+            ),
+          })
+          .where(eq(referenceStandard.id, id))
+          .returning();
 
-      const [existing] = await tx
-        .select()
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, id),
-            eq(referenceStandard.organizationId, member.organizationId),
-            buildUnitScopeCondition(referenceStandard.unitId, member),
-            isNull(referenceStandard.deletedAt),
-          ),
-        )
-        .limit(1);
+        // Audit log
+        await ctx.audit("referenceStandard", id, {
+          action: "delete",
+          changes: { deletedAt: { old: null, new: new Date().toISOString() } },
+        });
 
-      if (!existing) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
+        return row;
+      },
+    );
 
-      // Soft delete
-      const [updated] = await tx
-        .update(referenceStandard)
-        .set({
-          deletedAt: new Date(),
-          status: REFERENCE_STANDARD_MACHINE.requireTargetOf(
-            existing.status,
-            "retire",
-          ),
-        })
-        .where(eq(referenceStandard.id, id))
-        .returning();
-
-      // Audit log
-      await tx.insert(referenceStandardAuditLog).values({
-        organizationId: member.organizationId,
-        standardId: id,
-        action: "delete",
-        changes: { deletedAt: { old: null, new: new Date().toISOString() } },
-        performedBy: session.user.id,
-        ipAddress: clientIp(c),
-      });
-
-      return c.json({
-        message: "Padrão removido com sucesso",
-        data: updated,
-      });
+    return c.json({
+      message: "Padrão removido com sucesso",
+      data: updated,
     });
   })
 
@@ -2000,172 +1786,155 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
-        const input = c.req.valid("json");
-
-        if (id === null) {
-          return c.json({ error: "Padrão não encontrado" }, 404);
-        }
-
-        // Get existing standard
-        const [existing] = await tx
-          .select()
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.id, id),
-              eq(referenceStandard.organizationId, member.organizationId),
-              buildUnitScopeCondition(referenceStandard.unitId, member),
-              isNull(referenceStandard.deletedAt),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Padrão nao encontrado" }, 404);
-        }
-
-        // Build changes object
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
-        const updateData: Record<string, unknown> = {};
-
-        // Certificate data (required for renewal)
-        changes.certificateNumber = {
-          old: existing.certificateNumber,
-          new: input.certificateNumber,
-        };
-        updateData.certificateNumber = input.certificateNumber;
-
-        if (input.calibratedBy !== undefined) {
-          changes.calibratedBy = {
-            old: existing.calibratedBy,
-            new: input.calibratedBy,
-          };
-          updateData.calibratedBy = input.calibratedBy;
-        }
-        // C2: a renewal from another provider must re-attest its accreditation.
-        const renewedProviderFacts = nextProviderFacts(existing, input);
-        if (!renewedProviderFacts.ok) {
-          return domainErrorResponse(
-            c,
-            invalid("invalid_request", renewedProviderFacts.message),
+      const input = c.req.valid("json");
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          // Get existing standard
+          const existing = await requireLabStandard(
+            c.req.param("id"),
+            member,
+            ctx.o,
           );
-        }
-        changes.calibrationProviderAccreditationNumber = {
-          old: existing.calibrationProviderAccreditationNumber,
-          new: renewedProviderFacts.number,
-        };
-        updateData.calibrationProviderAccreditationNumber =
-          renewedProviderFacts.number;
-        changes.calibrationProviderMraRecognized = {
-          old: existing.calibrationProviderMraRecognized,
-          new: renewedProviderFacts.mraRecognized,
-        };
-        updateData.calibrationProviderMraRecognized =
-          renewedProviderFacts.mraRecognized;
+          const id = existing.id;
 
-        const newCalibrationDate = new Date(input.calibrationDate);
-        changes.calibrationDate = {
-          old: existing.calibrationDate.toISOString(),
-          new: newCalibrationDate.toISOString(),
-        };
-        updateData.calibrationDate = newCalibrationDate;
+          // Build changes object
+          const changes: Record<string, { old: unknown; new: unknown }> = {};
+          const updateData: Record<string, unknown> = {};
 
-        const newNextCalibrationDate = new Date(input.nextCalibrationDate);
-        changes.nextCalibrationDate = {
-          old: existing.nextCalibrationDate.toISOString(),
-          new: newNextCalibrationDate.toISOString(),
-        };
-        updateData.nextCalibrationDate = newNextCalibrationDate;
-
-        // Optional metrology updates
-        if (input.referenceValue !== undefined) {
-          changes.referenceValue = {
-            old: existing.referenceValue,
-            new: input.referenceValue,
+          // Certificate data (required for renewal)
+          changes.certificateNumber = {
+            old: existing.certificateNumber,
+            new: input.certificateNumber,
           };
-          updateData.referenceValue = input.referenceValue;
-        }
-        if (input.uncertainty !== undefined) {
-          changes.uncertainty = {
-            old: existing.uncertainty,
-            new: input.uncertainty,
-          };
-          updateData.uncertainty = input.uncertainty;
-        }
-        if (input.uncertaintyUnit !== undefined) {
-          changes.uncertaintyUnit = {
-            old: existing.uncertaintyUnit,
-            new: input.uncertaintyUnit,
-          };
-          updateData.uncertaintyUnit = input.uncertaintyUnit;
-        }
-        if (input.coverageFactor !== undefined) {
-          changes.coverageFactor = {
-            old: existing.coverageFactor,
-            new: input.coverageFactor,
-          };
-          updateData.coverageFactor = input.coverageFactor;
-        }
-        if (input.certifiedValues !== undefined) {
-          changes.certifiedValues = {
-            old: existing.certifiedValues,
-            new: input.certifiedValues,
-          };
-          updateData.certifiedValues = input.certifiedValues;
-        }
-        if (input.metrologyData !== undefined) {
-          changes.metrologyData = {
-            old: existing.metrologyData,
-            new: input.metrologyData,
-          };
-          updateData.metrologyData = input.metrologyData;
-        }
+          updateData.certificateNumber = input.certificateNumber;
 
-        // `renew` (REFERENCE_STANDARD_MACHINE): a new certificate brings an
-        // out-of-tolerance or sent standard back to ACTIVE.
-        if (
-          REFERENCE_STANDARD_MACHINE.canTransition(existing.status, "renew")
-        ) {
-          const renewed = REFERENCE_STANDARD_MACHINE.requireTargetOf(
-            existing.status,
-            "renew",
-          );
-          changes.status = { old: existing.status, new: renewed };
-          updateData.status = renewed;
-        }
+          if (input.calibratedBy !== undefined) {
+            changes.calibratedBy = {
+              old: existing.calibratedBy,
+              new: input.calibratedBy,
+            };
+            updateData.calibratedBy = input.calibratedBy;
+          }
+          // C2: a renewal from another provider must re-attest its accreditation.
+          const renewedProviderFacts = nextProviderFacts(existing, input);
+          if (!renewedProviderFacts.ok) {
+            throw invalid("invalid_request", renewedProviderFacts.message);
+          }
+          changes.calibrationProviderAccreditationNumber = {
+            old: existing.calibrationProviderAccreditationNumber,
+            new: renewedProviderFacts.number,
+          };
+          updateData.calibrationProviderAccreditationNumber =
+            renewedProviderFacts.number;
+          changes.calibrationProviderMraRecognized = {
+            old: existing.calibrationProviderMraRecognized,
+            new: renewedProviderFacts.mraRecognized,
+          };
+          updateData.calibrationProviderMraRecognized =
+            renewedProviderFacts.mraRecognized;
 
-        // Update the standard
-        const [updated] = await tx
-          .update(referenceStandard)
-          .set(updateData)
-          .where(eq(referenceStandard.id, id))
-          .returning();
+          const newCalibrationDate = new Date(input.calibrationDate);
+          changes.calibrationDate = {
+            old: existing.calibrationDate.toISOString(),
+            new: newCalibrationDate.toISOString(),
+          };
+          updateData.calibrationDate = newCalibrationDate;
 
-        // The new certificate is appended to the history; the one it replaces
-        // stays, for the work it covered (roadmap 2 C3).
-        if (updated) {
-          await tx
-            .insert(referenceStandardCalibration)
-            .values(calibrationRecordOf(updated, "renew", session.user.id));
-        }
+          const newNextCalibrationDate = new Date(input.nextCalibrationDate);
+          changes.nextCalibrationDate = {
+            old: existing.nextCalibrationDate.toISOString(),
+            new: newNextCalibrationDate.toISOString(),
+          };
+          updateData.nextCalibrationDate = newNextCalibrationDate;
 
-        // Audit log with reason (required for ISO 17025)
-        await tx.insert(referenceStandardAuditLog).values({
-          organizationId: member.organizationId,
-          standardId: id,
-          action: "renew",
-          changes,
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-          reason: input.reason,
-        });
+          // Optional metrology updates
+          if (input.referenceValue !== undefined) {
+            changes.referenceValue = {
+              old: existing.referenceValue,
+              new: input.referenceValue,
+            };
+            updateData.referenceValue = input.referenceValue;
+          }
+          if (input.uncertainty !== undefined) {
+            changes.uncertainty = {
+              old: existing.uncertainty,
+              new: input.uncertainty,
+            };
+            updateData.uncertainty = input.uncertainty;
+          }
+          if (input.uncertaintyUnit !== undefined) {
+            changes.uncertaintyUnit = {
+              old: existing.uncertaintyUnit,
+              new: input.uncertaintyUnit,
+            };
+            updateData.uncertaintyUnit = input.uncertaintyUnit;
+          }
+          if (input.coverageFactor !== undefined) {
+            changes.coverageFactor = {
+              old: existing.coverageFactor,
+              new: input.coverageFactor,
+            };
+            updateData.coverageFactor = input.coverageFactor;
+          }
+          if (input.certifiedValues !== undefined) {
+            changes.certifiedValues = {
+              old: existing.certifiedValues,
+              new: input.certifiedValues,
+            };
+            updateData.certifiedValues = input.certifiedValues;
+          }
+          if (input.metrologyData !== undefined) {
+            changes.metrologyData = {
+              old: existing.metrologyData,
+              new: input.metrologyData,
+            };
+            updateData.metrologyData = input.metrologyData;
+          }
 
-        return c.json({
-          message: "Certificado renovado com sucesso",
-          data: updated,
-        });
+          // `renew` (REFERENCE_STANDARD_MACHINE): a new certificate brings an
+          // out-of-tolerance or sent standard back to ACTIVE.
+          if (
+            REFERENCE_STANDARD_MACHINE.canTransition(existing.status, "renew")
+          ) {
+            const renewed = REFERENCE_STANDARD_MACHINE.requireTargetOf(
+              existing.status,
+              "renew",
+            );
+            changes.status = { old: existing.status, new: renewed };
+            updateData.status = renewed;
+          }
+
+          // Update the standard
+          const [row] = await ctx.o
+            .update(referenceStandard)
+            .set(updateData)
+            .where(eq(referenceStandard.id, id))
+            .returning();
+
+          // The new certificate is appended to the history; the one it replaces
+          // stays, for the work it covered (roadmap 2 C3).
+          if (row) {
+            await ctx.o
+              .insert(referenceStandardCalibration)
+              .values(calibrationRecordOf(row, "renew", session.user.id));
+          }
+
+          // Audit log with reason (required for ISO 17025)
+          await ctx.audit("referenceStandard", id, {
+            action: "renew",
+            changes,
+            reason: input.reason,
+          });
+
+          return row;
+        },
+      );
+
+      return c.json({
+        message: "Certificado renovado com sucesso",
+        data: updated,
       });
     },
   )
@@ -2179,11 +1948,7 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
-
-        if (id === null) {
-          return c.json({ error: "Padrão não encontrado" }, 404);
-        }
+        const id = await requireLabStandardId(c.req.param("id"), member, tx);
 
         // Verify standard exists and belongs to organization
         const [existing] = await tx
@@ -2199,7 +1964,7 @@ export const standardsRouter = new Hono<{
           .limit(1);
 
         if (!existing) {
-          return c.json({ error: "Padrão nao encontrado" }, 404);
+          throw notFound("standard_not_found", "Padrão nao encontrado");
         }
 
         // Get audit logs
