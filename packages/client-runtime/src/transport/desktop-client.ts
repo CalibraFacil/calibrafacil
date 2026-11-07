@@ -359,10 +359,7 @@ export function createDesktopApiClient(
       },
     },
     signatures: {
-      ...desktopCloudOnlyStubs("signatures", {
-        action: "Assinatura visual",
-        flavor: "cloud-sync",
-      }),
+      ...desktopEndpointStubs("signatures"),
       async getMine() {
         return { hasSignature: false };
       },
@@ -522,10 +519,8 @@ export function createDesktopApiClient(
     spc: desktopCloudOnlyStubs("spc", { action: "Cartas de controle" }),
     competences: desktopEndpointStubs("competences"),
     trainingRecords: desktopEndpointStubs("trainingRecords"),
-    calibrationRequests: desktopCloudOnlyStubs("calibrationRequests", {
-      action: "Solicitações de calibração",
-    }),
-    visits: desktopCloudOnlyStubs("visits", { action: "Visitas" }),
+    calibrationRequests: desktopEndpointStubs("calibrationRequests"),
+    visits: desktopEndpointStubs("visits"),
     integrations: {
       ...desktopCloudOnlyStubs("integrations", { action: "Integrações" }),
       async list<TResponse = unknown>() {

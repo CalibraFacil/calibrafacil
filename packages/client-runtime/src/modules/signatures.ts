@@ -1,25 +1,47 @@
-import type {
-  MySignatureResponse,
-  SignaturesApi,
-  SignatureDeleteResponse,
-  SignatureUploadResponse,
-} from "../types";
+import {
+  endpointLabel,
+  signatureEndpoints,
+  validateResponsePayload,
+  type SignatureUploadResponse,
+} from "@calibra-facil/contracts";
+
 import type { CreateCloudApiClientOptions } from "../transport/cloud";
 import { createCloudHeaders } from "../transport/cloud";
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
 import { appendNamedBlob } from "../transport/form-data";
 import { readJsonResponse } from "../transport/response";
 
+/**
+ * The signatures client is its endpoint group (`signatureEndpoints` in
+ * `@calibra-facil/contracts`) plus the one thing that is client-side logic:
+ * the upload is a multipart form, which the JSON endpoint client does not send.
+ */
+export type SignaturesApi = Omit<
+  EndpointClient<typeof signatureEndpoints>,
+  "uploadMine"
+> & {
+  uploadMine(
+    file: Blob,
+    input?: { fileName?: string },
+  ): Promise<SignatureUploadResponse>;
+};
+
 export function createSignaturesApi(
-  rawCloudClient: any,
+  transport: EndpointTransport,
   options: CreateCloudApiClientOptions,
 ): SignaturesApi {
+  const { uploadMine: _jsonUpload, ...client } = endpointClient(
+    signatureEndpoints,
+    transport,
+    options,
+  );
+
   return {
-    async getMine() {
-      return readJsonResponse<MySignatureResponse>(
-        await rawCloudClient.api.signatures["my-signature"].$get(),
-        "Failed to fetch signature",
-      );
-    },
+    ...client,
     async uploadMine(file, input) {
       const formData = new FormData();
       appendNamedBlob(formData, "signature", file, input?.fileName);
@@ -34,15 +56,12 @@ export function createSignaturesApi(
         },
       );
 
-      return readJsonResponse<SignatureUploadResponse>(
-        response,
-        "Upload failed",
-      );
-    },
-    async deleteMine() {
-      return readJsonResponse<SignatureDeleteResponse>(
-        await rawCloudClient.api.signatures["my-signature"].$delete(),
-        "Failed to delete signature",
+      const def = signatureEndpoints.uploadMine;
+      return validateResponsePayload(
+        def.response,
+        await readJsonResponse<unknown>(response, def.failure),
+        endpointLabel(def),
+        options,
       );
     },
   };
