@@ -112,8 +112,7 @@ describe('DeleteOrganizationCard', () => {
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/sign-in'))
     expect(mocks.softDelete).toHaveBeenCalledWith({
-      confirmName: NAME,
-      reason: REASON,
+      body: { confirmName: NAME, reason: REASON },
     })
     expect(mocks.signOut).toHaveBeenCalledTimes(1)
     expect(mocks.toastSuccess).toHaveBeenCalled()

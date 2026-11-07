@@ -1,3 +1,7 @@
+import { profileMediaEndpoints } from "./profile-media";
+import { organizationMediaEndpoints } from "./organization-media";
+import { organizationProfileEndpoints } from "./organization-profile";
+import { organizationLifecycleEndpoints } from "./organization-lifecycle";
 import { accreditedScopeEndpoints } from "./accredited-scope";
 import { publicInvitationEndpoints } from "./public-invitations";
 import { publicSignupEndpoints } from "./public-signup";
@@ -41,6 +45,10 @@ export * from "./public-signup";
 export * from "./signing-certificates";
 export * from "./sso";
 export * from "./portal-domains";
+export * from "./profile-media";
+export * from "./organization-media";
+export * from "./organization-profile";
+export * from "./organization-lifecycle";
 export * from "./assets";
 export * from "./asset-types";
 export * from "./customer-groups";
@@ -113,6 +121,10 @@ export const ENDPOINT_GROUPS = {
   notifications: notificationEndpoints,
   apiKeys: apiKeyEndpoints,
   emailDomains: emailDomainEndpoints,
+  organizationLifecycle: organizationLifecycleEndpoints,
+  organizationProfile: organizationProfileEndpoints,
+  organizationMedia: organizationMediaEndpoints,
+  profileMedia: profileMediaEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

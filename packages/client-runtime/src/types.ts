@@ -19,8 +19,6 @@ import type {
   CreateNonConformanceSchema,
   CreateServiceOrderSchema,
   FromTemplateSchema,
-  SoftDeleteOrganizationSchema,
-  UpdateOrganizationProfileSchema,
   UpdateCustomerSchema,
   UpdateMaterialSchema,
   UpdateNotificationPreferencesSchema,
@@ -32,6 +30,10 @@ import type { AssetTypesApi } from "./modules/asset-types";
 import type { ApiKeysApi } from "./modules/api-keys";
 import type { EmailDomainsApi } from "./modules/email-domains";
 import type { NotificationsApi } from "./modules/notifications";
+import type { OrganizationLifecycleApi } from "./modules/organization-lifecycle";
+import type { OrganizationMediaApi } from "./modules/organization-media";
+import type { OrganizationProfileApi } from "./modules/organization-profile";
+import type { ProfileMediaApi } from "./modules/profile-media";
 import type { AssetsApi } from "./modules/assets";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CapasApi } from "./modules/capa";
@@ -63,12 +65,6 @@ import type { VisitsApi } from "./modules/visits";
 
 export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
->;
-export type SoftDeleteOrganizationRequest = z.input<
-  typeof SoftDeleteOrganizationSchema
->;
-export type UpdateOrganizationProfileRequest = z.input<
-  typeof UpdateOrganizationProfileSchema
 >;
 export type CreateCustomerInput = z.input<typeof CreateCustomerSchema>;
 export type CreateCustomerGroupInput = z.input<
@@ -518,56 +514,10 @@ export type { SsoApi, SsoSettingsResponse, SsoVerificationRecord };
 // the client is generated from the endpoint definitions (`modules/api-keys.ts`).
 export type { ApiKeySecretResponse, ApiKeysApi, ApiKeysListResponse };
 
-export type SoftDeleteOrganizationResponse = {
-  success: boolean;
-  deletedAt: string;
-};
-
-/**
- * Organization lifecycle (records retention). The laboratory's owner
- * soft-deletes it: its records are kept for the retention period and the
- * laboratory is locked. Cloud only.
- */
-export interface OrganizationLifecycleApi {
-  softDelete(
-    input: SoftDeleteOrganizationRequest,
-  ): Promise<SoftDeleteOrganizationResponse>;
-}
-
-/** The laboratory profile as `PATCH /api/organization/profile` answers it. */
-export type OrganizationProfileResponse = {
-  cnpj: string | null;
-  accreditationNumber: string | null;
-  accreditationBody: string | null;
-  accreditationActive: boolean;
-  accreditationValidFrom: string | null;
-  accreditationValidUntil: string | null;
-  permissionariaAuthorizationNumber: string | null;
-  permissionariaAuthorizationState: string | null;
-  street: string | null;
-  number: string | null;
-  complement: string | null;
-  neighbourhood: string | null;
-  city: string | null;
-  state: string | null;
-  cep: string | null;
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-  technicalManagerName: string | null;
-  technicalManagerTitle: string | null;
-};
-
-/**
- * The laboratory profile: CNPJ, accreditation claim, address, contacts and the
- * technical manager. Written only here (Better Auth's `organization.update` no
- * longer accepts these fields). Admin or owner; cloud only.
- */
-export interface OrganizationProfileApi {
-  update(
-    input: UpdateOrganizationProfileRequest,
-  ): Promise<OrganizationProfileResponse>;
-}
+// ORGANIZATION LIFECYCLE and PROFILE: the DTOs and the clients are the endpoint
+// definitions' own (`endpoints/organization-lifecycle.ts`,
+// `endpoints/organization-profile.ts`; `modules/organization-*.ts`).
+export type { OrganizationLifecycleApi, OrganizationProfileApi };
 
 export type { EntityLabelsApi };
 
@@ -609,37 +559,10 @@ export type {
 // definitions plus the multipart upload (`modules/signatures.ts`).
 export type { MySignatureResponse, SignatureUploadResponse, SignaturesApi };
 
-export type ProfileAvatarUploadResponse = {
-  imageUrl: string;
-};
-
-export type ProfileAvatarDeleteResponse = {
-  success: boolean;
-};
-
-export interface ProfileMediaApi {
-  uploadAvatar(
-    file: Blob,
-    input?: { fileName?: string },
-  ): Promise<ProfileAvatarUploadResponse>;
-  deleteAvatar(): Promise<ProfileAvatarDeleteResponse>;
-}
-
-export type OrganizationLogoUploadResponse = {
-  logoUrl: string;
-};
-
-export type OrganizationLogoDeleteResponse = {
-  logoUrl: null;
-};
-
-export interface OrganizationMediaApi {
-  uploadLogo(
-    file: Blob,
-    input?: { fileName?: string },
-  ): Promise<OrganizationLogoUploadResponse>;
-  deleteLogo(): Promise<OrganizationLogoDeleteResponse>;
-}
+// PROFILE MEDIA and ORGANIZATION MEDIA: the clients are the endpoint
+// definitions plus the multipart uploads (`modules/profile-media.ts`,
+// `modules/organization-media.ts`).
+export type { OrganizationMediaApi, ProfileMediaApi };
 
 // SIGNING CERTIFICATES: the DTOs are the contract schemas' types
 // (`endpoints/signing-certificates.ts`); the client is generated from the

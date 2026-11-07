@@ -1,12 +1,9 @@
 import { createRouter } from "../server/router";
-import { zValidator } from "@hono/zod-validator";
+import { organizationLifecycleEndpoints } from "@calibra-facil/contracts";
 import { eq } from "drizzle-orm";
 import { orgDb } from "../lib/org-db";
 import { organization } from "@calibra-facil/db/schema";
-import {
-  SoftDeleteOrganizationSchema,
-  confirmationMatchesOrganizationName,
-} from "@calibra-facil/schemas";
+import { confirmationMatchesOrganizationName } from "@calibra-facil/schemas";
 import {
   type AuthVariables,
   requireLabProtected,
@@ -15,6 +12,7 @@ import {
 } from "../middleware/permission";
 import { conflict, invalid, notFound } from "../lib/domain-errors";
 import { softDeleteLabOrganization } from "../lib/records-retention";
+import { mount } from "../lib/endpoint-mount";
 
 /**
  * Organization lifecycle (records retention, decision Q16).
@@ -25,19 +23,25 @@ import { softDeleteLabOrganization } from "../lib/records-retention";
  * revoked) and only the records purge job may remove it, once the retention
  * period of its newest record has passed (docs/architecture/records-retention.md).
  */
+const PREFIX = "/api/organization";
+
 export const organizationLifecycleRouter = createRouter<{
   Variables: AuthVariables;
-}>().post(
-  "/soft-delete",
-  ...requireLabProtected,
-  requireOrgType("LAB"),
-  // Owner only: the same person who can close the laboratory down.
-  requireRole(["owner"]),
-  zValidator("json", SoftDeleteOrganizationSchema),
-  async (c) => {
+}>();
+
+mount(
+  organizationLifecycleRouter,
+  PREFIX,
+  organizationLifecycleEndpoints.softDelete,
+  [
+    ...requireLabProtected,
+    requireOrgType("LAB"), // Owner only: the same person who can close the laboratory down.
+    requireRole(["owner"]),
+  ],
+  async (c, { body }) => {
     const member = c.get("member");
     const session = c.get("session");
-    const input = c.req.valid("json");
+    const input = body;
 
     const [lab] = await orgDb(member.organizationId)
       .select({ name: organization.name })
@@ -64,10 +68,10 @@ export const organizationLifecycleRouter = createRouter<{
 
     switch (outcome.status) {
       case "soft_deleted":
-        return c.json({
-          success: true,
+        return {
+          success: true as const,
           deletedAt: outcome.deletedAt.toISOString(),
-        });
+        };
       case "already_deleted":
         throw conflict(
           "organization_already_deleted",

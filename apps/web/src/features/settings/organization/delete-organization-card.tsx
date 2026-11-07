@@ -70,7 +70,7 @@ export function DeleteOrganizationCard({
 
     setIsDeleting(true)
     try {
-      await calibraApi.organizationLifecycle.softDelete(parsed.value)
+      await calibraApi.organizationLifecycle.softDelete({ body: parsed.value })
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Falha ao excluir a organização',

@@ -1,20 +1,20 @@
-import type {
-  OrganizationProfileApi,
-  OrganizationProfileResponse,
-} from "../types";
-import { readJsonResponse } from "../transport/response";
+import { organizationProfileEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
+
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The organization profile client is its endpoint group (`organizationProfileEndpoints` in `@calibra-facil/contracts`). */
+export type OrganizationProfileApi = EndpointClient<
+  typeof organizationProfileEndpoints
+>;
 
 export function createOrganizationProfileApi(
-  rawCloudClient: any,
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
 ): OrganizationProfileApi {
-  return {
-    async update(input) {
-      return readJsonResponse<OrganizationProfileResponse>(
-        await rawCloudClient.api.organization.profile.$patch({
-          json: input,
-        }),
-        "Falha ao atualizar o perfil do laboratório",
-      );
-    },
-  };
+  return endpointClient(organizationProfileEndpoints, transport, options);
 }

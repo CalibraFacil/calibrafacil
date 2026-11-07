@@ -32,8 +32,6 @@ type RpcRoute<Path extends string> = {
 // pulls route handlers and runtime dependencies back across the package boundary.
 type HandListedRoutePath =
   | "/api/onboarding/checklist"
-  | "/api/organization/profile"
-  | "/api/organization/soft-delete"
   | "/api/authorized-signatories"
   | "/api/authorized-signatories/:id"
   | "/api/authorized-signatories/:id/revoke"

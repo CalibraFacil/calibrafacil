@@ -293,12 +293,8 @@ export function createDesktopApiClient(
         return { data: [] };
       },
     },
-    organizationLifecycle: desktopCloudOnlyStubs("organizationLifecycle", {
-      action: "Exclusão da organização",
-    }),
-    organizationProfile: desktopCloudOnlyStubs("organizationProfile", {
-      action: "Perfil do laboratório",
-    }),
+    organizationLifecycle: desktopEndpointStubs("organizationLifecycle"),
+    organizationProfile: desktopEndpointStubs("organizationProfile"),
     entityLabels: {
       ...desktopEndpointStubs("entityLabels"),
       // No record labels offline: the links render without one.
@@ -377,14 +373,8 @@ export function createDesktopApiClient(
         return { hasSignature: false };
       },
     },
-    profileMedia: desktopCloudOnlyStubs("profileMedia", {
-      action: "Avatar",
-      flavor: "cloud-sync",
-    }),
-    organizationMedia: desktopCloudOnlyStubs("organizationMedia", {
-      action: "Logo da organização",
-      flavor: "cloud-sync",
-    }),
+    profileMedia: desktopEndpointStubs("profileMedia"),
+    organizationMedia: desktopEndpointStubs("organizationMedia"),
     signingCertificates: {
       ...desktopEndpointStubs("signingCertificates"),
       async list() {
