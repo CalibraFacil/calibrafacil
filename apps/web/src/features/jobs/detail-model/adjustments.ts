@@ -1,9 +1,10 @@
+import { parseNumericValue } from '@calibra-facil/shared/units'
 import {
   type AcceptanceItem,
   type AdjustmentSummaryRow,
   type ReviewValidation,
 } from './types'
-import { arrayValueAt, numberFromUnknown, numericValues } from './job-values'
+import { arrayValueAt, numericValues } from './job-values'
 
 export function buildAdjustmentSummaryRows({
   indicationRows,
@@ -13,10 +14,10 @@ export function buildAdjustmentSummaryRows({
   displayReviewResults: Record<string, unknown> | null | undefined
 }): AdjustmentSummaryRow[] {
   return indicationRows.map((row, index) => {
-    const beforeMargin = numberFromUnknown(
+    const beforeMargin = parseNumericValue(
       arrayValueAt(displayReviewResults?.margem_conformidade_antes, index),
     )
-    const afterMargin = numberFromUnknown(
+    const afterMargin = parseNumericValue(
       arrayValueAt(displayReviewResults?.margem_conformidade_apos, index),
     )
     return {
@@ -86,7 +87,7 @@ export function buildAcceptanceItems({
       const deviations = numericValues(
         displayReviewResults?.maior_desvio_excentricidade_apos,
       )
-      const tolerance = numberFromUnknown(displayReviewData?.tolerancia_maxima)
+      const tolerance = parseNumericValue(displayReviewData?.tolerancia_maxima)
       status =
         deviations.length === 0 || tolerance == null
           ? 'unknown'

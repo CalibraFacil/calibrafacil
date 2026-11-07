@@ -6,6 +6,7 @@ import {
   parseMeasurementInput,
   withDecimalComma,
 } from "./calibration-format";
+import { parseNumericValue } from "./units/convert";
 
 describe("measurement values in pt-BR (roadmap 2 F3, Q47)", () => {
   it("formats with the decimal comma by default; a point only when asked", () => {
@@ -29,6 +30,18 @@ describe("measurement values in pt-BR (roadmap 2 F3, Q47)", () => {
     expect(parseMeasurementInput("1,2,3")).toBeNull();
     expect(parseMeasurementInput("")).toBeNull();
     expect(parseMeasurementInput("abc")).toBeNull();
+  });
+
+  it("reads stored values through the same rule as typed ones", () => {
+    expect(parseNumericValue(0)).toBe(0);
+    expect(parseNumericValue("0")).toBe(0);
+    expect(parseNumericValue("1,25")).toBe(1.25);
+    expect(parseNumericValue("1.25")).toBe(1.25);
+    expect(parseNumericValue("1.234,5")).toBeNull();
+    expect(parseNumericValue("0x10")).toBeNull();
+    expect(parseNumericValue("")).toBeNull();
+    expect(parseNumericValue(Number.NaN)).toBeNull();
+    expect(parseNumericValue(null)).toBeNull();
   });
 
   it("accepts text that can still become a number while typing", () => {

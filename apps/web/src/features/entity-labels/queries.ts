@@ -12,6 +12,8 @@ import { standardKeys } from '@/features/standards/keys'
 import { capaKeys, nonConformanceKeys } from '@/features/quality/keys'
 import { competenceKeys } from '@/features/personnel/keys'
 
+// A failed lookup is an error, not a label: it is not cached as "no label" for
+// this long, and the breadcrumb falls back to its own text meanwhile.
 const LABEL_STALE_TIME = 5 * 60 * 1000
 
 type LabelHookInput = {
@@ -23,12 +25,8 @@ export function customerLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: customerKeys.label(id),
     queryFn: async () => {
-      try {
-        const customer = await calibraApi.customers.get({ params: { id } })
-        return customer.name
-      } catch {
-        return null
-      }
+      const customer = await calibraApi.customers.get({ params: { id } })
+      return customer.name
     },
     staleTime: LABEL_STALE_TIME,
   })
@@ -38,12 +36,8 @@ export function assetLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: assetKeys.label(id),
     queryFn: async () => {
-      try {
-        const asset = await calibraApi.assets.get({ params: { id } })
-        return asset.name ?? null
-      } catch {
-        return null
-      }
+      const asset = await calibraApi.assets.get({ params: { id } })
+      return asset.name ?? null
     },
     staleTime: LABEL_STALE_TIME,
   })
@@ -53,12 +47,8 @@ export function methodLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: methodKeys.label(id),
     queryFn: async () => {
-      try {
-        const method = await calibraApi.methods.get({ params: { id } })
-        return method.name ?? null
-      } catch {
-        return null
-      }
+      const method = await calibraApi.methods.get({ params: { id } })
+      return method.name ?? null
     },
     staleTime: LABEL_STALE_TIME,
   })
@@ -68,14 +58,10 @@ export function jobLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: jobKeys.label(id),
     queryFn: async () => {
-      try {
-        const job = await calibraApi.jobs.get({
-          params: { id: apiRouteParam(id) },
-        })
-        return job.jobId ?? null
-      } catch {
-        return null
-      }
+      const job = await calibraApi.jobs.get({
+        params: { id: apiRouteParam(id) },
+      })
+      return job.jobId ?? null
     },
     staleTime: LABEL_STALE_TIME,
   })
@@ -85,12 +71,8 @@ export function serviceLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: serviceKeys.label(id),
     queryFn: async () => {
-      try {
-        const service = await calibraApi.services.get({ params: { id } })
-        return service.name ?? null
-      } catch {
-        return null
-      }
+      const service = await calibraApi.services.get({ params: { id } })
+      return service.name ?? null
     },
     staleTime: LABEL_STALE_TIME,
   })
@@ -100,14 +82,10 @@ export function serviceOrderLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: serviceOrderKeys.label(id),
     queryFn: async () => {
-      try {
-        const serviceOrder = await calibraApi.serviceOrders.get({
-          params: { id },
-        })
-        return serviceOrder.serviceOrderNumber ?? null
-      } catch {
-        return null
-      }
+      const serviceOrder = await calibraApi.serviceOrders.get({
+        params: { id },
+      })
+      return serviceOrder.serviceOrderNumber ?? null
     },
     staleTime: LABEL_STALE_TIME,
   })
@@ -117,12 +95,8 @@ export function standardLabelQueryOptions(id: string) {
   return queryOptions({
     queryKey: standardKeys.label(id),
     queryFn: async () => {
-      try {
-        const standard = await calibraApi.standards.get({ params: { id } })
-        return standard.name ?? null
-      } catch {
-        return null
-      }
+      const standard = await calibraApi.standards.get({ params: { id } })
+      return standard.name ?? null
     },
     staleTime: LABEL_STALE_TIME,
   })

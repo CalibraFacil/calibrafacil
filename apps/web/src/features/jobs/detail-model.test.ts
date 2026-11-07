@@ -27,7 +27,6 @@ import {
   formatDateTime,
   formatExpandedUncertainty,
   formatReviewValue,
-  numberFromUnknown,
   numericValues,
   reviewColumnDisplayLabel,
 } from './detail-model'
@@ -60,8 +59,6 @@ describe('job detail model', () => {
       }),
     ).toBe('Peso 1 g')
     expect(formatReviewValue(1.25, 'g')).toBe('1,25 g')
-    expect(numberFromUnknown('1,25')).toBe(1.25)
-    expect(numberFromUnknown('abc')).toBeNull()
     expect(numericValues([[1, '2,5'], 'x', 3])).toEqual([1, 2.5, 3])
   })
 

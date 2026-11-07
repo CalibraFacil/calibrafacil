@@ -1,11 +1,4 @@
-export function numberFromUnknown(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value.replace(',', '.'))
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
+import { parseNumericValue } from '@calibra-facil/shared/units'
 
 /**
  * What a cloud command needs to know about this job before it may run.
@@ -49,6 +42,6 @@ export function numericValues(value: unknown): number[] {
     return value.flatMap((item) => numericValues(item))
   }
 
-  const parsed = numberFromUnknown(value)
+  const parsed = parseNumericValue(value)
   return parsed == null ? [] : [parsed]
 }

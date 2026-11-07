@@ -6,7 +6,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { GaugeIcon, ThermometerIcon } from '@phosphor-icons/react'
 import { Badge } from '@calibra-facil/ui/badge'
-import { Input } from '@calibra-facil/ui/input'
+import { DecimalInput } from '@/components/decimal-input'
 import {
   Card,
   CardContent,
@@ -93,40 +93,19 @@ export function ExecuteEnvironmentCard({
                   Temperatura
                 </FieldLabel>
                 <div className="flex">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
+                  <DecimalInput
                     placeholder={
                       envLimits?.temperatureMin != null
                         ? `${envLimits.temperatureMin}–${envLimits.temperatureMax}`
-                        : 'Ex: 23.0'
+                        : 'Ex: 23,0'
                     }
-                    value={
-                      environment.temperature != null
-                        ? String(environment.temperature)
-                        : ''
+                    value={environment.temperature ?? null}
+                    onValueChange={(next) =>
+                      setEnvironment((prev) => ({
+                        ...prev,
+                        temperature: next,
+                      }))
                     }
-                    onChange={(e) => {
-                      const val = e.target.value.replace(',', '.')
-                      if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-                        setEnvironment((prev) => ({
-                          ...prev,
-                          temperature: val === '' ? null : Number(val) || null,
-                        }))
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const val = e.target.value.replace(',', '.')
-                      if (val !== '' && val !== '-' && val !== '.') {
-                        const parsed = parseFloat(val)
-                        if (!isNaN(parsed)) {
-                          setEnvironment((prev) => ({
-                            ...prev,
-                            temperature: parsed,
-                          }))
-                        }
-                      }
-                    }}
                     disabled={!isEditable}
                     className="rounded-r-none"
                   />
@@ -144,40 +123,19 @@ export function ExecuteEnvironmentCard({
                   Umidade
                 </FieldLabel>
                 <div className="flex">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
+                  <DecimalInput
                     placeholder={
                       envLimits?.humidityMin != null
                         ? `${envLimits.humidityMin}–${envLimits.humidityMax}`
-                        : 'Ex: 50.0'
+                        : 'Ex: 50,0'
                     }
-                    value={
-                      environment.humidity != null
-                        ? String(environment.humidity)
-                        : ''
+                    value={environment.humidity ?? null}
+                    onValueChange={(next) =>
+                      setEnvironment((prev) => ({
+                        ...prev,
+                        humidity: next,
+                      }))
                     }
-                    onChange={(e) => {
-                      const val = e.target.value.replace(',', '.')
-                      if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-                        setEnvironment((prev) => ({
-                          ...prev,
-                          humidity: val === '' ? null : Number(val) || null,
-                        }))
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const val = e.target.value.replace(',', '.')
-                      if (val !== '' && val !== '-' && val !== '.') {
-                        const parsed = parseFloat(val)
-                        if (!isNaN(parsed)) {
-                          setEnvironment((prev) => ({
-                            ...prev,
-                            humidity: parsed,
-                          }))
-                        }
-                      }
-                    }}
                     disabled={!isEditable}
                     className="rounded-r-none"
                   />
@@ -192,40 +150,19 @@ export function ExecuteEnvironmentCard({
                   Pressão
                 </FieldLabel>
                 <div className="flex">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
+                  <DecimalInput
                     placeholder={
                       envLimits?.pressureMin != null
                         ? `${envLimits.pressureMin}–${envLimits.pressureMax}`
-                        : 'Ex: 1013.0'
+                        : 'Ex: 1013,0'
                     }
-                    value={
-                      environment.pressure != null
-                        ? String(environment.pressure)
-                        : ''
+                    value={environment.pressure ?? null}
+                    onValueChange={(next) =>
+                      setEnvironment((prev) => ({
+                        ...prev,
+                        pressure: next,
+                      }))
                     }
-                    onChange={(e) => {
-                      const val = e.target.value.replace(',', '.')
-                      if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-                        setEnvironment((prev) => ({
-                          ...prev,
-                          pressure: val === '' ? null : Number(val) || null,
-                        }))
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const val = e.target.value.replace(',', '.')
-                      if (val !== '' && val !== '-' && val !== '.') {
-                        const parsed = parseFloat(val)
-                        if (!isNaN(parsed)) {
-                          setEnvironment((prev) => ({
-                            ...prev,
-                            pressure: parsed,
-                          }))
-                        }
-                      }
-                    }}
                     disabled={!isEditable}
                     className="rounded-r-none"
                   />

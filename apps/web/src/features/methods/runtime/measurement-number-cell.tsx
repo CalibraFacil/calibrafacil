@@ -116,39 +116,28 @@ export function MeasurementNumberCell({
   const handleChange = (raw: string) => {
     if (raw !== '' && !isPartialMeasurementInput(raw)) return
 
-    // The text stays as typed (pt-BR comma, roadmap 2 F3); parsing is shared.
-    const normalized = raw.replace(',', '.')
-    if (maxDecimals != null && fractionalDigits(normalized) > maxDecimals) {
+    // The text stays as typed; `parseMeasurementInput` reads it.
+    if (maxDecimals != null && fractionalDigits(raw) > maxDecimals) {
       return
     }
 
     setDraft(raw)
 
-    if (normalized === '' || normalized === '-' || normalized === '.') {
-      onCommit(null)
-      return
-    }
-
-    const parsed = Number.parseFloat(normalized)
-    if (Number.isFinite(parsed)) {
-      onCommit(toCanonical(parsed))
-    }
+    const parsed = parseMeasurementInput(raw)
+    onCommit(parsed === null ? null : toCanonical(parsed))
   }
 
   const handleBlur = () => {
     setFocused(false)
     if (draft === focusSeed) return
-    const normalized = draft.replace(',', '.')
-    if (normalized === '' || normalized === '-' || normalized === '.') {
+    const parsed = parseMeasurementInput(draft)
+    if (parsed === null) {
       onCommit(null)
       return
     }
-    const parsed = Number.parseFloat(normalized)
-    if (Number.isFinite(parsed)) {
-      const display =
-        maxDecimals != null ? Number(parsed.toFixed(maxDecimals)) : parsed
-      onCommit(toCanonical(display))
-    }
+    const display =
+      maxDecimals != null ? Number(parsed.toFixed(maxDecimals)) : parsed
+    onCommit(toCanonical(display))
   }
 
   const handlePick = (option: MeasurementPickerOption) => {

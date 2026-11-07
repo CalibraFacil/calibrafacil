@@ -16,6 +16,7 @@ import {
   formatMoneyBRL,
   formatNumber,
 } from '@calibra-facil/shared/format'
+import { parseMeasurementInput } from '@calibra-facil/shared/calibration-format'
 import {
   MONEY_PARSE_FAILURE_MESSAGES,
   parseMoneyToCents,
@@ -600,9 +601,9 @@ export function quoteItemLineTotal(item: QuoteDraftItem): number | null {
   // A blank field is "not filled in yet", not zero — `Number('')` is 0, so the
   // emptiness has to be checked before parsing. A typed "0,00" still totals 0.
   if (!item.quantity.trim() || !item.unitPrice.trim()) return null
-  const quantity = Number(item.quantity.replace(',', '.'))
+  const quantity = parseMeasurementInput(item.quantity)
   const price = parseMoneyToCents(item.unitPrice)
-  if (!Number.isFinite(quantity) || !price.ok) return null
+  if (quantity === null || !price.ok) return null
   return Math.round(quantity * price.cents)
 }
 
@@ -615,12 +616,12 @@ export function quoteItemsTotal(items: QuoteDraftItem[]) {
 
 export function toApiItems(items: QuoteDraftItem[]) {
   return items.map((item) => {
-    const quantity = Number(item.quantity.replace(',', '.'))
+    const quantity = parseMeasurementInput(item.quantity)
     const unitPrice = parseMoneyToCents(item.unitPrice)
     if (!item.description.trim()) {
       throw new Error('Informe a descrição de todos os itens.')
     }
-    if (!Number.isFinite(quantity) || quantity <= 0) {
+    if (quantity === null || quantity <= 0) {
       throw new Error('Informe uma quantidade válida para todos os itens.')
     }
     if (!unitPrice.ok) {

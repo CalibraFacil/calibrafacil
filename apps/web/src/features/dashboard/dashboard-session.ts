@@ -1,6 +1,8 @@
 import { redirect } from '@tanstack/react-router'
 
 import { hasRuntimeSession } from '@/app/session/runtime-session'
+import { setStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
+import { readLabHandoffOrganizationId } from '@calibra-facil/shared/lab-handoff'
 
 /**
  * Where to send the user back to after signing in.
@@ -38,4 +40,26 @@ export async function dashboardBeforeLoad({
       search: { redirect: continuationHref(location) },
     })
   }
+
+  adoptHandoffOrganization(location)
+}
+
+/**
+ * The portal's "Ir para o laboratório" link names the laboratory to open
+ * (`/dashboard?organization=<id>`): its localStorage is not ours, so the choice
+ * is stored here and the param dropped. An id the user does not belong to is
+ * ignored by the bootstrap, which only prefers a stored laboratory it can see.
+ */
+function adoptHandoffOrganization(location: {
+  pathname: string
+  searchStr?: string
+}) {
+  if (location.pathname !== '/dashboard' && location.pathname !== '/dashboard/')
+    return
+
+  const organizationId = readLabHandoffOrganizationId(location.searchStr)
+  if (!organizationId) return
+
+  setStoredDashboardOrganizationId(organizationId)
+  throw redirect({ to: '/dashboard', replace: true })
 }

@@ -29,10 +29,16 @@ export function isApprovedJobRecordData(
   )
 }
 
+/** An unknown status throws: showing it as DRAFT would offer DRAFT's actions. */
 export function toJobStatus(value: unknown): JobStatus {
-  return JOB_STATUS.parse(value) ?? 'DRAFT'
+  return JOB_STATUS.require(value)
 }
 
+/**
+ * The API leaves `financialStatus` out when no financial context was loaded for
+ * the job: that is "not billed". A value that is present and unknown throws.
+ */
 export function toFinancialStatus(value: unknown): FinancialStatus {
-  return FINANCIAL_STATUS.parse(value) ?? 'UNBILLED'
+  if (value === undefined || value === null) return 'UNBILLED'
+  return FINANCIAL_STATUS.require(value)
 }
