@@ -8,7 +8,7 @@ import {
 import { z } from "zod";
 
 import { nullableNumber, nullableString, paginationSchema } from "./common";
-import { serviceOrderStatusSchema } from "./service-orders";
+import { serviceOrderStatusSchema } from "./endpoints/service-orders";
 
 /**
  * Response contracts for what the customer does in the portal: notifications,

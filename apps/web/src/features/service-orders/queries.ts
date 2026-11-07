@@ -16,8 +16,6 @@ import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type NewServiceOrderAssetsData,
   type NewServiceOrderCustomersData,
-  type ServiceOrderDetail,
-  type ServiceOrdersListData,
   type ServiceOrdersListQueryInput,
 } from './types'
 
@@ -55,13 +53,14 @@ export function serviceOrdersListQueryOptions(
       input.statusFilter,
     ],
     queryFn: () =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- legacy service-order list DTOs need a runtime normalizer before this view-model cast can be removed.
       calibraApi.serviceOrders.list({
-        page: input.page,
-        limit: input.limit,
-        query: input.search || undefined,
-        status: input.statusFilter || undefined,
-      }) as Promise<ServiceOrdersListData>,
+        query: {
+          page: input.page,
+          limit: input.limit,
+          query: input.search || undefined,
+          status: input.statusFilter || undefined,
+        },
+      }),
     placeholderData: keepPreviousDataInScope([
       'service-orders',
       input.organizationId,
@@ -78,17 +77,17 @@ export function serviceOrderDetailQueryOptions(publicId: string) {
   return queryOptions({
     queryKey: ['service-order', publicId],
     queryFn: () =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- legacy service-order detail DTOs need a runtime normalizer before this view-model cast can be removed.
-      calibraApi.serviceOrders.getByPublicId(
-        publicId,
-      ) as Promise<ServiceOrderDetail>,
+      calibraApi.serviceOrders.getByPublicId({
+        params: { publicId },
+      }),
   })
 }
 
 function serviceOrderCommunicationsQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['service-order', id, 'communications'],
-    queryFn: () => calibraApi.serviceOrders.listCommunications(id),
+    queryFn: () =>
+      calibraApi.serviceOrders.listCommunications({ params: { id } }),
   })
 }
 
@@ -184,17 +183,21 @@ export function useServiceOrderMaterialsData(search = '') {
 }
 
 export async function getServiceOrderIntakeDocumentUrl(id: string) {
-  const result = await calibraApi.serviceOrders.getIntakeDocumentPdf(id)
+  const result = await calibraApi.serviceOrders.getIntakeDocumentPdf({
+    params: { id },
+  })
   return result.url
 }
 
 export async function getServiceOrderTagDocumentUrl(id: string) {
-  const result = await calibraApi.serviceOrders.getTagPdf(id)
+  const result = await calibraApi.serviceOrders.getTagPdf({ params: { id } })
   return result.url
 }
 
 export async function getServiceOrderDeliveryDocumentUrl(id: string) {
-  const result = await calibraApi.serviceOrders.getDeliveryDocumentPdf(id)
+  const result = await calibraApi.serviceOrders.getDeliveryDocumentPdf({
+    params: { id },
+  })
   return result.url
 }
 

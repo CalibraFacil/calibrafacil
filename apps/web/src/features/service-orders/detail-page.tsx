@@ -600,7 +600,9 @@ function ServiceOrderDetailContent({
   const documentReadTarget = { synced: orderTarget.synced }
   const evaluationAvailability = useOperationAvailability(
     'serviceOrders',
-    'saveEvaluation',
+    // Creating and revising an evaluation are both cloud-only, so they share one
+    // availability answer.
+    'createEvaluation',
     orderTarget,
   )
   const serviceStartAvailability = useOperationAvailability(
@@ -842,21 +844,32 @@ function ServiceOrderDetailContent({
   const saveEvaluation = useMutation({
     mutationFn: async (revisionReason?: string) => {
       if (!diagnosis.trim()) throw new Error('Informe o diagnóstico técnico.')
-      await calibraApi.serviceOrders.saveEvaluation(
-        id,
-        latestEvaluation?.id ?? null,
-        {
-          diagnosis,
-          detectedIssues: detectedIssues || null,
-          recommendedAction,
-          requiresQuote,
-          requiresClientApproval,
-          calibrationRecommended,
-          clientVisibleNotes: evaluationClientNotes || null,
-          photos: [],
-          ...(revisionReason ? { revisionReason } : {}),
-        },
-      )
+      const evaluation = {
+        diagnosis,
+        detectedIssues: detectedIssues || null,
+        recommendedAction,
+        requiresQuote,
+        requiresClientApproval,
+        calibrationRecommended,
+        clientVisibleNotes: evaluationClientNotes || null,
+        photos: [],
+      }
+      // revisionReason only exists on the update schema; the create endpoint
+      // would reject the unknown key.
+      if (latestEvaluation) {
+        await calibraApi.serviceOrders.updateEvaluation({
+          params: { id, evaluationId: latestEvaluation.id },
+          body: {
+            ...evaluation,
+            ...(revisionReason ? { revisionReason } : {}),
+          },
+        })
+      } else {
+        await calibraApi.serviceOrders.createEvaluation({
+          params: { id },
+          body: evaluation,
+        })
+      }
     },
     onSuccess: async () => {
       setRevisingEvaluation(false)
@@ -873,11 +886,14 @@ function ServiceOrderDetailContent({
 
   const createQuote = useMutation({
     mutationFn: async () => {
-      await calibraApi.serviceOrders.createQuote(id, {
-        deliveryEstimate: deliveryEstimate || null,
-        paymentTerms: paymentTerms || null,
-        clientMessage: quoteClientMessage || null,
-        items: toApiItems(quoteItems),
+      await calibraApi.serviceOrders.createQuote({
+        params: { id },
+        body: {
+          deliveryEstimate: deliveryEstimate || null,
+          paymentTerms: paymentTerms || null,
+          clientMessage: quoteClientMessage || null,
+          items: toApiItems(quoteItems),
+        },
       })
     },
     onSuccess: () => {
@@ -892,8 +908,9 @@ function ServiceOrderDetailContent({
 
   const sendQuote = useMutation({
     mutationFn: async (quoteId: number) => {
-      return calibraApi.serviceOrders.sendQuote(id, quoteId, {
-        clientMessage: quoteClientMessage || null,
+      return calibraApi.serviceOrders.sendQuote({
+        params: { id, quoteId },
+        body: { clientMessage: quoteClientMessage || null },
       })
     },
     onSuccess: async (result) => {
@@ -910,8 +927,11 @@ function ServiceOrderDetailContent({
 
   const startExecution = useMutation({
     mutationFn: async () => {
-      await calibraApi.serviceOrders.saveExecution(id, {
-        technicalNotes: executionTechnicalNotes || null,
+      // The start endpoint (`/execution/start`): the finish endpoint refuses a
+      // body without the service performed and the result.
+      await calibraApi.serviceOrders.startExecution({
+        params: { id },
+        body: { notes: executionTechnicalNotes || null },
       })
     },
     onSuccess: () => {
@@ -928,22 +948,25 @@ function ServiceOrderDetailContent({
 
   const finishExecution = useMutation({
     mutationFn: async () => {
-      await calibraApi.serviceOrders.saveExecution(id, {
-        servicePerformed: executionServicePerformed,
-        partsUsedSummary: executionPartsUsedSummary || null,
-        technicalNotes: executionTechnicalNotes || null,
-        calibrationRequiredAfterRepair: executionRequiresCalibration,
-        result: executionResult,
-        items: approvedQuote?.items.map((item) => ({
-          type: item.type,
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unitPriceCents: item.unitPriceCents,
-          // Carry the catalog reference from the approved quote through to the
-          // execution items so it round-trips on save.
-          materialId: item.materialId ?? null,
-        })),
+      await calibraApi.serviceOrders.saveExecution({
+        params: { id },
+        body: {
+          servicePerformed: executionServicePerformed,
+          partsUsedSummary: executionPartsUsedSummary || null,
+          technicalNotes: executionTechnicalNotes || null,
+          calibrationRequiredAfterRepair: executionRequiresCalibration,
+          result: executionResult,
+          items: approvedQuote?.items.map((item) => ({
+            type: item.type,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPriceCents: item.unitPriceCents,
+            // Carry the catalog reference from the approved quote through to the
+            // execution items so it round-trips on save.
+            materialId: item.materialId ?? null,
+          })),
+        },
       })
     },
     onSuccess: () => {
@@ -957,7 +980,10 @@ function ServiceOrderDetailContent({
   })
 
   const generateIntakeDocument = useMutation({
-    mutationFn: () => calibraApi.serviceOrders.generateIntakeDocument(id),
+    mutationFn: () =>
+      calibraApi.serviceOrders.generateIntakeDocument({
+        params: { id },
+      }),
     onSuccess: async () => {
       await settleCloudCommand('Comprovante enviado para geração')
     },
@@ -977,7 +1003,7 @@ function ServiceOrderDetailContent({
   })
 
   const generateTag = useMutation({
-    mutationFn: () => calibraApi.serviceOrders.generateTag(id),
+    mutationFn: () => calibraApi.serviceOrders.generateTag({ params: { id } }),
     onSuccess: async () => {
       await settleCloudCommand('Etiqueta enviada para geração')
     },
@@ -998,15 +1024,18 @@ function ServiceOrderDetailContent({
 
   const updateRepairMark = useMutation({
     mutationFn: async () => {
-      await calibraApi.serviceOrders.updateRepairMark(id, {
-        inmetroRepairMarkNumber: repairMarkNumber || null,
-        inmetroRepairMarkIssuedAt: repairMarkNumber
-          ? new Date().toISOString()
-          : null,
-        inmetroRepairMarkAppliedAt: repairMarkApplied
-          ? new Date().toISOString()
-          : null,
-        inmetroRepairMarkNotes: repairMarkNotes || null,
+      await calibraApi.serviceOrders.updateRepairMark({
+        params: { id },
+        body: {
+          inmetroRepairMarkNumber: repairMarkNumber || null,
+          inmetroRepairMarkIssuedAt: repairMarkNumber
+            ? new Date().toISOString()
+            : null,
+          inmetroRepairMarkAppliedAt: repairMarkApplied
+            ? new Date().toISOString()
+            : null,
+          inmetroRepairMarkNotes: repairMarkNotes || null,
+        },
       })
     },
     onSuccess: async () => {
@@ -1020,8 +1049,9 @@ function ServiceOrderDetailContent({
 
   const updateServiceStart = useMutation({
     mutationFn: async () => {
-      await calibraApi.serviceOrders.update(id, {
-        serviceStartedAt: serviceStartDraftToIso(serviceStart),
+      await calibraApi.serviceOrders.update({
+        params: { id },
+        body: { serviceStartedAt: serviceStartDraftToIso(serviceStart) },
       })
     },
     onSuccess: async () => {
@@ -1036,12 +1066,15 @@ function ServiceOrderDetailContent({
   const deliverOrder = useMutation({
     mutationFn: async () => {
       if (!order?.customerName) throw new Error('Cliente da OS não encontrado.')
-      await calibraApi.serviceOrders.deliver(id, {
-        deliveryMethod,
-        deliveredToName: order.customerName,
-        deliveredToDocument: deliveredToDocument || null,
-        deliveryNotes: deliveryNotes || null,
-        inmetroRepairMarkNumber: repairMarkNumber || null,
+      await calibraApi.serviceOrders.deliver({
+        params: { id },
+        body: {
+          deliveryMethod,
+          deliveredToName: order.customerName,
+          deliveredToDocument: deliveredToDocument || null,
+          deliveryNotes: deliveryNotes || null,
+          inmetroRepairMarkNumber: repairMarkNumber || null,
+        },
       })
     },
     onSuccess: async () => {
@@ -1055,9 +1088,9 @@ function ServiceOrderDetailContent({
 
   const issueDeliveryDocument = useMutation({
     mutationFn: async () => {
-      await calibraApi.serviceOrders.issueDeliveryDocument(id, {
-        technicianSignatureData: null,
-        clientSignatureData: null,
+      await calibraApi.serviceOrders.issueDeliveryDocument({
+        params: { id },
+        body: { technicianSignatureData: null, clientSignatureData: null },
       })
     },
     onSuccess: () => {

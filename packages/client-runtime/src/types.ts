@@ -16,6 +16,7 @@ import type {
   CreateJobSchema,
   CreateMaterialSchema,
   CreateNonConformanceSchema,
+  CreateServiceOrderSchema,
   CreateServiceSchema,
   SoftDeleteOrganizationSchema,
   UpdateOrganizationProfileSchema,
@@ -38,6 +39,7 @@ import type { ProficiencyTestsApi } from "./modules/proficiency-tests";
 import type { EnvironmentalLimitsApi } from "./modules/environmental-limits";
 import type { MaterialsApi } from "./modules/materials";
 import type { ReportsApi } from "./modules/reports";
+import type { ServiceOrdersApi } from "./modules/service-orders";
 import type { SignaturesApi } from "./modules/signatures";
 import type { SpcApi } from "./modules/spc";
 import type { TrainingRecordsApi } from "./modules/training-records";
@@ -77,6 +79,9 @@ import type {
   AssetAuditLogEntry,
   AssetDetail,
   AssetsListResponse,
+  ServiceOrderCommunicationStatus,
+  ServiceOrderDetail,
+  ServiceOrdersListResponse,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
   CnpjLookupResult,
@@ -125,23 +130,6 @@ import type {
   SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import type { JobExecutionPayload } from "./jobs";
-import type {
-  CreateServiceOrderInput,
-  CreateServiceOrderQuoteInput,
-  CreateServiceOrderResult,
-  DeliverServiceOrderInput,
-  IssueServiceOrderDeliveryDocumentInput,
-  SaveServiceOrderExecutionInput,
-  SaveServiceOrderEvaluationInput,
-  SendServiceOrderQuoteInput,
-  ServiceOrderCommunicationsData,
-  ServiceOrderDetail,
-  ServiceOrderDocumentUrl,
-  ServiceOrderRepairMarkInput,
-  ServiceOrdersListData,
-  ServiceOrdersListInput,
-  UpdateServiceOrderInput,
-} from "./service-orders";
 export type { JobExecutionPayload } from "./jobs";
 export type {
   AssetRecord,
@@ -149,22 +137,6 @@ export type {
   EnvironmentalLimit,
   EnvironmentalLimitsResponse,
 } from "@calibra-facil/contracts";
-export type {
-  CreateServiceOrderInput,
-  CreateServiceOrderQuoteInput,
-  CreateServiceOrderResult,
-  DeliverServiceOrderInput,
-  IssueServiceOrderDeliveryDocumentInput,
-  SaveServiceOrderExecutionInput,
-  SaveServiceOrderEvaluationInput,
-  SendServiceOrderQuoteInput,
-  ServiceOrderCommunicationStatus,
-  ServiceOrderDetail,
-  ServiceOrderRepairMarkInput,
-  ServiceOrdersListData,
-  ServiceOrdersListInput,
-  UpdateServiceOrderInput,
-} from "./service-orders";
 export type {
   LocalAttachment,
   LocalAttachmentsResponse,
@@ -909,55 +881,19 @@ export interface IntegrationsApi {
   ): Promise<TResponse>;
 }
 
-export interface ServiceOrdersApi {
-  list(input: ServiceOrdersListInput): Promise<ServiceOrdersListData>;
-  get(id: string | number): Promise<ServiceOrderDetail>;
-  /** Loads by the opaque publicId the lab dashboard routes with. */
-  getByPublicId(publicId: string): Promise<ServiceOrderDetail>;
-  listCommunications(
-    id: string | number,
-  ): Promise<ServiceOrderCommunicationsData>;
-  create(input: CreateServiceOrderInput): Promise<CreateServiceOrderResult>;
-  update(
-    id: string | number,
-    input: UpdateServiceOrderInput,
-  ): Promise<{ data: ServiceOrderDetail }>;
-  createQuote(
-    id: string | number,
-    input: CreateServiceOrderQuoteInput,
-  ): Promise<unknown>;
-  saveEvaluation(
-    id: string | number,
-    evaluationId: string | number | null,
-    input: SaveServiceOrderEvaluationInput,
-  ): Promise<unknown>;
-  sendQuote(
-    id: string | number,
-    quoteId: string | number,
-    input: SendServiceOrderQuoteInput,
-  ): Promise<unknown>;
-  saveExecution(
-    id: string | number,
-    input: SaveServiceOrderExecutionInput,
-  ): Promise<unknown>;
-  generateIntakeDocument(id: string | number): Promise<unknown>;
-  getIntakeDocumentPdf(id: string | number): Promise<ServiceOrderDocumentUrl>;
-  generateTag(id: string | number): Promise<unknown>;
-  getTagPdf(id: string | number): Promise<ServiceOrderDocumentUrl>;
-  updateRepairMark(
-    id: string | number,
-    input: ServiceOrderRepairMarkInput,
-  ): Promise<unknown>;
-  deliver(
-    id: string | number,
-    input: DeliverServiceOrderInput,
-  ): Promise<unknown>;
-  issueDeliveryDocument(
-    id: string | number,
-    input: IssueServiceOrderDeliveryDocumentInput,
-  ): Promise<unknown>;
-  getDeliveryDocumentPdf(id: string | number): Promise<ServiceOrderDocumentUrl>;
-}
+// =============================================================================
+// SERVICE ORDERS: the DTOs are the contract schemas' types
+// (`@calibra-facil/contracts`, `endpoints/service-orders.ts`); the client is
+// generated from the endpoint definitions (`modules/service-orders.ts`).
+// =============================================================================
+
+export type CreateServiceOrderInput = z.input<typeof CreateServiceOrderSchema>;
+export type ServiceOrdersListData = ServiceOrdersListResponse;
+export type {
+  ServiceOrderCommunicationStatus,
+  ServiceOrderDetail,
+  ServiceOrdersApi,
+};
 
 // =============================================================================
 // DASHBOARD: the DTOs are the contract schemas' types

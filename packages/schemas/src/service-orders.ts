@@ -29,7 +29,7 @@ const SERVICE_ORDER_CLOSING_REASONS = [
   "warranty_completed",
   "canceled_before_execution",
 ] as const;
-const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
+export const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
   "repair",
   "calibration_only",
   "return_without_repair",
@@ -37,7 +37,7 @@ const SERVICE_ORDER_RECOMMENDED_ACTIONS = [
   "warranty_service",
   "external_service_required",
 ] as const;
-const SERVICE_ORDER_ITEM_TYPES = [
+export const SERVICE_ORDER_ITEM_TYPES = [
   "service",
   "part",
   "external_service",
@@ -46,7 +46,7 @@ const SERVICE_ORDER_ITEM_TYPES = [
   "evaluation_fee",
   "other",
 ] as const;
-const SERVICE_ORDER_EXECUTION_RESULTS = [
+export const SERVICE_ORDER_EXECUTION_RESULTS = [
   "repaired",
   "not_repaired",
   "condemned",

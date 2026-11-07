@@ -90,7 +90,9 @@ export function serviceOrderLabelQueryOptions(id: string) {
     queryKey: ['service-orders', id, 'label'],
     queryFn: async () => {
       try {
-        const serviceOrder = await calibraApi.serviceOrders.get(id)
+        const serviceOrder = await calibraApi.serviceOrders.get({
+          params: { id },
+        })
         return serviceOrder.serviceOrderNumber ?? null
       } catch {
         return null

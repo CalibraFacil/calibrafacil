@@ -1,238 +1,51 @@
-import type {
-  ServiceOrderCommunicationsData,
-  ServiceOrderDetail,
-  ServiceOrderDocumentUrl,
-  ServiceOrdersListData,
-} from "../service-orders";
-import type {
-  CreateServiceOrderInput,
-  CreateServiceOrderQuoteInput,
-  CreateServiceOrderResult,
-  DeliverServiceOrderInput,
-  IssueServiceOrderDeliveryDocumentInput,
-  SaveServiceOrderEvaluationInput,
-  SaveServiceOrderExecutionInput,
-  SendServiceOrderQuoteInput,
-  ServiceOrderRepairMarkInput,
-  ServiceOrdersListInput,
-  ServiceOrdersApi,
-  UpdateServiceOrderInput,
-} from "../types";
-import { readJsonResponse } from "../transport/response";
+import {
+  serviceOrderEndpoints,
+  type EndpointClientInput,
+  type ResponseValidationOptions,
+  type ServiceOrderDetail,
+} from "@calibra-facil/contracts";
 
-export function createServiceOrdersApi(rawCloudClient: any): ServiceOrdersApi {
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/**
+ * The service-orders client is its endpoint group (`serviceOrderEndpoints` in
+ * `@calibra-facil/contracts`) plus the one thing that is client-side logic: the
+ * two detail reads answer the order itself, not the `{ data }` envelope.
+ */
+export type ServiceOrdersApi = Omit<
+  EndpointClient<typeof serviceOrderEndpoints>,
+  "get" | "getByPublicId"
+> & {
+  get(
+    input: EndpointClientInput<typeof serviceOrderEndpoints.get>,
+  ): Promise<ServiceOrderDetail>;
+  /**
+   * Loads by the opaque publicId the lab dashboard routes with, so URLs never
+   * carry the enumerable serial id; every other method keeps taking the numeric
+   * id, which callers read off the loaded detail.
+   */
+  getByPublicId(
+    input: EndpointClientInput<typeof serviceOrderEndpoints.getByPublicId>,
+  ): Promise<ServiceOrderDetail>;
+};
+
+export function createServiceOrdersApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): ServiceOrdersApi {
+  const client = endpointClient(serviceOrderEndpoints, transport, options);
+
   return {
-    async list(input: ServiceOrdersListInput) {
-      return readJsonResponse<ServiceOrdersListData>(
-        await rawCloudClient.api["service-orders"].$get({
-          query: {
-            page: String(input.page),
-            limit: String(input.limit),
-            query: input.query || undefined,
-            status: input.status || undefined,
-          },
-        }),
-        "Erro ao carregar ordens de serviço",
-      );
+    ...client,
+    async get(input) {
+      return (await client.get(input)).data;
     },
-    async get(id: string | number) {
-      const result = await readJsonResponse<{ data: ServiceOrderDetail }>(
-        await rawCloudClient.api["service-orders"][":id"].$get({
-          param: { id: String(id) },
-        }),
-        "Erro ao carregar OS",
-      );
-
-      return result.data;
-    },
-    /**
-     * Loads a service order by its opaque publicId. The lab dashboard routes by
-     * this so URLs never carry the enumerable serial id; every other method here
-     * keeps taking the numeric id, which callers read off the loaded detail.
-     */
-    async getByPublicId(publicId: string) {
-      const result = await readJsonResponse<{ data: ServiceOrderDetail }>(
-        await rawCloudClient.api["service-orders"]["by-public-id"][
-          ":publicId"
-        ].$get({
-          param: { publicId },
-        }),
-        "Erro ao carregar OS",
-      );
-
-      return result.data;
-    },
-    async listCommunications(id: string | number) {
-      return readJsonResponse<ServiceOrderCommunicationsData>(
-        await rawCloudClient.api["service-orders"][":id"].communications.$get({
-          param: { id: String(id) },
-        }),
-        "Erro ao carregar comunicações da OS",
-      );
-    },
-    async create(input: CreateServiceOrderInput) {
-      return readJsonResponse<CreateServiceOrderResult>(
-        await rawCloudClient.api["service-orders"].$post({ json: input }),
-        "Erro ao criar OS",
-      );
-    },
-    async update(id: string | number, input: UpdateServiceOrderInput) {
-      return readJsonResponse<{ data: ServiceOrderDetail }>(
-        await rawCloudClient.api["service-orders"][":id"].$patch({
-          param: { id: String(id) },
-          json: input,
-        }),
-        "Erro ao atualizar OS",
-      );
-    },
-    async createQuote(
-      id: string | number,
-      input: CreateServiceOrderQuoteInput,
-    ) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"].quotes.$post({
-          param: { id: String(id) },
-          json: input,
-        }),
-        "Erro ao salvar orçamento",
-      );
-    },
-    async saveEvaluation(
-      id: string | number,
-      evaluationId: string | number | null,
-      input: SaveServiceOrderEvaluationInput,
-    ) {
-      // revisionReason only exists on the update schema; the create endpoint
-      // would reject the unknown key.
-      const { revisionReason, ...createValues } = input;
-      const response = evaluationId
-        ? await rawCloudClient.api["service-orders"][":id"].evaluations[
-            ":evaluationId"
-          ].$patch({
-            param: { id: String(id), evaluationId: String(evaluationId) },
-            json: {
-              ...createValues,
-              ...(revisionReason ? { revisionReason } : {}),
-            },
-          })
-        : await rawCloudClient.api["service-orders"][":id"].evaluations.$post({
-            param: { id: String(id) },
-            json: createValues,
-          });
-
-      return readJsonResponse<unknown>(response, "Erro ao salvar avaliação");
-    },
-    async sendQuote(
-      id: string | number,
-      quoteId: string | number,
-      input: SendServiceOrderQuoteInput,
-    ) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"].quotes[
-          ":quoteId"
-        ].send.$post({
-          param: { id: String(id), quoteId: String(quoteId) },
-          json: input,
-        }),
-        "Erro ao emitir orçamento",
-      );
-    },
-    async saveExecution(
-      id: string | number,
-      input: SaveServiceOrderExecutionInput,
-    ) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][
-          ":id"
-        ].execution.finish.$post({
-          param: { id: String(id) },
-          json: input,
-        }),
-        "Erro ao salvar execução",
-      );
-    },
-    async generateIntakeDocument(id: string | number) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"][
-          "intake-document"
-        ].$post({
-          param: { id: String(id) },
-        }),
-        "Erro ao gerar comprovante",
-      );
-    },
-    async getIntakeDocumentPdf(id: string | number) {
-      return readJsonResponse<ServiceOrderDocumentUrl>(
-        await rawCloudClient.api["service-orders"][":id"][
-          "intake-document.pdf"
-        ].$get({
-          param: { id: String(id) },
-        }),
-        "PDF ainda indisponível",
-      );
-    },
-    async generateTag(id: string | number) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"].tag.$post({
-          param: { id: String(id) },
-        }),
-        "Erro ao gerar etiqueta",
-      );
-    },
-    async getTagPdf(id: string | number) {
-      return readJsonResponse<ServiceOrderDocumentUrl>(
-        await rawCloudClient.api["service-orders"][":id"]["tag.pdf"].$get({
-          param: { id: String(id) },
-        }),
-        "PDF ainda indisponível",
-      );
-    },
-    async updateRepairMark(
-      id: string | number,
-      input: ServiceOrderRepairMarkInput,
-    ) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"]["repair-mark"].$patch(
-          {
-            param: { id: String(id) },
-            json: input,
-          },
-        ),
-        "Erro ao salvar a Marca de Reparo",
-      );
-    },
-    async deliver(id: string | number, input: DeliverServiceOrderInput) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"].deliver.$post({
-          param: { id: String(id) },
-          json: input,
-        }),
-        "Erro ao registrar entrega",
-      );
-    },
-    async issueDeliveryDocument(
-      id: string | number,
-      input: IssueServiceOrderDeliveryDocumentInput,
-    ) {
-      return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"][
-          "delivery-document"
-        ].$post({
-          param: { id: String(id) },
-          json: input,
-        }),
-        "Erro ao gerar comprovante de entrega",
-      );
-    },
-    async getDeliveryDocumentPdf(id: string | number) {
-      return readJsonResponse<ServiceOrderDocumentUrl>(
-        await rawCloudClient.api["service-orders"][":id"][
-          "delivery-document.pdf"
-        ].$get({
-          param: { id: String(id) },
-        }),
-        "PDF ainda indisponível",
-      );
+    async getByPublicId(input) {
+      return (await client.getByPublicId(input)).data;
     },
   };
 }

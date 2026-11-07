@@ -150,7 +150,7 @@ describe("REQ-SYNC-RBAC-5: the unit role is the one of the event's unit", () => 
 // The online route an operation was derived from still asks for the same
 // permission: reads the route source and finds
 // `.<method>("<path>", ...withLabPermission({...}))`, or, for a domain converted
-// to endpoint definitions, `mount(router, prefix, <group>.<name>, withLabPermission({...}), ...)`.
+// to endpoint definitions, `mount(router, prefix, <group>.<name>, withLabPermission({...}), ...)` (the guard may lead an array of middleware: `[...withLabPermission({...}), zValidator("param", ...)]`).
 const ROUTE_FILES: Record<string, string> = {
   "/api/jobs": "../../routes/jobs.ts",
   "/api/assets": "../../routes/assets.ts",
@@ -211,7 +211,7 @@ describe("REQ-SYNC-RBAC-2: the table follows the online routes", () => {
         );
       const pattern = defined
         ? new RegExp(
-            `Endpoints\\.${defined[0]},\\s*withLabPermission\\((\\{[^}]*\\})\\)`,
+            `Endpoints\\.${defined[0]},\\s*(?:\\[\\s*\\.\\.\\.)?withLabPermission\\((\\{[^}]*\\})\\)`,
           )
         : new RegExp(
             `\\.${method.toLowerCase()}\\(\\s*"${escaped}",\\s*\\.\\.\\.withLabPermission\\((\\{[^}]*\\})\\)`,
