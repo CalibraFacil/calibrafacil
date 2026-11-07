@@ -1,5 +1,6 @@
 // Inventory classifications as data: asset.status, reference_standard.status
 // and mass_composition_profile.status.
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine, type Transition } from "../state-machine";
 
 function everyPair<S extends string, C extends string>(
@@ -37,6 +38,13 @@ export const ASSET_STATUSES = [
 ] as const;
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
+export const ASSET_STATUS = defineStatusVocabulary(ASSET_STATUSES, {
+  ACTIVE: { label: "Ativo", tone: "ok" },
+  INACTIVE: { label: "Inativo", tone: "neutral" },
+  MAINTENANCE: { label: "Em manutenção", tone: "warning" },
+  SCRAPPED: { label: "Descartado", tone: "critical" },
+});
+
 export const ASSET_MACHINE = defineStateMachine({
   name: "asset",
   states: ASSET_STATUSES,
@@ -64,6 +72,16 @@ export const REFERENCE_STANDARD_STATUSES = [
 ] as const;
 export type ReferenceStandardStatus =
   (typeof REFERENCE_STANDARD_STATUSES)[number];
+
+export const REFERENCE_STANDARD_STATUS = defineStatusVocabulary(
+  REFERENCE_STANDARD_STATUSES,
+  {
+    ACTIVE: { label: "Ativo", tone: "ok" },
+    INACTIVE: { label: "Inativo", tone: "neutral" },
+    OUT_OF_TOLERANCE: { label: "Fora de tolerância", tone: "critical" },
+    SENT_FOR_CALIBRATION: { label: "Em calibração", tone: "warning" },
+  },
+);
 
 export const REFERENCE_STANDARD_MACHINE = defineStateMachine({
   name: "reference standard",
@@ -99,6 +117,14 @@ export const REFERENCE_STANDARD_MACHINE = defineStateMachine({
 //   retire      routes/standards.ts DELETE /mass-profiles/:id
 const MASS_PROFILE_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 export type MassProfileStatus = (typeof MASS_PROFILE_STATUSES)[number];
+
+export const MASS_PROFILE_STATUS = defineStatusVocabulary(
+  MASS_PROFILE_STATUSES,
+  {
+    ACTIVE: { label: "Ativo", tone: "ok" },
+    INACTIVE: { label: "Inativo", tone: "neutral" },
+  },
+);
 
 export const MASS_PROFILE_MACHINE = defineStateMachine({
   name: "mass composition profile",

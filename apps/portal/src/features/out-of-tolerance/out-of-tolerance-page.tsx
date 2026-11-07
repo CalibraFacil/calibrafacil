@@ -24,7 +24,7 @@ import {
   StaggerItem,
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
-import { getOotNotificationStatus } from "@/lib/status-labels";
+import { OOT_NOTIFICATION_CUSTOMER_STATUS } from "./status";
 import {
   useAcknowledgeOotNotification,
   useOotNotifications,
@@ -118,7 +118,6 @@ export function OutOfTolerancePage() {
 
 function NotificationCard({ notification }: { notification: OotNotification }) {
   const acknowledge = useAcknowledgeOotNotification();
-  const status = getOotNotificationStatus(notification.status);
   const isAcknowledged = notification.status === "ACKNOWLEDGED";
   const viaLabel = notification.acknowledgedVia
     ? ACK_VIA_LABEL[notification.acknowledgedVia]
@@ -137,8 +136,11 @@ function NotificationCard({ notification }: { notification: OotNotification }) {
             Notificação de resultado fora de tolerância
           </p>
         </div>
-        <StatusPill tone={status.tone} pulse={notification.status === "SENT"}>
-          {status.label}
+        <StatusPill
+          tone={OOT_NOTIFICATION_CUSTOMER_STATUS.tone(notification.status)}
+          pulse={notification.status === "SENT"}
+        >
+          {OOT_NOTIFICATION_CUSTOMER_STATUS.label(notification.status)}
         </StatusPill>
       </div>
 

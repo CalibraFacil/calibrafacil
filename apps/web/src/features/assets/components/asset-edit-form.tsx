@@ -2,6 +2,7 @@ import { isWeighingScaleAssetType } from '@calibra-facil/shared/mass-units'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { FloppyDiskIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 
@@ -9,7 +10,6 @@ import { calibraApi } from '@/utils/api'
 import { dateOnlyToLocalDate } from '@/lib/date-only'
 import type { AssetDetail } from '@/features/assets/types'
 import {
-  isAssetFormStatus,
   isAssetSpecificationErrorField,
   parseAssetEditForm,
   regulatedFormFieldsFromAsset,
@@ -51,13 +51,6 @@ import { cn } from '@/lib/utils'
 
 /** The asset record returned by `assets.update` (used to refresh selection). */
 export type UpdatedAsset = AssetDetail
-
-const statusLabels: Record<AssetEditFormData['status'], string> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  MAINTENANCE: 'Em Manutenção',
-  SCRAPPED: 'Descartado',
-}
 
 function parseDate(date: string | Date | null | undefined): Date | undefined {
   if (!date) return undefined
@@ -340,20 +333,20 @@ export function AssetEditForm({
                 <Select
                   value={formData.status}
                   onValueChange={(value) => {
-                    if (isAssetFormStatus(value)) {
-                      updateField('status', value)
-                    }
+                    const status = ASSET_STATUS.parse(value)
+                    if (status) updateField('status', status)
                   }}
                   disabled={isSaving}
                 >
                   <SelectTrigger>
-                    <span>{statusLabels[formData.status]}</span>
+                    <span>{ASSET_STATUS.label(formData.status)}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ACTIVE">Ativo</SelectItem>
-                    <SelectItem value="INACTIVE">Inativo</SelectItem>
-                    <SelectItem value="MAINTENANCE">Em Manutenção</SelectItem>
-                    <SelectItem value="SCRAPPED">Descartado</SelectItem>
+                    {ASSET_STATUS.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>

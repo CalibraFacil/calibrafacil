@@ -5,6 +5,8 @@
  * Shapes mirror the /api/portal responses; the portal never recomputes verdicts.
  */
 
+import type { AssetOotEventStatus } from "@calibra-facil/schemas/machines";
+
 export type FleetAnalyticsBucket = "quarter" | "year";
 
 /** Rates are % over KNOWN cycles; `unknown` counts cycles without an as-found signal. */
@@ -84,7 +86,7 @@ export type AssetDriftSeries = {
   attribution: string;
 };
 
-export type OotEventStatus = "OPEN" | "ASSESSED";
+export type OotEventStatus = AssetOotEventStatus;
 
 export type OotDecision = "NO_IMPACT" | "IMPACT_CONTAINED" | "IMPACT_ESCALATED";
 

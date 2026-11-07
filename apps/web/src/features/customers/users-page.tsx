@@ -30,6 +30,7 @@ import {
 } from '@calibra-facil/ui/table'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
+import { InvitationStatusBadge } from '@/components/invitation-status-badge'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { Input } from '@calibra-facil/ui/input'
 import {
@@ -161,21 +162,6 @@ export function ClientUsersTab({ id }: { id: string }) {
 
     inviteMutation.mutate(inviteEmail.trim())
   }
-  const getStatusBadge = (status: string, expiresAt: string) => {
-    const isExpired = new Date(expiresAt) < new Date()
-
-    if (status === 'accepted') {
-      return <Badge variant="default">Aceito</Badge>
-    }
-    if (status === 'canceled') {
-      return <Badge variant="secondary">Cancelado</Badge>
-    }
-    if (isExpired) {
-      return <Badge variant="destructive">Expirado</Badge>
-    }
-    return <Badge variant="outline">Pendente</Badge>
-  }
-
   const visibleMembers = members.filter((member) =>
     isPortalVisibleMemberRole(member.role),
   )
@@ -396,7 +382,10 @@ export function ClientUsersTab({ id }: { id: string }) {
                           {inv.email}
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(inv.status, inv.expiresAt)}
+                          <InvitationStatusBadge
+                            status={inv.status}
+                            expiresAt={inv.expiresAt}
+                          />
                         </TableCell>
                         <TableCell>
                           {formatInstant(inv.expiresAt, 'date')}

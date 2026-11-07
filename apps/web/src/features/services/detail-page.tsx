@@ -21,6 +21,7 @@ import {
 } from '@/components/audit-timeline'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
+import { MethodStatusBadge } from '@/features/methods/components/method-status-badge'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   ACTION_BUTTON_CLASS,
@@ -48,23 +49,6 @@ function getMethodRouteParam(service: ServiceDetail): string {
     })
   }
   return String(service.methodId)
-}
-
-function formatMethodStatus(status: string | null): string {
-  if (status === 'PUBLISHED') return 'Publicado'
-  if (status === 'DRAFT') return 'Rascunho'
-  if (status === 'PENDING_APPROVAL') return 'Em aprovação'
-  if (status === 'TECHNICAL_REVIEWED') return 'Revisão técnica'
-  if (status === 'ARCHIVED') return 'Arquivado'
-  return status || 'Sem status'
-}
-
-function getMethodStatusVariant(
-  status: string | null,
-): 'default' | 'secondary' | 'outline' {
-  if (status === 'PUBLISHED') return 'default'
-  if (status === 'DRAFT') return 'secondary'
-  return 'outline'
 }
 
 export function ServiceDetailPage({ id }: { id: string }) {
@@ -113,9 +97,7 @@ export function ServiceDetailPage({ id }: { id: string }) {
         </BlueprintField>
         <BlueprintField label="Status do método">
           {service.methodId ? (
-            <Badge variant={getMethodStatusVariant(service.methodStatus)}>
-              {formatMethodStatus(service.methodStatus)}
-            </Badge>
+            <MethodStatusBadge status={service.methodStatus} />
           ) : (
             <span className="text-muted-foreground">—</span>
           )}

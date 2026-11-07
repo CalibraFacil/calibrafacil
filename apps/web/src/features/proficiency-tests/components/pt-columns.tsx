@@ -1,11 +1,10 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
 
-import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
+import { PT_OVERALL_STATUS } from '@calibra-facil/schemas/machines'
 import {
   PT_ACTIVITY_TYPE_LABELS,
-  PT_STATUS_BADGE_CLASSES,
-  PT_STATUS_LABELS,
   type PtRound,
 } from '@/features/proficiency-tests/types'
 import { formatInstant } from '@calibra-facil/shared/format'
@@ -59,12 +58,9 @@ export const ptColumns: ColumnDef<PtRound>[] = [
     accessorKey: 'overallStatus',
     header: 'Resultado',
     cell: ({ row }) => (
-      <Badge
-        variant="outline"
-        className={PT_STATUS_BADGE_CLASSES[row.original.overallStatus]}
-      >
-        {PT_STATUS_LABELS[row.original.overallStatus]}
-      </Badge>
+      <StatusBadge tone={PT_OVERALL_STATUS.tone(row.original.overallStatus)}>
+        {PT_OVERALL_STATUS.label(row.original.overallStatus)}
+      </StatusBadge>
     ),
   },
   {

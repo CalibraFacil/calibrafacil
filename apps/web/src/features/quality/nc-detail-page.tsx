@@ -21,7 +21,12 @@ import {
   CardTitle,
 } from '@calibra-facil/ui/card'
 import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
+import {
+  NON_CONFORMANCE_STATUS,
+  OOT_NOTIFICATION_STATUS,
+} from '@calibra-facil/schemas/machines'
 import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { Label } from '@calibra-facil/ui/label'
 import {
@@ -46,8 +51,6 @@ import {
 import {
   getAcknowledgedViaLabel,
   getDispositionLabel,
-  getOotStatusBadge,
-  getStatusBadge,
   getTypeLabel,
   ncAvailableActions,
 } from '@/features/quality/nc-model'
@@ -195,7 +198,6 @@ export function NCDetailPage({ id }: { id: string }) {
     )
   }
 
-  const statusBadge = getStatusBadge(nc.status)
   const availableActions = ncAvailableActions(nc)
 
   return (
@@ -210,7 +212,9 @@ export function NCDetailPage({ id }: { id: string }) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+            <StatusBadge tone={NON_CONFORMANCE_STATUS.tone(nc.status)}>
+              {NON_CONFORMANCE_STATUS.label(nc.status)}
+            </StatusBadge>
             {nc.capaId && (
               <Badge
                 variant="outline"
@@ -423,13 +427,15 @@ export function NCDetailPage({ id }: { id: string }) {
                     <div>
                       <Label className="text-muted-foreground">Status</Label>
                       <p className="mt-1">
-                        <Badge
-                          variant={
-                            getOotStatusBadge(ootNotification.status).variant
-                          }
+                        <StatusBadge
+                          tone={OOT_NOTIFICATION_STATUS.tone(
+                            ootNotification.status,
+                          )}
                         >
-                          {getOotStatusBadge(ootNotification.status).label}
-                        </Badge>
+                          {OOT_NOTIFICATION_STATUS.label(
+                            ootNotification.status,
+                          )}
+                        </StatusBadge>
                       </p>
                     </div>
                     <div>

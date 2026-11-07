@@ -202,16 +202,6 @@ const INITIAL_STANDARD_FORM_DATA: StandardFormData = {
   status: 'ACTIVE',
 }
 
-export const STANDARD_STATUS_LABELS: Record<
-  StandardFormData['status'],
-  string
-> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  OUT_OF_TOLERANCE: 'Fora de Tolerância',
-  SENT_FOR_CALIBRATION: 'Em Calibração',
-}
-
 export function createStandardCertifiedValueDraft(
   value?: Partial<StandardCertifiedValueFormData>,
 ): StandardCertifiedValueFormData {

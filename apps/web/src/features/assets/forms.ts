@@ -1,5 +1,4 @@
 import {
-  AssetStatusSchema,
   CreateAssetSchema,
   RegulatedIntervalSchema,
   UpdateAssetSchema,
@@ -34,8 +33,6 @@ export function baseMeasurementUnitOptions(
   const kind = dominantKindForAssetType(definition)
   return kind ? unitsForKind(kind) : MEASUREMENT_UNITS
 }
-
-const ASSET_FORM_STATUSES = AssetStatusSchema.options
 
 // NOTE: the lab no longer authors a calibration periodicity / next-calibration
 // date. Periodicity is the equipment owner's (customer's) decision, set in the
@@ -373,13 +370,6 @@ type AssetSpecificationField = {
 export type ParseAssetFormOptions = {
   requiresMassBaseUnit?: boolean
   specificationFields?: readonly AssetSpecificationField[]
-}
-
-export function isAssetFormStatus(value: unknown): value is AssetStatus {
-  return (
-    typeof value === 'string' &&
-    ASSET_FORM_STATUSES.some((status) => status === value)
-  )
 }
 
 export function isAssetSpecificationErrorField(

@@ -1,4 +1,5 @@
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
+import { OPEN_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { Hono } from "hono";
 import { LAB_TIME_ZONE } from "@calibra-facil/documents";
@@ -419,7 +420,10 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
                   calibrationRequest.organizationId,
                   memberData.organizationId,
                 ),
-                inArray(calibrationRequest.status, ["PENDING", "UNDER_REVIEW"]),
+                inArray(
+                  calibrationRequest.status,
+                  OPEN_CALIBRATION_REQUEST_STATUSES,
+                ),
               ),
             ),
 

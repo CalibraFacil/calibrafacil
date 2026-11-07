@@ -48,20 +48,12 @@ import type {
   StandardStatus,
 } from '@/features/standards/types'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { OOT_NOTIFICATION_STATUS } from '@calibra-facil/schemas/machines'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 
 const TABLE_WRAPPER_CLASS =
   'overflow-x-auto rounded-xl bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
 const TH_CLASS = 'px-3 py-2.5 text-left font-medium text-muted-foreground'
-
-const NOTIFICATION_STATUS_BADGES: Record<
-  StandardRecallNotification['status'],
-  { label: string; variant: 'default' | 'secondary' | 'outline' }
-> = {
-  PENDING: { label: 'Pendente', variant: 'outline' },
-  GENERATED: { label: 'Gerada', variant: 'outline' },
-  SENT: { label: 'Enviada', variant: 'secondary' },
-  ACKNOWLEDGED: { label: 'Confirmada', variant: 'default' },
-}
 
 const ACKNOWLEDGED_VIA_LABELS: Record<StandardRecallAcknowledgedVia, string> = {
   email_link: 'link do e-mail',
@@ -636,7 +628,6 @@ function RecallNotificationsTable({
         </thead>
         <tbody>
           {notifications.map((notification) => {
-            const badge = NOTIFICATION_STATUS_BADGES[notification.status]
             return (
               <tr
                 key={notification.id}
@@ -655,7 +646,11 @@ function RecallNotificationsTable({
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge variant={badge.variant}>{badge.label}</Badge>
+                    <StatusBadge
+                      tone={OOT_NOTIFICATION_STATUS.tone(notification.status)}
+                    >
+                      {OOT_NOTIFICATION_STATUS.label(notification.status)}
+                    </StatusBadge>
                     {notification.bounced ? (
                       <Badge variant="destructive">bounce</Badge>
                     ) : null}

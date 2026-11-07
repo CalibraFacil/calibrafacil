@@ -1,4 +1,5 @@
 // Tenancy and messaging records as data.
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine, type Transition } from "../state-machine";
 
 function everyMove<S extends string, C extends string>(
@@ -46,6 +47,27 @@ export const ORGANIZATION_UNIT_MACHINE = defineStateMachine({
     { from: "ACTIVE", command: "archive", to: "ARCHIVED" },
     { from: "ARCHIVED", command: "reactivate", to: "ACTIVE" },
   ],
+});
+
+// invitation.status: a membership invitation. Better-Auth writes accept,
+// reject and cancel; the portal service account (apps/api/src/lib/
+// portal-service-account.ts) creates, cancels and marks expired ones. Expiry is
+// also read at use time (`expiresAt`). Not guarded in Postgres: the library
+// owns most writes.
+const INVITATION_STATUSES = [
+  "pending",
+  "accepted",
+  "rejected",
+  "canceled",
+  "expired",
+] as const;
+
+export const INVITATION_STATUS = defineStatusVocabulary(INVITATION_STATUSES, {
+  pending: { label: "Pendente", tone: "info" },
+  accepted: { label: "Aceito", tone: "ok" },
+  rejected: { label: "Rejeitado", tone: "critical" },
+  canceled: { label: "Cancelado", tone: "neutral" },
+  expired: { label: "Expirado", tone: "critical" },
 });
 
 // organization_email_domain.status: the lab's sending domain, as the provider
@@ -109,6 +131,15 @@ export const EMAIL_DOMAIN_KEY_MACHINE = defineStateMachine({
 //   archive  routes/notifications.ts (read or not)
 export const NOTIFICATION_STATUSES = ["UNREAD", "READ", "ARCHIVED"] as const;
 export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];
+
+export const NOTIFICATION_STATUS = defineStatusVocabulary(
+  NOTIFICATION_STATUSES,
+  {
+    UNREAD: { label: "Não lida", tone: "info" },
+    READ: { label: "Lida", tone: "neutral" },
+    ARCHIVED: { label: "Arquivada", tone: "neutral" },
+  },
+);
 
 export const NOTIFICATION_MACHINE = defineStateMachine({
   name: "notification",

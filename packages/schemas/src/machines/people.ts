@@ -1,5 +1,6 @@
 // Personnel records as data (ISO/IEC 17025 §6.2: competence, training and
 // authorization of personnel).
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine } from "../state-machine";
 
 // personnel_competence.status: a technician's qualification for an asset type.
@@ -25,6 +26,17 @@ export const COMPETENCE_STATUSES = [
   "CANCELLED",
 ] as const;
 export type CompetenceStatus = (typeof COMPETENCE_STATUSES)[number];
+
+export const COMPETENCE_STATUS = defineStatusVocabulary(COMPETENCE_STATUSES, {
+  REQUESTED: { label: "Solicitada", tone: "info" },
+  TRAINING_ASSIGNED: { label: "Treinamento atribuído", tone: "info" },
+  IN_TRAINING: { label: "Em treinamento", tone: "info" },
+  PENDING_EVALUATION: { label: "Aguardando avaliação", tone: "warning" },
+  ACTIVE: { label: "Ativa", tone: "ok" },
+  SUSPENDED: { label: "Suspensa", tone: "critical" },
+  EXPIRED: { label: "Expirada", tone: "critical" },
+  CANCELLED: { label: "Cancelada", tone: "neutral" },
+});
 
 export const COMPETENCE_MACHINE = defineStateMachine({
   name: "personnel competence",
@@ -82,6 +94,13 @@ export const TRAINING_STATUSES = [
   "failed",
 ] as const;
 export type TrainingStatus = (typeof TRAINING_STATUSES)[number];
+
+export const TRAINING_STATUS = defineStatusVocabulary(TRAINING_STATUSES, {
+  planned: { label: "Planejado", tone: "neutral" },
+  in_progress: { label: "Em andamento", tone: "info" },
+  completed: { label: "Concluído", tone: "ok" },
+  failed: { label: "Reprovado", tone: "critical" },
+});
 
 const TRAINING_SET_STATUS = TRAINING_STATUSES.flatMap((from) =>
   TRAINING_STATUSES.filter((to) => to !== from).map((to) => ({

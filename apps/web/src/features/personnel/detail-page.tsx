@@ -25,7 +25,6 @@ import {
   isWorkflowStepCompleted,
   isWorkflowStepCurrent,
   toggleTrainingSelection,
-  TRAINING_STATUS_LABELS,
   TRAINING_TYPE_LABELS,
 } from '@/features/personnel/detail-model'
 import { Button } from '@calibra-facil/ui/button'
@@ -36,7 +35,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@calibra-facil/ui/card'
-import { Badge } from '@calibra-facil/ui/badge'
 import { Checkbox } from '@calibra-facil/ui/checkbox'
 import { Label } from '@calibra-facil/ui/label'
 import { Textarea } from '@calibra-facil/ui/textarea'
@@ -57,7 +55,10 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@calibra-facil/ui/select'
-import { getStatusBadge } from '@/features/personnel/components/columns'
+import {
+  CompetenceStatusBadge,
+  TrainingStatusBadge,
+} from '@/features/personnel/components/status-badges'
 
 export function CompetenceDetailPage({ id }: { id: string }) {
   const navigate = useNavigate()
@@ -181,7 +182,6 @@ export function CompetenceDetailPage({ id }: { id: string }) {
     )
   }
 
-  const statusBadge = getStatusBadge(comp.status)
   const canDelete = currentRole === 'owner' || currentRole === 'admin'
   const isTerminalInactive = isTerminalInactiveStatus(comp.status)
   const canCancel = canCancelCompetenceStatus(comp.status)
@@ -221,12 +221,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
           </div>
           {isTerminalInactive && (
             <div className="mt-3">
-              <Badge
-                variant={statusBadge.variant}
-                className={statusBadge.className}
-              >
-                {statusBadge.label}
-              </Badge>
+              <CompetenceStatusBadge status={comp.status} />
             </div>
           )}
         </CardContent>
@@ -264,12 +259,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
               <div>
                 <Label className="text-muted-foreground">Status</Label>
                 <p>
-                  <Badge
-                    variant={statusBadge.variant}
-                    className={statusBadge.className}
-                  >
-                    {statusBadge.label}
-                  </Badge>
+                  <CompetenceStatusBadge status={comp.status} />
                 </p>
               </div>
               <div>
@@ -813,10 +803,7 @@ function AssignTrainingDialog({
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-medium">{record.title}</p>
-                        <Badge variant="outline">
-                          {TRAINING_STATUS_LABELS[record.status] ??
-                            record.status}
-                        </Badge>
+                        <TrainingStatusBadge status={record.status} />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {TRAINING_TYPE_LABELS[record.type]} • início{' '}

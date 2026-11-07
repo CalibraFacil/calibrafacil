@@ -9,12 +9,12 @@ import {
   prewarmRouteQueries,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
+import { METHOD_STATUS } from '@calibra-facil/schemas/machines'
 import {
   type MethodAuditLogData,
   type MethodAuditLogRecord,
   type MethodDetail,
   type MethodEditData,
-  METHOD_STATUSES,
   type MethodsListData,
   type MethodsListQueryInput,
   type MethodStatus,
@@ -23,7 +23,7 @@ import {
 export const METHODS_LIST_LIMIT = 20
 
 function statusFromUrl(url?: URL): MethodStatus | '' {
-  return optionFromUrl(METHOD_STATUSES, url?.searchParams.get('status'))
+  return optionFromUrl(METHOD_STATUS.states, url?.searchParams.get('status'))
 }
 
 export function methodsListQueryInputFromUrl(

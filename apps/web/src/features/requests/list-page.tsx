@@ -10,7 +10,8 @@ import { ClipboardIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
 import { Button } from '@calibra-facil/ui/button'
 import { Input } from '@calibra-facil/ui/input'
-import { Badge } from '@calibra-facil/ui/badge'
+import { CALIBRATION_REQUEST_STATUS } from '@calibra-facil/schemas/machines'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import {
   Empty,
   EmptyContent,
@@ -30,31 +31,8 @@ import {
   CALIBRATION_REQUESTS_LIST_LIMIT,
   useCalibrationRequestsListData,
 } from '@/features/requests/queries'
-import {
-  CALIBRATION_REQUEST_STATUSES,
-  type CalibrationRequestListItem,
-  type CalibrationRequestStatus,
-} from '@/features/requests/types'
+import { type CalibrationRequestListItem } from '@/features/requests/types'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
-const statusLabels: Record<CalibrationRequestStatus, string> = {
-  PENDING: 'Pendente',
-  UNDER_REVIEW: 'Em análise',
-  APPROVED: 'Aprovada',
-  REJECTED: 'Rejeitada',
-  CONVERTED: 'Convertida',
-}
-
-const statusVariants: Record<
-  CalibrationRequestStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  PENDING: 'secondary',
-  UNDER_REVIEW: 'outline',
-  APPROVED: 'default',
-  REJECTED: 'destructive',
-  CONVERTED: 'outline',
-}
-
 // Module-level so the header/cell renderers are stable component types
 // instead of being re-created on every render of the page.
 const columns = [
@@ -97,9 +75,9 @@ const columns = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }: { row: { original: CalibrationRequestListItem } }) => (
-      <Badge variant={statusVariants[row.original.status]}>
-        {statusLabels[row.original.status]}
-      </Badge>
+      <StatusBadge tone={CALIBRATION_REQUEST_STATUS.tone(row.original.status)}>
+        {CALIBRATION_REQUEST_STATUS.label(row.original.status)}
+      </StatusBadge>
     ),
   },
 ]
@@ -115,7 +93,10 @@ export function RequestsPage() {
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...CALIBRATION_REQUEST_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([
+      ...CALIBRATION_REQUEST_STATUS.states,
+      '',
+    ]).withDefault(''),
   )
 
   const { data, isLoading, error } = useCalibrationRequestsListData({
@@ -188,14 +169,13 @@ export function RequestsPage() {
               >
                 Todas
               </Button>
-              {Object.entries(statusLabels).map(([value, label]) => (
+              {CALIBRATION_REQUEST_STATUS.options.map(({ value, label }) => (
                 <Button
                   key={value}
                   variant={statusFilter === value ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => {
-                    // oxlint-disable-next-line typescript/consistent-type-assertions -- Buttons are generated from calibration request status labels.
-                    setStatusFilter(value as CalibrationRequestStatus)
+                    setStatusFilter(value)
                     setPage(1)
                   }}
                 >

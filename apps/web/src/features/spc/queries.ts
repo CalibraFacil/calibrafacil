@@ -18,8 +18,8 @@ import {
   getStableDashboardOrganizationIdForRouteData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
+import { SPC_STATUS } from '@calibra-facil/schemas/machines'
 import {
-  SPC_STATUSES,
   type SpcChart,
   type SpcChartDetail,
   type SpcChartListData,
@@ -42,7 +42,10 @@ function spcChartListInputFromUrl(organizationId: string, url?: URL) {
     organizationId,
     page: pageFromUrl(url),
     standardId: standardIdFromUrl(url),
-    statusFilter: optionFromUrl(SPC_STATUSES, url?.searchParams.get('status')),
+    statusFilter: optionFromUrl(
+      SPC_STATUS.states,
+      url?.searchParams.get('status'),
+    ),
   } satisfies SpcChartListQueryInput
 }
 

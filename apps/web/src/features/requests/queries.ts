@@ -8,8 +8,8 @@ import {
   prewarmRouteQueries,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
+import { CALIBRATION_REQUEST_STATUS } from '@calibra-facil/schemas/machines'
 import {
-  CALIBRATION_REQUEST_STATUSES,
   type CalibrationRequestDetail,
   type CalibrationRequestsListData,
   type CalibrationRequestsListQueryInput,
@@ -22,7 +22,7 @@ export const CALIBRATION_REQUESTS_LIST_LIMIT = 20
 
 function statusFromUrl(url?: URL): CalibrationRequestStatus | '' {
   return optionFromUrl(
-    CALIBRATION_REQUEST_STATUSES,
+    CALIBRATION_REQUEST_STATUS.states,
     url?.searchParams.get('status'),
   )
 }

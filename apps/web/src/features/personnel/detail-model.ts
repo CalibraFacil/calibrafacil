@@ -21,13 +21,6 @@ export const TRAINING_TYPE_LABELS: Record<TrainingType, string> = {
   proficiency_test: 'Teste de Proficiência',
 }
 
-export const TRAINING_STATUS_LABELS: Record<string, string> = {
-  planned: 'Planejado',
-  in_progress: 'Em Andamento',
-  completed: 'Concluído',
-  failed: 'Reprovado',
-}
-
 const TRAINING_TYPE_SET = new Set<string>(Object.keys(TRAINING_TYPE_LABELS))
 
 export type CompetenceEvaluationPayload = {

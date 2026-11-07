@@ -11,7 +11,6 @@ import {
   ViewIcon,
 } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'
 import {
   DropdownMenu,
@@ -19,7 +18,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@calibra-facil/ui/dropdown-menu'
-import type { MethodListItem, MethodStatus } from '@/features/methods/types'
+import type { MethodListItem } from '@/features/methods/types'
+import { MethodStatusBadge } from '@/features/methods/components/method-status-badge'
 import { cn } from '@/lib/utils'
 
 export type Method = MethodListItem
@@ -27,25 +27,6 @@ export type Method = MethodListItem
 export interface MethodsTableMeta {
   onArchive?: (id: number) => void
   onNewVersion?: (id: number) => void
-}
-
-const statusLabels: Record<MethodStatus, string> = {
-  DRAFT: 'Rascunho',
-  PENDING_APPROVAL: 'Em aprovação',
-  TECHNICAL_REVIEWED: 'Revisão técnica',
-  PUBLISHED: 'Publicado',
-  ARCHIVED: 'Arquivado',
-}
-
-const statusVariants: Record<
-  MethodStatus,
-  'default' | 'secondary' | 'outline'
-> = {
-  DRAFT: 'secondary',
-  PENDING_APPROVAL: 'outline',
-  TECHNICAL_REVIEWED: 'outline',
-  PUBLISHED: 'default',
-  ARCHIVED: 'outline',
 }
 
 export const methodsColumns: ColumnDef<Method>[] = [
@@ -85,11 +66,7 @@ export const methodsColumns: ColumnDef<Method>[] = [
   {
     accessorKey: 'status',
     header: 'Status',
-    cell: ({ row }) => (
-      <Badge variant={statusVariants[row.original.status]}>
-        {statusLabels[row.original.status]}
-      </Badge>
-    ),
+    cell: ({ row }) => <MethodStatusBadge status={row.original.status} />,
   },
   {
     id: 'fields',

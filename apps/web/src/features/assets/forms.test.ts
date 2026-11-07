@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRegulatedIntervalFromForm,
   DEFAULT_REGULATED_FORM_FIELDS,
-  isAssetFormStatus,
   listMissingAssetRequirements,
   parseAssetEditForm,
   parseAssetForm,
@@ -419,11 +418,6 @@ describe('asset feature forms', () => {
         { field: 'spec_capacity', message: 'Capacidade é obrigatório' },
       ],
     })
-  })
-
-  it('narrows status select values before updating route state', () => {
-    expect(isAssetFormStatus('ACTIVE')).toBe(true)
-    expect(isAssetFormStatus('UNKNOWN')).toBe(false)
   })
 
   // NOTE: the lab no longer authors a calibration periodicity / next-calibration

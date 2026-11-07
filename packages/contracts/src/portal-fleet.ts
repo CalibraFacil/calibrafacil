@@ -1,3 +1,4 @@
+import { AssetStatusSchema } from "@calibra-facil/schemas";
 import { z } from "zod";
 
 import { nullableNumber, nullableString, paginationSchema } from "./common";
@@ -10,12 +11,7 @@ import { nullableNumber, nullableString, paginationSchema } from "./common";
  */
 
 const jsonRecordSchema = z.record(z.string(), z.unknown());
-const assetStatusSchema = z.enum([
-  "ACTIVE",
-  "INACTIVE",
-  "MAINTENANCE",
-  "SCRAPPED",
-]);
+const assetStatusSchema = AssetStatusSchema;
 const metrologyRegimeSchema = z.enum(["INDUSTRIAL", "LEGAL", "UNKNOWN"]);
 const portalScopeModeSchema = z.enum(["single", "group"]);
 

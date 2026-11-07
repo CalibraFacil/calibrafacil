@@ -1,3 +1,4 @@
+import { ASSET_OOT_EVENT_STATUSES } from "@calibra-facil/schemas/machines";
 import { z } from "zod";
 
 import { nullableNumber, nullableString } from "./common";
@@ -107,7 +108,7 @@ const ootDecisionSchema = z.enum([
 
 export const portalOotEventSchema = z.object({
   id: z.number(),
-  status: z.enum(["OPEN", "ASSESSED"]),
+  status: z.enum(ASSET_OOT_EVENT_STATUSES),
   detectedAt: z.string(),
   customerId: z.number(),
   assetId: z.number(),

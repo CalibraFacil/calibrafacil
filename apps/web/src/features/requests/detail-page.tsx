@@ -2,10 +2,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
-import { CALIBRATION_REQUEST_MACHINE } from '@calibra-facil/schemas/machines'
+import {
+  CALIBRATION_REQUEST_MACHINE,
+  CALIBRATION_REQUEST_STATUS,
+} from '@calibra-facil/schemas/machines'
 import { calibraApi } from '@/utils/api'
 import { Button } from '@calibra-facil/ui/button'
-import { Badge } from '@calibra-facil/ui/badge'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
@@ -43,7 +46,6 @@ import {
 import type {
   CalibrationRequestDetail,
   CalibrationRequestItem,
-  CalibrationRequestStatus,
   RequestConversionService,
   RequestTechnician,
 } from '@/features/requests/types'
@@ -53,25 +55,6 @@ type ConversionDraft = {
   serviceId: string
   technicianId: string
   dueDate: string
-}
-
-const statusLabels: Record<CalibrationRequestStatus, string> = {
-  PENDING: 'Pendente',
-  UNDER_REVIEW: 'Em análise',
-  APPROVED: 'Aprovada',
-  REJECTED: 'Rejeitada',
-  CONVERTED: 'Convertida',
-}
-
-const statusVariants: Record<
-  CalibrationRequestStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  PENDING: 'secondary',
-  UNDER_REVIEW: 'outline',
-  APPROVED: 'default',
-  REJECTED: 'destructive',
-  CONVERTED: 'outline',
 }
 
 function getCompatibleServices(
@@ -677,12 +660,12 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
                 {formatInstant(request.submittedAt, 'date')}
               </p>
             </div>
-            <Badge
-              variant={statusVariants[request.status]}
+            <StatusBadge
+              tone={CALIBRATION_REQUEST_STATUS.tone(request.status)}
               className="shrink-0"
             >
-              {statusLabels[request.status]}
-            </Badge>
+              {CALIBRATION_REQUEST_STATUS.label(request.status)}
+            </StatusBadge>
           </div>
 
           <StaggerGroup className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(170px,1fr))]">

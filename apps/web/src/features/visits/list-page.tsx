@@ -5,6 +5,8 @@ import { Location01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
 
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
+import { VISIT_STATUS } from '@calibra-facil/schemas/machines'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Empty,
@@ -22,19 +24,11 @@ import {
 } from '@/runtime/sync-status'
 import { formatVisitDay } from '@/features/visits/forms'
 import { useVisitsListData } from '@/features/visits/queries'
-import {
-  formatVisitAddress,
-  VISIT_STATUS_LABELS,
-  VISIT_STATUS_VARIANTS,
-  type VisitStatus,
-} from '@/features/visits/types'
+import { formatVisitAddress, type VisitStatus } from '@/features/visits/types'
 
 const STATUS_FILTERS: Array<{ value: VisitStatus | ''; label: string }> = [
   { value: '', label: 'Todas' },
-  { value: 'PROPOSED', label: 'Propostas' },
-  { value: 'CONFIRMED', label: 'Confirmadas' },
-  { value: 'IN_PROGRESS', label: 'Em andamento' },
-  { value: 'COMPLETED', label: 'Concluídas' },
+  ...VISIT_STATUS.options.filter((option) => option.value !== 'CANCELLED'),
 ]
 
 export function VisitsPage() {
@@ -168,9 +162,9 @@ export function VisitsPage() {
                         <span className="truncate text-sm font-medium">
                           {visit.customerName}
                         </span>
-                        <Badge variant={VISIT_STATUS_VARIANTS[visit.status]}>
-                          {VISIT_STATUS_LABELS[visit.status]}
-                        </Badge>
+                        <StatusBadge tone={VISIT_STATUS.tone(visit.status)}>
+                          {VISIT_STATUS.label(visit.status)}
+                        </StatusBadge>
                         {visit.rescheduleRequested ? (
                           <Badge
                             variant="outline"

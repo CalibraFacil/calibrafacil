@@ -9,13 +9,6 @@ import type { MassUnit } from '@calibra-facil/shared'
 
 import type { SpecFieldDefinition } from '@/components/dynamic-specs-form'
 
-export const ASSET_STATUSES = [
-  'ACTIVE',
-  'INACTIVE',
-  'MAINTENANCE',
-  'SCRAPPED',
-] as const satisfies readonly AssetStatus[]
-
 export type { AssetStatus }
 
 export type AssetListItem = ClientRuntimeAssetsListData['data'][number] & {

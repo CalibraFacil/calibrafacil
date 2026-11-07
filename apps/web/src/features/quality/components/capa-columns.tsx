@@ -1,27 +1,9 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
 import { Badge } from '@calibra-facil/ui/badge'
+import { CapaStatusBadge } from '@/features/quality/components/capa-status-badge'
 import type { CapaRow } from '@/features/quality/types'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
-
-const statusLabels: Record<string, string> = {
-  OPEN: 'Aberta',
-  INVESTIGATION: 'Investigação',
-  IMPLEMENTATION: 'Implementação',
-  VERIFICATION: 'Verificação',
-  CLOSED: 'Fechada',
-}
-
-const statusVariants: Record<string, string> = {
-  OPEN: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  INVESTIGATION:
-    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  IMPLEMENTATION:
-    'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  VERIFICATION:
-    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  CLOSED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-}
 
 const severityLabels: Record<string, string> = {
   minor: 'Menor',
@@ -79,14 +61,7 @@ export const capaColumns: ColumnDef<CapaRow>[] = [
   {
     accessorKey: 'status',
     header: 'Status',
-    cell: ({ row }) => (
-      <Badge
-        variant="outline"
-        className={statusVariants[row.original.status] ?? ''}
-      >
-        {statusLabels[row.original.status] ?? row.original.status}
-      </Badge>
-    ),
+    cell: ({ row }) => <CapaStatusBadge status={row.original.status} />,
   },
   {
     accessorKey: 'severity',

@@ -4,6 +4,7 @@ import {
   portalOotAcknowledgeResponseSchema,
   portalOotNotificationsResponseSchema,
 } from "@calibra-facil/contracts";
+import type { OotNotificationStatus } from "@calibra-facil/schemas/machines";
 
 import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
@@ -15,8 +16,6 @@ import { usePortalQueryKey } from "@/lib/portal-org-context";
  * *receipt only* — the customer still evaluates the impact on their
  * measurements on their side.
  */
-
-type OotNotificationStatus = "PENDING" | "GENERATED" | "SENT" | "ACKNOWLEDGED";
 
 type OotNotificationAckVia = "email_link" | "portal_link" | "manual";
 

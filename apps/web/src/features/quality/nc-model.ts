@@ -40,19 +40,6 @@ export function ncAvailableActions(nc: {
   return actions
 }
 
-export function getStatusBadge(status: string) {
-  switch (status) {
-    case 'open':
-      return { variant: 'destructive' as const, label: 'Aberta' }
-    case 'under_review':
-      return { variant: 'outline' as const, label: 'Em Analise' }
-    case 'resolved':
-      return { variant: 'default' as const, label: 'Resolvida' }
-    default:
-      return { variant: 'secondary' as const, label: status }
-  }
-}
-
 export function getDispositionLabel(disposition: string | null): string {
   if (!disposition) return 'Pendente'
   switch (disposition) {
@@ -81,19 +68,6 @@ export function getTypeLabel(type: string): string {
       return 'Fora de tolerância'
     default:
       return type
-  }
-}
-
-export function getOotStatusBadge(status: OotNotificationData['status']) {
-  switch (status) {
-    case 'ACKNOWLEDGED':
-      return { variant: 'default' as const, label: 'Confirmada' }
-    case 'SENT':
-      return { variant: 'secondary' as const, label: 'Enviada' }
-    case 'GENERATED':
-    case 'PENDING':
-    default:
-      return { variant: 'outline' as const, label: 'Gerada' }
   }
 }
 

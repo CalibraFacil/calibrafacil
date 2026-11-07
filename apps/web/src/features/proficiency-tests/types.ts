@@ -1,9 +1,4 @@
-export const PT_STATUSES = [
-  'pending',
-  'satisfactory',
-  'questionable',
-  'unsatisfactory',
-] as const
+import type { PtOverallStatus } from '@calibra-facil/schemas/machines'
 
 export const PT_ACTIVITY_TYPES = [
   'proficiency_test',
@@ -12,26 +7,10 @@ export const PT_ACTIVITY_TYPES = [
 
 const SCORE_TYPES = ['en', 'z', 'z_prime', 'zeta'] as const
 
-export type PtStatus = (typeof PT_STATUSES)[number]
+type PtStatus = PtOverallStatus
 export type PtActivityType = (typeof PT_ACTIVITY_TYPES)[number]
 export type PtScoreType = (typeof SCORE_TYPES)[number]
 type PtVerdict = Exclude<PtStatus, 'pending'>
-
-export const PT_STATUS_LABELS: Record<PtStatus, string> = {
-  pending: 'Pendente',
-  satisfactory: 'Satisfatório',
-  questionable: 'Questionável',
-  unsatisfactory: 'Insatisfatório',
-}
-
-export const PT_STATUS_BADGE_CLASSES: Record<PtStatus, string> = {
-  pending: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-  satisfactory:
-    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  questionable:
-    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  unsatisfactory: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-}
 
 export const PT_ACTIVITY_TYPE_LABELS: Record<PtActivityType, string> = {
   proficiency_test: 'Ensaio de proficiência',

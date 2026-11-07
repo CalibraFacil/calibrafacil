@@ -2,6 +2,7 @@
 // the value; the machine states which values exist and which moves the
 // derivation may make, so the database guard refuses anything else.
 import { CERTIFICATE_RELEASE_STATUSES } from "@calibra-facil/shared";
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine, type Transition } from "../state-machine";
 
 function moves<S extends string, C extends string>(
@@ -17,13 +18,21 @@ function moves<S extends string, C extends string>(
 //   create          POST / : pending (no results yet)
 //   record_results  POST /:id/results: the worst point verdict; recording again
 //                     replaces the results and re-derives
-const PT_OVERALL_STATUSES = [
+export const PT_OVERALL_STATUSES = [
   "pending",
   "satisfactory",
   "questionable",
   "unsatisfactory",
 ] as const;
 export type PtOverallStatus = (typeof PT_OVERALL_STATUSES)[number];
+
+export const PT_OVERALL_STATUS = defineStatusVocabulary(PT_OVERALL_STATUSES, {
+  pending: { label: "Pendente", tone: "neutral" },
+  satisfactory: { label: "Satisfatório", tone: "ok" },
+  questionable: { label: "Questionável", tone: "warning" },
+  unsatisfactory: { label: "Insatisfatório", tone: "critical" },
+});
+
 const PT_RESULTS = ["satisfactory", "questionable", "unsatisfactory"] as const;
 
 export const PT_OVERALL_MACHINE = defineStateMachine({
@@ -42,13 +51,20 @@ export const PT_OVERALL_MACHINE = defineStateMachine({
 //   recompute  routes/spc.ts (readings added or removed, limits edited,
 //                recalculate) and the nightly sweep (packages/jobs-core
 //                spc-recompute.ts): any status to any status
-const SPC_STATUSES = [
+export const SPC_STATUSES = [
   "insufficient_data",
   "in_control",
   "trending",
   "out_of_control",
 ] as const;
 export type SpcStatus = (typeof SPC_STATUSES)[number];
+
+export const SPC_STATUS = defineStatusVocabulary(SPC_STATUSES, {
+  insufficient_data: { label: "Dados insuficientes", tone: "neutral" },
+  in_control: { label: "Sob controle", tone: "ok" },
+  trending: { label: "Tendência", tone: "warning" },
+  out_of_control: { label: "Fora de controle", tone: "critical" },
+});
 
 export const SPC_MACHINE = defineStateMachine({
   name: "control chart",

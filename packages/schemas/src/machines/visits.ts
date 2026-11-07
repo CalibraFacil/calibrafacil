@@ -14,6 +14,7 @@
 //   settle      the same: every job settled with at least one certificate
 //   complete    routes/visits.ts POST /:id/complete (a confirmed or started trip)
 //   cancel      routes/visits.ts POST /:id/cancel
+import { defineStatusVocabulary } from "@calibra-facil/shared/status-vocabulary";
 import { defineStateMachine } from "../state-machine";
 
 export const VISIT_STATUSES = [
@@ -24,6 +25,14 @@ export const VISIT_STATUSES = [
   "CANCELLED",
 ] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
+
+export const VISIT_STATUS = defineStatusVocabulary(VISIT_STATUSES, {
+  PROPOSED: { label: "Proposta", tone: "warning" },
+  CONFIRMED: { label: "Confirmada", tone: "info" },
+  IN_PROGRESS: { label: "Em andamento", tone: "info" },
+  COMPLETED: { label: "Concluída", tone: "ok" },
+  CANCELLED: { label: "Cancelada", tone: "neutral" },
+});
 
 const VISIT_COMMANDS = [
   "create",
@@ -79,7 +88,7 @@ export function isVisitTerminal(status: string): boolean {
 //   accept     routes/visits.ts POST /:id/reschedule-requests/:requestId/accept
 //   decline    the same, /decline
 //   supersede  routes/visits.ts `supersedePendingRescheduleRequests`
-const VISIT_RESCHEDULE_REQUEST_STATUSES = [
+export const VISIT_RESCHEDULE_REQUEST_STATUSES = [
   "PENDING",
   "ACCEPTED",
   "DECLINED",
@@ -87,6 +96,16 @@ const VISIT_RESCHEDULE_REQUEST_STATUSES = [
 ] as const;
 export type VisitRescheduleRequestStatus =
   (typeof VISIT_RESCHEDULE_REQUEST_STATUSES)[number];
+
+export const VISIT_RESCHEDULE_REQUEST_STATUS = defineStatusVocabulary(
+  VISIT_RESCHEDULE_REQUEST_STATUSES,
+  {
+    PENDING: { label: "Pendente", tone: "warning" },
+    ACCEPTED: { label: "Aceita", tone: "ok" },
+    DECLINED: { label: "Recusada", tone: "neutral" },
+    SUPERSEDED: { label: "Substituída", tone: "neutral" },
+  },
+);
 
 export const VISIT_RESCHEDULE_REQUEST_MACHINE = defineStateMachine({
   name: "visit reschedule request",

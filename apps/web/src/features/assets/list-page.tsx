@@ -48,15 +48,8 @@ import {
   assetsColumns,
 } from '@/features/assets/components/columns'
 import { ASSETS_LIST_LIMIT, useAssetsListData } from '@/features/assets/queries'
-import { ASSET_STATUSES, type AssetStatus } from '@/features/assets/types'
+import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
 import { useCustomersSearchData } from '@/features/customers/queries'
-
-const statusLabels: Record<AssetStatus, string> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  MAINTENANCE: 'Manutenção',
-  SCRAPPED: 'Descartado',
-}
 
 export function AssetsPage() {
   const navigate = useNavigate()
@@ -68,7 +61,7 @@ export function AssetsPage() {
   )
   const [statusFilter, setStatusFilter] = useQueryState(
     'status',
-    parseAsStringLiteral([...ASSET_STATUSES, '']).withDefault(''),
+    parseAsStringLiteral([...ASSET_STATUS.states, '']).withDefault(''),
   )
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
 
@@ -194,12 +187,7 @@ export function AssetsPage() {
             <Select
               value={statusFilter || 'all'}
               onValueChange={(value) => {
-                setStatusFilter(
-                  value === 'all' || value === null
-                    ? ''
-                    : // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to AssetStatus values.
-                      (value as AssetStatus),
-                )
+                setStatusFilter(ASSET_STATUS.parse(value) ?? '')
                 setPage(1)
               }}
             >
@@ -208,15 +196,16 @@ export function AssetsPage() {
                 className="w-full sm:w-40"
               >
                 <span>
-                  {statusFilter ? statusLabels[statusFilter] : 'Status'}
+                  {statusFilter ? ASSET_STATUS.label(statusFilter) : 'Status'}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="ACTIVE">Ativo</SelectItem>
-                <SelectItem value="INACTIVE">Inativo</SelectItem>
-                <SelectItem value="MAINTENANCE">Manutenção</SelectItem>
-                <SelectItem value="SCRAPPED">Descartado</SelectItem>
+                {ASSET_STATUS.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 

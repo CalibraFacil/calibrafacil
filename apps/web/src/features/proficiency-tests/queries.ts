@@ -18,9 +18,9 @@ import {
   getStableDashboardOrganizationIdForRouteData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
+import { PT_OVERALL_STATUS } from '@calibra-facil/schemas/machines'
 import {
   PT_ACTIVITY_TYPES,
-  PT_STATUSES,
   type PtAuditLogData,
   type PtDetail,
   type PtListData,
@@ -38,7 +38,10 @@ function ptListInputFromUrl(organizationId: string, url?: URL) {
     organizationId,
     page: pageFromUrl(url),
     search: url?.searchParams.get('query') ?? '',
-    statusFilter: optionFromUrl(PT_STATUSES, url?.searchParams.get('status')),
+    statusFilter: optionFromUrl(
+      PT_OVERALL_STATUS.states,
+      url?.searchParams.get('status'),
+    ),
     activityTypeFilter: optionFromUrl(
       PT_ACTIVITY_TYPES,
       url?.searchParams.get('activityType'),

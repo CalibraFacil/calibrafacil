@@ -1,3 +1,4 @@
+import { OOT_NOTIFICATION_STATUSES } from "@calibra-facil/schemas/machines";
 import { z } from "zod";
 import {
   JobStatusSchema,
@@ -1015,7 +1016,7 @@ const jobOotNotificationSchema = z.object({
   recipientName: nullableString,
   recipientEmail: nullableString,
   affectedScope: nullableString,
-  status: z.enum(["PENDING", "GENERATED", "SENT", "ACKNOWLEDGED"]),
+  status: z.enum(OOT_NOTIFICATION_STATUSES),
   sentAt: nullableTimestamp,
   acknowledgedAt: nullableTimestamp,
   approvedBy: z.string(),

@@ -55,6 +55,10 @@ import {
   JOB_STATUS,
 } from "@calibra-facil/schemas";
 import {
+  ASSET_STATUS,
+  REFERENCE_STANDARD_STATUS,
+} from "@calibra-facil/schemas/machines";
+import {
   localAttachmentSchema,
   localAttachmentsResponseSchema,
   localBlockedOutboxEventsResponseSchema,
@@ -1214,16 +1218,7 @@ function parseJobStatus(status: string | undefined) {
 }
 
 function parseAssetStatus(status: string | undefined) {
-  if (
-    status === "ACTIVE" ||
-    status === "INACTIVE" ||
-    status === "MAINTENANCE" ||
-    status === "SCRAPPED"
-  ) {
-    return status;
-  }
-
-  return undefined;
+  return ASSET_STATUS.parse(status) ?? undefined;
 }
 
 function parseServiceOrderStatus(status: string | undefined) {
@@ -1251,16 +1246,7 @@ function parseServiceOrderStatus(status: string | undefined) {
 }
 
 function parseStandardStatus(status: string | undefined) {
-  if (
-    status === "ACTIVE" ||
-    status === "INACTIVE" ||
-    status === "OUT_OF_TOLERANCE" ||
-    status === "SENT_FOR_CALIBRATION"
-  ) {
-    return status;
-  }
-
-  return undefined;
+  return REFERENCE_STANDARD_STATUS.parse(status) ?? undefined;
 }
 
 function parseConflictStatus(status: string | undefined) {

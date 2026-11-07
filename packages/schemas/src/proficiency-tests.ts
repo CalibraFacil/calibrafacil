@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PT_OVERALL_STATUSES, SPC_STATUSES } from "./machines/derived";
 
 /**
  * Proficiency testing & SPC schemas — ISO/IEC 17025 §7.7 (issue #60).
@@ -12,21 +13,11 @@ const PtActivityTypeSchema = z.enum([
 
 const PtScoreTypeSchema = z.enum(["en", "z", "z_prime", "zeta"]);
 
-const PtOverallStatusSchema = z.enum([
-  "pending",
-  "satisfactory",
-  "questionable",
-  "unsatisfactory",
-]);
+const PtOverallStatusSchema = z.enum(PT_OVERALL_STATUSES);
 
 const SpcChartTypeSchema = z.enum(["i_mr", "xbar_r", "cusum", "ewma"]);
 
-const SpcStatusSchema = z.enum([
-  "insufficient_data",
-  "in_control",
-  "trending",
-  "out_of_control",
-]);
+const SpcStatusSchema = z.enum(SPC_STATUSES);
 
 function validIsoDate(message: string) {
   return z

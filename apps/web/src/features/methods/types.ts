@@ -1,4 +1,5 @@
 import type { MethodDetailData as ClientRuntimeMethodDetailData } from '@calibra-facil/client-runtime'
+import type { MethodStatus } from '@calibra-facil/schemas/machines'
 
 import type { MethodRecordData } from '@/components/method-builder'
 import type { MethodData } from '@/components/method-runtime/types'
@@ -13,15 +14,7 @@ type ClientRuntimeMethodsListData = {
   }
 }
 
-export const METHOD_STATUSES = [
-  'DRAFT',
-  'PENDING_APPROVAL',
-  'TECHNICAL_REVIEWED',
-  'PUBLISHED',
-  'ARCHIVED',
-] as const
-
-export type MethodStatus = (typeof METHOD_STATUSES)[number]
+export type { MethodStatus }
 
 export type MethodListItem = Omit<
   ClientRuntimeMethodsListData['data'][number],

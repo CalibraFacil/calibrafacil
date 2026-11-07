@@ -1,22 +1,11 @@
-export const SPC_STATUSES = [
-  'insufficient_data',
-  'in_control',
-  'trending',
-  'out_of_control',
-] as const
+import type { SpcStatus } from '@calibra-facil/schemas/machines'
 
 const SPC_CHART_TYPES = ['i_mr', 'xbar_r', 'cusum', 'ewma'] as const
 
-export type SpcStatus = (typeof SPC_STATUSES)[number]
+export type { SpcStatus }
 export type SpcChartType = (typeof SPC_CHART_TYPES)[number]
-export type SpcRuleSeverity = 'trending' | 'out_of_control'
-
-export const SPC_STATUS_LABELS: Record<SpcStatus, string> = {
-  insufficient_data: 'Dados insuficientes',
-  in_control: 'Sob controle',
-  trending: 'Tendência',
-  out_of_control: 'Fora de controle',
-}
+/** A rule hit signals a chart status: the two that call for attention. */
+type SpcRuleSeverity = Extract<SpcStatus, 'trending' | 'out_of_control'>
 
 export const SPC_CHART_TYPE_LABELS: Record<SpcChartType, string> = {
   i_mr: 'I-MR (individuais)',

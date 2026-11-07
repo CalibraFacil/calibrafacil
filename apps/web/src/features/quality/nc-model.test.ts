@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getDispositionLabel,
-  getOotStatusBadge,
-  getStatusBadge,
   getTypeLabel,
   ncAvailableActions,
 } from './nc-model'
@@ -59,15 +57,6 @@ describe('ncAvailableActions', () => {
 })
 
 describe('presentation maps', () => {
-  it('maps NC statuses to badges', () => {
-    expect(getStatusBadge('open')).toEqual({
-      variant: 'destructive',
-      label: 'Aberta',
-    })
-    expect(getStatusBadge('resolved').label).toBe('Resolvida')
-    expect(getStatusBadge('anything-else').label).toBe('anything-else')
-  })
-
   it('maps dispositions with a pending fallback', () => {
     expect(getDispositionLabel(null)).toBe('Pendente')
     expect(getDispositionLabel('use_as_is')).toBe('Uso como esta')
@@ -75,7 +64,5 @@ describe('presentation maps', () => {
 
   it('maps NC types and OOT notification statuses', () => {
     expect(getTypeLabel('out_of_tolerance')).toBe('Fora de tolerância')
-    expect(getOotStatusBadge('ACKNOWLEDGED').label).toBe('Confirmada')
-    expect(getOotStatusBadge('PENDING').label).toBe('Gerada')
   })
 })

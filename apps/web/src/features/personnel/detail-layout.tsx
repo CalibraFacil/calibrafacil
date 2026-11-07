@@ -8,7 +8,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useCompetenceDetailData } from '@/features/personnel/queries'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
-import { Badge } from '@calibra-facil/ui/badge'
 import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
 import { useIsMobile } from '@calibra-facil/ui/use-mobile'
 import {
@@ -16,7 +15,7 @@ import {
   NativeSelectOption,
 } from '@calibra-facil/ui/native-select'
 import { Tabs, TabsList, TabsTrigger } from '@calibra-facil/ui/tabs'
-import { getStatusBadge } from '@/features/personnel/components/columns'
+import { CompetenceStatusBadge } from '@/features/personnel/components/status-badges'
 
 const tabs = [
   {
@@ -80,18 +79,9 @@ export function CompetenceDetailLayout({ id }: CompetenceDetailLayoutProps) {
                 <h1 className="text-balance text-2xl font-semibold tracking-tight">
                   {competence.userName ?? 'Técnico'}
                 </h1>
-                {competence.status &&
-                  (() => {
-                    const badge = getStatusBadge(competence.status)
-                    return (
-                      <Badge
-                        variant={badge.variant}
-                        className={badge.className}
-                      >
-                        {badge.label}
-                      </Badge>
-                    )
-                  })()}
+                {competence.status && (
+                  <CompetenceStatusBadge status={competence.status} />
+                )}
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {competence.assetTypeName ?? 'Escopo geral'}

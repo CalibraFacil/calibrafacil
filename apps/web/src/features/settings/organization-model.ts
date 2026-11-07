@@ -512,31 +512,6 @@ export function formatInvitationTimeRemaining(
   return `${minutes} minuto${minutes > 1 ? 's' : ''}`
 }
 
-export function getInvitationStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    pending: 'Pendente',
-    accepted: 'Aceito',
-    rejected: 'Rejeitado',
-    canceled: 'Cancelado',
-  }
-  return labels[status] || status
-}
-
-export function getInvitationStatusVariant(
-  status: string,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  const variants: Record<
-    string,
-    'default' | 'secondary' | 'destructive' | 'outline'
-  > = {
-    pending: 'default',
-    accepted: 'secondary',
-    rejected: 'destructive',
-    canceled: 'outline',
-  }
-  return variants[status] || 'secondary'
-}
-
 export function getInviterName(
   members: OrganizationMember[],
   inviterId: string,

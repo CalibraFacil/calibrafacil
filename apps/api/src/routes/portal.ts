@@ -88,6 +88,7 @@ import {
 } from "drizzle-orm";
 import {
   ASSET_OOT_EVENT_MACHINE,
+  ASSET_OOT_EVENT_STATUSES,
   OOT_NOTIFICATION_MACHINE,
 } from "@calibra-facil/schemas/machines";
 import {
@@ -3148,7 +3149,7 @@ export const portalRouter = new Hono<{
     zValidator(
       "query",
       z.object({
-        status: z.enum(["OPEN", "ASSESSED"]).optional(),
+        status: z.enum(ASSET_OOT_EVENT_STATUSES).optional(),
         unitId: z.coerce.number().int().positive().optional(),
       }),
     ),

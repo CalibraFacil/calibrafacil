@@ -1,27 +1,12 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@calibra-facil/ui/badge'
+import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
+import { StatusBadge } from '@calibra-facil/ui/status-badge'
 import { SyncStateBadge } from '@/components/sync-state-badge'
-import type { AssetListItem, AssetStatus } from '@/features/assets/types'
+import type { AssetListItem } from '@/features/assets/types'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 export type Asset = AssetListItem
-
-const statusLabels: Record<AssetStatus, string> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  MAINTENANCE: 'Manutenção',
-  SCRAPPED: 'Descartado',
-}
-
-const statusVariants: Record<
-  AssetStatus,
-  'default' | 'secondary' | 'outline' | 'destructive'
-> = {
-  ACTIVE: 'default',
-  INACTIVE: 'secondary',
-  MAINTENANCE: 'outline',
-  SCRAPPED: 'destructive',
-}
 
 // The next calibration is a calendar date (a Postgres date): show its day.
 export interface AssetsTableMeta {
@@ -37,17 +22,6 @@ function getAssetsTableMeta(meta: unknown): AssetsTableMeta | null {
   if (typeof onCustomerClick !== 'function') return null
 
   return { onCustomerClick }
-}
-
-function getAssetStatus(status: string): AssetStatus {
-  switch (status) {
-    case 'INACTIVE':
-    case 'MAINTENANCE':
-    case 'SCRAPPED':
-      return status
-    default:
-      return 'ACTIVE'
-  }
 }
 
 export const assetsColumns: ColumnDef<Asset>[] = [
@@ -110,9 +84,11 @@ export const assetsColumns: ColumnDef<Asset>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = getAssetStatus(row.original.status)
+      const status = ASSET_STATUS.parse(row.original.status) ?? 'ACTIVE'
       return (
-        <Badge variant={statusVariants[status]}>{statusLabels[status]}</Badge>
+        <StatusBadge tone={ASSET_STATUS.tone(status)}>
+          {ASSET_STATUS.label(status)}
+        </StatusBadge>
       )
     },
   },
