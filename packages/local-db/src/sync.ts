@@ -16,6 +16,7 @@ import {
   syncMirrorLocalId,
 } from "@calibra-facil/contracts/sync-entities";
 import type { LocalDatabase } from "./database";
+import { getLocalSessionSnapshot } from "./tenant-snapshot";
 import { setSyncCursor } from "./outbox";
 import { resolveServiceOrdersForAggregates } from "./service-orders";
 import { recordSkippedRow } from "./skipped-rows";
@@ -1311,29 +1312,6 @@ function chunked<T>(items: T[], size: number): T[][] {
 
 const mirrorLocalId = syncMirrorLocalId;
 
-export function getLocalSessionSnapshot(database: LocalDatabase) {
-  const row = database
-    .prepare<[], { snapshot_json: string }>(
-      `
-SELECT snapshot_json
-FROM tenant_snapshot
-ORDER BY pulled_at DESC
-LIMIT 1
-`,
-    )
-    .get();
-
-  if (!row) return null;
-
-  const parsed = parseJson(row.snapshot_json);
-  if (!parsed || typeof parsed !== "object") {
-    return null;
-  }
-
-  const snapshot = syncBootstrapResponseSchema.safeParse(parsed);
-  return snapshot.success ? snapshot.data : null;
-}
-
 function eventsFor(
   events: CloudSyncEvent[],
   entityType: CloudSyncEvent["entityType"],
@@ -1386,15 +1364,6 @@ function getNestedString(value: unknown, key: string) {
   if (!value || typeof value !== "object") return null;
   const nested = Object.fromEntries(Object.entries(value))[key];
   return typeof nested === "string" ? nested : null;
-}
-
-function parseJson(value: string) {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return parsed;
-  } catch {
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------

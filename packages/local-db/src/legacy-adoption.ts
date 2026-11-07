@@ -6,9 +6,9 @@ import {
   claimLocalDatabase,
   isSameLocalDatabasePartition,
   readLocalDatabaseOwner,
-  readLocalTenantIdentity,
   type LocalDatabasePartition,
 } from "./partitions";
+import { readLocalTenantIdentity } from "./tenant-snapshot";
 
 export type LegacyAdoptionResult =
   | { adopted: true }

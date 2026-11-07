@@ -8,6 +8,7 @@ import {
   syncAttachmentCompleteUploadResponseSchema,
   syncAttachmentInitUploadResponseSchema,
   syncAttachmentPayloadSchema,
+  syncOperationUploadsFile,
 } from "@calibra-facil/contracts";
 import {
   getLocalAttachment,
@@ -90,7 +91,7 @@ export async function uploadAttachmentsBeforePush(
   let uploads = 0;
 
   for (const event of events) {
-    if (event.operation !== "create_local_attachment") {
+    if (!syncOperationUploadsFile(event.operation)) {
       ready.push(event);
       continue;
     }

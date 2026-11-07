@@ -7,6 +7,8 @@ import {
   SYNC_CREATE_OPERATIONS,
   SYNC_DESKTOP_VERSION_FLOOR,
   SYNC_OPERATIONS,
+  isSyncOperationCarriedBy,
+  syncOperationUploadsFile,
   SYNC_PROTOCOL_VERSION,
   buildSyncUpdateRequiredResponse,
   compareDesktopVersions,
@@ -138,6 +140,25 @@ describe("SyncCommand union (REQ-SP-1)", () => {
     expect(isCreateSyncOperation("create_local_asset")).toBe(true);
     expect(isCreateSyncOperation("submit_local_execution")).toBe(false);
     expect(isCreateSyncOperation("create_local_from_the_future")).toBe(false);
+  });
+
+  it("REQ-SP-1: the table says which protocol carries an operation and which ones upload a file first", () => {
+    expect(isSyncOperationCarriedBy("create_local_attachment", 3)).toBe(false);
+    expect(isSyncOperationCarriedBy("create_local_attachment", 4)).toBe(true);
+    expect(isSyncOperationCarriedBy("create_local_asset", 3)).toBe(true);
+    // An operation outside the table (a retired one) always travels: the cloud refuses it
+    // with a precise code.
+    expect(isSyncOperationCarriedBy("create_local_customer", 3)).toBe(true);
+    expect(
+      sorted(
+        Object.entries(SYNC_OPERATIONS)
+          .filter(([, definition]) => definition.uploadsFile)
+          .map(([operation]) => operation),
+      ),
+    ).toEqual(["create_local_attachment"]);
+    expect(syncOperationUploadsFile("create_local_attachment")).toBe(true);
+    expect(syncOperationUploadsFile("create_local_asset")).toBe(false);
+    expect(syncOperationUploadsFile("approve_from_the_future")).toBe(false);
   });
 
   it("REQ-SP-1: every operation has a pt-BR label and a permission of one or more resources", () => {

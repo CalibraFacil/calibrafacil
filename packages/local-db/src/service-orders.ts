@@ -7,6 +7,7 @@ import {
   type ServiceOrderStatus,
 } from "@calibra-facil/shared/service-orders";
 import { toRecord } from "@calibra-facil/shared/record";
+import { LocalDomainError } from "./errors";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -125,7 +126,7 @@ export function createLocalServiceOrderIntake(
     customerId: input.customerId,
   });
   if (!asset) {
-    throw new Error("Ativo ou cliente invalido para esta OS");
+    throw new LocalDomainError("Ativo ou cliente invalido para esta OS");
   }
 
   const now = new Date().toISOString();
@@ -137,7 +138,9 @@ export function createLocalServiceOrderIntake(
   const priority = input.priority ?? "normal";
   const deliveryMethod = input.deliveryMethod ?? "pickup_at_lab";
   if (intakeType === "warranty_return" && !input.sourceServiceOrderId) {
-    throw new Error("OS de garantia deve referenciar a OS de origem");
+    throw new LocalDomainError(
+      "OS de garantia deve referenciar a OS de origem",
+    );
   }
 
   const status: LocalServiceOrderStatus =

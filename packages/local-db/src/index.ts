@@ -83,10 +83,11 @@ export {
   applySyncPullResponse,
   discardBootstrapProgress,
   getBootstrapPageToken,
-  getLocalSessionSnapshot,
   hasIncompleteBootstrap,
 } from "./sync";
 export { getLocalDatabaseDiagnostics } from "./diagnostics";
+export * from "./errors";
 export * from "./partitions";
+export * from "./tenant-snapshot";
 export * from "./legacy-adoption";
 export * from "./state-machines";

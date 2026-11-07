@@ -236,6 +236,17 @@ export type SyncOperationDefinition = {
   readonly permission: SyncOperationPermission;
   /** The online route (or guard) the permission was taken from. */
   readonly onlineRoute: string;
+  /**
+   * The first push protocol that carries it. A desktop pushing to an older cloud keeps
+   * the event out of the request (still pending), so the cloud is never handed an
+   * operation it would acknowledge without being able to honour.
+   */
+  readonly minProtocolVersion: number;
+  /**
+   * The event's file goes to the cloud before the event (init-upload, PUT,
+   * complete-upload: sync-attachments.ts); the event follows only once it is there.
+   */
+  readonly uploadsFile: boolean;
 };
 
 /**
@@ -252,6 +263,8 @@ export const SYNC_OPERATIONS = {
     ordering: "create",
     permission: { equipment: ["create"] },
     onlineRoute: "POST /api/assets",
+    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    uploadsFile: false,
   },
   save_local_execution: {
     label: "Rascunho da execução",
@@ -259,6 +272,8 @@ export const SYNC_OPERATIONS = {
     ordering: "follow",
     permission: { calibration: ["execute"] },
     onlineRoute: "POST /api/jobs/:id/execute",
+    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    uploadsFile: false,
   },
   submit_local_execution: {
     label: "Envio da execução para aprovação",
@@ -266,6 +281,8 @@ export const SYNC_OPERATIONS = {
     ordering: "follow",
     permission: { calibration: ["submit"] },
     onlineRoute: "POST /api/jobs/:id/submit",
+    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    uploadsFile: false,
   },
   create_local_service_order_intake: {
     label: "Recebimento de ordem de serviço",
@@ -273,6 +290,8 @@ export const SYNC_OPERATIONS = {
     ordering: "create",
     permission: { service_order: ["create"] },
     onlineRoute: "POST /api/service-orders",
+    minProtocolVersion: LEGACY_SYNC_PROTOCOL_VERSION,
+    uploadsFile: false,
   },
   create_local_attachment: {
     label: "Anexo",
@@ -283,8 +302,31 @@ export const SYNC_OPERATIONS = {
     // the lab's records.
     permission: { calibration: ["create"] },
     onlineRoute: "POST /api/sync/attachments/init-upload",
+    minProtocolVersion: SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION,
+    uploadsFile: true,
   },
 } as const satisfies Record<SyncCommandOperation, SyncOperationDefinition>;
+
+const SYNC_OPERATION_DEFINITIONS: ReadonlyMap<string, SyncOperationDefinition> =
+  new Map(Object.entries(SYNC_OPERATIONS));
+
+/**
+ * Whether an event of `operation` may travel in a push of `protocolVersion`. An operation
+ * outside the table (a retired one left in an upgraded outbox) always may: the cloud
+ * refuses it with a precise code, which is what the person reading the refused list needs.
+ */
+export function isSyncOperationCarriedBy(
+  operation: string,
+  protocolVersion: number,
+): boolean {
+  const definition = SYNC_OPERATION_DEFINITIONS.get(operation);
+  return !definition || protocolVersion >= definition.minProtocolVersion;
+}
+
+/** Whether the file of an `operation` event goes to the cloud before the event does. */
+export function syncOperationUploadsFile(operation: string): boolean {
+  return SYNC_OPERATION_DEFINITIONS.get(operation)?.uploadsFile ?? false;
+}
 
 /**
  * The operations older builds wrote and the cloud no longer applies (Q69), with the label

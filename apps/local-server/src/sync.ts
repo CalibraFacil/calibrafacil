@@ -1,7 +1,5 @@
 import {
-  SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION,
   SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
-  SYNC_PROTOCOL_VERSION,
   SYNC_PULL_PROTOCOL_PARAM,
   desktopUpdateRequiredMessage,
   syncBootstrapPageResponseSchema,
@@ -30,6 +28,7 @@ import {
   getSyncCursor,
   getSyncCursorUpdatedAt,
   hasIncompleteBootstrap,
+  hasTenantSnapshot,
   listPendingOutboxEvents,
   releaseSettledSkippedRows,
   markOutboxEventsFailedForRetry,
@@ -38,6 +37,7 @@ import {
 } from "@calibra-facil/local-db";
 import { randomUUID } from "node:crypto";
 import { uploadAttachmentsBeforePush } from "./attachment-upload";
+import { PushProtocolMemo, eventsCarriedBy } from "./push-protocol";
 import type { LocalServerConfig } from "./bootstrap";
 import { getLocalRequestContext } from "./request-context";
 
@@ -123,6 +123,8 @@ export function createLocalSyncRuntime(
     lastError: null,
   };
   let syncQueue: Promise<unknown> = Promise.resolve();
+  // What older clouds said about the push protocol: this runtime's own memory.
+  const pushProtocols = new PushProtocolMemo();
 
   return {
     getStatus() {
@@ -179,7 +181,7 @@ export function createLocalSyncRuntime(
     );
 
     try {
-      await pushPendingOutbox(config, database, fetchImpl, {
+      await pushPendingOutbox(config, database, fetchImpl, pushProtocols, {
         includeDeferred: true,
       });
 
@@ -228,7 +230,7 @@ export function createLocalSyncRuntime(
     if (
       config.syncEnabled &&
       config.cloudApiUrl &&
-      (!hasBootstrapSnapshot() || hasIncompleteBootstrap(database))
+      (!hasTenantSnapshot(database) || hasIncompleteBootstrap(database))
     ) {
       // A bootstrap that was interrupted between two pages is resumed, not pulled over.
       return runInitialSyncOnce();
@@ -267,7 +269,7 @@ export function createLocalSyncRuntime(
     );
 
     try {
-      await pushPendingOutbox(config, database, fetchImpl, {
+      await pushPendingOutbox(config, database, fetchImpl, pushProtocols, {
         includeDeferred: pushOptions.includeDeferred === true,
       });
       await pullCloudChangesOrBootstrap(config, database, fetchImpl);
@@ -301,52 +303,10 @@ export function createLocalSyncRuntime(
       throw error;
     }
   }
-
-  function hasBootstrapSnapshot() {
-    const row = database
-      .prepare<
-        [],
-        { total: number }
-      >("SELECT COUNT(*) AS total FROM tenant_snapshot")
-      .get();
-
-    return (row?.total ?? 0) > 0;
-  }
 }
 
 const MAX_PULL_PAGES = 200;
 
-/** The push protocol an older cloud told this process it speaks, per cloud URL. */
-const cloudPushProtocol = new Map<string, { version: number; at: number }>();
-
-/**
- * How long a downgrade is remembered. The memo exists so that a cloud that
- * predates the push protocol is not asked twice per push; it must not outlive an
- * upgrade of the cloud, or every attachment would stay out of the push (and never
- * reach the new cloud) for the life of the process. After this the desktop asks
- * with its own protocol again.
- */
-const PUSH_PROTOCOL_MEMO_TTL_MS = 10 * 60_000;
-
-function rememberedPushProtocol(cloudApiUrl: string): number | null {
-  const remembered = cloudPushProtocol.get(cloudApiUrl);
-  if (!remembered) return null;
-  if (Date.now() - remembered.at > PUSH_PROTOCOL_MEMO_TTL_MS) {
-    cloudPushProtocol.delete(cloudApiUrl);
-    return null;
-  }
-  return remembered.version;
-}
-
-/**
- * Only a cloud of protocol 4 or later verifies an attachment's file before
- * recording its event. Against an older one the event would be acknowledged with
- * no file behind it (what lost field evidence before), so attachment events are
- * kept out of the push, still pending, until the cloud speaks protocol 4.
- */
-function pushCarriesAttachments(protocolVersion: number) {
-  return protocolVersion >= SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION;
-}
 /** A bootstrap page is at most 1000 rows (SYNC_BOOTSTRAP_MAX_PAGE_SIZE): 100k pages is a loop, not a laboratory. */
 const MAX_BOOTSTRAP_PAGES = 100_000;
 
@@ -578,16 +538,34 @@ async function pullCloudChanges(
   throw new Error(`Cloud pull did not converge after ${MAX_PULL_PAGES} pages`);
 }
 
+/** What every step of a push needs: who is pushing, to which cloud, and what that cloud speaks. */
+type PushDeps = {
+  config: LocalServerConfig;
+  database: LocalDatabase;
+  fetchImpl: typeof fetch;
+  cloudApiUrl: string;
+  protocols: PushProtocolMemo;
+};
+
+type PendingEvents = ReturnType<typeof listPendingOutboxEvents>;
+
 async function pushPendingOutbox(
   config: LocalServerConfig,
   database: LocalDatabase,
   fetchImpl: typeof fetch,
+  protocols: PushProtocolMemo,
   options: { includeDeferred?: boolean } = {},
 ) {
   if (!config.cloudApiUrl) {
     throw new Error("Cloud API URL is not configured for local sync");
   }
-  const cloudApiUrl = config.cloudApiUrl;
+  const deps: PushDeps = {
+    config,
+    database,
+    fetchImpl,
+    cloudApiUrl: config.cloudApiUrl,
+    protocols,
+  };
 
   // Only what the signed-in user authored (or nobody did): the cloud records
   // the pushing session as the actor, so a colleague's offline work must not be
@@ -608,25 +586,18 @@ async function pushPendingOutbox(
   // certificate bytes (certificates are rendered and signed in the cloud after an
   // online approval, so a queued `generate_local_certificate_pdf` from an older
   // build is pushed like any other and the cloud refuses it with a precise code).
-  const attachmentsAllowed = pushCarriesAttachments(
-    rememberedPushProtocol(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION,
-  );
   const ready = await uploadAttachmentsBeforePush(
     {
       config,
       database,
       fetchImpl,
-      cloudApiUrl,
+      cloudApiUrl: deps.cloudApiUrl,
       applyCloudAuthHeaders: (headers) =>
         applyCloudAuthHeaders(config, headers),
     },
-    attachmentsAllowed
-      ? pending
-      : pending.filter(
-          (event) => event.operation !== "create_local_attachment",
-        ),
+    eventsCarriedBy(pending, protocols.protocolFor(deps.cloudApiUrl)),
   );
-  await pushOutboxEvents(config, database, fetchImpl, ready, cloudApiUrl);
+  await pushOutboxEvents(deps, ready);
 }
 
 /**
@@ -694,33 +665,17 @@ function withinByteCap(
   return taken;
 }
 
-async function pushOutboxEvents(
-  config: LocalServerConfig,
-  database: LocalDatabase,
-  fetchImpl: typeof fetch,
-  pending: ReturnType<typeof listPendingOutboxEvents>,
-  cloudApiUrl: string,
-) {
+async function pushOutboxEvents(deps: PushDeps, pending: PendingEvents) {
   if (pending.length === 0) return;
 
-  const batch = withinByteCap(config, database, pending);
-  await pushEventBatch(config, database, fetchImpl, batch, cloudApiUrl);
+  const batch = withinByteCap(deps.config, deps.database, pending);
+  await pushEventBatch(deps, batch);
 }
 
 /** Pushes one batch; a request the cloud refuses outright is bisected (see POISON_PUSH_STATUSES). */
-async function pushEventBatch(
-  config: LocalServerConfig,
-  database: LocalDatabase,
-  fetchImpl: typeof fetch,
-  events: ReturnType<typeof listPendingOutboxEvents>,
-  cloudApiUrl: string,
-) {
-  const sent = events.filter(
-    (event) =>
-      pushCarriesAttachments(
-        rememberedPushProtocol(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION,
-      ) || event.operation !== "create_local_attachment",
-  );
+async function pushEventBatch(deps: PushDeps, events: PendingEvents) {
+  const { config, database, fetchImpl, cloudApiUrl, protocols } = deps;
+  const sent = eventsCarriedBy(events, protocols.protocolFor(cloudApiUrl));
   if (sent.length === 0) return;
 
   const context = getLocalRequestContext(config, database);
@@ -743,21 +698,16 @@ async function pushEventBatch(
       // The device clock at send time: the cloud records how far it is from its
       // own with the changes of this push (roadmap 2 E2).
       sentAt: new Date().toISOString(),
-      events: sent
-        .filter(
-          (event) =>
-            pushCarriesAttachments(protocolVersion) ||
-            event.operation !== "create_local_attachment",
-        )
-        .map((event) => toWireEvent(config, context, event)),
+      events: eventsCarriedBy(sent, protocolVersion).map((event) =>
+        toWireEvent(config, context, event),
+      ),
     }) satisfies SyncPushRequest;
 
   // The push wire format did not change with protocol 3 (only the pull and the
   // bootstrap did), so a cloud that predates it can read this push; it only refuses
   // the number. Such a cloud names the newest protocol it speaks
   // (SYNC_PROTOCOL_UNSUPPORTED): ask again with that one, once, and remember it.
-  let pushProtocol =
-    rememberedPushProtocol(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION;
+  let pushProtocol = protocols.protocolFor(cloudApiUrl);
   let response: Response;
   try {
     response = await fetchImpl(pushUrl, {
@@ -777,10 +727,7 @@ async function pushEventBatch(
         unsupported.data.supportedProtocolVersion < pushProtocol
       ) {
         pushProtocol = unsupported.data.supportedProtocolVersion;
-        cloudPushProtocol.set(cloudApiUrl, {
-          version: pushProtocol,
-          at: Date.now(),
-        });
+        protocols.remember(cloudApiUrl, pushProtocol);
         response = await fetchImpl(pushUrl, {
           method: "POST",
           headers,
@@ -814,14 +761,7 @@ async function pushEventBatch(
   throwIfAuthRequired(response);
   if (!response.ok) {
     if (POISON_PUSH_STATUSES.includes(response.status)) {
-      await isolatePoisonEvents(
-        config,
-        database,
-        fetchImpl,
-        sent,
-        cloudApiUrl,
-        response.status,
-      );
+      await isolatePoisonEvents(deps, sent, response.status);
       return;
     }
 
@@ -866,13 +806,11 @@ function warnOnClockSkew(clockSkewMs: number | undefined): void {
  * second half is chosen, so the second half never carries a dependent of a dead event.
  */
 async function isolatePoisonEvents(
-  config: LocalServerConfig,
-  database: LocalDatabase,
-  fetchImpl: typeof fetch,
-  events: ReturnType<typeof listPendingOutboxEvents>,
-  cloudApiUrl: string,
+  deps: PushDeps,
+  events: PendingEvents,
   status: number,
 ) {
+  const { config, database } = deps;
   const [only] = events;
   if (events.length === 1 && only) {
     applySyncPushResult(database, {
@@ -890,13 +828,7 @@ async function isolatePoisonEvents(
   }
 
   const middle = Math.ceil(events.length / 2);
-  await pushEventBatch(
-    config,
-    database,
-    fetchImpl,
-    events.slice(0, middle),
-    cloudApiUrl,
-  );
+  await pushEventBatch(deps, events.slice(0, middle));
 
   // Re-read the rest: the first half may have moved versions, and an event held behind a
   // poison one is not sent.
@@ -907,7 +839,7 @@ async function isolatePoisonEvents(
   }).filter((event) => restIds.has(event.eventId));
   if (rest.length === 0) return;
 
-  await pushEventBatch(config, database, fetchImpl, rest, cloudApiUrl);
+  await pushEventBatch(deps, rest);
 }
 
 function applyCloudAuthHeaders(config: LocalServerConfig, headers: Headers) {
