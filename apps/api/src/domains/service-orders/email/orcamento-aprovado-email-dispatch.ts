@@ -21,6 +21,7 @@ import {
 } from "@calibra-facil/notifications";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
 import { QuoteApprovedEmail } from "@calibra-facil/email";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * All fields needed to dispatch the "Orçamento Aprovado" customer email.
@@ -104,10 +105,13 @@ export async function dispatchOrcamentoAprovadoEmail(
     });
   } catch (error) {
     // Best-effort: swallow all errors so the approve command is never affected.
-    console.error(
-      `[QuoteApprovedEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
-      error,
-    );
+    reportServerError(error, {
+      surface: "service-order-email",
+      tags: {
+        email: "quote-approved",
+        serviceOrderId: String(input.serviceOrderId),
+      },
+    });
     return { sent: false, error: String(error) };
   }
 }

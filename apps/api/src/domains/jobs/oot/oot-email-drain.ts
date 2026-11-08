@@ -41,6 +41,7 @@ import {
   resolveBucketName,
 } from "../../../lib/storage";
 import { executeRowCount } from "../../../lib/db";
+import { reportServerError } from "../../../lib/observability";
 
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -354,10 +355,10 @@ export async function drainOotEmailOutbox(options?: {
         result.errors++;
         const message =
           rowError instanceof Error ? rowError.message : String(rowError);
-        console.error(
-          `[OotEmailDrain] Row failed (outbox id=${row.id}):`,
-          rowError,
-        );
+        reportServerError(rowError, {
+          surface: "oot-email-drain",
+          tags: { step: "row", outboxId: String(row.id) },
+        });
         try {
           await releaseOutboxRow(
             row.organizationId,
@@ -367,16 +368,19 @@ export async function drainOotEmailOutbox(options?: {
           );
           result.released++;
         } catch (releaseError) {
-          console.error(
-            `[OotEmailDrain] Release failed for outbox id=${row.id}:`,
-            releaseError,
-          );
+          reportServerError(releaseError, {
+            surface: "oot-email-drain",
+            tags: { step: "release", outboxId: String(row.id) },
+          });
         }
       }
     }
   } catch (error) {
     result.errors++;
-    console.error("[OotEmailDrain] Drain failed:", error);
+    reportServerError(error, {
+      surface: "oot-email-drain",
+      tags: { step: "drain" },
+    });
   }
 
   return result;

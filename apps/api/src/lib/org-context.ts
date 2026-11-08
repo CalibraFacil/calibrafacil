@@ -31,6 +31,7 @@ import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 import { stageBackgroundJob } from "./background-job-outbox";
 import { enqueueBackgroundJob } from "./background-jobs";
 import type { OrgRawTransaction } from "./org-transaction";
+import { reportServerError } from "./observability";
 
 /** Who is changing the laboratory's records, for the audit trail. */
 export type OrgActor = {
@@ -279,8 +280,9 @@ async function runLogged(task: AfterCommitTask): Promise<void> {
   try {
     await task();
   } catch (error) {
-    console.error("[withOrg] after-commit task failed", {
-      error: error instanceof Error ? error.message : String(error),
+    reportServerError(error, {
+      surface: "with-org",
+      tags: { step: "after-commit" },
     });
   }
 }

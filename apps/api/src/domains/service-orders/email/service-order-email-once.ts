@@ -21,6 +21,7 @@ import { serviceOrderEmailLog } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
 import { orgDb } from "../../../lib/org-db";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * Input to sendServiceOrderEmailOnce.
@@ -110,10 +111,14 @@ export async function sendServiceOrderEmailOnce(
     claimedId = rows[0]?.id;
   } catch (error) {
     // DB error on insert — log and abort (don't dispatch without a claim).
-    console.error(
-      `[sendServiceOrderEmailOnce] DB insert failed for SO ${serviceOrderId} / key "${eventKey}":`,
-      error,
-    );
+    reportServerError(error, {
+      surface: "service-order-email",
+      tags: {
+        step: "claim-key",
+        serviceOrderId: String(serviceOrderId),
+        eventKey,
+      },
+    });
     return "failed";
   }
 
@@ -122,10 +127,14 @@ export async function sendServiceOrderEmailOnce(
   try {
     result = await dispatch();
   } catch (error) {
-    console.error(
-      `[sendServiceOrderEmailOnce] dispatch() threw for SO ${serviceOrderId} / key "${eventKey}":`,
-      error,
-    );
+    reportServerError(error, {
+      surface: "service-order-email",
+      tags: {
+        step: "dispatch",
+        serviceOrderId: String(serviceOrderId),
+        eventKey,
+      },
+    });
     // fall through to step 4 — treat thrown error as not-sent
   }
 
@@ -140,10 +149,15 @@ export async function sendServiceOrderEmailOnce(
       });
     } catch (deleteError) {
       // Best-effort — log the failure but don't propagate.
-      console.error(
-        `[sendServiceOrderEmailOnce] DELETE (key release) failed for SO ${serviceOrderId} / key "${eventKey}" / log id ${claimedId}:`,
-        deleteError,
-      );
+      reportServerError(deleteError, {
+        surface: "service-order-email",
+        tags: {
+          step: "release-key",
+          serviceOrderId: String(serviceOrderId),
+          eventKey,
+          logId: String(claimedId),
+        },
+      });
     }
     return "failed";
   }
@@ -161,10 +175,15 @@ export async function sendServiceOrderEmailOnce(
           .where(eq(serviceOrderEmailLog.id, claimedId));
       });
     } catch (updateError) {
-      console.error(
-        `[sendServiceOrderEmailOnce] recipient stamp failed for SO ${serviceOrderId} / key "${eventKey}" / log id ${claimedId}:`,
-        updateError,
-      );
+      reportServerError(updateError, {
+        surface: "service-order-email",
+        tags: {
+          step: "stamp-recipient",
+          serviceOrderId: String(serviceOrderId),
+          eventKey,
+          logId: String(claimedId),
+        },
+      });
     }
   }
   return "sent";

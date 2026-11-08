@@ -84,7 +84,8 @@
     "calibra/no-error-response-in-transaction": "error",
     "calibra/no-features-import-from-low-layers": "error",
     "calibra/no-literal-query-keys": "error",
-    "calibra/no-api-domain-boundary-violations": "error"
+    "calibra/no-api-domain-boundary-violations": "error",
+    "calibra/no-console-error-in-api": "error"
   },
   "overrides": [
     {

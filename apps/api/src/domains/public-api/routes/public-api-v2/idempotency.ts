@@ -16,6 +16,7 @@ import { type ApiKeyAuthVariables } from "../../../../middleware/api-key-auth";
 import { apiKeyActor } from "./actor";
 import { toIdempotencyResponseStatus } from "./helpers";
 import { v2Refusal } from "./refusals";
+import { reportServerError } from "../../../../lib/observability";
 
 /**
  * Idempotent public-API mutations (Idempotency-Key).
@@ -164,7 +165,10 @@ async function releaseQuietly(params: {
     await releaseIdempotencyReservation(params);
   } catch (error) {
     // The reservation then expires on its own (IDEMPOTENCY_RESERVATION_TTL_MS).
-    console.error("[PublicApi] Failed to release an idempotency key", error);
+    reportServerError(error, {
+      surface: "public-api",
+      tags: { step: "release-idempotency-key" },
+    });
   }
 }
 
@@ -181,7 +185,10 @@ async function runAfterCommit(tasks: AfterCommitTask[]) {
       // oxlint-disable-next-line eslint/no-await-in-loop -- the effects run in the order the command registered them.
       await task();
     } catch (error) {
-      console.error("[PublicApi] After-commit task failed", error);
+      reportServerError(error, {
+        surface: "public-api",
+        tags: { step: "after-commit" },
+      });
     }
   }
 }
@@ -348,10 +355,10 @@ export async function withIdempotentCommand<
     } catch (error) {
       // The command committed but its record did not: give the key back, so a
       // retry reaches the command, which refuses a repeat transition.
-      console.error(
-        "[PublicApi] Failed to record an idempotent command",
-        error,
-      );
+      reportServerError(error, {
+        surface: "public-api",
+        tags: { step: "record-idempotent-command" },
+      });
       await releaseQuietly({ organizationId, token });
     }
   }

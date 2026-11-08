@@ -35,6 +35,7 @@ import { createSyncRun } from "./sync-run";
 import { failIntegrationSyncRun, writeIntegrationEvent } from "./records";
 import { buildRunSummary } from "./run-summary";
 import { getIntegrationCursor } from "./conta-azul-schedule-state";
+import { log } from "../../../lib/logger";
 
 async function hasActiveContaAzulPollRun(params: {
   integrationId: string;
@@ -388,7 +389,7 @@ export async function processScheduledContaAzulPolls(params: {
       durationMs: Date.now() - startedAt,
     });
     if (result.failedPolls > 0) {
-      console.warn("[IntegrationsCron] Conta Azul poll kind failed", {
+      log("warn", "conta_azul_poll_kind_failed", {
         pollKind: definition.kind,
         scannedIntegrations: result.scannedIntegrations,
         dueIntegrations: result.dueIntegrations,

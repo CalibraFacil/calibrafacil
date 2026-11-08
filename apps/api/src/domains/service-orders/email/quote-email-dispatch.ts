@@ -19,6 +19,7 @@ import { sendServiceOrderEmailOnce } from "./service-order-email-once";
 import { dispatchOrcamentoAprovadoEmail } from "./orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "./orcamento-recusado-email-dispatch";
 import { orgDb } from "../../../lib/org-db";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * Common order fields needed to build both email payloads.
@@ -126,10 +127,13 @@ export function dispatchApprovedQuoteEmailOnce(
           }),
       });
     } catch (error) {
-      console.error(
-        `[dispatchApprovedQuoteEmailOnce] Failed for OS ${input.order.serviceOrderNumber}:`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "service-order-email",
+        tags: {
+          step: "dispatchApprovedQuoteEmailOnce",
+          serviceOrderId: String(input.serviceOrderId),
+        },
+      });
     }
   })();
 }
@@ -166,10 +170,13 @@ export function dispatchApprovedQuoteEmailOncePortal(
           }),
       });
     } catch (error) {
-      console.error(
-        `[dispatchApprovedQuoteEmailOncePortal] Failed for OS ${input.order.serviceOrderNumber}:`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "service-order-email",
+        tags: {
+          step: "dispatchApprovedQuoteEmailOncePortal",
+          serviceOrderId: String(input.serviceOrderId),
+        },
+      });
     }
   })();
 }
@@ -220,10 +227,13 @@ export function dispatchRejectedQuoteEmailOnce(
           }),
       });
     } catch (error) {
-      console.error(
-        `[dispatchRejectedQuoteEmailOnce] Failed for OS ${input.order.serviceOrderNumber}:`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "service-order-email",
+        tags: {
+          step: "dispatchRejectedQuoteEmailOnce",
+          serviceOrderId: String(input.serviceOrderId),
+        },
+      });
     }
   })();
 }
@@ -259,10 +269,13 @@ export function dispatchRejectedQuoteEmailOncePortal(
           }),
       });
     } catch (error) {
-      console.error(
-        `[dispatchRejectedQuoteEmailOncePortal] Failed for OS ${input.order.serviceOrderNumber}:`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "service-order-email",
+        tags: {
+          step: "dispatchRejectedQuoteEmailOncePortal",
+          serviceOrderId: String(input.serviceOrderId),
+        },
+      });
     }
   })();
 }

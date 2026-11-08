@@ -1,9 +1,7 @@
 import { readObservabilityConfig } from "@calibra-facil/config";
 import {
   createLogErrorReporter,
-  createLogger,
   type ErrorReporter,
-  type StructuredLogger,
 } from "@calibra-facil/shared/telemetry";
 
 // Server-side error tracking for the API surfaces: request
@@ -23,22 +21,18 @@ function getErrorReporter(): ErrorReporter {
   return reporter;
 }
 
-const apiLogger: StructuredLogger = createLogger("API");
-
-/** Capture + structured log in one call; never throws. */
+/**
+ * Report an error the code caught (and continued past, or turned into a
+ * response) as one redacted JSON line on stderr; never throws. This is the only
+ * way a caught error leaves the process: pass the error itself, never its
+ * message or a hand-built object, so the reporter scrubs it, and keep the
+ * context in `tags` (identifiers only, never an e-mail, a name or a payload).
+ */
 export function reportServerError(
   error: unknown,
   context: { surface: string; tags?: Record<string, string> },
 ): void {
   const { surface, tags } = context;
-  apiLogger.error("unhandled server error", {
-    surface,
-    ...tags,
-    error:
-      error instanceof Error
-        ? { name: error.name, message: error.message }
-        : { name: "UnknownError", message: String(error) },
-  });
   getErrorReporter().captureException(error, {
     tags: { surface, ...tags },
   });

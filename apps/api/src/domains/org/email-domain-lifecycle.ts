@@ -16,6 +16,7 @@ import {
   buildFromAddress,
   otherOrganizationHoldsHostname,
 } from "./email-domains";
+import { log } from "../../lib/logger";
 
 type Actor = { organizationId: string; userId: string; memberId: string };
 
@@ -184,7 +185,7 @@ export async function saveManagedEmailDomain(
         // Only the ID returned by this create is eligible for cleanup.
         const cleanup = await deleteResendDomain(apiKey, details.data.id);
         if (!cleanup.ok) {
-          console.error("[EmailDomain] Provider cleanup required", {
+          log("error", "email_domain_provider_cleanup_required", {
             organizationId: actor.organizationId,
             hostname: input.hostname,
             resendDomainId: details.data.id,

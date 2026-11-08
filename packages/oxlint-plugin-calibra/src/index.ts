@@ -26,6 +26,7 @@ import noErrorResponseInTransaction from "./rules/no-error-response-in-transacti
 import noFeaturesImportFromLowLayers from "./rules/no-features-import-from-low-layers.ts";
 import noLiteralQueryKeys from "./rules/no-literal-query-keys.ts";
 import noApiDomainBoundaryViolations from "./rules/no-api-domain-boundary-violations.ts";
+import noConsoleErrorInApi from "./rules/no-console-error-in-api.ts";
 
 export default {
   meta: {
@@ -48,5 +49,6 @@ export default {
     "no-features-import-from-low-layers": noFeaturesImportFromLowLayers,
     "no-literal-query-keys": noLiteralQueryKeys,
     "no-api-domain-boundary-violations": noApiDomainBoundaryViolations,
+    "no-console-error-in-api": noConsoleErrorInApi,
   },
 };

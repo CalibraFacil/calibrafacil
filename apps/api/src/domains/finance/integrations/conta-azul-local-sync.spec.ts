@@ -54,12 +54,15 @@ describe("dispatchContaAzulSync", () => {
 
     await expect(dispatchContaAzulSync(message)).resolves.toBeDefined();
 
-    await vi.waitFor(() =>
-      expect(console.error).toHaveBeenCalledWith(
-        "[BackgroundJobs] Local Conta Azul job failed",
-        expect.objectContaining({ runId: "run-1", error: "boom" }),
-      ),
-    );
+    await vi.waitFor(() => expect(console.error).toHaveBeenCalledTimes(1));
+    // One redacted JSON line from the reporter, tagged with the run.
+    expect(
+      JSON.parse(String(vi.mocked(console.error).mock.calls[0]?.[0])),
+    ).toMatchObject({
+      level: "error",
+      message: "boom",
+      tags: { surface: "conta-azul-local-sync", runId: "run-1" },
+    });
   });
 
   it("rejects a malformed message", async () => {

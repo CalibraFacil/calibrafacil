@@ -47,6 +47,10 @@ const MAX_MESSAGE_LENGTH = 2_000;
 const MAX_STACK_LENGTH = 8_000;
 
 const SECRET_PATTERNS: Array<[RegExp, string]> = [
+  // A failed Drizzle query: the message is `Failed query: <sql>\nparams: <bound
+  // values>` and the values are row data (names, e-mails, document numbers).
+  // The statement stays, the values go (to the next stack frame or the end).
+  [/\nparams:[\s\S]*?(?=\n\s+at |$)/g, "\nparams: ***"],
   // Credentials embedded in URLs (postgres://user:pass@host, https://key@host).
   [/\/\/[^/\s@]+@/g, "//***@"],
   // Bearer/Basic tokens.

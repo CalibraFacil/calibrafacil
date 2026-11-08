@@ -39,6 +39,7 @@ import {
 } from "../unit-operational-settings";
 
 import { requireFreshSession } from "../../../middleware/fresh-session";
+import { log } from "../../../lib/logger";
 
 interface SigningEnv {
   SIGNING_MASTER_KEY: string; // The current KEK (256-bit AES key) wrapping the credentials' data keys
@@ -375,7 +376,7 @@ mount(
     const unit = resolveAccessibleUnitContext(memberData);
 
     if (!env.SIGNING_MASTER_KEY) {
-      console.error("SIGNING_MASTER_KEY not configured");
+      log("error", "signing_master_key_not_configured");
       throw signingNotConfigured();
     }
 

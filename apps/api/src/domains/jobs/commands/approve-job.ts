@@ -831,10 +831,14 @@ async function revertApprovalAfterDispatchFailure(params: {
       }
     });
   } catch (revertError) {
-    console.error(
-      "[Jobs] Approval dispatch failed AND the revert failed; job may be stuck in GENERATING_PDF",
-      { jobId: existing.id, dispatchError: message, revertError },
-    );
+    // The dispatch failed AND the revert failed: the job may be stuck in GENERATING_PDF.
+    reportServerError(revertError, {
+      surface: "approve-job",
+      tags: {
+        step: "revert-after-dispatch-failure",
+        jobId: String(existing.id),
+      },
+    });
   }
 }
 
@@ -858,13 +862,13 @@ async function dispatchUnstagedEffects(
         try {
           await enqueueBackgroundJob(effect.message);
         } catch (error) {
-          console.error(
-            "[Jobs] Failed to dispatch a post-approval notification",
-            {
-              type: effect.message.type,
-              error: error instanceof Error ? error.message : "unknown error",
+          reportServerError(error, {
+            surface: "approve-job",
+            tags: {
+              step: "dispatch-notification",
+              type: effect.message.type ?? "CERTIFICATE_RENDER",
             },
-          );
+          });
         }
       }),
   );
