@@ -51,7 +51,7 @@ import {
 } from "../domains/customers/routes";
 import { dashboardRouter, reportsRouter } from "../domains/reports/routes";
 import { financeRouter, integrationsRouter } from "../domains/finance/routes";
-import { runApiHealthCheck } from "../lib/health";
+import { runApiHealthCheck } from "./health";
 import { methodsRouter } from "../domains/methods/routes";
 import {
   notificationsRouter,
@@ -79,7 +79,7 @@ import { syncRouter } from "../domains/sync/routes";
 import { verifyRouter } from "../domains/verify/routes";
 import type { Env } from "./env";
 
-import { readCronSuccesses, readHealthAlerts } from "../lib/health-alerts";
+import { readCronSuccesses, readHealthAlerts } from "./health-alerts";
 import {
   metricsAuthorized,
   readQueueForMetrics,

@@ -4,7 +4,7 @@ import {
   findLiveVerificationValue,
   findUserByExactEmail,
   findUserPrimaryOrganization,
-} from "../../../lib/identity";
+} from "../identity";
 
 /**
  * Magic-link preview — NO AUTH (gated by possession of a valid magic-link token).

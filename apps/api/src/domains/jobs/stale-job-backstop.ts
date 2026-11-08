@@ -10,7 +10,7 @@ import {
   rejectDeadLetteredCertificateRenders,
   rejectStuckCertificateRenders,
 } from "@calibra-facil/db/queue-render-recovery";
-import { reportServerError } from "./observability";
+import { reportServerError } from "../../lib/observability";
 
 // Periodic orphan-job backstop.
 //

@@ -21,7 +21,7 @@ import {
 import { seedAssetTypes } from "@calibra-facil/db/seed-asset-types";
 import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
 
-import { ensurePortalServiceUser } from "../domains/portal";
+import { ensurePortalServiceUser } from "../domains/customers";
 
 const bootstrapScript = fileURLToPath(
   new URL("../../../../packages/db/scripts/bootstrap.mjs", import.meta.url),

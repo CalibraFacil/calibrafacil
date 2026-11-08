@@ -1,4 +1,4 @@
-import { invalid } from "./domain-errors";
+import { invalid } from "../../lib/domain-errors";
 
 /** A numeric route identifier, or a 400 for an unreadable one. */
 export function requireRouteId(raw: string): number {

@@ -26,9 +26,9 @@ import {
   organizationEventLog,
   platformEventLog,
 } from "@calibra-facil/db/schema";
-import { truncateAll } from "../../test/integration/db";
-import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
-import { seedOrg } from "../../test/integration/seed";
+import { truncateAll } from "../../../test/integration/db";
+import { openAppRoleDb, sqlStateOf } from "../../../test/integration/rls";
+import { seedOrg } from "../../../test/integration/seed";
 import {
   AuditChainBrokenError,
   CHAIN_BROKEN_ORGANIZATION_ACTION,

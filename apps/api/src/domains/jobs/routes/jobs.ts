@@ -3,7 +3,7 @@ import { jobEndpoints } from "@calibra-facil/contracts";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { toApiErrorJson } from "../../../lib/api-error-json";
+import { toApiErrorJson } from "../api-error-json";
 import { DomainError, invalid } from "../../../lib/domain-errors";
 import {
   renderLabel,

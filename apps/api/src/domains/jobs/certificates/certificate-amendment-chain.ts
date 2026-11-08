@@ -1,4 +1,5 @@
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
+import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
 import { and, eq, inArray } from "drizzle-orm";
 import { orgSetDb } from "../../../lib/org-db";
 
@@ -16,11 +17,6 @@ import { orgSetDb } from "../../../lib/org-db";
  *   current version", and a reopened original must not leak through an
  *   already-approved amendment.
  */
-
-export const PORTAL_TERMINAL_CERTIFICATE_STATUSES: JobStatus[] = [
-  "APPROVED",
-  "SUPERSEDED",
-];
 
 export type AmendmentChainJob = {
   id: number;
@@ -169,7 +165,7 @@ export function createPortalAmendmentChainLoader(params: {
         and(
           eq(calibrationJob.id, id),
           inArray(calibrationJob.customerId, params.customerIds),
-          inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
+          inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
         ),
       )
       .limit(1);

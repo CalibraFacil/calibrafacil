@@ -2,7 +2,7 @@ import type { OrgDb } from "@calibra-facil/db/for-org";
 import { and, desc, eq, ilike } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
-import { isUniqueViolation } from "./db-errors";
+import { isUniqueViolation } from "../../lib/db-errors";
 
 const MAX_SEQ_RETRIES = 3;
 

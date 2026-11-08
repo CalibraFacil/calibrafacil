@@ -1,6 +1,6 @@
 import { createRouter } from "../../../server/router";
 import { profileMediaEndpoints } from "@calibra-facil/contracts";
-import { findUserImage } from "../../../lib/identity";
+import { findUserImage } from "../identity";
 import {
   createR2Client,
   deleteFromR2,

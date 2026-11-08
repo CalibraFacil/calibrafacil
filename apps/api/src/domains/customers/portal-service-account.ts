@@ -24,6 +24,7 @@ import { getPortalBaseUrlForClientOrganization } from "../org";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 import { orgDb } from "../../lib/org-db";
 import { PortalServiceAccountError } from "../../lib/portal-service-account-error";
+import { toRecord } from "@calibra-facil/shared/record";
 
 const DEFAULT_INVITATION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -192,10 +193,7 @@ export async function createClientOrganizationAsServiceOwner(params: {
     );
   }
 
-  const orgType =
-    orgResult && typeof orgResult === "object" && !Array.isArray(orgResult)
-      ? Object.fromEntries(Object.entries(orgResult)).type
-      : null;
+  const orgType = toRecord(orgResult).type;
 
   if (orgType !== "CLIENT") {
     await db

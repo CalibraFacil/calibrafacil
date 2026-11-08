@@ -10,7 +10,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "../../lib/domain-errors";
-import { insertWithSequentialNumber } from "../../lib/sequential-number";
+import { insertWithSequentialNumber } from "./sequential-number";
 
 /**
  * Shared CAPA creator (ISO 17025 §8.7). Single code path for the cloud route

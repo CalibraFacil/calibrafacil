@@ -2,7 +2,7 @@ import { Cron } from "croner";
 import { db } from "@calibra-facil/db";
 import { cronRun } from "@calibra-facil/db/schema";
 import { countQueueJobsByStatus } from "@calibra-facil/db/queue";
-import type { CronEntry } from "./cron-scheduler";
+import type { CronEntry } from "../lib/cron-scheduler";
 import { CRON_ENTRIES } from "../cron/schedule";
 
 /**

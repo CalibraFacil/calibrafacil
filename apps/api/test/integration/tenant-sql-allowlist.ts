@@ -48,7 +48,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "auth-session",
-    file: "apps/api/src/lib/identity.ts",
+    file: "apps/api/src/domains/org/identity.ts",
     tables: ["member"],
     kinds: ["select"],
     reason:
@@ -159,7 +159,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "public-token",
-    file: "apps/api/src/lib/identity.ts",
+    file: "apps/api/src/domains/org/identity.ts",
     tables: ["invitation"],
     kinds: ["select"],
     reason:
@@ -212,7 +212,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/audit-chain.ts",
+    file: "apps/api/src/domains/jobs/audit-chain.ts",
     tables: ["job_audit_log"],
     kinds: ["select"],
     reason:

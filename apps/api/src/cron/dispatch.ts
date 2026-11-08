@@ -12,13 +12,13 @@ import {
   drainOotEmailOutbox,
   runCertificateDriftCheck,
   reconcileApprovalEffects,
+  runAuditChainVerification,
+  runStaleJobBackstop,
 } from "../domains/jobs";
 import { drainServiceOrderEmailOutbox } from "../domains/service-orders";
-import { runStaleJobBackstop } from "../lib/stale-job-backstop";
 import { createWorkerRuntimeEnv } from "../lib/runtime-env";
 import { runCron } from "./cron-run";
 import { CRON_SCHEDULE, isCronJobName, type CronJobName } from "./schedule";
-import { runAuditChainVerification } from "../lib/audit-chain";
 import { purgeSyncChangeLog } from "../domains/sync";
 import {
   createR2Client,

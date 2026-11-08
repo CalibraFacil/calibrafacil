@@ -46,7 +46,7 @@ vi.mock("../../domains/service-orders/email/service-order-email-drain", () => ({
   drainServiceOrderEmailOutbox: mocks.drainServiceOrderEmailOutbox,
 }));
 
-vi.mock("../../lib/stale-job-backstop", () => ({
+vi.mock("../../domains/jobs/stale-job-backstop", () => ({
   runStaleJobBackstop: mocks.runStaleJobBackstop,
 }));
 
