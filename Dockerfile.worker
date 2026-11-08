@@ -9,6 +9,13 @@ FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc
 # pnpm itself comes from the "packageManager" field of package.json.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
+# A native module (better-sqlite3, an optional peer of drizzle-orm the lockfile
+# resolves for every workspace) downloads a prebuilt binary from GitHub and
+# compiles from source when that download fails; without a toolchain a GitHub
+# outage would fail the build. The toolchain stays in this stage only.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /repo
 COPY . .
