@@ -1,3 +1,4 @@
+import type { OutboxRejectionCode } from "@calibra-facil/contracts/outbox-rejections";
 import {
   calibrationJob,
   type StandardSnapshot,
@@ -97,7 +98,7 @@ export async function desktopExecutionRefusal(
 /** The sync rejection for a job whose frozen compiled method could not be run. */
 function desktopOfficialExecutionRejection(failure: OfficialExecutionFailure): {
   ok: false;
-  code: string;
+  code: OutboxRejectionCode;
   reason: string;
 } {
   switch (failure.kind) {
@@ -205,7 +206,7 @@ async function rejectLostDesktopExecutionRace(
   };
 }
 
-type DesktopPayloadRefusal = { code: string; reason: string };
+type DesktopPayloadRefusal = { code: OutboxRejectionCode; reason: string };
 
 /**
  * The checks of a desktop execution payload that need no database: the standard
@@ -273,7 +274,7 @@ export function validateDesktopExecutionStandardsPayload(
 /** The sync rejection (code + reason) the desktop sees for a judgement refusal. */
 function desktopStandardsRejection(refusal: StandardsRefusal): {
   ok: false;
-  code: string;
+  code: OutboxRejectionCode;
   reason: string;
 } {
   const names = refusal.standardNames.join(", ");

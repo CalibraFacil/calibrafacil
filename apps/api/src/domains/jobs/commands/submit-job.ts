@@ -1,3 +1,4 @@
+import type { OutboxRejectionCode } from "@calibra-facil/contracts/outbox-rejections";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   appendJobEvent,
@@ -173,9 +174,12 @@ export type JobExecutionCommand = {
    * A caller-specific check on the loaded job, run once its transition is
    * known to be legal and before anything else is read or written (the desktop
    * uses it for payload integrity that depends on the job's stored snapshots).
-   * The command does not interpret the code; it is handed back unchanged.
+   * The command does not interpret the code; it is handed back unchanged, and
+   * it is a sync rejection code because the desktop push is the only caller.
    */
-  precondition?: (job: JobRow) => { code: string; reason: string } | null;
+  precondition?: (
+    job: JobRow,
+  ) => { code: OutboxRejectionCode; reason: string } | null;
 };
 
 type RunCommand = JobExecutionCommand & { command: "submit" | "execute" };
@@ -218,7 +222,7 @@ export type JobExecutionResult =
   | {
       /** The caller's own precondition on the loaded job refused (`precondition`). */
       status: "precondition_failed";
-      code: string;
+      code: OutboxRejectionCode;
       reason: string;
     }
   | {

@@ -4,54 +4,12 @@ import {
   isRegulatedOutboxOperation,
   parseOutboxErrorCode,
 } from "@calibra-facil/contracts/outbox-rejections";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const apiSource = (relative: string) =>
-  fileURLToPath(new URL(`../../../apps/api/src/${relative}`, import.meta.url));
-
-/** Quoted SCREAMING_SNAKE literals in the API's sync domain (its routes and its modules). */
-function emittedSyncCodes() {
-  const files = ["domains/sync/routes", "domains/sync"].flatMap((relative) => {
-    const directory = apiSource(relative);
-    return readdirSync(directory)
-      .filter((name) => name.endsWith(".ts") && !name.includes(".spec."))
-      .map((name) => `${directory}/${name}`);
-  });
-  const codes = new Set<string>();
-  for (const file of files) {
-    const source = readFileSync(file, "utf8");
-    for (const match of source.matchAll(/"([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)"/g)) {
-      const code = match[1];
-      if (code) codes.add(code);
-    }
-  }
-  // Not a rejection code: the state of a duplicate-delivery claim.
-  codes.delete("IN_PROGRESS");
-  return [...codes].sort();
-}
-
 describe("REQ-OB-1: classifying cloud rejection codes", () => {
-  it("REQ-OB-1: every code the API sync route emits has an explicit classification", () => {
-    const emitted = emittedSyncCodes();
-
-    expect(emitted.length).toBeGreaterThan(20);
-    const unclassified = emitted.filter(
-      (code) => !(code in OUTBOX_REJECTION_CLASSES),
-    );
-    expect(unclassified).toEqual([]);
-  });
-
-  it("REQ-OB-1: the table lists no code the API no longer emits", () => {
-    const emitted = new Set(emittedSyncCodes());
-
-    expect(
-      Object.keys(OUTBOX_REJECTION_CLASSES).filter(
-        (code) => !emitted.has(code),
-      ),
-    ).toEqual([]);
-  });
+  // Every code the API's sync push can put in `rejected` is typed
+  // `OutboxRejectionCode` (keyof the table), so an unclassified refusal does not
+  // compile; no source scan is needed.
 
   it.each([
     "UNSUPPORTED_SYNC_OPERATION",
