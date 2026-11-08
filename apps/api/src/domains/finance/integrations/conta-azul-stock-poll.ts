@@ -1,5 +1,5 @@
-import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { orgDb } from "../../../lib/org-db";
+import { reportServerError } from "../../../lib/observability";
 import {
   integrationObjectLink,
   material,
@@ -12,10 +12,18 @@ import {
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { IntegrationsEnv } from "./integrations-env";
 import { getIntegrationRecord, writeIntegrationEvent } from "./records";
+import { conflict, DomainError, invalid } from "../../../lib/domain-errors";
 import { createContaAzulAdapterForRecord } from "./conta-azul-auth";
+import { ContaAzulApiError } from "./conta-azul-client";
+import { isContaAzulReconnectRequiredError } from "./errors";
 import { CONTA_AZUL_PRODUCT_STOCK_CURSOR_TYPE } from "./constants";
 import { upsertIntegrationCursor } from "./conta-azul-schedule-state";
 import { requireLabContaAzulIntegration } from "./integration-access";
+
+const ERP_STOCK_NO_INTEGRATION =
+  "Nenhuma integração Conta Azul ativa encontrada";
+const ERP_STOCK_REFUSED =
+  "A Conta Azul não aceitou o ajuste de estoque. Tente novamente em instantes.";
 
 /**
  * Manual entrada/ajuste for a catalog material bound to a Conta Azul
@@ -31,7 +39,7 @@ export async function adjustMaterialErpStock(params: {
   env: IntegrationsEnv;
 }): Promise<{ stockQuantity: number; stockSyncedAt: Date }> {
   if (!Number.isFinite(params.quantity) || params.quantity < 0) {
-    throw new Error("Quantidade de estoque inválida");
+    throw invalid("invalid_request", "Quantidade de estoque inválida");
   }
 
   // The lookups share one transaction; the remote call below runs outside it.
@@ -52,7 +60,7 @@ export async function adjustMaterialErpStock(params: {
       .orderBy(desc(organizationIntegration.updatedAt))
       .limit(1);
     if (!integrationRow) {
-      throw new Error("Nenhuma integração Conta Azul ativa encontrada");
+      throw conflict("integration_inactive", ERP_STOCK_NO_INTEGRATION);
     }
 
     const record = await getIntegrationRecord(
@@ -61,12 +69,13 @@ export async function adjustMaterialErpStock(params: {
       o,
     );
     if (!record) {
-      throw new Error("Integração Conta Azul não encontrada");
+      throw conflict("integration_inactive", ERP_STOCK_NO_INTEGRATION);
     }
 
     const config = normalizeContaAzulConnectionConfig(record.connection.config);
     if (!config.enabledTargets.products) {
-      throw new Error(
+      throw conflict(
+        "integration_inactive",
         "Sincronização de produtos da Conta Azul está desativada",
       );
     }
@@ -88,21 +97,40 @@ export async function adjustMaterialErpStock(params: {
     return { integrationRow, record, link };
   });
   if (!link?.remoteEntityId) {
-    throw new Error(
+    throw conflict(
+      "conflict",
       "Material não está vinculado a um produto na Conta Azul — sincronize o catálogo antes de ajustar o estoque",
     );
   }
   const remoteEntityId = link.remoteEntityId;
 
-  const adapter = await createContaAzulAdapterForRecord({
-    record,
-    env: params.env,
-  });
-  if (!adapter.setProductStock) {
-    throw new Error("Provider Conta Azul sem suporte a ajuste de estoque");
-  }
+  try {
+    const adapter = await createContaAzulAdapterForRecord({
+      record,
+      env: params.env,
+    });
+    if (!adapter.setProductStock) {
+      throw conflict(
+        "conflict",
+        "Provider Conta Azul sem suporte a ajuste de estoque",
+      );
+    }
 
-  await adapter.setProductStock(remoteEntityId, params.quantity);
+    await adapter.setProductStock(remoteEntityId, params.quantity);
+  } catch (error) {
+    // A reconnect request carries the fixed pt-BR text of the refresh-failure
+    // policy; a Conta Azul refusal carries the vendor's response text, which
+    // the lab does not get. Anything else (a failed query, a code defect)
+    // bubbles to the error handler: reported, answered as the opaque 500.
+    if (error instanceof DomainError) throw error;
+    if (isContaAzulReconnectRequiredError(error)) {
+      throw conflict("integration_action_required", error.message);
+    }
+    if (error instanceof ContaAzulApiError) {
+      throw conflict("integration_request_failed", ERP_STOCK_REFUSED);
+    }
+    throw error;
+  }
 
   const stockSyncedAt = new Date();
   await orgDb(params.organizationId).transaction(async (o) => {
@@ -210,7 +238,24 @@ export async function pollContaAzulProductStock(params: {
       });
       updatedCount += 1;
     } catch (error) {
-      warnings.push(`material:${row.materialId}: ${errorMessage(error)}`);
+      // The warnings reach the response: a vendor refusal or a failed statement
+      // gets a fixed text, the cause goes to the redacted reporter.
+      if (!(error instanceof ContaAzulApiError)) {
+        reportServerError(error, {
+          surface: "api",
+          tags: {
+            step: "material-stock-poll",
+            organizationId: params.organizationId,
+          },
+        });
+      }
+      warnings.push(
+        `material:${row.materialId}: ${
+          error instanceof ContaAzulApiError
+            ? "consulta de estoque recusada pela Conta Azul"
+            : "falha ao atualizar o estoque"
+        }`,
+      );
     }
   }
 

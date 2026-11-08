@@ -1,4 +1,6 @@
 import { errorMessage } from "@calibra-facil/shared/telemetry";
+import { isDatabaseError } from "../../../lib/db-errors";
+import { reportServerError } from "../../../lib/observability";
 import { createRouter } from "../../../server/router";
 import {
   integrationEndpoints,
@@ -599,6 +601,24 @@ export const integrationsRouter = createRouter<{
   Bindings: IntegrationsBindings;
 }>();
 
+/**
+ * The 500 for a sync run that could not be queued. The cause (a failed insert
+ * into the job queue carries SQL) goes to the redacted reporter; the body
+ * carries a fixed pt-BR message.
+ */
+function dispatchFailed(error: unknown, organizationId: string) {
+  reportServerError(error, {
+    surface: "api",
+    tags: { step: "integration-sync-dispatch", organizationId },
+  });
+  return new DomainError({
+    code: "integration_sync_dispatch_failed",
+    status: 500,
+    message:
+      "Não foi possível iniciar a sincronização. Tente novamente em instantes.",
+  });
+}
+
 mount(
   integrationsRouter,
   "/api/integrations",
@@ -775,6 +795,7 @@ mount(
       if (error instanceof ContaAzulAppMissingError) {
         throw conflict("conta_azul_app_missing", error.message);
       }
+      if (isDatabaseError(error)) throw error;
       throw new DomainError({
         code: "conta_azul_oauth_unavailable",
         status: 503,
@@ -1240,6 +1261,7 @@ mount(
         catalog,
       });
     } catch (error) {
+      if (isDatabaseError(error)) throw error;
       throw invalid("integration_request_failed", errorMessage(error));
     }
   },
@@ -1431,7 +1453,7 @@ async function runContaAzulPoll<
       ),
     );
 
-    if (error instanceof DomainError) throw error;
+    if (error instanceof DomainError || isDatabaseError(error)) throw error;
     throw invalid("integration_request_failed", message);
   }
 }
@@ -1573,6 +1595,7 @@ mount(
         ),
       );
 
+      if (isDatabaseError(error)) throw error;
       throw invalid("integration_request_failed", message);
     }
   },
@@ -1728,6 +1751,7 @@ mount(
         );
       });
 
+      if (isDatabaseError(error)) throw error;
       throw invalid("integration_request_failed", message);
     }
   },
@@ -1872,11 +1896,7 @@ mount(
         trigger: "manual",
       });
     } catch (error) {
-      throw new DomainError({
-        code: "integration_sync_dispatch_failed",
-        status: 500,
-        message: errorMessage(error),
-      });
+      throw dispatchFailed(error, member.organizationId);
     }
 
     return {
@@ -2243,11 +2263,7 @@ mount(
         trigger: "retry",
       });
     } catch (error) {
-      throw new DomainError({
-        code: "integration_sync_dispatch_failed",
-        status: 500,
-        message: errorMessage(error),
-      });
+      throw dispatchFailed(error, member.organizationId);
     }
 
     return {

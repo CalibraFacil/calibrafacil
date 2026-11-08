@@ -7,6 +7,7 @@
  *   REQ-INTD-2  a sync run is dispatched by provider: Conta Azul starts its own run, a generic
  *               HTTP integration is queued as an INTEGRATION_SYNC row, and a Conta Azul run
  *               that cannot be dispatched is marked failed with the reason
+ *               (REQ-INTD-2 also: a queue insert that fails answers a fixed 500, no SQL)
  *   REQ-INTD-3  the items of a run come with their status counts
  *   REQ-INTD-4  targets only Conta Azul has (preview, schedule, retry of a legacy run) are
  *               refused for a generic HTTP integration
@@ -17,7 +18,7 @@
  *               read (the laboratory's own "no application" answer is REQ-CAZAPP-006)
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   appQueueJob,
@@ -277,6 +278,44 @@ describe("REQ-INTD-2: dispatching a run", () => {
       .where(eq(integrationEventLog.organizationId, org.orgId));
     expect(JSON.stringify(events)).toContain("queue_send");
     expect(remote.runIntegrationSync).not.toHaveBeenCalled();
+  });
+});
+
+describe("REQ-INTD-2: a run that cannot be queued", () => {
+  it("answers 500 integration_sync_dispatch_failed with a fixed message when the queue insert fails, the cause going to the reporter", async () => {
+    vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+    const integrationId = await seedIntegration(org, "generic_http");
+    // A validated connection is a ready one: the preview does not block the run.
+    await db
+      .update(organizationIntegration)
+      .set({ lastValidatedAt: new Date() })
+      .where(eq(organizationIntegration.id, integrationId));
+    // The queue insert is the dispatch: take its table away.
+    await db.execute(
+      sql`ALTER TABLE app_queue_job RENAME TO app_queue_job_away`,
+    );
+    let res: Response;
+    try {
+      res = await call(`/${integrationId}/sync`, "POST", {
+        target: "customer",
+        limit: 10,
+      });
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE app_queue_job_away RENAME TO app_queue_job`,
+      );
+      vi.unstubAllEnvs();
+    }
+
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({
+      error:
+        "Não foi possível iniciar a sincronização. Tente novamente em instantes.",
+      code: "integration_sync_dispatch_failed",
+    });
+    expect(text).not.toContain("app_queue_job");
+    expect(text).not.toContain("Failed query");
   });
 });
 

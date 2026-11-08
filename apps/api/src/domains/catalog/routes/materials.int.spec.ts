@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { materialsRouter } from "./materials";
 import { db } from "@calibra-facil/db";
 import { material } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedOrg } from "../../../../test/integration/seed";
@@ -27,6 +27,9 @@ import { seedOrg } from "../../../../test/integration/seed";
 //                org is allowed (uniqueness is per-organization)
 //   REQ-MAT-006  DELETE /:id soft-deletes (is_active=false), row survives
 //   REQ-MAT-007  Unauthenticated → 401
+//   REQ-MAT-009  POST /:id/stock without an ERP integration → 409, fixed pt-BR message
+//   REQ-MAT-011  POST /:id/stock when the database fails → opaque 500: no SQL
+//                text reaches the body, the cause reaches the redacted reporter
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -54,6 +57,10 @@ async function seedMaterial(params: {
 describe("materialsRouter — real DB + real RBAC middleware", () => {
   beforeEach(async () => {
     await truncateAll();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("REQ-MAT-001: GET / returns only the authenticated org's materials", async () => {
@@ -220,8 +227,48 @@ describe("materialsRouter — real DB + real RBAC middleware", () => {
     });
 
     expect(res.status).toBe(409);
-    const body = await res.json();
-    expect(typeof body.error).toBe("string");
+    expect(await res.json()).toEqual({
+      error: "Nenhuma integração Conta Azul ativa encontrada",
+      code: "integration_inactive",
+    });
+  });
+
+  it("REQ-MAT-011: POST /:id/stock when the database fails → opaque 500, no SQL text in the body, cause reported redacted", async () => {
+    const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+    const org = await seedOrg({ orgId: "lab-secret-5521", role: "admin" });
+    const id = await seedMaterial({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      name: "Material",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    // The ERP lookup of the adjustment reads `organization_integration`: take it away.
+    await db.execute(
+      sql`ALTER TABLE organization_integration RENAME TO organization_integration_away`,
+    );
+    let res: Response;
+    try {
+      res = await materialsRouter.request(`/${id}/stock`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ quantityOnHand: 5 }),
+      });
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE organization_integration_away RENAME TO organization_integration`,
+      );
+    }
+
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({ error: "Erro interno do servidor" });
+    expect(text).not.toContain("Failed query");
+    expect(text).not.toContain("organization_integration");
+    expect(text).not.toContain(org.orgId);
+    const logged = stderr.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(logged).toContain("Failed query");
+    expect(logged).toContain("params: ***");
   });
 
   it("REQ-MAT-010: cross-tenant POST /:id/stock → 404, remote never touched", async () => {

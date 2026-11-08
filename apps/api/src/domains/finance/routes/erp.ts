@@ -1,4 +1,5 @@
 import { errorMessage } from "@calibra-facil/shared/telemetry";
+import { isDatabaseError } from "../../../lib/db-errors";
 import { createRouter } from "../../../server/router";
 import { financeEndpoints } from "@calibra-facil/contracts";
 import { mount } from "../../../lib/endpoint-mount";
@@ -87,6 +88,9 @@ mount(
 
       return { data: exported };
     } catch (error) {
+      // A failed statement's text is SQL: it goes to the error handler
+      // (reported, opaque 500), never into the body.
+      if (isDatabaseError(error)) throw error;
       // A status the definition does not describe: answered as a ready Response.
       return c.json(
         {

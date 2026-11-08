@@ -1,3 +1,5 @@
+import { DrizzleQueryError } from "drizzle-orm";
+
 // Postgres error-code detection for route handlers.
 //
 // postgres-js (the API's driver, and the integration Docker harness's) surfaces a duplicate
@@ -63,4 +65,23 @@ export function isUniqueViolationOf(
     isUniqueViolation(error) &&
     extractPgConstraintName(error) === constraintName
   );
+}
+
+/**
+ * True when `error` (or anything on its `.cause` chain) is a failed statement:
+ * a Drizzle `DrizzleQueryError` or a driver `PostgresError`. Its message is the
+ * SQL text (bound values scrubbed or not), so a route must never put it in a
+ * response body: let it bubble to the error handler (reported, opaque 500).
+ */
+export function isDatabaseError(error: unknown): boolean {
+  if (error instanceof DrizzleQueryError) return true;
+  if (!error || typeof error !== "object") return false;
+  if (
+    "name" in error &&
+    (error.name === "PostgresError" || error.name === "DrizzleQueryError")
+  ) {
+    return true;
+  }
+  if ("cause" in error) return isDatabaseError(error.cause);
+  return false;
 }
