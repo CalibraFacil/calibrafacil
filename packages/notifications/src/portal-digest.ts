@@ -26,6 +26,7 @@ import {
   labToday,
   portalDigestFrequenciesFor,
 } from "@calibra-facil/shared";
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 import { formatCalendarDate } from "@calibra-facil/shared/format";
 
 import { isEmailSuppressed } from "./suppression";
@@ -54,8 +55,6 @@ import {
 // every run, WEEKLY on Mondays UTC) against `notification_preference.
 // digest_frequency` — this is that dormant column's first consumer.
 
-/** Mirrors the portal's DUE_SOON window (apps/portal calibration-status). */
-const PORTAL_DIGEST_DUE_SOON_DAYS = 30;
 /** Instruments listed in the email body; the rest become "e mais N". */
 const PORTAL_DIGEST_MAX_ITEMS = 15;
 
@@ -182,7 +181,7 @@ export async function sendPortalDueDigests(
   // next_calibration_date is a calendar day: overdue is before today in the
   // laboratory, due soon runs to today + 30.
   const today = labToday(now);
-  const soon = addCalendarDays(today, PORTAL_DIGEST_DUE_SOON_DAYS);
+  const soon = addCalendarDays(today, FLEET_DUE_SOON_DAYS);
 
   for (const recipient of recipients) {
     if (!recipient.email || recipient.customerIds.length === 0) continue;

@@ -10,6 +10,7 @@ import { buildServiceOrderFinancialStatus } from "../finance";
 import { orgDb } from "../../lib/org-db";
 import type { buildUnitScopeCondition } from "../../lib/units";
 import { isRecord } from "@calibra-facil/shared/record";
+import { isPendingObjectKey } from "@calibra-facil/shared/storage-keys";
 
 type PortalFinancialScope = Parameters<typeof buildUnitScopeCondition>[1];
 
@@ -94,7 +95,7 @@ function isAvailableLocalArtifact(metadata: Record<string, unknown> | null) {
   const status = textValue(metadata.status);
   const r2Key = localArtifactR2Key(metadata);
   return Boolean(
-    r2Key && !r2Key.startsWith("pending/") && status !== "unavailable",
+    r2Key && !isPendingObjectKey(r2Key) && status !== "unavailable",
   );
 }
 

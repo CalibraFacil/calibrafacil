@@ -3,7 +3,11 @@ import { financeEndpoints } from "@calibra-facil/contracts";
 import { mount } from "../../../lib/endpoint-mount";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
-import { isCalendarDatePast, labDaysUntil } from "@calibra-facil/shared";
+import {
+  isCalendarDatePast,
+  labDaysUntil,
+  LIVE_BILLING_DOCUMENT_STATUSES,
+} from "@calibra-facil/shared";
 import {
   billingDocument,
   customer,
@@ -71,12 +75,7 @@ mount(
             and(
               eq(billingDocument.organizationId, member.organizationId),
               buildUnitScopeCondition(billingDocument.unitId, member),
-              inArray(billingDocument.status, [
-                "DRAFT",
-                "ISSUED",
-                "PAID",
-                "OVERDUE",
-              ]),
+              inArray(billingDocument.status, LIVE_BILLING_DOCUMENT_STATUSES),
             ),
           );
 
@@ -104,12 +103,7 @@ mount(
             and(
               eq(billingDocument.organizationId, member.organizationId),
               buildUnitScopeCondition(billingDocument.unitId, member),
-              inArray(billingDocument.status, [
-                "DRAFT",
-                "ISSUED",
-                "PAID",
-                "OVERDUE",
-              ]),
+              inArray(billingDocument.status, LIVE_BILLING_DOCUMENT_STATUSES),
             ),
           )
           .orderBy(desc(billingDocument.createdAt))

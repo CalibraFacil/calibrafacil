@@ -36,6 +36,21 @@ export const BILLING_DOCUMENT_STATUSES = [
 ] as const;
 export type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
 
+/** Every document the laboratory still has (all but a void one). */
+export const LIVE_BILLING_DOCUMENT_STATUSES = [
+  "DRAFT",
+  "ISSUED",
+  "PAID",
+  "OVERDUE",
+] as const satisfies readonly BillingDocumentStatus[];
+
+/** A document that was issued to the customer (not a draft, not void). */
+export const ISSUED_BILLING_DOCUMENT_STATUSES = [
+  "ISSUED",
+  "PAID",
+  "OVERDUE",
+] as const satisfies readonly BillingDocumentStatus[];
+
 /** What a billing document's status reads like; the job's financial status shares it. */
 const BILLING_DOCUMENT_PRESENTATION = {
   DRAFT: { label: "Rascunho", tone: "neutral" },

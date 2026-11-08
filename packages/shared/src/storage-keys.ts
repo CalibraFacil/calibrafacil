@@ -343,6 +343,25 @@ export function standardCertificateKey(
   };
 }
 
+/**
+ * The key a row carries between being written and its file being uploaded. A
+ * failed upload leaves the row, which must never be read as a stored object:
+ * every reader asks `isPendingObjectKey`, none spells the prefix itself.
+ */
+export const PENDING_OBJECT_KEY_PREFIX = "pending/";
+
+export function pendingStandardCertificateKey(
+  standardId: number,
+  uniqueId: string,
+): string {
+  return `${PENDING_OBJECT_KEY_PREFIX}standards/${standardId}/${uniqueId}.pdf`;
+}
+
+/** True for a placeholder key: nothing has been uploaded under it. */
+export function isPendingObjectKey(key: string): boolean {
+  return key.startsWith(PENDING_OBJECT_KEY_PREFIX);
+}
+
 export interface SyncAttachmentKeyParams {
   org: OrgRef;
   entityType: string;

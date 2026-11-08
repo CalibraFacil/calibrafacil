@@ -19,6 +19,7 @@ import {
   resolvePeriodRange,
 } from "./report-support";
 import { orgDb } from "../../../../lib/org-db";
+import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 
 export const reportRoutes = createRouter<PublicApiV2Env>()
   .get(
@@ -109,11 +110,7 @@ export const reportRoutes = createRouter<PublicApiV2Env>()
               and(
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
               ),
             ),
           o
@@ -145,11 +142,7 @@ export const reportRoutes = createRouter<PublicApiV2Env>()
               and(
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
                 lt(calibrationJob.dueDate, labToday()),
               ),
             ),
@@ -220,11 +213,7 @@ export const reportRoutes = createRouter<PublicApiV2Env>()
               and(
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
                 lt(calibrationJob.dueDate, labToday()),
               ),
             )
@@ -458,11 +447,7 @@ export const reportRoutes = createRouter<PublicApiV2Env>()
               and(
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
                 lt(calibrationJob.dueDate, labToday()),
               ),
             )

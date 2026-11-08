@@ -3,7 +3,6 @@ export { renderIntervalReportHtml } from "./IntervalReportHtml.js";
 export {
   renderFleetStatusReportHtml,
   classifyFleetDueStatus,
-  FLEET_DUE_SOON_DAYS,
   type FleetStatusAsset,
 } from "./FleetStatusReportHtml.js";
 export { AccreditationSealSvg } from "@calibra-facil/accreditation-seal";

@@ -1,4 +1,7 @@
-import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
+import {
+  CERTIFICATE_ISSUED_JOB_STATUSES,
+  IN_FLIGHT_JOB_STATUSES,
+} from "@calibra-facil/schemas";
 import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
@@ -6,7 +9,6 @@ import {
   jobStandard,
   ootNotification,
   standardRecall,
-  type JobStatus,
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
@@ -198,13 +200,6 @@ export async function findImpactedCertificates(
  * listed so the laboratory can stop or amend it, not because approval can still
  * refuse it; RENDER_FAILED likewise (its render is retried or the job rejected).
  */
-const IN_FLIGHT_JOB_STATUSES = [
-  "DRAFT",
-  "IN_PROGRESS",
-  "REVIEW",
-  "GENERATING_PDF",
-  "RENDER_FAILED",
-] as const satisfies readonly JobStatus[];
 
 export type InFlightJob = {
   jobId: number;

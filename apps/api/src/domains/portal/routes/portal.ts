@@ -3,6 +3,7 @@ import { mount } from "../../../lib/endpoint-mount";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   PORTAL_NOTIFICATION_TYPES,
+  IN_FLIGHT_JOB_STATUSES,
 } from "@calibra-facil/schemas";
 import {
   requirePortalLabScope,
@@ -61,8 +62,6 @@ import {
   exists,
   asc,
   desc,
-  like,
-  not,
   count,
   isNull,
   isNotNull,
@@ -96,10 +95,9 @@ import {
   withdrawalOf,
 } from "../../jobs";
 import { isRecord } from "@calibra-facil/shared/record";
-
-// Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
-// An instrument is "due soon" within this many days of its next calibration.
-const DUE_SOON_DAYS = 30;
+import { finalizedStandardCertificateDocument } from "@calibra-facil/db/standard-certificate-documents";
+import { isPendingObjectKey } from "@calibra-facil/shared/storage-keys";
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 
 type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
 
@@ -177,13 +175,7 @@ function assetInLabSql(o: Pick<OrgDb, "select">) {
     .where(
       and(
         eq(calibrationJob.assetId, asset.id),
-        inArray(calibrationJob.status, [
-          "DRAFT",
-          "IN_PROGRESS",
-          "REVIEW",
-          "GENERATING_PDF",
-          "RENDER_FAILED",
-        ]),
+        inArray(calibrationJob.status, IN_FLIGHT_JOB_STATUSES),
       ),
     );
   const openServiceOrder = o
@@ -207,7 +199,7 @@ function buildDueStatusCondition(
   // next_calibration_date is a calendar day: compare it with the laboratory's
   // today (a calibration due on D is not overdue until D is over).
   const today = labTodayDate();
-  const soon = addCalendarDays(today, DUE_SOON_DAYS);
+  const soon = addCalendarDays(today, FLEET_DUE_SOON_DAYS);
 
   switch (dueStatus) {
     case "overdue":
@@ -319,10 +311,6 @@ type PortalReferenceStandardDocument = {
   nextCalibrationDate: string | Date;
 };
 
-function finalizedStandardCertificateDocumentCondition() {
-  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
-}
-
 type PortalReferenceStandardSnapshot = {
   id: number;
   name: string;
@@ -367,7 +355,7 @@ function normalizePortalDocument(
   if (
     documentId === null ||
     !r2Key ||
-    r2Key.startsWith("pending/") ||
+    isPendingObjectKey(r2Key) ||
     !fileName ||
     fileSize === null ||
     !sha256 ||
@@ -466,7 +454,7 @@ async function withMatchingPortalStandardDocuments(
         referenceStandardCertificateDocument.certificateNumber,
         standard.certificateNumber,
       ),
-      finalizedStandardCertificateDocumentCondition(),
+      finalizedStandardCertificateDocument(),
     ),
   );
 
@@ -605,7 +593,7 @@ mount(
       // Date objects inside a sql`` template fails under postgres.js, and the
       // UTC clock is already tomorrow from 21:00 in Sao Paulo).
       const labToday = sql.raw(LAB_TODAY_SQL);
-      const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
+      const labSoon = sql`(${labToday} + ${sql.raw(String(FLEET_DUE_SOON_DAYS))})`;
 
       const equipmentWhere = and(
         inArray(asset.customerId, customerIds),
@@ -1220,7 +1208,7 @@ mount(
     }
 
     const labToday = sql.raw(LAB_TODAY_SQL);
-    const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
+    const labSoon = sql`(${labToday} + ${sql.raw(String(FLEET_DUE_SOON_DAYS))})`;
 
     const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
       o
@@ -2685,7 +2673,7 @@ mount(
               referenceStandardCertificateDocument.certificateNumber,
               standard.certificateNumber,
             ),
-            finalizedStandardCertificateDocumentCondition(),
+            finalizedStandardCertificateDocument(),
           ),
         )
         .orderBy(

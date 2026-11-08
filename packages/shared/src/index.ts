@@ -1,5 +1,6 @@
 export * from "./domain-utils";
 export * from "./finance";
+export * from "./fleet-due";
 export * from "./integrations";
 export * from "./cnpj";
 export * from "./signup-email-policy";

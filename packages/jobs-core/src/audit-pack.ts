@@ -1,9 +1,9 @@
 import {
   renderFleetStatusReportHtml,
   classifyFleetDueStatus,
-  FLEET_DUE_SOON_DAYS,
   type FleetStatusAsset,
 } from "@calibra-facil/documents";
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 import { zipSync, strToU8, type Zippable } from "fflate";
 import { Workbook } from "@cj-tech-master/excelts";
 import type { AuditPackBackgroundJobMessage } from "@calibra-facil/schemas";

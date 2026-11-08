@@ -16,6 +16,7 @@ import {
 import { forbidden, invalid, notFound } from "../../../lib/domain-errors";
 import { orgDb } from "../../../lib/org-db";
 import { buildUnitScopeCondition } from "../../../lib/units";
+import { ISSUED_BILLING_DOCUMENT_STATUSES } from "@calibra-facil/shared";
 
 const PREFIX = "/api/finance/erp";
 
@@ -50,7 +51,7 @@ mount(
           and(
             eq(billingDocument.organizationId, member.organizationId),
             buildUnitScopeCondition(billingDocument.unitId, member),
-            inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
+            inArray(billingDocument.status, ISSUED_BILLING_DOCUMENT_STATUSES),
           ),
         )
         .orderBy(desc(billingDocument.updatedAt))

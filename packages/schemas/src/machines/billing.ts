@@ -5,6 +5,8 @@ import {
   BILLING_DOCUMENT_EXPORT_STATUSES,
   BILLING_DOCUMENT_STATUSES,
   COMMERCIAL_AGREEMENT_STATUSES,
+  ISSUED_BILLING_DOCUMENT_STATUSES,
+  LIVE_BILLING_DOCUMENT_STATUSES,
   RECEIVABLE_INSTALLMENT_STATUSES,
 } from "@calibra-facil/shared";
 import { defineStateMachine, type Transition } from "../state-machine";
@@ -60,7 +62,7 @@ export const COMMERCIAL_AGREEMENT_MACHINE = defineStateMachine({
 //   void            POST /:id/void (any document but a void one)
 //   sync_remote     the Conta Azul poll: the status the ERP's installments add
 //                     up to, for any document the lab did not void
-const DOCUMENT_LIVE = ["DRAFT", "ISSUED", "PAID", "OVERDUE"] as const;
+const DOCUMENT_LIVE = LIVE_BILLING_DOCUMENT_STATUSES;
 export const BILLING_DOCUMENT_MACHINE = defineStateMachine({
   name: "billing document",
   states: BILLING_DOCUMENT_STATUSES,
@@ -85,7 +87,7 @@ export const BILLING_DOCUMENT_MACHINE = defineStateMachine({
       "OVERDUE",
       "VOID",
     ] as const),
-    ...(["ISSUED", "PAID", "OVERDUE"] as const).map((from) => ({
+    ...ISSUED_BILLING_DOCUMENT_STATUSES.map((from) => ({
       from,
       command: "sync_remote" as const,
       to: from,

@@ -23,6 +23,10 @@ import {
 import { and, desc, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import { loadBillingDocumentPayloadsForIntegration } from "../finance";
 import { buildPessoaExternalId } from "./payloads-parties";
+import {
+  OPEN_JOB_STATUSES,
+  CERTIFICATE_ISSUED_JOB_STATUSES,
+} from "@calibra-facil/schemas";
 
 export async function loadServiceOrderPayloads(
   organizationId: string,
@@ -57,11 +61,8 @@ export async function loadServiceOrderPayloads(
       and(
         eq(calibrationJob.organizationId, organizationId),
         inArray(calibrationJob.status, [
-          "DRAFT",
-          "IN_PROGRESS",
-          "REVIEW",
-          "APPROVED",
-          "SUPERSEDED",
+          ...OPEN_JOB_STATUSES,
+          ...CERTIFICATE_ISSUED_JOB_STATUSES,
         ]),
       ),
     )
