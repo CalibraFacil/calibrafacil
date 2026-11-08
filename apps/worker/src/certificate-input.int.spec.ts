@@ -36,6 +36,7 @@ import { setJobStatus } from "../test/integration/job-fixtures";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 import { seedServiceOrder } from "../test/integration/seed-service-order";
 import { buildCertificateLayoutData } from "@calibra-facil/jobs-core/certificate/layout-data";
+import { utcTimestampTypes } from "@calibra-facil/jobs-core";
 import { fetchCertificateJobData } from "@calibra-facil/jobs-core/certificate/fetch-job-data";
 import { isRecord } from "@calibra-facil/shared/record";
 
@@ -1011,7 +1012,10 @@ describe("REQ-CIN-1: parity of the frozen document with the legacy live assembly
     });
 
     // legacy: the worker's live read, as it ran before the frozen input
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    const client = new Client({
+      connectionString: process.env.DATABASE_URL,
+      types: utcTimestampTypes,
+    });
     await client.connect();
     const legacy = await fetchCertificateJobData(client, job.jobId, {
       resolveLogoDataUrl: async (logo) =>

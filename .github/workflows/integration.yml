@@ -27,8 +27,11 @@ jobs:
       fail-fast: false
       matrix:
         app: [api, worker]
+    # The worker tier runs in the laboratory's zone, not UTC: its database
+    # reads and writes must not depend on the host's time zone (a host-local
+    # parse once shifted certificate dates by the offset).
     env:
-      TZ: UTC
+      TZ: ${{ matrix.app == 'worker' && 'America/Sao_Paulo' || 'UTC' }}
 
     steps:
       - name: Checkout
