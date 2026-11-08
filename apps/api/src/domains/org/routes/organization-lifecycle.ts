@@ -15,7 +15,7 @@ import { softDeleteLabOrganization } from "../records-retention";
 import { mount } from "../../../lib/endpoint-mount";
 
 /**
- * Organization lifecycle (records retention, decision Q16).
+ * Organization lifecycle (records retention).
  *
  * A laboratory is never deleted for real while it holds regulated records:
  * the owner soft-deletes it. Everything it holds is kept for the retention

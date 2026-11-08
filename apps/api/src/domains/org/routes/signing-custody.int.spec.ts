@@ -1,6 +1,6 @@
 /**
- * signing-custody.int.spec.ts - roadmap 2 B4a (signing-credential custody and
- * audit). Real database, real middleware (RBAC included), real fixture PKCS#12
+ * signing-custody.int.spec.ts - signing-credential custody and audit.
+ * Real database, real middleware (RBAC included), real fixture PKCS#12
  * files issued by a fixture CA. Only the better-auth session is mocked.
  *
  *   REQ-B4A-3  upload validation: an expired, not-yet-valid, key-usage-less or

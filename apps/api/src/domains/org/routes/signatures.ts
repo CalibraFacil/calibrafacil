@@ -26,10 +26,6 @@ import {
 } from "../../../lib/storage";
 import { memberSignatureKey } from "@calibra-facil/shared/storage-keys";
 
-// =============================================================================
-// CONSTANTS
-// =============================================================================
-
 const MAX_FILE_SIZE = 500 * 1024; // 500KB
 const MIN_WIDTH = 100;
 const MIN_HEIGHT = 50;
@@ -37,10 +33,6 @@ const MAX_WIDTH = 800;
 const MAX_HEIGHT = 400;
 const ALLOWED_CONTENT_TYPES = ["image/png"];
 const PRESIGNED_URL_EXPIRY = 300; // 5 minutes
-
-// =============================================================================
-// IMAGE DIMENSION VALIDATION
-// =============================================================================
 
 /**
  * Extract PNG image dimensions from buffer.
@@ -68,10 +60,6 @@ function getPngDimensions(
   return { width, height };
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
 const PREFIX = "/api/signatures";
 
 export const signaturesRouter = createRouter<{
@@ -79,9 +67,6 @@ export const signaturesRouter = createRouter<{
   Bindings: R2Env;
 }>();
 
-// ===========================================================================
-// POST /my-signature - Upload own signature
-// ===========================================================================
 mount(
   signaturesRouter,
   PREFIX,
@@ -91,7 +76,6 @@ mount(
     const memberData = c.get("member");
     const env = c.env;
 
-    // Parse multipart form data
     const formData = await c.req.formData();
     const file = formData.get("signature");
 
@@ -99,7 +83,6 @@ mount(
       throw invalid("invalid_request", "Nenhum arquivo enviado");
     }
 
-    // Validate content type
     if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
       throw invalid(
         "invalid_request",
@@ -107,7 +90,6 @@ mount(
       );
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       throw invalid(
         "invalid_request",
@@ -115,16 +97,13 @@ mount(
       );
     }
 
-    // Read file buffer
     const buffer = await file.arrayBuffer();
 
-    // Validate PNG and get dimensions
     const dimensions = getPngDimensions(buffer);
     if (!dimensions) {
       throw invalid("invalid_request", "Arquivo não é uma imagem PNG válida.");
     }
 
-    // Validate dimensions
     if (dimensions.width < MIN_WIDTH || dimensions.height < MIN_HEIGHT) {
       throw invalid(
         "invalid_request",
@@ -150,7 +129,6 @@ mount(
       memberId: memberData.id,
     });
 
-    // Upload to R2
     const r2Client = createR2Client(env);
     await uploadToR2(
       r2Client,
@@ -176,7 +154,6 @@ mount(
 
       const existing = existingSignature[0];
       if (existing) {
-        // Update existing
         await ctx.o
           .update(memberVisualSignature)
           .set({
@@ -189,7 +166,6 @@ mount(
           })
           .where(eq(memberVisualSignature.id, existing.id));
       } else {
-        // Insert new
         await ctx.o.insert(memberVisualSignature).values({
           memberId: memberData.id,
           organizationId: memberData.organizationId,
@@ -209,9 +185,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// GET /my-signature - Get own signature URL
-// ===========================================================================
 mount(
   signaturesRouter,
   PREFIX,
@@ -242,7 +215,6 @@ mount(
       return { hasSignature: false as const };
     }
 
-    // Generate presigned URL
     const r2Client = createR2Client(env);
     const bucketName = await resolveReadBucketName(
       r2Client,
@@ -266,9 +238,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// DELETE /my-signature - Remove own signature
-// ===========================================================================
 mount(
   signaturesRouter,
   PREFIX,
@@ -299,7 +268,6 @@ mount(
       throw notFound("not_found", "Nenhuma assinatura encontrada");
     }
 
-    // Delete from R2
     const r2Client = createR2Client(env);
     const bucketName = await resolveReadBucketName(
       r2Client,
@@ -309,7 +277,6 @@ mount(
     );
     await deleteFromR2(r2Client, bucketName, signature.r2Key);
 
-    // Delete from database
     await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
       ctx.o
         .delete(memberVisualSignature)
@@ -326,13 +293,12 @@ mount(
 // ===========================================================================
 signaturesRouter.get(
   "/member/:memberId",
-  ...withLabPermission({ calibration: ["approve"] }), // Only admins/owners can approve
+  ...withLabPermission({ calibration: ["approve"] }),
   async (c) => {
     const { memberId } = c.req.param();
     const memberData = c.get("member");
     const env = c.env;
 
-    // Verify the requested member belongs to the same organization
     const found = await orgDb(memberData.organizationId).transaction(
       async (o) => {
         const [targetMember] = await o

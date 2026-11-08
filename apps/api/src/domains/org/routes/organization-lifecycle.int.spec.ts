@@ -1,6 +1,6 @@
 /**
  * organization-lifecycle.int.spec.ts — POST /api/organization/soft-delete
- * (records retention, decision Q16, REQ-RET-3): the owner soft-deletes the
+ * (records retention, REQ-RET-3): the owner soft-deletes the
  * laboratory from the settings page. Real Postgres, real RBAC; only the
  * better-auth session is mocked.
  *

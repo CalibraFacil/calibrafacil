@@ -1,6 +1,6 @@
 /**
  * Re-encrypt the laboratories' signing credentials under the CURRENT key
- * encryption key (roadmap 2 B4a, REQ-B4A-2). Behind
+ * encryption key (REQ-B4A-2). Behind
  * `apps/api/src/cli/reencrypt-signing-credentials.ts`.
  *
  * What it does, per `organization_signing_certificate` row:

@@ -401,7 +401,7 @@ mount(
       updateData.archivedAt = input.status === "ARCHIVED" ? new Date() : null;
     }
 
-    // C2: the calibrating-body fields that actually change.
+    // The calibrating-body fields that actually change.
     const bodyBefore: Record<string, string | null> = {};
     const bodyAfter: Record<string, string | null> = {};
     for (const field of CALIBRATING_BODY_FIELDS) {
