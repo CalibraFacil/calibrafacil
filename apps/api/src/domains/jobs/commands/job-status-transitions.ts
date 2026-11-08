@@ -34,8 +34,7 @@ export function isCancelableJobStatus(status: JobStatus): boolean {
 
 /**
  * The 409 returned when a status compare-and-set matched no row: the job moved
- * under the caller. Wire shape is unchanged for existing clients (legacy
- * upper-case code + top-level `currentStatus`); `details` carries the same
+ * under the caller. Wire shape keeps the top-level `currentStatus`; `details` carries the same
  * status for new clients.
  */
 export async function jobStatusConflict(
@@ -51,7 +50,7 @@ export async function jobStatusConflict(
   const currentStatus = current?.status ?? null;
 
   return conflict(
-    "JOB_STATUS_CONFLICT",
+    "job_status_conflict",
     "O status do job mudou durante a operacao. Recarregue e tente novamente.",
     { details: { currentStatus }, legacyBody: { currentStatus } },
   );

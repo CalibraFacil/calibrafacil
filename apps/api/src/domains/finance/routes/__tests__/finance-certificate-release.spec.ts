@@ -166,7 +166,7 @@ describe("finance certificate-release routes", () => {
         serviceOrderId: 7,
         serviceOrderUnitId: 10,
       };
-      mocks.releaseByException.mockResolvedValueOnce({ code: "NOT_APPROVED" });
+      mocks.releaseByException.mockResolvedValueOnce({ code: "not_approved" });
 
       const res = await makeApp().request("/42/release-by-exception", {
         method: "POST",

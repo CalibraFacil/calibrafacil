@@ -259,10 +259,10 @@ mount(
         );
 
         if ("code" in result) {
-          if (result.code === "REASON_REQUIRED") {
+          if (result.code === "reason_required") {
             throw invalid("release_reason_required", "Motivo é obrigatório");
           }
-          if (result.code === "NOT_APPROVED") {
+          if (result.code === "not_approved") {
             throw conflict(
               "release_certificate_not_approved",
               "Certificado ainda não aprovado",

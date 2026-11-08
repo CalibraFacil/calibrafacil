@@ -20,7 +20,7 @@ export function buildJobApprovalInput(
       environmentalJustification.length > 0
         ? environmentalJustification
         : undefined,
-    // Only sent after the server blocked with SCOPE_VIOLATION;
+    // Only sent after the server blocked with scope_violation;
     // approving with it downgrades the certificate to non-accredited.
     scopeOverrideJustification:
       scopeOverride.length > 0 ? scopeOverride : undefined,
@@ -42,12 +42,12 @@ export function isJobApprovalBlockedByEnvironment(
 }
 
 /**
- * The approve call came back 422 SCOPE_VIOLATION. Detected from
+ * The approve call came back 422 scope_violation. Detected from
  * the CalibraApiError payload so the dialog can reveal the override path.
  */
 export function isScopeViolationError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false
   const payload = Reflect.get(error, 'payload')
   if (typeof payload !== 'object' || payload === null) return false
-  return Reflect.get(payload, 'code') === 'SCOPE_VIOLATION'
+  return Reflect.get(payload, 'code') === 'scope_violation'
 }

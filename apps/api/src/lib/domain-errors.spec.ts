@@ -46,13 +46,13 @@ describe("DomainError (REQ-DE-1)", () => {
   });
 
   it("REQ-DE-1: legacy top-level fields are merged into the body for backwards compatibility", () => {
-    const error = conflict("JOB_STATUS_CONFLICT", "Status mudou", {
+    const error = conflict("job_status_conflict", "Status mudou", {
       legacyBody: { currentStatus: "REJECTED" },
     });
 
     expect(domainErrorBody(error)).toEqual({
       error: "Status mudou",
-      code: "JOB_STATUS_CONFLICT",
+      code: "job_status_conflict",
       currentStatus: "REJECTED",
     });
   });
@@ -65,8 +65,6 @@ describe("DomainError (REQ-DE-1)", () => {
       [
         "ALREADY_ACKNOWLEDGED",
         "ALREADY_REGISTERED",
-        "APPROVAL_CONFLICT",
-        "APPROVAL_DISPATCH_FAILED",
         "APPROVAL_ROLE_NOT_PERMITTED",
         "APPROVAL_ROSTER_EMPTY",
         "APPROVER_NOT_AUTHORIZED_SIGNATORY",
@@ -74,12 +72,8 @@ describe("DomainError (REQ-DE-1)", () => {
         "CONCLUSION_REQUIRED",
         "DIMENSIONAL_ERROR",
         "JOB_NOT_APPROVED",
-        "JOB_NOT_FOUND",
-        "JOB_STATUS_CONFLICT",
         "LAST_CALIBRATION_APPROVER",
         "OOT_ALREADY_FLAGGED",
-        "SCOPE_VIOLATION",
-        "SELF_APPROVAL_BLOCKED",
       ].sort(),
     );
     expect(new Set(API_ERROR_CODES).size).toBe(API_ERROR_CODES.length);

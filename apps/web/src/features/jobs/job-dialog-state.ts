@@ -15,7 +15,7 @@ export type JobDialogState =
   | {
       kind: 'approve'
       envJustification: string
-      // The server answered SCOPE_VIOLATION: the dialog offers the documented
+      // The server answered scope_violation: the dialog offers the documented
       // override (issue without the accreditation seal).
       scopeViolationBlocked: boolean
       scopeOverrideJustification: string

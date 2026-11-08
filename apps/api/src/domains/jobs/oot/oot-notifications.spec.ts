@@ -213,10 +213,10 @@ beforeEach(() => {
 });
 
 describe("flagJobOutOfTolerance", () => {
-  it("returns JOB_NOT_FOUND when the job is not in the organization", async () => {
+  it("returns job_not_found when the job is not in the organization", async () => {
     enqueueSelects([]);
     const result = await flagJobOutOfTolerance(BASE_PARAMS, makeCtx());
-    expect(result).toMatchObject({ ok: false, code: "JOB_NOT_FOUND" });
+    expect(result).toMatchObject({ ok: false, code: "job_not_found" });
   });
 
   it("returns JOB_NOT_APPROVED for a job still in execution", async () => {

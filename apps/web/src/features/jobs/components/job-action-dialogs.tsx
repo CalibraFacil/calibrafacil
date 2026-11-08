@@ -110,7 +110,7 @@ export function ApproveJobDialog({
           )}
 
         {/* #427 Phase 1: scope-violation override (only after the server
-              blocked with SCOPE_VIOLATION). Approving here issues WITHOUT
+              blocked with scope_violation). Approving here issues WITHOUT
               the accreditation seal. */}
         {scopeViolationBlocked && (
           <div className="space-y-3">

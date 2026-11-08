@@ -763,7 +763,7 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
       status: "REVIEW",
     });
 
-    // userA tries to self-approve → 403 SELF_APPROVAL_BLOCKED (alternate userB exists)
+    // userA tries to self-approve → 403 self_approval_blocked (alternate userB exists)
     loginAs({ userId: userA, organizationId: "org-four" });
     const selfApproveRes = await jobsRouter.request(
       `/${fourEyesJobId}/approve`,
@@ -775,7 +775,7 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
     );
     expect(selfApproveRes.status).toBe(403);
     const selfApproveBody = await selfApproveRes.json();
-    expect(selfApproveBody.code).toBe("SELF_APPROVAL_BLOCKED");
+    expect(selfApproveBody.code).toBe("self_approval_blocked");
 
     // DB: still REVIEW
     const [blockedRow] = await db
@@ -978,7 +978,7 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
 // #427 Phase 1 — accredited-scope (CMC) guard at approval.
 //
 // Proven properties:
-//   REQ-CMC-010  enforce mode + U below CMC → 422 SCOPE_VIOLATION, job stays REVIEW
+//   REQ-CMC-010  enforce mode + U below CMC → 422 scope_violation, job stays REVIEW
 //   REQ-CMC-011  enforce mode + documented override → approved WITHOUT seal
 //                (scope_override_justification frozen on the job)
 //   REQ-CMC-012  warn mode + violation → approved, classification stamped,
@@ -1190,7 +1190,7 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
     await truncateAll();
   });
 
-  it("REQ-CMC-010: enforce mode blocks U-below-CMC approval with 422 SCOPE_VIOLATION", async () => {
+  it("REQ-CMC-010: enforce mode blocks U-below-CMC approval with 422 scope_violation", async () => {
     const world = await seedScopeGuardWorld({
       orgId: "org-cmc-block",
       userId: "user-cmc-block",
@@ -1208,7 +1208,7 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
 
     expect(res.status).toBe(422);
     const body = await res.json();
-    expect(body.code).toBe("SCOPE_VIOLATION");
+    expect(body.code).toBe("scope_violation");
     expect(body.scopeCompliance.status).toBe("U_BELOW_CMC");
 
     const [row] = await db
@@ -1523,7 +1523,7 @@ describe("jobsRouter — accreditation seal from the scope verdict (Q42)", () =>
     });
   });
 
-  it("REQ-SEAL-006: enforce mode blocks an out-of-scope approval with 422 SCOPE_VIOLATION and freezes nothing", async () => {
+  it("REQ-SEAL-006: enforce mode blocks an out-of-scope approval with 422 scope_violation and freezes nothing", async () => {
     const world = await seedScopeGuardWorld({
       orgId: "org-seal-block",
       userId: "user-seal-block",
@@ -1561,7 +1561,7 @@ describe("jobsRouter — accreditation seal from the scope verdict (Q42)", () =>
     );
 
     expect(res.status).toBe(422);
-    expect((await res.json()).code).toBe("SCOPE_VIOLATION");
+    expect((await res.json()).code).toBe("scope_violation");
     expect(await frozenSealOf(world.jobId)).toBeUndefined();
   });
 
@@ -1841,7 +1841,7 @@ describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", ()
 
     expect(res.status).toBe(409);
     const body = await res.json();
-    expect(body.code).toBe("JOB_STATUS_CONFLICT");
+    expect(body.code).toBe("job_status_conflict");
     expect(body.currentStatus).toBe("REJECTED");
     expect(await statusOf(id)).toBe("REJECTED");
     expect(await auditActions(id)).not.toContain("cancel");
@@ -1857,7 +1857,7 @@ describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", ()
     expect(await res.json()).toEqual({
       error:
         "O status do job mudou durante a operacao. Recarregue e tente novamente.",
-      code: "JOB_STATUS_CONFLICT",
+      code: "job_status_conflict",
       currentStatus: "REJECTED",
       details: { currentStatus: "REJECTED" },
     });
