@@ -18,8 +18,8 @@ import { isCompiledMethod } from "./commands/helpers";
  * A job freezes its own copy of the compiled method when it is created, so
  * recompiling and re-approving a published method after an engine release does
  * not reach jobs that are already open: their snapshots would stay on the old
- * engine and `executeCompiledMethod` would refuse to run them forever (review
- * of the 0.4.0 execution guard). Adoption is gated on the compiled method
+ * engine and `executeCompiledMethod` would refuse to run them forever.
+ * Adoption is gated on the compiled method
  * itself: `reconcileCompiledMethodEngine` only accepts a current compilation
  * whose normalized method definition (engine block removed) is byte-identical,
  * which proves the method's metrology did not move — only the engine it was

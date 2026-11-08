@@ -23,7 +23,7 @@ import {
  * Assign a technician to a job: the ONE implementation behind the cloud route.
  *
  *   1. load the job (organization + unit scope)
- *   2. the transition table (`assign`, decision Q19): only DRAFT, IN_PROGRESS,
+ *   2. the transition table (`assign`): only DRAFT, IN_PROGRESS,
  *      REVIEW and REJECTED take a technician; CANCELED, GENERATING_PDF,
  *      APPROVED and SUPERSEDED are refused
  *   3. the technician: a member of the organization with an assignment in the

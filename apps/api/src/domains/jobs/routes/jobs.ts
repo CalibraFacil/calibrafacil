@@ -229,9 +229,6 @@ export const jobsRouter = createRouter<{
   Bindings: IntegrationsEnv;
 }>();
 
-// =========================================================================
-// GET /search - Lightweight search for command palette
-// =========================================================================
 jobsRouter.get(
   "/search",
   ...withLabPermission({ calibration: ["read"] }),
@@ -266,9 +263,6 @@ jobsRouter.get(
   },
 );
 
-// =========================================================================
-// GET / - List jobs with pagination and filtering
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,
@@ -292,7 +286,6 @@ mount(
     } = filters;
     const offset = (page - 1) * limit;
 
-    // Build conditions - always scope to organization
     const conditions = [
       eq(calibrationJob.organizationId, memberData.organizationId),
       buildUnitScopeCondition(calibrationJob.unitId, memberData),
@@ -357,13 +350,11 @@ mount(
     const { countResult, jobs, financialContexts } = await orgDb(
       memberData.organizationId,
     ).transaction(async (o) => {
-      // Get total count
       const [countResult] = await o
         .select({ total: count() })
         .from(calibrationJob)
         .where(whereCondition);
 
-      // Get paginated data with joins
       const jobs = await o
         .select({
           id: calibrationJob.id,
@@ -375,7 +366,6 @@ mount(
           createdAt: calibrationJob.createdAt,
           updatedAt: calibrationJob.updatedAt,
           approvedAt: calibrationJob.approvedAt,
-          // Related entities
           customerId: calibrationJob.customerId,
           customerName: customer.name,
           assetId: calibrationJob.assetId,
@@ -385,7 +375,6 @@ mount(
           serviceName: service.name,
           technicianId: calibrationJob.technicianId,
           technicianName: user.name,
-          // Method snapshot summary
           methodSnapshot: calibrationJob.methodSnapshot,
         })
         .from(calibrationJob)
@@ -406,7 +395,6 @@ mount(
       return { countResult, jobs, financialContexts };
     });
 
-    // Add computed fields
     const now = new Date();
     const jobsWithComputedFields = jobs.map((job) => ({
       ...job,
@@ -415,7 +403,6 @@ mount(
           isOneOf(OPEN_JOB_STATUSES, job.status)
         : null,
       daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
-      // Extract method name from snapshot for display
       methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
       methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
       ...financialContexts.get(job.id),
@@ -433,9 +420,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/label - Get job label by ID
-// =========================================================================
 jobsRouter.get(
   "/:id/label",
   ...withLabPermission({ calibration: ["read"] }),
@@ -483,9 +467,6 @@ jobsRouter.get(
   },
 );
 
-// =========================================================================
-// GET /:id - Get single job with full details
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,
@@ -549,7 +530,6 @@ mount(
             amendmentNumber: calibrationJob.amendmentNumber,
             amendmentReason: calibrationJob.amendmentReason,
             supersededAt: calibrationJob.supersededAt,
-            // Related entities
             customerId: calibrationJob.customerId,
             customerName: customer.name,
             customerTaxId: customer.taxId,
@@ -582,7 +562,7 @@ mount(
             technicianName: user.name,
             approverName: approverUser.name,
             rejectorName: rejectorUser.name,
-            // Q42: the seal decision frozen at approval (null before approval
+            // The seal decision frozen at approval (null before approval
             // and for records approved before migration 0120).
             frozenSeal: frozenSealColumn,
           })
@@ -645,7 +625,7 @@ mount(
                 )
                 .limit(1)
             : [];
-        // Separation of duties (B5), for the allowed actions (F1): would this
+        // Separation of duties, for the allowed actions: would this
         // member's approval be refused as approving their own work?
         const approvalBlockedForMember =
           job.status === "REVIEW"
@@ -701,7 +681,6 @@ mount(
           } satisfies AssetSnapshot)
         : null);
 
-    // Add computed fields
     const now = new Date();
     const result = {
       ...job,
@@ -771,7 +750,7 @@ mount(
           serviceId: input.serviceId,
           technicianId: input.technicianId,
           dueDate: input.dueDate,
-          // DOM-02 (#655): back-link to the repair OS this calibration came
+          // Back-link to the repair OS this calibration came
           // from, when opened from the pending-after-repair flow. Org-scoped
           // in createCalibrationJob.
           sourceServiceOrderId: input.sourceServiceOrderId ?? null,
@@ -796,9 +775,6 @@ mount(
   },
 );
 
-// =========================================================================
-// PUT /:id - Update job (technician, due date)
-// =========================================================================
 jobsRouter.put(
   "/:id",
   ...withLabPermission({ calibration: ["update"] }),
@@ -824,7 +800,6 @@ jobsRouter.put(
             dueDate: input.dueDate,
           }),
         );
-        // Notify the technician if it changed.
         const { technicianId } = input;
         if (result.changed.technician && technicianId) {
           ctx.afterCommit(() =>
@@ -839,9 +814,6 @@ jobsRouter.put(
   },
 );
 
-// =========================================================================
-// POST /:id/assign - Assign technician to job
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,
@@ -867,7 +839,6 @@ mount(
             technicianId: input.technicianId,
           }),
         );
-        // Send notification to assigned technician
         ctx.afterCommit(() =>
           notifyJobAssigned(id, input.technicianId, ctx.actor.userId),
         );
@@ -919,7 +890,6 @@ mount(
       throw await jobExecutionRefusal(id, memberData.organizationId, result);
     }
 
-    // Send notifications to admins/owners (fire and forget)
     notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
       console.error("[Jobs] Failed to send submit notification:", err);
     });
@@ -1020,9 +990,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /:id/reject - Reject job (manager only)
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,
@@ -1048,7 +1015,6 @@ mount(
             reason: input.reason,
           }),
         );
-        // Send notification to technician
         ctx.afterCommit(() =>
           notifyJobRejected(id, ctx.actor.userId, input.reason),
         );
@@ -1065,7 +1031,7 @@ mount(
 
 // =========================================================================
 // POST /:id/retry-render - Render again the certificate of an approved job
-// whose render failed (RENDER_FAILED -> GENERATING_PDF, roadmap 2 C5)
+// whose render failed (RENDER_FAILED -> GENERATING_PDF)
 // =========================================================================
 mount(
   jobsRouter,
@@ -1101,7 +1067,7 @@ mount(
 
 // =========================================================================
 // POST /:id/flag-oot - Flag an approved job as out-of-tolerance (as found):
-// opens a typed NC and generates the §7.10 customer notification (#426).
+// opens a typed NC and generates the §7.10 customer notification.
 // Never gates certificate issuance — it opens a quality workflow only.
 // =========================================================================
 mount(
@@ -1223,7 +1189,7 @@ mount(
   PREFIX,
   jobEndpoints.amend,
   [
-    ...withLabPermission({ calibration: ["approve"] }), // Only admin/owner can amend
+    ...withLabPermission({ calibration: ["approve"] }),
     zValidator("json", AmendJobSchema),
   ],
   async (c, { params, body }) => {
@@ -1247,7 +1213,7 @@ mount(
           }),
         );
 
-        // Reverse traceability (#426 Phase 1): the amendment clones the
+        // Reverse traceability: the amendment clones the
         // frozen standards snapshot verbatim, so mirror the links for the new
         // job too. A derived index of that snapshot, written in the same
         // transaction: a failure rolls the amendment back.
@@ -1295,7 +1261,7 @@ mount(
   jobEndpoints.withdrawCertificate,
   [
     ...withLabPermission({ calibration: ["approve"] }),
-    requireRole(["admin", "owner"]), // Only admin/owner can withdraw
+    requireRole(["admin", "owner"]),
     zValidator("json", WithdrawCertificateSchema),
   ],
   async (c, { params, body }) => {
@@ -1359,7 +1325,6 @@ jobsRouter.get(
         memberData.organizationId,
         requestActor(c),
         async ({ o, tx }) => {
-          // Verify job exists and belongs to organization
           const [job] = await o
             .select({ id: calibrationJob.id })
             .from(calibrationJob)
@@ -1497,9 +1462,6 @@ jobsRouter.get(
   },
 );
 
-// =========================================================================
-// GET /:id/audit-log - Get audit log for a job
-// =========================================================================
 jobsRouter.get(
   "/:id/audit-log",
   ...withLabPermission({ calibration: ["read"] }),
@@ -1509,7 +1471,6 @@ jobsRouter.get(
 
     const logs = await orgDb(memberData.organizationId).transaction(
       async (o) => {
-        // Verify job exists and belongs to organization
         const [existing] = await o
           .select({ id: calibrationJob.id })
           .from(calibrationJob)
@@ -1524,7 +1485,6 @@ jobsRouter.get(
 
         if (!existing) return null;
 
-        // Get audit logs with performer details
         return o
           .select({
             id: jobAuditLog.id,
@@ -1551,9 +1511,6 @@ jobsRouter.get(
   },
 );
 
-// =========================================================================
-// GET /technicians - Get list of technicians for assignment dropdown
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,
@@ -1614,9 +1571,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/download - Generate presigned URL for certificate download
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,
@@ -1661,9 +1615,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /:id/generate-label - Enqueue thermal label generation
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,
@@ -1696,7 +1647,6 @@ mount(
       throw jobNotFound();
     }
 
-    // Only approved jobs can have labels generated
     if (job.status !== "APPROVED") {
       throw invalid(
         "invalid_request",
@@ -1717,9 +1667,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/download-label - Generate presigned URL for label download
-// =========================================================================
 mount(
   jobsRouter,
   PREFIX,

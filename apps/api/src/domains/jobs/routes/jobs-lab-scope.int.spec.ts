@@ -1,5 +1,5 @@
 /**
- * jobs-lab-scope.int.spec.ts — the calibration-job routes (P2-18f) that the other
+ * jobs-lab-scope.int.spec.ts — the calibration-job routes that the other
  * job specs do not reach on the success path, each with a cross-laboratory
  * negative: laboratory B's job (by id or by certificate number) used in
  * laboratory A's session answers 404, with nothing read or written.

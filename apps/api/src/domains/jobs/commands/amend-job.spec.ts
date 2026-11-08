@@ -13,7 +13,7 @@ import type { JobRow } from "./job-actor";
 
 /**
  * Every column of calibration_job is either part of the technical record an
- * amendment carries over (roadmap 2 B3, ISO/IEC 17025 §7.8.8) or is deliberately
+ * amendment carries over (ISO/IEC 17025 §7.8.8) or is deliberately
  * not carried, with the reason. A column added to the table later fails this test
  * until someone classifies it: an amendment must not silently drop (or copy) a
  * field of the frozen record.

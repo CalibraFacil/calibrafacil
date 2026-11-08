@@ -1,5 +1,5 @@
 /**
- * approval-sod-gates.int.spec.ts: roadmap 2 B5 [HIGH RISK].
+ * approval-sod-gates.int.spec.ts [HIGH RISK].
  *
  * The approval gates that make the release a real second pair of eyes, run through
  * the real routes (cloud `POST /jobs/:id/approve`, public API `POST /v2/jobs/:id/approve`),

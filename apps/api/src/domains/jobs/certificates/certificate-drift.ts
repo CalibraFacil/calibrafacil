@@ -62,7 +62,7 @@ export async function runCertificateDriftCheck(
   options: { sampleSize?: number } = {},
 ): Promise<DriftCheckResult> {
   const sampleSize = options.sampleSize ?? 25;
-  // System path (P2-18j): the sweep re-hashes the newest snapshots of EVERY
+  // System path: the sweep re-hashes the newest snapshots of EVERY
   // laboratory (a platform integrity job, no request names one), so this one
   // statement lists them across laboratories; the audit event of each finding
   // is written in a transaction that names that snapshot's laboratory.

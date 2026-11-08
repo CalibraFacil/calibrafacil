@@ -692,7 +692,7 @@ describe("append-only evidence tables (migration 0115)", () => {
        order by 1`);
     const list = Array.from(rows);
 
-    // 23 with organization_compliance_audit_log (roadmap 2 B4a, migration 0133).
+    // 23 with organization_compliance_audit_log (migration 0133).
     expect(list.filter((row) => row.tbl.endsWith("_audit_log"))).toHaveLength(
       23,
     );

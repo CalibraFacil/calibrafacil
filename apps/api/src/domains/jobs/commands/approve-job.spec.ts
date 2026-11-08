@@ -88,7 +88,7 @@ const {
     mockPrefetchImages: vi.fn(async () => ({ logo: null, signature: null })),
     ImagesChangedError: class ImagesChangedError extends Error {},
     // Issuance is disabled in production while the certificate layout is
-    // redesigned (#865), so approveJob can never reach "approved" for real.
+    // redesigned, so approveJob can never reach "approved" for real.
     // Default the mock to available so the approval-effect assertions below
     // — audit log, enqueue, OOT event, date advance — keep running instead of
     // going dark until Phase 3.

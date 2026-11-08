@@ -73,9 +73,6 @@ export function isCompiledMethod(value: unknown): value is CompiledMethod {
   );
 }
 
-/**
- * Check if environmental readings are within configured limits.
- */
 export function checkEnvironmentWithinLimits(
   env: {
     temperature: number | null;

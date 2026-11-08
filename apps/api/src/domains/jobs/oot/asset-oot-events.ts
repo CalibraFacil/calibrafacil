@@ -3,11 +3,11 @@ import { assetOotEvent, assetOotAuditLog } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
 /**
- * Asset OOT event (#740 Track B, ISO/IEC 17025 7.10). When a job is approved
+ * Asset OOT event (ISO/IEC 17025 7.10). When a job is approved
  * with a NON_CONFORMING as-found verdict, the customer-facing event and its
- * first audit entry are written INSIDE the approval's own transaction (roadmap
- * 2 B2): an approval cannot commit without the event, and the event cannot
- * exist without the approval. "Never lost, never without audit" (decision Q39)
+ * first audit entry are written INSIDE the approval's own transaction: an
+ * approval cannot commit without the event, and the event cannot
+ * exist without the approval. "Never lost, never without audit"
  * is therefore met by atomicity, not by retries.
  *
  * The customer alert (in-app + e-mail) is not a database write: it is staged
@@ -29,8 +29,8 @@ export type AssetOotEventInput = {
    */
   reconciled?: boolean;
   /**
-   * The decision rule the as-found non-conformity was judged by (roadmap 2 C4;
-   * "undeclared": the method declares none, judged by simple acceptance).
+   * The decision rule the as-found non-conformity was judged by ("undeclared": the
+   * method declares none, judged by simple acceptance).
    * Recorded on the audit entry with the event.
    */
   decisionRule?: string;

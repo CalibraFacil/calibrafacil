@@ -243,7 +243,7 @@ async function standardSnapshotEntries(
 
 /**
  * What a desktop draft save stores for a standard of its own snapshot that is
- * no longer valid (P1-11). The desktop's copy of that entry is never trusted:
+ * no longer valid. The desktop's copy of that entry is never trusted:
  * the cloud's saved entry is kept verbatim when it has one, else the entry is
  * built from the cloud's own standards record. Entries of valid standards are
  * returned as the desktop froze them.

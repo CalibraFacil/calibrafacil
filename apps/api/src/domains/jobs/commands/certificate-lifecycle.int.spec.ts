@@ -1,6 +1,6 @@
 /**
  * certificate-lifecycle.int.spec.ts: the amendment lifecycle and the withdrawal
- * of an issued certificate, against a real Postgres (roadmap 2 B3; ISO/IEC
+ * of an issued certificate, against a real Postgres (ISO/IEC
  * 17025 §7.8.8 amendments, §7.10 nonconforming work). The issuance half (the
  * replacement's certificate supersedes the original in the same transaction) is
  * in apps/worker/src/certificate-lifecycle.int.spec.ts.

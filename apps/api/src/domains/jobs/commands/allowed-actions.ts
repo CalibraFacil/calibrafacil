@@ -9,7 +9,7 @@ import {
 import type { PermissionCheck } from "@calibra-facil/auth/access";
 
 /**
- * What the signed-in member may do with a job right now (roadmap 2 F1, review
+ * What the signed-in member may do with a job right now (review
  * 3.5), decided by the server with the same rules the commands apply: the
  * status machine (`canTransition`), the RBAC permission of the command's route,
  * separation of duties (B5) and the certificate's lifecycle (B3). The web shows

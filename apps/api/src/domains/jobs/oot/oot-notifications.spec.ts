@@ -1,5 +1,5 @@
 /**
- * Tests for the §7.10 out-of-tolerance flag flow (#426 Phase 0).
+ * Tests for the §7.10 out-of-tolerance flag flow.
  *
  * Mocks the org-bound handle, the shared NC creator and the background-job enqueue to
  * assert the workflow contract of flagJobOutOfTolerance():

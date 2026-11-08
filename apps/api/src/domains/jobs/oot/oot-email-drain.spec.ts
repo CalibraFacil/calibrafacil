@@ -1,5 +1,5 @@
 /**
- * Tests for the §7.10 out-of-tolerance email outbox drain (#426 Phase 0).
+ * Tests for the §7.10 out-of-tolerance email outbox drain.
  *
  * Strategy mirrors service-order-email-drain.spec.ts: mock Drizzle `db`,
  * notifications and the email template; assert the drain's reliability

@@ -40,7 +40,7 @@ type CreateCalibrationJobParams = {
   ipAddress?: string | null;
   sourceRequestId?: number;
   sourceRequestItemId?: number;
-  // DOM-02 (#655): the repair service order this calibration is being opened
+  // The repair service order this calibration is being opened
   // from (flagged calibrationRequiredAfterRepair). Persisted as the back-link on
   // the job. Re-validated to be in the caller's organization before persisting;
   // a cross-tenant id is dropped to null rather than linked.
@@ -438,7 +438,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     dueDate = addLabBusinessDays(new Date(), serviceData.tat);
   }
 
-  // DOM-02: record the source repair OS, but only if it belongs to the caller's
+  // Record the source repair OS, but only if it belongs to the caller's
   // organization. A cross-tenant id is silently dropped to null so the link can
   // never point across the tenant boundary.
   let sourceServiceOrderId: number | null = null;

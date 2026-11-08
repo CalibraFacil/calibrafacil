@@ -148,7 +148,7 @@ async function seedAsset(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        // Per-org tag uniqueness — derive lab org from the customer.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
         assetTypeId: params.assetTypeId,
         name: "Test Instrument",
@@ -975,7 +975,7 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// #427 Phase 1 — accredited-scope (CMC) guard at approval.
+// Accredited-scope (CMC) guard at approval.
 //
 // Proven properties:
 //   REQ-CMC-010  enforce mode + U below CMC → 422 SCOPE_VIOLATION, job stays REVIEW
@@ -1111,7 +1111,7 @@ async function seedScopeGuardWorld(params: {
     })
     .where(eq(organization.id, params.orgId));
   // The work was done by a technician; the logged-in admin is the approver. An
-  // accredited lab (roadmap 2 B5) has no solo exemption and must keep an
+  // accredited lab has no solo exemption and must keep an
   // authorized-signatory roster, so the approver is on it.
   const maker = `${params.userId}-maker`;
   await seedExtraMember({
@@ -1315,7 +1315,7 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
 });
 
 // ---------------------------------------------------------------------------
-// Q42 (P0-7) — the accreditation seal is decided at approval from the frozen
+// The accreditation seal is decided at approval from the frozen
 // scope verdict. Asserted on the FROZEN certificate input, which is what the
 // renderer, the public verification page and the portal read.
 //
@@ -1544,7 +1544,7 @@ describe("jobsRouter — accreditation seal from the scope verdict (Q42)", () =>
     expect(await frozenSealOf(world.jobId)).toBeUndefined();
   });
 
-  // Q45 — `enforce` is the default for an accredited lab that never chose.
+  // `enforce` is the default for an accredited lab that never chose.
   it("REQ-ENF-001 [HIGH RISK]: a lab that never chose a mode is ENFORCED while accredited: an adverse result is blocked", async () => {
     const world = await seedScopeGuardWorld({
       orgId: "org-enf-default",

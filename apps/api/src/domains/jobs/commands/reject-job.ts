@@ -18,7 +18,7 @@ import {
 
 /**
  * Reject a job under review (REVIEW -> REJECTED), or one whose certificate render
- * failed (RENDER_FAILED -> REJECTED, roadmap 2 C5): the ONE implementation behind
+ * failed (RENDER_FAILED -> REJECTED): the ONE implementation behind
  * the cloud route and the public API. A reject sends the job back to the
  * technician with a written reason, so the reason is part of the command.
  *

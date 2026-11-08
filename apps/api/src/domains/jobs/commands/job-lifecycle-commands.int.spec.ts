@@ -8,9 +8,9 @@
  *
  *   REQ-LC-1a  rejectJob: REVIEW -> REJECTED, reason and rejector stored
  *   REQ-LC-1b  cancelJob: the cancelable statuses -> CANCELED
- *   REQ-LC-1c  assignJob: open statuses only (Q19), technician checked
+ *   REQ-LC-1c  assignJob: open statuses only, technician checked
  *   REQ-LC-1d  editJob: technician / due date, no-op writes nothing; the
- *              technician rule (Q25) and the competence gate (Q26) are
+ *              technician rule and the competence gate are
  *              assignJob's
  *   REQ-LC-1e  amendJob: APPROVED -> SUPERSEDED plus the DRAFT amendment
  *   REQ-LC-1f  every refusal writes nothing; a lost compare-and-set is

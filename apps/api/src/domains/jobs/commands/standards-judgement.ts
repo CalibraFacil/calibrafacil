@@ -18,7 +18,7 @@ import type { ApiErrorCode } from "@calibra-facil/contracts";
 import { invalid } from "../../../lib/domain-errors";
 
 /**
- * The cloud's runtime of the one standards judgement (Q12). This file is only a
+ * The cloud's runtime of the one standards judgement. This file is only a
  * thin fact loader (Drizzle) and the mapping of the refusal codes to the cloud's
  * error surfaces; every rule lives in `judgeExecutionStandards`
  * (`packages/schemas`), shared with the desktop sync apply and the offline
@@ -68,7 +68,7 @@ async function loadStandardFacts(
       ),
     );
   if (rows.length === 0) return [];
-  // Roadmap 2 C3: the certificates each standard has had, so work is judged by
+  // The certificates each standard has had, so work is judged by
   // the one valid on the day it was performed, not by the latest renewal.
   const history = await executor
     .select({

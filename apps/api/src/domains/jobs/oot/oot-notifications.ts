@@ -15,7 +15,7 @@ import { createNonConformanceRecord } from "../../quality";
 import type { OrgContext } from "../../../lib/org-context";
 
 /**
- * §7.10 out-of-tolerance workflow (#426 Phase 0).
+ * §7.10 out-of-tolerance workflow.
  *
  * Flagging an approved job as out-of-tolerance (as found) atomically opens a
  * typed non-conformance and — when requested — creates the customer
@@ -310,7 +310,7 @@ export async function flagJobOutOfTolerance(
 }
 
 // =============================================================================
-// STANDARD RECALL - reverse traceability (#426 Phase 1)
+// STANDARD RECALL - reverse traceability
 // =============================================================================
 
 export type RecallStandardIdentity = {

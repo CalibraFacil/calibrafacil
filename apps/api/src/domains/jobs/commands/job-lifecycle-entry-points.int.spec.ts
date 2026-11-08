@@ -619,7 +619,7 @@ describe("assign refuses a job that is closed or being approved (Q19)", () => {
 });
 
 /**
- * Q25 / Q26: naming a technician is one policy. The cloud `PUT`, the public
+ * Naming a technician is one policy. The cloud `PUT`, the public
  * `PATCH` and the cloud `assign` refuse the same people with the same code, and
  * all three run the §6.2.5 competence gate.
  */
