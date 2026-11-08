@@ -50,8 +50,8 @@ export const ORGANIZATION_UNIT_MACHINE = defineStateMachine({
 });
 
 // invitation.status: a membership invitation. Better-Auth writes accept,
-// reject and cancel; the portal service account (apps/api/src/lib/
-// portal-service-account.ts) creates, cancels and marks expired ones. Expiry is
+// reject and cancel; the portal service account
+// (apps/api/src/domains/portal/portal-service-account.ts) creates, cancels and marks expired ones. Expiry is
 // also read at use time (`expiresAt`). Not guarded in Postgres: the library
 // owns most writes.
 const INVITATION_STATUSES = [
