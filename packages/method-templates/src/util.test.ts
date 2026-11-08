@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { safeMethodId, stripUndefinedDeep } from "./util";
+import { safeMethodId } from "@calibra-facil/method-definition";
+import { stripUndefinedDeep } from "./util";
 
 // Narrowing helpers (no `as` — type assertions are banned repo-wide). These let
 // the "dropped keys truly do not exist" assertions index into the `unknown`

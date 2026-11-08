@@ -12,7 +12,11 @@ import {
 } from "@calibra-facil/shared";
 import { CALIBRATION_PHASE_MODES } from "@calibra-facil/shared/calibration-record";
 import { z } from "zod";
-import { METHOD_ENGINE_PACKAGE_NAME, type CompiledMethod } from "./types";
+import {
+  METHOD_ENGINE_PACKAGE_NAME,
+  type CompiledMethod,
+  type MethodPreviewScenario,
+} from "./types";
 
 const SafeKeySchema = z
   .string()
@@ -516,5 +520,13 @@ const CompiledMethodSchema = z
 /** The compiled method a stored or pushed value really is, or null. */
 export function parseCompiledMethod(value: unknown): CompiledMethod | null {
   const parsed = CompiledMethodSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** The preview scenario a stored value really is, or null (evidence read back from a method row). */
+export function parseMethodPreviewScenario(
+  value: unknown,
+): MethodPreviewScenario | null {
+  const parsed = MethodPreviewScenarioSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
