@@ -426,4 +426,96 @@ describe("portalRouter /notification-preferences — per-type map", () => {
     });
     expect(row?.digestFrequency).toBe("DAILY");
   });
+
+  // ===========================================================================
+  // REQ-PORTALNOTIF-009: the preferences are served only on a recognized host.
+  // ===========================================================================
+  it("REQ-PORTALNOTIF-009: GET from an unrecognized host is refused with 403", async () => {
+    const ctx = await seedPortalContext({});
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+
+    const res = await portalRouter.request("/notification-preferences");
+    expect(res.status).toBe(403);
+  });
+
+  // ===========================================================================
+  // REQ-PORTALNOTIF-010: stored values come back, projected to the whitelist.
+  // ===========================================================================
+  it("REQ-PORTALNOTIF-010: GET returns the stored digest and e-mail switch, projecting only whitelisted types", async () => {
+    const ctx = await seedPortalContext({});
+    await db.insert(notificationPreference).values({
+      userId: ctx.portalUserId,
+      preferences: {
+        CERTIFICATE_READY: { inApp: false, email: true },
+        JOB_APPROVED: { inApp: true, email: true },
+      },
+      emailEnabled: false,
+      digestFrequency: "WEEKLY",
+    });
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+
+    const res = await portalRouter.request("/notification-preferences", {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.digestFrequency).toBe("WEEKLY");
+    expect(body.emailEnabled).toBe(false);
+    expect(body.preferences.CERTIFICATE_READY).toEqual({
+      inApp: false,
+      email: true,
+    });
+    // A type the user never set defaults to both channels on.
+    expect(body.preferences.VISIT_CONFIRMED).toEqual({
+      inApp: true,
+      email: true,
+    });
+    expect(body.preferences.JOB_APPROVED).toBeUndefined();
+  });
+
+  // ===========================================================================
+  // REQ-PORTALNOTIF-011: PUT validates the digest frequency and persists it.
+  // ===========================================================================
+  it("REQ-PORTALNOTIF-011: PUT rejects an unknown frequency and stores a valid one, echoing the saved payload", async () => {
+    const ctx = await seedPortalContext({});
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+    const put = (body: unknown) =>
+      portalRouter.request("/notification-preferences", {
+        method: "PUT",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body),
+      });
+
+    expect((await put({ digestFrequency: "MONTHLY" })).status).toBe(400);
+    expect(
+      await db
+        .select()
+        .from(notificationPreference)
+        .where(eq(notificationPreference.userId, ctx.portalUserId)),
+    ).toEqual([]);
+
+    const res = await put({ digestFrequency: "DAILY" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.digestFrequency).toBe("DAILY");
+    expect(body.emailEnabled).toBe(true);
+    expect(body.preferences.CERTIFICATE_READY).toEqual({
+      inApp: true,
+      email: true,
+    });
+    const [row] = await db
+      .select()
+      .from(notificationPreference)
+      .where(eq(notificationPreference.userId, ctx.portalUserId));
+    expect(row?.digestFrequency).toBe("DAILY");
+  });
 });
