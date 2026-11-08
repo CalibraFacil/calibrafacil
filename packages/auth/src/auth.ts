@@ -46,6 +46,11 @@ import {
   validateLabAccountSetupToken,
 } from "./lab-access";
 import { toRecord } from "@calibra-facil/shared/record";
+import {
+  configuredAppUrl,
+  organizationInvitationLink,
+  resolveWebBaseUrl,
+} from "./app-url";
 import { log } from "./log";
 
 let devFallbackAuthSecret: string | null = null;
@@ -61,14 +66,6 @@ function originOf(value: string | undefined): string | null {
 
 function resolveApiBaseUrl(fallback: string): string {
   return readEnv("API_URL") ?? fallback;
-}
-
-function resolveWebBaseUrl(isProduction: boolean): string {
-  return (
-    readEnv("APP_URL") ??
-    readEnv("WEB_URL") ??
-    (isProduction ? getRequiredEnv("APP_URL") : "http://localhost:5173")
-  );
 }
 
 function resolveEmailVerificationUrl(url: string, webBaseUrl: string): string {
@@ -134,7 +131,7 @@ function isProductionRuntime(): boolean {
   }
 
   // No explicit runtime env: fall back to URL inference.
-  const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")];
+  const configuredUrls = [readEnv("API_URL"), configuredAppUrl()];
 
   if (configuredUrls.some(isLocalDevelopmentUrl)) {
     return false;
@@ -223,7 +220,7 @@ function allowsDevFallbackAuthSecret(isProduction: boolean): boolean {
   }
 
   const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
-  const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")].filter(
+  const configuredUrls = [readEnv("API_URL"), configuredAppUrl()].filter(
     Boolean,
   );
 
@@ -275,7 +272,7 @@ const DEV_TRUSTED_ORIGINS = [
 // (SITE_URL) and any extra origins listed in AUTH_TRUSTED_ORIGINS.
 function getConfiguredTrustedOrigins(): string[] {
   return [
-    originOf(readEnv("APP_URL")),
+    originOf(configuredAppUrl()),
     originOf(readEnv("PORTAL_APP_URL")),
     originOf(readEnv("SITE_URL")),
     ...readEnvList("AUTH_TRUSTED_ORIGINS").map((entry) => originOf(entry)),
@@ -1083,8 +1080,10 @@ function createOrganizationPlugin() {
         );
       }
 
-      const appUrl = process.env.APP_URL || "http://localhost:5173";
-      const inviteLink = `${appUrl}/accept-invitation/${data.id}`;
+      const inviteLink = organizationInvitationLink(
+        data.id,
+        isProductionRuntime(),
+      );
       if (!isPlatformEmailConfigured()) {
         throw emailNotConfiguredError("organization invitations");
       }

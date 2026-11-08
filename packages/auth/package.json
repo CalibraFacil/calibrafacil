@@ -20,6 +20,7 @@
   "dependencies": {
     "@better-auth/passkey": "1.7.13",
     "@better-auth/sso": "1.7.13",
+    "@calibra-facil/config": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/email-sender": "workspace:^",
     "@calibra-facil/lab-email-domain": "workspace:^",
