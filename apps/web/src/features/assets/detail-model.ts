@@ -10,6 +10,7 @@ import { SignalTone } from '@calibra-facil/shared/status-vocabulary'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 import { dateOnlyDaysBetween } from '@calibra-facil/shared/calendar-date'
+import { FLEET_DUE_SOON_DAYS } from '@calibra-facil/shared/fleet-due'
 
 export type AssetCalibrationLevel =
   | 'valid'
@@ -17,9 +18,6 @@ export type AssetCalibrationLevel =
   | 'overdue'
   | 'unscheduled'
   | 'retired'
-
-/** Within this window the calibration is flagged as expiring soon. */
-const DUE_SOON_DAYS = 30
 
 /** A calibration date is a calendar date (a Postgres date): show its day. */
 export function formatDate(date: string | Date | null | undefined): string {
@@ -86,7 +84,7 @@ export function buildAssetCalibrationStatus(
     }
   }
 
-  if (daysUntilNext <= DUE_SOON_DAYS) {
+  if (daysUntilNext <= FLEET_DUE_SOON_DAYS) {
     return {
       level: 'due_soon',
       tone: 'warning',

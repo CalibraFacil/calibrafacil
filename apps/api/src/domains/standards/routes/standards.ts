@@ -49,8 +49,6 @@ import {
   or,
   ilike,
   desc,
-  like,
-  not,
   count,
   isNull,
   lte,
@@ -87,6 +85,8 @@ import {
   labDaysUntil,
   labToday,
 } from "@calibra-facil/shared";
+import { finalizedStandardCertificateDocument } from "@calibra-facil/db/standard-certificate-documents";
+import { pendingStandardCertificateKey } from "@calibra-facil/shared/storage-keys";
 
 const MAX_STANDARD_CERTIFICATE_FILE_SIZE = 25 * 1024 * 1024;
 const STANDARD_CERTIFICATE_CONTENT_TYPE = "application/pdf";
@@ -202,10 +202,6 @@ function sanitizeStandardCertificateFileName(value: string) {
     : `${normalized || "certificado"}.pdf`;
 }
 
-function isFinalizedCertificateDocumentCondition() {
-  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
-}
-
 function standardCertificateDocumentResponse(
   document: typeof referenceStandardCertificateDocument.$inferSelect,
 ) {
@@ -240,7 +236,7 @@ async function currentCertificateDocumentsByStandardId(
       and(
         inArray(referenceStandardCertificateDocument.standardId, standardIds),
         eq(referenceStandardCertificateDocument.isCurrent, true),
-        isFinalizedCertificateDocumentCondition(),
+        finalizedStandardCertificateDocument(),
       ),
     );
 
@@ -765,7 +761,7 @@ mount(
       .digest("hex");
 
     // The pending row commits before the upload: a failed upload leaves a
-    // `pending/` row that is never current, as before.
+    // placeholder-key row that is never current, as before.
     const registered = await withOrg(
       member.organizationId,
       requestActor(c),
@@ -783,7 +779,7 @@ mount(
             contentType: STANDARD_CERTIFICATE_CONTENT_TYPE,
             fileSize: file.size,
             sha256,
-            r2Key: `pending/standards/${standard.id}/${randomUUID()}.pdf`,
+            r2Key: pendingStandardCertificateKey(standard.id, randomUUID()),
             isCurrent: false,
             uploadedBy: session.user.id,
           })
@@ -831,7 +827,7 @@ mount(
             and(
               eq(referenceStandardCertificateDocument.standardId, standard.id),
               eq(referenceStandardCertificateDocument.isCurrent, true),
-              isFinalizedCertificateDocumentCondition(),
+              finalizedStandardCertificateDocument(),
             ),
           )
           .limit(1);
@@ -922,7 +918,7 @@ mount(
             buildUnitScopeCondition(referenceStandard.unitId, member),
             isNull(referenceStandard.deletedAt),
             eq(referenceStandardCertificateDocument.isCurrent, true),
-            isFinalizedCertificateDocumentCondition(),
+            finalizedStandardCertificateDocument(),
           ),
         )
         .limit(1),

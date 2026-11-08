@@ -20,6 +20,7 @@
     "./testing": "./src/testing.ts",
     "./seed-asset-types": "./src/seed-asset-types.ts",
     "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts",
+    "./standard-certificate-documents": "./src/standard-certificate-documents.ts",
     "./status-guard-sql": "./src/status-guard-sql.ts",
     "./status-machines": "./src/status-machines.ts"
   },

@@ -1,3 +1,4 @@
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 import { createRouter } from "../../../server/router";
 import { uniqueSlug } from "../../../lib/unique-slug";
 import { customerGroupEndpoints } from "@calibra-facil/contracts";
@@ -39,9 +40,6 @@ import { orgDb } from "../../../lib/org-db";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 import { reportServerError } from "../../../lib/observability";
-
-// Mirrors the portal's DUE_SOON window (apps/portal/src/lib/calibration-status.ts).
-const DUE_SOON_DAYS = 30;
 
 function getStringProperty(value: unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -203,7 +201,7 @@ mount(
       >();
       if (branchIds.length > 0) {
         const labToday = sql.raw(LAB_TODAY_SQL);
-        const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
+        const labSoon = sql`(${labToday} + ${sql.raw(String(FLEET_DUE_SOON_DAYS))})`;
         const counts = await o
           .select({
             customerId: asset.customerId,

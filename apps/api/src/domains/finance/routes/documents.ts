@@ -21,6 +21,7 @@ import {
 import {
   DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
   resolveIssuedDueDate,
+  LIVE_BILLING_DOCUMENT_STATUSES,
 } from "@calibra-facil/shared";
 import {
   withLabPermission,
@@ -188,12 +189,7 @@ mount(
           .where(
             and(
               eq(billingDocument.organizationId, member.organizationId),
-              inArray(billingDocument.status, [
-                "DRAFT",
-                "ISSUED",
-                "PAID",
-                "OVERDUE",
-              ]),
+              inArray(billingDocument.status, LIVE_BILLING_DOCUMENT_STATUSES),
               inArray(
                 billingDocumentItem.jobId,
                 jobs.map((job) => job.id),
@@ -294,12 +290,7 @@ mount(
           .where(
             and(
               eq(billingDocument.organizationId, member.organizationId),
-              inArray(billingDocument.status, [
-                "DRAFT",
-                "ISSUED",
-                "PAID",
-                "OVERDUE",
-              ]),
+              inArray(billingDocument.status, LIVE_BILLING_DOCUMENT_STATUSES),
               inArray(billingDocumentItem.jobId, input.jobIds),
             ),
           );

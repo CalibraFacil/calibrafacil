@@ -1,3 +1,4 @@
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 import {
   formatCalendarDate,
   formatInstant,
@@ -26,9 +27,6 @@ export type FleetStatusClassification = {
   /** pt-BR label rendered in both the PDF and the XLSX ("vence em X dias"). */
   label: string;
 };
-
-/** Mirrors the portal's DUE_SOON window (apps/portal calibration-status). */
-export const FLEET_DUE_SOON_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

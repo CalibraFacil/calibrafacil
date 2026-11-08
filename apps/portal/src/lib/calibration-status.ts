@@ -1,5 +1,6 @@
 import { SignalTone } from "@calibra-facil/shared/status-vocabulary";
 import { dateOnlyDaysBetween } from "@calibra-facil/shared/calendar-date";
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 
 /**
  * Single source of truth for an instrument's calibration status.
@@ -18,7 +19,6 @@ export type CalibrationStatus =
   | "IN_LAB";
 
 /** An instrument counts as "due soon" within this many days of its due date. */
-export const DUE_SOON_DAYS = 30;
 
 export type CalibrationStatusInfo = {
   status: CalibrationStatus;
@@ -97,7 +97,7 @@ export function getCalibrationStatus(
   const status: CalibrationStatus =
     daysDelta < 0
       ? "OVERDUE"
-      : daysDelta <= DUE_SOON_DAYS
+      : daysDelta <= FLEET_DUE_SOON_DAYS
         ? "DUE_SOON"
         : "SCHEDULED";
 

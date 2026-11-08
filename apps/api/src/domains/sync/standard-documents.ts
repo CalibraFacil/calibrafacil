@@ -1,9 +1,10 @@
-import { and, eq, inArray, like, not } from "drizzle-orm";
-import {
-  referenceStandardCertificateDocument,
-  type ReferenceStandardCertificateDocumentSnapshot,
-} from "@calibra-facil/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { referenceStandardCertificateDocument } from "@calibra-facil/db/schema";
 import type { OrgDb } from "@calibra-facil/db/for-org";
+import {
+  finalizedStandardCertificateDocument,
+  standardCertificateDocumentSnapshot,
+} from "@calibra-facil/db/standard-certificate-documents";
 
 /**
  * The current certificate document of each standard travels with the standard (the
@@ -29,7 +30,7 @@ export async function attachReferenceStandardCertificateDocuments<
       and(
         inArray(referenceStandardCertificateDocument.standardId, ids),
         eq(referenceStandardCertificateDocument.isCurrent, true),
-        not(like(referenceStandardCertificateDocument.r2Key, "pending/%")),
+        finalizedStandardCertificateDocument(),
       ),
     );
   const certificateNumbers = new Map(
@@ -59,20 +60,4 @@ export async function attachReferenceStandardCertificateDocuments<
         ? (documentsByStandardId.get(standard.id) ?? null)
         : null,
   }));
-}
-
-function standardCertificateDocumentSnapshot(
-  document: typeof referenceStandardCertificateDocument.$inferSelect,
-): ReferenceStandardCertificateDocumentSnapshot {
-  return {
-    documentId: document.id,
-    r2Key: document.r2Key,
-    fileName: document.fileName,
-    fileSize: document.fileSize,
-    sha256: document.sha256,
-    uploadedAt: document.uploadedAt,
-    certificateNumber: document.certificateNumber,
-    calibrationDate: document.calibrationDate,
-    nextCalibrationDate: document.nextCalibrationDate,
-  };
 }

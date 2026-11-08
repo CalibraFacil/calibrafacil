@@ -6,6 +6,7 @@ import {
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
 
 type ServiceOrderNumberingDbExecutor = Pick<
   OrgExecutor,
@@ -136,7 +137,7 @@ export async function generateServiceOrderNumber(
     throw new Error("Unidade nao encontrada");
   }
 
-  const year = context.generatedAt.getFullYear();
+  const { year } = getLabCalendarDay(context.generatedAt);
   const sequenceKey = `year:${year}`;
   const sequenceUnitId =
     settings.numberingScope === "unit" ? context.unitId : null;

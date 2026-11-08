@@ -32,6 +32,7 @@ import {
   isServiceOrderBillable,
   type FinancialStatus,
   type IntegrationBillingDocumentPayload,
+  ISSUED_BILLING_DOCUMENT_STATUSES,
 } from "@calibra-facil/shared";
 import {
   and,
@@ -55,6 +56,7 @@ import {
   writeIntegrationEvent,
 } from "./integrations/records";
 import { pushBillingDocument } from "./integrations/billing-push";
+import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
 
 /**
  * What the finance helpers read and write through: an org-bound handle or the
@@ -850,7 +852,8 @@ export async function generateBillingDocumentNumber(
   organizationId: string,
   executor: FinanceRawExecutor,
 ) {
-  const year = new Date().getFullYear();
+  // The laboratory's year, not the server's (the new-year boundary is the lab's midnight).
+  const { year } = getLabCalendarDay(new Date());
   const sequence = await getNextBillingDocumentSequence(
     organizationId,
     year,
@@ -970,7 +973,7 @@ export async function loadBillingDocumentPayloadsForIntegration(
     .where(
       and(
         eq(billingDocument.organizationId, organizationId),
-        inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
+        inArray(billingDocument.status, ISSUED_BILLING_DOCUMENT_STATUSES),
       ),
     )
     .orderBy(desc(billingDocument.issueDate), desc(billingDocument.createdAt))

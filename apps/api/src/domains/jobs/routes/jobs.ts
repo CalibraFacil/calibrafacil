@@ -665,7 +665,8 @@ mount(
     const { frozenSeal, submittedBy: _submittedBy, ...job } = loadedJob;
     const derivedAssetSnapshot =
       job.assetSnapshot ??
-      (["DRAFT", "IN_PROGRESS", "REVIEW", "REJECTED"].includes(job.status)
+      (job.status === "REJECTED" ||
+      OPEN_JOB_STATUSES.some((status) => status === job.status)
         ? ({
             assetId: job.assetId,
             assetTypeId: job.assetTypeId ?? 0,

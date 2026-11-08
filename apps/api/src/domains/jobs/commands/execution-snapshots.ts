@@ -15,7 +15,7 @@ import {
   judgeDraftExecutionStandards,
   type StandardsDraftWarning,
 } from "@calibra-facil/schemas";
-import { and, desc, eq, inArray, isNull, like, not, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { selectEffectiveEnvironmentalLimits } from "../../org";
 import {
   checkEnvironmentWithinLimits,
@@ -25,6 +25,10 @@ import {
   snapshotStandardIds,
   type StandardsRefusal,
 } from "./standards-judgement";
+import {
+  finalizedStandardCertificateDocument,
+  standardCertificateDocumentSnapshot,
+} from "@calibra-facil/db/standard-certificate-documents";
 
 /**
  * The frozen records a calibration is recorded with (asset, reference
@@ -33,26 +37,6 @@ import {
  * the execution core (`@calibra-facil/method-definition`), shared with the
  * desktop.
  */
-
-function standardCertificateDocumentSnapshot(
-  document: typeof referenceStandardCertificateDocument.$inferSelect,
-) {
-  return {
-    documentId: document.id,
-    r2Key: document.r2Key,
-    fileName: document.fileName,
-    fileSize: document.fileSize,
-    sha256: document.sha256,
-    uploadedAt: document.uploadedAt,
-    certificateNumber: document.certificateNumber,
-    calibrationDate: document.calibrationDate,
-    nextCalibrationDate: document.nextCalibrationDate,
-  };
-}
-
-function finalizedStandardCertificateDocumentCondition() {
-  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
-}
 
 /** What these builders read through: the caller's org-bound handle or its own transaction. */
 type Reader = Pick<OrgExecutor, "select">;
@@ -192,7 +176,7 @@ async function standardSnapshotEntries(
     .where(
       and(
         eq(referenceStandardCertificateDocument.isCurrent, true),
-        finalizedStandardCertificateDocumentCondition(),
+        finalizedStandardCertificateDocument(),
         or(
           ...standards.map((standard) =>
             and(

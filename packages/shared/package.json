@@ -10,6 +10,7 @@
     "./accreditation": "./src/accreditation.ts",
     "./decision-rule": "./src/decision-rule.ts",
     "./calendar-date": "./src/calendar-date.ts",
+    "./fleet-due": "./src/fleet-due.ts",
     "./calibration-format": "./src/calibration-format.ts",
     "./calibration-record": "./src/calibration-record.ts",
     "./cnpj": "./src/cnpj.ts",

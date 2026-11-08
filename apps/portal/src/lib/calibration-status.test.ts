@@ -1,7 +1,7 @@
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
-  DUE_SOON_DAYS,
   getCalibrationStatus,
   getInstrumentStatus,
   isCalibrationFilter,
@@ -42,11 +42,11 @@ describe("getCalibrationStatus", () => {
 
   it("uses the inclusive DUE_SOON boundary", () => {
     const boundary = new Date(NOW);
-    boundary.setDate(boundary.getDate() + DUE_SOON_DAYS);
+    boundary.setDate(boundary.getDate() + FLEET_DUE_SOON_DAYS);
     expect(getCalibrationStatus(boundary, NOW).status).toBe("DUE_SOON");
 
     const justAfter = new Date(NOW);
-    justAfter.setDate(justAfter.getDate() + DUE_SOON_DAYS + 1);
+    justAfter.setDate(justAfter.getDate() + FLEET_DUE_SOON_DAYS + 1);
     expect(getCalibrationStatus(justAfter, NOW).status).toBe("SCHEDULED");
   });
 

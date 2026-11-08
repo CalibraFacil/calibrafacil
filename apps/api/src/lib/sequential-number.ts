@@ -1,6 +1,7 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { and, desc, eq, ilike } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { getLabCalendarDay } from "@calibra-facil/shared/calendar-date";
 import { isUniqueViolation } from "./db-errors";
 
 const MAX_SEQ_RETRIES = 3;
@@ -46,7 +47,8 @@ async function nextSequentialNumber(
   o: OrgDb,
   numbering: SequentialNumbering<unknown>,
 ): Promise<string> {
-  const year = new Date().getFullYear();
+  // The laboratory's year, not the server's: a number is named after the lab's day.
+  const { year } = getLabCalendarDay(new Date());
   const [last] = await o
     .select({ number: numbering.numberColumn })
     .from(numbering.table)

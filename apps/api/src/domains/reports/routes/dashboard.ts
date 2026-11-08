@@ -1,6 +1,9 @@
 import { createRouter } from "../../../server/router";
 import { dashboardEndpoints } from "@calibra-facil/contracts";
-import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
+import {
+  IN_FLIGHT_JOB_STATUSES,
+  OPEN_JOB_STATUSES,
+} from "@calibra-facil/schemas";
 import { OPEN_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { LAB_TIME_ZONE } from "@calibra-facil/shared/calendar-date";
@@ -136,11 +139,7 @@ mount(
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
                 jobUnitScopeCondition,
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
               ),
             ),
 
@@ -195,11 +194,7 @@ mount(
                 eq(calibrationJob.organizationId, memberData.organizationId),
                 jobUnitScopeCondition,
                 lt(calibrationJob.dueDate, now),
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
               ),
             ),
 
@@ -212,11 +207,7 @@ mount(
                 eq(calibrationJob.organizationId, memberData.organizationId),
                 jobUnitScopeCondition,
                 lte(calibrationJob.dueDate, endOfToday),
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
               ),
             ),
 
@@ -230,11 +221,7 @@ mount(
                 jobUnitScopeCondition,
                 gte(calibrationJob.dueDate, now),
                 lte(calibrationJob.dueDate, sevenDaysFromNow),
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
               ),
             ),
 
@@ -249,13 +236,7 @@ mount(
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
                 jobUnitScopeCondition,
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                  "GENERATING_PDF",
-                  "RENDER_FAILED",
-                ]),
+                inArray(calibrationJob.status, IN_FLIGHT_JOB_STATUSES),
               ),
             )
             .groupBy(calibrationJob.status),
@@ -501,11 +482,7 @@ mount(
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
                 jobUnitScopeCondition,
-                inArray(calibrationJob.status, [
-                  "DRAFT",
-                  "IN_PROGRESS",
-                  "REVIEW",
-                ]),
+                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
                 lte(calibrationJob.dueDate, sevenDaysFromNow),
               ),
             )

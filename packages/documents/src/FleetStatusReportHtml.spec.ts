@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 import {
   classifyFleetDueStatus,
   renderFleetStatusReportHtml,
-  FLEET_DUE_SOON_DAYS,
   type FleetStatusAsset,
 } from "./FleetStatusReportHtml.js";
 
