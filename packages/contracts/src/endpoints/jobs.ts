@@ -36,11 +36,9 @@ import { endpoint, type EndpointGroup } from "./define";
  * `:id` is a job's numeric id or its job code (the API resolves both); the SDK
  * normalizes the code before it reaches the URL (`modules/jobs.ts`).
  *
- * Not defined here, because the SDK does not call them as endpoints: the command
- * palette search, the label line, the amendment chain, the audit log, and the
- * job edit (`PUT /:id`). `GET /:id/label-commands`
- * answers plain text (ZPL/TSPL), which the JSON endpoint client does not read:
- * the SDK method is hand-written.
+ * Not defined here, because the SDK does not call it as an endpoint:
+ * `GET /:id/label-commands` answers plain text (ZPL/TSPL), which the JSON
+ * endpoint client does not read: the SDK method is hand-written.
  */
 
 const DESKTOP_LABEL = "Jobs de calibração";

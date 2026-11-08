@@ -25,7 +25,7 @@ import {
 
 /**
  * Edit the plain fields of a job (technician, due date): the ONE implementation
- * behind the cloud `PUT /jobs/:id` and the public API `PATCH /jobs/:id`.
+ * behind the public API `PATCH /jobs/:id`.
  * Status is never editable here; every transition has its own command.
  *
  *   1. load the job (organization + unit scope)
@@ -83,11 +83,8 @@ export function editJob(command: EditJobCommand): Promise<EditJobResult> {
   );
 }
 
-/**
- * The command inside the caller's transaction (`ctx.o` of a `withOrg`): the
- * route runs it there so the notification waits for the commit.
- */
-export async function editJobIn(
+/** The command inside an open transaction. */
+async function editJobIn(
   o: OrgDb,
   command: EditJobCommand,
 ): Promise<EditJobResult> {

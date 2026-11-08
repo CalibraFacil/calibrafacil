@@ -14,7 +14,7 @@
  *   REQ-JOB-003  Reject requires REVIEW: REVIEW → 200 + REJECTED; DRAFT → 400
  *   REQ-JOB-004  Role separation: technician/operator/member cannot approve (403)
  *   REQ-JOB-005  Four-eyes by identity: self-approval blocked when alternate exists; solo-lab exempt; distinct approver allowed
- *   REQ-JOB-006  Approved immutable: DELETE APPROVED → 400; PUT APPROVED → 400
+ *   REQ-JOB-006  Approved immutable: DELETE APPROVED → 400 (editing one is REQ-LC-4a, job-lifecycle-entry-points)
  *   REQ-JOB-007  Tenant isolation on read: GET / returns only own org; GET /:id cross-tenant → not found
  *   REQ-JOB-008  Unauthenticated approve → 401
  */
@@ -835,7 +835,7 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
   // =========================================================================
   // REQ-JOB-006: Approved job is immutable (ISO/IEC 17025 traceability)
   // =========================================================================
-  it("REQ-JOB-006: DELETE an APPROVED job → 400 + DB row still present+APPROVED; PUT an APPROVED job → 400", async () => {
+  it("REQ-JOB-006: DELETE an APPROVED job → 400 + DB row still present+APPROVED", async () => {
     const fixture = await seedJobFixture({
       orgId: "org-a",
       userId: "user-a",
@@ -871,21 +871,6 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
       .where(eq(calibrationJob.id, approvedJobId));
     expect(rowAfterDelete).toBeDefined();
     expect(rowAfterDelete?.status).toBe("APPROVED");
-
-    // --- 6b: PUT → 400 ---
-    const putRes = await jobsRouter.request(`/${approvedJobId}`, {
-      method: "PUT",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ technicianId: null }),
-    });
-    expect(putRes.status).toBe(400);
-
-    // DB: still APPROVED
-    const [rowAfterPut] = await db
-      .select({ status: calibrationJob.status })
-      .from(calibrationJob)
-      .where(eq(calibrationJob.id, approvedJobId));
-    expect(rowAfterPut?.status).toBe("APPROVED");
   });
 
   // =========================================================================

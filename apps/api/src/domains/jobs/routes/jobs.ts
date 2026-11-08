@@ -2,7 +2,6 @@ import { createRouter } from "../../../server/router";
 import { jobEndpoints } from "@calibra-facil/contracts";
 import { isOneOf } from "@calibra-facil/shared/status-vocabulary";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
 import { toApiErrorJson } from "../api-error-json";
 import { DomainError, invalid } from "../../../lib/domain-errors";
 import {
@@ -26,7 +25,6 @@ import {
 import type { IntegrationsEnv } from "../../finance";
 import {
   calibrationJob,
-  jobAuditLog,
   asset,
   assetType,
   certificateInput,
@@ -41,7 +39,6 @@ import { notify } from "@calibra-facil/notifications";
 import {
   OPEN_JOB_STATUSES,
   CreateJobSchema,
-  UpdateJobSchema,
   ListJobsQuerySchema,
   AssignTechnicianSchema,
   SubmitForReviewSchema,
@@ -69,7 +66,6 @@ import type {
 import { flagJobOutOfTolerance } from "../oot/oot-notifications";
 import { syncJobStandardLinks } from "../job-standards";
 import {
-  addServerTiming,
   requireRole,
   withLabPermission,
   type AuthVariables,
@@ -115,7 +111,6 @@ import { withdrawCertificateIn } from "../commands/withdraw-certificate";
 import { loadCertificateLifecycles } from "../certificates/certificate-lifecycle";
 import { assignJobIn } from "../commands/assign-job";
 import { cancelJob } from "../commands/cancel-job";
-import { editJobIn } from "../commands/edit-job";
 import { requireJobCommandOk } from "../commands/job-command-result";
 import { userJobActor } from "../commands/job-actor";
 import { rejectJobIn } from "../commands/reject-job";
@@ -136,15 +131,9 @@ import {
 import { allowedJobActions } from "../commands/allowed-actions";
 import { requireFreshSession } from "../../../middleware/fresh-session";
 import { reportServerError } from "../../../lib/observability";
-import { loadAmendmentChain } from "../certificates/certificate-amendment-chain";
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
-
-const CommandPaletteJobSearchQuerySchema = z.object({
-  query: z.string().trim().min(2),
-  limit: z.coerce.number().min(1).max(10).default(5),
-});
 
 /**
  * The 409 body of a lost compare-and-set: the status the job holds now, read in
@@ -209,7 +198,6 @@ async function jobExecutionRefusal(
  * - GET /: calibration:read (all roles)
  * - GET /:id: calibration:read (all roles)
  * - POST /: calibration:create (LAB only - operator, technician, admin, owner)
- * - PUT /:id: calibration:update (LAB only)
  * - DELETE /:id: calibration:delete (LAB only) - sets status to CANCELED
  * - POST /:id/assign: calibration:assign_technician (LAB only)
  * - POST /:id/execute: calibration:execute (LAB only)
@@ -224,41 +212,6 @@ export const jobsRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
 }>();
-
-// GET /search: no SDK method calls it (the command palette reads `jobs.list`), so no endpoint definition.
-jobsRouter.get(
-  "/search",
-  ...withLabPermission({ calibration: ["read"] }),
-  zValidator("query", CommandPaletteJobSearchQuerySchema),
-  async (c) => {
-    const memberData = c.get("member");
-    const { query, limit } = c.req.valid("query");
-
-    const results = await orgDb(memberData.organizationId).transaction((o) =>
-      o
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            or(
-              ilike(calibrationJob.jobId, `%${query}%`),
-              ilike(calibrationJob.certificateName, `%${query}%`),
-            )!,
-          ),
-        )
-        .orderBy(desc(calibrationJob.createdAt))
-        .limit(limit),
-    );
-
-    return c.json(results);
-  },
-);
 
 mount(jobsRouter, PREFIX, jobEndpoints.list, async (c, { query: filters }) => {
   const memberData = c.get("member");
@@ -400,54 +353,6 @@ mount(jobsRouter, PREFIX, jobEndpoints.list, async (c, { query: filters }) => {
     },
   };
 });
-
-// GET /:id/label: no SDK method calls it, so no endpoint definition.
-jobsRouter.get(
-  "/:id/label",
-  ...withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
-
-    const found = await orgDb(memberData.organizationId).transaction(
-      async (o) => {
-        const id = await resolveJobRouteId(c.req.param("id"), memberData, o);
-        if (id === null) return null;
-
-        const [job] = await o
-          .select({
-            id: calibrationJob.id,
-            label: calibrationJob.jobId,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1);
-        if (!job) return null;
-
-        const financialContextMap = await loadJobFinancialContexts(
-          memberData.organizationId,
-          [job.id],
-          o,
-        );
-        return { job, financialContext: financialContextMap.get(job.id) };
-      },
-    );
-
-    if (!found) {
-      throw jobNotFound();
-    }
-
-    return c.json({
-      ...found.job,
-      ...found.financialContext,
-    });
-  },
-);
 
 mount(jobsRouter, PREFIX, jobEndpoints.get, async (c, { params }) => {
   const memberData = c.get("member");
@@ -742,50 +647,6 @@ mount(jobsRouter, PREFIX, jobEndpoints.create, async (c, { body }) => {
 
   return newJob;
 });
-
-// PUT /:id: no SDK method calls it (the technician is set with `assign`), so no endpoint definition.
-jobsRouter.put(
-  "/:id",
-  ...withLabPermission({ calibration: ["update"] }),
-  zValidator("json", UpdateJobSchema),
-  async (c) => {
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(c.req.param("id"), memberData);
-    const input = c.req.valid("json");
-
-    const job = await withOrg(
-      memberData.organizationId,
-      requestActor(c),
-      async (ctx) => {
-        const result = await requireJobCommandOk(
-          ctx.o,
-          id,
-          await editJobIn(ctx.o, {
-            actor: userJobActor(ctx.actor),
-            jobId: id,
-            organizationId: ctx.org,
-            unitScope: memberData,
-            technicianId: input.technicianId,
-            dueDate: input.dueDate,
-          }),
-        );
-        const { technicianId } = input;
-        if (result.changed.technician && technicianId) {
-          ctx.afterCommit(() =>
-            notify("JOB_ASSIGNED", {
-              jobId: id,
-              technicianId,
-              assignedByUserId: ctx.actor.userId,
-            }),
-          );
-        }
-        return result.job;
-      },
-    );
-
-    return c.json(job);
-  },
-);
 
 mount(jobsRouter, PREFIX, jobEndpoints.assign, async (c, { params, body }) => {
   const memberData = c.get("member");
@@ -1252,131 +1113,6 @@ mount(
       certificateStatus: "WITHDRAWN" as const,
       withdrawnAt: outcome.withdrawnAt.toISOString(),
     };
-  },
-);
-
-// =========================================================================
-// GET /:id/amendment-chain - Get the full amendment history for a job
-// ISO 17025:2017 Clause 7.8.4.1 - Traceability of amendments
-// No SDK method calls it (the lab reads the chain inside `jobs.get`; the portal has its own
-// route), so no endpoint definition.
-// =========================================================================
-jobsRouter.get(
-  "/:id/amendment-chain",
-  ...withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const handlerStartedAt = performance.now();
-    const memberData = c.get("member");
-
-    try {
-      const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-      const dbStartedAt = performance.now();
-      // The job check and the recursive chain read run in one transaction
-      // that names the laboratory (row-level security). The chain is raw SQL
-      // (a recursive CTE the handle cannot express): it takes the raw
-      // executor, and every table in it carries the organization predicate.
-      const chain = await withOrg(
-        memberData.organizationId,
-        requestActor(c),
-        async ({ o, tx }) => {
-          const [job] = await o
-            .select({ id: calibrationJob.id })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.id, id),
-                eq(calibrationJob.organizationId, memberData.organizationId),
-                buildUnitScopeCondition(calibrationJob.unitId, memberData),
-              ),
-            )
-            .limit(1);
-
-          if (!job) {
-            return null;
-          }
-
-          const chainRows = await loadAmendmentChain(tx, {
-            jobId: id,
-            organizationId: memberData.organizationId,
-          });
-
-          return chainRows.map((row) => ({
-            id: row.id,
-            jobId: row.jobId,
-            status: row.status,
-            amendmentNumber: row.amendmentNumber,
-            amendmentReason: row.amendmentReason,
-            approvedAt: row.approvedAt,
-            supersededAt: row.supersededAt,
-            isCurrent: row.id === job.id,
-          }));
-        },
-      );
-      addServerTiming(c, "amendment_chain_db", dbStartedAt);
-      if (chain === null) {
-        throw jobNotFound();
-      }
-
-      return c.json({
-        data: chain,
-        originalJobId: chain[0]?.id,
-        latestJobId: chain[chain.length - 1]?.id,
-        totalAmendments: chain.length - 1,
-      });
-    } finally {
-      addServerTiming(c, "amendment_chain_handler", handlerStartedAt);
-    }
-  },
-);
-
-// GET /:id/audit-log: no SDK method calls it, so no endpoint definition.
-jobsRouter.get(
-  "/:id/audit-log",
-  ...withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(c.req.param("id"), memberData);
-
-    const logs = await orgDb(memberData.organizationId).transaction(
-      async (o) => {
-        const [existing] = await o
-          .select({ id: calibrationJob.id })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) return null;
-
-        return o
-          .select({
-            id: jobAuditLog.id,
-            action: jobAuditLog.action,
-            changes: jobAuditLog.changes,
-            performedBy: jobAuditLog.performedBy,
-            performedAt: jobAuditLog.performedAt,
-            ipAddress: jobAuditLog.ipAddress,
-            reason: jobAuditLog.reason,
-            performerName: user.name,
-          })
-          .from(jobAuditLog)
-          .leftJoin(user, eq(jobAuditLog.performedBy, user.id))
-          .where(eq(jobAuditLog.jobId, id))
-          .orderBy(desc(jobAuditLog.performedAt));
-      },
-    );
-
-    if (!logs) {
-      throw jobNotFound();
-    }
-
-    return c.json({ data: logs });
   },
 );
 
