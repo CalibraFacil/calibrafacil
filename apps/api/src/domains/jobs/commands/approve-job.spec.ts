@@ -18,6 +18,7 @@ const {
   mockRevertAdvance,
   mockFindServiceOrders,
   mockTriggerAutomaticSend,
+  mockReportServerError,
   mockLockJob,
   mockFreezeInput,
   mockDiscardInput,
@@ -67,7 +68,10 @@ const {
     mockWithdrawOotEvent: vi.fn(async () => undefined),
     mockRevertAdvance: vi.fn(async () => undefined),
     mockFindServiceOrders: vi.fn(async () => []),
-    mockTriggerAutomaticSend: vi.fn(async () => undefined),
+    mockTriggerAutomaticSend: vi.fn(
+      async (_params?: { event: { serviceOrderId: number } }) => undefined,
+    ),
+    mockReportServerError: vi.fn(),
     // The frozen certificate input reads the lab, customer, asset and approver
     // rows and writes `certificate_input`; it is covered against a real Postgres
     // by certificate-input.int.spec.ts. Here only the command's wiring of it is
@@ -179,6 +183,9 @@ vi.mock("../oot/asset-oot-events", () => ({
 vi.mock("../../finance/automatic-send", () => ({
   findServiceOrdersForCalibrationJob: mockFindServiceOrders,
   triggerAutomaticSendForMilestone: mockTriggerAutomaticSend,
+}));
+vi.mock("../../../lib/observability", () => ({
+  reportServerError: mockReportServerError,
 }));
 vi.mock("../../../lib/units", () => ({
   buildUnitScopeCondition: () => undefined,
@@ -815,5 +822,62 @@ describe("approveJob freezes the certificate input (REQ-CIN-1)", () => {
     expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
     expect(mockRecordOotEvent).not.toHaveBeenCalled();
     expect(mockAdvanceDates).not.toHaveBeenCalled();
+  });
+});
+
+describe("approveJob automatic ERP send", () => {
+  function approvedJob() {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+  }
+
+  it("finishes the send of every linked service order before the approval returns", async () => {
+    approvedJob();
+    mockFindServiceOrders.mockResolvedValue([501, 502]);
+    const finished: number[] = [];
+    mockTriggerAutomaticSend.mockImplementation(async (params) => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      finished.push(params?.event.serviceOrderId ?? -1);
+    });
+
+    const result = await callApprove();
+
+    expect(result.status).toBe("approved");
+    expect(finished).toEqual([501, 502]);
+  });
+
+  it("reports a failed send and still approves; the next order is still attempted", async () => {
+    approvedJob();
+    mockFindServiceOrders.mockResolvedValue([501, 502]);
+    const attempted: number[] = [];
+    mockTriggerAutomaticSend.mockImplementation(async (params) => {
+      const serviceOrderId = params?.event.serviceOrderId ?? -1;
+      attempted.push(serviceOrderId);
+      if (serviceOrderId === 501) throw new Error("audit insert failed");
+    });
+
+    const result = await callApprove();
+
+    expect(result.status).toBe("approved");
+    expect(attempted).toEqual([501, 502]);
+    expect(mockReportServerError).toHaveBeenCalledTimes(1);
+    expect(mockReportServerError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "audit insert failed" }),
+      expect.objectContaining({
+        surface: "approve-job",
+        tags: expect.objectContaining({ serviceOrderId: "501" }),
+      }),
+    );
+  });
+
+  it("reports a failed lookup of the linked orders and still approves", async () => {
+    approvedJob();
+    mockFindServiceOrders.mockRejectedValue(new Error("lookup failed"));
+
+    const result = await callApprove();
+
+    expect(result.status).toBe("approved");
+    expect(mockTriggerAutomaticSend).not.toHaveBeenCalled();
+    expect(mockReportServerError).toHaveBeenCalledTimes(1);
   });
 });
