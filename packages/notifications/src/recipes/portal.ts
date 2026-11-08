@@ -75,7 +75,7 @@ export const portalRecipes = {
    * as-found ("como recebido") condition at certificate approval.
    * The impact assessment is the CUSTOMER'S obligation (ISO 9001:2015 §7.1.5.2);
    * this only alerts and points at the portal workspace. Recipients mirror
-   * notifyCertificateReady: every member of the customer's CLIENT org.
+   * CERTIFICATE_READY: every member of the customer's CLIENT org.
    */
   async *ASSET_FOUND_OUT_OF_TOLERANCE({ jobId }) {
     const job = await getJobDetails(jobId);

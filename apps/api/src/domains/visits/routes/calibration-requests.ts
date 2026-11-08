@@ -30,15 +30,7 @@ import {
   type AuthVariables,
 } from "../../../middleware/permission";
 import { createCalibrationJob, jobCreationClientErrors } from "../../jobs";
-import {
-  notifyCalibrationRequestApproved,
-  notifyCalibrationRequestConverted,
-  notifyCalibrationRequestRejected,
-  notifyCalibrationRequestUnderReview,
-  notifyJobAssigned,
-  notifyVisitScheduled,
-  notifyVisitConfirmed,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../../../lib/units";
 import { formatOnsiteAddressText } from "../onsite-address";
 import { isAssignableTechnician } from "../../../lib/tenant-refs";
@@ -387,7 +379,10 @@ mount(
 
       if (existing.status === "PENDING") {
         ctx.afterCommit(() =>
-          notifyCalibrationRequestUnderReview(id, ctx.actor.userId),
+          notify("CALIBRATION_REQUEST_UNDER_REVIEW", {
+            requestId: id,
+            actorUserId: ctx.actor.userId,
+          }),
         );
       }
     });
@@ -458,7 +453,10 @@ mount(
       });
 
       ctx.afterCommit(() =>
-        notifyCalibrationRequestApproved(id, ctx.actor.userId),
+        notify("CALIBRATION_REQUEST_APPROVED", {
+          requestId: id,
+          actorUserId: ctx.actor.userId,
+        }),
       );
     });
 
@@ -533,7 +531,11 @@ mount(
       });
 
       ctx.afterCommit(() =>
-        notifyCalibrationRequestRejected(id, ctx.actor.userId, input.reason),
+        notify("CALIBRATION_REQUEST_REJECTED", {
+          requestId: id,
+          actorUserId: ctx.actor.userId,
+          reason: input.reason,
+        }),
       );
     });
 
@@ -758,23 +760,33 @@ mount(
           const technicianId = job.technicianId;
           if (technicianId) {
             ctx.afterCommit(() =>
-              notifyJobAssigned(job.jobId, technicianId, ctx.actor.userId),
+              notify("JOB_ASSIGNED", {
+                jobId: job.jobId,
+                technicianId,
+                assignedByUserId: ctx.actor.userId,
+              }),
             );
           }
         }
         ctx.afterCommit(() =>
-          notifyCalibrationRequestConverted(
-            id,
-            ctx.actor.userId,
-            createdJobs.map((job) => job.jobCode),
-          ),
+          notify("CALIBRATION_REQUEST_CONVERTED", {
+            requestId: id,
+            actorUserId: ctx.actor.userId,
+            jobCodes: createdJobs.map((job) => job.jobCode),
+          }),
         );
         if (visitId !== null) {
           const convertedVisitId = visitId;
           ctx.afterCommit(async () => {
-            await notifyVisitScheduled(convertedVisitId, ctx.actor.userId);
+            await notify("VISIT_SCHEDULED", {
+              visitId: convertedVisitId,
+              actorUserId: ctx.actor.userId,
+            });
             if (visitConfirmed) {
-              await notifyVisitConfirmed(convertedVisitId, ctx.actor.userId);
+              await notify("VISIT_CONFIRMED", {
+                visitId: convertedVisitId,
+                actorUserId: ctx.actor.userId,
+              });
             }
           });
         }

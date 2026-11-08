@@ -22,9 +22,6 @@ await notify("JOB_APPROVED", { jobId: 123, approvedByUserId: "user_xxx" });
 await notify("CERTIFICATE_READY", { jobId: 123 });
 ```
 
-The `notifyJobApproved(jobId, approvedByUserId)`-style functions are one-line
-wrappers over `notify`, kept for existing callers; prefer `notify`.
-
 ## How a notification is delivered
 
 - `src/recipes/*.ts`: one recipe per type of the registry
@@ -36,7 +33,7 @@ wrappers over `notify`, kept for existing callers; prefer `notify`.
   type in the registry does not compile until it has a payload and a recipe.
 - `src/delivery.ts`: `sendNotification`, which applies the recipient's
   preferences, inserts the in-app row and sends the e-mail.
-- `src/service.ts`: `notify`, which sends each row a recipe yields, and the wrappers.
+- `src/service.ts`: `notify`, which sends each row a recipe yields.
 
 To add a notification type: add it to the registry, add its payload to
 `NotificationPayloads`, add its recipe to the domain file it belongs to.

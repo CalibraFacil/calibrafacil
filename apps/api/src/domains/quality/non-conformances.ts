@@ -4,7 +4,7 @@ import {
   type NonConformanceTriggerSource,
   type NonConformanceType,
 } from "@calibra-facil/db/schema";
-import { notifyNCCreated } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "../../lib/domain-errors";
 import type { OrgContext } from "../../lib/org-context";
@@ -84,14 +84,14 @@ export async function createNonConformanceRecord(
   // The notification reads the NC back: it waits for the commit and never
   // runs on a rolled-back record.
   ctx.afterCommit(() =>
-    notifyNCCreated(
-      newNc.id,
-      newNc.ncNumber,
-      newNc.type,
-      newNc.description,
-      ctx.org,
-      ctx.actor.userId,
-    ),
+    notify("NC_CREATED", {
+      ncId: newNc.id,
+      ncNumber: newNc.ncNumber,
+      ncType: newNc.type,
+      description: newNc.description,
+      organizationId: ctx.org,
+      createdByUserId: ctx.actor.userId,
+    }),
   );
 
   return newNc;

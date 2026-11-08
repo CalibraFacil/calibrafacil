@@ -22,7 +22,7 @@ vi.mock("../../../lib/background-jobs", () => ({
 }));
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" };

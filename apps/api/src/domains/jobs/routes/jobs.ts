@@ -38,11 +38,7 @@ import {
   memberUnitAssignment,
   type AssetSnapshot,
 } from "@calibra-facil/db/schema";
-import {
-  notifyJobSubmittedForReview,
-  notifyJobRejected,
-  notifyJobAssigned,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import {
   OPEN_JOB_STATUSES,
   CreateJobSchema,
@@ -765,7 +761,11 @@ mount(
         const { technicianId } = job;
         if (technicianId) {
           ctx.afterCommit(() =>
-            notifyJobAssigned(job.id, technicianId, ctx.actor.userId),
+            notify("JOB_ASSIGNED", {
+              jobId: job.id,
+              technicianId,
+              assignedByUserId: ctx.actor.userId,
+            }),
           );
         }
         return job;
@@ -804,7 +804,11 @@ jobsRouter.put(
         const { technicianId } = input;
         if (result.changed.technician && technicianId) {
           ctx.afterCommit(() =>
-            notifyJobAssigned(id, technicianId, ctx.actor.userId),
+            notify("JOB_ASSIGNED", {
+              jobId: id,
+              technicianId,
+              assignedByUserId: ctx.actor.userId,
+            }),
           );
         }
         return result.job;
@@ -841,7 +845,11 @@ mount(
           }),
         );
         ctx.afterCommit(() =>
-          notifyJobAssigned(id, input.technicianId, ctx.actor.userId),
+          notify("JOB_ASSIGNED", {
+            jobId: id,
+            technicianId: input.technicianId,
+            assignedByUserId: ctx.actor.userId,
+          }),
         );
         return result;
       },
@@ -891,7 +899,10 @@ mount(
       throw await jobExecutionRefusal(id, memberData.organizationId, result);
     }
 
-    notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
+    notify("JOB_SUBMITTED_FOR_REVIEW", {
+      jobId: id,
+      submittedByUserId: session.user.id,
+    }).catch((err) => {
       reportServerError(err, {
         surface: "jobs",
         tags: { step: "submit-notification", jobId: String(id) },
@@ -1020,7 +1031,11 @@ mount(
           }),
         );
         ctx.afterCommit(() =>
-          notifyJobRejected(id, ctx.actor.userId, input.reason),
+          notify("JOB_REJECTED", {
+            jobId: id,
+            rejectedByUserId: ctx.actor.userId,
+            reason: input.reason,
+          }),
         );
         return result.job;
       },

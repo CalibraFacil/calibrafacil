@@ -33,16 +33,7 @@ const {
   mockLedgerClaim,
   mockGetLabEmailBrand,
   mockSendEmail,
-  mockServicoIniciado,
-  mockServicoAndamento,
-  mockAguardandoAvaliacaoTecnica,
-  mockEmAvaliacaoTecnica,
-  mockProntoParaRetirada,
-  mockOsEntregue,
-  mockOsEncerrada,
-  mockRevisaoFinal,
-  mockOsCancelada,
-  mockGarantiaRetorno,
+  mockStatusEmail,
 } = vi.hoisted(() => {
   // Chainable select builder
   function makeSelectChain(rows: unknown[]) {
@@ -101,20 +92,7 @@ const {
     mockLedgerClaim: ledgerClaim,
     mockGetLabEmailBrand: vi.fn().mockResolvedValue(undefined),
     mockSendEmail: vi.fn().mockResolvedValue({ sent: true, emailId: "e-1" }),
-    mockServicoIniciado: vi.fn().mockReturnValue("servico-iniciado-element"),
-    mockServicoAndamento: vi.fn().mockReturnValue("servico-andamento-element"),
-    mockAguardandoAvaliacaoTecnica: vi
-      .fn()
-      .mockReturnValue("aguardando-avaliacao-element"),
-    mockEmAvaliacaoTecnica: vi.fn().mockReturnValue("em-avaliacao-element"),
-    mockProntoParaRetirada: vi
-      .fn()
-      .mockReturnValue("pronto-para-retirada-element"),
-    mockOsEntregue: vi.fn().mockReturnValue("os-entregue-element"),
-    mockOsEncerrada: vi.fn().mockReturnValue("os-encerrada-element"),
-    mockRevisaoFinal: vi.fn().mockReturnValue("revisao-final-element"),
-    mockOsCancelada: vi.fn().mockReturnValue("os-cancelada-element"),
-    mockGarantiaRetorno: vi.fn().mockReturnValue("garantia-retorno-element"),
+    mockStatusEmail: vi.fn().mockReturnValue("status-email-element"),
   };
 });
 
@@ -212,17 +190,11 @@ vi.mock("@calibra-facil/notifications", () => ({
   getLabEmailBrand: mockGetLabEmailBrand,
 }));
 
-vi.mock("@calibra-facil/email", () => ({
-  ServiceStartedEmail: mockServicoIniciado,
-  ServiceInProgressEmail: mockServicoAndamento,
-  AwaitingEvaluationEmail: mockAguardandoAvaliacaoTecnica,
-  UnderEvaluationEmail: mockEmAvaliacaoTecnica,
-  ReadyForPickupEmail: mockProntoParaRetirada,
-  ServiceOrderDeliveredEmail: mockOsEntregue,
-  ServiceOrderClosedEmail: mockOsEncerrada,
-  FinalReviewEmail: mockRevisaoFinal,
-  ServiceOrderCanceledEmail: mockOsCancelada,
-  WarrantyReturnEmail: mockGarantiaRetorno,
+// The copy and subjects are the real ones (the drain's subject is what the email
+// package says); only the rendered element is stubbed.
+vi.mock("@calibra-facil/email", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@calibra-facil/email")>()),
+  ServiceOrderStatusEmail: mockStatusEmail,
 }));
 
 // =============================================================================
@@ -358,61 +330,61 @@ describe("drainServiceOrderEmailOutbox", () => {
       {
         targetStatus: "repair_in_progress",
         reqId: "REQ-SOEMAIL-041",
-        templateMockGetter: () => mockServicoIniciado,
+        subject: "OS OS-2026-100 — serviço iniciado",
       },
       {
         targetStatus: "awaiting_calibration",
         reqId: "REQ-SOEMAIL-042",
-        templateMockGetter: () => mockServicoAndamento,
+        subject: "OS OS-2026-100 — atualização do serviço",
       },
       {
         targetStatus: "calibration_in_progress",
         reqId: "REQ-SOEMAIL-042",
-        templateMockGetter: () => mockServicoAndamento,
+        subject: "OS OS-2026-100 — atualização do serviço",
       },
       {
         targetStatus: "awaiting_tech_evaluation",
         reqId: "REQ-SOEMAIL-043",
-        templateMockGetter: () => mockAguardandoAvaliacaoTecnica,
+        subject: "OS OS-2026-100 — aguardando avaliação técnica",
       },
       {
         targetStatus: "under_evaluation",
         reqId: "REQ-SOEMAIL-044",
-        templateMockGetter: () => mockEmAvaliacaoTecnica,
+        subject: "OS OS-2026-100 — em avaliação técnica",
       },
       {
         targetStatus: "ready_for_pickup",
         reqId: "REQ-SOEMAIL-051",
-        templateMockGetter: () => mockProntoParaRetirada,
+        subject: "OS OS-2026-100 — pronto para retirada",
       },
       {
         targetStatus: "delivered",
         reqId: "REQ-SOEMAIL-052",
-        templateMockGetter: () => mockOsEntregue,
+        subject: "OS OS-2026-100 — equipamento entregue",
       },
       {
         targetStatus: "closed",
         reqId: "REQ-SOEMAIL-053",
-        templateMockGetter: () => mockOsEncerrada,
+        subject: "OS OS-2026-100 — OS encerrada",
       },
       {
         targetStatus: "awaiting_final_review",
         reqId: "REQ-SOEMAIL-054",
-        templateMockGetter: () => mockRevisaoFinal,
+        subject: "OS OS-2026-100 — em revisão final",
       },
       {
         targetStatus: "canceled",
         reqId: "REQ-SOEMAIL-061",
-        templateMockGetter: () => mockOsCancelada,
+        subject: "OS OS-2026-100 — OS cancelada",
       },
       {
         targetStatus: "warranty_return",
         reqId: "REQ-SOEMAIL-062",
-        templateMockGetter: () => mockGarantiaRetorno,
+        subject: "OS OS-2026-100 — retorno em garantia",
       },
     ] as const;
 
-    for (const { targetStatus, reqId, templateMockGetter } of TABLE) {
+    for (const { targetStatus, reqId, subject } of TABLE) {
       it(`${reqId}: target_status="${targetStatus}" calls the correct template and sends once`, async () => {
         const row = makeOutboxRow(targetStatus);
         // pending rows SELECT
@@ -428,9 +400,17 @@ describe("drainServiceOrderEmailOutbox", () => {
         expect(result.sent).toBe(1);
         expect(result.released).toBe(0);
 
-        const templateMock = templateMockGetter();
-        expect(templateMock).toHaveBeenCalledTimes(1);
+        expect(mockStatusEmail).toHaveBeenCalledTimes(1);
+        expect(mockStatusEmail).toHaveBeenCalledWith({
+          status: targetStatus,
+          brand: undefined,
+          serviceOrderNumber: SAMPLE_SO.serviceOrderNumber,
+          customerName: SAMPLE_CUSTOMER.name,
+        });
         expect(mockSendEmail).toHaveBeenCalledTimes(1);
+        expect(mockSendEmail).toHaveBeenCalledWith(
+          expect.objectContaining({ subject }),
+        );
       });
     }
   });
@@ -439,7 +419,7 @@ describe("drainServiceOrderEmailOutbox", () => {
   // REQ-SOEMAIL-042: stage prop for progress_update emails
   // ---------------------------------------------------------------------------
 
-  it("REQ-SOEMAIL-042: awaiting_calibration passes stage='awaiting_calibration' to ServiceInProgressEmail", async () => {
+  it("REQ-SOEMAIL-042: awaiting_calibration renders the status email for awaiting_calibration", async () => {
     const row = makeOutboxRow("awaiting_calibration");
     enqueueSelects([row], [SAMPLE_CUSTOMER]);
     claimSucceeds(row.id);
@@ -448,12 +428,12 @@ describe("drainServiceOrderEmailOutbox", () => {
 
     await drainServiceOrderEmailOutbox({ batchSize: 10 });
 
-    expect(mockServicoAndamento).toHaveBeenCalledWith(
-      expect.objectContaining({ stage: "awaiting_calibration" }),
+    expect(mockStatusEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "awaiting_calibration" }),
     );
   });
 
-  it("REQ-SOEMAIL-042: calibration_in_progress passes stage='calibration_in_progress' to ServiceInProgressEmail", async () => {
+  it("REQ-SOEMAIL-042: calibration_in_progress renders the status email for calibration_in_progress", async () => {
     const row = makeOutboxRow("calibration_in_progress");
     enqueueSelects([row], [SAMPLE_CUSTOMER]);
     claimSucceeds(row.id);
@@ -462,8 +442,8 @@ describe("drainServiceOrderEmailOutbox", () => {
 
     await drainServiceOrderEmailOutbox({ batchSize: 10 });
 
-    expect(mockServicoAndamento).toHaveBeenCalledWith(
-      expect.objectContaining({ stage: "calibration_in_progress" }),
+    expect(mockStatusEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "calibration_in_progress" }),
     );
   });
 

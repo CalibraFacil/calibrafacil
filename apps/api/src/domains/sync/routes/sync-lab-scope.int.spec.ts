@@ -66,14 +66,9 @@ vi.mock("../../../lib/background-jobs", () => ({
 }));
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyJobSubmittedForReview: vi.fn().mockResolvedValue(undefined),
-  notifyJobApproved: vi.fn().mockResolvedValue(undefined),
-  notifyJobRejected: vi.fn().mockResolvedValue(undefined),
-  notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
-  notifyCertificateAmended: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
   notifyNonConformanceCreated: vi.fn().mockResolvedValue(undefined),
   notifyServiceOrderCreated: vi.fn().mockResolvedValue(undefined),
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
 }));
 
 const A = "org-ls-a";

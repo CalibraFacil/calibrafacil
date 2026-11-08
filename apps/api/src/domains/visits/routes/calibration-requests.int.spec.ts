@@ -70,13 +70,7 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 // ---------------------------------------------------------------------------
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCalibrationRequestApproved: vi.fn().mockResolvedValue(undefined),
-  notifyCalibrationRequestConverted: vi.fn().mockResolvedValue(undefined),
-  notifyCalibrationRequestRejected: vi.fn().mockResolvedValue(undefined),
-  notifyCalibrationRequestUnderReview: vi.fn().mockResolvedValue(undefined),
-  notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
-  notifyVisitScheduled: vi.fn().mockResolvedValue(undefined),
-  notifyVisitConfirmed: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---------------------------------------------------------------------------

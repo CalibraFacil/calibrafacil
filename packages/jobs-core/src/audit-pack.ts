@@ -8,7 +8,7 @@ import { zipSync, strToU8, type Zippable } from "fflate";
 import { Workbook } from "@cj-tech-master/excelts";
 import type { AuditPackBackgroundJobMessage } from "@calibra-facil/schemas";
 import { portalAuditPackKey } from "@calibra-facil/shared/storage-keys";
-import { notifyAuditPackReady } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { type Env } from "./runtime-types.js";
 import {
   findOrganizationOnSystemPath,
@@ -405,7 +405,7 @@ export async function processAuditPackJob(
 
     // Non-fatal: the pack is ready even if the notification fails.
     try {
-      await notifyAuditPackReady(exportId);
+      await notify("AUDIT_PACK_READY", { exportId });
     } catch (notifyError) {
       console.error(
         `[AUDIT PACK ${exportId}] Failed to send ready notification:`,

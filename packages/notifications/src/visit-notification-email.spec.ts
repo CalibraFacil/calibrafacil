@@ -410,10 +410,13 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
     process.env.RESEND_FROM_EMAIL = "noreply@calibrafacil.com";
   });
 
-  it("notifyVisitConfirmed: VisitNotificationEmail called with variant:confirmed + customer data", async () => {
+  it("VISIT_CONFIRMED: VisitNotificationEmail called with variant:confirmed + customer data", async () => {
     setupVisit();
-    const { notifyVisitConfirmed } = await import("./service");
-    await notifyVisitConfirmed(1, "lab-actor-user");
+    const { notify } = await import("./service");
+    await notify("VISIT_CONFIRMED", {
+      visitId: 1,
+      actorUserId: "lab-actor-user",
+    });
     expect(visitEmailSpy).toHaveBeenCalledTimes(1);
     expect(visitEmailSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -427,10 +430,13 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
     );
   });
 
-  it("notifyVisitRescheduled: customer branch calls VisitNotificationEmail with variant:rescheduled", async () => {
+  it("VISIT_RESCHEDULED: customer branch calls VisitNotificationEmail with variant:rescheduled", async () => {
     setupVisit();
-    const { notifyVisitRescheduled } = await import("./service");
-    await notifyVisitRescheduled(1, "lab-actor-user");
+    const { notify } = await import("./service");
+    await notify("VISIT_RESCHEDULED", {
+      visitId: 1,
+      actorUserId: "lab-actor-user",
+    });
     const customerCall = visitEmailSpy.mock.calls.find(
       (args) =>
         args[0] &&
@@ -444,18 +450,25 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
     );
   });
 
-  it("notifyVisitConfirmed: addressText is undefined when the visit has no address", async () => {
+  it("VISIT_CONFIRMED: addressText is undefined when the visit has no address", async () => {
     setupVisit({ ...VISIT_ROW, address: null });
-    const { notifyVisitConfirmed } = await import("./service");
-    await notifyVisitConfirmed(1, "lab-actor-user");
+    const { notify } = await import("./service");
+    await notify("VISIT_CONFIRMED", {
+      visitId: 1,
+      actorUserId: "lab-actor-user",
+    });
     expect(visitEmailSpy).toHaveBeenCalledTimes(1);
     expect(visitEmailSpy.mock.calls[0]?.[0]?.addressText).toBeUndefined();
   });
 
-  it("notifyVisitCancelled: customer branch calls VisitNotificationEmail with reason", async () => {
+  it("VISIT_CANCELLED: customer branch calls VisitNotificationEmail with reason", async () => {
     setupVisit();
-    const { notifyVisitCancelled } = await import("./service");
-    await notifyVisitCancelled(1, "lab-actor-user", "Laboratório indisponível");
+    const { notify } = await import("./service");
+    await notify("VISIT_CANCELLED", {
+      visitId: 1,
+      actorUserId: "lab-actor-user",
+      reason: "Laboratório indisponível",
+    });
     const customerCall = visitEmailSpy.mock.calls.find(
       (args) =>
         args[0] &&
@@ -467,10 +480,10 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
     expect(customerCall?.[0].reason).toBe("Laboratório indisponível");
   });
 
-  it("notifyVisitReminder: customer branch calls VisitNotificationEmail with variant:reminder", async () => {
+  it("VISIT_REMINDER: customer branch calls VisitNotificationEmail with variant:reminder", async () => {
     setupVisit();
-    const { notifyVisitReminder } = await import("./service");
-    await notifyVisitReminder(1);
+    const { notify } = await import("./service");
+    await notify("VISIT_REMINDER", { visitId: 1 });
     const customerCall = visitEmailSpy.mock.calls.find(
       (args) =>
         args[0] &&
@@ -481,10 +494,13 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
     expect(customerCall).toBeDefined();
   });
 
-  it("notifyVisitScheduled: does NOT call VisitNotificationEmail (technician in-app only)", async () => {
+  it("VISIT_SCHEDULED: does NOT call VisitNotificationEmail (technician in-app only)", async () => {
     setupVisit();
-    const { notifyVisitScheduled } = await import("./service");
-    await notifyVisitScheduled(1, "lab-actor-user");
+    const { notify } = await import("./service");
+    await notify("VISIT_SCHEDULED", {
+      visitId: 1,
+      actorUserId: "lab-actor-user",
+    });
     expect(visitEmailSpy).not.toHaveBeenCalled();
   });
 });

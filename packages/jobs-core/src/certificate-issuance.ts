@@ -22,11 +22,7 @@ import {
 } from "@calibra-facil/signing";
 import { resolveTsaConfig } from "./tsa-config.js";
 import { resolveSigningPolicy, SigningPolicyError } from "./signing-policy.js";
-import {
-  notifyCertificateAmended,
-  notifyCertificateReady,
-  notifySigningCertificateLapsed,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { formatInstant } from "@calibra-facil/shared/format";
 import {
   jobEventTransaction,
@@ -598,11 +594,11 @@ export async function notifyCertificateSuperseded(
   reason: string | null,
 ): Promise<void> {
   try {
-    await notifyCertificateAmended(
+    await notify("CERTIFICATE_AMENDED", {
       originalJobId,
-      replacementJobId,
-      reason ?? "Retificacao do certificado",
-    );
+      amendedJobId: replacementJobId,
+      reason: reason ?? "Retificacao do certificado",
+    });
   } catch (error) {
     console.error(
       `[JOB ${replacementJobId}] Failed to send the amendment notification for ${originalJobId}:`,
@@ -614,7 +610,7 @@ export async function notifyCertificateSuperseded(
 /** Customer-facing "certificate ready" mail; only after the issuance COMMITs. */
 export async function notifyCertificateIssued(jobId: number): Promise<void> {
   try {
-    await notifyCertificateReady(jobId);
+    await notify("CERTIFICATE_READY", { jobId });
   } catch (error) {
     console.error(
       `[JOB ${jobId}] Failed to send certificate ready notification:`,
@@ -687,7 +683,10 @@ export async function signPdfWithUnitCertificate(
       // the outcome, the issuance is already refused.
       console.error(`[JOB ${jobId}] ${policy.reason}`);
       try {
-        await notifySigningCertificateLapsed(jobId, policy.reason);
+        await notify("SIGNING_CERTIFICATE_LAPSED", {
+          jobId,
+          reason: policy.reason,
+        });
       } catch (notifyError) {
         console.error(
           `[JOB ${jobId}] Failed to notify the lab about the lapsed signing certificate:`,
@@ -783,7 +782,7 @@ export async function signPdfWithUnitCertificate(
   } catch (signError) {
     // REQ-CMP-SIGN-001/002: a configured certificate that fails to sign
     // ALWAYS fails the emission — the job goes REJECTED with a named reason and
-    // neither the R2 upload, the APPROVED transition nor notifyCertificateReady
+    // neither the R2 upload, the APPROVED transition nor the CERTIFICATE_READY notification
     // (all downstream of this call) can run. Includes TIMESTAMP_FAILED.
     console.error(`[JOB ${jobId}] PDF signing failed:`, signError);
     if (signError instanceof SigningPolicyError) {

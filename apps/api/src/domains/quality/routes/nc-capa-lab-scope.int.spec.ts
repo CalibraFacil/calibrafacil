@@ -50,11 +50,15 @@ import { seedOrg } from "../../../../test/integration/seed";
 import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-const notifications = vi.hoisted(() => ({
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
-  notifyNCEscalatedToCapa: vi.fn().mockResolvedValue(undefined),
-  notifyOotAcknowledged: vi.fn().mockResolvedValue(undefined),
-}));
+const notifications = vi.hoisted(() => {
+  const notify = vi.fn().mockResolvedValue(undefined);
+  return {
+    notify,
+    /** The payloads `notify` was called with for one notification type. */
+    sent: (type: string) =>
+      notify.mock.calls.filter(([sentType]) => sentType === type),
+  };
+});
 vi.mock("@calibra-facil/notifications", () => notifications);
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
@@ -297,8 +301,10 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
     expect(nc.jobId).toBe(ownJob.jobId);
     expect(await ncAuditActions(nc.id)).toEqual(["create"]);
     // The notification is handed over once, after the commit.
-    expect(notifications.notifyNCCreated).toHaveBeenCalledTimes(1);
-    expect(notifications.notifyNCCreated.mock.calls[0]?.[0]).toBe(nc.id);
+    expect(notifications.sent("NC_CREATED")).toHaveLength(1);
+    expect(notifications.sent("NC_CREATED")[0]?.[1]).toMatchObject({
+      ncId: nc.id,
+    });
 
     const log = await ncRequest(`/${nc.id}/audit-log`);
     expect(log.status).toBe(200);
@@ -377,7 +383,7 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
     });
     expect(stamped?.acknowledgedAt).toBeInstanceOf(Date);
     expect(await ncAuditActions(ncA)).toEqual(["oot_acknowledged"]);
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
 
     const again = await ncRequest(`/${ncA}/oot-ack`, {
       method: "POST",
@@ -385,7 +391,7 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
     });
     expect(again.status).toBe(409);
     expect((await again.json()).code).toBe("ALREADY_ACKNOWLEDGED");
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
 
     const refused = await ncRequest(`/${ncB}/oot-ack`, {
       method: "POST",
@@ -581,7 +587,7 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
     ).toEqual([]);
     expect((await ncRow(nc)).capaId).toBeNull();
     expect(await ncAuditActions(nc)).toEqual([]);
-    expect(notifications.notifyNCEscalatedToCapa).not.toHaveBeenCalled();
+    expect(notifications.sent("NC_ESCALATED_TO_CAPA")).toHaveLength(0);
 
     // Without the failure the same request succeeds and notifies once, after the commit.
     const retry = await ncRequest(`/${nc}/escalate-to-capa`, {
@@ -591,7 +597,7 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
     expect(retry.status).toBe(201);
     expect((await ncRow(nc)).capaId).not.toBeNull();
     expect(await ncAuditActions(nc)).toEqual(["escalate_to_capa"]);
-    expect(notifications.notifyNCEscalatedToCapa).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("NC_ESCALATED_TO_CAPA")).toHaveLength(1);
   });
 });
 
@@ -768,12 +774,15 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
       .where(eq(ootNotification.id, b.notification.id));
     expect(other?.status).toBe("SENT");
     expect(other?.acknowledgedAt).toBeNull();
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
-    expect(notifications.notifyOotAcknowledged.mock.calls[0]).toEqual([
-      a.notification.id,
-      a.nc,
-      "NC-2026-0001",
-      "org-a",
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")[0]).toEqual([
+      "OOT_NOTIFICATION_ACKNOWLEDGED",
+      {
+        notificationId: a.notification.id,
+        ncId: a.nc,
+        ncNumber: "NC-2026-0001",
+        organizationId: "org-a",
+      },
     ]);
 
     // A second click only renders the "already confirmed" page: nothing is stamped or sent again.
@@ -782,7 +791,7 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
     });
     expect(again.status).toBe(200);
     expect(await again.text()).toContain("Recebimento já confirmado");
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
 
     const unknown = await ootAckRouter.request(
       "/00000000-0000-4000-8000-000000000000",
@@ -805,7 +814,7 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
     expect(
       pages.filter((html) => html.includes("Recebimento já confirmado")),
     ).toHaveLength(2);
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
 
     const [stamped] = await db
       .select()
@@ -823,7 +832,7 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
       .from(ootNotification)
       .where(eq(ootNotification.id, a.notification.id));
     expect(after?.acknowledgedAt?.getTime()).toBe(firstStamp?.getTime());
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
   });
 
   it("REQ-18E-ACK-3 (Q34): a manual acknowledgement racing the public link stamps once and notifies once; a later manual one is a 409 and keeps the first timestamp", async () => {
@@ -845,7 +854,7 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
     expect(stamped?.status).toBe("ACKNOWLEDGED");
     const firstStamp = stamped?.acknowledgedAt;
     expect(firstStamp).toBeInstanceOf(Date);
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
 
     // The link answers 200 whoever won; the manual call is the loser's 409.
     expect(link.status).toBe(200);
@@ -878,6 +887,6 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
     expect(after?.acknowledgedAt?.getTime()).toBe(firstStamp?.getTime());
     expect(after?.acknowledgedVia).toBe(stamped?.acknowledgedVia);
     expect(after?.acknowledgedNote).toBe(stamped?.acknowledgedNote);
-    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+    expect(notifications.sent("OOT_NOTIFICATION_ACKNOWLEDGED")).toHaveLength(1);
   });
 });

@@ -55,18 +55,9 @@ import {
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
 import {
-  ServiceStartedEmail,
-  ServiceInProgressEmail,
-  AwaitingEvaluationEmail,
-  UnderEvaluationEmail,
-  ReadyForPickupEmail,
-  ServiceOrderDeliveredEmail,
-  ServiceOrderClosedEmail,
-  FinalReviewEmail,
-  ServiceOrderCanceledEmail,
-  WarrantyReturnEmail,
+  ServiceOrderStatusEmail,
+  serviceOrderStatusEmailSubject,
 } from "@calibra-facil/email";
-import type { ServiceInProgressStage } from "@calibra-facil/email";
 import { getStatusEmailDescriptor } from "./status-email-map";
 import { parseOutboxPayloadByNamespace } from "./email-outbox-payloads";
 import { sendServiceOrderEmailOnce } from "./service-order-email-once";
@@ -427,8 +418,8 @@ async function dispatchBcdEmailForRow(
  * Render and dispatch the correct email template for a given outbox row.
  * Returns true when the send path reports sent=true, false otherwise.
  *
- * Template routing follows STATUS_EMAIL_MAP (the single source of truth shared
- * with E1). The emailType field from the map drives template selection.
+ * The status in STATUS_EMAIL_MAP (the single source of truth shared with E1)
+ * picks the copy of `ServiceOrderStatusEmail` and its subject.
  */
 async function dispatchEmailForRow(
   row: OutboxRow,
@@ -472,114 +463,26 @@ async function dispatchEmailForRow(
           email: cust.email,
         },
         brand,
-        subject: buildSubject(descriptor.emailType, so.serviceOrderNumber),
+        subject: serviceOrderStatusEmailSubject(
+          descriptor.status,
+          so.serviceOrderNumber,
+        ),
         // Use ctx.brand (not the closed-over brand): the send layer re-renders
         // with a sender-stripped brand when a lab-sender attempt falls back to
         // the platform envelope.
         renderEmail: (ctx) =>
-          renderTemplate(
-            descriptor.emailType,
-            so.serviceOrderNumber,
-            cust.name,
-            row.targetStatus,
-            ctx.brand,
-          ),
+          ServiceOrderStatusEmail({
+            status: descriptor.status,
+            brand: ctx.brand,
+            serviceOrderNumber: so.serviceOrderNumber,
+            customerName: cust.name,
+          }),
       }),
   });
 
   // "sent"/"deduped" → terminal success (mark the outbox row done).
   // "failed" → release the outbox row for retry (transient send/DB failure).
   return outcome !== "failed";
-}
-
-function buildSubject(emailType: string, serviceOrderNumber: string): string {
-  const labels: Record<string, string> = {
-    service_started: `OS ${serviceOrderNumber} — serviço iniciado`,
-    progress_update: `OS ${serviceOrderNumber} — atualização do serviço`,
-    awaiting_tech_evaluation: `OS ${serviceOrderNumber} — aguardando avaliação técnica`,
-    under_evaluation: `OS ${serviceOrderNumber} — em avaliação técnica`,
-    ready_for_pickup: `OS ${serviceOrderNumber} — pronto para retirada`,
-    delivered: `OS ${serviceOrderNumber} — equipamento entregue`,
-    closed: `OS ${serviceOrderNumber} — OS encerrada`,
-    final_review: `OS ${serviceOrderNumber} — em revisão final`,
-    canceled: `OS ${serviceOrderNumber} — OS cancelada`,
-    warranty_return: `OS ${serviceOrderNumber} — retorno em garantia`,
-  };
-  return labels[emailType] ?? `OS ${serviceOrderNumber} — atualização`;
-}
-
-function renderTemplate(
-  emailType: string,
-  serviceOrderNumber: string,
-  customerName: string,
-  targetStatus: string,
-  brand: Awaited<ReturnType<typeof getLabEmailBrand>>,
-) {
-  if (emailType === "service_started") {
-    return ServiceStartedEmail({ brand, serviceOrderNumber, customerName });
-  }
-
-  if (emailType === "progress_update") {
-    // Both awaiting_calibration and calibration_in_progress use ServicoAndamento
-    // with a stage prop that corresponds to the targetStatus.
-    const isValidStage = (s: string): s is ServiceInProgressStage =>
-      s === "awaiting_calibration" || s === "calibration_in_progress";
-    const stage = isValidStage(targetStatus)
-      ? targetStatus
-      : "awaiting_calibration";
-    return ServiceInProgressEmail({
-      brand,
-      serviceOrderNumber,
-      customerName,
-      stage,
-    });
-  }
-
-  if (emailType === "awaiting_tech_evaluation") {
-    return AwaitingEvaluationEmail({
-      brand,
-      serviceOrderNumber,
-      customerName,
-    });
-  }
-
-  if (emailType === "under_evaluation") {
-    return UnderEvaluationEmail({ brand, serviceOrderNumber, customerName });
-  }
-
-  if (emailType === "ready_for_pickup") {
-    return ReadyForPickupEmail({ brand, serviceOrderNumber, customerName });
-  }
-
-  if (emailType === "delivered") {
-    return ServiceOrderDeliveredEmail({
-      brand,
-      serviceOrderNumber,
-      customerName,
-    });
-  }
-
-  if (emailType === "closed") {
-    return ServiceOrderClosedEmail({ brand, serviceOrderNumber, customerName });
-  }
-
-  if (emailType === "final_review") {
-    return FinalReviewEmail({ brand, serviceOrderNumber, customerName });
-  }
-
-  if (emailType === "canceled") {
-    return ServiceOrderCanceledEmail({
-      brand,
-      serviceOrderNumber,
-      customerName,
-    });
-  }
-
-  if (emailType === "warranty_return") {
-    return WarrantyReturnEmail({ brand, serviceOrderNumber, customerName });
-  }
-
-  return null;
 }
 
 /**

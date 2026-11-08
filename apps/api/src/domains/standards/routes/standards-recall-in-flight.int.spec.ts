@@ -53,12 +53,7 @@ vi.mock("../../../lib/storage", async (importOriginal) => {
 });
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
-  notifyNCEscalatedToCapa: vi.fn().mockResolvedValue(undefined),
-  notifyJobSubmittedForReview: vi.fn().mockResolvedValue(undefined),
-  notifyJobApproved: vi.fn().mockResolvedValue(undefined),
-  notifyJobRejected: vi.fn().mockResolvedValue(undefined),
-  notifyAssetFoundOutOfTolerance: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../quality/scope-compliance", async (importOriginal) => {

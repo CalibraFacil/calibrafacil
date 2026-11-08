@@ -79,10 +79,8 @@ vi.mock("@calibra-facil/email-sender", async (importOriginal) => ({
 import { db } from "@calibra-facil/db";
 import {
   getRecipientsByRole,
-  notifyJobApproved,
-  notifyCertificateReady,
-  notifyStandardExpiring,
   sendPortalDueDigests,
+  notify,
 } from "@calibra-facil/notifications";
 import {
   processScheduledContaAzulIntegrationSyncs,
@@ -180,20 +178,35 @@ describe("notifications, digests, drains and sweeps as calibra_app (P2-18h)", ()
     });
 
     // The approver is somebody else, so the job's creator (lab A) is notified.
-    await asApp(() => notifyJobApproved(jobA, "approver-elsewhere"));
+    await asApp(() =>
+      notify("JOB_APPROVED", {
+        jobId: jobA,
+        approvedByUserId: "approver-elsewhere",
+      }),
+    );
     expect(await notificationsIn(a.orgId)).toEqual([
       { recipientUserId: a.userId, type: "JOB_APPROVED" },
     ]);
     expect(await notificationsIn(b.orgId)).toEqual([]);
 
     // A compliance reminder for A's standard, asked in A: A's admin.
-    await asApp(() => notifyStandardExpiring(standardA, a.orgId));
+    await asApp(() =>
+      notify("STANDARD_EXPIRING", {
+        standardId: standardA,
+        organizationId: a.orgId,
+      }),
+    );
     expect(
       (await notificationsIn(a.orgId)).map((row) => row.type).toSorted(),
     ).toEqual(["JOB_APPROVED", "STANDARD_EXPIRING"]);
 
     // The same standard asked with lab B's organization resolves nothing there.
-    await asApp(() => notifyStandardExpiring(standardA, b.orgId));
+    await asApp(() =>
+      notify("STANDARD_EXPIRING", {
+        standardId: standardA,
+        organizationId: b.orgId,
+      }),
+    );
     expect(await notificationsIn(b.orgId)).toEqual([]);
     expect(await notificationsIn(a.orgId)).toHaveLength(2);
 
@@ -220,7 +233,7 @@ describe("notifications, digests, drains and sweeps as calibra_app (P2-18h)", ()
     const portalA = await seedPortalUser(a);
     const portalB = await seedPortalUser(b);
 
-    await asApp(() => notifyCertificateReady(jobA));
+    await asApp(() => notify("CERTIFICATE_READY", { jobId: jobA }));
 
     expect(await notificationsIn(a.clientOrgId)).toEqual([
       { recipientUserId: portalA, type: "CERTIFICATE_READY" },

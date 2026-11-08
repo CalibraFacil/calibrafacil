@@ -1,11 +1,5 @@
 import { type OrgSession } from "../pdf-render.js";
-import {
-  notifyAssetDueForLegalVerification,
-  notifyAssetDueForRecalibration,
-  notifyJobOverdue,
-  notifyStandardExpired,
-  notifyStandardExpiring,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import {
   type AssetDueRow,
   type AssetLegalVerificationDueRow,
@@ -46,7 +40,10 @@ export async function processAssetsDueForRecalibration(
     let batchFailures = 0;
     for (const asset of assetBatch) {
       try {
-        await notifyAssetDueForRecalibration(asset.id, asset.organization_id);
+        await notify("ASSET_DUE_FOR_RECALIBRATION", {
+          assetId: asset.id,
+          organizationId: asset.organization_id,
+        });
 
         await recordScheduledNotification(lab, {
           organizationId: asset.organization_id,
@@ -99,10 +96,10 @@ export async function processAssetsDueForLegalVerification(
     let batchFailures = 0;
     for (const legalAsset of legalBatch) {
       try {
-        await notifyAssetDueForLegalVerification(
-          legalAsset.id,
-          legalAsset.organization_id,
-        );
+        await notify("ASSET_DUE_FOR_LEGAL_VERIFICATION", {
+          assetId: legalAsset.id,
+          organizationId: legalAsset.organization_id,
+        });
 
         await recordScheduledNotification(lab, {
           organizationId: legalAsset.organization_id,
@@ -157,7 +154,10 @@ export async function processStandardsExpiring(
     let batchFailures = 0;
     for (const standard of standardBatch) {
       try {
-        await notifyStandardExpiring(standard.id, standard.organization_id);
+        await notify("STANDARD_EXPIRING", {
+          standardId: standard.id,
+          organizationId: standard.organization_id,
+        });
 
         await recordScheduledNotification(lab, {
           organizationId: standard.organization_id,
@@ -208,7 +208,10 @@ export async function processStandardsExpired(
     let batchFailures = 0;
     for (const standard of expiredBatch) {
       try {
-        await notifyStandardExpired(standard.id, standard.organization_id);
+        await notify("STANDARD_EXPIRED", {
+          standardId: standard.id,
+          organizationId: standard.organization_id,
+        });
 
         await recordScheduledNotification(lab, {
           organizationId: standard.organization_id,
@@ -257,7 +260,7 @@ export async function processOverdueJobs(lab: OrgSession): Promise<number> {
     let batchFailures = 0;
     for (const job of jobBatch) {
       try {
-        await notifyJobOverdue(job.id);
+        await notify("JOB_OVERDUE", { jobId: job.id });
 
         await recordScheduledNotification(lab, {
           organizationId: job.organization_id,

@@ -32,7 +32,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { systemDb } from "@calibra-facil/db";
 import { platformEventLog } from "@calibra-facil/db/schema";
-import { notifyAuditChainBroken } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 
 import { writeOrganizationAuditEvent } from "./audit";
 import { executeRows } from "./db";
@@ -287,11 +287,14 @@ async function announce(found: AuditChainBreak): Promise<void> {
       tx,
     ),
   );
-  await notifyAuditChainBroken(found.organizationId, {
-    table: found.table,
-    kind: found.kind,
-    chainSeq: found.chainSeq,
-    rowId: found.rowId,
+  await notify("AUDIT_CHAIN_BROKEN", {
+    organizationId: found.organizationId,
+    context: {
+      table: found.table,
+      kind: found.kind,
+      chainSeq: found.chainSeq,
+      rowId: found.rowId,
+    },
   });
   await systemDb.insert(platformEventLog).values({
     actorUserId: null,

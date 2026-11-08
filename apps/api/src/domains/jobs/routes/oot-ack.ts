@@ -1,5 +1,5 @@
 import { createRouter } from "../../../server/router";
-import { notifyOotAcknowledged } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import {
   findOotNotificationByAckToken,
   stampOotAcknowledgementByLink,
@@ -157,12 +157,12 @@ export const ootAckRouter = createRouter()
       return c.html(alreadyConfirmedPage(notification));
     }
 
-    notifyOotAcknowledged(
-      notification.id,
-      notification.ncId,
-      notification.ncNumber,
-      notification.organizationId,
-    ).catch((err) =>
+    notify("OOT_NOTIFICATION_ACKNOWLEDGED", {
+      notificationId: notification.id,
+      ncId: notification.ncId,
+      ncNumber: notification.ncNumber,
+      organizationId: notification.organizationId,
+    }).catch((err) =>
       reportServerError(err, {
         surface: "oot-ack",
         tags: { step: "notify-acknowledgement" },

@@ -56,8 +56,7 @@ import { isRecord } from "@calibra-facil/shared/record";
  */
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCertificateReady: vi.fn(async () => undefined),
-  notifyAuditPackReady: vi.fn(async () => undefined),
+  notify: vi.fn(async () => undefined),
 }));
 
 import { processBackgroundJob } from "@calibra-facil/jobs-core";

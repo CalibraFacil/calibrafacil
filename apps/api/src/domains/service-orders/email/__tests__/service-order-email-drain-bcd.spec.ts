@@ -42,7 +42,7 @@ const {
   // Status-path mocks (regression: must still work)
   mockGetLabEmailBrand,
   mockSendEmail,
-  mockServicoIniciado,
+  mockStatusEmail,
 } = vi.hoisted(() => {
   // Chainable Drizzle select builder
   function makeSelectChain(rows: unknown[]) {
@@ -134,7 +134,7 @@ const {
     mockSendEmail: vi
       .fn()
       .mockResolvedValue({ sent: true, emailId: "e-status" }),
-    mockServicoIniciado: vi.fn().mockReturnValue("servico-iniciado-element"),
+    mockStatusEmail: vi.fn().mockReturnValue("servico-iniciado-element"),
   };
 });
 
@@ -222,17 +222,9 @@ vi.mock("@calibra-facil/notifications", () => ({
   getLabEmailBrand: mockGetLabEmailBrand,
 }));
 
-vi.mock("@calibra-facil/email", () => ({
-  ServiceStartedEmail: mockServicoIniciado,
-  ServiceInProgressEmail: vi.fn().mockReturnValue("andamento"),
-  AwaitingEvaluationEmail: vi.fn().mockReturnValue("aat"),
-  UnderEvaluationEmail: vi.fn().mockReturnValue("eat"),
-  ReadyForPickupEmail: vi.fn().mockReturnValue("ppr"),
-  ServiceOrderDeliveredEmail: vi.fn().mockReturnValue("ent"),
-  ServiceOrderClosedEmail: vi.fn().mockReturnValue("enc"),
-  FinalReviewEmail: vi.fn().mockReturnValue("rev"),
-  ServiceOrderCanceledEmail: vi.fn().mockReturnValue("can"),
-  WarrantyReturnEmail: vi.fn().mockReturnValue("gar"),
+vi.mock("@calibra-facil/email", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@calibra-facil/email")>()),
+  ServiceOrderStatusEmail: mockStatusEmail,
 }));
 
 // Mock the B/C/D dispatch helpers
@@ -876,7 +868,7 @@ describe("mini-spec I drain: B/C/D routing", () => {
       const result = await drainServiceOrderEmailOutbox({ batchSize: 10 });
 
       expect(result.sent).toBe(1);
-      expect(mockServicoIniciado).toHaveBeenCalledTimes(1);
+      expect(mockStatusEmail).toHaveBeenCalledTimes(1);
       expect(mockDispatchNovaOs).not.toHaveBeenCalled();
       expect(mockDispatchNovoOrcamento).not.toHaveBeenCalled();
       expect(mockDispatchOrcamentoAprovado).not.toHaveBeenCalled();
