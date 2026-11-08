@@ -46,6 +46,7 @@ import {
   validateLabAccountSetupToken,
 } from "./lab-access";
 import { toRecord } from "@calibra-facil/shared/record";
+import { log } from "./log";
 
 let devFallbackAuthSecret: string | null = null;
 
@@ -251,7 +252,7 @@ function resolveAuthSecret(isProduction: boolean): string {
   }
 
   if (configuredSecret && configuredSecret.length < 32) {
-    console.warn(
+    log.warn(
       "BETTER_AUTH_SECRET is shorter than 32 chars in development; using a secure in-memory fallback secret",
     );
   }
@@ -628,7 +629,7 @@ async function sendPortalMagicLink(
     (await hasExistingPortalAccess(normalizedEmail));
 
   if (!hasPortalAccess) {
-    console.warn(
+    log.warn(
       `[Portal Auth] Suppressed magic link for non-portal email: ${normalizedEmail}`,
     );
     return;
@@ -747,7 +748,7 @@ async function sendLabMagicLink(
   const setupToken = readSetupTokenFromMagicLinkContext(ctx);
 
   if (!(await canSendLabPasswordlessEmail(normalizedEmail, setupToken))) {
-    console.warn(
+    log.warn(
       `[Lab Auth] Suppressed magic link for non-LAB email: ${normalizedEmail}`,
     );
     return;
@@ -781,7 +782,7 @@ async function sendLabVerificationOtp(data: {
     data.type !== "sign-in" ||
     !(await canSendLabPasswordlessEmail(normalizedEmail))
   ) {
-    console.warn(
+    log.warn(
       `[Lab Auth] Suppressed ${data.type} OTP for non-LAB email: ${normalizedEmail}`,
     );
     return;
@@ -1076,9 +1077,9 @@ function createOrganizationPlugin() {
           await ensureLabInvitationUser(data.email);
         }
       } catch (error) {
-        console.error(
+        log.error(
           "[Lab Auth] Failed to pre-create invited user; sending invitation email anyway",
-          error,
+          { error },
         );
       }
 
@@ -1420,10 +1421,9 @@ async function logAuthSessionCreated(
         },
       });
   } catch (error) {
-    console.error(
-      `[Auth Audit] Failed to log ${surface} session creation`,
+    log.error(`[Auth Audit] Failed to log ${surface} session creation`, {
       error,
-    );
+    });
   }
 }
 

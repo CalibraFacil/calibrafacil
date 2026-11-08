@@ -8,6 +8,8 @@ import {
   allowedFrom,
   requireTargetOf,
 } from "@calibra-facil/schemas/job-transitions";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 /** Runs `operation` in one transaction on `client`; rolls back on any throw. */
 async function inTransaction<T>(
@@ -21,7 +23,7 @@ async function inTransaction<T>(
     return result;
   } catch (error) {
     await client.query("ROLLBACK").catch((rollbackError) => {
-      console.error("[worker] ROLLBACK failed:", rollbackError);
+      log.error("[worker] ROLLBACK failed:", { error: rollbackError });
     });
     throw error;
   }
@@ -125,8 +127,8 @@ export async function setJobError(
       ],
     );
     if (updated.rows.length === 0) {
-      console.warn(
-        `[JOB ${jobId}] Not marking ${failedStatus}: job is no longer GENERATING_PDF (error was: ${error})`,
+      log.warn(
+        `[JOB ${jobId}] Not marking ${failedStatus}: job is no longer GENERATING_PDF (error was: ${errorMessage(error)})`,
       );
       return;
     }

@@ -15,6 +15,7 @@ import {
   checkStandardsExpiring,
 } from "./queries-assets-standards.js";
 import { BATCH_SIZE, recordScheduledNotification } from "./shared.js";
+import { log } from "../log";
 
 export async function processAssetsDueForRecalibration(
   lab: OrgSession,
@@ -57,7 +58,7 @@ export async function processAssetsDueForRecalibration(
         assetsProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(`[Scheduled] Error processing asset ${asset.id}:`, error);
+        log.error(`[Scheduled] Error processing asset ${asset.id}:`, { error });
       }
     }
 
@@ -113,9 +114,9 @@ export async function processAssetsDueForLegalVerification(
         legalVerificationsProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(
+        log.error(
           `[Scheduled] Error processing legal-verification for asset ${legalAsset.id}:`,
-          error,
+          { error },
         );
       }
     }
@@ -171,10 +172,9 @@ export async function processStandardsExpiring(
         standardsProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(
-          `[Scheduled] Error processing standard ${standard.id}:`,
+        log.error(`[Scheduled] Error processing standard ${standard.id}:`, {
           error,
-        );
+        });
       }
     }
 
@@ -225,9 +225,9 @@ export async function processStandardsExpired(
         standardsExpiredProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(
+        log.error(
           `[Scheduled] Error processing expired standard ${standard.id}:`,
-          error,
+          { error },
         );
       }
     }
@@ -274,7 +274,7 @@ export async function processOverdueJobs(lab: OrgSession): Promise<number> {
         jobsProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(`[Scheduled] Error processing job ${job.id}:`, error);
+        log.error(`[Scheduled] Error processing job ${job.id}:`, { error });
       }
     }
 

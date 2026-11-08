@@ -22,6 +22,8 @@ import {
   withOrgDbClient,
 } from "./pdf-render.js";
 import { bucketBinding, fetchOrgRefById } from "./storage-helpers.js";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
+import { log } from "./log";
 
 // =============================================================================
 // LABEL GENERATION FUNCTIONS
@@ -220,8 +222,8 @@ export async function processLabelJob(
 
     return { success: true, labelUrl };
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[LABEL ${jobId}] Error:`, errorMsg);
+    const errorMsg = errorMessage(error);
+    log.error(`[LABEL ${jobId}] Error:`, { error });
     return { success: false, error: errorMsg };
   }
 }

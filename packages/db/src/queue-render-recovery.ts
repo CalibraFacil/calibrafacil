@@ -8,6 +8,7 @@ import { forOrg } from "./for-org.js";
 import { appendJobEvent, type RenderRejectionTrigger } from "./job-events.js";
 import { appQueueJob, calibrationJob } from "./schema.js";
 import type { DeadLetteredQueueJob } from "./queue.js";
+import { log } from "./log";
 
 // Recovery for certificate renders that a hard crash (or a dropped queue message)
 // left in GENERATING_PDF with nothing left to move them.
@@ -188,9 +189,9 @@ export async function rejectDeadLetteredCertificateRenders(
       });
       if (done) rejected += 1;
     } catch (error) {
-      console.error(
+      log.error(
         `[QueueDeadLetter] failed to reject certificate job ${payload.jobId} (queue row ${queueJob.id})`,
-        error,
+        { error },
       );
     }
   }
@@ -285,9 +286,9 @@ export async function rejectStuckCertificateRenders(
       });
       if (done) rejected += 1;
     } catch (error) {
-      console.error(
+      log.error(
         `[QueueDeadLetter] failed to reject stuck certificate job ${candidate.id}`,
-        error,
+        { error },
       );
     }
   }

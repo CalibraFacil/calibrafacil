@@ -40,6 +40,8 @@ import { uploadAttachmentsBeforePush } from "./attachment-upload";
 import { PushProtocolMemo, eventsCarriedBy } from "./push-protocol";
 import type { LocalServerConfig } from "./bootstrap";
 import { getLocalRequestContext } from "./request-context";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 /**
  * The cloud refused the desktop's session (HTTP 401): it expired or was revoked.
@@ -215,7 +217,9 @@ export function createLocalSyncRuntime(
         lastError: error instanceof Error ? error.message : "Sync failed",
         updateRequiredVersion: updateRequiredVersionOf(error),
       };
-      console.error(`[sync:${runId}] initial sync failed: ${status.lastError}`);
+      log.error(
+        `[sync:${runId}] initial sync failed: ${errorMessage(status.lastError)}`,
+      );
       throw error;
     }
   }
@@ -299,7 +303,9 @@ export function createLocalSyncRuntime(
         lastError: error instanceof Error ? error.message : "Sync failed",
         updateRequiredVersion: updateRequiredVersionOf(error),
       };
-      console.error(`[sync:${runId}] push sync failed: ${status.lastError}`);
+      log.error(
+        `[sync:${runId}] push sync failed: ${errorMessage(status.lastError)}`,
+      );
       throw error;
     }
   }
@@ -789,7 +795,7 @@ const CLOCK_SKEW_WARNING_MS = 120_000;
 function warnOnClockSkew(clockSkewMs: number | undefined): void {
   if (clockSkewMs === undefined) return;
   if (Math.abs(clockSkewMs) <= CLOCK_SKEW_WARNING_MS) return;
-  console.warn(
+  log.warn(
     `[Sync] The device clock is ${Math.round(clockSkewMs / 1000)} s ${clockSkewMs > 0 ? "ahead of" : "behind"} the cloud's. Fix the system clock: the times recorded offline come from it.`,
   );
 }

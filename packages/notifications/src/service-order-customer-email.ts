@@ -28,6 +28,8 @@ import {
 } from "@calibra-facil/email-sender";
 import { labEmailSenderResolver } from "@calibra-facil/lab-email-domain";
 import type { EmailBrand } from "@calibra-facil/email";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 // =============================================================================
 // TYPES
@@ -196,7 +198,7 @@ export async function sendServiceOrderCustomerEmail(
   const fromEmail = getPlatformFromEmail();
 
   if (!isPlatformEmailConfigured() || !fromEmail) {
-    console.error(
+    log.error(
       "[ServiceOrderEmail] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM).",
     );
     return {
@@ -268,8 +270,8 @@ export async function sendServiceOrderCustomerEmail(
       } satisfies ServiceOrderCustomerEmailResult;
     }
 
-    console.error(
-      `[ServiceOrderEmail] Failed to send email for OS ${serviceOrder.serviceOrderNumber}: ${outcome.error}`,
+    log.error(
+      `[ServiceOrderEmail] Failed to send email for OS ${serviceOrder.serviceOrderNumber}: ${errorMessage(outcome.error)}`,
     );
     return {
       sent: false,
@@ -278,9 +280,9 @@ export async function sendServiceOrderCustomerEmail(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown transport error";
-    console.error(
+    log.error(
       `[ServiceOrderEmail] Failed to send email for OS ${serviceOrder.serviceOrderNumber}:`,
-      error,
+      { error },
     );
     return {
       sent: false,

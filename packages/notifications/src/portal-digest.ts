@@ -44,6 +44,7 @@ import {
   type PortalDueDigestItem,
   type EmailBrand,
 } from "@calibra-facil/email";
+import { log } from "./log";
 
 // =============================================================================
 // PORTAL DUE-CALIBRATION DIGEST
@@ -118,7 +119,7 @@ export async function sendPortalDueDigests(
 
   const fromEmail = getPlatformFromEmail();
   if (!isPlatformEmailConfigured() || !fromEmail) {
-    console.error(
+    log.error(
       "[PortalDigest] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM); skipping run.",
     );
     return result;
@@ -315,10 +316,10 @@ export async function sendPortalDueDigests(
       result.sent += 1;
     } catch (error) {
       result.errors += 1;
-      console.error("[PortalDigest] Failed to send digest", {
+      log.error("[PortalDigest] Failed to send digest", {
         userId: recipient.userId,
         scope: recipient.scopeLabel,
-        error: error instanceof Error ? error.message : "unknown error",
+        error,
       });
     }
   }

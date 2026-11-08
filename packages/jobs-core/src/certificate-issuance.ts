@@ -32,6 +32,8 @@ import {
 import { type Env } from "./runtime-types.js";
 import { withOrgDbClient } from "./pdf-render.js";
 import { toRecord } from "@calibra-facil/shared/record";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 /** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
 type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
@@ -600,9 +602,9 @@ export async function notifyCertificateSuperseded(
       reason: reason ?? "Retificacao do certificado",
     });
   } catch (error) {
-    console.error(
+    log.error(
       `[JOB ${replacementJobId}] Failed to send the amendment notification for ${originalJobId}:`,
-      error,
+      { error },
     );
   }
 }
@@ -612,10 +614,9 @@ export async function notifyCertificateIssued(jobId: number): Promise<void> {
   try {
     await notify("CERTIFICATE_READY", { jobId });
   } catch (error) {
-    console.error(
-      `[JOB ${jobId}] Failed to send certificate ready notification:`,
+    log.error(`[JOB ${jobId}] Failed to send certificate ready notification:`, {
       error,
-    );
+    });
   }
 }
 
@@ -634,10 +635,10 @@ export async function signPdfWithUnitCertificate(
 }> {
   const signStart = performance.now();
   if (!organizationId) {
-    console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
+    log.warn(`[JOB ${jobId}] Missing organization_id for signing`);
   }
   if (!unitId) {
-    console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
+    log.warn(`[JOB ${jobId}] Missing unit_id for signing`);
   }
 
   // The unit's signing policy governs the missing-cert /
@@ -681,16 +682,16 @@ export async function signPdfWithUnitCertificate(
       // render-failure path, which writes its audit event); the lab's admins
       // are told here, best effort — a notification failure must not change
       // the outcome, the issuance is already refused.
-      console.error(`[JOB ${jobId}] ${policy.reason}`);
+      log.error(`[JOB ${jobId}] ${policy.reason}`);
       try {
         await notify("SIGNING_CERTIFICATE_LAPSED", {
           jobId,
           reason: policy.reason,
         });
       } catch (notifyError) {
-        console.error(
+        log.error(
           `[JOB ${jobId}] Failed to notify the lab about the lapsed signing certificate:`,
-          notifyError,
+          { error: notifyError },
         );
       }
     }
@@ -699,7 +700,7 @@ export async function signPdfWithUnitCertificate(
   if (policy.action === "EMIT_UNSIGNED" || !signingCert) {
     // Visible, not silent: signature_metadata stays NULL, so the portal and
     // the public verification page render the UNSIGNED verdict.
-    console.warn(
+    log.warn(
       `[JOB ${jobId}] ${policy.action === "EMIT_UNSIGNED" ? policy.warning : "No signing certificate available"}`,
     );
     // When the unit chose to issue unsigned, the issued certificate records
@@ -771,7 +772,7 @@ export async function signPdfWithUnitCertificate(
       signatureVerdict = { ...verdict, computedAt: result.metadata.signedAt };
       console.log(`[JOB ${jobId}] verifyPdf: overall=${verdict.overall}`);
     } catch (verifyError) {
-      console.error(`[JOB ${jobId}] verifyPdf failed:`, verifyError);
+      log.error(`[JOB ${jobId}] verifyPdf failed:`, { error: verifyError });
     }
 
     return {
@@ -784,12 +785,11 @@ export async function signPdfWithUnitCertificate(
     // ALWAYS fails the emission — the job goes REJECTED with a named reason and
     // neither the R2 upload, the APPROVED transition nor the CERTIFICATE_READY notification
     // (all downstream of this call) can run. Includes TIMESTAMP_FAILED.
-    console.error(`[JOB ${jobId}] PDF signing failed:`, signError);
+    log.error(`[JOB ${jobId}] PDF signing failed:`, { error: signError });
     if (signError instanceof SigningPolicyError) {
       throw signError;
     }
-    const detail =
-      signError instanceof Error ? signError.message : String(signError);
+    const detail = errorMessage(signError);
     // Not permanent: the failure may be a TSA/network outage, so earlier
     // deliveries retry it; the final one still REJECTS the job.
     throw new SigningPolicyError(

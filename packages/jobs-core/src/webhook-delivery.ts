@@ -19,6 +19,7 @@ import {
   type DeliveryAttempt,
   type Env,
 } from "./runtime-types.js";
+import { log } from "./log";
 
 /** Calls kept on the delivery row (the newest ones). */
 const MAX_RECORDED_ATTEMPTS = 10;
@@ -137,8 +138,9 @@ async function deliverOnce(env: Env, row: DeliveryRow): Promise<Outcome> {
       webhookMasterKey(env),
     );
   } catch (error) {
-    console.error(
-      `[Webhook] cannot read the secret of subscription ${row.subscription_id}: ${error instanceof Error ? error.message : String(error)}`,
+    log.error(
+      `[Webhook] cannot read the secret of subscription ${row.subscription_id}`,
+      { error },
     );
     return {
       status: null,
@@ -187,7 +189,7 @@ export async function processWebhookDelivery(
     const row = await loadDelivery(session, message.deliveryId);
     if (!row) {
       // The subscription (and with it the delivery) was deleted meanwhile.
-      console.warn(
+      log.warn(
         `[Webhook] delivery ${message.deliveryId} no longer exists; nothing to send`,
       );
       return;

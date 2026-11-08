@@ -36,7 +36,6 @@ import { type Env } from "./runtime-types.js";
 import {
   findJobOrganization,
   generatePdfFromHtml,
-  getErrorMessage,
   withDbClient,
   withOrgDbClient,
 } from "./pdf-render.js";
@@ -58,6 +57,8 @@ import {
   resolveOrganizationLogoDataUrl,
   sha256Hex,
 } from "./storage-helpers.js";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 /**
  * Identifies the worker build that rendered a certificate, alongside the layout
@@ -159,7 +160,7 @@ export async function processJob(
     };
   }
   if (existing && !canTransition(existing.status, "complete_render")) {
-    console.warn(
+    log.warn(
       `[JOB ${jobId}] Not issuing a certificate: job status is ${existing.status}`,
     );
     return { success: true, skipped: existing.status };
@@ -213,7 +214,7 @@ export async function processJob(
       }
     } catch (error) {
       if (error instanceof CertificateIssuanceSkipped) {
-        console.warn(
+        log.warn(
           `[JOB ${jobId}] Not issuing a certificate: job status is ${error.currentStatus}`,
         );
         return { success: true, skipped: error.currentStatus ?? "unknown" };
@@ -275,8 +276,8 @@ export async function processJob(
           } as const)
         : loaded;
     if (source.status === "corrupt") {
-      console.error(
-        `[JOB ${jobId}] The frozen certificate input cannot be trusted: ${source.reason}`,
+      log.error(
+        `[JOB ${jobId}] The frozen certificate input cannot be trusted: ${errorMessage(source.reason)}`,
       );
       return {
         success: false,
@@ -319,12 +320,12 @@ export async function processJob(
         `[JOB ${jobId}] Rendering from the frozen certificate input (sha256 ${source.sha256})`,
       );
       if (source.input.layout.key !== CERTIFICATE_LAYOUT_KEY) {
-        console.warn(
+        log.warn(
           `[JOB ${jobId}] The input was frozen for layout ${source.input.layout.key}@${source.input.layout.version}; rendering with ${CERTIFICATE_LAYOUT_KEY}@${renderedLayoutVersion}`,
         );
       }
     } else {
-      console.warn(
+      log.warn(
         `[JOB ${jobId}] LEGACY render path: no frozen certificate_input (approved before migration 0120); reading the lab, signatory, customer and standards live`,
       );
     }
@@ -568,14 +569,14 @@ export async function processJob(
       // The job changed under the render (e.g. cancelled). The transaction
       // rolled back, so no snapshot or status write survives. The PDF object
       // already uploaded is unreferenced (its key carries a fresh UUID).
-      console.warn(
+      log.warn(
         `[JOB ${jobId}] Not issuing a certificate: job status is ${error.currentStatus}`,
       );
       return { success: true, skipped: error.currentStatus ?? "unknown" };
     }
     return {
       success: false,
-      error: getErrorMessage(error),
+      error: errorMessage(error),
       permanent: error instanceof SigningPolicyError && error.permanent,
     };
   }

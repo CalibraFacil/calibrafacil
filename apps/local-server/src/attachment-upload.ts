@@ -20,6 +20,8 @@ import {
 } from "@calibra-facil/local-db";
 import type { LocalServerConfig } from "./bootstrap";
 import { resolveLocalStoragePath } from "./local-storage";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 /**
  * The desktop half of the offline attachment upload leg.
@@ -124,8 +126,8 @@ function recordUploadFailure(
   event: PendingOutboxEvent,
   failure: UploadFailure,
 ) {
-  console.error(
-    `[sync] attachment upload for ${event.entityId} ${failure.kind}: ${failure.code}: ${failure.message}`,
+  log.error(
+    `[sync] attachment upload for ${event.entityId} ${failure.kind}: ${failure.code}: ${errorMessage(failure.message)}`,
   );
   if (failure.kind === "permanent") {
     markAttachmentUploadDead(database, {
@@ -140,7 +142,7 @@ function recordUploadFailure(
   markOutboxEventsFailedForRetry(
     database,
     [event.eventId],
-    `${failure.code}: ${failure.message}`,
+    `${failure.code}: ${errorMessage(failure.message)}`,
   );
 }
 

@@ -5,6 +5,7 @@
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { log } from "./log";
 
 const WORKER_HEARTBEAT_FILE = join(tmpdir(), "calibra-worker-heartbeat");
 
@@ -16,6 +17,6 @@ export async function touchHeartbeat(
   try {
     await writeFile(path, `${now()}\n`);
   } catch (error) {
-    console.error("[Worker] could not write the heartbeat file", error);
+    log.error("[Worker] could not write the heartbeat file", { error });
   }
 }

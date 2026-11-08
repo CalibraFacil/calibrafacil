@@ -22,6 +22,7 @@ import type { Hono } from "hono";
 import { discoverPrinters } from "./discovery";
 import { PrinterTransportError } from "./errors";
 import { sendToPrinter } from "./transport-types";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 function resolveProfile(
   database: LocalDatabase,
@@ -45,7 +46,7 @@ async function printCommands(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     };
   }
 }

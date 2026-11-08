@@ -21,6 +21,7 @@ import { addRfc3161Timestamp } from "./timestamp.js";
 import type { TimestampConfig } from "./timestamp.js";
 import { SigningError } from "./types.js";
 import type { SigningOptions, SigningResult } from "./types.js";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 export interface SignAndTimestampOptions extends SigningOptions {
   /** RFC 3161 TSA configuration. Absent/empty URL => plain AD-RB signing. */
@@ -46,7 +47,7 @@ export async function signAndTimestampPdf(
   try {
     outcome = await addRfc3161Timestamp(signed.signedPdf, timestamp);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = errorMessage(error);
     throw new SigningError(
       `Falha ao obter carimbo do tempo RFC 3161 da TSA configurada: ${detail}`,
       "TIMESTAMP_FAILED",

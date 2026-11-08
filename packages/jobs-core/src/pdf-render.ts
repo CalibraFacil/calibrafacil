@@ -200,10 +200,6 @@ export function withOrgSession<T>(
   });
 }
 
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** HTML to PDF runs on the Gotenberg Chromium engine; its URL is required. */
 function requireGotenbergUrl(env: Env): string {
   if (!env.GOTENBERG_URL) {

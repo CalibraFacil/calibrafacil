@@ -29,6 +29,7 @@ import {
   getResendDomain,
 } from "@calibra-facil/email-sender";
 import { eq } from "drizzle-orm";
+import { log } from "./log";
 
 export interface EmailDomainHealthResult {
   checked: number;
@@ -58,9 +59,9 @@ function resolveApiKey(
       masterKey,
     );
   } catch (error) {
-    console.error(
+    log.error(
       `[EmailDomainHealth] Failed to decrypt key for org ${row.organizationId}:`,
-      error,
+      { error },
     );
     return undefined;
   }
@@ -261,9 +262,9 @@ export async function processEmailDomainHealth(
       // oxlint-disable-next-line no-await-in-loop -- serial per-account polling
       await checkRow(connections.application, row, masterKey, result);
     } catch (error) {
-      console.error(
+      log.error(
         `[EmailDomainHealth] Unexpected error for org ${row.organizationId}:`,
-        error,
+        { error },
       );
       result.skipped++;
     }

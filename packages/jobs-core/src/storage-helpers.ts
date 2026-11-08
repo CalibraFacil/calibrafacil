@@ -6,6 +6,7 @@ import {
   type StorageBucket,
 } from "@calibra-facil/shared/storage-keys";
 import { type Env, type ObjectBucket } from "./runtime-types.js";
+import { log } from "./log";
 
 /** Pick the object-store bucket for a logical storage bucket. */
 export function bucketBinding(env: Env, bucket: StorageBucket): ObjectBucket {
@@ -68,7 +69,9 @@ export async function resolveOrganizationLogoDataUrl(
     const base64 = arrayBufferToBase64(logoBuffer);
     return `data:${contentType};base64,${base64}`;
   } catch (err) {
-    console.warn(`[JOB ${jobId}] Failed to fetch organization logo:`, err);
+    log.warn(`[JOB ${jobId}] Failed to fetch organization logo:`, {
+      error: err,
+    });
     return logoUrl ?? null;
   }
 }

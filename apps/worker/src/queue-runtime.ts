@@ -28,6 +28,7 @@ import {
 } from "@calibra-facil/db/queue-receipts";
 import { processBackgroundJob, type Env } from "@calibra-facil/jobs-core";
 import { createJobsEnv } from "@calibra-facil/jobs-core/runtime-env";
+import { log } from "./log";
 
 export type WorkerEnv = Env;
 
@@ -95,16 +96,16 @@ async function decideWithReceipt(
   try {
     claim = await claimQueueReceipt({ jobType: job.type, idempotencyKey: key });
   } catch (error) {
-    console.error(
+    log.error(
       `[QueueReceipt] ledger unavailable — running job ${job.id} without receipt`,
-      error,
+      { error },
     );
     return { job, run: true, owned: false };
   }
 
   if (claim.outcome === "claimed") return { job, run: true, owned: true };
 
-  console.warn(
+  log.warn(
     `[QueueReceipt] duplicate delivery (${mode}): type=${job.type} key=${key} state=${claim.outcome}`,
   );
   if (mode === "shadow") return { job, run: true, owned: false };
@@ -140,9 +141,9 @@ async function settleReceipt(
       ? completeQueueReceipt(params)
       : releaseQueueReceipt(params));
   } catch (error) {
-    console.error(
+    log.error(
       `[QueueReceipt] failed to settle receipt for job ${decision.job.id}`,
-      error,
+      { error },
     );
   }
 }
@@ -207,7 +208,7 @@ async function processClaimedJob(
       maxAttempts: job.maxAttempts,
     });
   } catch (error) {
-    console.error(`[Worker] Queue job ${job.id} failed`, error);
+    log.error(`[Worker] Queue job ${job.id} failed`, { error });
     // The real error is recorded as the job's last_error.
     if (await failQueueJob(job.id, workerId, error)) {
       await settleReceipt(decision, false);
@@ -230,11 +231,11 @@ async function reclaimStaleJobs(staleAfterMs: number): Promise<void> {
   const { deadLettered } = await releaseStaleQueueJobs(staleAfterMs);
   if (deadLettered.length === 0) return;
 
-  console.error(
+  log.error(
     `[Worker] Dead-lettered ${deadLettered.length} queue job(s) whose lease expired on the final attempt`,
   );
   await rejectDeadLetteredCertificateRenders(deadLettered).catch((error) => {
-    console.error("[Worker] Failed to reject dead-lettered renders", error);
+    log.error("[Worker] Failed to reject dead-lettered renders", { error });
   });
 }
 

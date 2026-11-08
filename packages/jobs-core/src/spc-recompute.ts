@@ -23,6 +23,7 @@ import {
 } from "@calibra-facil/interval-analysis";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { SPC_MACHINE } from "@calibra-facil/schemas/machines";
+import { log } from "./log";
 
 type ChartRow = Pick<
   typeof controlChart.$inferSelect,
@@ -179,17 +180,16 @@ export async function processSpcRecompute(
             if (evaluation.status === "out_of_control") outOfControl += 1;
             if (evaluation.status === "trending") trending += 1;
           } catch (error) {
-            console.error(`[SPC] Error recomputing chart ${chart.id}:`, error);
+            log.error(`[SPC] Error recomputing chart ${chart.id}:`, { error });
           }
         }
 
         offset += batch.length;
       } while (batch.length === BATCH_SIZE);
     } catch (error) {
-      console.error(
-        `[SPC] Error sweeping laboratory ${organizationId}:`,
+      log.error(`[SPC] Error sweeping laboratory ${organizationId}:`, {
         error,
-      );
+      });
     }
   }
 

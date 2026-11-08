@@ -4,6 +4,7 @@ import {
   LocalNotFoundError,
   LocalUnprocessableError,
 } from "@calibra-facil/local-db";
+import { log } from "./log";
 
 /**
  * The one place a thrown error becomes an HTTP answer (Hono `onError`).
@@ -42,7 +43,7 @@ export function handleLocalServerError(error: unknown, c: Context) {
     return c.json({ error: "Corpo da requisicao nao e um JSON valido" }, 400);
   }
 
-  console.error("[local-server] unexpected error", error);
+  log.error("[local-server] unexpected error", { error });
   return c.json({ error: "Erro interno do servidor local" }, 500);
 }
 

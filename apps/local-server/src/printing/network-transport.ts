@@ -1,6 +1,7 @@
 import { Socket } from "node:net";
 
 import { PrinterTransportError } from "./errors";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 // Zebra/ZPL printers accept raw bytes on TCP port 9100. We open a socket, write
 // the ZPL, flush, and close. No driver, no spooler — the most reliable path for
@@ -41,9 +42,7 @@ function describeSocketError(
     default:
       return new PrinterTransportError(
         "CONNECTION_FAILED",
-        `Falha ao conectar em ${host}:${port}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Falha ao conectar em ${host}:${port}: ${errorMessage(error)}`,
       );
   }
 }

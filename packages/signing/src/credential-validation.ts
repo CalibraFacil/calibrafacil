@@ -18,6 +18,7 @@ import {
   validateCertificateChain,
 } from "./chain-validation.js";
 import type { CertificateInfo } from "./types.js";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 type CredentialRejectionCode =
   | "CERTIFICATE_EXPIRED"
@@ -128,9 +129,9 @@ export function resolveSigningTrustAnchors(
     content = readFileSync(file, "utf8");
   } catch (error) {
     throw new Error(
-      `SIGNING_TRUST_STORE_FILE (${file}) cannot be read: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `SIGNING_TRUST_STORE_FILE (${file}) cannot be read: ${errorMessage(
+        error,
+      )}`,
       { cause: error },
     );
   }

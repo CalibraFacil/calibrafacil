@@ -21,6 +21,8 @@ import {
   sendPlatformEmail,
 } from "@calibra-facil/email-sender";
 import type { EmailBrand } from "@calibra-facil/email";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 export interface OotCustomerEmailInput {
   /** Already-validated recipient address (the notification's snapshot). */
@@ -48,7 +50,7 @@ export async function sendOotCustomerEmail(
   const fromEmail = getPlatformFromEmail();
 
   if (!isPlatformEmailConfigured() || !fromEmail) {
-    console.error(
+    log.error(
       "[OotEmail] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM).",
     );
     return {
@@ -78,10 +80,9 @@ export async function sendOotCustomerEmail(
     });
 
     if (!delivery.ok) {
-      console.error(
-        "[OotEmail] Failed to send notification email:",
-        delivery.error,
-      );
+      log.error("[OotEmail] Failed to send notification email:", {
+        error: errorMessage(delivery.error),
+      });
       return {
         sent: false,
         error: delivery.error,
@@ -95,7 +96,7 @@ export async function sendOotCustomerEmail(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown transport error";
-    console.error("[OotEmail] Failed to send notification email:", error);
+    log.error("[OotEmail] Failed to send notification email:", { error });
     return { sent: false, error: message } satisfies OotCustomerEmailResult;
   }
 }
