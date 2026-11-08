@@ -64,8 +64,9 @@ pnpm db:studio        # Drizzle Studio on :4000
 
 `drizzle-kit generate` does not produce usable migrations past the early snapshots:
 write new migrations by hand (`packages/db/drizzle/NNNN_name.sql`) and append the entry
-to `drizzle/meta/_journal.json`. New databases are built from `src/schema.ts` (the historical
-chain is not replayable from scratch), so a migration that adds something schema.ts cannot
+to `drizzle/meta/_journal.json`. New databases are built from `src/schema.ts` (the entry, which re-exports the per-area files in
+`src/schema/`; a file there imports only the files before it in the list in `schema.ts`, so they form no cycle; the
+historical chain is not replayable from scratch), so a migration that adds something schema.ts cannot
 express — an extension, function, partial/expression index or CHECK constraint — must also be
 added to `packages/db/sql/schema-extras.sql`. Each journal entry's `when` must be strictly larger than every entry before it
 and its `idx` must continue the sequence (`packages/db/src/migration-journal.test.ts` enforces it; renumber yours when rebasing
