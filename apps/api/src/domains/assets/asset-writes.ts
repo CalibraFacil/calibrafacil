@@ -1,17 +1,29 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { asset, customer } from "@calibra-facil/db/schema";
 import {
+  asset,
+  calibrationJob,
+  customer,
+  serviceOrder,
+} from "@calibra-facil/db/schema";
+import {
+  IN_FLIGHT_JOB_STATUSES,
   RegulatedIntervalSchema,
   type CreateAssetInput,
 } from "@calibra-facil/schemas";
-import { and, eq, isNull, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, type SQL } from "drizzle-orm";
+import type { ServiceOrderStatus } from "@calibra-facil/shared";
 import { findAssetTypeById } from "./asset-types";
 import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
 } from "./asset-measurement";
 import { resolveAssetRegimeWrite } from "./asset-regime";
-import { DomainError, invalid, notFound } from "../../lib/domain-errors";
+import {
+  conflict,
+  DomainError,
+  invalid,
+  notFound,
+} from "../../lib/domain-errors";
 import type { OrgContext } from "../../lib/org-context";
 import { deriveRegulatedNextDate } from "./regulated-interval";
 
@@ -281,6 +293,11 @@ export function planAssetRegimeUpdate(
 
 /**
  * Soft-deletes the asset (`deletedAt`) and records the `delete` audit row.
+ * Refuses (409 `asset_has_open_work`) while a calibration job of the asset is
+ * still in the laboratory's pipeline or a service order of it is not finished:
+ * work in progress would be left on a deleted asset (and the approval-effects
+ * reconciler skips deleted assets, so its calibration date would never be
+ * advanced). Finished and approved records stay; only the asset is hidden.
  * `scope` narrows the row the way the caller's access does (the lab's unit
  * scope, the portal user's linked customer); throws 404 `asset_not_found` when
  * the asset is not in it (or was deleted meanwhile).
@@ -297,9 +314,54 @@ export async function deleteLabAsset(
     .returning();
   if (!deleted) throw notFound("asset_not_found", "Ativo nao encontrado");
 
-  // TODO: Check for active calibrations before deleting
+  await assertNoOpenWork(ctx, existing);
   await ctx.audit("asset", existing.id, {
     action: "delete",
     changes: { asset: { old: existing, new: null } },
   });
+}
+
+/** Service orders in these statuses are finished: they do not hold the asset. */
+const FINISHED_SERVICE_ORDER_STATUSES: ServiceOrderStatus[] = [
+  "delivered",
+  "closed",
+  "canceled",
+];
+
+/**
+ * Throws 409 `asset_has_open_work` when the asset has a job in the pipeline or
+ * an unfinished service order. It runs after the soft delete inside the same
+ * transaction, so the refusal rolls the delete back.
+ */
+async function assertNoOpenWork(ctx: OrgContext, existing: AssetRow) {
+  const [openJob] = await ctx.o
+    .select({ id: calibrationJob.id })
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.organizationId, existing.labOrganizationId),
+        eq(calibrationJob.assetId, existing.id),
+        inArray(calibrationJob.status, [...IN_FLIGHT_JOB_STATUSES]),
+      ),
+    )
+    .limit(1);
+  const [openOrder] = openJob
+    ? []
+    : await ctx.o
+        .select({ id: serviceOrder.id })
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.organizationId, existing.labOrganizationId),
+            eq(serviceOrder.assetId, existing.id),
+            notInArray(serviceOrder.status, FINISHED_SERVICE_ORDER_STATUSES),
+          ),
+        )
+        .limit(1);
+  if (openJob || openOrder) {
+    throw conflict(
+      "asset_has_open_work",
+      "O ativo possui calibrações ou ordens de serviço em andamento e não pode ser excluído",
+    );
+  }
 }

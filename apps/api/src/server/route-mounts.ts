@@ -102,7 +102,6 @@ export function mountApiRoutes(
           status: "ok",
         }),
       )
-      .get("/hello", (c) => c.json({ message: "Hello!" }))
       // Readiness probe: checks Postgres, R2 and the job-queue
       // backlog; 503 when a dependency is down. `GET /api` above stays the
       // static liveness response.

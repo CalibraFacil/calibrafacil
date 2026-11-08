@@ -179,6 +179,7 @@ export const API_ERROR_CODES = [
   "organization_suspended",
   "organization_deleted",
   "customer_has_retained_records",
+  "asset_has_open_work",
 
   // Offline attachment upload leg (the desktop upload endpoints; the same
   // refusals reach a pushed event as the upper-case codes of outbox-rejections.ts).

@@ -443,9 +443,6 @@ customersRouter.delete(
       memberData.organizationId,
     );
 
-    // TODO: Check for active calibrations before deleting
-    // For now, we allow deletion
-
     // Retention: a customer that still has regulated records
     // (jobs, certificates, service orders, billing documents, requests,
     // visits, OOT events) cannot be deleted. Those foreign keys are RESTRICT, so

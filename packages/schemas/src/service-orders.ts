@@ -117,8 +117,6 @@ export const ListServiceOrdersQuerySchema = z.object({
   assetId: z.coerce.number().int().positive().optional(),
   technicianId: z.string().trim().optional(),
   unitId: z.coerce.number().int().positive().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
   warranty: queryFlag.optional(),
   awaitingApproval: queryFlag.optional(),
   readyForPickup: queryFlag.optional(),

@@ -36,7 +36,7 @@ apps/api/src/
 - Specs are exempt (a spec may reach any module; `vi.mock` needs the real module id) and live next
   to the file they test. Cross-cutting specs live in `lib/` (database level) or `server/` (request
   level).
-- Domains form a DAG (`pnpm check:cycles` enforces no import cycles): `customers -> {org, assets}`, `portal ->
+- Domains form a DAG (`pnpm check:cycles` enforces no import cycles): `customers -> {org, assets, finance}`, `portal ->
 {jobs, visits, assets, org}`, `visits -> jobs`, `jobs -> {assets, finance, org, quality}`, `quality -> org`, `standards -> jobs`,
   `verify -> jobs`, `service-orders -> finance`, `catalog -> finance`, `sync -> {jobs, assets, service-orders}`,
   `public-api -> {jobs, assets, customers, visits, finance, reports}`; `org`, `finance`, `assets`, `methods`,

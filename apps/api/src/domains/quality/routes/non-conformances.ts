@@ -77,10 +77,7 @@ mount(
   PREFIX,
   nonConformanceEndpoints.list,
   withLabPermission({ non_conformance: ["read"] }),
-  async (
-    c,
-    { query: { page, limit, query, status, type, jobId, dateFrom, dateTo } },
-  ) => {
+  async (c, { query: { page, limit, query, status, type, jobId } }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const member = c.get("member");
       const offset = (page - 1) * limit;
@@ -108,14 +105,6 @@ mount(
 
       if (jobId) {
         conditions.push(eq(nonConformance.jobId, jobId));
-      }
-
-      if (dateFrom) {
-        conditions.push(gte(nonConformance.detectedAt, new Date(dateFrom)));
-      }
-
-      if (dateTo) {
-        conditions.push(lte(nonConformance.detectedAt, new Date(dateTo)));
       }
 
       const whereCondition = and(...conditions);

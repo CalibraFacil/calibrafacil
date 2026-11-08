@@ -13,17 +13,7 @@ import {
   service,
   user,
 } from "@calibra-facil/db/schema";
-import {
-  and,
-  count,
-  desc,
-  eq,
-  gte,
-  ilike,
-  inArray,
-  lt,
-  sql,
-} from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { CALIBRATION_REQUEST_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   withLabPermission,
@@ -187,8 +177,7 @@ mount(
   withLabPermission({ request: ["read"] }),
   async (c, { query: filters }) => {
     const member = c.get("member");
-    const { page, limit, query, status, customerId, dateFrom, dateTo } =
-      filters;
+    const { page, limit, query, status, customerId } = filters;
     const offset = (page - 1) * limit;
 
     const conditions = [
@@ -211,18 +200,6 @@ mount(
 
     if (customerId) {
       conditions.push(eq(calibrationRequest.customerId, customerId));
-    }
-
-    if (dateFrom) {
-      conditions.push(gte(calibrationRequest.submittedAt, new Date(dateFrom)));
-    }
-
-    if (dateTo) {
-      const nextDay = new Date(dateTo);
-      nextDay.setHours(0, 0, 0, 0);
-      nextDay.setDate(nextDay.getDate() + 1);
-
-      conditions.push(lt(calibrationRequest.submittedAt, nextDay));
     }
 
     const whereCondition = and(...conditions);
