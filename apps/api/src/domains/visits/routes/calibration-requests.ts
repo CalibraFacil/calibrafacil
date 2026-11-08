@@ -29,7 +29,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../../middleware/permission";
-import { createCalibrationJob, jobCreationClientErrors } from "../../jobs";
+import { createCalibrationJob } from "../../jobs";
 import { notify } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../../../lib/units";
 import { formatOnsiteAddressText } from "../onsite-address";
@@ -678,33 +678,24 @@ mount(
             throw invalid("invalid_request", "Item de solicitacao invalido");
           }
 
-          let newJob;
-          try {
-            newJob = await createCalibrationJob({
-              organizationId: member.organizationId,
-              unitId: request.unitId,
-              createdBy: ctx.actor.userId,
-              assetId: requestItem.assetId,
-              serviceId: item.serviceId,
-              technicianId: item.technicianId,
-              dueDate: item.dueDate,
-              ipAddress: ctx.actor.ipAddress,
-              sourceRequestId: request.id,
-              sourceRequestItemId: requestItem.id,
-              executor: ctx.tx,
-              onsiteLocation,
-              visitId,
-            });
-          } catch (error) {
-            if (
-              error instanceof Error &&
-              jobCreationClientErrors.has(error.message)
-            ) {
-              throw invalid("invalid_request", error.message);
-            }
-
-            throw error;
-          }
+          // A refusal is a typed DomainError (asset_not_found, service_not_found,
+          // unit_asset_mismatch, ...): it keeps its status and code and rolls the
+          // conversion back.
+          const newJob = await createCalibrationJob({
+            organizationId: member.organizationId,
+            unitId: request.unitId,
+            createdBy: ctx.actor.userId,
+            assetId: requestItem.assetId,
+            serviceId: item.serviceId,
+            technicianId: item.technicianId,
+            dueDate: item.dueDate,
+            ipAddress: ctx.actor.ipAddress,
+            sourceRequestId: request.id,
+            sourceRequestItemId: requestItem.id,
+            executor: ctx.tx,
+            onsiteLocation,
+            visitId,
+          });
 
           createdJobs.push({
             requestItemId: requestItem.id,

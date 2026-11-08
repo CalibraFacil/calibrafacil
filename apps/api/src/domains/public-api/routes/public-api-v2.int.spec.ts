@@ -878,6 +878,47 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     expect(row?.technicianId).toBe(tech.userId);
   });
 
+  it("REQ-JOBCREATE-PAPI-001: POST /jobs naming a service that does not exist → 404 service_not_found (the domain error's own status and code), no job written", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-jobs-create",
+      scopes: ["jobs:write"],
+    });
+    const customerId = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-jobcreate",
+      name: "Acme",
+    });
+    const typeId = await seedAssetTypeRow("type-jobcreate");
+    const assetId = await seedAssetRow({
+      unitId: orgA.unitId,
+      customerId,
+      assetTypeId: typeId,
+      tag: "JOBCREATE-1",
+    });
+
+    const res = await publicApiV2Router.request("/jobs", {
+      method: "POST",
+      headers: {
+        "x-api-key": rawKey,
+        "content-type": "application/json",
+        "idempotency-key": "idem-job-missing-service",
+      },
+      body: JSON.stringify({ assetId, serviceId: 999999 }),
+    });
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error.code).toBe("service_not_found");
+    const jobs = await db
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.organizationId, orgA.orgId));
+    expect(jobs).toHaveLength(0);
+  });
+
   // =========================================================================
   // DELETE /jobs/:id — cancel through the status machine's allow-list, with a
   // compare-and-set on the validated status

@@ -737,6 +737,48 @@ describe("calibrationRequestsRouter — request → job workflow", () => {
     expect(jobsAfterReConvert).toHaveLength(1);
   });
 
+  it("REQ-CREQ-009: convert naming a service that does not exist → 404 service_not_found (not 400 invalid_request); the request stays APPROVED and no job exists", async () => {
+    const fixture = await seedRequestFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+    loginAs({ userId: "user-a", organizationId: "org-a" });
+    const { requestId, itemId } = await seedRequest({
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      authOrganizationId: fixture.clientOrgId,
+      assetId: fixture.assetId,
+      submittedBy: "user-a",
+      status: "APPROVED",
+    });
+
+    const res = await calibrationRequestsRouter.request(
+      `/${requestId}/convert`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          items: [{ itemId, serviceId: 999999, technicianId: null }],
+        }),
+      },
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: "service_not_found" });
+    const [row] = await db
+      .select({ status: calibrationRequest.status })
+      .from(calibrationRequest)
+      .where(eq(calibrationRequest.id, requestId));
+    expect(row?.status).toBe("APPROVED");
+    const jobs = await db
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.organizationId, "org-a"));
+    expect(jobs).toHaveLength(0);
+  });
+
   // =========================================================================
   // REQ-CREQ-004 [HIGH RISK] RBAC dual-gate
   // =========================================================================

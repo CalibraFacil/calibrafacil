@@ -1,3 +1,4 @@
+import { DomainError } from "../../../../lib/domain-errors";
 import { createRouter } from "../../../../server/router";
 import { orgDb } from "../../../../lib/org-db";
 import { zValidator } from "@hono/zod-validator";
@@ -17,7 +18,6 @@ import {
 import { requireApiScope } from "../../../../middleware/api-key-auth";
 import {
   createCalibrationJob,
-  jobCreationClientErrors,
   executeJob,
   submitJob,
   editJob,
@@ -142,10 +142,21 @@ export const jobWriteRoutes = createRouter<PublicApiV2Env>()
         },
         {
           mapError: (error) => {
+            // A refusal of createCalibrationJob is a typed DomainError: it
+            // answers its own status and code.
+            if (error instanceof DomainError && error.status < 500) {
+              return {
+                status: error.status,
+                body: buildPublicApiError({
+                  code: error.code,
+                  message: error.message,
+                }),
+              };
+            }
             const message =
               error instanceof Error ? error.message : "Falha ao criar OS";
             return {
-              status: jobCreationClientErrors.has(message) ? 400 : 500,
+              status: 500,
               body: buildPublicApiError({
                 code: "job_create_failed",
                 message,
