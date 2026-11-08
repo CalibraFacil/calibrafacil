@@ -1,11 +1,8 @@
 /**
  * Advance an asset's calibration dates when a calibration job is APPROVED.
  *
- * Before this existed, nothing moved `asset.last_calibration_date` /
- * `next_calibration_date` / `next_legal_verification_date` after a calibration
- * was actually performed — the lab had to PATCH the asset by hand, and until it
- * did, the due-recalibration and legal-verification sweeps kept re-reminding
- * for an instrument that had just been calibrated.
+ * Without it, the due-recalibration and legal-verification sweeps would keep
+ * re-reminding for an instrument that had just been calibrated.
  *
  * Rules (Track 1 — customer-owned interval, §7.8.4.3 + ILAC-G24):
  *  - `last_calibration_date` advances to the job's calibration date
@@ -106,8 +103,8 @@ export type AssetCalibrationAdvanceApplied = {
 };
 
 /**
- * Load, decide, persist + audit, on `o` (the caller's transaction). Since
- * roadmap 2 B2 this runs INSIDE the approval's own transaction: the read, the
+ * Load, decide, persist + audit, on `o` (the caller's transaction), which is the
+ * approval's own transaction: the read, the
  * forward-only update and its audit row commit or roll back with the approval
  * (no date change without its audit trail, no approval without the advance), so
  * there is no retry and no swallowed failure: an error rolls the approval back.

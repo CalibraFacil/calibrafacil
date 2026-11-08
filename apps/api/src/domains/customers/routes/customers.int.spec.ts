@@ -384,7 +384,7 @@ describe("customersRouter — real DB + real middleware", () => {
   });
 
   // =========================================================================
-  // REQ-CMP-AUD-001 (#649): the deletion audit row must SURVIVE the deletion
+  // REQ-CMP-AUD-001: the deletion audit row must SURVIVE the deletion
   // it documents (ISO/IEC 17025 append-only trail). Before the fix the
   // customer_id FK cascaded and the row self-deleted.
   // =========================================================================
@@ -430,7 +430,7 @@ describe("customersRouter — real DB + real middleware", () => {
   });
 
   // =========================================================================
-  // REQ-CMP-AUD-010a [HIGH RISK] (#692 / CMP-07): deleting a customer cascades
+  // REQ-CMP-AUD-010a [HIGH RISK]: deleting a customer cascades
   // its assets (asset.customer_id → customer, intentional). The asset audit
   // trail must SURVIVE that cascade — the append-only ISO/IEC 17025 trail must
   // keep both the pre-existing history AND a fresh 'delete' row per asset.

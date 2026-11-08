@@ -50,7 +50,6 @@ mount(
     const member = c.get("member");
     const offset = (page - 1) * limit;
 
-    // Build conditions - always scope to organization
     const conditions = [
       eq(service.organizationId, member.organizationId),
       buildUnitScopeCondition(service.unitId, member),
@@ -79,13 +78,11 @@ mount(
     const { countResult, services } = await orgDb(
       member.organizationId,
     ).transaction(async (o) => {
-      // Get total count
       const [total] = await o
         .select({ total: count() })
         .from(service)
         .where(whereCondition);
 
-      // Get paginated data with joins
       const rows = await o
         .select({
           id: service.id,
@@ -318,7 +315,6 @@ mount(
         const existing = await requireLabService(params.id, member, ctx.o);
         const id = existing.id;
 
-        // If methodId is being changed, validate it
         let finalAssetTypeId = input.assetTypeId;
 
         if (input.methodId !== undefined) {
@@ -328,7 +324,6 @@ mount(
               finalAssetTypeId = input.assetTypeId;
             }
           } else {
-            // Method is being set or changed
             const [method] = await ctx.o
               .select({
                 id: calibrationMethod.id,
@@ -348,7 +343,6 @@ mount(
               throw invalid("method_not_found", "Método não encontrado");
             }
 
-            // Enforce method's assetTypeId constraint
             if (method.assetTypeId) {
               if (
                 input.assetTypeId &&
@@ -364,11 +358,9 @@ mount(
           }
         }
 
-        // Build changes object for audit log
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         const updateData: Record<string, unknown> = {};
 
-        // Check each field for changes
         if (input.name !== undefined && input.name !== existing.name) {
           changes.name = { old: existing.name, new: input.name };
           updateData.name = input.name;
@@ -429,7 +421,6 @@ mount(
           updateData.isActive = input.isActive;
         }
 
-        // If no changes, return existing
         if (Object.keys(updateData).length === 0) {
           return existing;
         }
@@ -503,7 +494,6 @@ mount(
     return orgDb(member.organizationId).transaction(async (o) => {
       const id = await requireServiceRouteId(params.id, member, o);
 
-      // Verify service exists and belongs to organization
       const [existing] = await o
         .select({ id: service.id })
         .from(service)
@@ -520,7 +510,6 @@ mount(
         throw notFound("service_not_found", "Serviço não encontrado");
       }
 
-      // Get audit logs with performer details
       const logs = await o
         .select({
           id: serviceAuditLog.id,

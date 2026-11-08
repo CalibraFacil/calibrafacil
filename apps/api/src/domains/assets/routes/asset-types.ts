@@ -10,12 +10,12 @@ import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
 
 /**
- * READ-ONLY lab-facing view of the GLOBAL asset-type catalog (#637).
+ * READ-ONLY lab-facing view of the GLOBAL asset-type catalog.
  *
  * `asset_type` has no organization_id — it is a platform-wide shared catalog,
  * so tenant RBAC must never gate writes to it (any lab admin could corrupt or
- * delete types used by every other tenant). Per Pedro's decision (2026-07-05)
- * the catalog is curated centrally: it is seeded by
+ * delete types used by every other tenant). The catalog is curated centrally;
+ * it is seeded by
  * `packages/db/src/seed-asset-types.ts` and is read-only through the API.
  *
  * The reads live in `domains/assets/asset-types.ts`: the catalog has no tenant column and
@@ -25,7 +25,6 @@ const PREFIX = "/api/asset-types";
 
 export const assetTypesRouter = createRouter<{ Variables: AuthVariables }>();
 
-// GET / - List all asset types (for dropdown/selection)
 mount(
   assetTypesRouter,
   PREFIX,

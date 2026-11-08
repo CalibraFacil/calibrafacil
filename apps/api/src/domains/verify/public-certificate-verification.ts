@@ -23,7 +23,7 @@ import { orgDb } from "../../lib/org-db";
  * session). The unguessable verification token IS the credential, and it yields
  * the laboratory that issued the certificate, so the lookup by token cannot be
  * bound to an organization yet: it runs on the SYSTEM path (`systemDb`, the
- * owner connection; P2-18a, tenant-sql-allowlist.ts "public-token"). The
+ * owner connection; tenant-sql-allowlist.ts "public-token"). The
  * amendment links that follow are bound to that laboratory
  * (`findPublicAmendmentLink`).
  */
@@ -63,7 +63,7 @@ export async function findCertificateByVerificationToken(token: string) {
       labAccreditationValidFrom: organization.accreditationValidFrom,
       labAccreditationValidUntil: organization.accreditationValidUntil,
       labAccreditationNumber: organization.accreditationNumber,
-      // The seal decision frozen at approval (Q42); null before migration 0120.
+      // The seal decision frozen at approval; null before migration 0120.
       frozenSeal: frozenSealColumn,
       frozenAccreditationNumber: frozenAccreditationNumberColumn,
     })

@@ -136,7 +136,7 @@ export async function updateLabCustomer(
 
 /**
  * Deletes the customer and its CLIENT organization after the audit rows that
- * must outlive it. Retention (decision Q16): Postgres refuses the delete while
+ * must outlive it. Retention: Postgres refuses the delete while
  * regulated records still reference the customer (a foreign-key violation,
  * `isReferencedRowViolation`); the audit rows share the transaction, so a refused
  * delete rolls them back and leaves no "delete" entry behind.
@@ -145,14 +145,14 @@ export async function deleteLabCustomer(
   ctx: OrgContext,
   existing: CustomerRow,
 ) {
-  // CMP-06 (#649): the customer_id FK no longer cascades (soft reference), so
+  // The customer_id FK no longer cascades (soft reference), so
   // this row survives the delete below.
   await ctx.audit("customer", existing.id, {
     action: "delete",
     changes: { customer: { old: existing, new: null } },
   });
 
-  // CMP-07 (#692): deleting the customer cascades its assets
+  // Deleting the customer cascades its assets
   // (asset.customer_id -> customer, intentional). Record a 'delete' audit row
   // for EACH asset first: the asset_audit_log.asset_id FK no longer cascades,
   // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
@@ -177,7 +177,6 @@ export async function deleteLabCustomer(
         eq(customer.labOrganizationId, ctx.org),
       ),
     );
-  // Also delete the associated (CLIENT) organization.
   await ctx.o
     .delete(organization)
     .where(eq(organization.id, existing.authOrganizationId));

@@ -37,7 +37,7 @@ const UUID_REGEX =
 // deterministic per signed-PDF hash, so caching by pdfHash keeps the public
 // endpoint cheap and bounds the R2-download + crypto cost under repeated scans.
 const LIVE_VERDICT_TTL_MS = 10 * 60 * 1000;
-// #646 fase b: shared CRL fetcher (TTL-cached) for revocation checking on the
+// Shared CRL fetcher (TTL-cached) for revocation checking on the
 // public verification paths. Failures degrade the verdict, never error it.
 const crlFetcher = createCrlFetcher();
 
@@ -57,13 +57,9 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
  * Human page: {VERIFY_URL}/v/{verificationToken} (portal route /v/$token).
  */
 export const verifyRouter = createRouter<{ Bindings: R2Env }>()
-  // =========================================================================
-  // GET /:token - Get certificate verification info
-  // =========================================================================
   .get("/:token", async (c) => {
     const token = c.req.param("token");
 
-    // Validate UUID format
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(token)) {
@@ -132,11 +128,11 @@ export const verifyRouter = createRouter<{ Bindings: R2Env }>()
       }
     }
 
-    // The seal is the decision frozen at approval (Q42): vigência at emission,
+    // The seal is the decision frozen at approval: vigência at emission,
     // the method's scope and the frozen scope (CMC) verdict were all judged
     // then. The lab's CURRENT accreditation fields never re-decide an issued
     // certificate; only a record approved before the decision was frozen falls
-    // back to the rule it was issued under (#647, #427 Phase 1).
+    // back to the rule it was issued under.
     const { accredited, accreditationNumber } = issuedSealOf({
       frozenSeal: job.frozenSeal,
       frozenAccreditationNumber: job.frozenAccreditationNumber,
@@ -306,7 +302,7 @@ export const verifyRouter = createRouter<{ Bindings: R2Env }>()
         signerChainsToIcpRoot: false,
         certNotExpiredAtCheckDate: false,
         signaturePresent: true,
-        // Best-effort from the metadata recorded at issue (#646, PAdES-T) —
+        // Best-effort from the metadata recorded at issue (PAdES-T) —
         // the PDF itself couldn't be re-verified in this fallback path.
         timestampPresent: job.signatureMetadata.timestamped === true,
         timestamp: null,
@@ -331,7 +327,7 @@ export const verifyRouter = createRouter<{ Bindings: R2Env }>()
   })
 
   // =========================================================================
-  // POST /:token/match - Upload-to-verify (public, Phase 2)
+  // POST /:token/match - Upload-to-verify (public)
   //
   // Hash an uploaded PDF and compare it to the SHA-256 recorded for this
   // certificate (tamper detection), and report whether the uploaded file is
@@ -395,9 +391,6 @@ export const verifyRouter = createRouter<{ Bindings: R2Env }>()
     });
   })
 
-  // =========================================================================
-  // GET /:token/download - Download certificate (public)
-  // =========================================================================
   .get("/:token/download", async (c) => {
     const token = c.req.param("token");
 

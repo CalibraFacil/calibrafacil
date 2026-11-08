@@ -1,6 +1,6 @@
 /**
  * What the public certificate verification shows of the signer's tax id
- * (roadmap 2 D3, review 3.3; LGPD art. 6 III, necessity).
+ * (LGPD art. 6 III, necessity).
  *
  * A CPF identifies a person: only its middle six digits are shown
  * (`***.456.789-**`), enough to tell signers apart, not enough to reuse. A CNPJ
