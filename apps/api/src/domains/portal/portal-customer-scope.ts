@@ -20,7 +20,7 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
  * "single" mode it returns exactly one customer id, so existing single-tenant
  * behavior is byte-for-byte unchanged.
  *
- * SYSTEM PATH (P2-18a): every statement in this module runs on `systemDb`, the
+ * SYSTEM PATH: every statement in this module runs on `systemDb`, the
  * owner connection, on purpose. They start from the signed-in USER or from a
  * CLIENT organization, both outside any laboratory, and their job is to LEARN
  * which laboratory (or set of laboratories) the portal session belongs to; row-level

@@ -1,12 +1,12 @@
 /**
- * Fleet reliability aggregation for the portal (#740 Track A).
+ * Fleet reliability aggregation for the portal.
  *
  * Pure functions over approved-job rows: OOT (as-found non-conforming) rates
  * trended by period, per-asset-type breakdown, worst offenders, and the
  * per-asset matched-point drift series. The DB reads live in the portal route
  * (same split as interval-insight.ts).
  *
- * Honesty rules (issue #740):
+ * Honesty rules:
  * - Rates are computed over KNOWN cycles only (CONFORMING + NON_CONFORMING);
  *   the UNKNOWN share is always reported so analytics never overstate coverage.
  * - Jobs approved before asFoundConformity existed have null verdicts → UNKNOWN.
@@ -239,7 +239,7 @@ export function buildFleetReliabilitySummary(
 }
 
 // ---------------------------------------------------------------------------
-// Per-asset drift series (Track A item 3)
+// Per-asset drift series
 // ---------------------------------------------------------------------------
 
 export type DriftSeriesJobRow = {

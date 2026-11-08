@@ -17,7 +17,7 @@ import {
 import { portalRouter } from "./portal";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-// Q42: the accreditation seal (and the number printed with it) the portal shows for an
+// The accreditation seal (and the number printed with it) the portal shows for an
 // ISSUED certificate is the decision FROZEN at approval (certificate_input), never
 // re-decided from the lab's live accreditation fields. Same property as the public
 // verification page (verify.int.spec.ts), on the customer-facing portal route. Real DB,

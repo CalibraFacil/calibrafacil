@@ -1,5 +1,5 @@
 /**
- * portal-scope-isolation.int.spec.ts - P2-18a [HIGH RISK].
+ * portal-scope-isolation.int.spec.ts [HIGH RISK].
  *
  * Two laboratories, each with a portal customer. Proves, against the real
  * database and at the LIBRARY level (it calls no HTTP handler):

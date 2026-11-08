@@ -5,7 +5,7 @@ import { formatCalibrationValue } from "@calibra-facil/shared";
  *
  * The lab dashboard derives the at-a-glance approval verdict (points within
  * tolerance + expanded uncertainty) on the client from the frozen `results`
- * jsonb (see `apps/web/.../detail-model.ts`). The portal must not pull that
+ * jsonb (see `apps/web/src/features/jobs/detail-model/`). The portal must not pull that
  * method-runtime graph in, so we recompute the same numbers server-side from
  * the already-frozen `results` and expose only the summary the customer needs.
  *

@@ -233,8 +233,7 @@ describe("portal engagement endpoints: real responses honor the contract schemas
     expect(list.data[0]?.itemCount).toBe(1);
     // The detail, the batch create and the service-order endpoints are checked
     // at compile time (`satisfies` at the handlers): their success paths run
-    // customer-scoped statements the tenant SQL guard of this tier refuses
-    // (see the findings in the P2-15 report).
+    // customer-scoped statements the tenant SQL guard of this tier refuses.
   });
 
   it("REQ-TC-3: the out-of-tolerance notices list parses", async () => {

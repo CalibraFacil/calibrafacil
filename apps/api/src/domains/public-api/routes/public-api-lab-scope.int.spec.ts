@@ -1,5 +1,5 @@
 /**
- * public-api-lab-scope.int.spec.ts - P2-18h [HIGH RISK].
+ * public-api-lab-scope.int.spec.ts [HIGH RISK].
  *
  * The public API (v1 and v2), the API-key authentication and the webhook
  * delivery run every statement after the key lookup in a transaction that names

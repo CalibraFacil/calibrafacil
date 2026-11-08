@@ -1,11 +1,9 @@
 // Static OpenAPI 3.1 document for the Public API v2.
 //
-// Relocated verbatim from public-api-v2.ts (behavior-preserving structural
-// extraction). This module is intentionally pure: it contains ONLY the static
-// spec builders — no auth, no scope checks, no resource handlers, no DB access,
-// no business logic. The served JSON is byte-identical to the previous inline
-// definition; `buildPublicApiV2OpenApiDocument(origin)` interpolates the request
-// origin into `servers[0].url` exactly as before.
+// This module is intentionally pure: it contains ONLY the static spec builders
+// — no auth, no scope checks, no resource handlers, no DB access, no business
+// logic. `buildPublicApiV2OpenApiDocument(origin)` interpolates the request
+// origin into `servers[0].url`.
 
 type OpenApiParameter = {
   name: string;

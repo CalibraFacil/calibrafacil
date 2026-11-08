@@ -1,6 +1,4 @@
 /**
- * portal-service-order-actions.int.spec.ts - P2-18a.
- *
  * The OWN-order success paths of the portal service-order endpoints that the
  * cross-tenant spec only exercises as 404s: the financial summary of the
  * customer's own order (REQ-18A-1) and the quote approve / reject decisions.

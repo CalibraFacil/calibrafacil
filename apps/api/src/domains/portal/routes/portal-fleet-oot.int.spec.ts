@@ -1,7 +1,6 @@
 /**
- * portal-fleet-oot.int.spec.ts — Real-DB integration tests for issue #740:
- * fleet reliability analytics (Track A) and the asset OOT impact-assessment
- * workflow (Track B).
+ * portal-fleet-oot.int.spec.ts — Real-DB integration tests for the fleet
+ * reliability analytics and the asset OOT impact-assessment workflow.
  *
  * Only the portal session is mocked (test/integration/setup); scoping,
  * permissions and writes run against the seeded Postgres.

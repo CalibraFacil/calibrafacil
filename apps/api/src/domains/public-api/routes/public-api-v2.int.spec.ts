@@ -126,7 +126,7 @@ async function seedAssetRow(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b (#638): derive the lab org from the seeded customer so
+        // Derive the lab org from the seeded customer so
         // UNIQUE(lab_organization_id, tag) is per org (invariant asset.lab_org ==
         // customer.lab_org).
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
@@ -165,7 +165,7 @@ async function seedAsset(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b: lab_organization_id is NOT NULL — derive it from the owning
+        // lab_organization_id is NOT NULL — derive it from the owning
         // customer (invariant asset.lab_org == customer.lab_org).
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
         assetTypeId: params.assetTypeId,
@@ -390,7 +390,7 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
         .values({
           unitId: orgA.unitId,
           customerId,
-          labOrganizationId: orgA.orgId, // SEC-03b (#638): per-org tag uniqueness
+          labOrganizationId: orgA.orgId, // Per-org tag uniqueness
           assetTypeId: type!.id,
           name: "Balança 01",
           serialNumber: "SN-01",
@@ -430,9 +430,9 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   });
 
   // =========================================================================
-  // SEC-03 — tag collision checks are org-scoped. Same-org duplicates are
+  // Tag collision checks are org-scoped. Same-org duplicates are
   // rejected (app check, with the per-org unique asset_lab_org_tag_uidx as a race
-  // backstop mapped to 409 asset_tag_conflict); cross-org duplicates now succeed
+  // backstop mapped to 409 asset_tag_conflict); cross-org duplicates succeed
   // (see the REQ-SEC-TAG-001 tests below).
   // =========================================================================
 
@@ -520,13 +520,10 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     expect(body.error.code).toBe("asset_tag_conflict");
   });
 
-  // REQ-SEC-TAG-001 (public API POST) — cross-org duplicate tag now SUCCEEDS -
-  // BEHAVIOR CHANGE (SEC-03b, #638): part (a) returned 409 for a tag used only
-  // by another org because the GLOBAL unique still fired. Now uniqueness is
-  // per-org — UNIQUE(lab_organization_id, tag) — so org A may reuse org B's tag:
-  // the create returns 201 and BOTH orgs hold the tag. This closes the
-  // cross-tenant existence oracle. Intended flip of part (a)'s 004a/005a
-  // assertion — not a test loosening.
+  // REQ-SEC-TAG-001 (public API POST) — cross-org duplicate tag SUCCEEDS:
+  // uniqueness is per-org — UNIQUE(lab_organization_id, tag) — so org A may reuse
+  // org B's tag: the create returns 201 and BOTH orgs hold the tag. This closes
+  // the cross-tenant existence oracle.
   it("REQ-SEC-TAG-001: POST /assets with a tag used ONLY by another org → 201 (both orgs hold the tag)", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });

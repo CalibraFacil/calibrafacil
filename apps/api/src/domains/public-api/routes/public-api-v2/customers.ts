@@ -412,7 +412,7 @@ export const customerRoutes = createRouter<PublicApiV2Env>()
           ctx.o,
         );
 
-        // Retention (decision Q16): a customer that still has regulated records
+        // Retention: a customer that still has regulated records
         // cannot be deleted (those foreign keys are RESTRICT); the refusal is
         // mapped below, after the rollback.
         await deleteLabCustomer(ctx, existing);

@@ -1,6 +1,4 @@
 /**
- * public-api-v2-reports.int.spec.ts - Q37.
- *
  * `GET /api/v2/reports/consolidated/*` built raw `sql` fragments that handed a
  * `Date` straight to postgres-js, which rejects it: every call answered 500.
  * The period bounds now go through the typed column comparison, as the lab-side
