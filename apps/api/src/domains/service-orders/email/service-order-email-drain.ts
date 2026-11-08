@@ -186,10 +186,9 @@ async function claimOutboxRow(
  * REQ-REL-OBS-003: when this release EXHAUSTS the row (the incremented attempts
  * reach maxAttempts, so the drain will never select it again), also stamp
  * `dead_letter_at = now()`. That turns the previously-silent exhaustion into a
- * queryable state an operator can find with a query. The stamp is written in the SAME UPDATE (one statement) so nothing else in
- * the drain's call sequence changes. Two SQL variants (rather than a CASE with a
- * bound flag) keep the dead-letter write assertable in the drain's SQL-text unit
- * tests.
+ * queryable state an operator can find with a query. The stamp is written in the
+ * SAME UPDATE (one statement), as two SQL variants rather than a CASE with a
+ * bound flag.
  */
 async function releaseOutboxRow(
   organizationId: string,
@@ -233,8 +232,7 @@ async function releaseOutboxRow(
  * per missing key, so legacy rows and other namespaces pass through unchanged.
  * The placeholder (not key removal) keeps the payload valid for
  * parseOutboxPayloadByNamespace's z.string().min(1) on any later read. Two SQL
- * variants (not a CASE) keep the redaction assertable in SQL-text unit tests,
- * mirroring releaseOutboxRow.
+ * variants (not a CASE), mirroring releaseOutboxRow.
  */
 async function markOutboxRowProcessed(
   organizationId: string,
@@ -605,9 +603,8 @@ export async function drainServiceOrderEmailOutbox(options?: {
         }
 
         // 3. Re-load service order + customer (tenant-scoped by organizationId).
-        // Raw SQL so the organization_id predicate is directly assertable in tests.
         // One transaction that names the laboratory: the service order (raw SQL
-        // so the organization predicate stays assertable) and its customer.
+        // with its explicit organization predicate) and its customer.
         const { soRow, custRows } = await withOrg(
           row.organizationId,
           SYSTEM_ACTOR,
