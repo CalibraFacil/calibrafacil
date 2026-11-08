@@ -308,6 +308,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Electron and the electron-builder tools are GitHub release downloads:
+      # keep them between runs so a GitHub download outage (a 504 on a release
+      # asset) does not fail the package step. Keyed on the lockfile, which
+      # pins both versions.
+      - name: Cache the Electron downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-${{ runner.os }}-
+
       # Bundles the local server, builds main, preload and the web renderer,
       # and rebuilds the native modules for Electron.
       - name: Package the desktop app
