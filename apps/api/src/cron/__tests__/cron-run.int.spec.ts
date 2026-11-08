@@ -10,6 +10,8 @@ import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../../test/integration/db";
 import { runCron } from "../cron-run";
 
+const failing = () => Promise.reject(new Error("boom"));
+
 async function readRun(job: string) {
   const [row] = await db.select().from(cronRun).where(eq(cronRun.job, job));
   return row;
@@ -83,8 +85,6 @@ describe("runCron against cron_run", () => {
   });
 
   it("returns a structured 500 when the task throws and counts the consecutive failure", async () => {
-    const failing = () => Promise.reject(new Error("boom"));
-
     const first = await runCron("demo", {}, failing);
     const second = await runCron("demo", {}, failing);
 
