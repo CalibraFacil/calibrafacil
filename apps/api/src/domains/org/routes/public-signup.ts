@@ -29,6 +29,7 @@ import {
 } from "../lab-provisioning";
 import { mount } from "../../../lib/endpoint-mount";
 import { resolveTrustedAppUrl } from "../trusted-app-url";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * Public, UNAUTHENTICATED self-serve sign-up for a laboratory.
@@ -195,10 +196,12 @@ mount(
           // sign-up — it is a delivered account whose link did not arrive. Saying
           // "try again" would be a lie: the retry finds the account and refuses
           // it. Tell the truth and log it for the instance operator.
-          console.error("Failed to send the self-serve claim e-mail", {
-            email: provisioned.owner.email,
-            organizationId: provisioned.organization.id,
-            error,
+          reportServerError(error, {
+            surface: "public-signup",
+            tags: {
+              step: "claim-email",
+              organizationId: provisioned.organization.id,
+            },
           });
 
           // 202: a status the definition (200) does not describe.

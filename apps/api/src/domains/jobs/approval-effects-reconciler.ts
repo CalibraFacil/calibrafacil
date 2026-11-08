@@ -64,6 +64,8 @@ import { advanceAssetCalibrationDates } from "../assets";
 import { recordAssetOotEvent } from "./oot/asset-oot-events";
 import { stageBackgroundJob } from "../../lib/background-job-outbox";
 import { enqueueBackgroundJob } from "../../lib/background-jobs";
+import { log } from "../../lib/logger";
+import { reportServerError } from "../../lib/observability";
 
 /** A job approved this recently is not reconciled yet. */
 const RECONCILE_GRACE_MINUTES = 15;
@@ -169,10 +171,10 @@ export async function reconcileApprovalEffects(
       result.ootEventsCreated += 1;
     } catch (error) {
       result.failures += 1;
-      console.error(
-        `[approval-reconciler] Could not write the out-of-tolerance event of job ${candidate.jobId}:`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "approval-reconciler",
+        tags: { step: "oot-event", jobId: String(candidate.jobId) },
+      });
     }
   }
 
@@ -196,9 +198,10 @@ export async function reconcileApprovalEffects(
     );
   result.ootGapsOlderThanWindow = older?.count ?? 0;
   if (result.ootGapsOlderThanWindow > 0) {
-    console.warn(
-      `[approval-reconciler] ${result.ootGapsOlderThanWindow} approved non-conforming job(s) older than ${lookbackDays} days have no out-of-tolerance event; not repaired automatically.`,
-    );
+    log("warn", "approval_reconciler_oot_gaps_not_repaired", {
+      jobs: result.ootGapsOlderThanWindow,
+      olderThanDays: lookbackDays,
+    });
   }
 
   // ---- 2. approved jobs whose asset dates were not advanced ------------------
@@ -236,10 +239,10 @@ export async function reconcileApprovalEffects(
       if (advanced) result.assetDatesAdvanced += 1;
     } catch (error) {
       result.failures += 1;
-      console.error(
-        `[approval-reconciler] Could not advance the asset dates of job ${candidate.jobId}:`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "approval-reconciler",
+        tags: { step: "asset-dates", jobId: String(candidate.jobId) },
+      });
     }
   }
 
@@ -306,10 +309,13 @@ export async function reconcileApprovalEffects(
       result.notificationsRestaged += 1;
     } catch (error) {
       result.failures += 1;
-      console.error(
-        `[approval-reconciler] Could not re-stage the notification of OOT event ${event.eventId}:`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "approval-reconciler",
+        tags: {
+          step: "restage-oot-notification",
+          eventId: String(event.eventId),
+        },
+      });
     }
   }
 
@@ -318,9 +324,9 @@ export async function reconcileApprovalEffects(
     try {
       await enqueueBackgroundJob(message);
     } catch (error) {
-      console.error("[approval-reconciler] Could not dispatch a job", {
-        type: message.type,
-        error: error instanceof Error ? error.message : "unknown error",
+      reportServerError(error, {
+        surface: "approval-reconciler",
+        tags: { step: "dispatch", type: message.type ?? "CERTIFICATE_RENDER" },
       });
     }
   }

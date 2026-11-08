@@ -5,6 +5,7 @@ import {
   platformEventLog,
 } from "@calibra-facil/db/schema";
 import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
+import { reportServerError } from "../../lib/observability";
 
 /**
  * Persistence of the public self-serve sign-up (domains/org/routes/public-signup.ts).
@@ -133,7 +134,10 @@ export async function releaseSignupSlot(reservationId: number) {
       .delete(platformEventLog)
       .where(eq(platformEventLog.id, reservationId));
   } catch (error) {
-    console.error("Failed to release a public signup reservation", error);
+    reportServerError(error, {
+      surface: "public-signup",
+      tags: { step: "release-slot" },
+    });
   }
 }
 

@@ -38,6 +38,7 @@ import { writeOrganizationAuditEvent } from "./audit";
 import { getExecuteRows } from "./db";
 import { orgDb } from "./org-db";
 import { isRecord } from "@calibra-facil/shared/record";
+import { reportServerError } from "./observability";
 
 /** The tables that carry a chain (the SQL function `calibra_audit_chain_columns`). */
 const CHAINED_AUDIT_TABLES = ["job_audit_log"] as const;
@@ -420,10 +421,10 @@ export async function verifyAuditChains(
         report.announced.push(found);
       } catch (error) {
         report.failures.push({ organizationId, error });
-        console.error(
-          `[audit-chain] could not announce the break of ${table}/${organizationId}`,
-          error,
-        );
+        reportServerError(error, {
+          surface: "audit-chain",
+          tags: { step: "announce-break", table, organizationId },
+        });
       }
     }
   }

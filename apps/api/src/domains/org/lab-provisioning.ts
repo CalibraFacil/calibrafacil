@@ -17,6 +17,7 @@ import {
 import { orgDb } from "../../lib/org-db";
 import { removeLabOrganization } from "./records-retention";
 import { toRecord } from "@calibra-facil/shared/record";
+import { reportServerError } from "../../lib/observability";
 
 /**
  * Everything it takes to turn "a name and an e-mail" into a laboratory that
@@ -263,9 +264,12 @@ export async function cleanupFailedLabProvisioning(params: {
       });
     }
   } catch (error) {
-    console.error("Failed to clean up failed LAB provisioning", {
-      organizationId: params.organizationId,
-      error,
+    reportServerError(error, {
+      surface: "lab-provisioning",
+      tags: {
+        step: "cleanup-failed-provisioning",
+        organizationId: params.organizationId ?? "unknown",
+      },
     });
   }
 }

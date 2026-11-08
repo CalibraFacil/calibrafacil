@@ -46,6 +46,21 @@ describe("sanitizeErrorMessage (redaction)", () => {
     expect(sanitized).not.toContain(opaque);
   });
 
+  it("drops the bound values of a failed query and keeps the statement", () => {
+    const message =
+      'Failed query: insert into "customer" ("name", "email") values ($1, $2)\nparams: Maria Silva,maria@example.com';
+    const sanitized = sanitizeErrorMessage(message);
+    expect(sanitized).not.toContain("Maria");
+    expect(sanitized).not.toContain("maria@example.com");
+    expect(sanitized).toContain('insert into "customer"');
+
+    const stack = sanitizeErrorStack(
+      `Error: ${message}\n    at run (/app/src/db.ts:1:1)`,
+    );
+    expect(stack).not.toContain("maria@example.com");
+    expect(stack).toContain("at run (/app/src/db.ts:1:1)");
+  });
+
   it("keeps ordinary diagnostic text intact", () => {
     expect(
       sanitizeErrorMessage('relation "app_queue_job" does not exist'),

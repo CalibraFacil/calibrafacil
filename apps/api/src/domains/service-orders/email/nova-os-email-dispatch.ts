@@ -16,6 +16,7 @@ import {
 } from "@calibra-facil/notifications";
 import { formatInstant } from "@calibra-facil/shared/format";
 import { ServiceOrderCreatedEmail } from "@calibra-facil/email";
+import { reportServerError } from "../../../lib/observability";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,10 +126,13 @@ export async function dispatchNovaOsEmail(
     });
   } catch (error) {
     // REQ-SOEMAIL-012: email failure must never propagate to the caller.
-    console.error(
-      `[ServiceOrderCreatedEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
-      error,
-    );
+    reportServerError(error, {
+      surface: "service-order-email",
+      tags: {
+        email: "service-order-created",
+        serviceOrderId: String(input.serviceOrderId),
+      },
+    });
     return { sent: false, error: String(error) };
   }
 }

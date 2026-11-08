@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import { log } from "../lib/logger";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
 
 // Wraps every cron handler so the whole cron system fails loudly and safely:
@@ -63,9 +64,9 @@ async function recordOutcome(
     }
   } catch (error) {
     // Heartbeat is best-effort — never let recording an outcome mask the run.
-    console.error("[Cron] failed to record heartbeat", {
-      job,
-      message: getErrorMessage(error),
+    reportServerError(error, {
+      surface: "cron",
+      tags: { job, step: "record-heartbeat" },
     });
   }
 }
@@ -113,7 +114,7 @@ export async function runCron(
     );
     if (rowsLength(acquired) === 0) {
       // Another invocation holds the lease — skip without touching its row.
-      console.warn("[Cron] skipped: another run holds the lease", { job });
+      log("warn", "cron_skipped_lease_held", { job });
       return Response.json(
         { skipped: true, reason: "another run holds the lease" },
         { status: 200 },
@@ -123,9 +124,9 @@ export async function runCron(
   } catch (error) {
     // cron_run unavailable (migration lag) or a DB hiccup — fail open and run
     // the task anyway, just without a lease or heartbeat.
-    console.warn("[Cron] lease unavailable, proceeding without it", {
-      job,
-      message: getErrorMessage(error),
+    reportServerError(error, {
+      surface: "cron",
+      tags: { job, step: "lease-unavailable" },
     });
   }
 
@@ -140,7 +141,6 @@ export async function runCron(
     });
   } catch (error) {
     const message = getErrorMessage(error);
-    console.error("[Cron] task failed", { job, message });
     // Report the failure as well as recording it in the heartbeat table; flush so
     // the report is written before the run answers.
     reportServerError(error, { surface: "cron", tags: { job } });

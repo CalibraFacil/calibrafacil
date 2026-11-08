@@ -13,6 +13,7 @@ import {
   completeDesktopSyncClaim,
   type LegacyAppliedEvent,
 } from "./applied-events";
+import { reportServerError } from "../../lib/observability";
 
 export type AppliedEventResult = {
   ok: true;
@@ -191,6 +192,14 @@ export async function applyDesktopEventAtomically(params: {
         result: withAggregateVersion(captured.refusal, captured.currentVersion),
       };
     }
+    reportServerError(error, {
+      surface: "sync",
+      tags: {
+        step: "apply-event-transaction",
+        organizationId: params.organizationId,
+        eventId: params.event.eventId,
+      },
+    });
     return {
       state: "failed",
       message:

@@ -7,6 +7,8 @@
  * keeps two API replicas from running a job at the same time.
  */
 import { Cron } from "croner";
+import { log } from "./logger";
+import { reportServerError } from "./observability";
 
 export type CronEntry = { path: string; schedule: string };
 
@@ -60,9 +62,12 @@ export function startCronScheduler(options: {
       );
       const outcome = `${response.status} in ${Date.now() - startedAt} ms`;
       if (response.ok) console.info(`[cron] ${entry.path}: ${outcome}`);
-      else console.error(`[cron] ${entry.path}: ${outcome}`);
+      else log("error", "cron_task_failed", { path: entry.path, outcome });
     } catch (error) {
-      console.error(`[cron] ${entry.path} failed`, error);
+      reportServerError(error, {
+        surface: "cron-scheduler",
+        tags: { path: entry.path },
+      });
     }
   };
 

@@ -38,6 +38,7 @@ import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
+import { reportServerError } from "../../../lib/observability";
 
 // Mirrors the portal's DUE_SOON window (apps/portal/src/lib/calibration-status.ts).
 const DUE_SOON_DAYS = 30;
@@ -115,7 +116,10 @@ mount(
         });
         invitationId = inviteResult?.id ?? null;
       } catch (inviteError) {
-        console.error("Failed to send group invitation:", inviteError);
+        reportServerError(inviteError, {
+          surface: "customer-groups",
+          tags: { step: "portal-invitation" },
+        });
       }
     }
 
