@@ -18,7 +18,7 @@ import {
   syncAttachmentKey,
 } from "@calibra-facil/shared/storage-keys";
 import { type MemberData } from "../../middleware/permission";
-import { toRecord } from "@calibra-facil/shared/record";
+import { toRecord, isRecord } from "@calibra-facil/shared/record";
 
 export const DEFAULT_SYNC_PULL_LIMIT = 100;
 export const MAX_SYNC_PULL_LIMIT = 500;
@@ -145,9 +145,7 @@ export function getNullableString(row: Record<string, unknown>, key: string) {
 
 export function getRecordOrNull(row: Record<string, unknown>, key: string) {
   const value = row[key];
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : null;
+  return isRecord(value) ? toRecord(value) : null;
 }
 
 export function parseSnapshotDate(value: string | Date) {

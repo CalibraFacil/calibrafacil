@@ -1,5 +1,5 @@
 import { DEFAULT_CONTA_AZUL_SCOPES } from "@calibra-facil/shared";
-import { isRecord } from "@calibra-facil/shared/record";
+import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
 const CONTA_AZUL_AUTHORIZATION_URL = "https://auth.contaazul.com/login";
 
@@ -63,7 +63,7 @@ export function parseContaAzulTokenBundle(value: string): ContaAzulTokenBundle {
     throw new Error("Credenciais OAuth da Conta Azul inválidas");
   }
 
-  const record = Object.fromEntries(Object.entries(parsed));
+  const record = toRecord(parsed);
   if (
     typeof record.accessToken !== "string" ||
     typeof record.refreshToken !== "string" ||
@@ -332,7 +332,7 @@ function isStatePayload(value: unknown): value is ContaAzulOAuthStatePayload {
     return false;
   }
 
-  const record = Object.fromEntries(Object.entries(value));
+  const record = toRecord(value);
   return (
     typeof record.organizationId === "string" &&
     typeof record.userId === "string" &&
@@ -401,7 +401,7 @@ export async function verifyContaAzulOAuthState(params: {
     throw new Error("Estado OAuth inválido");
   }
 
-  const envelope = Object.fromEntries(Object.entries(decoded));
+  const envelope = toRecord(decoded);
   if (envelope.version !== STATE_VERSION || !isStatePayload(envelope.payload)) {
     throw new Error("Estado OAuth inválido");
   }

@@ -32,6 +32,7 @@ import type {
   ContaAzulServiceInvoice,
   ContaAzulServicoPayload,
 } from "./conta-azul-client";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type PessoaRoleConfig = {
   label: string;
@@ -1134,12 +1135,7 @@ export function extractContaAzulProductStockQuantity(
 ): number | null {
   if (!product || typeof product !== "object") return null;
   const root: Record<string, unknown> =
-    "estoque" in product &&
-    product.estoque &&
-    typeof product.estoque === "object" &&
-    !Array.isArray(product.estoque)
-      ? Object.fromEntries(Object.entries(product.estoque))
-      : {};
+    "estoque" in product ? toRecord(product.estoque) : {};
 
   for (const key of [
     "quantidade",

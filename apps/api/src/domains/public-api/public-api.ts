@@ -11,6 +11,7 @@ import { and, eq, inArray, lt } from "drizzle-orm";
 import { type PublicApiResourceType } from "@calibra-facil/shared";
 import { encryptPassword } from "@calibra-facil/signing";
 import { clientIp, type ClientIpContext } from "../../lib/client-ip";
+import { toRecord } from "@calibra-facil/shared/record";
 
 const DEFAULT_IDEMPOTENCY_TTL_DAYS = 7;
 
@@ -311,8 +312,7 @@ export async function reserveIdempotencyKey(
 }
 
 function toStoredBody(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value));
+  return toRecord(value);
 }
 
 /**

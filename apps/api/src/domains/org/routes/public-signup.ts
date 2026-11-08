@@ -30,6 +30,7 @@ import {
 import { mount } from "../../../lib/endpoint-mount";
 import { resolveTrustedAppUrl } from "../trusted-app-url";
 import { reportServerError } from "../../../lib/observability";
+import { toRecord } from "@calibra-facil/shared/record";
 
 /**
  * Public, UNAUTHENTICATED self-serve sign-up for a laboratory.
@@ -52,10 +53,7 @@ import { reportServerError } from "../../../lib/observability";
  */
 
 function envValue(c: { env?: unknown }, key: string): string | undefined {
-  const runtimeEnv =
-    c.env && typeof c.env === "object"
-      ? Object.fromEntries(Object.entries(c.env))
-      : {};
+  const runtimeEnv = toRecord(c.env);
   const fromRuntime = runtimeEnv[key];
   const value =
     typeof fromRuntime === "string" ? fromRuntime : process.env[key];
