@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   CloseCorrectiveActionSchema,
-  CreateCorrectiveActionSchema,
+  CreateCapaSchema,
   ImplementCorrectiveActionSchema,
   ListCorrectiveActionsQuerySchema,
   UpdateCorrectiveActionSchema,
@@ -191,7 +191,7 @@ export const capaEndpoints = {
   create: endpoint({
     method: "post",
     path: "/api/capa",
-    body: CreateCorrectiveActionSchema,
+    body: CreateCapaSchema,
     response: correctiveActionRowSchema,
     status: 201,
     failure: "Erro ao criar CAPA",

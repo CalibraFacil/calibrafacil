@@ -60,7 +60,7 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
-// Valid payload for POST / (satisfies CreateCorrectiveActionSchema)
+// Valid payload for POST / (satisfies CreateCapaSchema)
 function makeCreatePayload(params: {
   responsibleId: string;
   title?: string;
@@ -1201,5 +1201,34 @@ describe("capaRouter — an ineffective verification (decision Q61)", () => {
       body: JSON.stringify({ effectivenessConfirmed: true }),
     });
     expect(reverify.status).toBe(400);
+  });
+});
+
+describe("capaRouter — one create schema (strict payload)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it.each([
+    ["an unparseable detectionDate", { detectionDate: "abc" }],
+    ["an unparseable dueDate", { dueDate: "not-a-date" }],
+  ])("POST / with %s → 400, no CAPA row", async (_label, patch) => {
+    const org = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await capaRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        ...makeCreatePayload({ responsibleId: org.userId }),
+        ...patch,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const rows = await db
+      .select({ id: correctiveAction.id })
+      .from(correctiveAction);
+    expect(rows).toHaveLength(0);
   });
 });
