@@ -16,7 +16,7 @@ syncRouter
   .route("/", attachmentRoutes);
 
 // Names the router's specs (and nothing else) import from here; they live in
-// modules/sync now.
+// domains/sync.
 export {
   DESKTOP_SERVICE_ORDER_NULLABLE_KEYS,
   DesktopCreateAssetSchema,

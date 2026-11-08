@@ -91,10 +91,10 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
     }
 
     // The operator's own minimum ends the calibration-record exemption of events a
-    // build before the rule left in an outbox (Q28); the floor below does not.
+    // build before the rule left in an outbox; the floor below does not.
     const configuredMinimumDesktopVersion = readSyncConfig().minDesktopVersion;
 
-    // Minimum desktop version (Q28, Q69). Answered before any event is looked at:
+    // Minimum desktop version. Answered before any event is looked at:
     // nothing is applied, claimed or dead-lettered, so the queue survives the
     // upgrade untouched. A push of a protocol the cloud no longer serves is the
     // same refusal (a build that reports a version but not protocol 3).
@@ -135,7 +135,7 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
     }> = [];
 
     const actorMembershipCache = new Map<string, boolean>();
-    // Roadmap 2 E2: the device says when it sent the push; the skew of its clock
+    // The device says when it sent the push; the skew of its clock
     // is answered to it and recorded with the job changes it carries.
     const receivedAt = new Date();
     const deviceClockSkewMs = deviceClockSkewOf(body.sentAt, receivedAt);
@@ -143,7 +143,7 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
       jobUpdatedAtMs: new Map(),
       ...(deviceClockSkewMs === undefined ? {} : { deviceClockSkewMs }),
     };
-    // Per-aggregate head-of-line inside the batch (roadmap 2 E1): once an event of a record
+    // Per-aggregate head-of-line inside the batch: once an event of a record
     // was not applied (refused, in conflict, failed), the later events of the same record in
     // this push are not looked at. They were made on top of it (the desktop sends them in
     // the order they were written), and applying one without its predecessor is how an

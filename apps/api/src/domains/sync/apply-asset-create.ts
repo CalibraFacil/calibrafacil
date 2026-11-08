@@ -122,10 +122,10 @@ export async function applyCreateLocalAsset(
     }
   }
 
-  // SEC-03b (#638): tag uniqueness is per lab org — scope the collision check to
+  // Tag uniqueness is per lab org — scope the collision check to
   // the caller's org (join asset → customer) so a desktop-created asset whose tag
   // is used only by ANOTHER lab is not falsely rejected (and cannot read/probe
-  // another tenant's tags). The DB now enforces UNIQUE(lab_organization_id, tag).
+  // another tenant's tags). The DB enforces UNIQUE(lab_organization_id, tag).
   const [existingAsset] = await input.o
     .select({ id: asset.id })
     .from(asset)
@@ -150,7 +150,7 @@ export async function applyCreateLocalAsset(
   // ILAC-G24); the field is not in the schema, so a desktop-sent value is
   // stripped and a freshly created asset lands with no next-cal date.
   const lastCalibrationDate = parseSyncDate(values.lastCalibrationDate);
-  // Legal-metrology TRACK 2 (mirrors the cloud asset-create route): resolve the regime
+  // Legal-metrology (mirrors the cloud asset-create route): resolve the regime
   // trio + derive next_legal_verification_date so a desktop-created LEGAL instrument lands
   // consistent (REQ-MLR-003/030/031 + REQ-INSTALL-002), not as a half-set state.
   const installedAt = parseSyncDate(values.installedAt);
@@ -179,7 +179,7 @@ export async function applyCreateLocalAsset(
     .values({
       unitId,
       customerId: values.customerId,
-      // SEC-03b (#638): denormalize the lab org from the (already org-scoped)
+      // Denormalize the lab org from the (already org-scoped)
       // customer so the desktop-synced asset satisfies UNIQUE(lab_org, tag).
       // foundCustomer was fetched WHERE labOrganizationId =
       // memberData.organizationId, so this is the device's own lab org.

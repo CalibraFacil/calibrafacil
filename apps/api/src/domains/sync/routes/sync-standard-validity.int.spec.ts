@@ -1,7 +1,7 @@
 /**
  * sync-standard-validity.int.spec.ts: real-Postgres proof that the desktop sync
  * apply judges a reference standard by the Sao Paulo day the work was PERFORMED,
- * not by the day it is synced (REQ-CAL-004, Q12).
+ * not by the day it is synced (REQ-CAL-004).
  *
  * A standard is valid THROUGH the day its certificate names (D). The standard
  * below is valid through three days ago, so every event is synced (today) after

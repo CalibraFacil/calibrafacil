@@ -1,5 +1,5 @@
 /**
- * sync-attachments.int.spec.ts: P0-5, the cloud half of the offline attachment
+ * sync-attachments.int.spec.ts: the cloud half of the offline attachment
  * upload leg, against real Postgres and the real permission middleware (the
  * Better Auth session, the queue and the notifications are faked; the object store
  * is an in-memory fake that enforces the size and type the presign was bound to).

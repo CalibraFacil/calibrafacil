@@ -1,5 +1,5 @@
 /**
- * sync-lab-scope.int.spec.ts: desktop sync under row-level security (P2-18i).
+ * sync-lab-scope.int.spec.ts: desktop sync under row-level security.
  *
  * The push, the pull and both bootstraps resolve ONE laboratory from the device's
  * session and run every statement in a transaction that names it (the event's own
@@ -639,7 +639,7 @@ describe("REQ-18I-PULL: a device reads only its own laboratory", () => {
       ),
     ).toBe(false);
 
-    // B's cursor now names B's scope (roadmap 2 E2), so A pulling with it is
+    // B's cursor now names B's scope, so A pulling with it is
     // told to bootstrap again...
     loginAs({ userId: a.userId, organizationId: a.orgId });
     const refused = await syncRouter.request(

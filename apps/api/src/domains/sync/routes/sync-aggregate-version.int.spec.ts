@@ -1,6 +1,6 @@
 /**
  * sync-aggregate-version.int.spec.ts — real-Postgres proof of the server-side
- * expected version of desktop sync pushes (roadmap 2 E1).
+ * expected version of desktop sync pushes.
  *
  *   REQ-E1-1  an event that names the aggregate's current version is applied and
  *             moves it forward by one (answered as `aggregateVersion`); one that
@@ -13,7 +13,7 @@
  *             (SYNC_PRECEDING_EVENT_NOT_APPLIED), while other records go through.
  *   REQ-E2-3  a push that says when it was sent is answered with the server time
  *             and the device clock's skew, and a skew beyond the tolerance is
- *             recorded in the audit row of the job change it carries (roadmap 2 E2).
+ *             recorded in the audit row of the job change it carries.
  */
 
 import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";

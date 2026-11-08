@@ -9,7 +9,7 @@
  *   REQ-CS-2  deletes, soft deletes and moves out of the desktop's unit scope are
  *             tombstones (`op = 'delete'`)
  *   REQ-CS-3  the bootstrap is paged: bounded pages, one cursor, nothing lost or repeated
- *   REQ-CS-4  protocol 1 and 2 desktops are told to update (Q69); a protocol 3 pull with
+ *   REQ-CS-4  protocol 1 and 2 desktops are told to update; a protocol 3 pull with
  *             a cursor of another protocol is told to bootstrap again
  *   REQ-CS-5  tenant-scoped log, retention purge, a cursor older than the purge horizon is
  *             told to bootstrap again

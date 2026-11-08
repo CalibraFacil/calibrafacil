@@ -143,14 +143,14 @@ export async function applyLocalJobExecution(
     // A submit from a build that enforced the calibration record offline is
     // held to the rule here too; one from a build before it (no payload
     // version) is applied as before so an upgrade does not dead-letter it.
-    // That exemption ends once a minimum desktop version is configured (Q28):
+    // That exemption ends once a minimum desktop version is configured:
     // every desktop that reaches this point is then at or above it.
     legacyUnvalidatedRecord:
       input.minimumDesktopVersion === undefined &&
       !desktopEventCarriesCalibrationRecordRule(payload),
     // The desktop reports the status its own store moved the job to; the
     // server derives the target from the transition table and refuses a
-    // payload that disagrees (Q20).
+    // payload that disagrees.
     claimedStatus: getJobStatus(payload, "status"),
     // With a base version, the write holds only if the job is still what the
     // stale-base check saw (a content-only write in between is a conflict).

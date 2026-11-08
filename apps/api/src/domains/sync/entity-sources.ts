@@ -465,7 +465,7 @@ export function syncEntitySource(entityType: SyncEntity): SyncEntitySource {
 }
 
 /**
- * A short fingerprint of what a sync scope covers (roadmap 2 E2): the
+ * A short fingerprint of what a sync scope covers: the
  * organization, the unit selection and the units it may reach. It rides on the
  * pull cursor, so a cursor handed out under another scope (a unit gained or
  * lost, another active unit) is refused and the desktop bootstraps again

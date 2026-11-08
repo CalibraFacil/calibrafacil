@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { detectStaleDesktopBase } from "./";
 
-// REL-01 slice 2 — Docker-free boundary coverage of the optimistic-concurrency
+// Docker-free boundary coverage of the optimistic-concurrency
 // comparator that guards the three blind desktop applies. The end-to-end apply +
 // DB proof lives in sync-divergence.int.spec.ts; this pins the millisecond ISO
 // comparison rules the acceptance criteria hinge on.
