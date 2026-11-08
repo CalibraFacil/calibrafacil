@@ -141,7 +141,7 @@ type ProviderFactsOutcome =
   | { ok: false; message: string };
 
 /**
- * Roadmap 2 C2: the calibration provider's accreditation facts after a write.
+ * The calibration provider's accreditation facts after a write.
  * They describe the provider named in `calibratedBy`, so a write that names a
  * DIFFERENT provider without supplying its facts resets them (not verified)
  * instead of carrying the previous provider's accreditation over. The MRA flag
@@ -270,7 +270,7 @@ async function currentCertificateDocumentsByStandardId(
  * - DELETE /:id: standard:delete (admin, owner - LAB only) - soft delete
  * - POST /:id/renew: standard:renew (admin, owner - LAB only) - certificate renewal
  */
-/** The calibration-history row of a standard's current certificate (roadmap 2 C3). */
+/** The calibration-history row of a standard's current certificate. */
 function calibrationRecordOf(
   standard: typeof referenceStandard.$inferSelect,
   source: "create" | "renew",
@@ -353,7 +353,6 @@ mount(
     const member = c.get("member");
     const offset = (page - 1) * limit;
 
-    // Build conditions - always scope to organization and exclude soft-deleted
     const conditions = [
       eq(referenceStandard.organizationId, member.organizationId),
       buildUnitScopeCondition(referenceStandard.unitId, member),
@@ -374,7 +373,6 @@ mount(
       conditions.push(eq(referenceStandard.status, status));
     }
 
-    // Filter by upcoming calibration due date
     if (expiringWithinDays) {
       // next_calibration_date is a calendar day: valid through that day, so
       // "expiring" runs from the laboratory's today to today + N, inclusive.
@@ -390,14 +388,12 @@ mount(
 
     const whereCondition = and(...conditions);
 
-    // Get total count
     return await orgDb(member.organizationId).transaction(async (tx) => {
       const [countResult] = await tx
         .select({ total: count() })
         .from(referenceStandard)
         .where(whereCondition);
 
-      // Get paginated data
       const standards = await tx
         .select({
           id: referenceStandard.id,
@@ -433,7 +429,6 @@ mount(
         .limit(limit)
         .offset(offset);
 
-      // Add computed field: isExpired
       const now = new Date();
       const certificateDocuments =
         await currentCertificateDocumentsByStandardId(
@@ -707,7 +702,6 @@ mount(
     return await orgDb(member.organizationId).transaction(async (tx) => {
       const found = await requireLabStandard(params.id, member, tx);
 
-      // Add computed fields
       const now = new Date();
       const certificateDocuments =
         await currentCertificateDocumentsByStandardId([found.id], tx);
@@ -969,7 +963,6 @@ mount(
       );
     }
 
-    // Create the reference standard
     const activeUnitId = member.activeUnitId;
     const created = await withOrg(
       member.organizationId,
@@ -1011,12 +1004,11 @@ mount(
           throw new Error("Falha ao criar padrão");
         }
 
-        // The standard's first certificate (roadmap 2 C3).
+        // The standard's first certificate.
         await ctx.o
           .insert(referenceStandardCalibration)
           .values(calibrationRecordOf(newStandard, "create", session.user.id));
 
-        // Audit log
         await ctx.audit("referenceStandard", newStandard.id, {
           action: "create",
           changes: {
@@ -1052,11 +1044,9 @@ mount(
       async (ctx) => {
         const existing = await requireLabStandard(params.id, member, ctx.o);
         const id = existing.id;
-        // Build changes object for audit log
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         const updateData: Record<string, unknown> = {};
 
-        // Check each field for changes
         if (input.name !== undefined && input.name !== existing.name) {
           changes.name = { old: existing.name, new: input.name };
           updateData.name = input.name;
@@ -1220,7 +1210,6 @@ mount(
           updateData.drift = input.drift;
         }
         if (input.certifiedValues !== undefined) {
-          // Compare JSON stringified versions
           const oldJson = JSON.stringify(existing.certifiedValues);
           const newJson = JSON.stringify(input.certifiedValues);
           if (oldJson !== newJson) {
@@ -1251,12 +1240,10 @@ mount(
           );
         }
 
-        // If no changes, return existing
         if (Object.keys(updateData).length === 0) {
           return existing;
         }
 
-        // Update the standard
         const [row] = await ctx.o
           .update(referenceStandard)
           .set(updateData)
@@ -1268,13 +1255,12 @@ mount(
           throw notFound("standard_not_found", "Padrão não encontrado");
         }
 
-        // Audit log
         await ctx.audit("referenceStandard", id, {
           action: changes.status ? "status_change" : "update",
           changes,
         });
 
-        // #426 Phase 1: flagging a standard OUT_OF_TOLERANCE auto-opens the
+        // Flagging a standard OUT_OF_TOLERANCE auto-opens the
         // §7.10 recall workflow (typed NC + DRAFT recall). Best-effort, in its
         // own transaction once the status change has committed: a failing
         // hook never undoes the change (the wizard's send endpoint re-ensures
@@ -1661,7 +1647,6 @@ mount(
         const existing = await requireLabStandard(params.id, member, ctx.o);
         const id = existing.id;
 
-        // Soft delete
         const [row] = await ctx.o
           .update(referenceStandard)
           .set({
@@ -1674,7 +1659,6 @@ mount(
           .where(eq(referenceStandard.id, id))
           .returning();
 
-        // Audit log
         await ctx.audit("referenceStandard", id, {
           action: "delete",
           changes: { deletedAt: { old: null, new: new Date().toISOString() } },
@@ -1704,15 +1688,12 @@ mount(
       member.organizationId,
       requestActor(c),
       async (ctx) => {
-        // Get existing standard
         const existing = await requireLabStandard(params.id, member, ctx.o);
         const id = existing.id;
 
-        // Build changes object
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         const updateData: Record<string, unknown> = {};
 
-        // Certificate data (required for renewal)
         changes.certificateNumber = {
           old: existing.certificateNumber,
           new: input.certificateNumber,
@@ -1726,7 +1707,7 @@ mount(
           };
           updateData.calibratedBy = input.calibratedBy;
         }
-        // C2: a renewal from another provider must re-attest its accreditation.
+        // A renewal from another provider must re-attest its accreditation.
         const renewedProviderFacts = nextProviderFacts(existing, input);
         if (!renewedProviderFacts.ok) {
           throw invalid("invalid_request", renewedProviderFacts.message);
@@ -1758,7 +1739,6 @@ mount(
         };
         updateData.nextCalibrationDate = newNextCalibrationDate;
 
-        // Optional metrology updates
         if (input.referenceValue !== undefined) {
           changes.referenceValue = {
             old: existing.referenceValue,
@@ -1815,7 +1795,6 @@ mount(
           updateData.status = renewed;
         }
 
-        // Update the standard
         const [row] = await ctx.o
           .update(referenceStandard)
           .set(updateData)
@@ -1823,7 +1802,7 @@ mount(
           .returning();
 
         // The new certificate is appended to the history; the one it replaces
-        // stays, for the work it covered (roadmap 2 C3).
+        // stays, for the work it covered.
         if (row) {
           await ctx.o
             .insert(referenceStandardCalibration)
@@ -1859,7 +1838,6 @@ mount(
     return await orgDb(member.organizationId).transaction(async (tx) => {
       const id = await requireLabStandardId(params.id, member, tx);
 
-      // Verify standard exists and belongs to organization
       const [existing] = await tx
         .select({ id: referenceStandard.id })
         .from(referenceStandard)
@@ -1876,7 +1854,6 @@ mount(
         throw notFound("standard_not_found", "Padrão nao encontrado");
       }
 
-      // Get audit logs
       const logs = await tx
         .select({
           id: referenceStandardAuditLog.id,
