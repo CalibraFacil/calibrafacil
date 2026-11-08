@@ -1470,7 +1470,9 @@ describe("desktop hybrid runtime adapter", () => {
             serverTime: "2026-05-09T12:00:00.000Z",
             user: { id: "user-1", name: "Ana", email: "ana@example.test" },
             organization: { id: "org-1", type: "laboratory" },
-            activeUnits: [{ id: 10, name: "Laboratorio Central" }],
+            activeUnits: [
+              { id: 10, name: "Laboratorio Central", role: "admin" },
+            ],
             permissions: {
               role: "admin",
               unitRole: null,

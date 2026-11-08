@@ -5,27 +5,28 @@ import {
   assetTypeEndpoints,
   customerEndpoints,
   ENDPOINT_GROUPS,
+  localAttachmentSchema,
+  localAttachmentsResponseSchema,
+  localBlockedOutboxEventsResponseSchema,
+  localDeadOutboxEventDiscardResponseSchema,
+  localDeadOutboxEventRequeueResponseSchema,
+  localDeadOutboxEventsResponseSchema,
+  localSessionSnapshotResponseSchema,
+  localSyncConflictResolveResponseSchema,
+  localSyncConflictsResponseSchema,
   methodEndpoints,
   standardEndpoints,
   type EndpointDef,
   type EndpointGroups,
   type UnitsContext,
 } from "@calibra-facil/contracts";
-import type { SyncStatusSnapshot } from "@calibra-facil/contracts";
 import type {
   CalibraApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
   EnvironmentalLimit,
   FinanceAccessResponse,
-  LocalAttachment,
-  LocalAttachmentsResponse,
-  LocalDeadOutboxEvent,
-  LocalBlockedOutboxEventsResponse,
-  LocalDeadOutboxEventsResponse,
   LocalSessionSnapshotResponse,
-  LocalSyncConflict,
-  LocalSyncConflictsResponse,
   NotificationPreferencesResponse,
   EmailDomainResponse,
   PortalDomainResponse,
@@ -47,22 +48,11 @@ import { createServiceOrdersApi } from "../modules/service-orders";
 import { emptyGovernanceResponse } from "../modules/units";
 import { createEnvironmentalLimitsApi } from "../modules/environmental-limits";
 import { createJobsApi } from "../modules/jobs";
+import { createValidatedReader } from "./response";
 import {
   createDesktopHeaders,
   type CreateDesktopApiClientOptions,
 } from "./desktop";
-
-function assumeDesktopPayload<TResponse>(payload: unknown): TResponse {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- desktop transport mirrors typed API methods; domain schemas live at higher boundaries and this helper centralizes the unavoidable generic JSON trust point.
-  return payload as TResponse;
-}
-
-async function readDesktopJson<TResponse>(
-  response: Response,
-): Promise<TResponse> {
-  const payload: unknown = await response.json();
-  return assumeDesktopPayload<TResponse>(payload);
-}
 
 type DesktopUnsupportedMessageFlavor = "web-api" | "cloud-sync";
 
@@ -120,6 +110,7 @@ export function createDesktopApiClient(
   options: CreateDesktopApiClientOptions,
 ): CalibraApi {
   const fetchImpl = options.fetch ?? fetch;
+  const read = createValidatedReader(options);
   const desktopTransport = createDesktopEndpointTransport(options);
   const localServiceOrders = createServiceOrdersApi(desktopTransport, options);
   const localJobs = createJobsApi(desktopTransport, options);
@@ -175,7 +166,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar sessão local");
         }
 
-        return readDesktopJson<LocalSessionSnapshotResponse>(response);
+        return read(
+          response,
+          localSessionSnapshotResponseSchema,
+          "GET /api/local/session",
+          "Falha ao carregar sessão local",
+        );
       })
       .catch((error) => {
         localSessionCache = null;
@@ -501,7 +497,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar conflitos de sincronização");
         }
 
-        return readDesktopJson<LocalSyncConflictsResponse>(response);
+        return read(
+          response,
+          localSyncConflictsResponseSchema,
+          "GET /api/local/sync/conflicts",
+          "Falha ao carregar conflitos de sincronização",
+        );
       },
       async resolveConflict(id, status = "resolved", reason) {
         const response = await fetchImpl(
@@ -538,7 +539,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao resolver conflito de sincronização");
         }
 
-        return readDesktopJson<{ data: LocalSyncConflict }>(response);
+        return read(
+          response,
+          localSyncConflictResolveResponseSchema,
+          "POST /api/local/sync/conflicts/:id/resolve",
+          "Falha ao resolver conflito de sincronização",
+        );
       },
       async listDeadEvents() {
         const response = await fetchImpl(
@@ -553,7 +559,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar eventos recusados");
         }
 
-        return readDesktopJson<LocalDeadOutboxEventsResponse>(response);
+        return read(
+          response,
+          localDeadOutboxEventsResponseSchema,
+          "GET /api/local/sync/dead-events",
+          "Falha ao carregar eventos recusados",
+        );
       },
       async listBlockedEvents() {
         const response = await fetchImpl(
@@ -568,7 +579,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar alterações aguardando envio");
         }
 
-        return readDesktopJson<LocalBlockedOutboxEventsResponse>(response);
+        return read(
+          response,
+          localBlockedOutboxEventsResponseSchema,
+          "GET /api/local/sync/blocked-events",
+          "Falha ao carregar alterações aguardando envio",
+        );
       },
       async discardDeadEvent(eventId, reason) {
         const response = await fetchImpl(
@@ -590,10 +606,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao descartar o evento recusado");
         }
 
-        return readDesktopJson<{
-          data: LocalDeadOutboxEvent;
-          syncStatus: SyncStatusSnapshot;
-        }>(response);
+        return read(
+          response,
+          localDeadOutboxEventDiscardResponseSchema,
+          "POST /api/local/sync/dead-events/:eventId/discard",
+          "Falha ao descartar o evento recusado",
+        );
       },
       async requeueDeadEvent(eventId) {
         const response = await fetchImpl(
@@ -612,10 +630,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao reenviar o evento recusado");
         }
 
-        return readDesktopJson<{
-          data: { eventId: string };
-          syncStatus: SyncStatusSnapshot;
-        }>(response);
+        return read(
+          response,
+          localDeadOutboxEventRequeueResponseSchema,
+          "POST /api/local/sync/dead-events/:eventId/requeue",
+          "Falha ao reenviar o evento recusado",
+        );
       },
     },
     attachments: {
@@ -643,7 +663,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar anexos locais");
         }
 
-        return readDesktopJson<LocalAttachmentsResponse>(response);
+        return read(
+          response,
+          localAttachmentsResponseSchema,
+          "GET /api/attachments",
+          "Falha ao carregar anexos locais",
+        );
       },
       async upload(input) {
         const formData = new FormData();
@@ -665,7 +690,12 @@ export function createDesktopApiClient(
           throw new Error("Falha ao anexar arquivo local");
         }
 
-        return readDesktopJson<LocalAttachment>(response);
+        return read(
+          response,
+          localAttachmentSchema,
+          "POST /api/attachments",
+          "Falha ao anexar arquivo local",
+        );
       },
     },
   };
