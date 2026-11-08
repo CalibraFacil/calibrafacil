@@ -92,7 +92,7 @@ function assertVisitOpen(status: string) {
 }
 
 /**
- * #739: reset of the customer's acknowledgement when the visit date moves —
+ * Reset of the customer's acknowledgement when the visit date moves —
  * the customer confirmed a *specific* date, so a new date needs a new
  * confirmation. Spread into the caller's `.set()`.
  */
@@ -102,7 +102,7 @@ const RESET_CUSTOMER_CONFIRMATION = {
 };
 
 /**
- * #739: a lab-driven date change supersedes any PENDING customer reschedule
+ * A lab-driven date change supersedes any PENDING customer reschedule
  * request — in the caller's transaction, so a lab reschedule can never race a
  * pending request into a stale state.
  */
@@ -237,7 +237,7 @@ mount(
         jobCounts.map((row) => [row.visitId, row.total] as const),
       );
 
-      // #739: badge visits with a pending customer reschedule request.
+      // Badge visits with a pending customer reschedule request.
       const pendingReschedules =
         visitIds.length > 0
           ? await o
@@ -271,9 +271,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// GET /:id — one visit with its linked jobs/assets
-// ===========================================================================
 mount(
   visitsRouter,
   PREFIX,
@@ -333,7 +330,7 @@ mount(
         .where(eq(calibrationJob.visitId, id))
         .orderBy(calibrationJob.id);
 
-      // #739: pending customer reschedule request (feeds the detail banner).
+      // Pending customer reschedule request (feeds the detail banner).
       const [pendingReschedule] = await o
         .select({
           id: visitRescheduleRequest.id,
@@ -361,9 +358,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// POST /:id/assign — assign / reassign the technician
-// ===========================================================================
 mount(
   visitsRouter,
   PREFIX,
@@ -507,9 +501,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// PATCH /:id — reschedule date / address / notes
-// ===========================================================================
 mount(
   visitsRouter,
   PREFIX,
@@ -567,9 +558,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// POST /:id/cancel — cancel the visit
-// ===========================================================================
 mount(
   visitsRouter,
   PREFIX,
@@ -620,9 +608,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// POST /:id/complete — mark the trip done (operator closes it out)
-// ===========================================================================
 mount(
   visitsRouter,
   PREFIX,
@@ -772,7 +757,6 @@ mount(
         // REQ-VISITJOB-005: scope via requireScopedVisit
         const visit = await requireScopedVisit(id, member, ctx.o);
 
-        // Load the job scoped to org
         const [foundJob] = await ctx.o
           .select({
             id: calibrationJob.id,
@@ -871,7 +855,7 @@ async function requireVisitRescheduleRequest(
 const RESCHEDULE_REQUEST_RESOLVED = "Solicitacao ja resolvida";
 
 /**
- * #739: lab resolution of customer reschedule requests. Mounted separately
+ * Lab resolution of customer reschedule requests. Mounted separately
  * (like visitJobsRouter) to keep the main visitsRouter under Hono's type
  * chain limits (TS7056).
  */

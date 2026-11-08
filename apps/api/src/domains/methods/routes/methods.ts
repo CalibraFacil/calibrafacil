@@ -624,16 +624,12 @@ function isMassCompositionQuantityMode(
   return value === "linear_per_item_then_rss" || value === "profile_linear";
 }
 
-// BUGFIX (surfaced while writing DOM-10 deny tests, unrelated to the
-// dimensional gate itself — see slice-3 report): this function used to set
-// `outputUnit` / `reporting` / `scope` / `metadata` unconditionally, which put
-// an EXPLICIT `undefined` value on the returned object whenever a formula
-// lacked that optional field. `parseMethodDraft` → `assertSafeUnknown` rejects
-// any object key whose value is literally `undefined` (vs. the key being
-// absent), so `methodRecordToDraft` — used by request-approval, quality-approve
-// and publish — 500'd for ANY stored method with a formula missing
-// unit/reporting/scope/metadata (i.e. most real formulas). Conditional-spread
-// each optional field instead, mirroring `methodInputToDefinitionInput`'s
+// Each optional field is conditionally spread: `parseMethodDraft` →
+// `assertSafeUnknown` rejects any object key whose value is literally
+// `undefined` (as opposed to the key being absent), so an explicit `undefined`
+// would make `methodRecordToDraft` (request-approval, quality-approve and
+// publish) 500 for any stored method with a formula missing
+// unit/reporting/scope/metadata. Mirrors `methodInputToDefinitionInput`'s
 // existing `...(metadata ? { metadata } : {})` convention above.
 function methodFormulaToDefinitionFormula(formula: unknown) {
   const record = toRecord(formula);
@@ -1009,7 +1005,7 @@ function diagnosticsMessage(diagnostics: MethodDiagnostic[]): string {
 }
 
 /**
- * DOM-10 dimensional publish gate. Runs the publish-time dimensional lint over a
+ * Dimensional publish gate. Runs the publish-time dimensional lint over a
  * raw method shape (dataFields / formulas / measurementModels) and, when it
  * finds a dimensional incoherence, returns a structured pt-BR error carrying the
  * named `DIMENSIONAL_ERROR` code plus a per-formula diagnostics array. Returns
@@ -1199,7 +1195,6 @@ mount(
   ) => {
     const member = c.get("member");
     const offset = (page - 1) * limit;
-    // Build where conditions
     const conditions = [
       eq(calibrationMethod.organizationId, member.organizationId),
     ];
@@ -1225,7 +1220,6 @@ mount(
 
     const whereCondition = and(...conditions);
 
-    // Get total count
     return await orgDb(member.organizationId).transaction(async (tx) => {
       const [countResult] = await tx
         .select({ total: count() })
@@ -1234,7 +1228,6 @@ mount(
 
       const total = countResult?.total ?? 0;
 
-      // Get methods with related data
       const methods = await tx
         .select({
           id: calibrationMethod.id,
@@ -1559,7 +1552,6 @@ mount(
   async (c, { body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
-    // Check for duplicate name in same org (version 1)
     const result = await withOrg(
       member.organizationId,
       requestActor(c),
@@ -1583,11 +1575,10 @@ mount(
           );
         }
 
-        // DOM-10 dimensional gate: reject an incoherent field/formula set before
+        // Dimensional gate: reject an incoherent field/formula set before
         // it is ever persisted (no method row escapes the check when written).
         assertDimensionallyCoherent(input);
 
-        // Create method
         const [newMethod] = await ctx.o
           .insert(calibrationMethod)
           .values({
@@ -1613,7 +1604,6 @@ mount(
           throw new Error("Erro ao criar método");
         }
 
-        // Audit log
         await ctx.audit("method", newMethod.id, {
           action: "create",
 
@@ -1701,7 +1691,7 @@ mount(
           );
         }
 
-        // DOM-10 dimensional gate on template instantiation: a curated template
+        // Dimensional gate on template instantiation: a curated template
         // must be dimensionally coherent before it becomes a DRAFT method.
         assertDimensionallyCoherent(def);
 
@@ -1777,7 +1767,6 @@ mount(
         );
         const id = existing.id;
 
-        // Only DRAFT can be updated
         if (!METHOD_MACHINE.canTransition(existing.status, "edit")) {
           throw invalid(
             "method_not_editable",
@@ -1808,7 +1797,6 @@ mount(
           }
         }
 
-        // Build update object
         const updateData: Record<string, unknown> = {};
         const changes: Record<string, { old: unknown; new: unknown }> = {};
 
@@ -1891,7 +1879,7 @@ mount(
           return existing;
         }
 
-        // DOM-10 dimensional gate on the EFFECTIVE post-update field/formula set
+        // Dimensional gate on the EFFECTIVE post-update field/formula set
         // (incoming edits overlaid on the stored draft). Reject before persisting
         // so the row stays unchanged on a dimensional incoherence.
         assertDimensionallyCoherent({
@@ -1908,7 +1896,6 @@ mount(
         updateData.methodCompiledAt = null;
         updateData.publicationEvidence = null;
 
-        // Update method
         const [updated] = await ctx.o
           .update(calibrationMethod)
           .set(updateData)
@@ -1965,7 +1952,6 @@ mount(
           );
         }
 
-        // Validate method has required fields
         if (!existing.dataFields || existing.dataFields.length === 0) {
           throw invalid(
             "method_has_no_inputs",
@@ -1995,7 +1981,7 @@ mount(
         if (uncertaintyDiagnostics.length > 0) {
           throw methodCompileFailure(uncertaintyDiagnostics);
         }
-        // DOM-10 dimensional gate on the publish-transition recompile (the engine
+        // Dimensional gate on the publish-transition recompile (the engine
         // is dimension-blind by design, so this is the check that catches an
         // incoherent unit set on submit-for-approval).
         assertDimensionallyCoherent(existing);
@@ -2167,7 +2153,6 @@ mount(
           );
         }
 
-        // Validate method has required fields
         if (!existing.dataFields || existing.dataFields.length === 0) {
           throw invalid(
             "method_has_no_inputs",
@@ -2200,7 +2185,7 @@ mount(
         if (uncertaintyDiagnostics.length > 0) {
           throw methodCompileFailure(uncertaintyDiagnostics);
         }
-        // DOM-10 dimensional gate on the publish recompile — no method row
+        // Dimensional gate on the publish recompile — no method row
         // reaches PUBLISHED with a dimensional incoherence.
         assertDimensionallyCoherent(existing);
         const publicationEvidence = buildPublicationEvidence({
@@ -2403,7 +2388,6 @@ mount(
           );
         }
 
-        // Validate method has required fields
         if (!existing.dataFields || existing.dataFields.length === 0) {
           throw invalid(
             "method_has_no_inputs",
@@ -2436,7 +2420,7 @@ mount(
         if (uncertaintyDiagnostics.length > 0) {
           throw methodCompileFailure(uncertaintyDiagnostics);
         }
-        // DOM-10 dimensional gate on the publish recompile — no method row
+        // Dimensional gate on the publish recompile — no method row
         // reaches PUBLISHED with a dimensional incoherence.
         assertDimensionallyCoherent(existing);
         const publicationEvidence = buildPublicationEvidence({
@@ -2476,7 +2460,6 @@ mount(
             ),
           );
 
-        // Publish
         const [published] = await ctx.o
           .update(calibrationMethod)
           .set({
@@ -2506,7 +2489,6 @@ mount(
           );
         }
 
-        // Audit log
         await ctx.audit("method", id, {
           action: "publish",
 
@@ -2573,7 +2555,6 @@ mount(
           );
         }
 
-        // Audit log
         await ctx.audit("method", id, {
           action: "archive",
 
@@ -2612,7 +2593,6 @@ mount(
           );
         }
 
-        // Check if there's already a draft for this method
         const [existingDraft] = await ctx.o
           .select()
           .from(calibrationMethod)
@@ -2633,7 +2613,6 @@ mount(
           );
         }
 
-        // Find the highest version number
         const [maxVersion] = await ctx.o
           .select({ maxVersion: calibrationMethod.version })
           .from(calibrationMethod)
@@ -2648,7 +2627,6 @@ mount(
 
         const newVersion = (maxVersion?.maxVersion || existing.version) + 1;
 
-        // Clone the method
         const [newMethod] = await ctx.o
           .insert(calibrationMethod)
           .values({
@@ -2675,7 +2653,6 @@ mount(
           throw new Error("Erro ao criar nova versão");
         }
 
-        // Audit log
         await ctx.audit("method", newMethod.id, {
           action: "new_version",
 
@@ -2717,7 +2694,7 @@ methodsRouter.delete(
           );
         }
 
-        // CMP-06 (#649): record the deletion in the audit trail BEFORE deleting —
+        // Record the deletion in the audit trail BEFORE deleting —
         // mirrors customers.ts. The method_id FK no longer cascades (soft
         // reference), so this row outlives the method it documents.
         await ctx.audit("method", id, {
@@ -2750,7 +2727,6 @@ methodsRouter.get(
         tx,
       );
 
-      // Get the method to find its name
       const [method] = await tx
         .select({ name: calibrationMethod.name })
         .from(calibrationMethod)
@@ -2766,7 +2742,6 @@ methodsRouter.get(
         throw notFound("method_not_found", "Método nao encontrado");
       }
 
-      // Get all versions with this name
       const versions = await tx
         .select({
           id: calibrationMethod.id,
@@ -2804,7 +2779,6 @@ mount(
         tx,
       );
 
-      // Verify method belongs to org
       const [method] = await tx
         .select({ id: calibrationMethod.id })
         .from(calibrationMethod)

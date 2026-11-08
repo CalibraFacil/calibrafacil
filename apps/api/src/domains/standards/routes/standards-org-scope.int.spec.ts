@@ -1,5 +1,5 @@
 /**
- * standards-org-scope.int.spec.ts - P2-18d [HIGH RISK].
+ * standards-org-scope.int.spec.ts [HIGH RISK].
  *
  * The reference-standard handlers the other standards specs do not reach (ISO/IEC
  * 17025 §6.4, §7.10): GET /search, the mass composition-profile catalog

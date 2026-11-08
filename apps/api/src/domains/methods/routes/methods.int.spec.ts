@@ -113,7 +113,7 @@ async function seedMethod(params: {
   version?: number;
   nameSuffix?: string;
   assetTypeId?: number | null;
-  // DOM-10: allow seeding a method with an ALREADY-STORED dimensional
+  // Allow seeding a method with an ALREADY-STORED dimensional
   // incoherence directly (bypassing POST/PUT), so the request-approval,
   // quality-approve and publish gates can be exercised on a pre-existing bad
   // row — the scenario those routes must catch that POST/PUT structurally
@@ -738,7 +738,7 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   });
 
   // =========================================================================
-  // REQ-CMP-AUD-002/003 (#649): deleting a DRAFT method must WRITE a 'delete'
+  // REQ-CMP-AUD-002/003: deleting a DRAFT method must WRITE a 'delete'
   // audit row and that row must SURVIVE the deletion (ISO/IEC 17025 append-only
   // trail). Before the fix there was no delete audit insert at all AND the
   // method_id FK cascaded — the trail had no trace of the deletion.

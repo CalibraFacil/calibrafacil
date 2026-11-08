@@ -1,5 +1,5 @@
 /**
- * methods-lifecycle.int.spec.ts - P2-18d [HIGH RISK].
+ * methods-lifecycle.int.spec.ts [HIGH RISK].
  *
  * The method-definition handlers methods.int.spec.ts does not reach (ISO/IEC 17025
  * §7.2, §8.4): GET /:id/label, POST /from-template, POST /:id/return-to-draft,
