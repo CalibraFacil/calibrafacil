@@ -21,6 +21,7 @@ import {
 } from "@calibra-facil/notifications";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
 import { QuoteRejectedEmail } from "@calibra-facil/email";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * All fields needed to dispatch the "Orçamento Recusado" customer email.
@@ -103,10 +104,13 @@ export async function dispatchOrcamentoRecusadoEmail(
     });
   } catch (error) {
     // Best-effort: swallow all errors so the reject command is never affected.
-    console.error(
-      `[QuoteRejectedEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
-      error,
-    );
+    reportServerError(error, {
+      surface: "service-order-email",
+      tags: {
+        email: "quote-rejected",
+        serviceOrderId: String(input.serviceOrderId),
+      },
+    });
     return { sent: false, error: String(error) };
   }
 }

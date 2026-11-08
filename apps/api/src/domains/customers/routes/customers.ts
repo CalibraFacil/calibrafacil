@@ -57,6 +57,7 @@ import {
 } from "../../portal";
 import { orgDb } from "../../../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
+import { reportServerError } from "../../../lib/observability";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -142,7 +143,10 @@ mount(
         invitationId = inviteResult?.id ?? null;
       } catch (inviteError) {
         // Log but don't fail - customer was created successfully
-        console.error("Failed to send invitation:", inviteError);
+        reportServerError(inviteError, {
+          surface: "customers",
+          tags: { step: "portal-invitation" },
+        });
       }
     }
 

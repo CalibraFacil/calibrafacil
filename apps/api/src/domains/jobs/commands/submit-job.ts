@@ -71,6 +71,7 @@ import {
   standardsRefusalDomainError,
   type StandardsRefusal,
 } from "./standards-judgement";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * Submit and execute (save the worksheet / record results) a calibration job:
@@ -943,7 +944,10 @@ async function runJobExecutionIn(
           syncVisitStatusFromJobs(visitId, tx),
         );
       } catch (error) {
-        console.error("[Jobs] Failed to sync visit status:", error);
+        reportServerError(error, {
+          surface: "submit-job",
+          tags: { step: "sync-visit-status", visitId: String(visitId) },
+        });
       }
     });
   }

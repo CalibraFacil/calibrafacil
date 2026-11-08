@@ -4,6 +4,7 @@ import {
 } from "@calibra-facil/schemas";
 import { createWorkerRuntimeEnv } from "../../../lib/runtime-env";
 import { runIntegrationSync } from "./sync-run";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * Starts a Conta Azul sync in this process and returns without waiting for it.
@@ -35,12 +36,14 @@ export async function dispatchContaAzulSync(message: ContaAzulSyncMessage) {
       limit: message.limit,
       env: createWorkerRuntimeEnv(),
     }).catch((error) => {
-      console.error("[BackgroundJobs] Local Conta Azul job failed", {
-        integrationId: message.integrationId,
-        organizationId: message.organizationId,
-        runId: message.runId,
-        target: message.target,
-        error: error instanceof Error ? error.message : "unknown error",
+      reportServerError(error, {
+        surface: "conta-azul-local-sync",
+        tags: {
+          integrationId: message.integrationId,
+          organizationId: message.organizationId,
+          runId: message.runId,
+          target: message.target,
+        },
       });
     });
   });

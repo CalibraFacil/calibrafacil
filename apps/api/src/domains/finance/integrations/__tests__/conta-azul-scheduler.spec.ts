@@ -245,7 +245,7 @@ const consoleInfoSpy = vi
   .spyOn(console, "info")
   .mockImplementation(() => undefined);
 const consoleWarnSpy = vi
-  .spyOn(console, "warn")
+  .spyOn(console, "error")
   .mockImplementation(() => undefined);
 
 afterAll(() => {

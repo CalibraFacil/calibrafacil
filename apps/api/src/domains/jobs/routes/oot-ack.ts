@@ -4,6 +4,7 @@ import {
   findOotNotificationByAckToken,
   stampOotAcknowledgementByLink,
 } from "../oot/oot-acknowledgement";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * Public §7.10 acknowledgement router - NO AUTH REQUIRED.
@@ -162,7 +163,10 @@ export const ootAckRouter = createRouter()
       notification.ncNumber,
       notification.organizationId,
     ).catch((err) =>
-      console.error("[OOT] Failed to notify acknowledgement:", err),
+      reportServerError(err, {
+        surface: "oot-ack",
+        tags: { step: "notify-acknowledgement" },
+      }),
     );
 
     return c.html(

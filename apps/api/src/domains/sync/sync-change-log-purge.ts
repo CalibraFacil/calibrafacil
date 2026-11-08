@@ -19,6 +19,7 @@ import { systemDb } from "@calibra-facil/db";
 import { readSyncConfig } from "@calibra-facil/config";
 import { executeRows } from "../../lib/db";
 import { z } from "zod";
+import { reportServerError } from "../../lib/observability";
 
 export type SyncChangeLogPurgeResult = {
   /** Entries deleted. */
@@ -62,10 +63,10 @@ export async function purgeSyncChangeLog(
       organizations += outcome.organizations;
     } catch (error) {
       failed.push(organizationId);
-      console.error(
-        `[sync-change-log-purge] laboratory ${organizationId} failed`,
-        error,
-      );
+      reportServerError(error, {
+        surface: "sync-change-log-purge",
+        tags: { organizationId },
+      });
     }
   }
   // The other laboratories were purged; the run still reports the failure.

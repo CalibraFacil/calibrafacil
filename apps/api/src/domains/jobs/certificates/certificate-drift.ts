@@ -5,6 +5,7 @@ import { issuedCertificateSnapshot } from "@calibra-facil/db/schema";
 
 import { writeOrganizationAuditEvent } from "../../../lib/audit";
 import { orgDb } from "../../../lib/org-db";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * Certificate drift detection: re-hash the STORED PDF of recent
@@ -128,10 +129,14 @@ export async function runCertificateDriftCheck(
         );
       } catch (error) {
         failures.push({ snapshotId: row.id, error });
-        console.error(
-          `[drift-check] audit event for snapshot ${row.id} (laboratory ${row.organizationId}) failed`,
-          error,
-        );
+        reportServerError(error, {
+          surface: "certificate-drift",
+          tags: {
+            step: "audit-event",
+            snapshotId: String(row.id),
+            organizationId: row.organizationId,
+          },
+        });
       }
     }
   }

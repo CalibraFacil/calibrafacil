@@ -26,6 +26,7 @@ import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notificatio
 import { formatInstant } from "@calibra-facil/shared/format";
 import { QuoteEmail } from "@calibra-facil/email";
 import type { QuoteEmailItem } from "@calibra-facil/email";
+import { reportServerError } from "../../../lib/observability";
 
 /**
  * All fields needed to dispatch the "Novo Orçamento" customer email.
@@ -196,10 +197,13 @@ export async function dispatchNovoOrcamentoEmail(
     });
   } catch (error) {
     // Best-effort: swallow all errors so sendServiceOrderQuote is never affected.
-    console.error(
-      `[QuoteEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
-      error,
-    );
+    reportServerError(error, {
+      surface: "service-order-email",
+      tags: {
+        email: "quote-sent",
+        serviceOrderId: String(input.serviceOrderId),
+      },
+    });
     return { sent: false, error: String(error) };
   }
 }
