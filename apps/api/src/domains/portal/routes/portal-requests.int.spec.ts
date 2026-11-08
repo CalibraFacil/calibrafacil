@@ -7,6 +7,7 @@ import {
   assetType,
   calibrationRequest,
   calibrationRequestItem,
+  organizationUnit,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
 import {
@@ -17,6 +18,7 @@ import { truncateAll } from "../../../../test/integration/db";
 import {
   seedPortalContext,
   seedPortalCustomer,
+  seedPortalGroup,
 } from "../../../../test/integration/seed";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
@@ -367,6 +369,161 @@ describe("portalRequestsRouter — real DB + real portal middleware", () => {
       .from(calibrationRequestItem)
       .where(eq(calibrationRequestItem.requestId, created.id));
     expect(items.map((i) => i.assetId)).toEqual([assetAId]);
+  });
+
+  // =========================================================================
+  // REQ-PR-004: the group cockpit's batch recall. A selection that spans branch
+  // customers and lab units is split into one request per (customer, unit), all or nothing.
+  // =========================================================================
+  async function seedGroupFleet() {
+    const assetTypeId = await ensureAssetType();
+    const ctx = await seedPortalContext({ clientOrgId: "portal-client-solo" });
+    const group = await seedPortalGroup({
+      labOrgId: ctx.labOrgId,
+      branches: [{ name: "Norte" }, { name: "Sul" }],
+    });
+    const [north, south] = group.branches;
+    const [secondUnit] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: ctx.labOrgId,
+          name: "Filial",
+          slug: "filial-batch",
+          status: "ACTIVE",
+        })
+        .returning({ id: organizationUnit.id }),
+    );
+    const northCustomer = north?.customerId ?? 0;
+    const southCustomer = south?.customerId ?? 0;
+    const northMain = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: northCustomer,
+      assetTypeId,
+      name: "Norte matriz",
+      tag: "EQ-N1",
+    });
+    const northFilial = await seedAsset({
+      labUnitId: secondUnit?.id ?? 0,
+      customerId: northCustomer,
+      assetTypeId,
+      name: "Norte filial",
+      tag: "EQ-N2",
+    });
+    const southMain = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: southCustomer,
+      assetTypeId,
+      name: "Sul matriz",
+      tag: "EQ-S1",
+    });
+    // A customer outside the group, same laboratory: never selectable by the group.
+    const outsiderId = await seedPortalCustomer({
+      labOrgId: ctx.labOrgId,
+      clientOrgId: "portal-client-outsider",
+      portalUserId: "portal-user-outsider",
+      customerName: "Outsider",
+    });
+    const outsiderAsset = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: outsiderId,
+      assetTypeId,
+      name: "Alheio",
+      tag: "EQ-X1",
+    });
+    loginAsPortal({
+      userId: group.groupUserId,
+      organizationId: group.groupOrgId,
+    });
+    return {
+      northCustomer,
+      southCustomer,
+      northMain,
+      northFilial,
+      southMain,
+      outsiderAsset,
+      unitIds: { main: ctx.labUnitId, filial: secondUnit?.id ?? 0 },
+    };
+  }
+
+  function batch(assetIds: number[]) {
+    return portalRequestsRouter.request("/batch", {
+      method: "POST",
+      headers: { ...LOCAL_ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ assetIds, deliveryMethod: "dropoff" }),
+    });
+  }
+
+  async function requestCount() {
+    return (
+      await db.select({ id: calibrationRequest.id }).from(calibrationRequest)
+    ).length;
+  }
+
+  it("REQ-PR-004: a group batch is split into one request per (branch customer, lab unit), each carrying its branch's organization", async () => {
+    const fleet = await seedGroupFleet();
+
+    const res = await batch([
+      fleet.northMain,
+      fleet.northFilial,
+      fleet.southMain,
+    ]);
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.created).toHaveLength(3);
+    const rows = await db
+      .select({
+        id: calibrationRequest.id,
+        customerId: calibrationRequest.customerId,
+        unitId: calibrationRequest.unitId,
+        authOrganizationId: calibrationRequest.authOrganizationId,
+        status: calibrationRequest.status,
+      })
+      .from(calibrationRequest);
+    expect(
+      rows.map((row) => `${row.customerId}:${row.unitId}`).toSorted(),
+    ).toEqual(
+      [
+        `${fleet.northCustomer}:${fleet.unitIds.main}`,
+        `${fleet.northCustomer}:${fleet.unitIds.filial}`,
+        `${fleet.southCustomer}:${fleet.unitIds.main}`,
+      ].toSorted(),
+    );
+    expect(new Set(rows.map((row) => row.status))).toEqual(
+      new Set(["PENDING"]),
+    );
+    // The request of a branch carries that branch's CLIENT org, not the group's.
+    expect(
+      rows.some((row) => row.authOrganizationId === "portal-group-org"),
+    ).toBe(false);
+    const items = await db
+      .select({ assetId: calibrationRequestItem.assetId })
+      .from(calibrationRequestItem);
+    expect(items.map((item) => item.assetId).toSorted()).toEqual(
+      [fleet.northMain, fleet.northFilial, fleet.southMain].toSorted(),
+    );
+  });
+
+  it("REQ-PR-004: a batch with an asset outside the group is refused (400) and creates nothing", async () => {
+    const fleet = await seedGroupFleet();
+
+    const res = await batch([fleet.northMain, fleet.outsiderAsset]);
+
+    expect(res.status).toBe(400);
+    expect(await requestCount()).toBe(0);
+  });
+
+  it("REQ-PR-004: a batch is all-or-nothing when one asset already has an active request", async () => {
+    const fleet = await seedGroupFleet();
+    expect((await batch([fleet.northMain])).status).toBe(201);
+    expect(await requestCount()).toBe(1);
+
+    const res = await batch([fleet.northMain, fleet.southMain]);
+
+    expect(res.status).toBe(400);
+    // Neither the repeated asset nor the fresh one produced a second request.
+    expect(await requestCount()).toBe(1);
   });
 
   // =========================================================================

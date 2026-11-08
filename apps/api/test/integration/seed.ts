@@ -7,6 +7,7 @@ import {
   memberUnitAssignment,
   organizationApiKey,
   customer,
+  customerGroup,
 } from "@calibra-facil/db/schema";
 import { createApiKeySecret } from "../../src/lib/api-keys";
 import { withStatusRepair } from "./state-fixtures";
@@ -179,6 +180,94 @@ export async function seedPortalContext(params?: {
     clientOrgId,
     customerId,
   };
+}
+
+export type SeededPortalGroup = {
+  groupId: number;
+  groupOrgId: string;
+  groupUserId: string;
+  branches: Array<{ customerId: number; clientOrgId: string }>;
+};
+
+/**
+ * Seed a customer GROUP of an existing lab: the group's own CLIENT auth-org with a portal user
+ * and member (the unified quality manager), the `customer_group` row, and one branch customer
+ * per entry of `branches`, each with its own CLIENT org. A branch normally belongs to the group's
+ * laboratory; `labOrgId` places it in another one (a mis-assigned branch, which the resolver
+ * must not expose). The group user is NOT a member of any branch org: what it sees comes from
+ * the group expansion alone.
+ */
+export async function seedPortalGroup(params: {
+  labOrgId: string;
+  groupOrgId?: string;
+  groupUserId?: string;
+  branches: Array<{ name: string; labOrgId?: string }>;
+}): Promise<SeededPortalGroup> {
+  const groupOrgId = params.groupOrgId ?? "portal-group-org";
+  const groupUserId = params.groupUserId ?? "portal-group-user";
+  const now = new Date("2026-01-01T00:00:00.000Z");
+
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: groupOrgId,
+      name: `Group ${groupOrgId}`,
+      slug: groupOrgId,
+      createdAt: now,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
+  await db.insert(user).values({
+    id: groupUserId,
+    name: `Group QM ${groupUserId}`,
+    email: `${groupUserId}@client.test`,
+  });
+  await db.insert(member).values({
+    id: `member-${groupOrgId}-${groupUserId}`,
+    organizationId: groupOrgId,
+    userId: groupUserId,
+    role: "client_user",
+    createdAt: now,
+  });
+  const [group] = await db
+    .insert(customerGroup)
+    .values({
+      name: `Group ${groupOrgId}`,
+      authOrganizationId: groupOrgId,
+      labOrganizationId: params.labOrgId,
+    })
+    .returning({ id: customerGroup.id });
+  if (!group) throw new Error("seedPortalGroup: group insert failed");
+
+  const branches: SeededPortalGroup["branches"] = [];
+  for (const [index, branch] of params.branches.entries()) {
+    const clientOrgId = `${groupOrgId}-branch-${index + 1}`;
+    // oxlint-disable-next-line eslint/no-await-in-loop -- a few sequential inserts.
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: clientOrgId,
+        name: branch.name,
+        slug: clientOrgId,
+        createdAt: now,
+        type: "CLIENT",
+        status: "ACTIVE",
+      }),
+    );
+    // oxlint-disable-next-line eslint/no-await-in-loop -- a few sequential inserts.
+    const [row] = await db
+      .insert(customer)
+      .values({
+        name: branch.name,
+        authOrganizationId: clientOrgId,
+        labOrganizationId: branch.labOrgId ?? params.labOrgId,
+        groupId: group.id,
+      })
+      .returning({ id: customer.id });
+    if (!row) throw new Error("seedPortalGroup: branch insert failed");
+    branches.push({ customerId: row.id, clientOrgId });
+  }
+
+  return { groupId: group.id, groupOrgId, groupUserId, branches };
 }
 
 /**
