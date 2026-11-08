@@ -42,8 +42,12 @@ import {
   member,
   organization,
   organizationApiKey,
+  automaticSendAuditLog,
+  automaticSendRule,
   organizationEventLog,
   service,
+  serviceOrder,
+  serviceOrderCertificateLink,
   user,
 } from "@calibra-facil/db/schema";
 import { and, eq, sql } from "drizzle-orm";
@@ -1441,6 +1445,31 @@ describe("post-approval effects are atomic with the approval (roadmap 2 B2, Q39)
       expect(mocks.enqueue).not.toHaveBeenCalled();
     });
 
+    it("B2: a re-approval after a rejection cycle finds the OOT event already there and stages no second customer alert", async () => {
+      const jobId = await nonConformingJob(fixture);
+      await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+      // The render failed and the job went through a rejection cycle back to review.
+      await withStatusRepair((tx) =>
+        tx
+          .update(calibrationJob)
+          .set({ status: "REVIEW" })
+          .where(eq(calibrationJob.id, jobId)),
+      );
+
+      await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+
+      expect((await ootRows(jobId)).events).toHaveLength(1);
+      const rows = await db.select().from(appQueueJob).orderBy(appQueueJob.id);
+      expect(
+        rows.filter((row) => row.type === "ASSET_OOT_NOTIFICATION"),
+      ).toHaveLength(1);
+      expect(rows.filter((row) => row.type === "CERTIFICATE")).toHaveLength(2);
+    });
+
     it("B2: a refused approval stages no notification", async () => {
       const jobId = await nonConformingJob(fixture);
 
@@ -1450,6 +1479,305 @@ describe("post-approval effects are atomic with the approval (roadmap 2 B2, Q39)
 
       expect(await db.select().from(appQueueJob)).toEqual([]);
       expect(await ootRows(jobId)).toEqual({ events: [], audits: [] });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the approval does around the release itself, against a real Postgres:
+// the justification of an out-of-limits environment, the status it refuses from,
+// the submitter it never rewrites, and the automatic send to the finance module.
+// ---------------------------------------------------------------------------
+
+describe("approval completion (real Postgres)", () => {
+  let fixture: Fixture;
+
+  beforeEach(async () => {
+    await truncateAll();
+    mocks.uploadToR2.mockClear();
+    mocks.enqueue.mockReset();
+    mocks.enqueue.mockResolvedValue({ messageId: "test-noop" });
+    mocks.scope.adverse = false;
+    mocks.scope.hook = null;
+    fixture = await seedFixture();
+  });
+
+  async function checkerActor() {
+    const [checker] = await db
+      .select()
+      .from(member)
+      .where(and(eq(member.userId, CHECKER), eq(member.organizationId, ORG)));
+    if (!checker) throw new Error("checker missing");
+    return {
+      kind: "user" as const,
+      member: {
+        id: checker.id,
+        role: "admin" as const,
+        organizationId: ORG,
+        organizationType: "LAB" as const,
+        userId: CHECKER,
+        activeUnitId: fixture.unitId,
+        activeUnitName: "Matriz",
+        accessibleUnitIds: [fixture.unitId],
+        accessibleUnits: [],
+        selectedUnitScope: "all" as const,
+        canAccessAllUnits: true,
+        unitRole: null,
+      },
+    };
+  }
+
+  function approveWith(
+    jobId: number,
+    sendServiceOrdersToFinance: (params: {
+      organizationId: string;
+      serviceOrderIds: number[];
+      actorUserId: string;
+    }) => Promise<
+      Array<{
+        serviceOrderId: number;
+        ok: boolean;
+        billingDocumentId: number | null;
+        error: string | null;
+      }>
+    > = async () => [],
+  ) {
+    return checkerActor().then((actor) =>
+      approveJob({
+        jobId,
+        actor,
+        values: {},
+        metadata: {},
+        completion: {
+          kind: "generate_certificate_pdf",
+          sendServiceOrdersToFinance,
+        },
+      }),
+    );
+  }
+
+  it("REQ-APPROVAL-004: a justification given with the approval is persisted into the environmental snapshot, and the job is released", async () => {
+    const jobId = await seedReviewJob(fixture, {
+      environmentalSnapshot: {
+        temperature: 30,
+        humidity: 50,
+        pressure: 1013,
+        recordedAt: "2026-02-01T10:00:00.000Z",
+        recordedBy: MAKER,
+        limits: { temperature: { min: 18, max: 25 } },
+        withinLimits: false,
+        outOfLimitsJustification: null,
+      },
+    });
+
+    loginPerRequestHeader(ORG);
+    const res = await jobsRouter.request(`/${jobId}/approve`, {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-test-user-id": CHECKER },
+      body: JSON.stringify({
+        environmentalJustification: "Estufa em manutenção",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({
+        status: calibrationJob.status,
+        environmentalSnapshot: calibrationJob.environmentalSnapshot,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobId));
+    expect(row?.status).toBe("GENERATING_PDF");
+    expect(row?.environmentalSnapshot).toMatchObject({
+      withinLimits: false,
+      temperature: 30,
+      outOfLimitsJustification: "Estufa em manutenção",
+    });
+  });
+
+  it("REQ-APPROVAL-005: a job that is not in REVIEW is refused (400 job_not_approvable) naming its current status, and nothing is written", async () => {
+    const jobId = await seedReviewJob(fixture, { status: "DRAFT" });
+
+    loginPerRequestHeader(ORG);
+    const res = await jobsRouter.request(`/${jobId}/approve`, {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-test-user-id": CHECKER },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("job_not_approvable");
+    expect(body.error).toContain("DRAFT");
+    expect((await readJob(jobId)).status).toBe("DRAFT");
+    expect(await releaseAuditRows(jobId)).toHaveLength(0);
+  });
+
+  it("REQ-B5-1: the approval never rewrites who submitted the job for review", async () => {
+    const jobId = await seedReviewJob(fixture, { submittedBy: MAKER });
+
+    const result = await approveWith(jobId);
+
+    expect(result.status).toBe("approved");
+    const [row] = await db
+      .select({ submittedBy: calibrationJob.submittedBy })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobId));
+    expect(row?.submittedBy).toBe(MAKER);
+  });
+
+  describe("the automatic send to the finance module", () => {
+    async function linkOrders(jobId: number, numbers: string[]) {
+      await db.insert(automaticSendRule).values({
+        organizationId: ORG,
+        milestone: "certificate_approved",
+      });
+      const ids: number[] = [];
+      for (const number of numbers) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- a few sequential inserts, in order.
+        const [order] = await withStatusRepair((tx) =>
+          tx
+            .insert(serviceOrder)
+            .values({
+              organizationId: ORG,
+              unitId: fixture.unitId,
+              customerId: fixture.customerId,
+              assetId: fixture.assetId,
+              openedByUserId: MAKER,
+              serviceOrderNumber: number,
+              status: "awaiting_calibration",
+              claimedDefect: "Fora de calibração",
+              intakeCondition: "Recebido",
+              intakeType: "counter",
+              deliveryMethod: "pickup_at_lab",
+              priority: "normal",
+              totalQuotedCents: 0,
+              totalApprovedCents: 0,
+              evaluationFeeCents: 0,
+              evaluationFeeApplied: false,
+              isExternalService: false,
+            })
+            .returning({ id: serviceOrder.id }),
+        );
+        if (!order) throw new Error("service order insert failed");
+        // oxlint-disable-next-line eslint/no-await-in-loop -- a few sequential inserts, in order.
+        await db.insert(serviceOrderCertificateLink).values({
+          organizationId: ORG,
+          serviceOrderId: order.id,
+          certificateJobId: jobId,
+          linkedByUserId: MAKER,
+        });
+        ids.push(order.id);
+      }
+      return ids;
+    }
+
+    async function auditRows() {
+      return (
+        await db
+          .select({
+            serviceOrderId: automaticSendAuditLog.serviceOrderId,
+            outcome: automaticSendAuditLog.outcome,
+          })
+          .from(automaticSendAuditLog)
+          .orderBy(automaticSendAuditLog.id)
+      ).map((row) => `${row.serviceOrderId}:${row.outcome}`);
+    }
+
+    it("REQ-APPROVAL-ERP-1: finishes the send of every linked service order before the approval returns", async () => {
+      const jobId = await seedReviewJob(fixture);
+      const [first, second] = await linkOrders(jobId, ["OS-1", "OS-2"]);
+      const sent: number[] = [];
+
+      const result = await approveWith(jobId, async (params) => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        sent.push(...params.serviceOrderIds);
+        return params.serviceOrderIds.map((serviceOrderId) => ({
+          serviceOrderId,
+          ok: true,
+          billingDocumentId: 900 + serviceOrderId,
+          error: null,
+        }));
+      });
+
+      expect(result.status).toBe("approved");
+      // Already done when the approval answers: the sends and their audit rows.
+      expect(sent).toEqual([first, second]);
+      expect(await auditRows()).toEqual([`${first}:sent`, `${second}:sent`]);
+    });
+
+    it("REQ-APPROVAL-ERP-2: a failed send is audited as failed and the approval stands; the next order is still sent", async () => {
+      const jobId = await seedReviewJob(fixture);
+      const [first, second] = await linkOrders(jobId, ["OS-1", "OS-2"]);
+
+      const result = await approveWith(jobId, async (params) =>
+        params.serviceOrderIds.map((serviceOrderId) =>
+          serviceOrderId === first
+            ? {
+                serviceOrderId,
+                ok: false,
+                billingDocumentId: null,
+                error: "ERP indisponível",
+              }
+            : {
+                serviceOrderId,
+                ok: true,
+                billingDocumentId: 7,
+                error: null,
+              },
+        ),
+      );
+
+      expect(result.status).toBe("approved");
+      expect(await auditRows()).toEqual([`${first}:failed`, `${second}:sent`]);
+      expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
+    });
+
+    it("REQ-APPROVAL-ERP-3: when one order's audit row cannot be written the approval stands, the failure is reported, and the next order is still sent", async () => {
+      const jobId = await seedReviewJob(fixture);
+      const [first, second] = await linkOrders(jobId, ["OS-1", "OS-2"]);
+      const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+      // The audit row of the first order is refused by the database.
+      await db.execute(sql`
+        CREATE OR REPLACE FUNCTION approval_test_fail_send_audit() RETURNS trigger AS $$
+        BEGIN
+          IF NEW.service_order_id = ${sql.raw(String(first))} THEN
+            RAISE EXCEPTION 'approval_test: automatic_send_audit_log insert forced to fail';
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql`);
+      await db.execute(sql`
+        CREATE TRIGGER approval_test_fail_send_audit
+        BEFORE INSERT ON automatic_send_audit_log
+        FOR EACH ROW EXECUTE FUNCTION approval_test_fail_send_audit()`);
+      let result;
+      try {
+        result = await approveWith(jobId, async (params) =>
+          params.serviceOrderIds.map((serviceOrderId) => ({
+            serviceOrderId,
+            ok: true,
+            billingDocumentId: 7,
+            error: null,
+          })),
+        );
+      } finally {
+        await db.execute(
+          sql`DROP TRIGGER IF EXISTS approval_test_fail_send_audit ON automatic_send_audit_log`,
+        );
+        await db.execute(
+          sql`DROP FUNCTION IF EXISTS approval_test_fail_send_audit()`,
+        );
+      }
+
+      expect(result.status).toBe("approved");
+      expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
+      expect(await auditRows()).toEqual([`${second}:sent`]);
+      const logged = stderr.mock.calls
+        .map((call) => String(call[0]))
+        .join("\n");
+      expect(logged).toContain('"step":"automatic-send"');
+      expect(logged).toContain(`"serviceOrderId":"${first}"`);
     });
   });
 });
