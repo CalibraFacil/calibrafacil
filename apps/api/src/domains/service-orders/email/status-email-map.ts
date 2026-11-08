@@ -2,8 +2,8 @@
  * Central mapping from triggering service-order status → outbox email descriptor.
  *
  * This is the SINGLE source of truth shared between:
- *  - `recordServiceOrderEvent` (enqueue side, mini-spec E1)
- *  - The outbox worker (drain side, mini-spec E2)
+ *  - `recordServiceOrderEvent` (enqueue side)
+ *  - The outbox worker (drain side)
  *
  * Only statuses listed here produce an email outbox entry. All other transitions
  * are silently ignored by the enqueue logic.

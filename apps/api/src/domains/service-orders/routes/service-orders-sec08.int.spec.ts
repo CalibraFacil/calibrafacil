@@ -1,9 +1,9 @@
 /**
- * service-orders-sec08.int.spec.ts — SEC-08 defense-in-depth tenant-scoping for
+ * service-orders-sec08.int.spec.ts — defense-in-depth tenant-scoping for
  * the final UPDATE in `updateServiceOrder` (PATCH /service-orders/:id).
  *
  * Context: the module resolved + guarded the target OS with an org/unit-scoped
- * SELECT, then issued the UPDATE with `WHERE id = X` only. SEC-08 repeats the
+ * SELECT, then issued the UPDATE with `WHERE id = X` only. The UPDATE now repeats the
  * tenant predicate (organizationId + unit scope) in the UPDATE's own WHERE so the
  * write stays tenant-scoped even if a future refactor drops the guarding read.
  * This is a resilience change with NO observable behavior delta for legitimate

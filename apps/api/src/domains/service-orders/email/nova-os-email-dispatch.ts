@@ -1,11 +1,11 @@
 /**
- * "Nova OS" email dispatch helper — mini-spec B (REQ-SOEMAIL-011, REQ-SOEMAIL-012).
+ * "Nova OS" email dispatch helper (REQ-SOEMAIL-011, REQ-SOEMAIL-012).
  *
  * Called from createServiceOrder() AFTER the creation transaction commits,
  * best-effort. A failed email must not throw out of createServiceOrder.
  *
  * Uses:
- *  - sendServiceOrderCustomerEmail (mini-spec A dispatcher, already non-throwing)
+ *  - sendServiceOrderCustomerEmail (the dispatcher, already non-throwing)
  *  - getLabEmailBrand (additively exported from packages/notifications/src/service.ts)
  *  - ServiceOrderCreatedEmail template from packages/email
  */
@@ -17,10 +17,6 @@ import {
 import { formatInstant } from "@calibra-facil/shared/format";
 import { ServiceOrderCreatedEmail } from "@calibra-facil/email";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 /**
  * All fields needed to dispatch the Nova OS email.
  *
@@ -29,22 +25,18 @@ import { ServiceOrderCreatedEmail } from "@calibra-facil/email";
  * responsibility (REQ-SOEMAIL-004).
  */
 export interface NovaOsEmailDispatchInput {
-  /** Numeric PK of the created service order. */
   serviceOrderId: number;
   /** Human-readable OS number, e.g. "OS-2024-001". */
   serviceOrderNumber: string;
   /** The lab's organization ID — used to resolve the white-label brand. */
   organizationId: string;
-  /** Opaque public ID of the service order. */
   publicId: string;
-  /** Numeric customer PK. */
   customerId: number;
   /**
    * Snapshot of the contact at intake (jsonb Record). Contains { email, name, … }
    * or null. The dispatcher resolves the recipient from this field first.
    */
   clientContactSnapshot: Record<string, unknown> | null | undefined;
-  /** Customer name (for greeting). */
   customerName: string;
   /** Customer email — fallback if clientContactSnapshot has no email. */
   customerEmail: string | null | undefined;
@@ -54,32 +46,22 @@ export interface NovaOsEmailDispatchInput {
   assetModel: string | null | undefined;
   /** Asset serial number (from serviceOrderAssetSnapshot). */
   assetSerialNumber: string | null | undefined;
-  /** Service order intake timestamp (openedAt). */
   openedAt: Date;
-  /** The claimed defect description. */
   claimedDefect: string;
 }
-
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Main dispatcher
-// ---------------------------------------------------------------------------
 
 /**
  * Dispatch the "nova OS" customer email (REQ-SOEMAIL-011).
  *
  * - REQ-SOEMAIL-012: If no contact email resolves, the dispatcher skips
- *   silently (mini-spec A's sendServiceOrderCustomerEmail already does this).
+ *   silently (sendServiceOrderCustomerEmail already does this).
  *   This function wraps the entire operation in a try/catch so ANY unexpected
  *   error (brand resolution failure, template error, etc.) is swallowed —
  *   the OS creation must never be rolled back by email failure.
  *
  * Never throws.
  *
- * Mini-spec H note: dedup is applied by the caller (createServiceOrder) via
+ * Dedup is applied by the caller (createServiceOrder) via
  * sendServiceOrderEmailOnce, not here — this keeps this function testable
  * without a DB mock.
  */

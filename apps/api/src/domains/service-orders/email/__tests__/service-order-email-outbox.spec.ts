@@ -1,19 +1,19 @@
 /**
  * Tests for the transactional email outbox enqueue logic in recordServiceOrderEvent.
  *
- * Mini-spec E1 — PART 1 of service-order-emails (outbox enqueue).
+ * Intake and evaluation e-mails:
  * REQ-SOEMAIL-041: repair_in_progress → outbox row
  * REQ-SOEMAIL-042: awaiting_calibration, calibration_in_progress → outbox rows
  * REQ-SOEMAIL-043: awaiting_tech_evaluation → outbox row
  * REQ-SOEMAIL-044: under_evaluation → outbox row
  *
- * Mini-spec F — Conclusão / entrega (outbox enqueue).
+ * Conclusão / entrega e-mails:
  * REQ-SOEMAIL-051: ready_for_pickup → outbox row
  * REQ-SOEMAIL-052: delivered → outbox row
  * REQ-SOEMAIL-053: closed → outbox row
  * REQ-SOEMAIL-054: awaiting_final_review → outbox row
  *
- * Mini-spec G — Cancelamento / garantia (outbox enqueue).
+ * Cancelamento / garantia e-mails:
  * REQ-SOEMAIL-061: canceled → outbox row
  * REQ-SOEMAIL-062: warranty_return → outbox row
  */

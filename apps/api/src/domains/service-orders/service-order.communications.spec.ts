@@ -1,5 +1,5 @@
 /**
- * Tests for the per-OS customer-communication log merge (#343).
+ * Tests for the per-OS customer-communication log merge.
  *
  * Unit-tests the pure `buildServiceOrderCommunicationEntries` merge of the
  * email ledger (`service_order_email_log`) and outbox

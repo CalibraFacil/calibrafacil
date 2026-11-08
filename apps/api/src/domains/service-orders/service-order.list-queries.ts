@@ -201,7 +201,7 @@ export async function listServiceOrdersForLab(
 }
 
 /**
- * DOM-02 (#655) — REQ-DOM-REP-001: the "calibração pendente após reparo" queue.
+ * DOM-02 — REQ-DOM-REP-001: the "calibração pendente após reparo" queue.
  *
  * A service order belongs here when its execution was FINALIZED
  * (`finishedAt` set) with `calibrationRequiredAfterRepair = true` and no

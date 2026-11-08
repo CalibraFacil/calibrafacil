@@ -1,6 +1,6 @@
 /**
  * service-orders-lab-scope.int.spec.ts — success paths of the laboratory service
- * order routes (P2-18g) that the other service-order specs do not reach, each
+ * order routes that the other service-order specs do not reach, each
  * with a cross-laboratory negative: laboratory B's order, quote or evaluation
  * used in laboratory A's session answers 404/400 and leaves B's rows untouched.
  *

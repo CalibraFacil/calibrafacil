@@ -6,7 +6,7 @@
  * was called with the right args" without having to mock the entire DB
  * transaction layer end-to-end.
  *
- * Pattern mirrors mini-specs B and C: fire-and-forget `void (async)()` kept
+ * Pattern mirrors the other dispatch helpers: fire-and-forget `void (async)()` kept
  * here so the caller stays a single-line call.
  *
  * REQ-SOEMAIL-031 — approve paths → dispatchApprovedQuoteEmailOnce
@@ -19,10 +19,6 @@ import { sendServiceOrderEmailOnce } from "./service-order-email-once";
 import { dispatchOrcamentoAprovadoEmail } from "./orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "./orcamento-recusado-email-dispatch";
 import { orgDb } from "../../../lib/org-db";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 /**
  * Common order fields needed to build both email payloads.
@@ -83,10 +79,6 @@ export interface DispatchRejectedQuoteEmailOncePortalInput {
   customerName: string;
   customerEmail: string | null | undefined;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 /**
  * REQ-SOEMAIL-031 (manual path): fire-and-forget approved email after the

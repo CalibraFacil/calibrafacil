@@ -1,5 +1,5 @@
 /**
- * Mini-spec I, Part 2 — Outbox wiring tests.
+ * Outbox wiring tests.
  *
  * REQ-SOEMAIL-071: B (createServiceOrder) and C (sendServiceOrderQuote) enqueue
  *   an outbox row durably (awaited) instead of fire-and-forget dispatch.

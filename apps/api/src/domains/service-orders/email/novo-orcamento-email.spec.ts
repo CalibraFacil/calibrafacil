@@ -1,5 +1,5 @@
 /**
- * Tests for REQ-SOEMAIL-021–024 — mini-spec C "Novo Orçamento" dispatch wiring.
+ * Tests for REQ-SOEMAIL-021–024 "Novo Orçamento" dispatch wiring.
  *
  * Verifies:
  *  - REQ-021: WHEN sendServiceOrderQuote is called (quote status → "sent"),

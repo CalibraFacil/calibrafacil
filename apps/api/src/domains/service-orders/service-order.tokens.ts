@@ -72,7 +72,7 @@ type PublicAccessLookup =
   | { kind: "not_found" };
 
 /**
- * SYSTEM PATH (P2-18g): the public link's token (or approval code) is the only
+ * SYSTEM PATH: the public link's token (or approval code) is the only
  * credential the visitor holds, and the grant row it resolves to is what LEARNS
  * the laboratory. No organization is known before this lookup, so it runs on
  * `systemDb` (the owner connection), by the unguessable hash only; every statement
@@ -114,7 +114,7 @@ async function getPublicServiceOrderAccessByToken(
 
 /**
  * Redeem a human-typeable approval code for a tokenized access URL
- * (spec quote-approval-public-access, mini-spec B).
+ * (spec quote-approval-public-access).
  *
  * - REQ-QPUB-012: a valid, live code answers with the canonical
  *   /service-order-access/<token> URL. The emailed link token is

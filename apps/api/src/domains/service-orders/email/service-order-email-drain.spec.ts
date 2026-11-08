@@ -1,5 +1,5 @@
 /**
- * Tests for the service-order email outbox drain (mini-spec E2).
+ * Tests for the service-order email outbox drain.
  *
  * Strategy: mock the DB (Drizzle `db`) and notification functions; test the
  * drain's logic in isolation. The real send path and templates are proven by
@@ -946,7 +946,7 @@ describe("drainServiceOrderEmailOutbox", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // REQ-REL-OBS-003 (issue #653): dead-letter on attempt exhaustion.
+  // REQ-REL-OBS-003: dead-letter on attempt exhaustion.
   //
   // The SELECT filters `attempts < maxAttempts`. A release increments attempts;
   // once that reaches maxAttempts the row is never selected again. On THAT

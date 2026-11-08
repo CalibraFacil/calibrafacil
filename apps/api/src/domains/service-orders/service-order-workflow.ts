@@ -83,7 +83,7 @@ export function createServiceOrderPublicToken() {
 }
 
 // ---------------------------------------------------------------------------
-// Approval code (spec quote-approval-public-access, mini-spec B)
+// Approval code (spec quote-approval-public-access)
 // ---------------------------------------------------------------------------
 
 /**
@@ -291,7 +291,7 @@ export function calculatePricedItems<
  * Appends the order's event-log row AND, when the event moves the order to a
  * status that mails the customer, that status's e-mail outbox row (the
  * transactional outbox: both commit or roll back with the caller's
- * transaction, so no e-mail is orphaned; the worker sends it, mini-spec E2).
+ * transaction, so no e-mail is orphaned; the worker sends it).
  *
  * The outbox row is a consequence of the event, not a separate write the caller
  * asked for, so the return value says which one it staged: the event key of the

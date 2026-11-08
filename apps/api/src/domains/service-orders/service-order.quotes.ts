@@ -541,7 +541,7 @@ export async function approveServiceOrderQuoteManually(
   quoteId: number,
   values: ApproveQuoteManuallyInput,
 ) {
-  // SEC-01: resolve the OS within the caller's org+unit scope first, so a
+  // Resolve the OS within the caller's org+unit scope first, so a
   // cross-tenant :id is rejected with 404.
   await requireScopedServiceOrder(serviceOrderId, scope, ctx.o);
 
@@ -558,7 +558,7 @@ export async function approveServiceOrderQuoteManually(
     throw quoteNotDecidable("Orcamento nao pode ser aprovado");
   }
 
-  // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
+  // Scope the OS to the caller's organization so a cross-tenant :id
   // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
   // scoped read above already resolved it; this is the module-level
   // defense-in-depth.
@@ -575,7 +575,6 @@ export async function approveServiceOrderQuoteManually(
     .for("update");
   if (!order) throw serviceOrderNotFound();
 
-  // Look up customer for the email payload
   const [customerRow] = await ctx.o
     .select({ name: customer.name, email: customer.email })
     .from(customer)
@@ -666,7 +665,7 @@ export async function rejectServiceOrderQuoteManually(
   quoteId: number,
   values: RejectQuoteManuallyInput,
 ) {
-  // SEC-01: resolve the OS within the caller's org+unit scope first, so a
+  // Resolve the OS within the caller's org+unit scope first, so a
   // cross-tenant :id is rejected with 404.
   await requireScopedServiceOrder(serviceOrderId, scope, ctx.o);
 
@@ -683,7 +682,7 @@ export async function rejectServiceOrderQuoteManually(
     throw quoteNotDecidable("Orcamento nao pode ser recusado");
   }
 
-  // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
+  // Scope the OS to the caller's organization so a cross-tenant :id
   // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
   // scoped read above already resolved it; this is the module-level
   // defense-in-depth.
@@ -700,7 +699,6 @@ export async function rejectServiceOrderQuoteManually(
     .for("update");
   if (!order) throw serviceOrderNotFound();
 
-  // Look up customer for the email payload
   const [customerRowReject] = await ctx.o
     .select({ name: customer.name, email: customer.email })
     .from(customer)

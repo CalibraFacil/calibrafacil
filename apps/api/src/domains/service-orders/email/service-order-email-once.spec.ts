@@ -1,5 +1,5 @@
 /**
- * Tests for mini-spec H — Idempotency / dedup (REQ-SOEMAIL-007, 008, 009).
+ * Tests for idempotency / dedup (REQ-SOEMAIL-007, 008, 009).
  *
  * Unit-tests the send-once helper `sendServiceOrderEmailOnce` in isolation by
  * mocking @calibra-facil/db so no real DB is needed.

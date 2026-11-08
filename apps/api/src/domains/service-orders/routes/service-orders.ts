@@ -238,7 +238,7 @@ serviceOrdersRouter.get(
   },
 );
 
-// DOM-02 (#655) — REQ-DOM-REP-001: queue of repair OSs finalized with
+// DOM-02 — REQ-DOM-REP-001: queue of repair OSs finalized with
 // "calibration required after repair" that don't have a calibration opened yet.
 serviceOrdersRouter.get(
   "/pending-calibration",
@@ -294,7 +294,7 @@ mount(
   },
 );
 
-// #343 — per-OS customer-communication log ("Comunicações"): merges the
+// Per-OS customer-communication log ("Comunicações"): merges the
 // email ledger + outbox into a timestamped audit trail. Read-only, same
 // permission as viewing the OS.
 mount(

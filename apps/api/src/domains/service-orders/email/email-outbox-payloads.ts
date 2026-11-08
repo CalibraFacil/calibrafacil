@@ -1,5 +1,5 @@
 /**
- * Mini-spec I — Payload schemas for B/C/D outbox emails.
+ * Payload schemas for B/C/D outbox emails.
  *
  * Defines Zod schemas for the `payload` column of `service_order_email_outbox`
  * rows whose `eventKey` belongs to one of the B/C/D namespaces:
@@ -10,7 +10,7 @@
  *   quote_rejected:*  → QuoteRejectedOutboxPayloadSchema
  *
  * These schemas are the contract that:
- *  - PART 2 (command wiring) fills when it enqueues the row
+ *  - The command wiring fills when it enqueues the row
  *  - The drain router reads when it dispatches the email
  *
  * Each schema mirrors the corresponding dispatch-helper input interface
@@ -24,10 +24,6 @@
 import { z } from "zod";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
-
-// =============================================================================
-// Helpers
-// =============================================================================
 
 /**
  * A nullable, optional string field — common to several dispatch inputs.
@@ -242,10 +238,6 @@ export type QuoteRejectedOutboxPayload = z.infer<
   typeof QuoteRejectedOutboxPayloadSchema
 >;
 
-// =============================================================================
-// Discriminated parse helper
-// =============================================================================
-
 /**
  * Result type for parseOutboxPayloadByNamespace.
  */
@@ -311,10 +303,6 @@ export function parseOutboxPayloadByNamespace(
   return { namespace: "unknown" };
 }
 
-// =============================================================================
-// Typed enqueue helper
-// =============================================================================
-
 /**
  * The executor type accepted by enqueueServiceOrderEmail — matches the
  * `ServiceOrderDbExecutor` used throughout service-order-workflow.ts, so a
@@ -336,7 +324,7 @@ export interface EnqueueServiceOrderEmailParams {
    *   "quote_approved:42"
    *   "quote_rejected:42"
    *
-   * PART 2 constructs this from the event type and the quoteId (for C/D).
+   * The command constructs this from the event type and the quoteId (for C/D).
    */
   eventKey: string;
   /**
@@ -347,7 +335,7 @@ export interface EnqueueServiceOrderEmailParams {
   targetStatus: string;
   /**
    * The per-email payload. Must satisfy the schema for the given eventKey
-   * namespace so the drain can parse and dispatch correctly. PART 2 constructs
+   * namespace so the drain can parse and dispatch correctly. The command constructs
    * this from live command data.
    */
   payload: Record<string, unknown>;

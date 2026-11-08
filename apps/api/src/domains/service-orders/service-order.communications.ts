@@ -1,5 +1,5 @@
 /**
- * Per-OS customer-communication log (#343).
+ * Per-OS customer-communication log.
  *
  * Read model that merges the two existing customer-email ledgers into one
  * chronological "we told customer X on date Y" list for the OS detail page:
