@@ -139,7 +139,7 @@ export function evaluateOrderBlockers(input: {
   const blockers: BillingBlocker[] = [];
   const { customer: c, certificateJobStatuses, amountCents } = input;
 
-  // Phase 2 slice 5: emit granular payer-readiness blockers so operators
+  // Emit granular payer-readiness blockers so operators
   // know exactly which field to fix, not just "Dados de cliente
   // incompletos". The code stays BLOCKED_BY_CUSTOMER_DATA so existing
   // queue consumers keep grouping these together.

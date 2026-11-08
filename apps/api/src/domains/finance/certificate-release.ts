@@ -51,7 +51,7 @@ export function evaluateReleaseStatus(
   input: CertificateReleaseEvaluatorInput,
 ): CertificateReleaseStatus {
   // Exception release is sticky. The only way out is policy_change or a
-  // future "reset to policy" action — not modeled in slice 1.
+  // future "reset to policy" action — not modeled yet.
   if (input.hasExceptionRelease) return "RELEASED_BY_EXCEPTION";
 
   const { mode, paymentState } = input;
@@ -88,10 +88,6 @@ export function evaluateReleaseStatus(
   // Exhaustive fallback. New modes added to the enum must extend the switch.
   return "HELD_FOR_PAYMENT";
 }
-
-// ---------------------------------------------------------------------------
-// Policy resolution.
-// ---------------------------------------------------------------------------
 
 export interface CertificateReleasePolicyResolutionInput {
   organizationId: string;
@@ -571,7 +567,7 @@ export async function releaseByException(
 
 // ---------------------------------------------------------------------------
 // Payment state assembly for a job. Reads the job's linked SOs, their
-// billing documents and installments, and derives the Phase 1 continuity
+// billing documents and installments, and derives the continuity
 // status. Read-only: never touches calibrationJob or issuedCertificateSnapshot.
 // ---------------------------------------------------------------------------
 

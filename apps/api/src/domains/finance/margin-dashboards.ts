@@ -219,10 +219,8 @@ async function readMarginDashboards(
 
   // By service is intentionally lighter: we group by `serviceOrderNumber`
   // bucketed by leading prefix (e.g. "OS-2026-..." → "OS"). Per-service
-  // breakdown by `calibrationJob.serviceId` requires a heavier join and
-  // is tracked as a polish follow-up.
-  // For slice 2 we return an empty list here; the byCustomer view is the
-  // load-bearing surface.
+  // breakdown by `calibrationJob.serviceId` requires a heavier join, so this
+  // list is returned empty; the byCustomer view is the load-bearing surface.
 
   return {
     byCustomer: summarizeMarginByEntity([...byCustomerMap.values()]),

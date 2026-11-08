@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as integrations from "./index";
 
-// REQ-SPLIT-2: lib/integrations.ts became this folder. Every runtime name its
-// callers (routes, worker entry points, tests) imported
-// before the split must still come out of the index, and nothing else leaks.
+// REQ-SPLIT-2: every runtime name the callers (routes, worker entry points,
+// tests) import comes out of the index, and nothing else leaks.
 // The type half (IntegrationOverview, IntegrationsEnv) is held by `check-types`
 // on the callers that import them.
 const CALLER_SURFACE = [

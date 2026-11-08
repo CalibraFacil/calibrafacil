@@ -1,6 +1,6 @@
 /**
  * finance-lab-scope.int.spec.ts — success paths of the finance routes and libs
- * (P2-18g) that the per-router specs do not reach, each with a cross-laboratory
+ * that the per-router specs do not reach, each with a cross-laboratory
  * negative: laboratory B's id used in laboratory A's session answers 404 (or an
  * `ok: false` result), with nothing read or written for B.
  *

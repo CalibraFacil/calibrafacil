@@ -14,10 +14,9 @@ const reconciliationFile = resolve(
 /**
  * Boundary invariant: the payment-aware certificate-release flow MUST NEVER
  * write to `calibration_job.status` or `issued_certificate_snapshot.status`.
- * Phase 2 slice 1 separates technical approval from commercial release; the
- * strategy explicitly requires that ERP payment status not be allowed to
- * mutate technical approval (see docs/plans/conta-azul-product-strategy.md
- * "Certificate Release Versus Payment Status").
+ * Technical approval is separate from commercial release; the product
+ * strategy requires that ERP payment status is never allowed to mutate
+ * technical approval.
  *
  * The cheapest enforcement that survives refactors is a source-level scan
  * for forbidden mutation patterns. Anything that tries to call

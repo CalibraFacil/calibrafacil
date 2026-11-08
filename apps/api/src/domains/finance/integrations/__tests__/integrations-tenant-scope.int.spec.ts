@@ -12,9 +12,9 @@ import { seedOrg } from "../../../../../test/integration/seed";
 import { withStatusRepair } from "../../../../../test/integration/state-fixtures";
 
 // REQ-TENANT-SQL-001 (tenant SQL guard finding): markContaAzulReconnectRequired
-// takes an organizationId but used to update the integration by id alone, so a
-// caller handing it another tenant's integration id flipped THAT tenant's
-// integration to ACTION_REQUIRED. The write is now organization-scoped.
+// takes an organizationId and must update the integration only inside it: a
+// caller handing it another tenant's integration id must not flip THAT tenant's
+// integration to ACTION_REQUIRED. The write is organization-scoped.
 
 async function seedContaAzulIntegration(orgId: string, userId: string) {
   const id = `int-${orgId}`;

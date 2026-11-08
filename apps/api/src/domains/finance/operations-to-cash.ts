@@ -62,7 +62,7 @@ export interface OperationsToCashClassification {
 
 /**
  * Pure stage + overlay classifier. Inputs are pre-resolved from the
- * Phase 1 read model. Reuses billing-document status semantics and
+ * read model. Reuses billing-document status semantics and
  * installment-mix logic so the dashboard doesn't fork stage rules.
  */
 export function classifyServiceOrder(

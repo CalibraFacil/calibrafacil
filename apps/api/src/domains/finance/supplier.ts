@@ -19,7 +19,7 @@ function normalize(value: string): string {
 
 /**
  * Case-insensitive lookup with auto-create. Used by the outsourced-cost
- * normalization in slice 6 → slice 7 transition: when an operator
+ * normalization: when an operator
  * writes a free-text supplierName the engine looks it up here and
  * creates a supplier record on first sight.
  *

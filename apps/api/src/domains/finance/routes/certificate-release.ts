@@ -168,9 +168,6 @@ export const financeCertificateReleaseRouter = createRouter<{
   Variables: AuthVariables;
 }>();
 
-// -------------------------------------------------------------------------
-// GET /api/finance/certificate-releases/:calibrationJobId
-// -------------------------------------------------------------------------
 mount(
   financeCertificateReleaseRouter,
   RELEASES_PREFIX,
@@ -222,9 +219,6 @@ mount(
   },
 );
 
-// -------------------------------------------------------------------------
-// POST /api/finance/certificate-releases/:calibrationJobId/release-by-exception
-// -------------------------------------------------------------------------
 mount(
   financeCertificateReleaseRouter,
   RELEASES_PREFIX,

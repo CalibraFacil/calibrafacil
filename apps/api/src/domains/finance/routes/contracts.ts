@@ -472,7 +472,7 @@ financeContractsRouter.put(
         );
 
         // The agreement update and the customers' compliance follow-up are
-        // separate writes, as before; they share this transaction now.
+        // separate writes; they share this transaction.
         if ((input.status ?? existing.status) === "ACTIVE") {
           // Ascending, so two reassignments in opposite directions lock the
           // customer rows in the same order and cannot deadlock.
