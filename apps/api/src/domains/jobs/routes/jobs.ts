@@ -225,6 +225,7 @@ export const jobsRouter = createRouter<{
   Bindings: IntegrationsEnv;
 }>();
 
+// GET /search: no SDK method calls it (the command palette reads `jobs.list`), so no endpoint definition.
 jobsRouter.get(
   "/search",
   ...withLabPermission({ calibration: ["read"] }),
@@ -416,6 +417,7 @@ mount(
   },
 );
 
+// GET /:id/label: no SDK method calls it, so no endpoint definition.
 jobsRouter.get(
   "/:id/label",
   ...withLabPermission({ calibration: ["read"] }),
@@ -776,6 +778,7 @@ mount(
   },
 );
 
+// PUT /:id: no SDK method calls it (the technician is set with `assign`), so no endpoint definition.
 jobsRouter.put(
   "/:id",
   ...withLabPermission({ calibration: ["update"] }),
@@ -1321,6 +1324,8 @@ mount(
 // =========================================================================
 // GET /:id/amendment-chain - Get the full amendment history for a job
 // ISO 17025:2017 Clause 7.8.4.1 - Traceability of amendments
+// No SDK method calls it (the lab reads the chain inside `jobs.get`; the portal has its own
+// route), so no endpoint definition.
 // =========================================================================
 jobsRouter.get(
   "/:id/amendment-chain",
@@ -1391,6 +1396,7 @@ jobsRouter.get(
   },
 );
 
+// GET /:id/audit-log: no SDK method calls it, so no endpoint definition.
 jobsRouter.get(
   "/:id/audit-log",
   ...withLabPermission({ calibration: ["read"] }),
@@ -1620,7 +1626,9 @@ mount(
 // Rendered server-side (the verification token isn't exposed in the general
 // job DTO) in the requested language (?lang=zpl|tspl). The browser fetches
 // this, then hands the commands to a transport (desktop local-server, Zebra
-// Browser Print, WebUSB, or Web Serial).
+// Browser Print, WebUSB, or Web Serial). It answers plain text (ZPL/TSPL), which the JSON
+// endpoint client does not read: no endpoint definition, the SDK method is hand-written
+// (`createJobsApi.getLabelCommands`).
 jobsRouter.get(
   "/:id/label-commands",
   ...withLabPermission({ calibration: ["read"] }),
