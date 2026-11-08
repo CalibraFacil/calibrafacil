@@ -13,33 +13,34 @@
 //     │                                   └──submit──▶ REVIEW        APPROVED ──amend──▶ SUPERSEDED
 //     └─ cancel (DRAFT, IN_PROGRESS, REVIEW, REJECTED) ─▶ CANCELED
 //
-// Every row below was derived from the code path that performs it (file:line
-// at the commit this table was introduced; the pre-checks and the
-// compare-and-set WHERE clauses of those paths now read this table):
+// Every row below was derived from the code path that performs it (the
+// pre-checks and the compare-and-set WHERE clauses of those paths now read
+// this table):
 //
-//   create           apps/api/src/domains/jobs/jobs.ts:444-457 (new job, status DRAFT)
-//                    apps/api/src/domains/jobs/routes/jobs.ts:2871,2891 (the amendment clone, DRAFT)
+//   create           apps/api/src/domains/jobs/jobs.ts (new job, status DRAFT)
+//                    apps/api/src/domains/jobs/commands/amend-job.ts (the amendment clone, DRAFT)
 //   execute          apps/api/src/domains/jobs/commands/submit-job.ts (`executeJob`: save
 //                      worksheet / record results, for the cloud route, the
 //                      public API and the desktop sync apply alike:
 //                      DRAFT -> IN_PROGRESS, otherwise the status is kept)
-//                    packages/local-db/src/execution.ts:245,252-257 (offline save)
+//                    packages/local-db/src/execution.ts (offline save)
 //   submit           apps/api/src/domains/jobs/commands/submit-job.ts (`submitJob`, for
 //                      the cloud route, the public API and the desktop sync)
-//                    packages/local-db/src/execution.ts:245,253
+//                    packages/local-db/src/execution.ts
 //   reject           apps/api/src/domains/jobs/commands/reject-job.ts (`rejectJob`, for the
 //                      cloud route and the public API)
-//   approve          apps/api/src/domains/jobs/commands/approve-job.ts:274,385
+//   approve          apps/api/src/domains/jobs/commands/approve-job.ts
 //                      (REVIEW only: a REJECTED job must be resubmitted first)
-//   complete_render  packages/jobs-core/src/index.ts:488-489,529,1809,1959 (the render
+//   complete_render  packages/jobs-core/src/certificate-issuance.ts and
+//                    packages/jobs-core/src/certificate-render.ts (the render
 //                      worker: GENERATING_PDF -> APPROVED; SUPERSEDED keeps its
 //                      status while the watermarked PDF is regenerated)
-//   fail_render      packages/jobs-core/src/index.ts:727,732 (setJobError)
-//                    packages/db/src/queue-render-recovery.ts:80,90 (backstop)
+//   fail_render      packages/jobs-core/src/job-events.ts (setJobError)
+//                    packages/db/src/queue-render-recovery.ts (backstop)
 //   retry_render     apps/api/src/domains/jobs/commands/retry-render.ts (`retryRender`: a
 //                      manager re-dispatches the certificate of a failed render;
 //                      the approval and its frozen input stand)
-//   revert_approval  apps/api/src/domains/jobs/commands/approve-job.ts:532,549 (dispatch
+//   revert_approval  apps/api/src/domains/jobs/commands/approve-job.ts (dispatch
 //                      failed after the approval: back to the status approved from)
 //   cancel           apps/api/src/domains/jobs/commands/cancel-job.ts (`cancelJob`, for the
 //                      cloud route, the public API DELETE and the visit's
