@@ -17,6 +17,7 @@ import {
   headObject,
 } from "../../lib/storage";
 import { type MemberData } from "../../middleware/permission";
+import { reportServerError } from "../../lib/observability";
 
 /**
  * The cloud half of the offline attachment upload leg (roadmap P0-5).
@@ -182,7 +183,10 @@ export async function discardStoredSyncAttachment(
 ) {
   await deleteFromR2(createR2Client(env), env.R2_BUCKET_NAME, objectKey).catch(
     (error: unknown) => {
-      console.error("[Sync] Could not remove a rejected attachment:", error);
+      reportServerError(error, {
+        surface: "sync",
+        tags: { step: "discard-rejected-attachment" },
+      });
     },
   );
 }

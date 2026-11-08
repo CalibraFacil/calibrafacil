@@ -124,12 +124,15 @@ describe("enqueueBackgroundJob — local mode", () => {
     await expect(enqueueBackgroundJob(auditPackMessage)).resolves.toMatchObject(
       { messageId: expect.stringMatching(/^local-/) },
     );
-    await vi.waitFor(() =>
-      expect(console.error).toHaveBeenCalledWith(
-        "[BackgroundJobs] Local job failed",
-        expect.objectContaining({ message: auditPackMessage }),
-      ),
-    );
+    await vi.waitFor(() => expect(console.error).toHaveBeenCalledTimes(1));
+    // One redacted JSON line from the reporter; the job payload is not in it.
+    const line = String(vi.mocked(console.error).mock.calls[0]?.[0]);
+    expect(JSON.parse(line)).toMatchObject({
+      level: "error",
+      message: "render failed",
+      tags: { surface: "background-jobs", step: "local-job" },
+    });
+    expect(line).not.toContain("user-1");
   });
 });
 

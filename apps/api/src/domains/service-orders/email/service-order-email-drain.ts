@@ -75,6 +75,8 @@ import { dispatchNovoOrcamentoEmail } from "./novo-orcamento-email-dispatch";
 import { dispatchOrcamentoAprovadoEmail } from "./orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "./orcamento-recusado-email-dispatch";
 import { isReleaseExhausting } from "../../../lib/outbox-release";
+import { log } from "../../../lib/logger";
+import { reportServerError } from "../../../lib/observability";
 
 // =============================================================================
 // CONSTANTS
@@ -323,9 +325,10 @@ async function dispatchBcdEmailForRow(
 
   if (parseResult.namespace === "invalid") {
     // Malformed payload: log and treat as handled (graceful skip, no retry).
-    console.warn(
-      `[ServiceOrderEmailDrain] Malformed payload for eventKey="${row.eventKey}" (outbox id=${row.id}): ${parseResult.error}`,
-    );
+    log("warn", "service_order_email_malformed_payload", {
+      eventKey: row.eventKey,
+      outboxId: row.id,
+    });
     return true; // skip, do not release for retry
   }
 
@@ -467,9 +470,10 @@ async function dispatchEmailForRow(
 ): Promise<boolean> {
   const descriptor = getStatusEmailDescriptor(row.targetStatus);
   if (!descriptor) {
-    console.warn(
-      `[ServiceOrderEmailDrain] No email descriptor for target_status="${row.targetStatus}" (outbox id=${row.id}); skipping.`,
-    );
+    log("warn", "service_order_email_no_descriptor", {
+      targetStatus: row.targetStatus,
+      outboxId: row.id,
+    });
     return true; // treat as "handled" — release-on-retry would loop forever
   }
 
@@ -699,10 +703,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
           try {
             handled = await dispatchBcdEmailForRow(bcdRow);
           } catch (bcdError) {
-            console.error(
-              `[ServiceOrderEmailDrain] dispatchBcdEmailForRow threw for outbox id=${row.id}:`,
-              bcdError,
-            );
+            reportServerError(bcdError, {
+              surface: "service-order-email-drain",
+              tags: { step: "dispatch-bcd", outboxId: String(row.id) },
+            });
             handled = false;
           }
 
@@ -725,10 +729,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
                 isReleaseExhausting(row.attempts, maxAttempts),
               );
             } catch (releaseError) {
-              console.error(
-                `[ServiceOrderEmailDrain] Release failed for B/C/D outbox id=${row.id}:`,
-                releaseError,
-              );
+              reportServerError(releaseError, {
+                surface: "service-order-email-drain",
+                tags: { step: "release-bcd", outboxId: String(row.id) },
+              });
             }
             result.released++;
           }
@@ -808,9 +812,11 @@ export async function drainServiceOrderEmailOutbox(options?: {
 
         const soRow = parseSoRow(soRawRow);
         if (!soRow) {
-          console.warn(
-            `[ServiceOrderEmailDrain] Service order ${row.serviceOrderId} not found for org ${row.organizationId} (outbox id=${row.id}); marking processed.`,
-          );
+          log("warn", "service_order_email_order_missing", {
+            serviceOrderId: row.serviceOrderId,
+            organizationId: row.organizationId,
+            outboxId: row.id,
+          });
           // Graceful terminal skip — the SO is gone, so mark done (don't let the
           // lease expire and re-pick it forever).
           await markOutboxRowProcessed(row.organizationId, row.id, {
@@ -822,9 +828,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
 
         const custRow = custRows[0];
         if (!custRow) {
-          console.warn(
-            `[ServiceOrderEmailDrain] Customer ${soRow.customerId} not found (outbox id=${row.id}); marking processed.`,
-          );
+          log("warn", "service_order_email_customer_missing", {
+            customerId: soRow.customerId,
+            outboxId: row.id,
+          });
           // Graceful terminal skip — mark done so the lease isn't re-claimed.
           await markOutboxRowProcessed(row.organizationId, row.id, {
             redactCredentials: false,
@@ -839,10 +846,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
           sent = await dispatchEmailForRow(row, soRow, custRow);
         } catch (sendError) {
           sent = false;
-          console.error(
-            `[ServiceOrderEmailDrain] dispatchEmailForRow threw for outbox id=${row.id}:`,
-            sendError,
-          );
+          reportServerError(sendError, {
+            surface: "service-order-email-drain",
+            tags: { step: "dispatch", outboxId: String(row.id) },
+          });
         }
 
         if (sent) {
@@ -865,19 +872,19 @@ export async function drainServiceOrderEmailOutbox(options?: {
         }
       } catch (rowError) {
         // Best-effort: one bad row must not abort the batch.
-        console.error(
-          `[ServiceOrderEmailDrain] Unexpected error processing outbox row:`,
-          rowError,
-        );
+        reportServerError(rowError, {
+          surface: "service-order-email-drain",
+          tags: { step: "process-row" },
+        });
         result.errors++;
       }
     }
   } catch (outerError) {
     // Best-effort: the SELECT itself failing must not throw out of the cron handler.
-    console.error(
-      "[ServiceOrderEmailDrain] Failed to fetch pending outbox rows:",
-      outerError,
-    );
+    reportServerError(outerError, {
+      surface: "service-order-email-drain",
+      tags: { step: "fetch-pending" },
+    });
     result.errors++;
   }
 

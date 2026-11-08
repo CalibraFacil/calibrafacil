@@ -141,6 +141,7 @@ import {
 } from "../commands/approval-gates";
 import { allowedJobActions } from "../commands/allowed-actions";
 import { requireFreshSession } from "../../../middleware/fresh-session";
+import { reportServerError } from "../../../lib/observability";
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
@@ -891,7 +892,10 @@ mount(
     }
 
     notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
-      console.error("[Jobs] Failed to send submit notification:", err);
+      reportServerError(err, {
+        surface: "jobs",
+        tags: { step: "submit-notification", jobId: String(id) },
+      });
     });
 
     return {

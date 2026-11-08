@@ -13,6 +13,8 @@ import {
 } from "../../../lib/domain-errors";
 import { recordResendWebhookEvent } from "../resend-webhook-ledger";
 import { isRecord } from "@calibra-facil/shared/record";
+import { log } from "../../../lib/logger";
+import { reportServerError } from "../../../lib/observability";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
@@ -38,9 +40,7 @@ export const webhooksRouter = createRouter().post("/resend", async (c) => {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) {
     if (!resendWebhookSecretWarningLogged) {
-      console.warn(
-        "RESEND_WEBHOOK_SECRET not configured - Resend webhook is a no-op",
-      );
+      log("warn", "resend_webhook_secret_missing");
       resendWebhookSecretWarningLogged = true;
     }
     return c.json({ received: true, skipped: true }, 200);
@@ -107,7 +107,10 @@ export const webhooksRouter = createRouter().post("/resend", async (c) => {
       }
     }
   } catch (error) {
-    console.error("[ResendWebhook] processing error", error);
+    reportServerError(error, {
+      surface: "resend-webhook",
+      tags: { step: "processing" },
+    });
   }
 
   return c.json({ received: true }, 200);

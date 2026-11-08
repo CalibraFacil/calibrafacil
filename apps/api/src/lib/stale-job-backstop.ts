@@ -10,6 +10,7 @@ import {
   rejectDeadLetteredCertificateRenders,
   rejectStuckCertificateRenders,
 } from "@calibra-facil/db/queue-render-recovery";
+import { reportServerError } from "./observability";
 
 // Periodic orphan-job backstop.
 //
@@ -95,10 +96,10 @@ export async function runStaleJobBackstop(
   const rejectedRenders = await deps
     .rejectDeadLetteredRenders(deadLettered)
     .catch((error) => {
-      console.error(
-        "[QueueDeadLetter] failed to reject dead-lettered renders",
-        error,
-      );
+      reportServerError(error, {
+        surface: "queue-backstop",
+        tags: { step: "reject-dead-lettered-renders" },
+      });
       return 0;
     });
 
@@ -107,7 +108,10 @@ export async function runStaleJobBackstop(
   const stuckRendersRejected = await deps
     .rejectStuckRenders(deps.stuckRenderAfterMs)
     .catch((error) => {
-      console.error("[QueueDeadLetter] failed to sweep stuck renders", error);
+      reportServerError(error, {
+        surface: "queue-backstop",
+        tags: { step: "sweep-stuck-renders" },
+      });
       return 0;
     });
 
@@ -119,7 +123,10 @@ export async function runStaleJobBackstop(
   // 5. Prune aged idempotency receipts so the ledger stays
   //    bounded. Hygiene only — a prune failure must never break the reclaim.
   const prunedReceipts = await deps.pruneReceipts().catch((error) => {
-    console.error("[QueueReceipt] failed to prune receipts", error);
+    reportServerError(error, {
+      surface: "queue-backstop",
+      tags: { step: "prune-receipts" },
+    });
     return 0;
   });
 

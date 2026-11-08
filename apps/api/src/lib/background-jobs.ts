@@ -5,6 +5,7 @@ import {
 } from "@calibra-facil/schemas";
 import { createWorkerRuntimeEnv } from "./runtime-env";
 import { getBackgroundJobsMode } from "./background-job-routing";
+import { reportServerError } from "./observability";
 
 // Loaded on first use, not at import: the handlers of jobs-core (certificate
 // rendering, signing, ...) are only needed where a job runs in this process.
@@ -16,7 +17,13 @@ async function processInProcess(message: BackgroundJobMessage) {
 function runLocalBackgroundJob(message: BackgroundJobMessage) {
   queueMicrotask(() => {
     processInProcess(message).catch((error) => {
-      console.error("[BackgroundJobs] Local job failed", { message, error });
+      reportServerError(error, {
+        surface: "background-jobs",
+        tags: {
+          step: "local-job",
+          type: message.type ?? "CERTIFICATE_RENDER",
+        },
+      });
     });
   });
 }

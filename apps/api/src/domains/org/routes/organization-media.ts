@@ -31,6 +31,7 @@ import { invalid, notFound } from "../../../lib/domain-errors";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 import { mount } from "../../../lib/endpoint-mount";
+import { reportServerError } from "../../../lib/observability";
 const MAX_LOGO_FILE_SIZE = 2 * 1024 * 1024;
 // Raster only: an SVG can carry script, and the logo is embedded in certificates.
 const ALLOWED_LOGO_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -245,7 +246,10 @@ organizationMediaRouter.get("/logo/:key", async (c) => {
 
     return c.redirect(url, 302);
   } catch (error) {
-    console.error("Error fetching organization logo:", error);
+    reportServerError(error, {
+      surface: "organization-media",
+      tags: { step: "logo-url" },
+    });
     throw notFound("not_found", "Erro ao carregar logo");
   }
 });

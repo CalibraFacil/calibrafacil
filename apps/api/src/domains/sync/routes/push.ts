@@ -44,6 +44,7 @@ import {
   authorizeSyncOperation,
   memberForEventUnit,
 } from "../operation-permissions";
+import { reportServerError } from "../../../lib/observability";
 
 /** `entityType:entityId` of a raw event, or null when it names no aggregate. */
 function aggregateKeyOf(rawEvent: unknown): string | null {
@@ -266,11 +267,10 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
             protocolVersion,
           });
         } catch (error) {
-          console.error(
-            "[Sync] Preparing a desktop sync event failed:",
-            event.eventId,
-            error,
-          );
+          reportServerError(error, {
+            surface: "sync",
+            tags: { step: "prepare-event", eventId: event.eventId },
+          });
           rejected.push({
             eventId: event.eventId,
             code: "DESKTOP_SYNC_APPLY_FAILED",
@@ -337,11 +337,6 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
           case "failed": {
             // Rolled back whole; reported for this event only. Transient: the
             // cause (a write, an audit row, the commit) may not repeat.
-            console.error(
-              "[Sync] Desktop sync event failed and was rolled back:",
-              event.eventId,
-              outcome.message,
-            );
             rejected.push({
               eventId: event.eventId,
               code: "DESKTOP_SYNC_APPLY_FAILED",

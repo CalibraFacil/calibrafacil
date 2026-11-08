@@ -482,7 +482,7 @@ describe("approval effects reconciler (REQ-B2-RECON-1..3)", () => {
       nonConforming: true,
       ageMs: 90 * DAY,
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await asApp(() => reconcileApprovalEffects());
 
@@ -495,7 +495,16 @@ describe("approval effects reconciler (REQ-B2-RECON-1..3)", () => {
     });
     expect(await eventsOf(lab)).toEqual([]);
     expect(await eventsOf(old)).toEqual([]);
-    expect(warn).toHaveBeenCalled();
+    // The count is logged as one structured warning, not repaired.
+    expect(
+      logged.mock.calls.map((call) => JSON.parse(String(call[0]))),
+    ).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        event: "approval_reconciler_oot_gaps_not_repaired",
+        jobs: 1,
+      }),
+    );
     expect(mocks.enqueue).not.toHaveBeenCalled();
   });
 

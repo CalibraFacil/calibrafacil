@@ -26,6 +26,8 @@ import {
   r2EnvForStorageDependentWork,
   resolveBucketName,
 } from "../lib/storage";
+import { log } from "../lib/logger";
+import { reportServerError } from "../lib/observability";
 
 // One dispatcher serves every cron job. The scheduler (the in-process one,
 // lib/cron-scheduler.ts, or an external one) hits the semantic paths
@@ -99,7 +101,7 @@ async function runCronTask<T>(
     return { ok: true, value: await task() };
   } catch (error) {
     const message = getErrorMessage(error, "Falha ao processar tarefa do cron");
-    console.error("[IntegrationsCron] Task failed", { name, message });
+    reportServerError(error, { surface: "cron", tags: { task: name } });
     return { ok: false, error: message };
   }
 }
@@ -140,7 +142,7 @@ function runCertificateDrift() {
   // check that reports "checked: 0" is indistinguishable from a clean one.
   const r2Env = r2EnvForStorageDependentWork("run the certificate drift check");
   if (!r2Env) {
-    console.warn("[drift-check] storage unconfigured — skipping");
+    log("warn", "drift_check_skipped_storage_unconfigured");
     return Promise.resolve({ checked: 0, drifted: 0, missing: 0, details: [] });
   }
   const client = createR2Client(r2Env);
@@ -237,7 +239,10 @@ export async function GET(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Erro desconhecido no cron";
-    console.error("[Cron] handler crashed", { job, message });
+    reportServerError(error, {
+      surface: "cron",
+      tags: { job, step: "handler-crashed" },
+    });
     return Response.json({ ok: false, error: message }, { status: 500 });
   }
 }
