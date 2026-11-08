@@ -22,6 +22,7 @@
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { decryptBinary, decryptPassword } from "./encryption.js";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -360,9 +361,9 @@ export function openSigningCredential(
     }
   }
   throw new Error(
-    `The legacy signing credential does not open with any configured KEK: ${
-      lastError instanceof Error ? lastError.message : String(lastError)
-    }`,
+    `The legacy signing credential does not open with any configured KEK: ${errorMessage(
+      lastError,
+    )}`,
   );
 }
 

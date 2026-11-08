@@ -24,6 +24,7 @@ import {
   generatePdfFromHtml,
   withOrgDbClient,
 } from "./pdf-render.js";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 function formatAddress(parts: Record<string, unknown> | null | undefined) {
   if (!parts || typeof parts !== "object") return null;
@@ -322,7 +323,7 @@ export async function processServiceOrderIntakeDocument(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     };
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildErrorLogRecord,
   createLogErrorReporter,
+  errorMessage,
   sanitizeErrorMessage,
   sanitizeErrorStack,
 } from "./error-reporter";
@@ -183,5 +184,16 @@ describe("buildErrorLogRecord", () => {
     const error = new Error("x");
     error.name = "";
     expect(buildErrorLogRecord(error).name).toBe("Error");
+  });
+});
+
+describe("errorMessage", () => {
+  it("returns the scrubbed message of an Error, a string or anything thrown", () => {
+    const failed = new Error(
+      "Failed query: select 1\nparams: maria@cliente.example",
+    );
+    expect(errorMessage(failed)).toBe("Failed query: select 1\nparams: ***");
+    expect(errorMessage("plain failure")).toBe("plain failure");
+    expect(errorMessage({ toString: () => "token=abc123" })).toBe("token=***");
   });
 });

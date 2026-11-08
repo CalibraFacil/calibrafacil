@@ -14,6 +14,7 @@ import { fetchRuntime, updateIntegrationConfig } from "./runtime-db.js";
 import { withOrgSession, withSystemDbClient } from "../pdf-render.js";
 import { createSyncRun, hasActiveTargetRun } from "./runs.js";
 import { processIntegrationSync } from "./process-sync.js";
+import { log } from "../log";
 
 type DueScheduledRun = {
   integrationId: string;
@@ -114,7 +115,7 @@ export async function processScheduledIntegrationSyncs(
         organizationId: row.organization_id,
         error,
       });
-      console.error("[IntegrationScheduler] Failed to check active runs", {
+      log.error("[IntegrationScheduler] Failed to check active runs", {
         integrationId: row.id,
         organizationId: row.organization_id,
         error,
@@ -185,7 +186,7 @@ export async function processScheduledIntegrationSyncs(
         organizationId: dueRun.organizationId,
         error,
       });
-      console.error("[IntegrationScheduler] Failed to schedule a run", {
+      log.error("[IntegrationScheduler] Failed to schedule a run", {
         integrationId: dueRun.integrationId,
         organizationId: dueRun.organizationId,
         target: dueRun.target,
@@ -215,7 +216,7 @@ export async function processScheduledIntegrationSyncs(
         await processIntegrationSync(env, message);
       }
     } catch (error) {
-      console.error("[IntegrationScheduler] Failed scheduled run", {
+      log.error("[IntegrationScheduler] Failed scheduled run", {
         integrationId: dueRun.integrationId,
         organizationId: dueRun.organizationId,
         target: dueRun.target,

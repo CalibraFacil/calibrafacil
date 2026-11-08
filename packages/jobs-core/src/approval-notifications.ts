@@ -17,6 +17,7 @@ import type {
   JobApprovedNotificationBackgroundJobMessage as JobApprovedNotificationMessage,
 } from "@calibra-facil/schemas";
 import { and, eq } from "drizzle-orm";
+import { log } from "./log";
 
 /** Tell the technician (or the job's creator) the calibration was approved. */
 export async function processJobApprovedNotification(
@@ -62,7 +63,7 @@ export async function processAssetOotNotification(
 
   if (!state) {
     // The event is gone (the approval that wrote it was reverted): nothing to say.
-    console.warn(
+    log.warn(
       `[AssetOOT] Event ${message.eventId} no longer exists; its notification is dropped.`,
     );
     return;

@@ -15,6 +15,8 @@ import { processLabelJob } from "./labels.js";
 import { processJob } from "./certificate-render.js";
 import { findJobOrganization, withDbClient } from "./pdf-render.js";
 import { setJobError } from "./job-events.js";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 function isServiceOrderDocumentMessage(
   message: DocumentBackgroundJobMessage,
@@ -114,11 +116,13 @@ export async function processDocumentMessage(
           ),
         );
       })().catch((dbError) => {
-        console.error(`[JOB ${body.jobId}] Failed to record error:`, dbError);
+        log.error(`[JOB ${body.jobId}] Failed to record error:`, {
+          error: dbError,
+        });
       });
     } else {
-      console.warn(
-        `[JOB ${body.jobId}] Certificate attempt ${delivery?.attempt}/${delivery?.maxAttempts} failed; keeping GENERATING_PDF for redelivery: ${result.error}`,
+      log.warn(
+        `[JOB ${body.jobId}] Certificate attempt ${delivery?.attempt}/${delivery?.maxAttempts} failed; keeping GENERATING_PDF for redelivery: ${errorMessage(result.error)}`,
       );
     }
   }

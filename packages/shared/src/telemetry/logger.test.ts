@@ -58,3 +58,28 @@ describe("createLogger", () => {
     expect(lastLine(spy)).toMatchObject({ serialization: "failed" });
   });
 });
+
+describe("createLogger redaction", () => {
+  const FAILED_QUERY = new Error(
+    'Failed query: insert into "customer" ("name", "email") values ($1, $2)\nparams: Maria Souza,maria@cliente.example',
+  );
+
+  it("never writes the bound values of a failed statement", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    createLogger("Worker").error("job failed", { error: FAILED_QUERY });
+
+    const raw = String(spy.mock.calls.at(-1)?.[0]);
+    expect(raw).not.toContain("maria@cliente.example");
+    expect(raw).not.toContain("Maria Souza");
+    expect(lastLine(spy).error).toMatchObject({ name: "Error" });
+  });
+
+  it("scrubs credentials in an Error message", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    createLogger("Sync").warn("connect failed", {
+      error: new Error("connect postgres://admin:hunter2@db:5432/app failed"),
+    });
+
+    expect(String(spy.mock.calls.at(-1)?.[0])).not.toContain("hunter2");
+  });
+});

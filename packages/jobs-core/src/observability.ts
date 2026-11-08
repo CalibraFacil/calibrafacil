@@ -1,9 +1,7 @@
 import { readObservabilityConfig } from "@calibra-facil/config";
 import {
   createLogErrorReporter,
-  createLogger,
   type ErrorReporter,
-  type StructuredLogger,
 } from "@calibra-facil/shared/telemetry";
 
 // Server-side error tracking for the worker surfaces: every run mode (the
@@ -23,20 +21,15 @@ function getWorkerErrorReporter(): ErrorReporter {
   return reporter;
 }
 
-const workerLogger: StructuredLogger = createLogger("Worker");
-
-/** Capture + structured log for a failed job; never throws. */
+/**
+ * Report a failed job as one redacted JSON line on stderr; never throws. The
+ * reporter is the only writer: a second plain-logger line carried the raw
+ * message (a failed statement's bound values) next to the scrubbed one.
+ */
 export function reportWorkerError(
   error: unknown,
   tags: Record<string, string>,
 ): void {
-  workerLogger.error("job failed", {
-    ...tags,
-    error:
-      error instanceof Error
-        ? { name: error.name, message: error.message }
-        : { name: "UnknownError", message: String(error) },
-  });
   getWorkerErrorReporter().captureException(error, {
     tags: { surface: "worker", ...tags },
   });

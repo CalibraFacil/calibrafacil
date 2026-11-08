@@ -24,6 +24,7 @@ import {
 } from "./queries-people-certificates.js";
 import { BATCH_SIZE, recordScheduledNotification } from "./shared.js";
 import { checkPtPlanDue } from "./queries-assets-standards.js";
+import { log } from "../log";
 
 export async function processCompetencesExpiring(
   lab: OrgSession,
@@ -66,9 +67,9 @@ export async function processCompetencesExpiring(
         competencesExpiringProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(
+        log.error(
           `[Scheduled] Error processing expiring competence ${comp.id}:`,
-          error,
+          { error },
         );
       }
     }
@@ -147,9 +148,9 @@ export async function processCompetencesExpired(
         competencesExpiredProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(
+        log.error(
           `[Scheduled] Error processing expired competence ${comp.id}:`,
-          error,
+          { error },
         );
       }
     }
@@ -196,7 +197,7 @@ export async function processVisitReminders(lab: OrgSession): Promise<number> {
         visitsProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(`[Scheduled] Error processing visit ${visit.id}:`, error);
+        log.error(`[Scheduled] Error processing visit ${visit.id}:`, { error });
       }
     }
 
@@ -269,9 +270,9 @@ export async function processSigningCertificatesExpiring(
 
         signingCertsProcessed++;
       } catch (error) {
-        console.error(
+        log.error(
           `[Scheduled] Error processing signing certificate ${cert.id}:`,
-          error,
+          { error },
         );
       }
     }
@@ -342,9 +343,9 @@ export async function processAccreditationsExpiring(
 
         accreditationsProcessed++;
       } catch (error) {
-        console.error(
+        log.error(
           `[Scheduled] Error processing accreditation for org ${row.organization_id}:`,
-          error,
+          { error },
         );
       }
     }
@@ -411,9 +412,9 @@ export async function processAccreditedScopeLinesExpiring(
 
         scopeLinesProcessed++;
       } catch (error) {
-        console.error(
+        log.error(
           `[Scheduled] Error processing accredited-scope line ${row.id}:`,
-          error,
+          { error },
         );
       }
     }
@@ -461,10 +462,9 @@ export async function processPtPlanDue(lab: OrgSession): Promise<number> {
         ptPlanItemsProcessed++;
       } catch (error) {
         batchFailures++;
-        console.error(
-          `[Scheduled] Error processing PT plan item ${planItem.id}:`,
+        log.error(`[Scheduled] Error processing PT plan item ${planItem.id}:`, {
           error,
-        );
+        });
       }
     }
     ptPlanOffset += batchFailures;

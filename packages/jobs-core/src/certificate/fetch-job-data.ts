@@ -25,6 +25,7 @@ import {
   type CertificateJobData,
 } from "@calibra-facil/certificate-data";
 import type { Client, QueryResultRow } from "pg";
+import { log } from "../log";
 
 /**
  * Only what this module needs from the worker's env, so the query can be
@@ -201,10 +202,9 @@ export async function resolveCertificateJobData(
           signatureRow.content_type,
         );
       } catch (error) {
-        console.warn(
-          `[JOB ${jobId}] Failed to fetch approver signature:`,
+        log.warn(`[JOB ${jobId}] Failed to fetch approver signature:`, {
           error,
-        );
+        });
       }
     }
   }

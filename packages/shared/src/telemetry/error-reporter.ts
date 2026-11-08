@@ -84,6 +84,15 @@ export function sanitizeErrorStack(stack: string): string {
   return scrub(stack, MAX_STACK_LENGTH);
 }
 
+/**
+ * The message of anything that was thrown, scrubbed. Use it wherever an error
+ * becomes text that is stored or logged (a job's `last_error`, a log line, a
+ * response detail): a failed statement's message carries its bound values.
+ */
+export function errorMessage(error: unknown): string {
+  return describeThrowable(error).message;
+}
+
 function describeThrowable(error: unknown): {
   name: string;
   message: string;

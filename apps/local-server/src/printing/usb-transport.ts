@@ -1,6 +1,7 @@
 import type { Interface, OutEndpoint } from "usb";
 
 import { PrinterTransportError } from "./errors";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 // node-usb is a native module; import it lazily so network/serial printing never
 // loads it and so a missing/blocked module degrades to a clear error.
@@ -10,9 +11,7 @@ async function loadUsb() {
   } catch (error) {
     throw new PrinterTransportError(
       "USB_UNAVAILABLE",
-      `Suporte a USB indisponível: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `Suporte a USB indisponível: ${errorMessage(error)}`,
     );
   }
 }
@@ -26,7 +25,7 @@ function describeUsbError(
   vendorId: number,
   productId: number,
 ): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   if (/access|permission|LIBUSB_ERROR_ACCESS/i.test(message)) {
     return `Permissão negada para a impressora USB ${hex(vendorId)}:${hex(productId)}. No Linux, adicione uma regra udev para o fornecedor (ex.: SUBSYSTEM=="usb", ATTRS{idVendor}=="0a5f", MODE="0666"). Detalhe: ${message}`;
   }

@@ -3,6 +3,13 @@
 // aggregator) can parse level/tag/fields instead of grepping free text.
 // No dependencies, no transports, no levels config — console is the sink on
 // every runtime we deploy to (Bun/Node servers, CF container).
+//
+// An Error field is written as its name and its SCRUBBED message (the same
+// scrubbing the error reporter applies): a failed statement's message carries
+// the bound values, and every app that logs through here gets that for free.
+// A caught error goes in a field (`{ error }`), never in the message string.
+
+import { sanitizeErrorMessage } from "./error-reporter";
 
 export type LogFields = Record<string, unknown>;
 
@@ -35,7 +42,7 @@ function consoleFor(level: LogLevel): (line: string) => void {
 /** JSON.stringify replacer that keeps Error values useful and never throws. */
 function safeValue(value: unknown): unknown {
   if (value instanceof Error) {
-    return { name: value.name, message: value.message };
+    return { name: value.name, message: sanitizeErrorMessage(value.message) };
   }
   if (typeof value === "bigint") return value.toString();
   return value;

@@ -9,11 +9,11 @@ import { Workbook } from "@cj-tech-master/excelts";
 import type { AuditPackBackgroundJobMessage } from "@calibra-facil/schemas";
 import { portalAuditPackKey } from "@calibra-facil/shared/storage-keys";
 import { notify } from "@calibra-facil/notifications";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { type Env } from "./runtime-types.js";
 import {
   findOrganizationOnSystemPath,
   generatePdfFromHtml,
-  getErrorMessage,
   withOrgDbClient,
 } from "./pdf-render.js";
 import {
@@ -28,6 +28,7 @@ import {
   renderAuditPackIndexHtml,
 } from "./audit-pack-support.js";
 import { bucketBinding, getStoredObject } from "./storage-helpers.js";
+import { log } from "./log";
 
 export async function processAuditPackJob(
   env: Env,
@@ -94,7 +95,7 @@ export async function processAuditPackJob(
       // `claim` of PORTAL_EXPORT_JOB_MACHINE leaves PENDING/PROCESSING only: a
       // redelivery after the export finished (or failed) has nothing to do,
       // and must not overwrite the recorded outcome.
-      console.warn(
+      log.warn(
         `[AUDIT PACK ${exportId}] Not claimable (finished or missing); skipped`,
       );
       return;
@@ -193,7 +194,7 @@ export async function processAuditPackJob(
         const object = await getStoredObject(env, "documents", key);
         if (!object) {
           missingCount += 1;
-          console.error(
+          log.error(
             `[AUDIT PACK ${exportId}] Certificate PDF missing in R2, skipping`,
             { jobId: cert.job_id, key },
           );
@@ -407,10 +408,9 @@ export async function processAuditPackJob(
     try {
       await notify("AUDIT_PACK_READY", { exportId });
     } catch (notifyError) {
-      console.error(
-        `[AUDIT PACK ${exportId}] Failed to send ready notification:`,
-        notifyError,
-      );
+      log.error(`[AUDIT PACK ${exportId}] Failed to send ready notification:`, {
+        error: notifyError,
+      });
     }
 
     const totalMs = Math.round(performance.now() - totalStart);
@@ -418,7 +418,7 @@ export async function processAuditPackJob(
       `[AUDIT PACK ${exportId}] DONE in ${totalMs}ms (${includedJobIds.length} certificates, ${zipBytes.byteLength} bytes)`,
     );
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
+    const failureReason = errorMessage(error);
     // Without the laboratory (the lookup failed, or there is no such export) the
     // row cannot be written as the application role: nothing to record.
     if (labOrganizationId !== null) {
@@ -429,13 +429,12 @@ export async function processAuditPackJob(
           set status = 'FAILED', failure_reason = $1, updated_at = now()
           where id = $2 and status in ('PENDING', 'PROCESSING')
         `,
-          [errorMessage, exportId],
+          [failureReason, exportId],
         ),
       ).catch((dbError) => {
-        console.error(
-          `[AUDIT PACK ${exportId}] Failed to record error:`,
-          dbError,
-        );
+        log.error(`[AUDIT PACK ${exportId}] Failed to record error:`, {
+          error: dbError,
+        });
       });
     }
     throw error;

@@ -15,6 +15,8 @@ import {
   type QueueMessage,
 } from "@calibra-facil/schemas";
 import { toRecord } from "@calibra-facil/shared/record";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 export type { QueueMessage };
 
@@ -184,14 +186,14 @@ export async function claimQueueJobs(
       }
       deadLettered += 1;
       if (row.id === null) {
-        console.error(`[Queue] skipped a claimed row: ${row.reason}`);
+        log.error(`[Queue] skipped a claimed row: ${errorMessage(row.reason)}`);
         continue;
       }
-      console.error(
-        `[Queue] dead-lettering queue job ${row.id}: ${row.reason}`,
+      log.error(
+        `[Queue] dead-lettering queue job ${row.id}: ${errorMessage(row.reason)}`,
       );
       // oxlint-disable-next-line eslint/no-await-in-loop -- a handful of rows at most; each settle is one fenced update.
-      await deadLetterQueueJob(row.id, workerId, row.reason);
+      await deadLetterQueueJob(row.id, workerId, errorMessage(row.reason));
     }
     wanted = deadLettered;
   }
@@ -221,7 +223,7 @@ function logFencedOut(
   id: number,
   workerId: string,
 ) {
-  console.warn(
+  log.warn(
     `[Queue] fenced out: worker ${workerId} no longer holds the lease on queue job ${id}; ${action} ignored`,
   );
 }
@@ -279,7 +281,9 @@ export async function failQueueJob(
   }
 
   const exhausted = job.attempts >= job.maxAttempts;
-  const lastError = error instanceof Error ? error.message : String(error);
+  // last_error is shown to operators and survives the row: a failed
+  // statement's message carries its bound values, so it is stored scrubbed.
+  const lastError = errorMessage(error);
   const status: AppQueueJobStatus = exhausted ? "FAILED" : "PENDING";
   const availableAt = exhausted
     ? new Date()

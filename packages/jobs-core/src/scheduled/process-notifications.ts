@@ -16,6 +16,7 @@ import {
   processSigningCertificatesExpiring,
   processVisitReminders,
 } from "./steps-people-certificates.js";
+import { log } from "../log";
 
 /**
  * Process all scheduled compliance notifications with pagination
@@ -92,10 +93,9 @@ export async function processScheduledNotifications(
         totals.ptPlanItemsProcessed += await processPtPlanDue(lab);
       });
     } catch (error) {
-      console.error(
-        `[Scheduled] Error sweeping laboratory ${organizationId}:`,
+      log.error(`[Scheduled] Error sweeping laboratory ${organizationId}:`, {
         error,
-      );
+      });
       firstFailure ??= { error };
     }
   }

@@ -63,6 +63,8 @@ import {
   type EmailBrand,
 } from "@calibra-facil/email";
 import { appBaseUrl, portalBaseUrl } from "@calibra-facil/shared/public-urls";
+import { log } from "./log";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 // Track if email misconfiguration warning has been logged this session
 let emailMisconfigWarningLogged = false;
@@ -814,7 +816,7 @@ async function sendNotificationEmail(options: {
 
   if (!isPlatformEmailConfigured() || !fromEmail) {
     if (!emailMisconfigWarningLogged) {
-      console.error(
+      log.error(
         "[Notifications] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM). " +
           "Users will only receive in-app notifications, no emails will be sent.",
       );
@@ -830,7 +832,7 @@ async function sendNotificationEmail(options: {
     .limit(1);
 
   if (!userData?.email) {
-    console.warn(`[Notifications] User ${recipientUserId} has no email`);
+    log.warn(`[Notifications] User ${recipientUserId} has no email`);
     return false;
   }
 
@@ -877,11 +879,13 @@ async function sendNotificationEmail(options: {
     });
 
     if (!outcome.sent) {
-      console.error("[Notifications] Failed to send email:", outcome.error);
+      log.error("[Notifications] Failed to send email:", {
+        error: errorMessage(outcome.error),
+      });
     }
     return outcome.sent;
   } catch (error) {
-    console.error("[Notifications] Failed to send email:", error);
+    log.error("[Notifications] Failed to send email:", { error });
     return false;
   }
 }

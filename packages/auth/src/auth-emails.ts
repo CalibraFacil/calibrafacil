@@ -31,6 +31,8 @@ import {
   type EmailBrand,
 } from "@calibra-facil/email";
 import { readEnv } from "./auth-env";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
+import { log } from "./log";
 
 // Sender used when neither RESEND_FROM_EMAIL nor EMAIL_FROM is configured. The
 // example.com domain is reserved, so a misconfigured deployment fails loudly at
@@ -60,7 +62,7 @@ function getEmailLogoSrc(): string {
 async function sendAuthEmail(payload: CreateEmailOptions): Promise<void> {
   const result = await sendPlatformEmail(payload);
   if (!result.ok) {
-    console.error("[Email] Delivery failed", result.error);
+    log.error("[Email] Delivery failed", { error: errorMessage(result.error) });
     throw new Error(`Email delivery failed: ${result.error}`);
   }
 }
@@ -188,7 +190,9 @@ export async function deliverPortalInvitationEmail(input: {
   if (!outcome.sent) {
     // Same fail-loud contract as sendAuthEmail: a provider rejection must
     // surface instead of returning a silent 200.
-    console.error("[Email] Delivery failed", outcome.error);
+    log.error("[Email] Delivery failed", {
+      error: errorMessage(outcome.error),
+    });
     throw new Error(`Email delivery failed: ${outcome.error}`);
   }
 }

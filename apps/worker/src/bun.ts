@@ -18,6 +18,7 @@ import {
   readQueueConfig,
 } from "./queue-runtime.js";
 import { createWorkerShutdownPlan } from "./shutdown.js";
+import { log } from "./log";
 
 type BunRuntime = {
   file(path: URL): {
@@ -78,7 +79,7 @@ const poll = createPollLoop({
     }
   },
   onError: (error) => {
-    console.error("[Worker] queue poll failed", error);
+    log.error("[Worker] queue poll failed", { error });
   },
 });
 poll.start();

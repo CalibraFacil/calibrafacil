@@ -1,4 +1,5 @@
 import { PrinterTransportError } from "./errors";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 // serialport is a native module; import it lazily (see usb-transport.ts).
 async function loadSerial() {
@@ -7,9 +8,7 @@ async function loadSerial() {
   } catch (error) {
     throw new PrinterTransportError(
       "SERIAL_UNAVAILABLE",
-      `Suporte a serial indisponível: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `Suporte a serial indisponível: ${errorMessage(error)}`,
     );
   }
 }
@@ -33,9 +32,9 @@ export async function sendCommandsOverSerial(
       reject(
         new PrinterTransportError(
           "SERIAL_ERROR",
-          `Falha na impressão serial (${connection.path}): ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Falha na impressão serial (${connection.path}): ${errorMessage(
+            error,
+          )}`,
         ),
       );
     };

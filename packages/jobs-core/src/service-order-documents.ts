@@ -21,6 +21,7 @@ import {
   loadServiceOrderDocumentBase,
 } from "./service-order-data.js";
 import { bucketBinding, fetchOrgRefById } from "./storage-helpers.js";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 export async function processServiceOrderTag(
   env: Env,
@@ -111,7 +112,7 @@ export async function processServiceOrderTag(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     };
   }
 }
@@ -199,7 +200,7 @@ export async function processServiceOrderQuote(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     };
   }
 }
@@ -361,7 +362,7 @@ export async function processServiceOrderDeliveryReceipt(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     };
   }
 }

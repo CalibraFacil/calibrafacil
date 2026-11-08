@@ -16,6 +16,7 @@ import {
   resolveOrganizationLogoDataUrl,
   sha256Hex,
 } from "./storage-helpers.js";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 
 // =============================================================================
 // §7.10 OUT-OF-TOLERANCE CUSTOMER NOTIFICATION
@@ -249,7 +250,7 @@ export async function processOotNotification(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
     };
   }
 }

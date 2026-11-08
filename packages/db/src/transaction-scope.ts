@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { log } from "./log";
 
 /**
  * The transaction a request is running its work in, when it asked for one with
@@ -60,7 +61,7 @@ export function afterTransactionCommit(
 }
 
 function logAfterCommitFailure(error: unknown) {
-  console.error("[db] An after-commit callback failed:", error);
+  log.error("[db] An after-commit callback failed:", { error });
 }
 
 /** Opens a database transaction and hands its handle to `callback`. */
