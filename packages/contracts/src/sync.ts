@@ -1,5 +1,6 @@
 import { RECORDED_SYNC_CONFLICT_STATUSES } from "@calibra-facil/schemas/sync-status";
 import { z } from "zod";
+import { syncStatusSnapshotSchema } from "./desktop";
 import { SYNC_ENTITY_ORDER, type SyncBootstrapKey } from "./sync-entities";
 
 export const syncEventSchema = z.object({
@@ -309,6 +310,23 @@ export const localBlockedOutboxEventsResponseSchema = z.object({
 export const localDeadOutboxEventsResponseSchema = z.object({
   data: z.array(localDeadOutboxEventSchema),
   total: z.number().int().nonnegative(),
+});
+
+/** POST /api/local/sync/conflicts/:id/resolve: the conflict as it is now. */
+export const localSyncConflictResolveResponseSchema = z.object({
+  data: localSyncConflictSchema,
+});
+
+/** POST /api/local/sync/dead-events/:eventId/discard. */
+export const localDeadOutboxEventDiscardResponseSchema = z.object({
+  data: localDeadOutboxEventSchema,
+  syncStatus: syncStatusSnapshotSchema,
+});
+
+/** POST /api/local/sync/dead-events/:eventId/requeue. */
+export const localDeadOutboxEventRequeueResponseSchema = z.object({
+  data: z.object({ eventId: z.string() }),
+  syncStatus: syncStatusSnapshotSchema,
 });
 
 export const syncConflictResolutionRequestSchema =
