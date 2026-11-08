@@ -1,6 +1,9 @@
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { CERTIFICATE_ISSUED_JOB_STATUSES } from "@calibra-facil/schemas";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
+import type { OrgRawTransaction } from "../../../lib/org-transaction";
+import { executeRows } from "../../../lib/db";
 import { orgSetDb } from "../../../lib/org-db";
 
 /**
@@ -171,4 +174,119 @@ export function createPortalAmendmentChainLoader(params: {
       .limit(1);
     return row ?? null;
   };
+}
+
+/** Safety limit against a loop in corrupted data. */
+const MAX_AMENDMENT_CHAIN_LENGTH = 100;
+
+/**
+ * The whole amendment history of a certificate: from the job, up to its original
+ * (`supersedes_id`) and down to the latest replacement (`superseded_by_id`),
+ * oldest first (ISO/IEC 17025 §7.8.4.1 traceability of amendments). A recursive
+ * CTE the org-bound handle cannot express, so it takes the raw transaction of the
+ * caller's `withOrg`; every table of it carries the organization predicate.
+ */
+export async function loadAmendmentChain(
+  tx: Pick<OrgRawTransaction, "execute">,
+  params: { jobId: number; organizationId: string },
+) {
+  const result = await tx.execute(sql`
+        WITH RECURSIVE ancestors AS (
+          SELECT
+            id,
+            supersedes_id,
+            0::integer AS depth,
+            ARRAY[id]::integer[] AS path
+          FROM calibration_job
+          WHERE id = ${params.jobId}
+            AND organization_id = ${params.organizationId}
+
+          UNION ALL
+
+          SELECT
+            parent.id,
+            parent.supersedes_id,
+            ancestors.depth + 1,
+            ancestors.path || parent.id
+          FROM calibration_job parent
+          INNER JOIN ancestors ON parent.id = ancestors.supersedes_id
+          WHERE parent.organization_id = ${params.organizationId}
+            AND ancestors.depth < ${MAX_AMENDMENT_CHAIN_LENGTH}
+            AND NOT (parent.id = ANY(ancestors.path))
+        ),
+        root_job AS (
+          SELECT id
+          FROM ancestors
+          ORDER BY depth DESC
+          LIMIT 1
+        ),
+        chain AS (
+          SELECT
+            job.id,
+            job.job_id,
+            job.status,
+            job.amendment_number,
+            job.amendment_reason,
+            job.approved_at,
+            job.superseded_at,
+            job.superseded_by_id,
+            0::integer AS depth,
+            ARRAY[job.id]::integer[] AS path
+          FROM calibration_job job
+          INNER JOIN root_job ON root_job.id = job.id
+          WHERE job.organization_id = ${params.organizationId}
+
+          UNION ALL
+
+          SELECT
+            child.id,
+            child.job_id,
+            child.status,
+            child.amendment_number,
+            child.amendment_reason,
+            child.approved_at,
+            child.superseded_at,
+            child.superseded_by_id,
+            chain.depth + 1,
+            chain.path || child.id
+          FROM calibration_job child
+          INNER JOIN chain ON child.id = chain.superseded_by_id
+          WHERE child.organization_id = ${params.organizationId}
+            AND chain.depth < ${MAX_AMENDMENT_CHAIN_LENGTH}
+            AND NOT (child.id = ANY(chain.path))
+        )
+        SELECT
+          id,
+          job_id,
+          status,
+          amendment_number,
+          amendment_reason,
+          approved_at,
+          superseded_at,
+          depth
+        FROM chain
+        ORDER BY depth ASC;
+      `);
+  return executeRows(
+    result,
+    z
+      .object({
+        id: z.coerce.number(),
+        job_id: z.string(),
+        status: z.string(),
+        amendment_number: z.coerce.number().nullable(),
+        amendment_reason: z.string().nullable(),
+        approved_at: z.coerce.date().nullable(),
+        superseded_at: z.coerce.date().nullable(),
+      })
+      .transform((row) => ({
+        id: row.id,
+        jobId: row.job_id,
+        status: row.status,
+        amendmentNumber: row.amendment_number,
+        amendmentReason: row.amendment_reason,
+        approvedAt: row.approved_at,
+        supersededAt: row.superseded_at,
+      })),
+  );
 }

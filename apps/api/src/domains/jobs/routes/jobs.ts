@@ -93,7 +93,6 @@ import {
   lt,
   ne,
   or,
-  sql,
 } from "drizzle-orm";
 import {
   createR2Client,
@@ -107,7 +106,6 @@ import {
   frozenSealOf,
 } from "../certificates/frozen-seal";
 import { alias } from "drizzle-orm/pg-core";
-import { executeRows } from "../../../lib/db";
 import { buildUnitScopeCondition } from "../../../lib/units";
 import { r2EnvFromUnknown, methodSnapshotDisplay } from "../commands/helpers";
 import { approveJob } from "../commands/approve-job";
@@ -138,6 +136,7 @@ import {
 import { allowedJobActions } from "../commands/allowed-actions";
 import { requireFreshSession } from "../../../middleware/fresh-session";
 import { reportServerError } from "../../../lib/observability";
+import { loadAmendmentChain } from "../certificates/certificate-amendment-chain";
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
@@ -1333,9 +1332,6 @@ jobsRouter.get(
     try {
       const id = await requireJobRouteId(c.req.param("id"), memberData);
 
-      // Safety limit to prevent infinite loops from corrupted data
-      const MAX_CHAIN_LENGTH = 100;
-
       const dbStartedAt = performance.now();
       // The job check and the recursive chain read run in one transaction
       // that names the laboratory (row-level security). The chain is raw SQL
@@ -1361,104 +1357,19 @@ jobsRouter.get(
             return null;
           }
 
-          const chainResult = await tx.execute(sql`
-        WITH RECURSIVE ancestors AS (
-          SELECT
-            id,
-            supersedes_id,
-            0::integer AS depth,
-            ARRAY[id]::integer[] AS path
-          FROM calibration_job
-          WHERE id = ${id}
-            AND organization_id = ${memberData.organizationId}
-
-          UNION ALL
-
-          SELECT
-            parent.id,
-            parent.supersedes_id,
-            ancestors.depth + 1,
-            ancestors.path || parent.id
-          FROM calibration_job parent
-          INNER JOIN ancestors ON parent.id = ancestors.supersedes_id
-          WHERE parent.organization_id = ${memberData.organizationId}
-            AND ancestors.depth < ${MAX_CHAIN_LENGTH}
-            AND NOT (parent.id = ANY(ancestors.path))
-        ),
-        root_job AS (
-          SELECT id
-          FROM ancestors
-          ORDER BY depth DESC
-          LIMIT 1
-        ),
-        chain AS (
-          SELECT
-            job.id,
-            job.job_id,
-            job.status,
-            job.amendment_number,
-            job.amendment_reason,
-            job.approved_at,
-            job.superseded_at,
-            job.superseded_by_id,
-            0::integer AS depth,
-            ARRAY[job.id]::integer[] AS path
-          FROM calibration_job job
-          INNER JOIN root_job ON root_job.id = job.id
-          WHERE job.organization_id = ${memberData.organizationId}
-
-          UNION ALL
-
-          SELECT
-            child.id,
-            child.job_id,
-            child.status,
-            child.amendment_number,
-            child.amendment_reason,
-            child.approved_at,
-            child.superseded_at,
-            child.superseded_by_id,
-            chain.depth + 1,
-            chain.path || child.id
-          FROM calibration_job child
-          INNER JOIN chain ON child.id = chain.superseded_by_id
-          WHERE child.organization_id = ${memberData.organizationId}
-            AND chain.depth < ${MAX_CHAIN_LENGTH}
-            AND NOT (child.id = ANY(chain.path))
-        )
-        SELECT
-          id,
-          job_id,
-          status,
-          amendment_number,
-          amendment_reason,
-          approved_at,
-          superseded_at,
-          depth
-        FROM chain
-        ORDER BY depth ASC;
-      `);
-          const chainRows = executeRows(
-            chainResult,
-            z.object({
-              id: z.coerce.number(),
-              job_id: z.string(),
-              status: z.string(),
-              amendment_number: z.coerce.number().nullable(),
-              amendment_reason: z.string().nullable(),
-              approved_at: z.coerce.date().nullable(),
-              superseded_at: z.coerce.date().nullable(),
-            }),
-          );
+          const chainRows = await loadAmendmentChain(tx, {
+            jobId: id,
+            organizationId: memberData.organizationId,
+          });
 
           return chainRows.map((row) => ({
             id: row.id,
-            jobId: row.job_id,
+            jobId: row.jobId,
             status: row.status,
-            amendmentNumber: row.amendment_number,
-            amendmentReason: row.amendment_reason,
-            approvedAt: row.approved_at,
-            supersededAt: row.superseded_at,
+            amendmentNumber: row.amendmentNumber,
+            amendmentReason: row.amendmentReason,
+            approvedAt: row.approvedAt,
+            supersededAt: row.supersededAt,
             isCurrent: row.id === job.id,
           }));
         },
