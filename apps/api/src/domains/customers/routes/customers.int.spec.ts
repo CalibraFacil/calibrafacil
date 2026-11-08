@@ -244,7 +244,6 @@ describe("customersRouter — real DB + real middleware", () => {
     // Tenant-scoped: the returned record belongs to the calling org
     expect(updated.labOrganizationId).toBe(org.orgId);
 
-    // Verify the change was persisted to the DB
     const [dbRow] = await db
       .select({ name: customer.name })
       .from(customer)
@@ -333,7 +332,6 @@ describe("customersRouter — real DB + real middleware", () => {
     });
     expect(ownRes.status).toBe(200);
 
-    // Verify own customer is gone from the DB
     const [gone] = await db
       .select({ id: customer.id })
       .from(customer)

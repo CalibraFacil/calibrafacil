@@ -8,7 +8,7 @@
  *
  * The DB dedup ledger and the suppression helper are mocked; the REAL signature
  * lib runs end-to-end through the handler (the crypto itself is pinned to an
- * independent oracle in lib/resend-webhook.spec.ts).
+ * independent oracle in domains/notifications/resend-webhook.spec.ts).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHmac } from "node:crypto";

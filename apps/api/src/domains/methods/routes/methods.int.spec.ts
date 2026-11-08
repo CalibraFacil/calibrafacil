@@ -76,12 +76,9 @@ const JSON_HEADERS = { "content-type": "application/json" };
  * The engine accepts this and preview scenarios pass trivially (no errors).
  *
  * `unit` and `defaultValue` are spelled out here only to keep the fixture
- * realistic. They used to be mandatory: `methodInputToDefinitionInput` writes
- * absent optional fields as an explicit `undefined`
- * (`unit: typeof record.unit === "string" ? record.unit : undefined`), and
- * `assertSafeUnknown` rejected any key holding `undefined`, so a fixture without
- * them 500'd. `assertSafeUnknown` now treats such a key as absent — the same as
- * the identical payload arriving as JSON.
+ * realistic: `methodInputToDefinitionInput` writes absent optional fields as an
+ * explicit `undefined`, and `assertSafeUnknown` treats such a key as absent —
+ * the same as the identical payload arriving as JSON.
  */
 const MINIMAL_DATA_FIELDS = [
   {
@@ -100,10 +97,8 @@ const MINIMAL_DATA_FIELDS = [
  *
  * SEED NOTES:
  * - description: "" (not null) and a seeded assetTypeId keep these rows close to
- *   real ones. Both used to be load-bearing: the draft mappers map null→undefined
- *   and `assertSafeUnknown` rejected keys holding `undefined`, so a null
- *   description or assetTypeId 500'd on every compiling transition. That is fixed
- *   in `packages/method-definition/src/safety.ts`.
+ *   real ones (the draft mappers map null→undefined; `assertSafeUnknown` in
+ *   `packages/method-definition/src/safety.ts` treats such a key as absent).
  */
 async function seedMethod(params: {
   orgId: string;
@@ -190,10 +185,8 @@ async function seedExtraMember(params: {
  * Seed a minimal asset type row and return its id.
  *
  * Linking a method to a real asset type makes `methodRecordToDraft` emit
- * assetTypeId as a string ("1"). This used to be required for any test reaching
- * quality-approve compilation, because a null assetTypeId mapped to `undefined`
- * and `assertSafeUnknown` rejected it with
- * "draft.assetTypeId has unsupported type undefined" — no longer the case.
+ * assetTypeId as a string ("1"), as it is for any real method that reaches
+ * quality-approve compilation.
  */
 async function seedAssetType(): Promise<number> {
   const [row] = await db

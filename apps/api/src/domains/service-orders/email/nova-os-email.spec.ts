@@ -78,7 +78,7 @@ function makeInput(
 // REQ-SOEMAIL-011 (dispatch wiring): the helper passes the required fields to
 // the template. The template's ACTUAL field rendering is proven by a real-HTML
 // render test co-located with the template in
-// packages/email/emails/nova-os-email.spec.ts (tautology guard, mirrors A's REQ-006).
+// packages/email/emails/service-order-created-email.spec.ts (tautology guard, mirrors A's REQ-006).
 // ---------------------------------------------------------------------------
 
 describe("REQ-SOEMAIL-011: nova OS email sent on service order creation", () => {

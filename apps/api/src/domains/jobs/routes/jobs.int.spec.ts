@@ -389,7 +389,6 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
     expect(approveBody.data.status).toBe("GENERATING_PDF");
     expect(approveBody.data.approvedBy).toBe(approverUserId);
 
-    // Verify DB state
     const [approvedRow] = await db
       .select({
         status: calibrationJob.status,

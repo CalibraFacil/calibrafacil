@@ -12,7 +12,7 @@
  * Strategy: test dispatchOrcamentoRecusadoEmail in isolation, mocking both
  * sendServiceOrderCustomerEmail and getLabEmailBrand. The template's ACTUAL
  * field rendering is proven by the real-HTML render test co-located in
- * packages/email/emails/orcamento-recusado-email.spec.ts.
+ * packages/email/emails/quote-rejected-email.spec.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
