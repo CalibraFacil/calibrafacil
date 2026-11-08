@@ -1,7 +1,8 @@
-import { orgDb } from "../../../lib/org-db";
+import { conflict } from "../../../lib/domain-errors";
 import { HTTPException } from "hono/http-exception";
 import { type IntegrationSyncTarget } from "@calibra-facil/shared";
-import { getIntegrationRecord, type IntegrationsEnv } from "./index";
+import { requireLabContaAzulIntegration } from "./integration-access";
+import type { IntegrationsEnv } from "./integrations-env";
 import { type ContaAzulOAuthEnv } from "./conta-azul-oauth";
 
 const GENERIC_HTTP_SYNC_TARGETS = new Set<IntegrationSyncTarget>([
@@ -27,20 +28,16 @@ export async function assertActiveContaAzulIntegration(params: {
   organizationId: string;
   integrationId: string;
 }) {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
 
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new HTTPException(404, {
-      message: "Integração Conta Azul não encontrada",
-    });
-  }
-
   if (record.integration.status !== "ACTIVE") {
-    throw new HTTPException(409, {
-      message: "Integração Conta Azul precisa estar ativa para esta operação",
-    });
+    throw conflict(
+      "integration_inactive",
+      "Integração Conta Azul precisa estar ativa para esta operação",
+    );
   }
 }
 

@@ -733,10 +733,17 @@ export class ContaAzulClient {
     this.onUnauthorized = options.onUnauthorized;
   }
 
-  async request<T>(
+  /**
+   * The one request loop of the client: wait for the rate-limit slot, send,
+   * refresh the token once on a 401, retry a 429/5xx up to `maxRetries` times
+   * (the server's `Retry-After`, else a linear backoff), turn any other failure
+   * into a `ContaAzulApiError`, and read a success with `read`.
+   */
+  private async execute<T>(
     method: string,
     path: string,
-    options: ContaAzulRequestOptions = {},
+    options: ContaAzulRequestOptions,
+    read: (response: Response) => T | Promise<T>,
   ): Promise<T> {
     let retryCount = 0;
     let refreshedAfterUnauthorized = false;
@@ -780,164 +787,45 @@ export class ContaAzulClient {
         });
       }
 
-      return readSuccessResponse<T>(response);
+      return read(response);
     }
   }
 
-  async requestBinary(
+  request<T>(
+    method: string,
+    path: string,
+    options: ContaAzulRequestOptions = {},
+  ): Promise<T> {
+    return this.execute(method, path, options, (response) =>
+      readSuccessResponse<T>(response),
+    );
+  }
+
+  requestBinary(
     method: string,
     path: string,
     options: ContaAzulRequestOptions = {},
   ): Promise<ContaAzulBinaryResponse> {
-    let retryCount = 0;
-    let refreshedAfterUnauthorized = false;
-
-    while (true) {
-      await waitForRateLimit(this.rateLimitKey, this.minRequestIntervalMs);
-      const response = await this.fetchImpl(
-        this.buildUrl(path, options.query),
-        this.buildRequestInit(method, options.json, options.accept),
-      );
-
-      if (
-        response.status === 401 &&
-        this.onUnauthorized &&
-        !refreshedAfterUnauthorized
-      ) {
-        const refreshedToken = await this.onUnauthorized();
-        if (refreshedToken?.trim()) {
-          this.accessToken = refreshedToken.trim();
-          refreshedAfterUnauthorized = true;
-          continue;
-        }
-      }
-
-      if (isRetryableStatus(response.status) && retryCount < this.maxRetries) {
-        const retryAfterMs = parseRetryAfterMs(
-          response.headers.get("retry-after"),
-        );
-        await wait(retryAfterMs ?? this.retryDelayMs * (retryCount + 1));
-        retryCount += 1;
-        continue;
-      }
-
-      if (!response.ok) {
-        const body = await readResponseBody(response);
-        throw new ContaAzulApiError({
-          status: response.status,
-          code: extractErrorCode(body, "CONTA_AZUL_API_ERROR"),
-          message: extractErrorMessage(body, response.status),
-          details: sanitizeErrorDetails(body),
-        });
-      }
-
-      return {
-        body: await response.arrayBuffer(),
-        contentType: response.headers.get("content-type"),
-      };
-    }
+    return this.execute(method, path, options, async (response) => ({
+      body: await response.arrayBuffer(),
+      contentType: response.headers.get("content-type"),
+    }));
   }
 
-  async requestText(
+  requestText(
     method: string,
     path: string,
     options: ContaAzulRequestOptions = {},
   ): Promise<string> {
-    let retryCount = 0;
-    let refreshedAfterUnauthorized = false;
-
-    while (true) {
-      await waitForRateLimit(this.rateLimitKey, this.minRequestIntervalMs);
-      const response = await this.fetchImpl(
-        this.buildUrl(path, options.query),
-        this.buildRequestInit(method, options.json, options.accept),
-      );
-
-      if (
-        response.status === 401 &&
-        this.onUnauthorized &&
-        !refreshedAfterUnauthorized
-      ) {
-        const refreshedToken = await this.onUnauthorized();
-        if (refreshedToken?.trim()) {
-          this.accessToken = refreshedToken.trim();
-          refreshedAfterUnauthorized = true;
-          continue;
-        }
-      }
-
-      if (isRetryableStatus(response.status) && retryCount < this.maxRetries) {
-        const retryAfterMs = parseRetryAfterMs(
-          response.headers.get("retry-after"),
-        );
-        await wait(retryAfterMs ?? this.retryDelayMs * (retryCount + 1));
-        retryCount += 1;
-        continue;
-      }
-
-      if (!response.ok) {
-        const body = await readResponseBody(response);
-        throw new ContaAzulApiError({
-          status: response.status,
-          code: extractErrorCode(body, "CONTA_AZUL_API_ERROR"),
-          message: extractErrorMessage(body, response.status),
-          details: sanitizeErrorDetails(body),
-        });
-      }
-
-      return readSuccessTextResponse(response);
-    }
+    return this.execute(method, path, options, readSuccessTextResponse);
   }
 
-  async requestNoContent(
+  requestNoContent(
     method: string,
     path: string,
     options: ContaAzulRequestOptions = {},
   ): Promise<null> {
-    let retryCount = 0;
-    let refreshedAfterUnauthorized = false;
-
-    while (true) {
-      await waitForRateLimit(this.rateLimitKey, this.minRequestIntervalMs);
-      const response = await this.fetchImpl(
-        this.buildUrl(path, options.query),
-        this.buildRequestInit(method, options.json, options.accept),
-      );
-
-      if (
-        response.status === 401 &&
-        this.onUnauthorized &&
-        !refreshedAfterUnauthorized
-      ) {
-        const refreshedToken = await this.onUnauthorized();
-        if (refreshedToken?.trim()) {
-          this.accessToken = refreshedToken.trim();
-          refreshedAfterUnauthorized = true;
-          continue;
-        }
-      }
-
-      if (isRetryableStatus(response.status) && retryCount < this.maxRetries) {
-        const retryAfterMs = parseRetryAfterMs(
-          response.headers.get("retry-after"),
-        );
-        await wait(retryAfterMs ?? this.retryDelayMs * (retryCount + 1));
-        retryCount += 1;
-        continue;
-      }
-
-      if (!response.ok) {
-        const body = await readResponseBody(response);
-        throw new ContaAzulApiError({
-          status: response.status,
-          code: extractErrorCode(body, "CONTA_AZUL_API_ERROR"),
-          message: extractErrorMessage(body, response.status),
-          details: sanitizeErrorDetails(body),
-        });
-      }
-
-      return readSuccessNoContentResponse(response);
-    }
+    return this.execute(method, path, options, readSuccessNoContentResponse);
   }
 
   getPessoa<T = unknown>(id: string) {

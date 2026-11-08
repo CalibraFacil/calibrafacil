@@ -71,7 +71,8 @@ export type ContaAzulPollDefinition = {
   intervalMs: number;
   disabledMessage: string;
   failedMessage: string;
-  completedEvent: string;
+  /** The audit/event name of the poll: `<prefix>` (manual run), `<prefix>.completed`, `<prefix>.failed`. */
+  eventPrefix: string;
 };
 
 export type ContaAzulScheduleRow = {

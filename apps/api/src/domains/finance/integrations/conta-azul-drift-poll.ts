@@ -8,13 +8,14 @@ import {
 } from "@calibra-facil/shared";
 import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "./integrations-env";
-import { getIntegrationRecord, writeIntegrationEvent } from "./records";
+import { writeIntegrationEvent } from "./records";
 import {
   getIntegrationCursor,
   upsertIntegrationCursor,
 } from "./conta-azul-schedule-state";
-import { CONTA_AZUL_DRIFT_CURSOR_TYPE } from "./constants";
+import { CONTA_AZUL_DRIFT_CURSOR_TYPE, contaAzulPollEvents } from "./constants";
 import { createContaAzulAdapterForRecord } from "./conta-azul-auth";
+import { requireLabContaAzulIntegration } from "./integration-access";
 
 export async function pollContaAzulRemoteDrift(params: {
   integrationId: string;
@@ -22,13 +23,10 @@ export async function pollContaAzulRemoteDrift(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
-
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
 
   const config = normalizeContaAzulConnectionConfig(record.connection.config);
   if (!config.enabledTargets.driftChecks) {
@@ -104,7 +102,7 @@ export async function pollContaAzulRemoteDrift(params: {
         integrationId: params.integrationId,
         organizationId: params.organizationId,
         level: result.warnings.length > 0 ? "warning" : "info",
-        event: "integration.conta_azul.drift_poll.completed",
+        event: contaAzulPollEvents("driftChecks").completed,
         message: "Verificação de drift da Conta Azul concluída",
         details: {
           processedCount: result.processedCount,

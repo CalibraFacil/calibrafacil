@@ -29,16 +29,20 @@ import {
 } from "./conta-azul-reconciliation";
 import { mapContaAzulInstallmentStatus } from "./conta-azul-mappers";
 import type { IntegrationsEnv } from "./integrations-env";
-import { getIntegrationRecord, writeIntegrationEvent } from "./records";
+import { writeIntegrationEvent } from "./records";
 import {
   getIntegrationCursor,
   readCursorStateText,
   upsertIntegrationCursor,
 } from "./conta-azul-schedule-state";
-import { CONTA_AZUL_RECEIVABLES_CURSOR_TYPE } from "./constants";
+import {
+  CONTA_AZUL_RECEIVABLES_CURSOR_TYPE,
+  contaAzulPollEvents,
+} from "./constants";
 import { formatContaAzulDateTime, parseRemoteDate } from "./conta-azul-due";
 import { createContaAzulClientForRecord } from "./conta-azul-auth";
 import { getExistingLink, upsertLink } from "./sync-state";
+import { requireLabContaAzulIntegration } from "./integration-access";
 
 async function getDocumentStatusAfterInstallmentUpdate(
   o: OrgDb,
@@ -148,13 +152,10 @@ export async function pollContaAzulBillingStatus(params: {
   limit?: number;
   now?: Date;
 }): Promise<RemoteStatusPollResult> {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
-
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
 
   const config = normalizeContaAzulConnectionConfig(record.connection.config);
   if (!config.enabledTargets.paymentStatusPolling) {
@@ -497,7 +498,7 @@ export async function pollContaAzulBillingStatus(params: {
         integrationId: params.integrationId,
         organizationId: params.organizationId,
         level: warnings.length > 0 ? "warning" : "info",
-        event: "integration.conta_azul.payment_poll.completed",
+        event: contaAzulPollEvents("paymentStatusPolling").completed,
         message: "Polling de pagamentos da Conta Azul concluído",
         details: {
           processedCount: items.length,
