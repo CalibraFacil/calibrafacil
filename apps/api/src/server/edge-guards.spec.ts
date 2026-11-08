@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyBodyLimit } from "./body-limit";
 import { applyOriginGuard } from "./origin-guard";
-import { applyRateLimit, FixedWindowLimiter } from "./rate-limit";
+import {
+  applyRateLimit,
+  FixedWindowLimiter,
+  VerifiedCredentials,
+} from "./rate-limit";
 import type { Env } from "./env";
 
 const ENV = {
@@ -135,13 +139,59 @@ describe("rate limit (roadmap 2 D1)", () => {
     vi.unstubAllEnvs();
   });
 
-  it("answers 429 with Retry-After once a caller spends the window, per caller", async () => {
-    const app = appWith(applyRateLimit);
+  // The authentication middleware stand-in: a cookie or key whose value starts
+  // with "valid" is accepted and sets what the real middleware sets
+  // (`session`, `apiKey`); anything else is a stranger's text.
+  function appWithAuthentication() {
+    const app = new Hono<{ Bindings: Env }>();
+    applyRateLimit(app);
+    const authentication = new Hono<{
+      Variables: { session?: object; apiKey?: object };
+    }>();
+    authentication.use("*", async (c, next) => {
+      if (c.req.header("cookie")?.includes("=valid")) c.set("session", {});
+      if (c.req.header("x-api-key")?.startsWith("valid")) c.set("apiKey", {});
+      await next();
+    });
+    authentication.all("*", (c) => c.json({ ok: true }));
+    app.route("/api", authentication);
+    return app;
+  }
+
+  async function statusesOf(
+    app: Hono<{ Bindings: Env }>,
+    headers: (index: number) => Record<string, string>,
+    count: number,
+    env: Record<string, string> = ENV,
+  ) {
     const statuses: number[] = [];
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < count; index += 1) {
+      statuses.push(
+        (
+          await request(
+            app,
+            "/api/jobs",
+            { method: "GET", headers: headers(index) },
+            env,
+          )
+        ).status,
+      );
+    }
+    return statuses;
+  }
+
+  it("answers 429 with Retry-After once a caller spends the window, and counts an authenticated user apart from the others at the same address", async () => {
+    const app = appWithAuthentication();
+    const session = (user: string) => ({
+      cookie: `calibra.session_token=valid-${user}`,
+    });
+    // The first request of a credential is counted on the address (it is not
+    // proven yet); once accepted the credential has a counter of its own.
+    const statuses: number[] = [];
+    for (let index = 0; index < 5; index += 1) {
       const res = await request(app, "/api/jobs", {
         method: "GET",
-        headers: { cookie: "calibra.session_token=user-1" },
+        headers: session("1"),
       });
       statuses.push(res.status);
       if (res.status === 429) {
@@ -149,13 +199,62 @@ describe("rate limit (roadmap 2 D1)", () => {
         expect(await res.json()).toMatchObject({ code: "RATE_LIMITED" });
       }
     }
-    expect(statuses).toEqual([200, 200, 200, 429]);
+    expect(statuses).toEqual([200, 200, 200, 200, 429]);
 
     const otherUser = await request(app, "/api/jobs", {
       method: "GET",
-      headers: { cookie: "calibra.session_token=user-2" },
+      headers: session("2"),
     });
     expect(otherUser.status).toBe(200);
+  });
+
+  it("limits a caller that rotates fake API keys, Bearer tokens or session cookies by its address", async () => {
+    const app = appWithAuthentication();
+    expect(
+      await statusesOf(app, (index) => ({ "x-api-key": `fake-${index}` }), 5),
+    ).toEqual([200, 200, 200, 429, 429]);
+
+    const bearer = appWithAuthentication();
+    expect(
+      await statusesOf(
+        bearer,
+        (index) => ({ authorization: `Bearer fake-${index}` }),
+        5,
+      ),
+    ).toEqual([200, 200, 200, 429, 429]);
+
+    const cookies = appWithAuthentication();
+    expect(
+      await statusesOf(
+        cookies,
+        (index) => ({ cookie: `calibra.session_token=fake-${index}` }),
+        5,
+      ),
+    ).toEqual([200, 200, 200, 429, 429]);
+
+    // Another address still has its own window.
+    expect(
+      await statusesOf(
+        app,
+        (index) => ({ "x-api-key": `fake-other-${index}` }),
+        1,
+        { ...ENV, REMOTE_ADDRESS: "203.0.113.77" },
+      ),
+    ).toEqual([200]);
+  });
+
+  it("does not let a valid session vouch for a fake API key it travels with", async () => {
+    const app = appWithAuthentication();
+    expect(
+      await statusesOf(
+        app,
+        (index) => ({
+          cookie: "calibra.session_token=valid-user",
+          "x-api-key": `fake-${index}`,
+        }),
+        5,
+      ),
+    ).toEqual([200, 200, 200, 429, 429]);
   });
 
   it("holds the unauthenticated endpoints to their stricter limit, per client address", async () => {
@@ -174,6 +273,20 @@ describe("rate limit (roadmap 2 D1)", () => {
       { ...ENV, REMOTE_ADDRESS: "203.0.113.10" },
     );
     expect(otherAddress.status).toBe(200);
+  });
+
+  it("remembers a verified credential for a few minutes and no more than its bound", () => {
+    const verified = new VerifiedCredentials();
+    verified.add("key:a", 0);
+    expect(verified.has("key:a", 4 * 60_000)).toBe(true);
+    expect(verified.has("key:a", 6 * 60_000)).toBe(false);
+    expect(verified.has("key:never", 0)).toBe(false);
+
+    for (let index = 0; index < 10_001; index += 1) {
+      verified.add(`key:${index}`, 0);
+    }
+    expect(verified.has("key:0", 1)).toBe(false);
+    expect(verified.has("key:10000", 1)).toBe(true);
   });
 
   it("a new window starts after a minute", () => {

@@ -308,8 +308,9 @@ The API edge and Docker Compose changes below (D1, G1, G3) are part of 0.4.0 too
   address is used by the audit trail's IP, the rate limits and the approval-code throttle.
 - **Rate limits.** `API_RATE_LIMIT_PER_MINUTE` (default 600 per signed-in user, API key or
   address) and `API_PUBLIC_RATE_LIMIT_PER_MINUTE` (default 60 per address on verification, magic
-  links, sign-up and access codes), answered 429 with `Retry-After`. Each API replica counts on
-  its own.
+  links, sign-up and access codes), answered 429 with `Retry-After`. A session or API key has a
+  counter of its own only after the API accepted it once; until then (and for any value the API
+  rejects) the request counts against the client address. Each API replica counts on its own.
 - **Body size.** Request bodies above `API_MAX_BODY_BYTES` (default 25 MiB) are answered 413.
 
 **Docker Compose hardening (roadmap 2, G1 and G3).** Nothing is required: `docker compose pull` and

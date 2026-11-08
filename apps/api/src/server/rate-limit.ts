@@ -7,8 +7,12 @@ import type { Env } from "./env";
  * Request rate limits: one fixed one-minute window per
  * caller, answered 429 with `Retry-After` once spent.
  *
- * The caller is, in order: the API key of a public API request, the session
- * cookie of a signed-in browser, else the client address (lib/client-ip.ts). The
+ * The caller is the client address (lib/client-ip.ts) until the request has
+ * proved a credential: an API key or session cookie gets a counter of its own
+ * only once an earlier request carrying it was accepted by the authentication
+ * middleware (`VerifiedCredentials`). A credential the limiter merely finds in a
+ * header or cookie is attacker-chosen text: keying on it would let a caller who
+ * sends a different fake value each time escape every counter. The
  * unauthenticated endpoints (certificate verification, magic links, sign-up, the
  * out-of-tolerance acknowledgement, service-order access codes) have a stricter
  * limit of their own, per client address.
@@ -20,8 +24,12 @@ import type { Env } from "./env";
  */
 export function applyRateLimit(app: Hono<{ Bindings: Env }>) {
   const limiter = new FixedWindowLimiter();
+  const verified = new VerifiedCredentials();
   app.use("/api/*", async (c, next) => {
-    const decision = limiter.hit(limitKeyOf(c), Date.now());
+    const credential = credentialOf(c);
+    const proven =
+      credential && verified.has(credential.id, Date.now()) ? credential : null;
+    const decision = limiter.hit(limitKeyOf(c, proven), Date.now());
     if (decision.limited) {
       c.header("Retry-After", String(decision.retryAfterSeconds));
       return c.json(
@@ -34,6 +42,9 @@ export function applyRateLimit(app: Hono<{ Bindings: Env }>) {
       );
     }
     await next();
+    if (credential && wasAuthenticatedBy(c, credential.kind)) {
+      verified.add(credential.id, Date.now());
+    }
   });
 }
 
@@ -50,7 +61,10 @@ const PUBLIC_PREFIXES = [
 
 type LimitKey = { key: string; limit: number } | null;
 
-function limitKeyOf(c: Context<{ Bindings: Env }>): LimitKey {
+function limitKeyOf(
+  c: Context<{ Bindings: Env }>,
+  proven: Credential | null,
+): LimitKey {
   const { pathname } = new URL(c.req.url);
   if (pathname === "/api/health") return null;
   const config = readRuntimeConfig();
@@ -63,23 +77,40 @@ function limitKeyOf(c: Context<{ Bindings: Env }>): LimitKey {
   }
   if (config.rateLimitPerMinute === 0) return null;
 
-  const apiKey =
-    c.req.header("x-api-key") ?? bearerTokenOf(c.req.header("authorization"));
-  if (apiKey) {
-    return {
-      key: `key:${fingerprint(apiKey)}`,
-      limit: config.rateLimitPerMinute,
-    };
-  }
-  const session = sessionCookieOf(c.req.header("cookie"));
-  if (session) {
-    return {
-      key: `session:${fingerprint(session)}`,
-      limit: config.rateLimitPerMinute,
-    };
-  }
+  if (proven) return { key: proven.id, limit: config.rateLimitPerMinute };
   const ip = clientIp(c);
   return ip ? { key: `ip:${ip}`, limit: config.rateLimitPerMinute } : null;
+}
+
+type Credential = { kind: "key" | "session"; id: string };
+
+/** The credential a request presents (not yet believed): its API key, else its session cookie. */
+function credentialOf(c: Context<{ Bindings: Env }>): Credential | null {
+  const apiKey =
+    c.req.header("x-api-key") ?? bearerTokenOf(c.req.header("authorization"));
+  if (apiKey) return { kind: "key", id: `key:${fingerprint(apiKey)}` };
+  const session = sessionCookieOf(c.req.header("cookie"));
+  if (session) {
+    return { kind: "session", id: `session:${fingerprint(session)}` };
+  }
+  return null;
+}
+
+/**
+ * Whether the authentication middleware accepted the request, by the same kind
+ * of credential the limiter read: a request authenticated by its session says
+ * nothing about a fake API key it also carried.
+ */
+function wasAuthenticatedBy(
+  c: Context<{ Bindings: Env }>,
+  kind: Credential["kind"],
+): boolean {
+  const variables = c.var;
+  if (kind === "key") return Reflect.get(variables, "apiKey") != null;
+  return (
+    Reflect.get(variables, "apiKey") == null &&
+    Reflect.get(variables, "session") != null
+  );
 }
 
 function bearerTokenOf(header: string | undefined): string | null {
@@ -143,6 +174,37 @@ export class FixedWindowLimiter {
     if (this.windows.size < 10_000) return;
     for (const [key, window] of this.windows) {
       if (now - window.start >= WINDOW_MS) this.windows.delete(key);
+    }
+  }
+}
+
+const VERIFIED_TTL_MS = 5 * 60_000;
+const VERIFIED_MAX = 10_000;
+
+/**
+ * Fingerprints of credentials the authentication middleware accepted, for a few
+ * minutes. Bounded: the oldest entry goes first once the map is full, so a flood
+ * of valid credentials cannot grow it either.
+ */
+export class VerifiedCredentials {
+  private readonly expiry = new Map<string, number>();
+
+  has(id: string, now: number): boolean {
+    const expiresAt = this.expiry.get(id);
+    if (expiresAt === undefined) return false;
+    if (expiresAt <= now) {
+      this.expiry.delete(id);
+      return false;
+    }
+    return true;
+  }
+
+  add(id: string, now: number) {
+    this.expiry.delete(id);
+    this.expiry.set(id, now + VERIFIED_TTL_MS);
+    if (this.expiry.size > VERIFIED_MAX) {
+      const oldest = this.expiry.keys().next();
+      if (!oldest.done) this.expiry.delete(oldest.value);
     }
   }
 }
