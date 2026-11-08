@@ -56,6 +56,7 @@ import {
   triggerAutomaticSendForMilestone,
 } from "../../finance";
 import { orgDb } from "../../../lib/org-db";
+import { reportServerError } from "../../../lib/observability";
 import { orgTransactionWithExecutor } from "../../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../../lib/units";
 
@@ -722,7 +723,7 @@ export async function approveJob(
   // approval. In `queue` mode `staged` is set for every one and nothing is left.
   await dispatchUnstagedEffects(effects);
 
-  runCloudApprovalSideEffects({
+  await runCloudApprovalSideEffects({
     existing,
     approverId,
     organizationId: memberData.organizationId,
@@ -870,66 +871,83 @@ async function dispatchUnstagedEffects(
 }
 
 /**
- * Post-commit, fire-and-forget financial step of a cloud approval. Never
- * blocks or fails the approval response. (The notifications and the asset
- * records are not here: they are written / staged in the approval transaction.)
+ * Post-commit financial step of a cloud approval: the automatic ERP send of
+ * every service order linked to the job. It is awaited (never a floating
+ * promise: a rejection nobody observes would vanish) and never throws, so a
+ * failure is reported through the redacting reporter and the approval stands;
+ * the engine writes one `automatic_send_audit_log` row per attempt, and an
+ * order that was not sent stays visible in billing readiness for the manual
+ * send. (The notifications and the asset records are not here: they are
+ * written / staged in the approval transaction.)
  */
-function runCloudApprovalSideEffects(params: {
+async function runCloudApprovalSideEffects(params: {
   existing: JobRow;
   approverId: string;
   organizationId: string;
   sendServiceOrdersToFinance: ApprovalCompletion["sendServiceOrdersToFinance"];
-}) {
+}): Promise<void> {
   const { existing, approverId, organizationId } = params;
   const jobId = existing.id;
 
-  // Fire automatic-send for every SO linked
-  // to this job. Fire-and-forget — never block the approval response
-  // on the financial-send pathway. Engine writes an audit row per
-  // call regardless of outcome.
-  void (async () => {
+  let linkedSoIds: number[];
+  try {
+    linkedSoIds = await orgDb(organizationId).transaction((o) =>
+      findServiceOrdersForCalibrationJob(jobId, organizationId, o),
+    );
+  } catch (error) {
+    reportServerError(error, {
+      surface: "approve-job",
+      tags: { step: "automatic-send-lookup", jobId: String(jobId) },
+    });
+    return;
+  }
+
+  // One order failing (its audit row could not be written) never stops the others.
+  for (const serviceOrderId of linkedSoIds) {
     try {
-      const linkedSoIds = await orgDb(organizationId).transaction((o) =>
-        findServiceOrdersForCalibrationJob(jobId, organizationId, o),
-      );
-      for (const serviceOrderId of linkedSoIds) {
-        await triggerAutomaticSendForMilestone({
-          event: {
-            event: "certificate_approved",
-            serviceOrderId,
-            organizationId,
-          },
-          actorUserId: approverId,
-          invoker: async (invokerParams) => {
-            try {
-              const results = await params.sendServiceOrdersToFinance({
-                organizationId: invokerParams.organizationId,
-                serviceOrderIds: [invokerParams.serviceOrderId],
-                actorUserId: invokerParams.actorUserId,
-              });
-              const first = results[0];
-              if (!first) {
-                return { ok: false, reason: "no_result" };
-              }
-              return {
-                ok: first.ok,
-                summary: {
-                  ok: first.ok,
-                  billingDocumentId: first.billingDocumentId ?? null,
-                },
-                reason: first.ok ? undefined : (first.error ?? "send_failed"),
-              };
-            } catch (error) {
-              return {
-                ok: false,
-                reason: error instanceof Error ? error.message : "send_threw",
-              };
+      await triggerAutomaticSendForMilestone({
+        event: {
+          event: "certificate_approved",
+          serviceOrderId,
+          organizationId,
+        },
+        actorUserId: approverId,
+        invoker: async (invokerParams) => {
+          try {
+            const results = await params.sendServiceOrdersToFinance({
+              organizationId: invokerParams.organizationId,
+              serviceOrderIds: [invokerParams.serviceOrderId],
+              actorUserId: invokerParams.actorUserId,
+            });
+            const first = results[0];
+            if (!first) {
+              return { ok: false, reason: "no_result" };
             }
-          },
-        });
-      }
+            return {
+              ok: first.ok,
+              summary: {
+                ok: first.ok,
+                billingDocumentId: first.billingDocumentId ?? null,
+              },
+              reason: first.ok ? undefined : (first.error ?? "send_failed"),
+            };
+          } catch (error) {
+            return {
+              ok: false,
+              reason: error instanceof Error ? error.message : "send_threw",
+            };
+          }
+        },
+      });
     } catch (error) {
-      console.error("[Jobs] Automatic-send wire-up failed:", error);
+      reportServerError(error, {
+        surface: "approve-job",
+        tags: {
+          step: "automatic-send",
+          jobId: String(jobId),
+          serviceOrderId: String(serviceOrderId),
+        },
+      });
     }
-  })();
+  }
 }
