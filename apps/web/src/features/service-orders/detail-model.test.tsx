@@ -51,6 +51,10 @@ describe('service order communications (#343)', () => {
     expect(communicationEventLabel('status_email:something_new')).toBe(
       'Atualização de status',
     )
+    // a status the label table lacks is named by the status vocabulary
+    expect(communicationEventLabel('status_email:opened')).toBe(
+      'Atualização de status — Aberta',
+    )
     // unknown namespaces fall back to the raw key rather than hiding the entry
     expect(communicationEventLabel('future_event:1')).toBe('future_event:1')
   })

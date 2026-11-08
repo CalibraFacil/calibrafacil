@@ -168,9 +168,6 @@ export const portalAuthClient = createBetterAuthClient({
   plugins: [magicLinkClient(), organizationPluginConfig],
 });
 
-// Keep the original 'authClient' export for backwards compatibility (uses lab auth)
-export const authClient = labAuthClient;
-
 // Lab auth exports (for apps/web)
 export const {
   signIn,
@@ -221,10 +218,10 @@ export const labPasskey = labAuthClient.passkey;
  */
 export async function hasPermission(
   permissions: Parameters<
-    typeof authClient.organization.hasPermission
+    typeof labAuthClient.organization.hasPermission
   >[0]["permissions"],
 ): Promise<boolean> {
-  const result = await authClient.organization.hasPermission({
+  const result = await labAuthClient.organization.hasPermission({
     permissions,
   });
   return result.data?.success ?? false;
@@ -239,15 +236,15 @@ export async function hasPermission(
  */
 export function checkRolePermission(
   role: Parameters<
-    typeof authClient.organization.checkRolePermission
+    typeof labAuthClient.organization.checkRolePermission
   >[0]["role"],
   permissions: NonNullable<
     Parameters<
-      typeof authClient.organization.checkRolePermission
+      typeof labAuthClient.organization.checkRolePermission
     >[0]["permissions"]
   >,
 ): boolean {
-  return authClient.organization.checkRolePermission({
+  return labAuthClient.organization.checkRolePermission({
     role,
     permissions,
   });

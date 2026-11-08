@@ -11,6 +11,7 @@ import {
   customerGroup,
 } from "@calibra-facil/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { formatAddress } from "@calibra-facil/shared/address";
 import { formatInstant } from "@calibra-facil/shared/format";
 import { inOrg, findVisitLaboratory } from "../lab-scope";
 import {
@@ -22,24 +23,11 @@ import { getUserName } from "./lookups";
 import type { CustomerAddress } from "@calibra-facil/db/schema";
 import type { NotificationRecipes } from "./types";
 
-/**
- * Formats the visit's on-site address to a single-line text string for the
- * customer email. Mirrors the API-side `formatOnsiteAddressText` used to
- * freeze the calibration location snapshot at job-creation time.
- */
+/** The on-site address as the customer e-mail prints it: absent when there is none. */
 function formatVisitAddressText(
   address: CustomerAddress | null,
 ): string | undefined {
-  if (!address) return undefined;
-  const street = [address.street, address.number].filter(Boolean).join(", ");
-  const region = [address.neighbourhood, address.city, address.state]
-    .filter(Boolean)
-    .join(" - ");
-  const text = [street, address.complement, region, address.cep]
-    .map((part) => (part ?? "").trim())
-    .filter(Boolean)
-    .join(" · ");
-  return text || undefined;
+  return formatAddress(address) || undefined;
 }
 
 function formatVisitDate(date: Date | null): string {

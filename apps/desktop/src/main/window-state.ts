@@ -18,20 +18,20 @@ import { z } from "zod";
  * the correction on a HiDPI screen.
  */
 
-export const windowBoundsSchema = z.object({
+const windowBoundsSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
   width: z.number().finite().positive(),
   height: z.number().finite().positive(),
 });
 
-export const persistedWindowStateSchema = z.object({
+const persistedWindowStateSchema = z.object({
   bounds: windowBoundsSchema.nullable().default(null),
   maximized: z.boolean().default(false),
   fullScreen: z.boolean().default(false),
 });
 
-export type WindowBounds = z.infer<typeof windowBoundsSchema>;
+type WindowBounds = z.infer<typeof windowBoundsSchema>;
 export type PersistedWindowState = z.infer<typeof persistedWindowStateSchema>;
 
 export type DisplayLike = {

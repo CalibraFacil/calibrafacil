@@ -316,7 +316,7 @@ export function list(opts: VarOptions): z.ZodType<readonly string[]> {
  * one no longer does. Setting it is a start-up error that names it, not a silent
  * no-op: an operator who still sets it believes a behaviour that is gone.
  */
-export interface RetiredVar {
+interface RetiredVar {
   readonly env: string;
   /**
    * Only this value is retired (compared case-insensitively, as the variable's

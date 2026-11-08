@@ -11,7 +11,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { authClient } from '@calibra-facil/auth/client'
+import { labAuthClient } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { calibraApi } from '@/utils/api'
 import {
@@ -141,7 +141,7 @@ export function OrganizationMembersSection({
 
     setIsInviting(true)
     try {
-      const result = await authClient.organization.inviteMember({
+      const result = await labAuthClient.organization.inviteMember({
         email: inviteEmail.trim(),
         role: inviteRole,
         organizationId: activeOrg.id,
@@ -174,7 +174,7 @@ export function OrganizationMembersSection({
 
     setIsRemoving(true)
     try {
-      const result = await authClient.organization.removeMember({
+      const result = await labAuthClient.organization.removeMember({
         memberIdOrEmail: memberToRemove.user.email,
         organizationId: activeOrg.id,
       })
@@ -223,7 +223,7 @@ export function OrganizationMembersSection({
   const handleCancelInvitation = async (invitationId: string) => {
     setCancellingInvitation(invitationId)
     try {
-      const result = await authClient.organization.cancelInvitation({
+      const result = await labAuthClient.organization.cancelInvitation({
         invitationId,
       })
       if (result.error) {

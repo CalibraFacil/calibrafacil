@@ -1,6 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { authClient, useSession } from '@calibra-facil/auth/client'
+import { labAuthClient, useSession } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { Button } from '@calibra-facil/ui/button'
 import { buttonVariants } from '@calibra-facil/ui/button-variants'
@@ -33,7 +33,7 @@ export function AcceptInvitationPage({ id }: { id: string }) {
   async function handleAccept() {
     setIsAccepting(true)
     const { error: acceptError } =
-      await authClient.organization.acceptInvitation({
+      await labAuthClient.organization.acceptInvitation({
         invitationId: id,
       })
 
@@ -55,7 +55,7 @@ export function AcceptInvitationPage({ id }: { id: string }) {
   async function handleReject() {
     setIsRejecting(true)
     const { error: rejectError } =
-      await authClient.organization.rejectInvitation({
+      await labAuthClient.organization.rejectInvitation({
         invitationId: id,
       })
 

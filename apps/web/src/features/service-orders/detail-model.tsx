@@ -30,6 +30,7 @@ import {
   isServiceOrderFinalStatus,
   SERVICE_ORDER_EVENT_TYPES,
   SERVICE_ORDER_QUOTE_STATUS,
+  SERVICE_ORDER_STATUS,
 } from '@calibra-facil/shared'
 import { SERVICE_ORDER_MACHINE } from '@calibra-facil/schemas/machines'
 import type {
@@ -371,8 +372,9 @@ export function communicationStatusBadgeVariant(
   }
 }
 
-// Labels for the status_email:* event keys — mirrors the subjects the customer
-// receives (apps/api service-order-email-drain buildSubject).
+// Short labels for the status_email:* event keys (the lab's communications list,
+// worded like the customer's e-mail). A status the e-mail package gains later is
+// named by the status vocabulary (SERVICE_ORDER_STATUS) until it is listed here.
 const COMMUNICATION_STATUS_EMAIL_LABELS: Record<string, string> = {
   repair_in_progress: 'Serviço iniciado',
   awaiting_calibration: 'Atualização do serviço — aguardando calibração',
@@ -398,7 +400,12 @@ export function communicationEventLabel(eventKey: string): string {
   }
   if (eventKey.startsWith('status_email:')) {
     const status = eventKey.slice('status_email:'.length)
-    return COMMUNICATION_STATUS_EMAIL_LABELS[status] ?? 'Atualização de status'
+    const known = COMMUNICATION_STATUS_EMAIL_LABELS[status]
+    if (known) return known
+    const vocabularyStatus = SERVICE_ORDER_STATUS.parse(status)
+    return vocabularyStatus
+      ? `Atualização de status — ${SERVICE_ORDER_STATUS.label(vocabularyStatus)}`
+      : 'Atualização de status'
   }
   return eventKey
 }

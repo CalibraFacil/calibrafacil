@@ -24,7 +24,7 @@ async function loadDashboardSession(options: {
 
   vi.doMock('@tanstack/react-router', () => ({ redirect }))
   vi.doMock('@calibra-facil/auth/client', () => ({
-    authClient: { getSession },
+    labAuthClient: { getSession },
   }))
   vi.doMock('@/runtime/desktop-auth', () => ({ hasDesktopSession }))
   vi.doMock('@/runtime/desktop', () => ({

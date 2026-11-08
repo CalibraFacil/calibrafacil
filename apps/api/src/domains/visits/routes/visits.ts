@@ -40,7 +40,7 @@ import { requireScopedVisit } from "../visit-access";
 import { isAssignableTechnician } from "../../../lib/tenant-refs";
 import { notify } from "@calibra-facil/notifications";
 import { cancelJob, createCalibrationJob, jobStatusConflict } from "../../jobs";
-import { formatOnsiteAddressText } from "../onsite-address";
+import { formatAddress } from "@calibra-facil/shared/address";
 import {
   assertAssetBelongsToVisitCustomer,
   assertGuard,
@@ -726,7 +726,7 @@ mount(
           assetId,
           serviceId,
           onsiteLocation: {
-            addressText: formatOnsiteAddressText(visit.address),
+            addressText: formatAddress(visit.address),
           },
           visitId: id,
           executor: ctx.tx,

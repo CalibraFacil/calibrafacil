@@ -11,7 +11,7 @@ import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
  * way, so the logic lives here and nowhere else.
  */
 
-export type CalibrationStatus =
+type CalibrationStatus =
   | "OVERDUE"
   | "DUE_SOON"
   | "SCHEDULED"

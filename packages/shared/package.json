@@ -16,6 +16,7 @@
     "./cnpj": "./src/cnpj.ts",
     "./mass-units": "./src/mass-units.ts",
     "./public-urls": "./src/public-urls.ts",
+    "./audit-pack": "./src/audit-pack.ts",
     "./status-vocabulary": "./src/status-vocabulary.ts",
     "./service-orders": "./src/service-orders.ts",
     "./record": "./src/record.ts",

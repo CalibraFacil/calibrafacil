@@ -18,7 +18,6 @@ import {
 } from "./pdf-render.js";
 import {
   AUDIT_PACK_EXPIRY_DAYS,
-  AUDIT_PACK_MAX_CERTIFICATES,
   AUDIT_PACK_MAX_TOTAL_BYTES,
   type AuditPackCertificateRow,
   auditPackFileName,
@@ -27,6 +26,10 @@ import {
   portalBaseUrl,
   renderAuditPackIndexHtml,
 } from "./audit-pack-support.js";
+import {
+  AUDIT_PACK_MAX_CERTIFICATES,
+  auditPackTooLargeMessage,
+} from "@calibra-facil/shared/audit-pack";
 import { bucketBinding, getStoredObject } from "./storage-helpers.js";
 import { log } from "./log";
 
@@ -176,9 +179,7 @@ export async function processAuditPackJob(
       : [];
 
     if (certificates.length > AUDIT_PACK_MAX_CERTIFICATES) {
-      throw new Error(
-        `O período selecionado tem mais de ${AUDIT_PACK_MAX_CERTIFICATES} certificados. Reduza o período e gere pacotes menores.`,
-      );
+      throw new Error(auditPackTooLargeMessage());
     }
 
     const zipEntries: Zippable = {};
