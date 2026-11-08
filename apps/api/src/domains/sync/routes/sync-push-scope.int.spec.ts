@@ -1,6 +1,6 @@
 /**
  * sync-push-scope.int.spec.ts: who may reach POST /api/sync/push at all, and under
- * which unit role (P0-2 follow-ups), against real Postgres and the real permission
+ * which unit role, against real Postgres and the real permission
  * middleware (only the Better Auth sessions, the queue and notifications are faked).
  *
  *   REQ-SYNC-RBAC-5  the unit role is the member's role in the EVENT's unit, not in the

@@ -233,7 +233,7 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // REQ-SYNC-003: RBAC — decided per event (P0-2, sync-operation-permissions.int.spec.ts):
+  // REQ-SYNC-003: RBAC — decided per event (sync-operation-permissions.int.spec.ts):
   // a member (read-only) is refused SYNC_PERMISSION_DENIED, an operator is not.
   // RED-able: dropping the per-event check would let the member's event through.
   // ───────────────────────────────────────────────────────────────────────────
@@ -286,7 +286,7 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
   // REQ-SEC-TAG-006: the desktop sync CREATE path (create_local_asset) persists
   // asset.lab_organization_id (denormalized from the device's own lab org), so a
   // desktop-created asset satisfies the per-org UNIQUE(lab_organization_id, tag).
-  // Without setting it, the NOT NULL column would reject the insert (#638 / SEC-03b).
+  // Without setting it, the NOT NULL column would reject the insert.
   // ───────────────────────────────────────────────────────────────────────────
   it("REQ-SEC-TAG-006: POST /push create_local_asset persists lab_organization_id (== the device's org)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "operator" });
@@ -352,8 +352,8 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
   // REQ-SEC-TAG-001/002 (desktop CREATE, tag uniqueness): the tag collision check is
   // scoped to the device's laboratory (the DB enforces UNIQUE(lab_organization_id, tag)).
   // Unscoped it would over-reject a tag only ANOTHER lab holds and re-expose a
-  // cross-tenant existence oracle. (The rename path, `update_local_asset`, was retired
-  // in Q69; the create path is the one a desktop still writes.)
+  // cross-tenant existence oracle. (The rename path, `update_local_asset`, is retired;
+  // the create path is the one a desktop still writes.)
   // ───────────────────────────────────────────────────────────────────────────
   async function seedTagFixture(slug: string) {
     const [type] = await db

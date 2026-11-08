@@ -22,12 +22,12 @@ import {
 import { buildSyncAttachmentObjectKey } from "./helpers";
 
 /**
- * `create_local_attachment` (roadmap P0-5). The event used to be audit-only: the
- * cloud acknowledged it whether or not the bytes ever arrived, and the desktop
- * marked the attachment synced. It is now recorded only when the blob it names was
- * uploaded and verified through the attachment endpoints
- * (domains/sync/attachment-uploads.ts), and the acknowledgement carries the object
- * key, which the desktop stores as the attachment's `remote_key`.
+ * `create_local_attachment`: recorded only when the blob it names was uploaded
+ * and verified through the attachment endpoints
+ * (domains/sync/attachment-uploads.ts), never on the event alone, so the desktop
+ * does not mark synced an attachment whose bytes never arrived. The
+ * acknowledgement carries the object key, which the desktop stores as the
+ * attachment's `remote_key`.
  */
 
 /** The fields the cloud needs; the protocol schema keeps them optional for old outboxes. */

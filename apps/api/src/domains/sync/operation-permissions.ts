@@ -11,15 +11,14 @@ import {
 } from "../../middleware/permission";
 
 /**
- * Who may push which desktop operation (roadmap P0-2).
+ * Who may push which desktop operation.
  *
- * `POST /api/sync/push` used to gate the whole request on `calibration:create`
- * and then apply every event, so a technician or operator could do offline what
- * the online routes deny them (a quote, a delivery document, a non-conformance,
- * a service order). Each operation now carries the permission of the online
- * route that does the same thing, evaluated per event against the pushing
- * member with the helper the online guard uses (`requirePermission`:
- * `getEffectivePermissionRole` + `hasPermissionLocally`).
+ * Each operation carries the permission of the online route that does the same
+ * thing (a quote, a delivery document, a non-conformance, a service order),
+ * evaluated per event against the pushing member with the helper the online
+ * guard uses (`requirePermission`: `getEffectivePermissionRole` +
+ * `hasPermissionLocally`), so a technician or operator cannot do offline what
+ * the online routes deny them.
  *
  * The permission lives in the push-operation table of the contract
  * (`SYNC_OPERATIONS`, packages/contracts/src/sync-protocol.ts), which is exhaustive

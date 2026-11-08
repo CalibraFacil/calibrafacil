@@ -3,8 +3,7 @@
  * the same calibration record rule as every other submit (REQ-P112-3).
  *
  * A job is submitted for review only with a calibration location and, for every
- * phase block not performed, a written reason. The desktop used to be exempt
- * because its offline store did not collect them. Builds that enforce the rule
+ * phase block not performed, a written reason. Builds that enforce the rule
  * offline stamp `executionPayloadVersion` on each event, so the cloud checks
  * those; an event with no stamp comes from a build that predates the rule and
  * is applied as before, so the outbox a user upgrades with is not dead-lettered.

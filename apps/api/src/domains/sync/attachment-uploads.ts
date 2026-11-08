@@ -19,7 +19,7 @@ import {
 import { type MemberData } from "../../middleware/permission";
 
 /**
- * The cloud half of the offline attachment upload leg (roadmap P0-5).
+ * The cloud half of the offline attachment upload leg.
  *
  * `init-upload` hands out a presigned PUT bound to the declared size and type;
  * `complete-upload` does not trust that: it reads the stored object back (HEAD

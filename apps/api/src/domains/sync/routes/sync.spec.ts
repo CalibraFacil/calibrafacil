@@ -166,7 +166,7 @@ vi.mock("../applied-events", () => ({
   completeDesktopSyncClaim: async () => undefined,
 }));
 
-// The aggregate version (roadmap 2 E1) is exercised against a real database in
+// The aggregate version is exercised against a real database in
 // sync-aggregate-version.int.spec.ts. Here no desktop event was applied before (version
 // 0) and the lock is a no-op, so the mocked select queue is consumed exactly as before.
 vi.mock("../aggregate-version", () => ({
@@ -547,7 +547,7 @@ describe("syncRouter", () => {
           data: { readings: [] },
         },
         remotePayload: {
-          // The aggregate version the conflict names (roadmap 2 E1).
+          // The aggregate version the conflict names.
           aggregateVersion: 0,
           id: 42,
           jobId: "CAL-2026-0042",

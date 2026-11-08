@@ -3,7 +3,7 @@ import { syncAppliedEvent } from "@calibra-facil/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 
 /**
- * The version of a desktop-synced aggregate (roadmap 2 E1).
+ * The version of a desktop-synced aggregate.
  *
  * An aggregate is what the desktop names by `entityType` + `entityId`. Its version is a
  * plain integer counted by the cloud: every desktop event the cloud applies to it produces

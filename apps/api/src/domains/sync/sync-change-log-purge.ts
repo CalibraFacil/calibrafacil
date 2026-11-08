@@ -10,7 +10,7 @@
  * Cross-tenant by design (a platform maintenance job, like records-purge), so it
  * appears in test/integration/tenant-sql-allowlist.ts: ONE statement on the system
  * path lists the laboratories that hold entries older than the window, then each
- * laboratory is purged in its own transaction that names it (P2-18j): the delete
+ * laboratory is purged in its own transaction that names it: the delete
  * and the recording of its horizon commit together, for that laboratory only.
  */
 import { withOrg, SYSTEM_ACTOR } from "../../lib/org-context";

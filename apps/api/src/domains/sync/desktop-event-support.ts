@@ -18,7 +18,7 @@ export type PushBatchState = {
   jobUpdatedAtMs: Map<number, number>;
   /**
    * The pushing device's clock minus the server's (ms), when the push carried
-   * `sentAt` and the difference exceeds CLOCK_SKEW_TOLERANCE_MS (roadmap 2 E2).
+   * `sentAt` and the difference exceeds CLOCK_SKEW_TOLERANCE_MS.
    */
   deviceClockSkewMs?: number;
 };
@@ -108,10 +108,10 @@ export function noteAppliedJobVersion(
 }
 
 // ============================================================================
-// Optimistic-concurrency guard for the blind desktop applies (REL-01 slice 2)
+// Optimistic-concurrency guard for the blind desktop applies
 // ============================================================================
 // The desktop emits `baseUpdatedAt` — the cloud row's `updatedAt` captured at
-// PULL time (slice 1). If the server row's current `updatedAt` is STRICTLY after
+// PULL time. If the server row's current `updatedAt` is STRICTLY after
 // that base, the cloud advanced since the desktop last pulled, so the desktop
 // edit was made against a stale base and a blind UPDATE would silently lose the
 // cloud change (last-write-wins). Equal timestamps = unchanged since pull = safe
@@ -159,7 +159,7 @@ export function buildStaleDesktopBaseConflict(params: {
   id: number;
   serverUpdatedAtIso: string;
   baseUpdatedAt: string;
-  // REL-01 slice 3 (REQ-REL-RES-001): the CURRENT cloud row's diff-relevant
+  // REQ-REL-RES-001: the CURRENT cloud row's diff-relevant
   // fields, so the desktop conflicts UI renders real cloud values instead of
   // "—" for every column. Read from the row already fetched under the caller's
   // tenant WHERE clause; the fixed keys below always win over these.

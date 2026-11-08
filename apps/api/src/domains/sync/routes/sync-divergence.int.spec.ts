@@ -13,8 +13,7 @@ import { executableMethodSnapshot } from "../../../../test/integration/executabl
 import { syncRouter } from "./";
 
 // Real-DB integration tests of the `baseUpdatedAt` guard on the one desktop apply that
-// still carries it, the job execution save/submit (Q69 retired the customer, instrument
-// edit and execution-notes applies it also guarded).
+// still carries it, the job execution save/submit.
 //
 // The desktop emits `baseUpdatedAt` = the cloud job's `updatedAt` captured at PULL time.
 // If the job's current `updatedAt` is STRICTLY after that base, the cloud advanced since

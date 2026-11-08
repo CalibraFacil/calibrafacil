@@ -1,5 +1,5 @@
 /**
- * sync-operation-permissions.int.spec.ts: P0-2, per-operation RBAC on the desktop push,
+ * sync-operation-permissions.int.spec.ts: per-operation RBAC on the desktop push,
  * against real Postgres and the real permission middleware (only the Better Auth
  * session, the queue and the notifications are faked).
  *
