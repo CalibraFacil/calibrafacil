@@ -22,7 +22,7 @@
 //   CONTA_AZUL_CLIENT_SECRET=... \
 //   CONTA_AZUL_TEST_REFRESH_TOKEN=... \
 //   pnpm --filter @calibra-facil/api test:run \
-//     src/lib/__tests__/conta-azul-contract.live.spec.ts
+//     src/domains/finance/integrations/__tests__/conta-azul-contract.live.spec.ts
 //
 // Its purpose is to convert the "dev-observed" undocumented endpoints
 // (/v1/protocolo/{id} and the parcela/baixa acquittance surface, which are NOT

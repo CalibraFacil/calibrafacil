@@ -1,5 +1,5 @@
 /**
- * integrations-lab-scope.int.spec.ts - P2-18h [HIGH RISK].
+ * integrations-lab-scope.int.spec.ts [HIGH RISK].
  *
  * The ERP integration routes (settings, schedule, validation, runs, events, the
  * Conta Azul disconnect, the drift queue) run every statement in

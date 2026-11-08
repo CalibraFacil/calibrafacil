@@ -231,8 +231,8 @@ async function readCashForecast(
 
   // Recurring projection: active agreements with a priced
   // monthlyRecurringCents field. The current schema doesn't carry
-  // this column yet, so the priced aggregate is the count × 0 until
-  // a later slice surfaces per-agreement pricing. Honest fallback.
+  // this column, so the priced aggregate is the count × 0 until
+  // per-agreement pricing exists. Honest fallback.
   const agreements = await o
     .select({
       status: commercialAgreement.status,

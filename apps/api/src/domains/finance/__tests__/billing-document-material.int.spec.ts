@@ -21,7 +21,7 @@ import { createBillingDocumentFromServiceOrder } from "../../service-orders/serv
 import { loadBillingDocumentExportPayload } from "../finance";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-// Real-DB integration test for Phase 2 of the estoque/inventory epic (#580):
+// Real-DB integration test for the estoque/inventory flow:
 // billing lines remember their material, and the ERP export payload turns
 // that into a resolvable catalog reference so the exported sale (Venda)
 // carries a product line — which is what makes Conta Azul decrement stock.
@@ -74,7 +74,7 @@ async function seedBillingContext(tag: string) {
       .values({
         unitId: org.unitId,
         customerId: customerRow.id,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        // Per-org tag uniqueness — derive lab org from the customer.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
         assetTypeId: type.id,
         name: `Asset ${tag}`,

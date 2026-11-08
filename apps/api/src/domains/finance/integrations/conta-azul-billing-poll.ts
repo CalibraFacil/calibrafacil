@@ -365,7 +365,7 @@ export async function pollContaAzulBillingStatus(params: {
     }
     const { localInstallment, mapped, receiptSummary } = reconciled;
 
-    // Phase 2 slice 1: recompute certificate release state for any
+    // Recompute certificate release state for any
     // calibration jobs linked (via service_order_certificate_link) to a
     // service order pointing at this billing document. Read-only with
     // respect to calibration_job.status / issued_certificate_snapshot.status.
