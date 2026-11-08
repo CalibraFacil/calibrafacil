@@ -15,15 +15,19 @@ export function createIntegrationPayloadFingerprint(
   return createHash("sha256").update(stableJson(payload)).digest("hex");
 }
 
-function getMasterKey(env: IntegrationsEnv) {
-  if (!env.INTEGRATIONS_MASTER_KEY) {
+type MasterKeyEnv = Pick<IntegrationsEnv, "INTEGRATIONS_MASTER_KEY">;
+
+/** The key every integration secret (connection tokens, OAuth app secrets) is sealed with. */
+function getMasterKey(env: MasterKeyEnv) {
+  const key = env.INTEGRATIONS_MASTER_KEY;
+  if (!key?.trim()) {
     throw new Error("INTEGRATIONS_MASTER_KEY não configurada");
   }
 
-  return env.INTEGRATIONS_MASTER_KEY;
+  return key;
 }
 
-export function encryptIntegrationSecret(secret: string, env: IntegrationsEnv) {
+export function encryptIntegrationSecret(secret: string, env: MasterKeyEnv) {
   const { encryptedPassword, iv } = encryptPassword(secret, getMasterKey(env));
   return { encryptedSecret: encryptedPassword, secretIv: iv };
 }
@@ -31,7 +35,7 @@ export function encryptIntegrationSecret(secret: string, env: IntegrationsEnv) {
 export function decryptIntegrationSecret(
   encryptedSecret: string,
   secretIv: string,
-  env: IntegrationsEnv,
+  env: MasterKeyEnv,
 ) {
   return decryptPassword(encryptedSecret, secretIv, getMasterKey(env));
 }

@@ -42,7 +42,7 @@ export const CONTA_AZUL_POLL_DEFINITIONS = [
     intervalMs: DEFAULT_CONTA_AZUL_PAYMENT_POLLING_INTERVAL_MS,
     disabledMessage: "Polling de pagamentos da Conta Azul está desativado",
     failedMessage: "Falha no polling de pagamentos da Conta Azul",
-    completedEvent: "integration.conta_azul.payment_poll.completed",
+    eventPrefix: "integration.conta_azul.payment_poll",
   },
   {
     kind: "payables",
@@ -51,7 +51,7 @@ export const CONTA_AZUL_POLL_DEFINITIONS = [
     intervalMs: DEFAULT_CONTA_AZUL_PAYMENT_POLLING_INTERVAL_MS,
     disabledMessage: "Polling de contas a pagar da Conta Azul está desativado",
     failedMessage: "Falha no polling de contas a pagar da Conta Azul",
-    completedEvent: "integration.conta_azul.payable_poll.completed",
+    eventPrefix: "integration.conta_azul.payable_poll",
   },
   {
     kind: "fiscalDocuments",
@@ -60,7 +60,7 @@ export const CONTA_AZUL_POLL_DEFINITIONS = [
     intervalMs: DEFAULT_CONTA_AZUL_FISCAL_POLLING_INTERVAL_MS,
     disabledMessage: "Sincronização fiscal da Conta Azul está desativada",
     failedMessage: "Falha no polling fiscal da Conta Azul",
-    completedEvent: "integration.conta_azul.fiscal_poll.completed",
+    eventPrefix: "integration.conta_azul.fiscal_poll",
   },
   {
     kind: "protocols",
@@ -69,7 +69,7 @@ export const CONTA_AZUL_POLL_DEFINITIONS = [
     intervalMs: DEFAULT_CONTA_AZUL_PROTOCOL_POLLING_INTERVAL_MS,
     disabledMessage: "Polling de protocolos da Conta Azul está desativado",
     failedMessage: "Falha no polling de protocolos da Conta Azul",
-    completedEvent: "integration.conta_azul.protocol_poll.completed",
+    eventPrefix: "integration.conta_azul.protocol_poll",
   },
   {
     kind: "driftChecks",
@@ -78,7 +78,7 @@ export const CONTA_AZUL_POLL_DEFINITIONS = [
     intervalMs: DEFAULT_CONTA_AZUL_DRIFT_POLLING_INTERVAL_MS,
     disabledMessage: "Verificação de drift da Conta Azul está desativada",
     failedMessage: "Falha na verificação de drift da Conta Azul",
-    completedEvent: "integration.conta_azul.drift_poll.completed",
+    eventPrefix: "integration.conta_azul.drift_poll",
   },
   {
     kind: "productStock",
@@ -87,6 +87,24 @@ export const CONTA_AZUL_POLL_DEFINITIONS = [
     intervalMs: DEFAULT_CONTA_AZUL_PRODUCT_STOCK_POLLING_INTERVAL_MS,
     disabledMessage: "Sincronização de produtos da Conta Azul está desativada",
     failedMessage: "Falha no polling de estoque de produtos da Conta Azul",
-    completedEvent: "integration.conta_azul.product_stock_poll.completed",
+    eventPrefix: "integration.conta_azul.product_stock_poll",
   },
 ] as const satisfies readonly ContaAzulPollDefinition[];
+
+type PollKind = (typeof CONTA_AZUL_POLL_DEFINITIONS)[number]["kind"];
+
+/**
+ * The names a Conta Azul poll writes under, spelled once: the manual run's audit
+ * action, the event of a finished poll and the event of a failed one.
+ */
+export function contaAzulPollEvents(kind: PollKind) {
+  const definition = CONTA_AZUL_POLL_DEFINITIONS.find(
+    (candidate) => candidate.kind === kind,
+  );
+  if (!definition) throw new Error(`Poll Conta Azul inválido: ${kind}`);
+  return {
+    audit: definition.eventPrefix,
+    completed: `${definition.eventPrefix}.completed`,
+    failed: `${definition.eventPrefix}.failed`,
+  };
+}

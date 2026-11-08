@@ -44,6 +44,10 @@ vi.mock("../../../../lib/background-jobs", () => ({
   enqueueBackgroundJob: mocks.enqueueBackgroundJob,
 }));
 
+vi.mock("../../integrations/records", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../integrations/records")>()),
+  getIntegrationRecord: mocks.getIntegrationRecord,
+}));
 vi.mock("../../integrations", () => ({
   buildEmptyRemoteDocumentSummary: vi.fn(() => ({
     totalCount: 0,

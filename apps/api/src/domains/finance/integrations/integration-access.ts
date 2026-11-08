@@ -1,6 +1,7 @@
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { orgDb } from "../../../lib/org-db";
-import { getIntegrationRecord } from "./";
 import { notFound } from "../../../lib/domain-errors";
+import { getIntegrationRecord } from "./records";
 
 /**
  * The laboratory's integration with its connection. Throws 404 when none of
@@ -20,16 +21,21 @@ export async function requireLabIntegration(
 }
 
 /**
- * The laboratory's Conta Azul integration with its connection. Throws 404 when
- * the id names no integration of theirs or one of another provider.
+ * The laboratory's Conta Azul integration with its connection: the one place
+ * that refuses an id that names no integration of theirs, or one of another
+ * provider, with the one failure (404 `integration_not_found`). `executor` is
+ * the caller's org-bound handle when it is inside a transaction already.
  */
 export async function requireLabContaAzulIntegration(
   organizationId: string,
   integrationId: string,
+  executor?: OrgDb,
 ) {
-  const record = await orgDb(organizationId).transaction((o) =>
-    getIntegrationRecord(organizationId, integrationId, o),
-  );
+  const record = executor
+    ? await getIntegrationRecord(organizationId, integrationId, executor)
+    : await orgDb(organizationId).transaction((o) =>
+        getIntegrationRecord(organizationId, integrationId, o),
+      );
   if (!record || record.integration.provider !== "conta_azul") {
     throw notFound(
       "integration_not_found",

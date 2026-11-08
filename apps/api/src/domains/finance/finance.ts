@@ -11,8 +11,6 @@ import {
   customer,
   financialAuditLog,
   integrationConnection,
-  integrationEventLog,
-  integrationObjectLink,
   jobCommercialSnapshot,
   organizationIntegration,
   organizationUnit,
@@ -27,12 +25,9 @@ import {
   type BillingDocumentStatus,
   type CommercialAgreementStatus,
   DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-  applyIntegrationMappings,
   calculateFinancialDueDate,
   resolveIssuedDueDate,
   getBillingBlockerCodeLabel,
-  normalizeContaAzulConnectionConfig,
-  normalizeGenericFinancialErpConfig,
   isCalendarDatePast,
   isServiceOrderBillable,
   type FinancialStatus,
@@ -52,22 +47,14 @@ import {
   sql,
 } from "drizzle-orm";
 import { BILLING_DOCUMENT_MACHINE } from "@calibra-facil/schemas/machines";
-import {
-  REMOTE_API_OUTBOUND_OPTIONS,
-  createOutboundFetch,
-} from "@calibra-facil/shared/safe-outbound-fetch";
 import type { IntegrationsEnv } from "./integrations/integrations-env";
 import { buildUnitScopeCondition } from "../../lib/units";
-import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
-import { createFinancialErpAdapter } from "./integrations/financial-erp-adapters";
-import {
-  buildContaAzulRefreshFailurePolicy,
-  parseContaAzulTokenBundle,
-  refreshContaAzulAccessToken,
-  serializeContaAzulTokenBundle,
-} from "./integrations/conta-azul-oauth";
-import { requireContaAzulOAuthConfig } from "./integrations/conta-azul-app";
 import { orgDb } from "../../lib/org-db";
+import {
+  getIntegrationRecord,
+  writeIntegrationEvent,
+} from "./integrations/records";
+import { pushBillingDocument } from "./integrations/billing-push";
 
 /**
  * What the finance helpers read and write through: an org-bound handle or the
@@ -342,54 +329,6 @@ function getAgreementDisplayCode(agreement: {
   return agreement.agreementCode?.trim() || `Contrato #${agreement.id}`;
 }
 
-function getIntegrationsMasterKey(env: IntegrationsEnv) {
-  if (!env.INTEGRATIONS_MASTER_KEY) {
-    throw new Error("INTEGRATIONS_MASTER_KEY não configurada");
-  }
-
-  return env.INTEGRATIONS_MASTER_KEY;
-}
-
-function decryptIntegrationSecret(
-  encryptedSecret: string,
-  secretIv: string,
-  env: IntegrationsEnv,
-) {
-  return decryptPassword(
-    encryptedSecret,
-    secretIv,
-    getIntegrationsMasterKey(env),
-  );
-}
-
-function encryptIntegrationSecret(secret: string, env: IntegrationsEnv) {
-  const { encryptedPassword, iv } = encryptPassword(
-    secret,
-    getIntegrationsMasterKey(env),
-  );
-  return { encryptedSecret: encryptedPassword, secretIv: iv };
-}
-
-async function writeFinanceIntegrationEvent(params: {
-  details?: Record<string, unknown>;
-  event: string;
-  integrationId: string;
-  level: "info" | "warning" | "error";
-  message: string;
-  organizationId: string;
-}) {
-  await orgDb(params.organizationId).transaction((o) =>
-    o.insert(integrationEventLog).values({
-      integrationId: params.integrationId,
-      organizationId: params.organizationId,
-      level: params.level,
-      event: params.event,
-      message: params.message,
-      details: params.details ?? null,
-    }),
-  );
-}
-
 function toLowerBillingDocumentStatus(
   status: BillingDocumentStatus,
 ): IntegrationBillingDocumentPayload["status"] {
@@ -407,52 +346,6 @@ function toLowerBillingDocumentStatus(
   }
 
   throw new Error(`Status de documento financeiro invalido: ${status}`);
-}
-
-function extractRemoteId(data: unknown): string | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-
-  const record = Object.fromEntries(Object.entries(data));
-  if (typeof record.remoteId === "string" && record.remoteId.trim()) {
-    return record.remoteId.trim();
-  }
-  if (typeof record.id === "string" && record.id.trim()) {
-    return record.id.trim();
-  }
-  if (typeof record.id === "number") {
-    return String(record.id);
-  }
-
-  return null;
-}
-
-const outboundFetch = createOutboundFetch(REMOTE_API_OUTBOUND_OPTIONS);
-
-async function callRemoteJson(
-  url: string,
-  secret: string,
-  method: "POST" | "PUT",
-  body: unknown,
-) {
-  const response = await outboundFetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const contentType = response.headers.get("content-type") ?? "";
-  const data = contentType.includes("application/json")
-    ? await response.json().catch(() => null)
-    : await response.text().catch(() => null);
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    data,
-  };
 }
 
 async function resolveApplicableAgreement(
@@ -1092,371 +985,124 @@ export async function loadBillingDocumentPayloadsForIntegration(
   );
 }
 
+/**
+ * Sends one billing document to the laboratory's active ERP integration, now
+ * (the document's "export" button): the same push the sync runs make
+ * (`pushTargetRecord` for a generic HTTP ERP, `pushContaAzulTargetRecord` for
+ * Conta Azul), so credentials, mappings, links, retries and the customer
+ * recovery behave as in a run. The document's export status and an event of the
+ * integration record the outcome.
+ *
+ * The remote calls can take seconds: no database transaction is held across
+ * them; every statement is a short transaction of its own that names the
+ * laboratory (row-level security).
+ */
 export async function exportBillingDocumentToPrimaryIntegration(params: {
   documentId: number;
   env: IntegrationsEnv;
   organizationId: string;
 }) {
-  // The remote calls below can take seconds: no database transaction is held
-  // across them. Every statement runs in a short transaction of its own that
-  // names the laboratory (row-level security).
-  const inOrg = <R>(run: (o: OrgDb) => Promise<R>) =>
-    orgDb(params.organizationId).transaction(run);
+  const { record, payload } = await orgDb(params.organizationId).transaction(
+    async (o) => {
+      const [active] = await o
+        .select({ integrationId: organizationIntegration.id })
+        .from(organizationIntegration)
+        .innerJoin(
+          integrationConnection,
+          eq(integrationConnection.integrationId, organizationIntegration.id),
+        )
+        .where(
+          and(
+            eq(organizationIntegration.organizationId, params.organizationId),
+            eq(organizationIntegration.type, "financial_erp"),
+            eq(organizationIntegration.status, "ACTIVE"),
+          ),
+        )
+        .orderBy(desc(organizationIntegration.updatedAt))
+        .limit(1);
+      if (!active) return { record: null, payload: null };
 
-  const { record, payload, existingLink } = await inOrg(async (o) => {
-    const [integration] = await o
-      .select({
-        integrationId: organizationIntegration.id,
-        provider: organizationIntegration.provider,
-        connectionId: integrationConnection.id,
-        encryptedSecret: integrationConnection.encryptedSecret,
-        secretIv: integrationConnection.secretIv,
-        config: integrationConnection.config,
-      })
-      .from(organizationIntegration)
-      .innerJoin(
-        integrationConnection,
-        eq(integrationConnection.integrationId, organizationIntegration.id),
-      )
-      .where(
-        and(
-          eq(organizationIntegration.organizationId, params.organizationId),
-          eq(organizationIntegration.type, "financial_erp"),
-          eq(organizationIntegration.status, "ACTIVE"),
-        ),
-      )
-      .orderBy(desc(organizationIntegration.updatedAt))
-      .limit(1);
-
-    if (!integration)
-      return { record: null, payload: null, existingLink: null };
-
-    const exportPayload = await loadBillingDocumentExportPayload(
-      params.organizationId,
-      params.documentId,
-      o,
-    );
-
-    if (!exportPayload) {
-      return { record: integration, payload: null, existingLink: null };
-    }
-
-    const [link] = await o
-      .select({
-        id: integrationObjectLink.id,
-        remoteEntityId: integrationObjectLink.remoteEntityId,
-      })
-      .from(integrationObjectLink)
-      .where(
-        and(
-          eq(integrationObjectLink.integrationId, integration.integrationId),
-          eq(integrationObjectLink.target, "billing_document"),
-          eq(integrationObjectLink.localEntityId, exportPayload.externalId),
-        ),
-      )
-      .limit(1);
-
-    return {
-      record: integration,
-      payload: exportPayload,
-      existingLink: link ?? null,
-    };
-  });
+      const loaded = await getIntegrationRecord(
+        params.organizationId,
+        active.integrationId,
+        o,
+      );
+      const exportPayload = loaded
+        ? await loadBillingDocumentExportPayload(
+            params.organizationId,
+            params.documentId,
+            o,
+          )
+        : null;
+      return { record: loaded, payload: exportPayload };
+    },
+  );
 
   if (!record) {
     throw new Error("Nenhuma integração ERP ativa encontrada");
   }
-
   if (!payload) {
     throw new Error("Documento financeiro nao encontrado");
   }
 
-  let remoteEntityId: string | null = null;
-
-  if (record.provider === "generic_http") {
-    const config = normalizeGenericFinancialErpConfig(record.config);
-    const secret = decryptIntegrationSecret(
-      record.encryptedSecret,
-      record.secretIv,
-      params.env,
-    );
-    const mappedPayload = applyIntegrationMappings(
-      "billing_document",
-      Object.fromEntries(Object.entries(payload)),
-      config.mappings.billing_document,
-    );
-    const remoteUrl = existingLink?.remoteEntityId
-      ? `${config.baseUrl}${config.billingDocumentPath}/${encodeURIComponent(existingLink.remoteEntityId)}`
-      : `${config.baseUrl}${config.billingDocumentPath}`;
-    const remoteMethod = existingLink?.remoteEntityId ? "PUT" : "POST";
-    const response = await callRemoteJson(
-      remoteUrl,
-      secret,
-      remoteMethod,
-      mappedPayload,
-    );
-
-    if (!response.ok) {
-      await inOrg((o) =>
-        o
-          .update(billingDocument)
-          .set({
-            exportStatus: "FAILED", // `fail` of BILLING_EXPORT_MACHINE (from any export status)
-            updatedAt: new Date(),
-          })
-          .where(eq(billingDocument.id, params.documentId)),
-      );
-
-      await writeFinanceIntegrationEvent({
-        integrationId: record.integrationId,
-        organizationId: params.organizationId,
-        level: "error",
-        event: "finance.document_export.failed",
-        message: `Falha ao exportar documento financeiro ${payload.externalId}`,
-        details: {
-          documentId: params.documentId,
-          status: response.status,
-        },
-      });
-
-      throw new Error(
-        `Falha ao exportar documento: remoto respondeu ${response.status}`,
-      );
-    }
-
-    remoteEntityId = extractRemoteId(response.data);
-  } else {
-    const tokenBundle = parseContaAzulTokenBundle(
-      decryptIntegrationSecret(
-        record.encryptedSecret,
-        record.secretIv,
-        params.env,
-      ),
-    );
-    const config = normalizeContaAzulConnectionConfig(record.config);
-    if (!config.enabledTargets.billingDocuments) {
-      throw new Error("Sincronização de faturamento Conta Azul desativada");
-    }
-    const adapter = createFinancialErpAdapter({
-      provider: "conta_azul",
-      integrationId: record.integrationId,
-      organizationId: params.organizationId,
-      config,
-      accessToken: tokenBundle.accessToken,
-      rateLimitKey: record.integrationId,
-      links: {
-        async getExistingRemoteId({ target, localEntityId }) {
-          const [link] = await inOrg((o) =>
-            o
-              .select({
-                remoteEntityId: integrationObjectLink.remoteEntityId,
-              })
-              .from(integrationObjectLink)
-              .where(
-                and(
-                  eq(integrationObjectLink.integrationId, record.integrationId),
-                  eq(integrationObjectLink.target, target),
-                  eq(integrationObjectLink.localEntityId, localEntityId),
-                ),
-              )
-              .limit(1),
-          );
-
-          return link?.remoteEntityId ?? null;
-        },
-        async upsertLink({
-          target,
-          localEntityId,
-          remoteEntityId: linkRemoteEntityId,
-          remoteDisplayId,
-          remoteEntityType,
-          metadata,
-        }) {
-          await inOrg(async (o) => {
-            const [link] = await o
-              .select({ id: integrationObjectLink.id })
-              .from(integrationObjectLink)
-              .where(
-                and(
-                  eq(integrationObjectLink.integrationId, record.integrationId),
-                  eq(integrationObjectLink.target, target),
-                  eq(integrationObjectLink.localEntityId, localEntityId),
-                ),
-              )
-              .limit(1);
-
-            if (link) {
-              await o
-                .update(integrationObjectLink)
-                .set({
-                  remoteEntityId: linkRemoteEntityId,
-                  remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
-                  remoteEntityType: remoteEntityType ?? null,
-                  metadata: metadata ?? null,
-                  lastSyncedAt: new Date(),
-                  updatedAt: new Date(),
-                })
-                .where(eq(integrationObjectLink.id, link.id));
-              return;
-            }
-
-            await o.insert(integrationObjectLink).values({
-              id: crypto.randomUUID(),
-              integrationId: record.integrationId,
-              organizationId: params.organizationId,
-              target,
-              localEntityId,
-              remoteEntityId: linkRemoteEntityId,
-              remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
-              remoteEntityType: remoteEntityType ?? null,
-              metadata: metadata ?? null,
-              lastSyncedAt: new Date(),
-            });
-          });
-        },
-      },
-      async onUnauthorized() {
-        try {
-          const refreshed = await refreshContaAzulAccessToken(
-            await requireContaAzulOAuthConfig({
-              organizationId: params.organizationId,
-              env: params.env,
-            }),
-            {
-              refreshToken: tokenBundle.refreshToken,
-            },
-          );
-          const encrypted = encryptIntegrationSecret(
-            serializeContaAzulTokenBundle(refreshed),
-            params.env,
-          );
-          const refreshedConfig = normalizeContaAzulConnectionConfig({
-            ...config,
-            accessTokenExpiresAt: refreshed.expiresAt,
-            scopes: refreshed.scopes,
-          });
-
-          await inOrg((o) =>
-            o
-              .update(integrationConnection)
-              .set({
-                credentialType: "oauth2",
-                config: refreshedConfig,
-                encryptedSecret: encrypted.encryptedSecret,
-                secretIv: encrypted.secretIv,
-                updatedAt: new Date(),
-              })
-              .where(eq(integrationConnection.id, record.connectionId)),
-          );
-
-          return refreshed.accessToken;
-        } catch (error) {
-          const failure = buildContaAzulRefreshFailurePolicy(error);
-
-          await inOrg((o) =>
-            o
-              .update(organizationIntegration)
-              .set({
-                status: failure.status,
-                lastValidationError: failure.message,
-                updatedAt: new Date(),
-              })
-              .where(eq(organizationIntegration.id, record.integrationId)),
-          );
-
-          throw new Error(failure.message, { cause: error });
-        }
-      },
+  let remoteEntityId: string | null;
+  try {
+    remoteEntityId = await pushBillingDocument({
+      record,
+      payload,
+      env: params.env,
     });
-
-    try {
-      const exported = await adapter.exportBillingDocument(payload);
-      remoteEntityId = exported.remoteEntityId;
-    } catch (error) {
-      await inOrg((o) =>
-        o
-          .update(billingDocument)
-          .set({
-            exportStatus: "FAILED", // `fail` of BILLING_EXPORT_MACHINE (from any export status)
-            updatedAt: new Date(),
-          })
-          .where(eq(billingDocument.id, params.documentId)),
-      );
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao exportar documento para Conta Azul";
-
-      await writeFinanceIntegrationEvent({
-        integrationId: record.integrationId,
-        organizationId: params.organizationId,
-        level: "error",
-        event: "finance.document_export.failed",
-        message: `Falha ao exportar documento financeiro ${payload.externalId}`,
-        details: {
-          documentId: params.documentId,
-          provider: "conta_azul",
-          error: message,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  if (record.provider === "generic_http") {
-    if (existingLink) {
-      await inOrg((o) =>
-        o
-          .update(integrationObjectLink)
-          .set({
-            remoteEntityId,
-            remoteDisplayId: remoteEntityId,
-            remoteEntityType: "billing_document",
-            lastSyncedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(integrationObjectLink.id, existingLink.id)),
-      );
-    } else {
-      await inOrg((o) =>
-        o.insert(integrationObjectLink).values({
-          id: crypto.randomUUID(),
-          integrationId: record.integrationId,
+  } catch (error) {
+    await orgDb(params.organizationId).transaction(async (o) => {
+      await o
+        .update(billingDocument)
+        .set({
+          exportStatus: "FAILED", // `fail` of BILLING_EXPORT_MACHINE (from any export status)
+          updatedAt: new Date(),
+        })
+        .where(eq(billingDocument.id, params.documentId));
+      await writeIntegrationEvent(
+        {
+          integrationId: record.integration.id,
           organizationId: params.organizationId,
-          target: "billing_document",
-          localEntityId: payload.externalId,
-          remoteEntityId,
-          remoteDisplayId: remoteEntityId,
-          remoteEntityType: "billing_document",
-          lastSyncedAt: new Date(),
-        }),
+          level: "error",
+          event: "finance.document_export.failed",
+          message: `Falha ao exportar documento financeiro ${payload.externalId}`,
+          details: {
+            documentId: params.documentId,
+            provider: record.integration.provider,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Falha ao exportar documento",
+          },
+        },
+        o,
       );
-    }
+    });
+    throw error;
   }
 
-  await inOrg((o) =>
-    o
+  await orgDb(params.organizationId).transaction(async (o) => {
+    await o
       .update(billingDocument)
       .set({
         exportStatus: "EXPORTED", // `export` of BILLING_EXPORT_MACHINE (from any export status)
         exportedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(billingDocument.id, params.documentId)),
-  );
-
-  await writeFinanceIntegrationEvent({
-    integrationId: record.integrationId,
-    organizationId: params.organizationId,
-    level: "info",
-    event: "finance.document_export.completed",
-    message: `Documento financeiro ${payload.externalId} exportado com sucesso`,
-    details: {
-      documentId: params.documentId,
-      remoteEntityId,
-    },
+      .where(eq(billingDocument.id, params.documentId));
+    await writeIntegrationEvent(
+      {
+        integrationId: record.integration.id,
+        organizationId: params.organizationId,
+        level: "info",
+        event: "finance.document_export.completed",
+        message: `Documento financeiro ${payload.externalId} exportado com sucesso`,
+        details: { documentId: params.documentId, remoteEntityId },
+      },
+      o,
+    );
   });
 
   return payload;

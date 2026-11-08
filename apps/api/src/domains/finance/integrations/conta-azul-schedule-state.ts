@@ -22,8 +22,8 @@ import {
   type ContaAzulScheduledPollKind,
 } from "./types";
 
-import { getIntegrationRecord } from "./records";
 import { CONTA_AZUL_POLL_DEFINITIONS } from "./constants";
+import { requireLabContaAzulIntegration } from "./integration-access";
 
 function addMilliseconds(value: string, intervalMs: number) {
   const parsed = parseRemoteDate(value);
@@ -83,14 +83,11 @@ export async function getContaAzulScheduleState(
   },
   executor: OrgDb,
 ): Promise<ContaAzulScheduleState> {
-  const record = await getIntegrationRecord(
+  const record = await requireLabContaAzulIntegration(
     params.organizationId,
     params.integrationId,
     executor,
   );
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
   const config = normalizeContaAzulConnectionConfig(record.connection.config);
   const runs = await executor
     .select()

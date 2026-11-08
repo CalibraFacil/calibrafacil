@@ -418,4 +418,58 @@ describe("integration routes: laboratory scope (P2-18h)", () => {
     const after = await (await call("/drift")).json();
     expect(after.data).toEqual([]);
   });
+
+  it("REQ-18H-INTG-5: a manual Conta Azul poll answers one failure per wrong id, writes the poll's failed event, and every kind uses it", async () => {
+    const a = await seedOrg({ orgId: "lab-a", role: "admin" });
+    const b = await seedOrg({ orgId: "lab-b", role: "admin" });
+    const contaAzul = await seedIntegration(a, "conta_azul");
+    const generic = await seedIntegration(b, "generic_http");
+    const contaAzulOfB = await seedIntegration(b, "conta_azul");
+    const kinds = [
+      ["poll", "payment_poll"],
+      ["poll-payables", "payable_poll"],
+      ["poll-fiscal", "fiscal_poll"],
+      ["poll-protocols", "protocol_poll"],
+      ["poll-drift", "drift_poll"],
+    ] as const;
+
+    as(a);
+    for (const [path, eventPrefix] of kinds) {
+      // The stored secret cannot be decrypted: the poll itself fails.
+      const failed = await call(`/${contaAzul}/conta-azul/${path}`, "POST", {
+        limit: 10,
+      });
+      expect(failed.status, path).toBe(400);
+      expect((await failed.json()).code, path).toBe(
+        "integration_request_failed",
+      );
+
+      // Another laboratory's integration, and one of another provider: 404, no event.
+      for (const id of [contaAzulOfB, generic]) {
+        const refused = await call(`/${id}/conta-azul/${path}`, "POST", {
+          limit: 10,
+        });
+        expect(refused.status, `${path} ${id}`).toBe(404);
+        expect((await refused.json()).code).toBe("integration_not_found");
+      }
+
+      expect(await eventNames(a.orgId), path).toContain(
+        `integration.conta_azul.${eventPrefix}.failed`,
+      );
+    }
+    expect(await eventNames(b.orgId)).toEqual([]);
+
+    // An integration that is switched off is a conflict, not a poll.
+    await withStatusRepair((tx) =>
+      tx
+        .update(organizationIntegration)
+        .set({ status: "DISABLED" })
+        .where(eq(organizationIntegration.id, contaAzul)),
+    );
+    const inactive = await call(`/${contaAzul}/conta-azul/poll`, "POST", {
+      limit: 10,
+    });
+    expect(inactive.status).toBe(409);
+    expect((await inactive.json()).code).toBe("integration_inactive");
+  });
 });

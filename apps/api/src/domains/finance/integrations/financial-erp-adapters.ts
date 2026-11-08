@@ -2,7 +2,6 @@ import {
   applyIntegrationMappings,
   normalizeContaAzulConnectionConfig,
   normalizeGenericFinancialErpConfig,
-  validateIntegrationMappings,
 } from "@calibra-facil/shared";
 import { normalizeCnpj } from "@calibra-facil/shared/cnpj";
 import {
@@ -73,16 +72,16 @@ import {
   mapSaleToContaAzulSale,
 } from "./conta-azul-mappers";
 import { toRecord } from "@calibra-facil/shared/record";
+import { assertValidMappings } from "./mapping";
+import {
+  buildAuthHeaders,
+  callRemoteJson,
+  extractRemoteId,
+} from "./remote-http";
 
 type SyncPayload =
   | IntegrationCustomerPayload
   | IntegrationBillingDocumentPayload;
-
-type RemoteJsonResult = {
-  ok: boolean;
-  status: number;
-  data: unknown;
-};
 
 type AdapterLinks = {
   getExistingRemoteId(params: {
@@ -165,43 +164,6 @@ export type FinancialErpAdapterOptions =
   | ({
       provider: "conta_azul";
     } & ContaAzulAdapterOptions);
-
-async function callRemoteJson(
-  fetchImpl: OutboundFetch,
-  url: string,
-  init: RequestInit,
-): Promise<RemoteJsonResult> {
-  const response = await fetchImpl(url, init);
-  const contentType = response.headers.get("content-type") ?? "";
-
-  let data: unknown = null;
-  if (contentType.includes("application/json")) {
-    data = await response.json().catch(() => null);
-  } else {
-    data = await response.text().catch(() => null);
-  }
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    data,
-  };
-}
-
-function extractRemoteId(data: unknown): string | null {
-  const record = toRecord(data);
-  if (typeof record.remoteId === "string" && record.remoteId.trim()) {
-    return record.remoteId;
-  }
-  if (typeof record.id === "string" && record.id.trim()) {
-    return record.id;
-  }
-  if (typeof record.id === "number") {
-    return String(record.id);
-  }
-
-  return null;
-}
 
 function extractContaAzulRemoteId(data: unknown): string {
   const remoteId = extractRemoteId(data);
@@ -914,13 +876,6 @@ function inferReferenceDomainFromRemoteEntityType(value: unknown) {
   }
 }
 
-function buildAuthHeaders(secret: string) {
-  return {
-    Authorization: `Bearer ${secret}`,
-    "Content-Type": "application/json",
-  };
-}
-
 function getGenericHttpTargetPath(
   config: GenericFinancialErpConnectionConfig,
   target: IntegrationSyncTarget,
@@ -932,19 +887,6 @@ function getGenericHttpTargetPath(
       return config.serviceOrderPath;
     case "billing_document":
       return config.billingDocumentPath;
-  }
-}
-
-function assertValidMappings(
-  config: GenericFinancialErpConnectionConfig,
-  target?: IntegrationSyncTarget,
-) {
-  const issues = validateIntegrationMappings(config.mappings).filter(
-    (issue) => !target || issue.target === target,
-  );
-
-  if (issues.length > 0) {
-    throw new Error(issues.map((issue) => issue.message).join(" "));
   }
 }
 
@@ -983,12 +925,12 @@ class GenericHttpFinancialErpAdapter implements FinancialErpAdapter {
 
   async validateConnection(): Promise<IntegrationValidationResult> {
     const result = await callRemoteJson(
-      this.fetchImpl,
       `${this.config.baseUrl}${this.config.healthPath}`,
       {
         method: "GET",
         headers: buildAuthHeaders(this.secret),
       },
+      this.fetchImpl,
     );
 
     if (!result.ok) {
@@ -1036,11 +978,15 @@ class GenericHttpFinancialErpAdapter implements FinancialErpAdapter {
       ? `${this.config.baseUrl}${targetPath}/${encodeURIComponent(existingRemoteId)}`
       : `${this.config.baseUrl}${targetPath}`;
 
-    const result = await callRemoteJson(this.fetchImpl, url, {
-      method,
-      headers: buildAuthHeaders(this.secret),
-      body: JSON.stringify(mappedPayload),
-    });
+    const result = await callRemoteJson(
+      url,
+      {
+        method,
+        headers: buildAuthHeaders(this.secret),
+        body: JSON.stringify(mappedPayload),
+      },
+      this.fetchImpl,
+    );
 
     if (!result.ok) {
       throw new Error(

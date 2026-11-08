@@ -14,6 +14,7 @@ import { getIntegrationRecord, writeIntegrationEvent } from "./records";
 import { createContaAzulAdapterForRecord } from "./conta-azul-auth";
 import { CONTA_AZUL_PRODUCT_STOCK_CURSOR_TYPE } from "./constants";
 import { upsertIntegrationCursor } from "./conta-azul-schedule-state";
+import { requireLabContaAzulIntegration } from "./integration-access";
 
 /**
  * Manual entrada/ajuste for a catalog material bound to a Conta Azul
@@ -148,13 +149,10 @@ export async function pollContaAzulProductStock(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
-
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
 
   const config = normalizeContaAzulConnectionConfig(record.connection.config);
   if (!config.enabledTargets.products) {

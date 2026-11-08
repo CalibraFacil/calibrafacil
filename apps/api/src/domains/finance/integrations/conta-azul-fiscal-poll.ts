@@ -9,7 +9,7 @@ import {
 } from "@calibra-facil/shared";
 import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "./integrations-env";
-import { getIntegrationRecord, writeIntegrationEvent } from "./records";
+import { writeIntegrationEvent } from "./records";
 import {
   getIntegrationCursor,
   upsertIntegrationCursor,
@@ -17,8 +17,10 @@ import {
 import {
   CONTA_AZUL_FISCAL_DOCUMENTS_CURSOR_TYPE,
   CONTA_AZUL_PROTOCOLS_CURSOR_TYPE,
+  contaAzulPollEvents,
 } from "./constants";
 import { createContaAzulAdapterForRecord } from "./conta-azul-auth";
+import { requireLabContaAzulIntegration } from "./integration-access";
 
 export async function pollContaAzulFiscalDocuments(params: {
   integrationId: string;
@@ -26,13 +28,10 @@ export async function pollContaAzulFiscalDocuments(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
-
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
 
   const config = normalizeContaAzulConnectionConfig(record.connection.config);
   if (!config.enabledTargets.fiscalDocuments) {
@@ -109,7 +108,7 @@ export async function pollContaAzulFiscalDocuments(params: {
         integrationId: params.integrationId,
         organizationId: params.organizationId,
         level: result.warnings.length > 0 ? "warning" : "info",
-        event: "integration.conta_azul.fiscal_poll.completed",
+        event: contaAzulPollEvents("fiscalDocuments").completed,
         message: "Polling fiscal da Conta Azul concluído",
         details: {
           processedCount: result.processedCount,
@@ -130,13 +129,10 @@ export async function linkContaAzulFiscalDocumentsToMdfe(params: {
   env: IntegrationsEnv;
   payload: IntegrationMdfeLinkPayload;
 }) {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
-
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
 
   const config = normalizeContaAzulConnectionConfig(record.connection.config);
   if (!config.enabledTargets.fiscalDocuments) {
@@ -184,13 +180,10 @@ export async function pollContaAzulProtocols(params: {
   env: IntegrationsEnv;
   limit?: number;
 }): Promise<RemoteStatusPollResult> {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
-
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
 
   const config = normalizeContaAzulConnectionConfig(record.connection.config);
   if (!config.enabledTargets.protocols) {
@@ -267,7 +260,7 @@ export async function pollContaAzulProtocols(params: {
         integrationId: params.integrationId,
         organizationId: params.organizationId,
         level: result.warnings.length > 0 ? "warning" : "info",
-        event: "integration.conta_azul.protocol_poll.completed",
+        event: contaAzulPollEvents("protocols").completed,
         message: "Polling de protocolos da Conta Azul concluído",
         details: {
           processedCount: result.processedCount,

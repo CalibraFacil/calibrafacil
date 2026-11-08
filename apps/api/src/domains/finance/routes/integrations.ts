@@ -49,6 +49,8 @@ import {
   acknowledgeIntegrationDrift,
   buildIntegrationDriftQueue,
 } from "../integrations/integration-drift";
+import { contaAzulPollEvents } from "../integrations/constants";
+import { getContaAzulPollDefinition } from "../integrations/conta-azul-due";
 
 const DRIFT_TARGETS: ReadonlySet<string> = new Set<IntegrationObjectLinkTarget>(
   [
@@ -1375,6 +1377,81 @@ mount(
   },
 );
 
+/**
+ * A manual run of one Conta Azul poll (billing, payables, fiscal, protocols,
+ * drift): the integration must exist and be active, the run is an audited
+ * action of the member, and a failure writes the poll's `.failed` event of the
+ * integration before it answers. Event names come from `contaAzulPollEvents`,
+ * the same ones the scheduled runs write.
+ */
+async function runContaAzulPoll<
+  R extends {
+    processedCount: number;
+    updatedCount: number;
+    warnings: unknown[];
+  },
+>(params: {
+  kind: Parameters<typeof contaAzulPollEvents>[0];
+  member: { id: string; organizationId: string };
+  actorUserId: string;
+  integrationId: string;
+  poll: () => Promise<R>;
+}): Promise<R> {
+  const { member, integrationId } = params;
+  const events = contaAzulPollEvents(params.kind);
+
+  await assertActiveContaAzulIntegration({
+    organizationId: member.organizationId,
+    integrationId,
+  });
+
+  try {
+    const result = await params.poll();
+
+    await orgDb(member.organizationId).transaction((o) =>
+      writeOrganizationIntegrationEvent(
+        {
+          organizationId: member.organizationId,
+          actorUserId: params.actorUserId,
+          actorMemberId: member.id,
+          action: events.audit,
+          entityId: integrationId,
+          details: {
+            processedCount: result.processedCount,
+            updatedCount: result.updatedCount,
+            warningCount: result.warnings.length,
+          },
+        },
+        o,
+      ),
+    );
+
+    return result;
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : getContaAzulPollDefinition(params.kind).failedMessage;
+
+    await orgDb(member.organizationId).transaction((o) =>
+      writeIntegrationEvent(
+        {
+          integrationId,
+          organizationId: member.organizationId,
+          level: "error",
+          event: events.failed,
+          message,
+          details: { provider: "conta_azul" },
+        },
+        o,
+      ),
+    );
+
+    if (error instanceof DomainError) throw error;
+    throw invalid("integration_request_failed", message);
+  }
+}
+
 mount(
   integrationsRouter,
   "/api/integrations",
@@ -1382,66 +1459,19 @@ mount(
   adminOnly,
   async (c, { params, body }) => {
     const member = c.get("member");
-    const session = c.get("session");
-    const id = params.id;
-    const input = body;
-
-    await assertActiveContaAzulIntegration({
-      organizationId: member.organizationId,
-      integrationId: id,
+    return runContaAzulPoll({
+      kind: "paymentStatusPolling",
+      member,
+      actorUserId: c.get("session").user.id,
+      integrationId: params.id,
+      poll: () =>
+        pollContaAzulBillingStatus({
+          integrationId: params.id,
+          organizationId: member.organizationId,
+          env: c.env,
+          limit: body.limit,
+        }),
     });
-
-    try {
-      const result = await pollContaAzulBillingStatus({
-        integrationId: id,
-        organizationId: member.organizationId,
-        env: c.env,
-        limit: input.limit,
-      });
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.conta_azul.payment_poll",
-            entityId: id,
-            details: {
-              processedCount: result.processedCount,
-              updatedCount: result.updatedCount,
-              warningCount: result.warnings.length,
-            },
-          },
-          o,
-        ),
-      );
-
-      return result;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao consultar pagamentos da Conta Azul";
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "error",
-            event: "integration.conta_azul.payment_poll.failed",
-            message,
-            details: {
-              provider: "conta_azul",
-            },
-          },
-          o,
-        ),
-      );
-
-      throw invalid("integration_request_failed", message);
-    }
   },
 );
 
@@ -1452,66 +1482,19 @@ mount(
   adminOnly,
   async (c, { params, body }) => {
     const member = c.get("member");
-    const session = c.get("session");
-    const id = params.id;
-    const input = body;
-
-    await assertActiveContaAzulIntegration({
-      organizationId: member.organizationId,
-      integrationId: id,
+    return runContaAzulPoll({
+      kind: "payables",
+      member,
+      actorUserId: c.get("session").user.id,
+      integrationId: params.id,
+      poll: () =>
+        pollContaAzulPayableStatus({
+          integrationId: params.id,
+          organizationId: member.organizationId,
+          env: c.env,
+          limit: body.limit,
+        }),
     });
-
-    try {
-      const result = await pollContaAzulPayableStatus({
-        integrationId: id,
-        organizationId: member.organizationId,
-        env: c.env,
-        limit: input.limit,
-      });
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.conta_azul.payable_poll",
-            entityId: id,
-            details: {
-              processedCount: result.processedCount,
-              updatedCount: result.updatedCount,
-              warningCount: result.warnings.length,
-            },
-          },
-          o,
-        ),
-      );
-
-      return result;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao consultar contas a pagar da Conta Azul";
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "error",
-            event: "integration.conta_azul.payable_poll.failed",
-            message,
-            details: {
-              provider: "conta_azul",
-            },
-          },
-          o,
-        ),
-      );
-
-      throw invalid("integration_request_failed", message);
-    }
   },
 );
 
@@ -1522,66 +1505,19 @@ mount(
   adminOnly,
   async (c, { params, body }) => {
     const member = c.get("member");
-    const session = c.get("session");
-    const id = params.id;
-    const input = body;
-
-    await assertActiveContaAzulIntegration({
-      organizationId: member.organizationId,
-      integrationId: id,
+    return runContaAzulPoll({
+      kind: "fiscalDocuments",
+      member,
+      actorUserId: c.get("session").user.id,
+      integrationId: params.id,
+      poll: () =>
+        pollContaAzulFiscalDocuments({
+          integrationId: params.id,
+          organizationId: member.organizationId,
+          env: c.env,
+          limit: body.limit,
+        }),
     });
-
-    try {
-      const result = await pollContaAzulFiscalDocuments({
-        integrationId: id,
-        organizationId: member.organizationId,
-        env: c.env,
-        limit: input.limit,
-      });
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.conta_azul.fiscal_poll",
-            entityId: id,
-            details: {
-              processedCount: result.processedCount,
-              updatedCount: result.updatedCount,
-              warningCount: result.warnings.length,
-            },
-          },
-          o,
-        ),
-      );
-
-      return result;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao consultar documentos fiscais da Conta Azul";
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "error",
-            event: "integration.conta_azul.fiscal_poll.failed",
-            message,
-            details: {
-              provider: "conta_azul",
-            },
-          },
-          o,
-        ),
-      );
-
-      throw invalid("integration_request_failed", message);
-    }
   },
 );
 
@@ -1668,66 +1604,19 @@ mount(
   adminOnly,
   async (c, { params, body }) => {
     const member = c.get("member");
-    const session = c.get("session");
-    const id = params.id;
-    const input = body;
-
-    await assertActiveContaAzulIntegration({
-      organizationId: member.organizationId,
-      integrationId: id,
+    return runContaAzulPoll({
+      kind: "protocols",
+      member,
+      actorUserId: c.get("session").user.id,
+      integrationId: params.id,
+      poll: () =>
+        pollContaAzulProtocols({
+          integrationId: params.id,
+          organizationId: member.organizationId,
+          env: c.env,
+          limit: body.limit,
+        }),
     });
-
-    try {
-      const result = await pollContaAzulProtocols({
-        integrationId: id,
-        organizationId: member.organizationId,
-        env: c.env,
-        limit: input.limit,
-      });
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.conta_azul.protocol_poll",
-            entityId: id,
-            details: {
-              processedCount: result.processedCount,
-              updatedCount: result.updatedCount,
-              warningCount: result.warnings.length,
-            },
-          },
-          o,
-        ),
-      );
-
-      return result;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao consultar protocolos da Conta Azul";
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "error",
-            event: "integration.conta_azul.protocol_poll.failed",
-            message,
-            details: {
-              provider: "conta_azul",
-            },
-          },
-          o,
-        ),
-      );
-
-      throw invalid("integration_request_failed", message);
-    }
   },
 );
 
@@ -1738,66 +1627,19 @@ mount(
   adminOnly,
   async (c, { params, body }) => {
     const member = c.get("member");
-    const session = c.get("session");
-    const id = params.id;
-    const input = body;
-
-    await assertActiveContaAzulIntegration({
-      organizationId: member.organizationId,
-      integrationId: id,
+    return runContaAzulPoll({
+      kind: "driftChecks",
+      member,
+      actorUserId: c.get("session").user.id,
+      integrationId: params.id,
+      poll: () =>
+        pollContaAzulRemoteDrift({
+          integrationId: params.id,
+          organizationId: member.organizationId,
+          env: c.env,
+          limit: body.limit,
+        }),
     });
-
-    try {
-      const result = await pollContaAzulRemoteDrift({
-        integrationId: id,
-        organizationId: member.organizationId,
-        env: c.env,
-        limit: input.limit,
-      });
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeOrganizationIntegrationEvent(
-          {
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "integration.conta_azul.drift_poll",
-            entityId: id,
-            details: {
-              processedCount: result.processedCount,
-              updatedCount: result.updatedCount,
-              warningCount: result.warnings.length,
-            },
-          },
-          o,
-        ),
-      );
-
-      return result;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao verificar drift da Conta Azul";
-
-      await orgDb(member.organizationId).transaction((o) =>
-        writeIntegrationEvent(
-          {
-            integrationId: id,
-            organizationId: member.organizationId,
-            level: "error",
-            event: "integration.conta_azul.drift_poll.failed",
-            message,
-            details: {
-              provider: "conta_azul",
-            },
-          },
-          o,
-        ),
-      );
-
-      throw invalid("integration_request_failed", message);
-    }
   },
 );
 

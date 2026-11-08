@@ -206,7 +206,7 @@ export async function runContaAzulScheduledPoll(params: {
             provider: "conta_azul",
             pollKind: params.kind,
             cursorType: definition.cursorType,
-            completedEvent: definition.completedEvent,
+            completedEvent: `${definition.eventPrefix}.completed`,
             processedCount: result.processedCount,
             updatedCount: result.updatedCount,
             warnings: result.warnings,

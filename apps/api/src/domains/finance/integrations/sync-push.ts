@@ -38,7 +38,7 @@ import {
   buildAuthHeaders,
   callRemoteJson,
   extractRemoteId,
-} from "./generic-remote";
+} from "./remote-http";
 
 export async function pushContaAzulTargetRecord(params: {
   record: GenericConnectionRecord;

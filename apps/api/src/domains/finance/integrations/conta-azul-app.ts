@@ -2,7 +2,10 @@ import { orgDb } from "../../../lib/org-db";
 import { and, eq } from "drizzle-orm";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { integrationOAuthApp } from "@calibra-facil/db/schema";
-import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
+import {
+  decryptIntegrationSecret,
+  encryptIntegrationSecret,
+} from "./credentials";
 
 import {
   buildContaAzulOAuthConfig,
@@ -28,14 +31,6 @@ export interface ContaAzulAppSummary {
   clientSecretLast4: string | null;
   redirectUri: string;
   updatedAt: string | null;
-}
-
-function getMasterKey(env: ContaAzulOAuthEnv) {
-  const key = env.INTEGRATIONS_MASTER_KEY?.trim();
-  if (!key) {
-    throw new Error("INTEGRATIONS_MASTER_KEY não configurada");
-  }
-  return key;
 }
 
 function organizationAppCondition(organizationId: string) {
@@ -65,10 +60,10 @@ async function resolveContaAzulAppCredentials(
     return {
       source: "organization",
       clientId: row.clientId,
-      clientSecret: decryptPassword(
+      clientSecret: decryptIntegrationSecret(
         row.encryptedClientSecret,
         row.clientSecretIv,
-        getMasterKey(params.env),
+        params.env,
       ),
     };
   }
@@ -146,14 +141,14 @@ export async function saveContaAzulAppCredentials(
   },
   executor: OrgDb,
 ) {
-  const { encryptedPassword, iv } = encryptPassword(
+  const { encryptedSecret, secretIv } = encryptIntegrationSecret(
     params.credentials.clientSecret,
-    getMasterKey(params.env),
+    params.env,
   );
   const values = {
     clientId: params.credentials.clientId,
-    encryptedClientSecret: encryptedPassword,
-    clientSecretIv: iv,
+    encryptedClientSecret: encryptedSecret,
+    clientSecretIv: secretIv,
     clientSecretLast4: params.credentials.clientSecret.slice(-4),
     updatedBy: params.actorUserId,
   };

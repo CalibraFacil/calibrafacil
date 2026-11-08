@@ -24,7 +24,6 @@ import {
   encryptIntegrationSecret,
 } from "./credentials";
 import {
-  getIntegrationRecord,
   markContaAzulReconnectRequired,
   writeIntegrationEvent,
 } from "./records";
@@ -32,6 +31,7 @@ import { ContaAzulReconnectRequiredError } from "./errors";
 import { CONTA_AZUL_TOKEN_REFRESH_SKEW_MS } from "./constants";
 import { getExistingLink, upsertLink } from "./sync-state";
 import { cacheContaAzulReferenceLinks } from "./reference-links";
+import { requireLabContaAzulIntegration } from "./integration-access";
 
 async function refreshContaAzulTokenForConnection(params: {
   record: GenericConnectionRecord;
@@ -293,13 +293,10 @@ export async function listContaAzulCatalog(params: {
     | "balances"
     | "transfers";
 }) {
-  const record = await orgDb(params.organizationId).transaction((o) =>
-    getIntegrationRecord(params.organizationId, params.integrationId, o),
+  const record = await requireLabContaAzulIntegration(
+    params.organizationId,
+    params.integrationId,
   );
-
-  if (!record || record.integration.provider !== "conta_azul") {
-    throw new Error("Integração Conta Azul não encontrada");
-  }
 
   const adapter = await createContaAzulAdapterForRecord({
     record,
