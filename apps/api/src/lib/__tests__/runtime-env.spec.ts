@@ -51,4 +51,25 @@ describe("REQ-TSA-1 the API-built worker environment (cron, local)", () => {
     expect(env.SIGNING_TSA_AUTH).toBeUndefined();
     expect(env.SIGNING_TSA_TIMEOUT_MS).toBeUndefined();
   });
+
+  it("adds the API-only settings to the jobs-core environment", () => {
+    stubWorkerEnvironment();
+    vi.stubEnv("API_URL", "https://api.example.com");
+    vi.stubEnv("CONTA_AZUL_CLIENT_ID", "ca-id");
+    vi.stubEnv("CONTA_AZUL_CLIENT_SECRET", "ca-secret");
+    vi.stubEnv("CONTA_AZUL_OAUTH_REDIRECT_URI", "https://api.example.com/cb");
+    vi.stubEnv("QUOTE_APPROVAL_CODE_PEPPER", "pepper");
+
+    const env = createWorkerRuntimeEnv();
+
+    expect(env).toMatchObject({
+      DATABASE_URL: "postgres://calibra:pw@db:5432/calibra",
+      API_URL: "https://api.example.com",
+      CONTA_AZUL_CLIENT_ID: "ca-id",
+      CONTA_AZUL_CLIENT_SECRET: "ca-secret",
+      CONTA_AZUL_OAUTH_REDIRECT_URI: "https://api.example.com/cb",
+      QUOTE_APPROVAL_CODE_PEPPER: "pepper",
+    });
+    expect(typeof env.CERTIFICATES_BUCKET.get).toBe("function");
+  });
 });

@@ -2,6 +2,7 @@ import { CRON_ENTRIES } from "./cron/schedule";
 import {
   failFast,
   failFastAsync,
+  parseEnvFile,
   rawEnv,
   setProcessEnv,
 } from "@calibra-facil/config";
@@ -49,32 +50,6 @@ const appDirectory = new URL("..", import.meta.url);
 const processEnv = rawEnv();
 const isProduction = processEnv.NODE_ENV === "production";
 
-function parseLocalEnv(contents: string): Record<string, string> {
-  const env: Record<string, string> = {};
-
-  for (const line of contents.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex === -1) continue;
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    let value = trimmed.slice(separatorIndex + 1).trim();
-
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    env[key] = value;
-  }
-
-  return env;
-}
-
 async function loadLocalEnv() {
   if (isProduction) return {};
 
@@ -83,7 +58,7 @@ async function loadLocalEnv() {
   for (const filename of [".env", ".env.local"]) {
     const file = Bun.file(new URL(filename, appDirectory));
     if (await file.exists()) {
-      Object.assign(env, parseLocalEnv(await file.text()));
+      Object.assign(env, parseEnvFile(await file.text()).env);
     }
   }
 
