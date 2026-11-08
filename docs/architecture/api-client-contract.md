@@ -126,8 +126,9 @@ To convert a domain:
    domain here. Add a `<domain>.fixtures.ts` (contract-valid builders, re-exported by `src/fixtures.ts`, parsed in
    a test) for tests in other packages.
 2. API: replace the chained `.get(...)/.post(...)` of each client-facing route
-   with `mount(...)`, return plain values (no `c.json`), keep `withLabPermission`
-   as the `middleware` argument. A route nothing calls stays a plain Hono route
+   with `mount(...)`, return plain values (no `c.json`). A lab permission goes in the
+   definition (`permission: { client: ["read"] }`, see "The route's permission"
+   below), not in `mount`'s `middleware`. A route nothing calls stays a plain Hono route
    (comment why). A status the definition does not describe (a 502 from an
    upstream) returns a `Response` from the handler.
 3. client-runtime: nothing to wire. The group is a `CalibraApi` namespace, its
@@ -153,9 +154,31 @@ more than a string (`params: z.object({ id: routeId })` for a numeric id): the
 request is refused with 400 before the handler runs and the handler gets the
 parsed value. Do not `parseInt(params.id)` in a handler.
 
-Not yet in the definition: the route's permission (stays the `middleware`
-argument of `mount`), and a response check in the SDK for domains that are not
+Not yet in the definition: a response check in the SDK for domains that are not
 converted.
+
+### The route's permission
+
+A definition may carry `permission: { resource: [actions] }` (`EndpointPermission`
+in `define.ts`): what a LAB member must hold, spelled as the access statements of
+`packages/auth/src/access.ts` do. `mount` puts `withLabPermission(def.permission)`
+(lab session, active organization, LAB type, the check) in front of the route's own
+`middleware` argument, so the same data is what the API enforces and what anything
+else can read (the sync operation table checks its `permission` against the
+definition `onlineRoute` names). A route with a `permission` and nothing else to add
+takes the 4-argument form, `mount(router, PREFIX, def, handler)`.
+
+- The contract types it structurally (strings): it cannot import auth's runtime, and
+  `access.ts` is a cut-line file. The names are held to `ac.statements` by
+  `isPermissionCheck` (`apps/api/src/lib/permission-check.ts`): `mount` throws when a
+  route is registered with a resource or action the statements do not have, and
+  `permission-check.spec.ts` runs it over every definition.
+- Everything that is not a permission stays in `middleware`: `requireRole(...)`,
+  `requireFreshSession`, the portal guards (`requirePortalProtected`), a scope
+  check, `withPermission` (not lab-only), a `requirePermission` that sits among
+  other guards on purpose. The guards run in this order: the definition's
+  permission guards, then `middleware`, then the validators.
+- A plain (unmounted) route keeps `withLabPermission(...)` in its own chain.
 
 ## Domain errors and stable codes
 

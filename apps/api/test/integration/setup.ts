@@ -3,7 +3,7 @@ import { beforeEach, inject, vi } from "vitest";
 import { assertEphemeralTestDb } from "./guard";
 import { installTenantSqlGuard } from "./tenant-sql-guard";
 import { installReportProbes } from "./app-role-mode";
-import { checkEndpointResponses } from "../../src/lib/endpoint-mount";
+import { checkEndpointResponses } from "../../src/lib/endpoint-response-check";
 
 // Per-worker setup for the integration tier. Runs before any test file in this
 // worker process. Each worker gets its OWN copy of the schema (calibra_w<id>)

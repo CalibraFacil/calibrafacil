@@ -1,5 +1,4 @@
 import { zValidator } from "@hono/zod-validator";
-import { isRecord } from "@calibra-facil/shared/record";
 import type { Context, Env, Hono, MiddlewareHandler } from "hono";
 import {
   endpointLabel,
@@ -8,6 +7,9 @@ import {
   type EndpointResponse,
   type ServerShape,
 } from "@calibra-facil/contracts";
+import { withLabPermission } from "../middleware/permission";
+import { isPermissionCheck } from "./permission-check";
+import { shouldCheckResponses } from "./endpoint-response-check";
 
 /**
  * What a handler answers: the definition's response, as a value the server
@@ -31,9 +33,13 @@ type EndpointHandler<TEnv extends Env, TDef extends EndpointDef> = (
  * (when the definition has a `params` schema), the query and the body are
  * validated with the definition's schemas (`zValidator`, so a failure
  * answers exactly as every other validated route and the app-wide shape hook
- * rewrites it), and the handler receives them typed. `middleware` runs first (authentication, permission).
+ * rewrites it), and the handler receives them typed. When the definition has a
+ * `permission`, `withLabPermission(def.permission)` (lab session, organization,
+ * LAB type, the permission check) runs first; then `middleware`, for what is not
+ * a permission (a role, a fresh session, the portal's guards). A route without
+ * either takes the 4-argument form.
  *
- * In development and tests (see {@link checkEndpointResponses}) the success body is also parsed with the response
+ * In development and tests (see `checkEndpointResponses` in `endpoint-response-check.ts`) the success body is also parsed with the response
  * schema (after a JSON round trip, so it is the wire value): drift fails the
  * request where it is introduced. Production does not re-parse.
  */
@@ -41,15 +47,36 @@ export function mount<TEnv extends Env, TDef extends EndpointDef>(
   router: Hono<TEnv>,
   prefix: string,
   def: TDef,
+  handler: EndpointHandler<TEnv, TDef>,
+): void;
+export function mount<TEnv extends Env, TDef extends EndpointDef>(
+  router: Hono<TEnv>,
+  prefix: string,
+  def: TDef,
   middleware: readonly MiddlewareHandler[],
   handler: EndpointHandler<TEnv, TDef>,
+): void;
+export function mount<TEnv extends Env, TDef extends EndpointDef>(
+  router: Hono<TEnv>,
+  prefix: string,
+  def: TDef,
+  ...rest:
+    | [handler: EndpointHandler<TEnv, TDef>]
+    | [
+        middleware: readonly MiddlewareHandler[],
+        handler: EndpointHandler<TEnv, TDef>,
+      ]
 ): void {
+  const [middleware, handler] =
+    rest.length === 1 ? [[], rest[0]] : [rest[0], rest[1]];
   if (!def.path.startsWith(prefix)) {
     throw new Error(
       `${endpointLabel(def)} cannot be mounted under ${prefix}: its path does not start with it`,
     );
   }
   const path = def.path.slice(prefix.length) || "/";
+
+  const guards = permissionGuards(def);
 
   const validators: MiddlewareHandler[] = [];
   if (def.params) validators.push(zValidator("param", def.params));
@@ -68,10 +95,26 @@ export function mount<TEnv extends Env, TDef extends EndpointDef>(
   router.on(
     def.method.toUpperCase(),
     [path],
+    ...guards,
     ...middleware,
     ...validators,
     respond,
   );
+}
+
+/**
+ * The definition's `permission` as the guard the lab routes use. An unknown
+ * resource or action throws when the route is registered, not at the first
+ * request.
+ */
+function permissionGuards(def: EndpointDef): readonly MiddlewareHandler[] {
+  if (def.permission === undefined) return [];
+  if (!isPermissionCheck(def.permission)) {
+    throw new Error(
+      `${endpointLabel(def)} declares a permission that is not an access-control statement: ${JSON.stringify(def.permission)}`,
+    );
+  }
+  return withLabPermission(def.permission);
 }
 
 function handlerInput<TDef extends EndpointDef>(
@@ -103,24 +146,6 @@ function typedInput<TDef extends EndpointDef>(
 ): EndpointHandlerInput<TDef> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- the single trust point of the mount helper: `input` is built above from the definition's own parts (params always, parsed when the definition has a `params` schema; query/body exactly when the definition declares them; all validated by its schemas), which is what `EndpointHandlerInput` computes from the definition.
   return input as EndpointHandlerInput<TDef>;
-}
-
-let checkInTests = false;
-
-/**
- * Turns the response-schema check on for every mounted endpoint. The test setup
- * files call it (a spec that drifts fails where it is introduced); a
- * development server turns it on by its `NODE_ENV` binding. Production never
- * re-parses.
- */
-export function checkEndpointResponses(enabled = true) {
-  checkInTests = enabled;
-}
-
-function shouldCheckResponses(c: Context) {
-  if (checkInTests) return true;
-  const bindings: unknown = c.env;
-  return isRecord(bindings) && bindings.NODE_ENV === "development";
 }
 
 function assertMatchesResponseSchema(
