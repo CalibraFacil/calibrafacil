@@ -1,3 +1,4 @@
+import { DEFAULT_APP_URL } from "@calibra-facil/config/origin-defaults";
 import { conflict } from "../../../lib/domain-errors";
 import { HTTPException } from "hono/http-exception";
 import { type IntegrationSyncTarget } from "@calibra-facil/shared";
@@ -48,7 +49,7 @@ export function buildContaAzulOAuthReturnUrl(
   returnTo: string | null,
 ) {
   const appUrl = typeof env.APP_URL === "string" ? env.APP_URL.trim() : "";
-  const baseUrl = appUrl || "http://localhost:5173";
+  const baseUrl = appUrl || DEFAULT_APP_URL;
   return new URL(
     returnTo ?? "/dashboard/settings/integrations",
     baseUrl,
@@ -65,7 +66,7 @@ export function buildContaAzulOAuthErrorUrl(
   reason: "invalid_state" | "exchange_failed" | "app_missing",
 ) {
   const appUrl = typeof env.APP_URL === "string" ? env.APP_URL.trim() : "";
-  const baseUrl = appUrl || "http://localhost:5173";
+  const baseUrl = appUrl || DEFAULT_APP_URL;
   const url = new URL(returnTo ?? "/dashboard/settings/integrations", baseUrl);
   url.searchParams.set("contaAzulOAuth", "error");
   url.searchParams.set("reason", reason);

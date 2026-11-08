@@ -124,7 +124,7 @@ mount(
       );
     }
 
-    const appUrl = resolveTrustedAppUrl(c);
+    const appUrl = resolveTrustedAppUrl();
     const claimUrl = buildLabClaimUrl(appUrl, rawToken);
     const auth = createLabAuth();
     const response = await auth.api.signInMagicLink({

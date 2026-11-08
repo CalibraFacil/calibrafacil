@@ -164,7 +164,7 @@ mount(
 
     const invitedEmail = normalizeEmail(inv.email);
     const invitedUser = await ensureInvitationUser(invitedEmail);
-    const appUrl = resolveTrustedAppUrl(c);
+    const appUrl = resolveTrustedAppUrl();
     const setupToken = await createLabAccountSetupToken({
       userId: invitedUser.user.id,
       organizationId: inv.organizationId,

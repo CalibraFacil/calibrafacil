@@ -22,7 +22,7 @@ import { withOrg, type OrgActor } from "../../../lib/org-context";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
 import { requestActor } from "../../../middleware/request-actor";
-import { appBaseUrl } from "@calibra-facil/shared/public-urls";
+import { readOriginsConfig } from "@calibra-facil/config";
 
 const providerOidcConfigSchema = z.object({
   discoveryEndpoint: z.string().optional(),
@@ -52,15 +52,11 @@ const ssoStartResponseSchema = z.object({
 type SsoProviderRow = typeof ssoProvider.$inferSelect;
 
 function getApiBaseURL() {
-  return process.env.NODE_ENV === "production"
-    ? process.env.API_URL || "http://localhost:3000"
-    : "http://localhost:3000";
+  return readOriginsConfig().apiBaseUrl;
 }
 
 function getDashboardBaseURL() {
-  return process.env.NODE_ENV === "production"
-    ? process.env.APP_URL || appBaseUrl()
-    : "http://localhost:5173";
+  return readOriginsConfig().appBaseUrl;
 }
 
 function normalizeDomain(value: string): string | null {

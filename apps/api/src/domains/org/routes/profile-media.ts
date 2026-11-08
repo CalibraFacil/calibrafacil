@@ -1,3 +1,4 @@
+import { readOriginsConfig } from "@calibra-facil/config";
 import { createRouter } from "../../../server/router";
 import { profileMediaEndpoints } from "@calibra-facil/contracts";
 import { findUserImage } from "../identity";
@@ -24,7 +25,7 @@ const ALLOWED_AVATAR_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const AVATAR_URL_EXPIRY = 300;
 
 function getAvatarApiUrl(): string {
-  return `${process.env.API_URL || "https://localhost:3000"}/api/profile-media/avatar`;
+  return `${readOriginsConfig().apiBaseUrl}/api/profile-media/avatar`;
 }
 
 const PREFIX = "/api/profile-media";

@@ -13,6 +13,8 @@
  * In the browser there is no process.env; callers there get the local defaults
  * unless they pass an explicit env.
  */
+import { DEFAULT_APP_URL } from "@calibra-facil/config/origin-defaults";
+
 export type PublicUrlEnv = Record<string, string | undefined>;
 
 const ENV_NAMES = [
@@ -53,7 +55,7 @@ function baseUrl(value: string | undefined, fallback: string): string {
 }
 
 export function appBaseUrl(env: PublicUrlEnv = processEnv()): string {
-  return baseUrl(env.APP_URL ?? env.WEB_URL, "http://localhost:5173");
+  return baseUrl(env.APP_URL ?? env.WEB_URL, DEFAULT_APP_URL);
 }
 
 export function portalBaseUrl(env: PublicUrlEnv = processEnv()): string {

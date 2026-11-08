@@ -1,4 +1,11 @@
+import { DEFAULT_API_URL, DEFAULT_APP_URL } from "../origin-defaults";
 import { defineGroup, example, list, text, url } from "../define";
+
+function withoutTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
 
 export const originsGroup = defineGroup({
   name: "origins",
@@ -67,4 +74,12 @@ export const originsGroup = defineGroup({
       example: example.commented(".example.com"),
     }),
   },
+  derive: (values) => ({
+    /** API_URL, else the development default, without a trailing slash. */
+    apiBaseUrl: withoutTrailingSlashes(values.apiUrl ?? DEFAULT_API_URL),
+    /** APP_URL, else its older name WEB_URL, else the development default, without a trailing slash. */
+    appBaseUrl: withoutTrailingSlashes(
+      values.appUrl ?? values.webUrl ?? DEFAULT_APP_URL,
+    ),
+  }),
 });

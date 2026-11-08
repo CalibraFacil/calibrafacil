@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError, domainErrorBody } from "../../../../lib/domain-errors";
 import { labSetupRouter } from "../lab-setup";
 
@@ -79,6 +79,10 @@ function validToken(overrides: Record<string, unknown> = {}) {
 }
 
 describe("labSetupRouter", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.dbInsert.mockReturnValue({ values: mocks.dbInsertValues });
@@ -118,14 +122,18 @@ describe("labSetupRouter", () => {
   it("sends magic links only after token validation and uses the trusted app URL", async () => {
     mocks.validateLabAccountSetupToken.mockResolvedValue(validToken());
 
-    const response = await createApp({
-      APP_URL: "https://web.calibrafacil.test",
-    }).request("/raw.setup.token/request-magic-link", {
-      method: "POST",
-      headers: {
-        Origin: "https://attacker.test",
+    // `applyRuntimeEnv` puts the bindings in the process environment, where
+    // the configuration is read.
+    vi.stubEnv("APP_URL", "https://web.calibrafacil.test");
+    const response = await createApp().request(
+      "/raw.setup.token/request-magic-link",
+      {
+        method: "POST",
+        headers: {
+          Origin: "https://attacker.test",
+        },
       },
-    });
+    );
 
     expect(response.status).toBe(200);
     expect(mocks.signInMagicLink).toHaveBeenCalledWith(

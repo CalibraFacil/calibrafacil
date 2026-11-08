@@ -45,6 +45,7 @@ export type ApiConfig = ReturnType<typeof loadApiConfig>;
 export { ConfigError, isProductionEnv, type EnvSource } from "./define";
 export { parseEnvFile, type EnvFile } from "./env-file";
 export type { PlatformEmailTransport } from "./groups/email";
+export { DEFAULT_API_URL, DEFAULT_APP_URL } from "./origin-defaults";
 export {
   readAuthConfig,
   readDatabaseConfig,

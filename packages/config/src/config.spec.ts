@@ -7,6 +7,7 @@ import {
   loadWebConfig,
   loadWorkerConfig,
   readDatabaseConfig,
+  readOriginsConfig,
   readJobsConfig,
   readRetentionConfig,
   readSyncConfig,
@@ -79,6 +80,27 @@ describe("REQ-CFG-1 defaults", () => {
     expect(config.database.url).toBeUndefined();
     expect(config.database.poolMax).toBe(5);
     expect(config.origins.appUrl).toBe("http://localhost:5173");
+  });
+
+  it("REQ-CFG-1: the API and app base URLs have one default and one shape for every reader", () => {
+    const unset = readOriginsConfig({});
+    expect(unset.apiBaseUrl).toBe("http://localhost:3000");
+    expect(unset.appBaseUrl).toBe("http://localhost:5173");
+    expect(
+      readOriginsConfig({
+        API_URL: "https://api.example.com//",
+        WEB_URL: "https://web.example.com/",
+      }),
+    ).toMatchObject({
+      apiBaseUrl: "https://api.example.com",
+      appBaseUrl: "https://web.example.com",
+    });
+    expect(
+      readOriginsConfig({
+        APP_URL: "https://app.example.com",
+        WEB_URL: "https://web.example.com",
+      }).appBaseUrl,
+    ).toBe("https://app.example.com");
   });
 
   it("REQ-CFG-1: DATABASE_POOL_MAX overrides the default pool size", () => {

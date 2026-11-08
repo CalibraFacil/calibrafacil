@@ -1,3 +1,4 @@
+import { readEmailConfig } from "@calibra-facil/config";
 import { createRouter } from "../../../server/router";
 import { suppressEmail } from "@calibra-facil/notifications";
 import {
@@ -36,7 +37,7 @@ export const webhooksRouter = createRouter().post("/resend", async (c) => {
 
   // Graceful degradation: with no secret configured we cannot verify the Svix
   // signature, so we ack the provider (200) and process nothing.
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  const secret = readEmailConfig().resendWebhookSecret;
   if (!secret) {
     if (!resendWebhookSecretWarningLogged) {
       log("warn", "resend_webhook_secret_missing");

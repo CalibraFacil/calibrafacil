@@ -1,3 +1,4 @@
+import { DEFAULT_API_URL } from "@calibra-facil/config/origin-defaults";
 import { DEFAULT_CONTA_AZUL_SCOPES } from "@calibra-facil/shared";
 import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
@@ -201,7 +202,7 @@ export function resolveContaAzulRedirectUri(env: ContaAzulOAuthEnv): string {
     return configured;
   }
 
-  const apiUrl = env.API_URL?.trim() || "http://localhost:3000";
+  const apiUrl = env.API_URL?.trim() || DEFAULT_API_URL;
   return `${apiUrl.replace(/\/+$/, "")}${CONTA_AZUL_OAUTH_CALLBACK_PATH}`;
 }
 

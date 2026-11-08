@@ -1,3 +1,4 @@
+import { readEmailConfig } from "@calibra-facil/config";
 /** Managed laboratory sending domains, with read support for legacy BYOK rows. */
 
 import { createRouter } from "../../../server/router";
@@ -94,7 +95,7 @@ function resolveRowApiKey(record: {
   resendApiKeyIv: string | null;
 }): { ok: true; apiKey: string } | { ok: false; message: string } {
   if (record.mode === "managed") {
-    const platformKey = process.env.RESEND_API_KEY;
+    const platformKey = readEmailConfig().resendApiKey;
     return platformKey
       ? { ok: true, apiKey: platformKey }
       : { ok: false, message: PLATFORM_KEY_MISSING_MESSAGE };
