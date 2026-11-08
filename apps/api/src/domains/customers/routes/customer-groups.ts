@@ -1,9 +1,7 @@
-import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
 import { createRouter } from "../../../server/router";
 import { uniqueSlug } from "../../../lib/unique-slug";
 import { customerGroupEndpoints } from "@calibra-facil/contracts";
 import {
-  asset,
   customer,
   customerGroup,
   invitation,
@@ -15,8 +13,7 @@ import {
   PORTAL_VISIBLE_MEMBER_ROLES,
   isPortalManageableMemberRole,
 } from "@calibra-facil/auth/access";
-import { LAB_TODAY_SQL } from "@calibra-facil/shared";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
@@ -40,6 +37,7 @@ import { orgDb } from "../../../lib/org-db";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 import { reportServerError } from "../../../lib/observability";
+import { fleetDueCountsByCustomer } from "../../assets";
 
 function getStringProperty(value: unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -200,26 +198,9 @@ mount(
         { total: number; overdue: number; dueSoon: number }
       >();
       if (branchIds.length > 0) {
-        const labToday = sql.raw(LAB_TODAY_SQL);
-        const labSoon = sql`(${labToday} + ${sql.raw(String(FLEET_DUE_SOON_DAYS))})`;
-        const counts = await o
-          .select({
-            customerId: asset.customerId,
-            total: sql<number>`cast(count(*) as int)`,
-            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
-            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
-          })
-          .from(asset)
-          .where(
-            and(
-              inArray(asset.customerId, branchIds),
-              eq(asset.status, "ACTIVE"),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .groupBy(asset.customerId);
-        for (const row of counts) {
-          countsById.set(row.customerId, {
+        const counts = await fleetDueCountsByCustomer(o, branchIds);
+        for (const [customerId, row] of counts) {
+          countsById.set(customerId, {
             total: row.total,
             overdue: row.overdue,
             dueSoon: row.dueSoon,

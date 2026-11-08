@@ -1,9 +1,5 @@
 import { createRouter } from "../../../server/router";
-import {
-  ReportQuerySchema,
-  reportEndpoints,
-  type ReportPeriod,
-} from "@calibra-facil/contracts";
+import { ReportQuerySchema, reportEndpoints } from "@calibra-facil/contracts";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { createMiddleware } from "hono/factory";
 import { zValidator } from "@hono/zod-validator";
@@ -16,7 +12,6 @@ import {
   and,
   asc,
   count,
-  desc,
   eq,
   gte,
   inArray,
@@ -37,25 +32,19 @@ import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { resolvePeriodRange } from "../report-period";
-
-type HealthStatus = "healthy" | "attention" | "critical";
+import {
+  buildReportScopeSummary,
+  getHealthReason,
+  getHealthStatus,
+  getPeriodLabel,
+  parseRequestedUnitIds,
+} from "../report-support";
 
 type UnitSummary = {
   id: number;
   name: string;
   slug: string;
 };
-
-function parseRequestedUnitIds(raw?: string) {
-  if (!raw?.trim()) return null;
-
-  const unitIds = raw
-    .split(",")
-    .map((value) => Number.parseInt(value.trim(), 10))
-    .filter((value) => Number.isInteger(value) && value > 0);
-
-  return unitIds.length > 0 ? Array.from(new Set(unitIds)) : null;
-}
 
 function mapCountsByUnit<
   T extends { unitId: number | null; value: number | string },
@@ -147,76 +136,6 @@ async function resolveSelectedUnits(params: {
   };
 }
 
-function getPeriodLabel(period: ReportPeriod) {
-  switch (period) {
-    case "7d":
-      return "Últimos 7 dias";
-    case "30d":
-      return "Últimos 30 dias";
-    case "90d":
-      return "Últimos 90 dias";
-    case "month":
-      return "Mês atual";
-    default:
-      return "Últimos 30 dias";
-  }
-}
-
-function buildScopeSummary(params: {
-  selectedUnits: UnitSummary[];
-  availableUnits: UnitSummary[];
-}) {
-  const unitsIncluded = params.selectedUnits.length;
-  const isAllUnits = unitsIncluded === params.availableUnits.length;
-
-  return {
-    label: isAllUnits
-      ? "Todas as unidades ativas"
-      : `${unitsIncluded} unidade(s) selecionada(s)`,
-    description: isAllUnits
-      ? "Visão executiva consolidada para todas as unidades ativas acessíveis."
-      : `Visão executiva filtrada para ${unitsIncluded} unidade(s) dentro do consolidado.`,
-    unitsIncluded,
-    isAllUnits,
-  };
-}
-
-function getHealthStatus(params: {
-  overdueNow: number;
-  rejectedInPeriod: number;
-  expiringStandardsSoon: number;
-}): HealthStatus {
-  if (params.overdueNow > 0) {
-    return "critical";
-  }
-
-  if (params.rejectedInPeriod > 0 || params.expiringStandardsSoon > 0) {
-    return "attention";
-  }
-
-  return "healthy";
-}
-
-function getHealthReason(params: {
-  overdueNow: number;
-  rejectedInPeriod: number;
-  expiringStandardsSoon: number;
-}) {
-  if (params.overdueNow > 0) {
-    return `${params.overdueNow} OS atrasada(s) em aberto`;
-  }
-
-  if (params.rejectedInPeriod > 0) {
-    return `${params.rejectedInPeriod} rejeição(ões) no período`;
-  }
-
-  if (params.expiringStandardsSoon > 0) {
-    return `${params.expiringStandardsSoon} padrão(ões) expirando em 30 dias`;
-  }
-
-  return "Operação sem alertas executivos no período";
-}
-
 const PREFIX = "/api/reports";
 
 export const reportsRouter = createRouter<{ Variables: AuthVariables }>();
@@ -243,7 +162,7 @@ mount(
           accessibleUnitIds: memberData.accessibleUnitIds,
           requestedUnitIds,
         });
-      const scopeSummary = buildScopeSummary({
+      const scopeSummary = buildReportScopeSummary({
         selectedUnits,
         availableUnits,
       });

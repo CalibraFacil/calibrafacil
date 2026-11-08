@@ -17,7 +17,7 @@ import {
   getPeriodLabel,
   parseRequestedUnitIds,
   resolvePeriodRange,
-} from "./report-support";
+} from "../../../reports";
 import { orgDb } from "../../../../lib/org-db";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 
