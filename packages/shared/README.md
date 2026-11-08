@@ -24,7 +24,6 @@ Node, the browser, the Electron renderer).
 | `background-jobs`                                 | Background job messages shared by the API and the worker        |
 | `portal-digest`                                   | Client-portal digest frequencies                                |
 | `public-api`                                      | Public integrator API resource types and webhook events         |
-| `signup-email-policy`                             | Corporate-domain rule for the self-service sign-up              |
 | `domain-utils`                                    | Hostname and origin normalization                               |
 | `public-urls`, `storage-keys`, `storage-endpoint` | Public URL builders and the object-storage layout               |
 | `telemetry`                                       | Structured logger and a log-backed error reporter               |

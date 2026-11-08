@@ -4,7 +4,6 @@ import { organizationProfileEndpoints } from "./organization-profile";
 import { organizationLifecycleEndpoints } from "./organization-lifecycle";
 import { accreditedScopeEndpoints } from "./accredited-scope";
 import { publicInvitationEndpoints } from "./public-invitations";
-import { publicSignupEndpoints } from "./public-signup";
 import { assetTypeEndpoints } from "./asset-types";
 import { labSetupEndpoints } from "./lab-setup";
 import { sessionEndpoints } from "./sessions";
@@ -46,7 +45,6 @@ import { visitEndpoints } from "./visits";
 
 export * from "./define";
 export * from "./public-invitations";
-export * from "./public-signup";
 export * from "./lab-setup";
 export * from "./sessions";
 export * from "./access";
@@ -130,7 +128,6 @@ export const ENDPOINT_GROUPS = {
   portalDomains: portalDomainEndpoints,
   sso: ssoEndpoints,
   signingCertificates: signingCertificateEndpoints,
-  publicSignup: publicSignupEndpoints,
   publicInvitations: publicInvitationEndpoints,
   units: unitEndpoints,
   notifications: notificationEndpoints,

@@ -11,20 +11,10 @@ const BRAND_MESH_COLORS = [
   '#F5F7FF',
 ]
 
-type AuthShaderPanelProps = {
-  title?: string
-  description?: string
-}
-
 /**
- * The brand panel that fills half of the authentication screens. Sign-in and
- * sign-up share it so the two pages read as one surface; only the copy over
- * the mesh changes, which is why the text is props rather than hardcoded.
+ * The brand panel that fills half of the sign-in screen.
  */
-export function AuthShaderPanel({
-  title = 'Calibração sem complicação.',
-  description = 'Fluxos de calibração, cálculo de incertezas e emissão de certificados ISO/IEC 17025 em uma única plataforma.',
-}: AuthShaderPanelProps = {}) {
+export function AuthShaderPanel() {
   const prefersReducedMotion = useReducedMotion()
 
   return (
@@ -43,10 +33,11 @@ export function AuthShaderPanel({
 
       <div className="relative z-10 flex flex-col gap-4 p-10 text-white">
         <h2 className="max-w-md text-3xl font-semibold leading-tight text-balance">
-          {title}
+          Calibração sem complicação.
         </h2>
         <p className="max-w-md text-sm text-white/80 text-pretty">
-          {description}
+          Fluxos de calibração, cálculo de incertezas e emissão de certificados
+          ISO/IEC 17025 em uma única plataforma.
         </p>
       </div>
     </div>

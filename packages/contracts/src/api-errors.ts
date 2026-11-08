@@ -245,8 +245,7 @@ export const API_ERROR_CODES = [
   "payload_too_large",
 
   // Laboratory settings and access: API keys, e-mail sending domains, SSO,
-  // sessions, notifications, invitations, the account-setup link, self-serve
-  // sign-up and the signing credential's server configuration.
+  // sessions, notifications, invitations, the account-setup link and the signing credential's server configuration.
   "api_key_not_found",
   "email_domain_not_found",
   "email_domain_not_verified",
@@ -260,8 +259,6 @@ export const API_ERROR_CODES = [
   "invitation_not_found",
   "lab_setup_token_invalid",
   "lab_setup_delivery_failed",
-  "signup_domain_cap_reached",
-  "signup_unavailable",
   "signing_not_configured",
 
   // Client portal and public verification: audit packs, out-of-tolerance
@@ -295,8 +292,6 @@ export const API_ERROR_CODES = [
   "ALREADY_ACKNOWLEDGED",
   "ASSESSMENT_SIGNED",
   "CONCLUSION_REQUIRED",
-  // Shipped with public self-serve sign-up and asserted by the sign-up page.
-  "ALREADY_REGISTERED",
   // The cloud approval route's role and roster refusals (`POST /jobs/:id/approve`),
   // asserted by the web approval dialog and the approval specs.
   "APPROVAL_ROLE_NOT_PERMITTED",

@@ -56,14 +56,6 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "auth-session",
-    file: "apps/api/src/domains/org/public-signup-store.ts",
-    tables: ["member"],
-    kinds: ["select"],
-    reason:
-      "System path (P2-18j, systemDb): public self-serve sign-up (hasLabMembership) asks whether the e-mail's user already belongs to ANY laboratory before one is provisioned; an unauthenticated visitor has no organization. One row, only its existence is used.",
-  },
-  {
-    category: "auth-session",
     file: "packages/auth/src/auth.ts",
     tables: ["personnel_competence", "training_record", "authorized_signatory"],
     reason:

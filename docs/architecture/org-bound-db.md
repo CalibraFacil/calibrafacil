@@ -113,7 +113,7 @@ that no longer exist (`inOrgTransaction`, `withOrgReader`, `OrgScope`, `afterCom
 them (`import * as x`, `x.db`), a dynamic `import("@calibra-facil/db")`, and importing `db` or
 `getDb` by name from ANY module (so a lib that re-exports the raw handle is no way around it). No route is
 grandfathered since P2-18j (the baseline is gone, and so is the rule's `baseline` option): a route that needs a statement
-outside an organization calls a named lib function (`domains/org/identity.ts`, `domains/org/public-signup-store.ts`, ...),
+outside an organization calls a named lib function (`domains/org/identity.ts`, ...),
 never the raw handle.
 
 ## Row-level security (enforced since P2-18k)
@@ -415,9 +415,6 @@ added or removed without a migration.
     delete of a just-created, record-less laboratory) runs on the system path: the guard of the `organization`
     row yields to `calibra.allow_org_purge` for the table owner only (migration 0127), never for `calibra_app`. `domains/org/lab-provisioning.ts` creates the first membership in the new
     laboratory's transaction; `domains/org/activation-checklist.ts` reads one laboratory in one transaction.
-    Public self-serve sign-up keeps its slot ledger in the global `platform_event_log`
-    (`domains/org/public-signup-store.ts`); its one tenant read ("is this person already in a laboratory") is a system-path
-    statement.
   - **E-mail domain.** `domains/org/email-domain-lifecycle.ts` stays ONE transaction that names the laboratory and holds the
     tenant lock across the provider call: that is deliberate (it serialises a concurrent create for the same
     organization and lets a rejected database write be compensated before the lock is released; the specs pin

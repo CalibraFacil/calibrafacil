@@ -23,10 +23,9 @@ import { reportServerError } from "../../lib/observability";
  * Everything it takes to turn "a name and an e-mail" into a laboratory that
  * can log in and work.
  *
- * Self-serve sign-up is the only caller today. It does NOT decide *who may
- * call it*: the public route gates on the sign-up e-mail policy, a real MX
- * record and a per-domain cap. Nor does it send the claim e-mail or write the
- * audit entry; those stay at the call site.
+ * The operator's `create-lab` CLI is the caller: a laboratory is opened by
+ * whoever runs the instance, never by an anonymous visitor. It does not send
+ * the claim e-mail or write the audit entry; those stay at the call site.
  */
 
 function platformUserFromUnknown(value: unknown) {
@@ -143,7 +142,7 @@ export async function createLabOrganizationWithUniqueSlug(input: {
   });
 }
 
-export async function findLabProvisioningUser(email: string) {
+async function findLabProvisioningUser(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const existing = await db.query.user.findFirst({
     where: eq(sql<string>`lower(${userTable.email})`, normalizedEmail),

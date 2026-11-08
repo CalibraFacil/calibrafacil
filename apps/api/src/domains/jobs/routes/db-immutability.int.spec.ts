@@ -12,8 +12,8 @@
  *   REQ-DBIMM-005  every *_audit_log table and event log is append-only
  *   REQ-DBIMM-006  the seed escape hatch lifts the triggers for one
  *                  transaction only
- *   REQ-DBIMM-007  platform_event_log stays editable only for the public-signup
- *                  reservation row
+ *   REQ-DBIMM-007  platform_event_log is append-only for every row (migration
+ *                  0142 removed the sign-up reservation exception)
  *   REQ-DBIMM-009  no route writes to an issued certificate: assigning a
  *                  technician or editing a SUPERSEDED / APPROVED job is refused
  *                  with a client error instead of reaching the trigger
@@ -927,13 +927,13 @@ describe("seed escape hatch calibra.allow_audit_rewrite (migration 0115)", () =>
 
 // ---------------------------------------------------------------------------
 
-describe("platform_event_log signup reservation (migration 0115)", () => {
+describe("platform_event_log is append-only (migrations 0115, 0142)", () => {
   beforeEach(async () => {
     await truncateAll();
   });
 
-  it("REQ-DBIMM-007: the RESERVED signup row can be completed, but is append-only afterwards", async () => {
-    const [reserved] = await db
+  it("REQ-DBIMM-007: no platform event can be updated or deleted, including a row shaped like the retired sign-up reservation", async () => {
+    const [reservationShaped] = await db
       .insert(platformEventLog)
       .values({
         action: "public.signup.provisioned",
@@ -941,51 +941,26 @@ describe("platform_event_log signup reservation (migration 0115)", () => {
         details: { emailDomain: "lab.test", status: "RESERVED" },
       })
       .returning({ id: platformEventLog.id });
-    if (!reserved) throw new Error("insert failed");
-
-    // public-signup.ts completeSignupReservation
-    await db
-      .update(platformEventLog)
-      .set({ entityId: "org-1", details: { emailDomain: "lab.test" } })
-      .where(eq(platformEventLog.id, reserved.id));
-
-    const after = await failureOf(() =>
-      db
-        .update(platformEventLog)
-        .set({ details: { tampered: true } })
-        .where(eq(platformEventLog.id, reserved.id)),
-    );
-    expect(after.message).toContain("append-only");
-    const del = await failureOf(() =>
-      db.delete(platformEventLog).where(eq(platformEventLog.id, reserved.id)),
-    );
-    expect(del.message).toContain("append-only");
-  });
-
-  it("REQ-DBIMM-007: a failed signup can still release its RESERVED row; other platform events cannot be deleted", async () => {
-    const [reserved] = await db
-      .insert(platformEventLog)
-      .values({
-        action: "public.signup.provisioned",
-        entityType: "organization",
-        details: { status: "RESERVED" },
-      })
-      .returning({ id: platformEventLog.id });
     const [other] = await db
       .insert(platformEventLog)
       .values({ action: "user.banned", entityType: "user" })
       .returning({ id: platformEventLog.id });
-    if (!reserved || !other) throw new Error("insert failed");
+    if (!reservationShaped || !other) throw new Error("insert failed");
 
-    await db
-      .delete(platformEventLog)
-      .where(eq(platformEventLog.id, reserved.id));
-    expect(await db.select().from(platformEventLog)).toHaveLength(1);
-
-    const failure = await failureOf(() =>
-      db.delete(platformEventLog).where(eq(platformEventLog.id, other.id)),
-    );
-    expect(failure.message).toContain("append-only");
+    for (const id of [reservationShaped.id, other.id]) {
+      const update = await failureOf(() =>
+        db
+          .update(platformEventLog)
+          .set({ details: { tampered: true } })
+          .where(eq(platformEventLog.id, id)),
+      );
+      expect(update.message).toContain("append-only");
+      const del = await failureOf(() =>
+        db.delete(platformEventLog).where(eq(platformEventLog.id, id)),
+      );
+      expect(del.message).toContain("append-only");
+    }
+    expect(await db.select().from(platformEventLog)).toHaveLength(2);
   });
 });
 

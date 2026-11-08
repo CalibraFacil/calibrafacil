@@ -65,7 +65,6 @@ describe("REQ-CFG-1 defaults", () => {
     expect(config.jobs.queueReceiptsMode).toBe("enforce");
     expect(config.retention.purgeEnabled).toBe(false);
     expect(config.retention.purgeMode).toBe("dry-run");
-    expect(config.auth.publicSignupEnabled).toBe(false);
     expect(config.signing.tsaIcpConformant).toBe(false);
     expect(config.email.transport).toBeNull();
   });

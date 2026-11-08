@@ -1,7 +1,6 @@
 /**
- * admin-public-contract.int.spec.ts: the cloud half of the public-signup and
- * public-invitations endpoint definitions
- * (`packages/contracts/src/endpoints/{public-signup,public-invitations}.ts`).
+ * admin-public-contract.int.spec.ts: the cloud half of the public-invitations
+ * endpoint definitions (`packages/contracts/src/endpoints/public-invitations.ts`).
  * The endpoints that do not need Better Auth or an outbound mailbox are called
  * for real (real handlers, real Postgres) and their bodies are parsed with the
  * response schema of their definition. `mount` also checks each body with that
@@ -9,21 +8,16 @@
  * the request itself; the explicit parse here names the drifting path and the
  * status.
  *
- * Not covered here: the sign-up that provisions an account and the setup link
- * request (they create users through Better Auth and send mail);
- * `invitations.int.spec.ts` calls the latter.
+ * Not covered here: the setup link request (it creates users through Better
+ * Auth and sends mail); `invitations.int.spec.ts` calls it.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
-import {
-  publicInvitationEndpoints,
-  publicSignupEndpoints,
-} from "@calibra-facil/contracts";
+import { publicInvitationEndpoints } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { invitation } from "@calibra-facil/db/schema";
 import { invitationsRouter } from "./invitations";
-import { publicSignupRouter } from "./public-signup";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedOrg } from "../../../../test/integration/seed";
 
@@ -66,35 +60,5 @@ describe("public-invitations endpoints: real responses honor the definitions' re
       email: "convidado@lab.test",
       organizationId: org.orgId,
     });
-  });
-});
-
-describe("public-signup endpoints: real responses honor the definitions' response schemas", () => {
-  beforeEach(() => {
-    vi.stubEnv("PUBLIC_SIGNUP_ENABLED", "true");
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("start answers the success shape to the honeypot, with the no-cache headers", async () => {
-    const response = await publicSignupRouter.request("/", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: "Ana Souza",
-        email: "ana@laboratorio-exemplo.com.br",
-        labName: "Laboratório Exemplo",
-        cnpj: "11.222.333/0001-81",
-        website: "http://spam.example",
-      }),
-    });
-
-    expect(response.headers.get("cache-control")).toContain("no-store");
-    const body = await parsedBody(
-      response,
-      publicSignupEndpoints.start.response,
-    );
-    expect(body.ok).toBe(true);
   });
 });

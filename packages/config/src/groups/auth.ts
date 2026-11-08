@@ -1,4 +1,4 @@
-import { defineGroup, example, flag, integer, list, text } from "../define";
+import { defineGroup, example, integer, list, text } from "../define";
 
 export const authGroup = defineGroup({
   name: "auth",
@@ -33,12 +33,6 @@ export const authGroup = defineGroup({
       env: "PASSKEY_EXTRA_ORIGINS",
       description: "Passkeys: extra origins (comma-separated).",
       example: example.commented(""),
-    }),
-    publicSignupEnabled: flag({
-      env: "PUBLIC_SIGNUP_ENABLED",
-      description: "Self-service lab sign-up (corporate e-mail domains only).",
-      default: false,
-      example: example.commented("false"),
     }),
     portalServiceUserId: text({
       env: "PORTAL_SERVICE_USER_ID",

@@ -12,7 +12,7 @@ Migration `0130_evidence_privileges_owner_hatch` (roadmap 2, B1) makes that a pr
   (`pnpm --filter @calibra-facil/db gen:rls-sql evidence`) and repeated in `sql/schema-extras.sql`. A drift test
   fails when an audit or event log is added without being classified. Left to the triggers alone, each with
   the reason in that file: `calibration_job` (UPDATEd until approval), `certificate_input` `DELETE` (the revert
-  of an approval), `platform_event_log` (the public-signup reservation row) and `organization`.
+  of an approval) and `organization`. `platform_event_log` is append-only like the other logs (migration 0142).
   The `ON DELETE SET NULL` actions of foreign keys keep working: Postgres runs them as the table owner.
 - **The hatches are the owner's.** `calibra.allow_audit_rewrite`, `calibra.allow_status_repair` and
   `calibra.allow_org_purge` only take effect when the session user and the current user are the owner of the
