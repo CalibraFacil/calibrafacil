@@ -1,13 +1,34 @@
 import type { MethodStatus } from '@calibra-facil/schemas/machines'
 import type { MeasurementUnit } from '@calibra-facil/shared/units'
+import type {
+  CERTIFICATE_SECTION_DISPLAYS,
+  ECCENTRICITY_INDICATOR_VARIANTS,
+  ENVIRONMENT_FIELDS,
+  FORMULA_REPORTING_GROUPS,
+  MASS_COMPOSITION_OPTION_SOURCES,
+  MASS_COMPOSITION_QUANTITY_MODES,
+  MASS_COMPOSITION_UNCERTAINTY_MODES,
+  MASS_UNITS,
+  METHOD_COLUMN_PHASES,
+  METHOD_INPUT_FIELD_SOURCES,
+  METHOD_INPUT_FIELD_TYPES,
+  METHOD_TABLE_COLUMN_ROLES,
+  METHOD_TABLE_COLUMN_TYPES,
+  METHOD_VALIDATION_OPERATORS,
+  METHOD_VALIDATION_SEVERITIES,
+  STANDARD_CHANNEL_PROPERTIES,
+  TABLE_STATISTICS,
+  UNCERTAINTY_DISTRIBUTIONS,
+} from '@calibra-facil/shared'
 
 /**
  * Types for the Method Builder component
  */
 
-export type MethodInputType = 'text' | 'number' | 'select' | 'table'
-type MethodInputSource = 'manual' | 'asset_spec'
-type EccentricityIndicatorVariant = 'circular_platform' | 'road_scale'
+export type MethodInputType = (typeof METHOD_INPUT_FIELD_TYPES)[number]
+type MethodInputSource = (typeof METHOD_INPUT_FIELD_SOURCES)[number]
+type EccentricityIndicatorVariant =
+  (typeof ECCENTRICITY_INDICATOR_VARIANTS)[number]
 
 interface EccentricityIndicatorConfig {
   enabled?: boolean
@@ -31,11 +52,11 @@ interface WeighingRangeResolverConfig {
   }
 }
 
-type MethodTableColumnRole = 'standard_value' | 'mass_standard_composition'
+type MethodTableColumnRole = (typeof METHOD_TABLE_COLUMN_ROLES)[number]
 
 interface MassCompositionConfig {
-  targetUnit?: 'mg' | 'g' | 'kg'
-  optionSource?: 'certified_values' | 'composition_profiles'
+  targetUnit?: (typeof MASS_UNITS)[number]
+  optionSource?: (typeof MASS_COMPOSITION_OPTION_SOURCES)[number]
   targetColumns?: {
     certifiedValue?: string
     compositionLabel?: string
@@ -44,8 +65,8 @@ interface MassCompositionConfig {
     drift?: string
     buoyancy?: string
   }
-  uncertaintyMode?: 'expanded_rss' | 'expanded_arithmetic'
-  quantityMode?: 'linear_per_item_then_rss' | 'profile_linear'
+  uncertaintyMode?: (typeof MASS_COMPOSITION_UNCERTAINTY_MODES)[number]
+  quantityMode?: (typeof MASS_COMPOSITION_QUANTITY_MODES)[number]
 }
 
 /**
@@ -67,12 +88,12 @@ export interface StandardValueConfig {
 export interface MethodTableColumn {
   key: string
   label: string
-  type: 'text' | 'number'
+  type: (typeof METHOD_TABLE_COLUMN_TYPES)[number]
   unit?: string
   role?: MethodTableColumnRole
   /** Semantic role; delta-valued roles convert factor-only for affine kinds. */
   quantityKind?: string
-  phase?: 'before' | 'after' | 'always'
+  phase?: (typeof METHOD_COLUMN_PHASES)[number]
   massComposition?: MassCompositionConfig
   standardValue?: StandardValueConfig
 }
@@ -107,7 +128,7 @@ interface MethodFormulaReporting {
     | 'conformity_verdict'
     | 'uncertainty_component'
     | 'auxiliary'
-  group?: 'calibration_result' | 'uncertainty_budget' | 'raw_calculation'
+  group?: (typeof FORMULA_REPORTING_GROUPS)[number]
 }
 
 export interface MethodFormula {
@@ -122,10 +143,10 @@ export interface MethodFormula {
 
 export interface MethodValidation {
   leftExpression: string
-  operator: '<' | '<=' | '>' | '>=' | '==' | '!='
+  operator: (typeof METHOD_VALIDATION_OPERATORS)[number]
   rightExpression: string
   message: string
-  severity: 'error' | 'warning'
+  severity: (typeof METHOD_VALIDATION_SEVERITIES)[number]
   metadata?: Record<string, unknown>
 }
 
@@ -142,7 +163,7 @@ export type MethodVariableBinding =
       source: 'table_statistic'
       fieldKey: string
       columnKey: string
-      statistic: 'mean' | 'sample_stddev' | 'count' | 'min' | 'max'
+      statistic: (typeof TABLE_STATISTICS)[number]
     }
   | {
       key: string
@@ -155,7 +176,7 @@ export type MethodVariableBinding =
       key: string
       label?: string
       source: 'environment'
-      field: 'temperature' | 'humidity' | 'pressure'
+      field: (typeof ENVIRONMENT_FIELDS)[number]
     }
   | {
       key: string
@@ -170,18 +191,13 @@ export type MethodVariableBinding =
       source: 'standard_channel'
       standardId?: number
       channelKey: string
-      property:
-        | 'value'
-        | 'correction'
-        | 'uncertainty'
-        | 'coverageFactor'
-        | 'drift'
+      property: (typeof STANDARD_CHANNEL_PROPERTIES)[number]
     }
 
 interface MethodTypeBComponent {
   name: string
   value: number
-  distribution: 'normal' | 'rectangular' | 'triangular' | 'u-shaped'
+  distribution: (typeof UNCERTAINTY_DISTRIBUTIONS)[number]
   coverageFactor?: number
   divisor?: number
   degreesOfFreedom?: number
@@ -207,9 +223,9 @@ type MethodCertificateContentSection =
 interface MethodCertificateContent {
   procedureCode?: string
   referenceStandards?: Array<string>
-  certifiedValuesDisplay?: 'full' | 'hidden'
-  massCompositionDisplay?: 'full' | 'hidden'
-  uncertaintyBudgetDisplay?: 'full' | 'hidden'
+  certifiedValuesDisplay?: (typeof CERTIFICATE_SECTION_DISPLAYS)[number]
+  massCompositionDisplay?: (typeof CERTIFICATE_SECTION_DISPLAYS)[number]
+  uncertaintyBudgetDisplay?: (typeof CERTIFICATE_SECTION_DISPLAYS)[number]
   sections?: Array<MethodCertificateContentSection>
 }
 

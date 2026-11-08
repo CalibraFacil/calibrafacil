@@ -148,12 +148,15 @@ export const CERTIFICATE_RELEASE_STATUS = defineStatusVocabulary(
  * Release policy modes. The strategy's
  * "Partial Payments Or Installments" section enumerates these.
  */
+export const CERTIFICATE_RELEASE_POLICY_MODES = [
+  "release_after_invoice",
+  "release_after_first_installment",
+  "release_after_full_payment",
+  "trusted_customer",
+  "manual_only",
+] as const;
 export type CertificateReleasePolicyMode =
-  | "release_after_invoice"
-  | "release_after_first_installment"
-  | "release_after_full_payment"
-  | "trusted_customer"
-  | "manual_only";
+  (typeof CERTIFICATE_RELEASE_POLICY_MODES)[number];
 
 /**
  * Reason the release-state recompute / mutation happened. Audit-only.
@@ -170,11 +173,13 @@ export type CertificateReleaseAuditSource =
 // order whose policy points at me, send it to the configured financial
 // provider." Triggered automatically by the engine; audited.
 
-export type AutomaticSendMilestone =
-  | "certificate_approved"
-  | "service_order_delivered"
-  | "contract_anniversary"
-  | "manual_only";
+export const AUTOMATIC_SEND_MILESTONES = [
+  "certificate_approved",
+  "service_order_delivered",
+  "contract_anniversary",
+  "manual_only",
+] as const;
+export type AutomaticSendMilestone = (typeof AUTOMATIC_SEND_MILESTONES)[number];
 
 export type AutomaticSendOutcome =
   | "sent"
@@ -215,13 +220,15 @@ export interface CertificateReleasePaymentStateSnapshot {
   } | null;
 }
 
-export type FinancialPaymentMethod =
-  | "CREDIT_CARD"
-  | "PIX"
-  | "BOLETO"
-  | "BANK_TRANSFER"
-  | "CASH"
-  | "OTHER";
+export const FINANCIAL_PAYMENT_METHODS = [
+  "CREDIT_CARD",
+  "PIX",
+  "BOLETO",
+  "BANK_TRANSFER",
+  "CASH",
+  "OTHER",
+] as const;
+export type FinancialPaymentMethod = (typeof FINANCIAL_PAYMENT_METHODS)[number];
 
 export const FINANCIAL_STATUSES = [
   "UNBILLED",
@@ -247,31 +254,47 @@ export const FINANCIAL_STATUS = defineStatusVocabulary(FINANCIAL_STATUSES, {
  * - BILLED:  a billing document exists but has not been sent to finance yet.
  * - SENT:    the billing document was sent to the financial provider.
  */
-export type BillingReadinessStatus = "READY" | "BLOCKED" | "BILLED" | "SENT";
+export const BILLING_READINESS_STATUSES = [
+  "READY",
+  "BLOCKED",
+  "BILLED",
+  "SENT",
+] as const;
+export type BillingReadinessStatus =
+  (typeof BILLING_READINESS_STATUSES)[number];
 
 /** Who is responsible for resolving a billing blocker. */
-export type BillingBlockerOwner =
-  | "lab_ops"
-  | "finance"
-  | "commercial"
-  | "admin"
-  | "support";
+export const BILLING_BLOCKER_OWNERS = [
+  "lab_ops",
+  "finance",
+  "commercial",
+  "admin",
+  "support",
+] as const;
+export type BillingBlockerOwner = (typeof BILLING_BLOCKER_OWNERS)[number];
 
 /** How far a blocker reaches: one order, one customer, or all future work. */
-type BillingBlockerScope = "order" | "customer" | "all_future";
+export const BILLING_BLOCKER_SCOPES = [
+  "order",
+  "customer",
+  "all_future",
+] as const;
+type BillingBlockerScope = (typeof BILLING_BLOCKER_SCOPES)[number];
 
 /**
  * Provider-neutral blocker codes from the strategy's failure/blocking model.
  * These describe lab-side problems, never raw provider error enums.
  */
-export type BillingBlockerCode =
-  | "BLOCKED_BY_CUSTOMER_DATA"
-  | "BLOCKED_BY_UNMAPPED_SERVICE"
-  | "BLOCKED_BY_CERTIFICATE_STATUS"
-  | "BLOCKED_BY_POLICY"
-  | "INTEGRATION_NOT_CONFIGURED"
-  | "INTEGRATION_DISCONNECTED"
-  | "CONFIGURATION_INCOMPLETE";
+export const BILLING_BLOCKER_CODES = [
+  "BLOCKED_BY_CUSTOMER_DATA",
+  "BLOCKED_BY_UNMAPPED_SERVICE",
+  "BLOCKED_BY_CERTIFICATE_STATUS",
+  "BLOCKED_BY_POLICY",
+  "INTEGRATION_NOT_CONFIGURED",
+  "INTEGRATION_DISCONNECTED",
+  "CONFIGURATION_INCOMPLETE",
+] as const;
+export type BillingBlockerCode = (typeof BILLING_BLOCKER_CODES)[number];
 
 export interface BillingBlocker {
   code: BillingBlockerCode;
@@ -312,10 +335,37 @@ export function getBillingBlockerOwnerLabel(owner: BillingBlockerOwner) {
 }
 
 /** Whether the org has a usable financial provider connection. */
+export const BILLING_INTEGRATION_STATES = [
+  "connected",
+  "disconnected",
+  "not_configured",
+] as const;
 export type BillingIntegrationState =
-  | "connected"
-  | "disconnected"
-  | "not_configured";
+  (typeof BILLING_INTEGRATION_STATES)[number];
+
+/**
+ * Operations-to-cash dashboard stages, in pipeline order. Provider-neutral,
+ * lab-facing. `OVERDUE` and `BLOCKED` are surface flags layered over a stage,
+ * not stages themselves.
+ */
+export const OPERATIONS_TO_CASH_STAGES = [
+  "READY_TO_BILL",
+  "SENT_TO_FINANCE",
+  "INVOICED",
+  "PARTIALLY_COLLECTED",
+  "COLLECTED",
+] as const;
+export type OperationsToCashStage = (typeof OPERATIONS_TO_CASH_STAGES)[number];
+
+/** Why an order's revenue is at risk of leaking (one order can carry several). */
+export const REVENUE_LEAKAGE_CLASSES = [
+  "STUCK_READY_TO_BILL",
+  "STUCK_SENT_TO_FINANCE",
+  "STUCK_INVOICED",
+  "LONG_OVERDUE",
+  "BLOCKED_TOO_LONG",
+] as const;
+export type RevenueLeakageClass = (typeof REVENUE_LEAKAGE_CLASSES)[number];
 
 interface BillingReadinessCertificateRef {
   jobId: number;

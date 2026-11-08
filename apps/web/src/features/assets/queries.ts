@@ -1,6 +1,7 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import type { AssetDetail as ContractAssetDetail } from '@calibra-facil/contracts'
 import { AssetTypeFieldSchema } from '@calibra-facil/schemas'
+import { REGULATED_INTERVAL_KINDS } from '@calibra-facil/shared'
 import { isMassUnit } from '@calibra-facil/shared/mass-units'
 import { isRecord } from '@calibra-facil/shared/record'
 import { z } from 'zod'
@@ -139,12 +140,7 @@ export function assetTypesQueryOptions() {
 const LegalMetrologyRegulationEntrySchema = z.object({
   id: z.number(),
   category: z.string(),
-  kind: z.enum([
-    'fixed_months',
-    'max_months_from_install',
-    'per_technology',
-    'not_nationally_fixed',
-  ]),
+  kind: z.enum(REGULATED_INTERVAL_KINDS),
   valueMonths: z.number().nullable(),
   byTechnology: z.record(z.string(), z.number()).nullable(),
   anchor: z.string().nullable(),

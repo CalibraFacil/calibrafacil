@@ -2,11 +2,13 @@ import {
   ACCEPTANCE_CRITERION_SEVERITIES,
   FORMULA_REPORTING_GROUPS,
   FORMULA_REPORTING_ROLES,
+  GUM_TYPE_B_DISTRIBUTIONS,
   MASS_COMPOSITION_OPTION_SOURCES,
   MASS_COMPOSITION_QUANTITY_MODES,
   MASS_COMPOSITION_UNCERTAINTY_MODES,
   MASS_UNITS,
   METHOD_COLUMN_PHASES,
+  METHOD_QUANTITY_KINDS,
   METHOD_TABLE_COLUMN_ROLES,
   METHOD_TABLE_COLUMN_TYPES,
 } from "@calibra-facil/shared";
@@ -47,19 +49,7 @@ const BaseInputSchema = z.object({
 
 const ScalarInputSchema = BaseInputSchema.extend({
   kind: z.literal("scalar"),
-  quantityKind: z
-    .enum([
-      "indication",
-      "reference",
-      "environment",
-      // Delta-valued roles: convert factor-only for affine kinds (temperature).
-      "correction",
-      "tolerance",
-      "uncertainty",
-      "resolution",
-      "other",
-    ])
-    .optional(),
+  quantityKind: z.enum(METHOD_QUANTITY_KINDS).optional(),
   defaultValue: NumericValueSchema.optional(),
   constraints: z
     .object({
@@ -96,18 +86,7 @@ const TableColumnSchema = z
     type: z.enum(METHOD_TABLE_COLUMN_TYPES),
     unit: z.string().trim().optional(),
     role: z.enum(METHOD_TABLE_COLUMN_ROLES).optional(),
-    quantityKind: z
-      .enum([
-        "indication",
-        "reference",
-        "environment",
-        "correction",
-        "tolerance",
-        "uncertainty",
-        "resolution",
-        "other",
-      ])
-      .optional(),
+    quantityKind: z.enum(METHOD_QUANTITY_KINDS).optional(),
     phase: z.enum(METHOD_COLUMN_PHASES).optional(),
     /** Presentation: false keeps a calc-input column out of the certificate grid. */
     includeInCertificate: z.boolean().optional(),
@@ -264,13 +243,7 @@ const TypeAUncertaintySchema = z
 const TypeBUncertaintySchema = z
   .object({
     kind: z.literal("type_b"),
-    distribution: z.enum([
-      "normal",
-      "rectangular",
-      "triangular",
-      "u_shaped",
-      "custom",
-    ]),
+    distribution: z.enum(GUM_TYPE_B_DISTRIBUTIONS),
     standardUncertainty: NumericValueSchema.optional(),
     halfWidth: NumericValueSchema.optional(),
     limits: z

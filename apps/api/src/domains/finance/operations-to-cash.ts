@@ -11,6 +11,7 @@ import {
 import type {
   BillingBlocker,
   BillingDocumentStatus,
+  OperationsToCashStage,
   ReceivableInstallmentStatus,
 } from "@calibra-facil/shared";
 import { isServiceOrderBillable } from "@calibra-facil/shared";
@@ -20,26 +21,6 @@ import {
   resolveServiceOrderBillingDocumentLinks,
 } from "./finance";
 import { buildUnitScopeCondition } from "../../lib/units";
-
-/**
- * Operations-to-cash dashboard stages. Provider-neutral, lab-facing.
- * `OVERDUE` and `BLOCKED` are surface flags layered over a stage, not
- * stages themselves — see {@link OperationsToCashClassification}.
- */
-export type OperationsToCashStage =
-  | "READY_TO_BILL"
-  | "SENT_TO_FINANCE"
-  | "INVOICED"
-  | "PARTIALLY_COLLECTED"
-  | "COLLECTED";
-
-export const OPERATIONS_TO_CASH_STAGES: ReadonlyArray<OperationsToCashStage> = [
-  "READY_TO_BILL",
-  "SENT_TO_FINANCE",
-  "INVOICED",
-  "PARTIALLY_COLLECTED",
-  "COLLECTED",
-];
 
 export interface OperationsToCashClassifierInput {
   hasBillingDocument: boolean;

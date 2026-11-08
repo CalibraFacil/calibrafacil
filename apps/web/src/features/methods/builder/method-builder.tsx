@@ -28,6 +28,12 @@ import {
   PanelHeader,
 } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@calibra-facil/ui/utils'
+import {
+  METHOD_VALIDATION_OPERATORS,
+  METHOD_VALIDATION_SEVERITIES,
+  UNCERTAINTY_DISTRIBUTIONS,
+} from '@calibra-facil/shared'
+import { pickOption } from './vocabulary'
 
 import { cloneMethodDraft } from './adapters'
 import {
@@ -87,18 +93,9 @@ interface MethodBuilderProps {
   isNew?: boolean
 }
 
-const validationOperators: Array<MethodDraftValidation['operator']> = [
-  '<',
-  '<=',
-  '>',
-  '>=',
-  '==',
-  '!=',
-]
+const validationOperators = METHOD_VALIDATION_OPERATORS
 
-const distributionOptions: Array<
-  MethodDraftUncertaintyComponent['distribution']
-> = ['normal', 'rectangular', 'triangular', 'u-shaped']
+const distributionOptions = UNCERTAINTY_DISTRIBUTIONS
 
 const SECTION_NAV = [
   { id: 'mb-identificacao', label: 'Identificação' },
@@ -124,35 +121,19 @@ function jumpToSection(id: string) {
 function parseValidationOperator(
   value: string | null,
 ): MethodDraftValidation['operator'] {
-  switch (value) {
-    case '<=':
-    case '>':
-    case '>=':
-    case '==':
-    case '!=':
-      return value
-    default:
-      return '<'
-  }
+  return pickOption(validationOperators, value, '<')
 }
 
 function parseValidationSeverity(
   value: string | null,
 ): MethodDraftValidation['severity'] {
-  return value === 'warning' ? 'warning' : 'error'
+  return pickOption(METHOD_VALIDATION_SEVERITIES, value, 'error')
 }
 
 function parseUncertaintyDistribution(
   value: string | null,
 ): MethodDraftUncertaintyComponent['distribution'] {
-  switch (value) {
-    case 'rectangular':
-    case 'triangular':
-    case 'u-shaped':
-      return value
-    default:
-      return 'normal'
-  }
+  return pickOption(distributionOptions, value, 'normal')
 }
 
 export function MethodBuilder({

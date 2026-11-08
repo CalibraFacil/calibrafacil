@@ -5,7 +5,10 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import type { CertificateReleasePolicyMode } from '@calibra-facil/shared'
+import {
+  CERTIFICATE_RELEASE_POLICY_MODES,
+  type CertificateReleasePolicyMode,
+} from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'
@@ -51,13 +54,7 @@ const MODE_LABEL: Record<CertificateReleasePolicyMode, string> = {
   manual_only: 'Apenas manual',
 }
 
-const MODE_KEYS: ReadonlyArray<CertificateReleasePolicyMode> = [
-  'release_after_invoice',
-  'release_after_first_installment',
-  'release_after_full_payment',
-  'trusted_customer',
-  'manual_only',
-]
+const MODE_KEYS = CERTIFICATE_RELEASE_POLICY_MODES
 
 function isPolicyMode(
   value: string | null,

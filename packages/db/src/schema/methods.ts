@@ -1,6 +1,7 @@
 // Tables of the "methods" area. Part of the schema entry packages/db/src/schema.ts.
 import type { MethodStatus } from "@calibra-facil/schemas/machines";
 import type { MethodMeasurementModel } from "@calibra-facil/schemas";
+import type { UNCERTAINTY_DISTRIBUTIONS } from "@calibra-facil/shared";
 import {
   pgTable,
   text,
@@ -211,7 +212,7 @@ export type MethodVariableBinding =
 export type MethodTypeBComponent = {
   name: string;
   value: number;
-  distribution: "normal" | "rectangular" | "triangular" | "u-shaped";
+  distribution: (typeof UNCERTAINTY_DISTRIBUTIONS)[number];
   coverageFactor?: number;
   divisor?: number;
   degreesOfFreedom?: number;

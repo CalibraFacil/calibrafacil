@@ -2,6 +2,7 @@ import {
   AssetStatusSchema,
   MetrologyRegimeSchema,
 } from "@calibra-facil/schemas";
+import { REGULATED_INTERVAL_KINDS } from "@calibra-facil/shared";
 import { z } from "zod";
 
 import { nullableNumber, nullableString, paginationSchema } from "./common";
@@ -151,12 +152,7 @@ const portalAssetCertificateSchema = z.object({
  * the detail schema keeps it opaque and a reader narrows it with this).
  */
 export const portalRegulatedIntervalSchema = z.object({
-  kind: z.enum([
-    "fixed_months",
-    "max_months_from_install",
-    "per_technology",
-    "not_nationally_fixed",
-  ]),
+  kind: z.enum(REGULATED_INTERVAL_KINDS),
   regulationReference: z.string(),
   operationalizedByDelegate: z.boolean(),
 });

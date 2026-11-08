@@ -12,7 +12,10 @@ import {
 } from '@calibra-facil/ui/select'
 import { Field } from '@calibra-facil/ui/field'
 
+import { GUM_TYPE_B_DISTRIBUTIONS } from '@calibra-facil/shared'
+
 import { firstNumericSource } from './draft-operations'
+import { pickOption } from './vocabulary'
 import type {
   MethodDraftFormula,
   MethodDraftInput,
@@ -29,13 +32,7 @@ const gumUncertaintyKinds = [
   'direct_standard_uncertainty',
 ] as const
 
-const gumDistributions = [
-  'normal',
-  'rectangular',
-  'triangular',
-  'u_shaped',
-  'custom',
-] as const
+const gumDistributions = GUM_TYPE_B_DISTRIBUTIONS
 
 function parseMeasurementModelScope(
   value: string | null,
@@ -58,15 +55,7 @@ function parseGumUncertaintyKind(
 function parseGumDistribution(
   value: string | null,
 ): (typeof gumDistributions)[number] {
-  switch (value) {
-    case 'rectangular':
-    case 'triangular':
-    case 'u_shaped':
-    case 'custom':
-      return value
-    default:
-      return 'normal'
-  }
+  return pickOption(gumDistributions, value, 'normal')
 }
 
 export function MeasurementModelEditor({

@@ -13,23 +13,15 @@ import {
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { Field } from '@calibra-facil/ui/field'
 
+import {
+  FORMULA_REPORTING_GROUPS,
+  FORMULA_REPORTING_ROLES,
+} from '@calibra-facil/shared'
+
 import type { MethodDraftFormula, MethodDraftInput } from './types'
 
-const reportingGroups: Array<
-  NonNullable<MethodDraftFormula['reporting']>['group']
-> = ['calibration_result', 'uncertainty_budget', 'raw_calculation']
-
-const reportingRoles: Array<
-  NonNullable<MethodDraftFormula['reporting']>['role']
-> = [
-  'primary_result',
-  'expanded_uncertainty',
-  'coverage_factor',
-  'conformity_margin',
-  'conformity_verdict',
-  'uncertainty_component',
-  'auxiliary',
-]
+const reportingGroups = FORMULA_REPORTING_GROUPS
+const reportingRoles = FORMULA_REPORTING_ROLES
 
 const formulaScopes = ['scalar', 'table_row'] as const
 

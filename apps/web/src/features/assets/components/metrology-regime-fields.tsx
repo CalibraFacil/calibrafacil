@@ -1,4 +1,8 @@
-import { regulationCategoryForAssetTypeSlug } from '@calibra-facil/shared'
+import {
+  METROLOGY_REGIMES,
+  REGULATED_INTERVAL_KINDS,
+  regulationCategoryForAssetTypeSlug,
+} from '@calibra-facil/shared'
 import { useState } from 'react'
 
 import { Checkbox } from '@calibra-facil/ui/checkbox'
@@ -23,9 +27,7 @@ import {
   isSecondaryRegulationProvenance,
   METROLOGY_REGIME_LABELS,
   METROLOGY_REGIME_SHORT_LABELS,
-  METROLOGY_REGIMES,
   REGULATED_ANCHOR_LABELS,
-  REGULATED_INTERVAL_KINDS,
   REGULATED_KIND_LABELS,
   REGULATION_CATALOG_SECONDARY_CAVEAT,
   regulationCatalogToRegimePatch,

@@ -3,6 +3,11 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { AlertCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
+import {
+  OPERATIONS_TO_CASH_STAGES,
+  type OperationsToCashStage,
+} from '@calibra-facil/shared'
+
 import { calibraApi } from '@/utils/api'
 import { formatFinanceMoney } from '@/lib/finance-formatters'
 import {
@@ -17,20 +22,9 @@ import { Badge } from '@calibra-facil/ui/badge'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { financeKeys } from '@/features/finance/keys'
 
-type Stage =
-  | 'READY_TO_BILL'
-  | 'SENT_TO_FINANCE'
-  | 'INVOICED'
-  | 'PARTIALLY_COLLECTED'
-  | 'COLLECTED'
+type Stage = OperationsToCashStage
 
-const STAGE_ORDER: ReadonlyArray<Stage> = [
-  'READY_TO_BILL',
-  'SENT_TO_FINANCE',
-  'INVOICED',
-  'PARTIALLY_COLLECTED',
-  'COLLECTED',
-]
+const STAGE_ORDER = OPERATIONS_TO_CASH_STAGES
 
 const STAGE_LABEL: Record<Stage, string> = {
   READY_TO_BILL: 'Pronto para faturar',

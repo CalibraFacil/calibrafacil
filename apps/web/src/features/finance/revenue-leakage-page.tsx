@@ -21,14 +21,10 @@ import {
   FinanceDataTable,
   type FacetConfig,
 } from '@/features/finance/components/finance-data-table'
+import type { RevenueLeakageClass } from '@calibra-facil/shared'
 import { financeKeys } from '@/features/finance/keys'
 
-type LeakageClass =
-  | 'STUCK_READY_TO_BILL'
-  | 'STUCK_SENT_TO_FINANCE'
-  | 'STUCK_INVOICED'
-  | 'LONG_OVERDUE'
-  | 'BLOCKED_TOO_LONG'
+type LeakageClass = RevenueLeakageClass
 
 const CLASS_ORDER: ReadonlyArray<LeakageClass> = [
   'LONG_OVERDUE',

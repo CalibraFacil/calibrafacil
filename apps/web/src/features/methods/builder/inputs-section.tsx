@@ -16,6 +16,15 @@ import {
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { Field } from '@calibra-facil/ui/field'
 
+import {
+  MASS_COMPOSITION_OPTION_SOURCES,
+  MASS_COMPOSITION_QUANTITY_MODES,
+  MASS_COMPOSITION_UNCERTAINTY_MODES,
+  MASS_UNITS,
+  METHOD_INPUT_FIELD_TYPES,
+  METHOD_TABLE_COLUMN_ROLES,
+} from '@calibra-facil/shared'
+
 import { SectionCard } from './section-card'
 import {
   methodDraftQuantityKinds,
@@ -25,17 +34,8 @@ import {
   type MethodDraftTableColumn,
 } from './types'
 
-const inputTypes: Array<MethodDraftInputType> = [
-  'text',
-  'number',
-  'select',
-  'table',
-]
-
-const tableColumnRoles = [
-  'standard_value',
-  'mass_standard_composition',
-] as const
+const inputTypes = METHOD_INPUT_FIELD_TYPES
+const tableColumnRoles = METHOD_TABLE_COLUMN_ROLES
 
 // Quantity-kind options split by conversion semantics. Delta-valued roles
 // convert factor-only for affine kinds (temperature); absolute roles apply the
@@ -63,22 +63,13 @@ const quantityKindLabels: Record<MethodDraftQuantityKind, string> = {
   other: 'Outro',
 }
 
-const massCompositionOptionSources = [
-  'certified_values',
-  'composition_profiles',
-] as const
+const massCompositionOptionSources = MASS_COMPOSITION_OPTION_SOURCES
 
-const massCompositionQuantityModes = [
-  'linear_per_item_then_rss',
-  'profile_linear',
-] as const
+const massCompositionQuantityModes = MASS_COMPOSITION_QUANTITY_MODES
 
-const massCompositionUncertaintyModes = [
-  'expanded_rss',
-  'expanded_arithmetic',
-] as const
+const massCompositionUncertaintyModes = MASS_COMPOSITION_UNCERTAINTY_MODES
 
-const massUnits = ['mg', 'g', 'kg'] as const
+const massUnits = MASS_UNITS
 
 type MassUnit = (typeof massUnits)[number]
 type TableColumnRole = (typeof tableColumnRoles)[number]

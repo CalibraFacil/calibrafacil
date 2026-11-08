@@ -1,12 +1,20 @@
 import { z } from "zod";
 import {
+  AUTOMATIC_SEND_MILESTONES,
+  BILLING_BLOCKER_CODES,
+  BILLING_BLOCKER_OWNERS,
+  BILLING_BLOCKER_SCOPES,
   BILLING_DOCUMENT_EXPORT_STATUSES,
   BILLING_DOCUMENT_STATUSES,
+  BILLING_INTEGRATION_STATES,
+  BILLING_READINESS_STATUSES,
+  CERTIFICATE_RELEASE_POLICY_MODES,
   CERTIFICATE_RELEASE_STATUSES,
   COMMERCIAL_AGREEMENT_STATUSES,
+  FINANCIAL_PAYMENT_METHODS,
+  OPERATIONS_TO_CASH_STAGES,
   RECEIVABLE_INSTALLMENT_STATUSES,
-  type AutomaticSendMilestone,
-  type CertificateReleasePolicyMode,
+  REVENUE_LEAKAGE_CLASSES,
 } from "@calibra-facil/shared";
 
 import { nullableNumber, nullableString } from "../common";
@@ -33,34 +41,12 @@ const agreementStatusSchema = z.enum(COMMERCIAL_AGREEMENT_STATUSES);
 const documentStatusSchema = z.enum(BILLING_DOCUMENT_STATUSES);
 const exportStatusSchema = z.enum(BILLING_DOCUMENT_EXPORT_STATUSES);
 const installmentStatusSchema = z.enum(RECEIVABLE_INSTALLMENT_STATUSES);
-const paymentMethodSchema = z.enum([
-  "CREDIT_CARD",
-  "PIX",
-  "BOLETO",
-  "BANK_TRANSFER",
-  "CASH",
-  "OTHER",
-]);
+const paymentMethodSchema = z.enum(FINANCIAL_PAYMENT_METHODS);
 
 const certificateReleaseStatusSchema = z.enum(CERTIFICATE_RELEASE_STATUSES);
 
-/** Release policy modes (`CertificateReleasePolicyMode`). */
-export const CERTIFICATE_RELEASE_POLICY_MODES = [
-  "release_after_invoice",
-  "release_after_first_installment",
-  "release_after_full_payment",
-  "trusted_customer",
-  "manual_only",
-] as const satisfies readonly CertificateReleasePolicyMode[];
 const policyModeSchema = z.enum(CERTIFICATE_RELEASE_POLICY_MODES);
 
-/** When an automatic send fires (`AutomaticSendMilestone`). */
-export const AUTOMATIC_SEND_MILESTONES = [
-  "certificate_approved",
-  "service_order_delivered",
-  "contract_anniversary",
-  "manual_only",
-] as const satisfies readonly AutomaticSendMilestone[];
 const milestoneSchema = z.enum(AUTOMATIC_SEND_MILESTONES);
 
 const ruleScopeSchema = z.enum([
@@ -485,32 +471,15 @@ export type FinanceOverview = z.infer<typeof financeOverviewSchema>;
 
 // Billing readiness -------------------------------------------------------
 
-const billingReadinessStatusSchema = z.enum([
-  "READY",
-  "BLOCKED",
-  "BILLED",
-  "SENT",
-]);
+const billingReadinessStatusSchema = z.enum(BILLING_READINESS_STATUSES);
 const billingBlockerSchema = z.object({
-  code: z.enum([
-    "BLOCKED_BY_CUSTOMER_DATA",
-    "BLOCKED_BY_UNMAPPED_SERVICE",
-    "BLOCKED_BY_CERTIFICATE_STATUS",
-    "BLOCKED_BY_POLICY",
-    "INTEGRATION_NOT_CONFIGURED",
-    "INTEGRATION_DISCONNECTED",
-    "CONFIGURATION_INCOMPLETE",
-  ]),
+  code: z.enum(BILLING_BLOCKER_CODES),
   label: z.string(),
-  owner: z.enum(["lab_ops", "finance", "commercial", "admin", "support"]),
+  owner: z.enum(BILLING_BLOCKER_OWNERS),
   fixAction: z.string(),
-  scope: z.enum(["order", "customer", "all_future"]),
+  scope: z.enum(BILLING_BLOCKER_SCOPES),
 });
-const integrationStateSchema = z.enum([
-  "connected",
-  "disconnected",
-  "not_configured",
-]);
+const integrationStateSchema = z.enum(BILLING_INTEGRATION_STATES);
 const entityRefSchema = z.object({ id: z.number(), name: z.string() });
 
 export const billingReadinessResponseSchema = z.object({
@@ -739,13 +708,7 @@ export type AutomaticSendRule = z.infer<typeof sendRuleSchema>;
 
 // Dashboards --------------------------------------------------------------
 
-const stageSchema = z.enum([
-  "READY_TO_BILL",
-  "SENT_TO_FINANCE",
-  "INVOICED",
-  "PARTIALLY_COLLECTED",
-  "COLLECTED",
-]);
+const stageSchema = z.enum(OPERATIONS_TO_CASH_STAGES);
 const stageBucketSchema = z.object({
   count: z.number(),
   totalCents: z.number(),
@@ -783,13 +746,7 @@ export const operationsToCashSchema = z.object({
 });
 export type OperationsToCashEnvelope = z.infer<typeof operationsToCashSchema>;
 
-const leakageClassSchema = z.enum([
-  "STUCK_READY_TO_BILL",
-  "STUCK_SENT_TO_FINANCE",
-  "STUCK_INVOICED",
-  "LONG_OVERDUE",
-  "BLOCKED_TOO_LONG",
-]);
+const leakageClassSchema = z.enum(REVENUE_LEAKAGE_CLASSES);
 const leakageBucketSchema = z.object({
   count: z.number(),
   totalCents: z.number(),

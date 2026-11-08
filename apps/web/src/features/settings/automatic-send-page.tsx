@@ -5,7 +5,10 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import type { AutomaticSendMilestone } from '@calibra-facil/shared'
+import {
+  AUTOMATIC_SEND_MILESTONES,
+  type AutomaticSendMilestone,
+} from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Button } from '@calibra-facil/ui/button'
@@ -50,12 +53,7 @@ const MILESTONE_LABEL: Record<AutomaticSendMilestone, string> = {
   manual_only: 'Apenas manual',
 }
 
-const MILESTONE_KEYS: ReadonlyArray<AutomaticSendMilestone> = [
-  'certificate_approved',
-  'service_order_delivered',
-  'contract_anniversary',
-  'manual_only',
-]
+const MILESTONE_KEYS = AUTOMATIC_SEND_MILESTONES
 
 const SCOPE_LABEL: Record<Scope, string> = {
   customer: 'Cliente',

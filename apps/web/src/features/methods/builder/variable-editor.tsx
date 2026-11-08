@@ -11,7 +11,10 @@ import {
 } from '@calibra-facil/ui/select'
 import { Field } from '@calibra-facil/ui/field'
 
+import { TABLE_STATISTICS } from '@calibra-facil/shared'
+
 import type { MethodDraftInput, MethodDraftVariableBinding } from './types'
+import { pickOption } from './vocabulary'
 
 function parseTableStatistic(
   statistic: string | null,
@@ -19,15 +22,7 @@ function parseTableStatistic(
   MethodDraftVariableBinding,
   { source: 'table_statistic' }
 >['statistic'] {
-  switch (statistic) {
-    case 'sample_stddev':
-    case 'count':
-    case 'min':
-    case 'max':
-      return statistic
-    default:
-      return 'mean'
-  }
+  return pickOption(TABLE_STATISTICS, statistic, 'mean')
 }
 
 function parseEnvironmentField(
@@ -230,13 +225,11 @@ export function VariableEditor({
                 <span>{variable.statistic}</span>
               </SelectTrigger>
               <SelectContent>
-                {['mean', 'sample_stddev', 'count', 'min', 'max'].map(
-                  (item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ),
-                )}
+                {TABLE_STATISTICS.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>

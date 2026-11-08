@@ -9,6 +9,10 @@ import {
   type RegulatedInterval,
   type UpdateAssetInput,
 } from '@calibra-facil/schemas'
+import {
+  METROLOGY_REGIMES,
+  REGULATED_INTERVAL_KINDS,
+} from '@calibra-facil/shared'
 import { isRecord } from '@calibra-facil/shared/record'
 import {
   dominantKindForAssetType,
@@ -75,19 +79,6 @@ export type AssetEditFormData = Omit<
 
 export type AssetFormField = keyof AssetFormData | `spec_${string}`
 export type AssetEditFormField = keyof AssetEditFormData | `spec_${string}`
-
-export const METROLOGY_REGIMES = [
-  'INDUSTRIAL',
-  'LEGAL',
-  'UNKNOWN',
-] as const satisfies readonly MetrologyRegime[]
-
-export const REGULATED_INTERVAL_KINDS = [
-  'fixed_months',
-  'max_months_from_install',
-  'per_technology',
-  'not_nationally_fixed',
-] as const satisfies readonly RegulatedInterval['kind'][]
 
 export const DEFAULT_REGULATED_FORM_FIELDS = {
   regulatedKind: 'fixed_months',
