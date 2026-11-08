@@ -142,6 +142,7 @@ export const jobEndpoints = {
     response: jobExecutionResponseSchema,
     failure: "Erro ao salvar",
     policy: "local-command-sync",
+    permission: { calibration: ["execute"] },
   }),
   submitExecution: endpoint({
     method: "post",
@@ -150,6 +151,7 @@ export const jobEndpoints = {
     response: jobExecutionResponseSchema,
     failure: "Erro ao submeter",
     policy: "local-command-sync",
+    permission: { calibration: ["submit"] },
   }),
   getCertificateDownloadUrl: endpoint({
     method: "get",

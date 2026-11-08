@@ -22,7 +22,8 @@ acknowledged before the permission is re-decided, so a role downgrade does not d
 The check is the online one: `getEffectivePermissionRole(member, permission)` (a unit role elevates only on unit-scoped
 resources) then `hasPermissionLocally(role, permission)`, the two functions `requirePermission` uses. The table is exhaustive by
 type (`satisfies Record<SyncCommandOperation, ...>`): a new push operation does not compile until someone says who may send it.
-`operation-permissions.spec.ts` reads the online route sources and fails when a route's `withLabPermission(...)` and the table
+`operation-permissions.spec.ts` compares each table entry with the `permission` field of the endpoint definition its online route
+names (the field `mount` applies as the route's `withLabPermission`; data against data, no source scanning) and fails when they
 disagree, and pins who is allowed per role by hand. The operations older builds wrote (customers, instrument edits, job drafts,
 non-conformances, quote, delivery and execution-notes documents, certificate drafts and PDFs) were retired in Q69: the cloud no
 longer applies them, and one left in an upgraded outbox is refused `UNSUPPORTED_SYNC_OPERATION`, before any permission is decided.

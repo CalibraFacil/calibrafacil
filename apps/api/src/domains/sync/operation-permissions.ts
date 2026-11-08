@@ -28,8 +28,9 @@ import {
  * someone says who may send it. The contract states resources and actions as plain
  * strings (it cannot import the access-control statements), so
  * {@link syncOperationPermission} checks the names against them.
- * `operation-permissions.spec.ts` also reads the online route sources and fails when
- * a route's guard and the table disagree.
+ * `operation-permissions.spec.ts` (REQ-SYNC-RBAC-2) compares each entry with the
+ * `permission` of the endpoint definition its `onlineRoute` names (the field `mount`
+ * applies as the route's guard) and fails when they disagree.
  */
 /** The permission an operation needs, as the access-control statements spell it. */
 export function syncOperationPermission(

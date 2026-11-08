@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   ENDPOINT_GROUPS,
@@ -12,6 +10,7 @@ import type { RoleName } from "@calibra-facil/auth/access";
 import {
   authorizeSyncOperation,
   memberForEventUnit,
+  SYNC_ATTACHMENT_PERMISSION,
   syncOperationPermission,
 } from "./operation-permissions";
 
@@ -137,72 +136,41 @@ describe("REQ-SYNC-RBAC-5: the unit role is the one of the event's unit", () => 
 });
 
 // The online route an operation was derived from still asks for the same
-// permission: reads the route source and finds
-// `.<method>("<path>", ...withLabPermission({...}))`, or, for a domain converted
-// to endpoint definitions, `mount(router, prefix, <group>.<name>, withLabPermission({...}), ...)` (the guard may lead an array of middleware: `[...withLabPermission({...}), zValidator("param", ...)]`).
-const ROUTE_FILES: Record<string, string> = {
-  "/api/jobs": "../jobs/routes/jobs.ts",
-  "/api/assets": "../assets/routes/assets.ts",
-  "/api/service-orders": "../service-orders/routes/service-orders.ts",
-};
+// permission: the route is an endpoint definition (`onlineRoute` names it by
+// "METHOD /path"), its permission is the definition's `permission` field, which
+// `mount` applies as `withLabPermission` -- so this compares data with data.
+const ENDPOINT_DEFINITIONS = Object.values(ENDPOINT_GROUPS).flatMap((group) =>
+  Object.values(group),
+);
 
-function squash(text: string) {
-  return text.replace(/\s+/g, "").replace(/,([}\]])/g, "$1");
-}
-
-function describeTable(permission: object) {
-  return `{${Object.entries(permission)
-    .map(
-      ([resource, actions]) =>
-        `${resource}:[${(Array.isArray(actions) ? actions : []).map((action) => JSON.stringify(action)).join(",")}]`,
-    )
-    .join(",")}}`;
+function definitionOf(onlineRoute: string) {
+  return ENDPOINT_DEFINITIONS.find((def) => endpointLabel(def) === onlineRoute);
 }
 
 describe("REQ-SYNC-RBAC-2: the table follows the online routes", () => {
-  const derived = OPERATIONS.flatMap((op) => {
-    const [method, route] = SYNC_OPERATIONS[op].onlineRoute.split(" ");
-    const prefix = Object.keys(ROUTE_FILES).find((p) => route?.startsWith(p));
-    return method && route && prefix ? [{ op, method, route, prefix }] : [];
+  // The attachment event follows the attachment endpoints (`/api/sync/attachments/*`),
+  // plain routes that take the table's own entry (SYNC_ATTACHMENT_PERMISSION).
+  const fromDefinition = OPERATIONS.filter(
+    (op) => op !== "create_local_attachment",
+  );
+
+  it("names a mounted endpoint definition as the online route of every operation but the attachment event", () => {
+    for (const op of fromDefinition) {
+      const { onlineRoute } = SYNC_OPERATIONS[op];
+      expect(definitionOf(onlineRoute), `${op}: ${onlineRoute}`).toBeDefined();
+    }
   });
 
-  it("derives every operation from a route file except the attachment event", () => {
-    // The attachment event follows the attachment endpoints' permission, not a
-    // `withLabPermission` literal in a route file.
-    expect(derived.map(({ op }) => op).toSorted()).toEqual(
-      OPERATIONS.filter((op) => op !== "create_local_attachment").toSorted(),
+  it.each(fromDefinition)("%s has the permission of its online route", (op) => {
+    const { onlineRoute, permission } = SYNC_OPERATIONS[op];
+    const definition = definitionOf(onlineRoute);
+    expect(definition?.permission, `${op}: ${onlineRoute}`).toBeDefined();
+    expect(definition?.permission).toEqual(permission);
+  });
+
+  it("create_local_attachment: the attachment endpoints use the table's permission", () => {
+    expect(SYNC_ATTACHMENT_PERMISSION).toEqual(
+      SYNC_OPERATIONS.create_local_attachment.permission,
     );
   });
-
-  it.each(derived)(
-    "$op follows $method $route",
-    ({ op, method, route, prefix }) => {
-      const file = ROUTE_FILES[prefix];
-      if (!file) throw new Error(`no route file for ${prefix}`);
-      const source = readFileSync(
-        fileURLToPath(new URL(file, import.meta.url)),
-        "utf8",
-      );
-      const path = route.slice(prefix.length) || "/";
-      const escaped = path.replace(/[/:.]/g, (ch) => `\\${ch}`);
-      const defined = Object.values(ENDPOINT_GROUPS)
-        .flatMap((group) => Object.entries(group))
-        .find(
-          ([, def]) =>
-            endpointLabel(def) === `${method.toUpperCase()} ${route}`,
-        );
-      const pattern = defined
-        ? new RegExp(
-            `Endpoints\\.${defined[0]},\\s*(?:\\[\\s*\\.\\.\\.)?withLabPermission\\((\\{[^}]*\\})\\)`,
-          )
-        : new RegExp(
-            `\\.${method.toLowerCase()}\\(\\s*"${escaped}",\\s*\\.\\.\\.withLabPermission\\((\\{[^}]*\\})\\)`,
-          );
-      const found = pattern.exec(source);
-      expect(found, `${method} ${route} not found in ${file}`).not.toBeNull();
-      expect(squash(found?.[1] ?? "")).toBe(
-        describeTable(SYNC_OPERATIONS[op].permission),
-      );
-    },
-  );
 });

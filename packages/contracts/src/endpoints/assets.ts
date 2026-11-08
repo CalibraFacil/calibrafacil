@@ -102,6 +102,7 @@ export const assetEndpoints = {
     status: 201,
     failure: "Erro ao criar ativo",
     policy: "local-command-sync",
+    permission: { equipment: ["create"] },
   }),
   get: endpoint({
     method: "get",

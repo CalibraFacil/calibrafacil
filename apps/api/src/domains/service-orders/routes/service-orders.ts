@@ -182,7 +182,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.create,
-  withLabPermission({ service_order: ["create"] }),
   async (c, { body }) => {
     const member = c.get("member");
     const input = body;
