@@ -1,11 +1,11 @@
 /**
- * standards-recall-in-flight.int.spec.ts: roadmap 2 B5 (REQ-B5-4, REQ-B5-5) [HIGH RISK].
+ * standards-recall-in-flight.int.spec.ts: (REQ-B5-4, REQ-B5-5) [HIGH RISK].
  *
- * A reference-standard recall (ISO/IEC 17025 §6.4, §7.10) used to see only the
- * certificates already issued (APPROVED / SUPERSEDED). The jobs still on the way
- * to a certificate (DRAFT, IN_PROGRESS, REVIEW, GENERATING_PDF) that rely on the
- * standard were invisible: nobody knew an approval was about to put a recalled
- * standard on a new certificate. Through the real routes and middleware, as the
+ * A reference-standard recall (ISO/IEC 17025 §6.4, §7.10) covers the
+ * certificates already issued (APPROVED / SUPERSEDED) and the jobs still on the
+ * way to a certificate (DRAFT, IN_PROGRESS, REVIEW, GENERATING_PDF) that rely on
+ * the standard: an approval must not put a recalled standard on a new
+ * certificate. Through the real routes and middleware, as the
  * application role `calibra_app`:
  *
  *   REQ-B5-4  the recall impact lists the in-flight jobs that use the standard, next

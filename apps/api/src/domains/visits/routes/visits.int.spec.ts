@@ -294,7 +294,6 @@ describe("visitsRouter — real DB + real RBAC middleware", () => {
     // Verify org scope: the returned record belongs to the calling org
     expect(body.organizationId).toBe(org.orgId);
 
-    // Verify persisted to DB
     const [row] = await db
       .select({
         status: calibrationVisit.status,
@@ -369,7 +368,6 @@ describe("visitsRouter — real DB + real RBAC middleware", () => {
     expect(body.organizationId).toBe(org.orgId);
     expect(body.unitId).toBe(org.unitId);
 
-    // Verify persisted to DB
     const [row] = await db
       .select({
         status: calibrationVisit.status,

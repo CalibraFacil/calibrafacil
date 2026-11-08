@@ -236,7 +236,7 @@ vi.mock("@calibra-facil/email", () => ({
 }));
 
 // Mock the B/C/D dispatch helpers
-// Paths relative to THIS test file (src/lib/__tests__/) → ../../modules/service-orders/
+// Paths relative to THIS test file (src/domains/service-orders/email/__tests__/) → ../
 vi.mock("../nova-os-email-dispatch", () => ({
   dispatchNovaOsEmail: mockDispatchNovaOs,
 }));

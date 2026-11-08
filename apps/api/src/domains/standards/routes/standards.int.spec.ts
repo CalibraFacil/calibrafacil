@@ -143,7 +143,6 @@ describe("standardsRouter — real DB + real middleware", () => {
     expect(created.organizationId).toBe(org.orgId);
     expect(created.unitId).toBe(org.unitId);
 
-    // Verify audit log was written
     const audit = await db
       .select()
       .from(referenceStandardAuditLog)
@@ -403,7 +402,6 @@ describe("standardsRouter — real DB + real middleware", () => {
     expect(row?.deletedAt).not.toBeNull();
     expect(row?.status).toBe("INACTIVE");
 
-    // Verify audit log
     const audit = await db
       .select()
       .from(referenceStandardAuditLog)

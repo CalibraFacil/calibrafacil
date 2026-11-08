@@ -194,7 +194,6 @@ describe("unitsRouter — real DB + real middleware", () => {
     expect(created.organizationId).toBe(org.orgId);
     expect(created.slug).toBe("filial-centro");
 
-    // Verify persisted in DB with correct org scope
     const [row] = await db
       .select({
         name: organizationUnit.name,
@@ -229,7 +228,6 @@ describe("unitsRouter — real DB + real middleware", () => {
     const updated = await res.json();
     expect(updated.name).toBe("Sede Principal");
 
-    // Verify persisted in DB
     const [row] = await db
       .select({ name: organizationUnit.name })
       .from(organizationUnit)
@@ -442,7 +440,6 @@ describe("unitsRouter — real DB + real middleware", () => {
     const body = await res.json();
     expect(body.success).toBe(true);
 
-    // Verify the assignment was persisted in the DB
     const assignments = await db
       .select({
         unitId: memberUnitAssignment.unitId,

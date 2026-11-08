@@ -388,7 +388,7 @@ describe("REQ-CERTNUM-008: DEFAULT_CERTIFICATE_NUMBERING_CONFIG", () => {
 // The year / month / day of a certificate number (and the sequence it resets on)
 // are the laboratory's calendar day, America/Sao_Paulo, the zone the certificate
 // layout prints its dates in (LAB_TIME_ZONE) — not the server's: the API runs in
-// UTC in production and in the developer's zone locally, which used to give
+// UTC in production and in the developer's zone locally, which would give
 // different numbers for the same instant.
 describe("REQ-CERTNUM-008: certificate numbers use the laboratory's calendar day", () => {
   // 01:30 UTC on 1 January is 22:30 on 31 December in São Paulo.

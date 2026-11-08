@@ -17,7 +17,7 @@ import { withStatusRepair } from "./state-fixtures";
 // endpoints read (a customer with complete billing data, an asset, a priced
 // service), plus builders for approved certificate jobs and service orders.
 // Shared by service-orders-lab-scope.int.spec.ts and
-// finance/finance-lab-scope.int.spec.ts.
+// domains/finance/routes/finance-lab-scope.int.spec.ts.
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 

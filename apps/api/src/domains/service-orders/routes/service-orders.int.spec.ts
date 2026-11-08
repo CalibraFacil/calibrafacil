@@ -405,7 +405,6 @@ describe("serviceOrdersRouter — real DB + real RBAC middleware", () => {
     // Org-scope: the returned record belongs to the calling org
     expect(body.data.organizationId).toBe(org.orgId);
 
-    // Verify persisted to DB
     const [row] = await db
       .select({
         status: serviceOrder.status,
@@ -593,7 +592,6 @@ describe("serviceOrdersRouter — real DB + real RBAC middleware", () => {
     expect(body.data.customerId).toBe(custId);
     expect(body.data.assetId).toBe(assetId);
 
-    // Verify persisted in DB with correct org scope
     const [row] = await db
       .select({ organizationId: serviceOrder.organizationId })
       .from(serviceOrder)
@@ -626,7 +624,7 @@ describe("serviceOrdersRouter — real DB + real RBAC middleware", () => {
 //                   guard (this suite mocks NOTHING).
 //   REQ-TST-SO-003  the domain execution commands (startServiceOrderExecution /
 //                   finishServiceOrderExecution) validate the target transition
-//                   against the graph BEFORE writing `status` — they no longer
+//                   against the graph BEFORE writing `status`, so they do not
 //                   bypass the table.
 // ===========================================================================
 describe("serviceOrdersRouter — state-machine transition enforcement (real graph)", () => {
@@ -805,9 +803,9 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
   // -------------------------------------------------------------------------
   // REQ-TST-SO-004 — the lifecycle endpoints consult the graph too.
   //
-  // deliver/close/cancel used to write their status unconditionally, so an OS
-  // still under evaluation could be marked delivered in one call while
-  // SERVICE_ORDER_ALLOWED_TRANSITIONS said only ready_for_pickup → delivered.
+  // deliver/close/cancel consult the table before writing their status: an OS
+  // still under evaluation cannot be marked delivered in one call while
+  // SERVICE_ORDER_ALLOWED_TRANSITIONS says only ready_for_pickup → delivered.
   // -------------------------------------------------------------------------
   it("REQ-TST-SO-004: POST /:id/deliver from under_evaluation → 400, status unchanged", async () => {
     const { org, orderId } = await setupOrderAt(
