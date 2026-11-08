@@ -24,6 +24,7 @@
  * A row that cannot be opened is reported `failed` and left untouched; the sweep
  * goes on, and the caller exits non-zero.
  */
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { and, asc, eq } from "drizzle-orm";
 import { systemDb } from "@calibra-facil/db";
 import { organizationSigningCertificate } from "@calibra-facil/db/schema";
@@ -114,7 +115,7 @@ export async function reencryptSigningCredentials(options: {
       reports.push({
         ...base,
         outcome: "failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
       continue;
     }

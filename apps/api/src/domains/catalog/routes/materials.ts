@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { createRouter } from "../../../server/router";
 import { materialEndpoints } from "@calibra-facil/contracts";
 import { material } from "@calibra-facil/db/schema";
@@ -303,8 +304,7 @@ mount(
       // Lab-actionable preconditions (no integration, unlinked material,
       // products sync disabled, plan gate) surface as a conflict with the
       // pt-BR message; unexpected failures still bubble to the 500 handler.
-      const message =
-        error instanceof Error ? error.message : "Falha ao ajustar estoque";
+      const message = errorMessage(error);
       throw conflict("conflict", message);
     }
   },

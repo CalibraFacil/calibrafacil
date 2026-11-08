@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { orgDb } from "../../../lib/org-db";
 import { integrationSyncRun } from "@calibra-facil/db/schema";
 import {
@@ -218,8 +219,7 @@ export async function runContaAzulScheduledPoll(params: {
 
     return result;
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : definition.failedMessage;
+    const message = errorMessage(error);
     await failIntegrationSyncRun({
       integrationId: params.integrationId,
       organizationId: params.organizationId,

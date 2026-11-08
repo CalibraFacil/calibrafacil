@@ -43,7 +43,10 @@ import {
   changeJobBeforeNextTransaction,
   jobRow,
 } from "../../../../test/integration/job-cas";
-import { failEventAuditInsert } from "../../../../test/integration/sync-faults";
+import {
+  failAppliedEventCompletion,
+  failEventAuditInsert,
+} from "../../../../test/integration/sync-faults";
 import { syncRouter } from "./";
 
 vi.mock("../../../lib/background-jobs", () => ({
@@ -453,6 +456,45 @@ describe("REQ-SP-3: one transaction per event", () => {
     expect(retried.accepted).toHaveLength(1);
     expect(await assetsByTag("SP3-RETRY")).toHaveLength(1);
   });
+
+  it.each([
+    ["the audit row of the change", failEventAuditInsert, "apply-event"],
+    [
+      "the claim's completion at the end of the transaction",
+      failAppliedEventCompletion,
+      "apply-event-transaction",
+    ],
+  ])(
+    "REQ-SP-3: when %s fails, the device is told a fixed reason (no query text, no bound row values) and the cause goes to the redacted log",
+    async (_where, injectFault, reportedStep) => {
+      const world = await seedWorld();
+      const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+      const restore = await injectFault("evt-sp3-reason");
+      let body: Awaited<ReturnType<typeof push>>;
+      try {
+        body = await push(world, [
+          createAssetEvent(world, "evt-sp3-reason", "SP3-SECRET-TAG"),
+        ]);
+      } finally {
+        await restore();
+      }
+
+      expect(body.rejected).toEqual([
+        {
+          eventId: "evt-sp3-reason",
+          code: "DESKTOP_SYNC_APPLY_FAILED",
+          reason: "Desktop sync event could not be applied.",
+        },
+      ]);
+      expect(JSON.stringify(body)).not.toContain("SP3-SECRET-TAG");
+      const logged = stderr.mock.calls
+        .map((call) => String(call[0]))
+        .join("\n");
+      expect(logged).toContain("Failed query");
+      expect(logged).toContain(`"step":"${reportedStep}"`);
+      expect(logged).not.toContain("SP3-SECRET-TAG");
+    },
+  );
 
   it("REQ-SP-3: an event the cloud rejects writes nothing, not even the half of it that ran before the refusal", async () => {
     const world = await seedWorld();

@@ -23,6 +23,7 @@ import {
 import { applyDesktopEventAtomically } from "../event-transaction";
 import { type SyncRouterEnv, getMemberData } from "./env";
 import {
+  DESKTOP_EVENT_APPLY_FAILED_REASON,
   type PreparedDesktopEventSideEffects,
   type PushBatchState,
   deviceClockSkewOf,
@@ -341,7 +342,7 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
             rejected.push({
               eventId: event.eventId,
               code: "DESKTOP_SYNC_APPLY_FAILED",
-              reason: outcome.message,
+              reason: DESKTOP_EVENT_APPLY_FAILED_REASON,
             });
             break;
           }

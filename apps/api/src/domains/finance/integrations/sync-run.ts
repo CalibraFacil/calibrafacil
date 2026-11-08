@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { orgDb } from "../../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
@@ -165,8 +166,7 @@ async function markSyncItemFailed(params: {
   attemptCount: number;
   error: unknown;
 }) {
-  const message =
-    params.error instanceof Error ? params.error.message : "Falha desconhecida";
+  const message = errorMessage(params.error);
 
   await orgDb(params.organizationId).transaction(async (o) => {
     await o
@@ -314,8 +314,7 @@ export async function runIntegrationSync(params: {
         }
 
         errorCount += 1;
-        const failure =
-          error instanceof Error ? error.message : "Falha desconhecida";
+        const failure = errorMessage(error);
         errorSummary = failure;
 
         await orgDb(params.organizationId).transaction((o) =>
@@ -405,8 +404,7 @@ export async function runIntegrationSync(params: {
       errorSummary,
     };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Falha ao processar integração";
+    const message = errorMessage(error);
 
     await failIntegrationSyncRun({
       integrationId: params.integrationId,

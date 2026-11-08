@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { orgDb } from "../../../lib/org-db";
 import {
   integrationObjectLink,
@@ -209,13 +210,7 @@ export async function pollContaAzulProductStock(params: {
       });
       updatedCount += 1;
     } catch (error) {
-      warnings.push(
-        `material:${row.materialId}: ${
-          error instanceof Error
-            ? error.message
-            : "falha ao ler estoque do produto"
-        }`,
-      );
+      warnings.push(`material:${row.materialId}: ${errorMessage(error)}`);
     }
   }
 

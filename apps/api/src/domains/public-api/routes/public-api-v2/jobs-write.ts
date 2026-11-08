@@ -1,6 +1,7 @@
 import { DomainError } from "../../../../lib/domain-errors";
 import { createRouter } from "../../../../server/router";
 import { orgDb } from "../../../../lib/org-db";
+import { reportServerError } from "../../../../lib/observability";
 import { zValidator } from "@hono/zod-validator";
 import {
   ExecuteJobSchema,
@@ -153,13 +154,21 @@ export const jobWriteRoutes = createRouter<PublicApiV2Env>()
                 }),
               };
             }
-            const message =
-              error instanceof Error ? error.message : "Falha ao criar OS";
+            // Anything else is an unexpected fault (a failed query's message carries the
+            // SQL and the bound row values): the key holder gets a fixed message, the
+            // cause goes to the redacted reporter.
+            reportServerError(error, {
+              surface: "public-api-v2",
+              tags: {
+                step: "job-create",
+                organizationId: apiKey.organizationId,
+              },
+            });
             return {
               status: 500,
               body: buildPublicApiError({
                 code: "job_create_failed",
-                message,
+                message: "Falha ao criar OS",
               }),
             };
           },

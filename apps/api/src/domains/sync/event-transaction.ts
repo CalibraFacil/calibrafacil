@@ -46,8 +46,12 @@ export type DesktopEventOutcome =
   | { state: "applied"; result: AppliedEventResult; aggregateVersion: number }
   /** Refused or in conflict: nothing was written. */
   | { state: "refused"; result: RefusedEventResult }
-  /** The transaction failed (a write, the audit row, the commit): nothing was written. */
-  | { state: "failed"; message: string };
+  /**
+   * The transaction failed (a write, the audit row, the commit): nothing was written. Carries
+   * no message: a failed query's text holds the bound row values, so the cause goes to the
+   * error reporter (redacted) and the device is told a fixed reason.
+   */
+  | { state: "failed" };
 
 /**
  * A pushed event whose expected aggregate version is not the current one: somebody else's
@@ -201,11 +205,7 @@ export async function applyDesktopEventAtomically(params: {
         eventId: params.event.eventId,
       },
     });
-    return {
-      state: "failed",
-      message:
-        error instanceof Error ? error.message : "Desktop sync event failed.",
-    };
+    return { state: "failed" };
   }
 }
 

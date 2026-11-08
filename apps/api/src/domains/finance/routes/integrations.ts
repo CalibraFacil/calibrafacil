@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { createRouter } from "../../../server/router";
 import {
   integrationEndpoints,
@@ -375,10 +376,7 @@ export async function dispatchSyncRun(params: {
         trigger: params.trigger,
       });
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao enfileirar sincronização Conta Azul";
+      const message = errorMessage(error);
 
       await failIntegrationSyncRun({
         integrationId: params.integrationId,
@@ -409,10 +407,7 @@ export async function dispatchSyncRun(params: {
       trigger: params.trigger,
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Falha ao enfileirar sincronização";
+    const message = errorMessage(error);
 
     await failIntegrationSyncRun({
       integrationId: params.integrationId,
@@ -783,10 +778,7 @@ mount(
       throw new DomainError({
         code: "conta_azul_oauth_unavailable",
         status: 503,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Configuração OAuth da Conta Azul inválida",
+        message: errorMessage(error),
       });
     }
 
@@ -1248,12 +1240,7 @@ mount(
         catalog,
       });
     } catch (error) {
-      throw invalid(
-        "integration_request_failed",
-        error instanceof Error
-          ? error.message
-          : CATALOG_FAILURE_MESSAGE[catalog],
-      );
+      throw invalid("integration_request_failed", errorMessage(error));
     }
   },
 );
@@ -1428,10 +1415,7 @@ async function runContaAzulPoll<
 
     return result;
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : getContaAzulPollDefinition(params.kind).failedMessage;
+    const message = errorMessage(error);
 
     await orgDb(member.organizationId).transaction((o) =>
       writeIntegrationEvent(
@@ -1571,10 +1555,7 @@ mount(
 
       return result;
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao vincular MDF-e na Conta Azul";
+      const message = errorMessage(error);
 
       await orgDb(member.organizationId).transaction((o) =>
         writeIntegrationEvent(
@@ -1723,8 +1704,7 @@ mount(
 
       return { success: true };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Falha ao validar conexão";
+      const message = errorMessage(error);
 
       await withOrg(member.organizationId, requestActor(c), async ({ o }) => {
         await o
@@ -1895,10 +1875,7 @@ mount(
       throw new DomainError({
         code: "integration_sync_dispatch_failed",
         status: 500,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Falha ao processar sincronização",
+        message: errorMessage(error),
       });
     }
 
@@ -2269,10 +2246,7 @@ mount(
       throw new DomainError({
         code: "integration_sync_dispatch_failed",
         status: 500,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Falha ao processar sincronização",
+        message: errorMessage(error),
       });
     }
 

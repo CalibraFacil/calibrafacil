@@ -11,6 +11,7 @@
  * Invoked by the `oot-emails` cron handler in src/cron/dispatch.ts.
  */
 
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { withOrg, SYSTEM_ACTOR } from "../../../lib/org-context";
 import { readOriginsConfig } from "@calibra-facil/config";
 import { systemDb } from "@calibra-facil/db";
@@ -352,8 +353,7 @@ export async function drainOotEmailOutbox(options?: {
         }
       } catch (rowError) {
         result.errors++;
-        const message =
-          rowError instanceof Error ? rowError.message : String(rowError);
+        const message = errorMessage(rowError);
         reportServerError(rowError, {
           surface: "oot-email-drain",
           tags: { step: "row", outboxId: String(row.id) },

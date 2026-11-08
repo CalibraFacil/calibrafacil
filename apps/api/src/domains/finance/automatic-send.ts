@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   automaticSendAuditLog,
@@ -293,7 +294,7 @@ export async function triggerAutomaticSendForMilestone(
       milestone: input.event.event,
       outcome: "failed",
       actorUserId: input.actorUserId,
-      reason: error instanceof Error ? error.message : "unknown_error",
+      reason: errorMessage(error),
       providerResponseSummary: null,
     });
   }
