@@ -5,6 +5,9 @@ import { customer } from "@calibra-facil/db/schema";
 import { and, asc, eq, or } from "drizzle-orm";
 
 const CUSTOMER_ROUTE_SLUG_SCAN_LIMIT = 500;
+// `customer.id` is a 32-bit integer: a longer run of digits (a CNPJ) is a tax id,
+// and comparing it to the column would make Postgres refuse the whole statement.
+const MAX_CUSTOMER_ID = 2_147_483_647;
 
 /**
  * `executor` is the caller's org-bound transaction when it has one (row-level
@@ -18,7 +21,7 @@ export async function resolveCustomerRouteId(
 ): Promise<number | null> {
   const legacyId = parseNumericRouteIdentifier(identifier);
   const directConditions = [eq(customer.taxId, identifier)];
-  if (legacyId !== null) {
+  if (legacyId !== null && legacyId <= MAX_CUSTOMER_ID) {
     directConditions.unshift(eq(customer.id, legacyId));
   }
   const [directMatch] = await executor
