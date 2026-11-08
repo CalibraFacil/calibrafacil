@@ -41,8 +41,7 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 // ---------------------------------------------------------------------------
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
-  notifyNCEscalatedToCapa: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---------------------------------------------------------------------------

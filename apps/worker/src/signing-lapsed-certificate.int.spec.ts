@@ -26,14 +26,20 @@ import { setJobStatus } from "../test/integration/job-fixtures";
  * (in-memory) and the notification service (asserted on).
  */
 
-const mocks = vi.hoisted(() => ({
-  lapsed: vi.fn(async (_jobId: number, _reason: string) => undefined),
-}));
+const mocks = vi.hoisted(() => {
+  const notify = vi.fn(async (_type: string, _payload: unknown) => undefined);
+  return {
+    notify,
+    /** The calls `notify` received for the lapsed-signing-certificate alert. */
+    lapsed: () =>
+      notify.mock.calls.filter(
+        ([type]) => type === "SIGNING_CERTIFICATE_LAPSED",
+      ),
+  };
+});
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCertificateReady: vi.fn(async () => undefined),
-  notifyAuditPackReady: vi.fn(async () => undefined),
-  notifySigningCertificateLapsed: mocks.lapsed,
+  notify: mocks.notify,
 }));
 
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
@@ -189,7 +195,7 @@ async function issue(env: Env, org: SeededOrg, jobId: number) {
 
 beforeEach(async () => {
   await truncateAll();
-  mocks.lapsed.mockClear();
+  mocks.notify.mockClear();
 });
 
 afterEach(() => {
@@ -225,11 +231,11 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
 
     await expect(issue(env, org, job.jobId)).rejects.toThrow();
 
-    expect(mocks.lapsed).toHaveBeenCalledTimes(1);
-    expect(mocks.lapsed.mock.calls[0]?.[0]).toBe(job.jobId);
-    expect(mocks.lapsed.mock.calls[0]?.[1]).toMatch(
-      /sem assinatura foi bloqueada/,
-    );
+    expect(mocks.lapsed()).toHaveLength(1);
+    expect(mocks.lapsed()[0]?.[1]).toMatchObject({ jobId: job.jobId });
+    expect(mocks.lapsed()[0]?.[1]).toMatchObject({
+      reason: expect.stringMatching(/sem assinatura foi bloqueada/),
+    });
   });
 
   it("REQ-P08-003 [HIGH RISK] a REVOKED certificate is the same: the unit signed before, so it never falls back to unsigned", async () => {
@@ -318,7 +324,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
         "unsignedByPolicy",
       ),
     ).toBe("Deixamos de assinar os certificados");
-    expect(mocks.lapsed).not.toHaveBeenCalled();
+    expect(mocks.lapsed()).toHaveLength(0);
   });
 
   it("REQ-Q51-011 [HIGH RISK]: the same expired certificate with the setting OFF still fails closed", async () => {
@@ -381,7 +387,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
 
     expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
     expect(stored.size).toBe(0);
-    expect(mocks.lapsed).toHaveBeenCalledTimes(1);
+    expect(mocks.lapsed()).toHaveLength(1);
   });
 
   it("REQ-P08-006 [HIGH RISK] a unit that NEVER had a certificate keeps issuing unsigned (unless it requires signatures), and nobody is alerted", async () => {
@@ -396,7 +402,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     expect(after.signatureMetadata).toBeNull();
     expect(stored.size).toBe(1);
     expect(await snapshotCount(job.jobId)).toBe(1);
-    expect(mocks.lapsed).not.toHaveBeenCalled();
+    expect(mocks.lapsed()).toHaveLength(0);
   });
 
   it("REQ-P08-007: a unit that never had one and requires signatures still fails, without the lapsed alert", async () => {
@@ -412,7 +418,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     );
 
     expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
-    expect(mocks.lapsed).not.toHaveBeenCalled();
+    expect(mocks.lapsed()).toHaveLength(0);
   });
 
   it("REQ-P08-008: an expired certificate next to a valid default one signs normally (the history only matters when nothing is valid)", async () => {
@@ -431,7 +437,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     const after = await jobRow(job.jobId);
     expect(after.status).toBe("APPROVED");
     expect(field(after.signatureMetadata, "signerName")).toBeTruthy();
-    expect(mocks.lapsed).not.toHaveBeenCalled();
+    expect(mocks.lapsed()).toHaveLength(0);
   });
 
   // An already-issued certificate is never touched again: a certificate that
@@ -452,7 +458,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     await db.execute(
       sql`UPDATE organization_signing_certificate SET valid_until = ${LONG_AGO.toISOString()}::timestamp WHERE organization_id = ${org.orgId}`,
     );
-    mocks.lapsed.mockClear();
+    mocks.notify.mockClear();
     return {
       env,
       org,
@@ -478,7 +484,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
       sql`SELECT pdf_r2_key, pdf_sha256 FROM issued_certificate_snapshot WHERE job_id = ${ctx.job.jobId}`,
     );
     expect(toRows(snapshotAfter)).toEqual(ctx.snapshotBefore);
-    expect(mocks.lapsed).not.toHaveBeenCalled();
+    expect(mocks.lapsed()).toHaveLength(0);
   });
 
   it("REQ-P08-021 [HIGH RISK]: the watermark refresh of a SUPERSEDED job after its certificate expired does not sign again or fail: the issued snapshot and signature stay as they are", async () => {
@@ -496,7 +502,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
       sql`SELECT pdf_r2_key, pdf_sha256 FROM issued_certificate_snapshot WHERE job_id = ${ctx.job.jobId}`,
     );
     expect(toRows(snapshotAfter)).toEqual(ctx.snapshotBefore);
-    expect(mocks.lapsed).not.toHaveBeenCalled();
+    expect(mocks.lapsed()).toHaveLength(0);
   });
 
   it("REQ-P08-009: another unit's expired certificate does not affect this unit (tenant and unit scope)", async () => {
@@ -512,6 +518,6 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     await issue(env, org, job.jobId);
 
     expect((await jobRow(job.jobId)).status).toBe("APPROVED");
-    expect(mocks.lapsed).not.toHaveBeenCalled();
+    expect(mocks.lapsed()).toHaveLength(0);
   });
 });

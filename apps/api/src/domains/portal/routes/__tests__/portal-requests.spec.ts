@@ -60,9 +60,9 @@ vi.mock("../../../org/portal-domains", () => ({
   resolveLabOrganizationIdByPortalHostname: vi.fn(async () => null),
 }));
 
-const notifyCalibrationRequestSubmitted = vi.fn(async () => undefined);
+const notify = vi.fn(async () => undefined);
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCalibrationRequestSubmitted,
+  notify,
 }));
 
 vi.mock("../../../../middleware/permission", () => {
@@ -105,7 +105,7 @@ function pushGroupScope() {
 beforeEach(() => {
   dbQueue.length = 0;
   insertReturns.length = 0;
-  notifyCalibrationRequestSubmitted.mockClear();
+  notify.mockClear();
 });
 
 describe("POST /requests/batch", () => {
@@ -147,7 +147,7 @@ describe("POST /requests/batch", () => {
     expect(
       body.created.map((r: { customerId: number }) => r.customerId),
     ).toEqual([10, 11]);
-    expect(notifyCalibrationRequestSubmitted).toHaveBeenCalledTimes(2);
+    expect(notify).toHaveBeenCalledTimes(2);
   });
 
   it("rejects when an asset is out of the customer scope (count mismatch)", async () => {
@@ -168,7 +168,7 @@ describe("POST /requests/batch", () => {
       body: JSON.stringify({ assetIds: [100, 999], deliveryMethod: "dropoff" }),
     });
     expect(res.status).toBe(400);
-    expect(notifyCalibrationRequestSubmitted).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("is all-or-nothing when any asset already has an active request", async () => {
@@ -192,6 +192,6 @@ describe("POST /requests/batch", () => {
       body: JSON.stringify({ assetIds: [100], deliveryMethod: "dropoff" }),
     });
     expect(res.status).toBe(400);
-    expect(notifyCalibrationRequestSubmitted).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

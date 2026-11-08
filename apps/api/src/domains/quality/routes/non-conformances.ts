@@ -12,10 +12,7 @@ import {
   ootNotification,
   user,
 } from "@calibra-facil/db/schema";
-import {
-  notifyNCEscalatedToCapa,
-  notifyOotAcknowledged,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import {
   withLabPermission,
   type AuthVariables,
@@ -674,15 +671,15 @@ mount(
         // Notify admins/owners of escalation, after the commit: the
         // notification reads the CAPA back.
         ctx.afterCommit(() =>
-          notifyNCEscalatedToCapa(
-            id,
-            existing.ncNumber,
-            newCapa.id,
-            newCapa.capaNumber,
-            existing.description,
-            member.organizationId,
-            session.user.id,
-          ),
+          notify("NC_ESCALATED_TO_CAPA", {
+            ncId: id,
+            ncNumber: existing.ncNumber,
+            capaId: newCapa.id,
+            capaNumber: newCapa.capaNumber,
+            description: existing.description,
+            organizationId: member.organizationId,
+            escalatedByUserId: session.user.id,
+          }),
         );
 
         return {
@@ -831,12 +828,12 @@ mount(
         // Like the public link: only the call that stamped notifies, and only
         // after the stamp is committed.
         ctx.afterCommit(() =>
-          notifyOotAcknowledged(
-            row.id,
-            id,
-            existing.ncNumber,
-            member.organizationId,
-          ),
+          notify("OOT_NOTIFICATION_ACKNOWLEDGED", {
+            notificationId: row.id,
+            ncId: id,
+            ncNumber: existing.ncNumber,
+            organizationId: member.organizationId,
+          }),
         );
 
         // Like the read above: the unguessable public link never leaves

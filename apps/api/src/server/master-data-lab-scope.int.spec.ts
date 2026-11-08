@@ -65,8 +65,7 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 // e-mail; they are not under test here.
 vi.mock("@calibra-facil/notifications", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@calibra-facil/notifications")>()),
-  notifyCalibrationRequestUnderReview: vi.fn().mockResolvedValue(undefined),
-  notifyCalibrationRequestRejected: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" };

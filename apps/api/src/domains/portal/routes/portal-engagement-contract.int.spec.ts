@@ -50,10 +50,7 @@ vi.mock("@calibra-facil/notifications", async (importOriginal) => {
     await importOriginal<typeof import("@calibra-facil/notifications")>();
   return {
     ...actual,
-    notifyCalibrationRequestSubmitted: vi.fn().mockResolvedValue(undefined),
-    notifyVisitCustomerConfirmed: vi.fn().mockResolvedValue(undefined),
-    notifyVisitRescheduleRequested: vi.fn().mockResolvedValue(undefined),
-    notifyOotAcknowledged: vi.fn().mockResolvedValue(undefined),
+    notify: vi.fn().mockResolvedValue(undefined),
   };
 });
 

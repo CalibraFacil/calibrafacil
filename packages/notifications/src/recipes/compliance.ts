@@ -102,7 +102,7 @@ export const complianceRecipes = {
   /**
    * Notify lab members when a customer's legal-metrology instrument is due for its
    * regulation-fixed VERIFICATION (Track 2 — Inmetro / RBMLQ-I), INDEPENDENTLY of
-   * the recalibration reminder (`notifyAssetDueForRecalibration`). Called by the
+   * the recalibration reminder (`ASSET_DUE_FOR_RECALIBRATION`). Called by the
    * scheduled sweep that checks asset.nextLegalVerificationDate for LEGAL-regime
    * instruments. No-ops for any asset whose `metrologyRegime` is not 'LEGAL' or
    * whose `nextLegalVerificationDate` is null.

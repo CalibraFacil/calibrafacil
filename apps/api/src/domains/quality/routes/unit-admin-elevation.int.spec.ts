@@ -51,10 +51,7 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 import { competencesRouter } from "./competences";
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
-  notifyNCEscalatedToCapa: vi.fn().mockResolvedValue(undefined),
-  notifyCompetenceRequested: vi.fn().mockResolvedValue(undefined),
-  notifyCompetenceApproved: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;

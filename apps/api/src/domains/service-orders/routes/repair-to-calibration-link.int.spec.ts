@@ -47,7 +47,7 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 // a `DomainError` and `app.onError` renders it.
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" };

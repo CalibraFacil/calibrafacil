@@ -9,10 +9,7 @@ import {
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
 import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import {
-  notifyVisitCustomerConfirmed,
-  notifyVisitRescheduleRequested,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import {
   requirePermission,
   requirePortalProtected,
@@ -253,7 +250,12 @@ mount(
         },
       });
 
-      ctx.afterCommit(() => notifyVisitCustomerConfirmed(id, ctx.actor.userId));
+      ctx.afterCommit(() =>
+        notify("VISIT_CUSTOMER_CONFIRMED", {
+          visitId: id,
+          actorUserId: ctx.actor.userId,
+        }),
+      );
     });
 
     return {
@@ -335,7 +337,10 @@ mount(
           });
 
           ctx.afterCommit(() =>
-            notifyVisitRescheduleRequested(id, ctx.actor.userId),
+            notify("VISIT_RESCHEDULE_REQUESTED", {
+              visitId: id,
+              actorUserId: ctx.actor.userId,
+            }),
           );
           return created.id;
         },

@@ -52,13 +52,12 @@ import {
 
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
 
-// The SO handlers do not call notifyCertificateReady, but importing ./index pulls
+// The SO handlers do not call `notify`, but importing ./index pulls
 // the whole worker module graph (incl. the certificate path that does). Mock the
 // package to a no-op so the worker's node-only integration config never has to
 // transform the React-Email JSX templates that package transitively imports.
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCertificateReady: vi.fn(async () => {}),
-  notifyAuditPackReady: vi.fn(async () => {}),
+  notify: vi.fn(async () => {}),
 }));
 
 // vitest hoists vi.mock above the imports. processBackgroundJob is the PUBLIC

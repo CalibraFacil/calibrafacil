@@ -15,7 +15,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { CreateCalibrationRequestSchema } from "@calibra-facil/schemas";
 import { AWAITING_CONVERSION_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
-import { notifyCalibrationRequestSubmitted } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { invalid, notFound } from "../../../lib/domain-errors";
 import { and, count, desc, eq, inArray, isNull, ilike, sql } from "drizzle-orm";
 import {
@@ -394,7 +394,9 @@ portalRequestsRouter.post(
         });
 
         ctx.afterCommit(() =>
-          notifyCalibrationRequestSubmitted(createdRequest.id),
+          notify("CALIBRATION_REQUEST_SUBMITTED", {
+            requestId: createdRequest.id,
+          }),
         );
 
         return createdRequest;
@@ -577,7 +579,9 @@ mount(
             },
           });
           ctx.afterCommit(() =>
-            notifyCalibrationRequestSubmitted(createdRequest.id),
+            notify("CALIBRATION_REQUEST_SUBMITTED", {
+              requestId: createdRequest.id,
+            }),
           );
 
           results.push({

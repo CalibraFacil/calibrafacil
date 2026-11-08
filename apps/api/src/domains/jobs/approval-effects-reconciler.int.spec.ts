@@ -51,8 +51,7 @@ vi.mock("@calibra-facil/db", async (importOriginal) => {
 
 const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),
-  notifyJobApproved: vi.fn(),
-  notifyAssetOot: vi.fn(),
+  notify: vi.fn(),
 }));
 
 vi.mock("../../lib/background-jobs", () => ({
@@ -61,8 +60,7 @@ vi.mock("../../lib/background-jobs", () => ({
 
 vi.mock("@calibra-facil/notifications", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@calibra-facil/notifications")>()),
-  notifyJobApproved: mocks.notifyJobApproved,
-  notifyAssetFoundOutOfTolerance: mocks.notifyAssetOot,
+  notify: mocks.notify,
 }));
 
 import { db } from "@calibra-facil/db";
@@ -198,8 +196,7 @@ describe("post-approval notification handlers (REQ-B2-NOTIFY-1)", () => {
   beforeEach(async () => {
     await truncateAll();
     vi.clearAllMocks();
-    mocks.notifyJobApproved.mockResolvedValue(undefined);
-    mocks.notifyAssetOot.mockResolvedValue(undefined);
+    mocks.notify.mockResolvedValue(undefined);
   });
 
   it("delivers the technician notification for the approved job", async () => {
@@ -211,10 +208,10 @@ describe("post-approval notification handlers (REQ-B2-NOTIFY-1)", () => {
       }),
     );
 
-    expect(mocks.notifyJobApproved).toHaveBeenCalledExactlyOnceWith(
-      41,
-      "approver-1",
-    );
+    expect(mocks.notify).toHaveBeenCalledExactlyOnceWith("JOB_APPROVED", {
+      jobId: 41,
+      approvedByUserId: "approver-1",
+    });
   });
 
   it("alerts the customer once per event and records the notify audit entry; a redelivery sends nothing", async () => {
@@ -241,7 +238,10 @@ describe("post-approval notification handlers (REQ-B2-NOTIFY-1)", () => {
     await asApp(() => processBackgroundJob(ENV, message));
     await asApp(() => processBackgroundJob(ENV, message));
 
-    expect(mocks.notifyAssetOot).toHaveBeenCalledExactlyOnceWith(jobId);
+    expect(mocks.notify).toHaveBeenCalledExactlyOnceWith(
+      "ASSET_FOUND_OUT_OF_TOLERANCE",
+      { jobId },
+    );
     expect((await ootAudits()).map((audit) => audit.action)).toEqual([
       "create",
       "notify",
@@ -268,7 +268,7 @@ describe("post-approval notification handlers (REQ-B2-NOTIFY-1)", () => {
       organizationId: lab.orgId,
       userId: lab.userId,
     };
-    mocks.notifyAssetOot.mockRejectedValueOnce(new Error("smtp down"));
+    mocks.notify.mockRejectedValueOnce(new Error("smtp down"));
 
     await expect(
       asApp(() => processBackgroundJob(ENV, message)),
@@ -310,7 +310,7 @@ describe("post-approval notification handlers (REQ-B2-NOTIFY-1)", () => {
       }),
     );
 
-    expect(mocks.notifyAssetOot).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
     expect((await ootAudits()).map((audit) => audit.action)).toEqual([
       "create",
     ]);

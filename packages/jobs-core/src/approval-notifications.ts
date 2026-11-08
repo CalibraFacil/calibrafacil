@@ -11,10 +11,7 @@
 import { db } from "@calibra-facil/db";
 import { forOrg } from "@calibra-facil/db/for-org";
 import { assetOotAuditLog, assetOotEvent } from "@calibra-facil/db/schema";
-import {
-  notifyAssetFoundOutOfTolerance,
-  notifyJobApproved,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import type {
   AssetOotNotificationBackgroundJobMessage as AssetOotNotificationMessage,
   JobApprovedNotificationBackgroundJobMessage as JobApprovedNotificationMessage,
@@ -25,7 +22,10 @@ import { and, eq } from "drizzle-orm";
 export async function processJobApprovedNotification(
   message: JobApprovedNotificationMessage,
 ): Promise<void> {
-  await notifyJobApproved(message.jobId, message.userId);
+  await notify("JOB_APPROVED", {
+    jobId: message.jobId,
+    approvedByUserId: message.userId,
+  });
 }
 
 /**
@@ -71,7 +71,7 @@ export async function processAssetOotNotification(
 
   // A failure throws: the queue retries the job (3 attempts, backoff), so the
   // customer alert is not lost to a transient e-mail or database error.
-  await notifyAssetFoundOutOfTolerance(state.jobId);
+  await notify("ASSET_FOUND_OUT_OF_TOLERANCE", { jobId: state.jobId });
 
   await lab.transaction((tx) =>
     tx.insert(assetOotAuditLog).values({

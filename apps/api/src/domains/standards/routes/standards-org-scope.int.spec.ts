@@ -63,8 +63,7 @@ vi.mock("../../../lib/storage", async (importOriginal) => {
 });
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
-  notifyNCEscalatedToCapa: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;

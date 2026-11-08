@@ -32,8 +32,7 @@ import { capaRouter } from "./capa";
 import { nonConformancesRouter } from "./non-conformances";
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
-  notifyNCEscalatedToCapa: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;

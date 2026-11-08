@@ -51,7 +51,7 @@ import {
   type PortalOverviewResponse,
   type ServerShape,
 } from "@calibra-facil/contracts";
-import { notifyOotAcknowledged } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
 import {
   eq,
@@ -2588,12 +2588,12 @@ mount(
           // Notified after the commit: the notification reads the row it is about.
           if (updated) {
             ctx.afterCommit(() =>
-              notifyOotAcknowledged(
-                notification.id,
-                notification.ncId,
-                notification.ncNumber,
-                notification.organizationId,
-              ),
+              notify("OOT_NOTIFICATION_ACKNOWLEDGED", {
+                notificationId: notification.id,
+                ncId: notification.ncId,
+                ncNumber: notification.ncNumber,
+                organizationId: notification.organizationId,
+              }),
             );
           }
         }

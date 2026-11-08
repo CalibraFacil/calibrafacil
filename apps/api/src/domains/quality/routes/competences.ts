@@ -28,10 +28,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../../middleware/permission";
-import {
-  notifyCompetenceRequested,
-  notifyCompetenceApproved,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { eq, and, isNull, desc, count, lte, gte, inArray } from "drizzle-orm";
 import { COMPETENCE_MACHINE } from "@calibra-facil/schemas/machines";
 
@@ -388,11 +385,11 @@ mount(
 
         // Notify admins, once the request is committed (the notification reads it).
         ctx.afterCommit(() =>
-          notifyCompetenceRequested(
-            row.id,
-            memberData.organizationId,
-            session.user.id,
-          ),
+          notify("COMPETENCE_REQUESTED", {
+            competenceId: row.id,
+            organizationId: memberData.organizationId,
+            requestedByUserId: session.user.id,
+          }),
         );
 
         return row;
@@ -782,11 +779,11 @@ mount(
 
           // Notify technician, once the approval is committed (the notification reads it).
           ctx.afterCommit(() =>
-            notifyCompetenceApproved(
-              id,
-              memberData.organizationId,
-              session.user.id,
-            ),
+            notify("COMPETENCE_APPROVED", {
+              competenceId: id,
+              organizationId: memberData.organizationId,
+              approvedByUserId: session.user.id,
+            }),
           );
 
           return approved;

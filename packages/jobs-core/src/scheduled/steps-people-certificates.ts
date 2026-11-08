@@ -2,14 +2,8 @@ import { type OrgSession } from "../pdf-render.js";
 import { labToday } from "@calibra-facil/shared";
 import {
   decideSigningCertificateExpiryAlert,
-  notifyAccreditationExpiring,
-  notifyAccreditedScopeLineExpiring,
-  notifyCompetenceExpired,
-  notifyCompetenceExpiring,
-  notifySigningCertificateExpiring,
-  notifyPtPlanDue,
-  notifyVisitReminder,
   SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
+  notify,
 } from "@calibra-facil/notifications";
 import {
   type AccreditationExpiringRow,
@@ -55,7 +49,10 @@ export async function processCompetencesExpiring(
     let batchFailures = 0;
     for (const comp of compExpiringBatch) {
       try {
-        await notifyCompetenceExpiring(comp.id, comp.organization_id);
+        await notify("COMPETENCE_EXPIRING", {
+          competenceId: comp.id,
+          organizationId: comp.organization_id,
+        });
 
         await recordScheduledNotification(lab, {
           organizationId: comp.organization_id,
@@ -133,7 +130,10 @@ export async function processCompetencesExpired(
           );
         });
 
-        await notifyCompetenceExpired(comp.id, comp.organization_id);
+        await notify("COMPETENCE_EXPIRED", {
+          competenceId: comp.id,
+          organizationId: comp.organization_id,
+        });
 
         await recordScheduledNotification(lab, {
           organizationId: comp.organization_id,
@@ -182,7 +182,7 @@ export async function processVisitReminders(lab: OrgSession): Promise<number> {
     let batchFailures = 0;
     for (const visit of visitBatch) {
       try {
-        await notifyVisitReminder(visit.id);
+        await notify("VISIT_REMINDER", { visitId: visit.id });
 
         await recordScheduledNotification(lab, {
           organizationId: visit.organization_id,
@@ -250,8 +250,12 @@ export async function processSigningCertificatesExpiring(
           continue;
         }
 
-        await notifySigningCertificateExpiring(cert.id, cert.organization_id, {
-          daysRemaining: decision.daysUntilExpiry,
+        await notify("SIGNING_CERTIFICATE_EXPIRING", {
+          certificateId: cert.id,
+          organizationId: cert.organization_id,
+          context: {
+            daysRemaining: decision.daysUntilExpiry,
+          },
         });
 
         await recordScheduledNotification(lab, {
@@ -319,9 +323,12 @@ export async function processAccreditationsExpiring(
           continue;
         }
 
-        await notifyAccreditationExpiring(row.organization_id, {
-          daysRemaining: decision.daysUntilExpiry,
-          validUntil: row.valid_until,
+        await notify("ACCREDITATION_EXPIRING", {
+          organizationId: row.organization_id,
+          context: {
+            daysRemaining: decision.daysUntilExpiry,
+            validUntil: row.valid_until,
+          },
         });
 
         await recordScheduledNotification(lab, {
@@ -385,8 +392,12 @@ export async function processAccreditedScopeLinesExpiring(
           continue;
         }
 
-        await notifyAccreditedScopeLineExpiring(row.id, row.organization_id, {
-          daysRemaining: decision.daysUntilExpiry,
+        await notify("ACCREDITED_SCOPE_LINE_EXPIRING", {
+          scopeLineId: row.id,
+          organizationId: row.organization_id,
+          context: {
+            daysRemaining: decision.daysUntilExpiry,
+          },
         });
 
         await recordScheduledNotification(lab, {
@@ -433,7 +444,10 @@ export async function processPtPlanDue(lab: OrgSession): Promise<number> {
     let batchFailures = 0;
     for (const planItem of ptPlanBatch) {
       try {
-        await notifyPtPlanDue(planItem.id, planItem.organization_id);
+        await notify("PT_PLAN_DUE", {
+          planItemId: planItem.id,
+          organizationId: planItem.organization_id,
+        });
 
         await recordScheduledNotification(lab, {
           organizationId: planItem.organization_id,

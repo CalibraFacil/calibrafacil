@@ -29,12 +29,16 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
  */
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCertificateReady: vi.fn(async () => undefined),
-  notifyAuditPackReady: vi.fn(async () => undefined),
+  notify: vi.fn(async () => undefined),
 }));
 
-import { notifyCertificateReady } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
+
+/** The `notify` calls of one notification type. */
+function sent(type: string) {
+  return vi.mocked(notify).mock.calls.filter(([sentType]) => sentType === type);
+}
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
@@ -398,7 +402,7 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
   // look issued.
   describe("status guards (compare-and-set on GENERATING_PDF)", () => {
     beforeEach(() => {
-      vi.mocked(notifyCertificateReady).mockClear();
+      vi.mocked(notify).mockClear();
     });
 
     it("REQ-WSTAT-001 [HIGH RISK] a job cancelled while its PDF renders is NOT approved: no snapshot, no certificate_url, no approval audit, no notification", async () => {
@@ -420,7 +424,7 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
       expect(await issuedSnapshotRows(job.jobId)).toHaveLength(0);
       const actions = (await auditRows(job.jobId)).map((e) => e.action);
       expect(actions).not.toContain("certificate_generated");
-      expect(notifyCertificateReady).not.toHaveBeenCalled();
+      expect(sent("CERTIFICATE_READY")).toHaveLength(0);
     });
 
     it("REQ-WSTAT-002 a job that is already CANCELED is not rendered or issued at all", async () => {
@@ -460,7 +464,7 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
       expect(await auditRows(job.jobId)).toEqual(auditAfterFirst);
       expect(await jobRow(job.jobId)).toEqual(approved);
       expect(captured).toHaveLength(1);
-      expect(notifyCertificateReady).toHaveBeenCalledTimes(1);
+      expect(sent("CERTIFICATE_READY")).toHaveLength(1);
     });
 
     it("REQ-WSTAT-004 a late render failure does not REJECT a job that was cancelled meanwhile", async () => {

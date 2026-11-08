@@ -30,16 +30,16 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
  */
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCertificateReady: vi.fn(async () => undefined),
-  notifyCertificateAmended: vi.fn(async () => undefined),
-  notifyAuditPackReady: vi.fn(async () => undefined),
+  notify: vi.fn(async () => undefined),
 }));
 
-import {
-  notifyCertificateAmended,
-  notifyCertificateReady,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
+
+/** The `notify` calls of one notification type. */
+function sent(type: string) {
+  return vi.mocked(notify).mock.calls.filter(([sentType]) => sentType === type);
+}
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
@@ -136,7 +136,7 @@ async function seedIssuedOriginal() {
     jobId: original.jobId,
     userId: org.userId,
   });
-  vi.mocked(notifyCertificateReady).mockClear();
+  vi.mocked(notify).mockClear();
   return { org, original };
 }
 
@@ -180,7 +180,6 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.mocked(notifyCertificateAmended).mockClear();
 });
 
 describe("certificate lifecycle written by the worker (real DB)", () => {
@@ -265,12 +264,16 @@ describe("certificate lifecycle written by the worker (real DB)", () => {
     await processBackgroundJob(makeEnv(), message);
     await processBackgroundJob(makeEnv(), message);
 
-    expect(notifyCertificateAmended).toHaveBeenCalledTimes(1);
-    expect(notifyCertificateAmended).toHaveBeenCalledWith(
-      original.jobId,
-      amendment.id,
-      AMENDMENT_REASON,
-    );
+    expect(sent("CERTIFICATE_AMENDED")).toEqual([
+      [
+        "CERTIFICATE_AMENDED",
+        {
+          originalJobId: original.jobId,
+          amendedJobId: amendment.id,
+          reason: AMENDMENT_REASON,
+        },
+      ],
+    ]);
   });
 
   it("REQ-B3-W3 [HIGH RISK]: a render that fails leaves the original APPROVED and unchanged", async () => {
@@ -296,7 +299,7 @@ describe("certificate lifecycle written by the worker (real DB)", () => {
     });
     expect(await events(original.jobId)).toEqual(eventsBefore);
     expect(await auditActions(original.jobId)).toEqual(auditBefore);
-    expect(notifyCertificateAmended).not.toHaveBeenCalled();
+    expect(sent("CERTIFICATE_AMENDED")).toHaveLength(0);
   });
 
   it("REQ-B3-W4: an original that cannot be superseded fails the whole issuance; nothing of the replacement is written", async () => {

@@ -38,13 +38,7 @@ import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 import { requireScopedVisit } from "../visit-access";
 import { isAssignableTechnician } from "../../../lib/tenant-refs";
-import {
-  notifyVisitCancelled,
-  notifyVisitConfirmed,
-  notifyVisitRescheduleDeclined,
-  notifyVisitRescheduled,
-  notifyVisitScheduled,
-} from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import {
   cancelJob,
   createCalibrationJob,
@@ -403,7 +397,12 @@ mount(
         }
 
         if (technicianId !== visit.technicianId) {
-          ctx.afterCommit(() => notifyVisitScheduled(id, ctx.actor.userId));
+          ctx.afterCommit(() =>
+            notify("VISIT_SCHEDULED", {
+              visitId: id,
+              actorUserId: ctx.actor.userId,
+            }),
+          );
         }
         return updated;
       },
@@ -488,9 +487,15 @@ mount(
         }
 
         ctx.afterCommit(async () => {
-          await notifyVisitConfirmed(id, ctx.actor.userId);
+          await notify("VISIT_CONFIRMED", {
+            visitId: id,
+            actorUserId: ctx.actor.userId,
+          });
           if (technicianId !== visit.technicianId) {
-            await notifyVisitScheduled(id, ctx.actor.userId);
+            await notify("VISIT_SCHEDULED", {
+              visitId: id,
+              actorUserId: ctx.actor.userId,
+            });
           }
         });
         return updated;
@@ -548,7 +553,12 @@ mount(
 
         if (dateChanged) {
           await supersedePendingRescheduleRequests(ctx.o, id, ctx.actor.userId);
-          ctx.afterCommit(() => notifyVisitRescheduled(id, ctx.actor.userId));
+          ctx.afterCommit(() =>
+            notify("VISIT_RESCHEDULED", {
+              visitId: id,
+              actorUserId: ctx.actor.userId,
+            }),
+          );
         }
         return updated;
       },
@@ -598,7 +608,11 @@ mount(
         await supersedePendingRescheduleRequests(ctx.o, id, ctx.actor.userId);
 
         ctx.afterCommit(() =>
-          notifyVisitCancelled(id, ctx.actor.userId, reason ?? undefined),
+          notify("VISIT_CANCELLED", {
+            visitId: id,
+            actorUserId: ctx.actor.userId,
+            reason: reason ?? undefined,
+          }),
         );
         return updated;
       },
@@ -959,7 +973,12 @@ mount(
           reason: input.resolutionNote ?? null,
         });
 
-        ctx.afterCommit(() => notifyVisitRescheduled(id, ctx.actor.userId));
+        ctx.afterCommit(() =>
+          notify("VISIT_RESCHEDULED", {
+            visitId: id,
+            actorUserId: ctx.actor.userId,
+          }),
+        );
         return row;
       },
     );
@@ -1037,11 +1056,11 @@ mount(
         });
 
         ctx.afterCommit(() =>
-          notifyVisitRescheduleDeclined(
-            id,
-            ctx.actor.userId,
-            input.resolutionNote ?? undefined,
-          ),
+          notify("VISIT_RESCHEDULE_DECLINED", {
+            visitId: id,
+            actorUserId: ctx.actor.userId,
+            reason: input.resolutionNote ?? undefined,
+          }),
         );
         return rows;
       },

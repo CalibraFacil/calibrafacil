@@ -82,11 +82,7 @@ vi.mock("../certificates/certificate-input-images", () => ({
 }));
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyJobSubmittedForReview: vi.fn().mockResolvedValue(undefined),
-  notifyJobApproved: vi.fn().mockResolvedValue(undefined),
-  notifyJobRejected: vi.fn().mockResolvedValue(undefined),
-  notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
-  notifyCertificateAmended: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" };

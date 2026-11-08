@@ -29,12 +29,11 @@ const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-
 // integration config has no JSX transform. Mock the package to sever the JSX
 // import AND to keep the ready-notification a no-op side effect.
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyCertificateReady: vi.fn(async () => {}),
-  notifyAuditPackReady: vi.fn(async () => {}),
+  notify: vi.fn(async () => {}),
 }));
 
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
-import { notifyAuditPackReady } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 
 // ---- row-reader helpers (no `as`; same pattern as the sibling specs) ----
 function toRows(result: unknown): unknown[] {
@@ -112,7 +111,7 @@ function findZip(puts: Map<string, Uint8Array>): {
 
 beforeEach(async () => {
   await truncateAll();
-  vi.mocked(notifyAuditPackReady).mockClear();
+  vi.mocked(notify).mockClear();
 });
 
 afterEach(() => {
@@ -348,7 +347,9 @@ describe("processAuditPackJob (worker real-DB integration)", () => {
       userId: org.userId,
     });
 
-    expect(vi.mocked(notifyAuditPackReady)).toHaveBeenCalledWith(exportId);
+    expect(vi.mocked(notify)).toHaveBeenCalledWith("AUDIT_PACK_READY", {
+      exportId,
+    });
   });
 
   it("REQ-AUDIT-005 failure path: an invalid export records FAILED + failure_reason and rethrows for the queue retry", async () => {
@@ -386,7 +387,10 @@ describe("processAuditPackJob (worker real-DB integration)", () => {
       "Invalid audit pack params",
     );
     expect(after.r2_key).toBeNull();
-    expect(vi.mocked(notifyAuditPackReady)).not.toHaveBeenCalled();
+    expect(vi.mocked(notify)).not.toHaveBeenCalledWith(
+      "AUDIT_PACK_READY",
+      expect.anything(),
+    );
   });
 
   it("REQ-AUDIT-006 a certificate missing from R2 is skipped with a README note, not a failed pack", async () => {

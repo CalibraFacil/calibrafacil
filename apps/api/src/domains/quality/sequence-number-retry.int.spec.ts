@@ -24,7 +24,7 @@ import { orgDb } from "../../lib/org-db";
 import { withOrg } from "../../lib/org-context";
 
 vi.mock("@calibra-facil/notifications", () => ({
-  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
+  notify: vi.fn().mockResolvedValue(undefined),
 }));
 
 const CONCURRENT = 3;

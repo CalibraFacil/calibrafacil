@@ -16,11 +16,6 @@ import {
   SERVICE_ORDER_STATUSES,
 } from "@calibra-facil/shared/service-orders";
 import {
-  AwaitingEvaluationEmail,
-  ServiceInProgressEmail,
-  ServiceStartedEmail,
-} from "../index";
-import {
   SERVICE_ORDER_EMAIL_STATUSES,
   ServiceOrderStatusEmail,
   sendsServiceOrderStatusEmail,
@@ -170,31 +165,6 @@ describe("service-order status emails", () => {
     it("puts the preview line in the pre-header of the HTML", async () => {
       const html = await renderStatus(status, BRAND, false);
       expect(html).toContain(`>OS ${SERVICE_ORDER_NUMBER} — `);
-    });
-  });
-
-  describe("the named components the outbox drain imports", () => {
-    const props = {
-      brand: BRAND,
-      serviceOrderNumber: SERVICE_ORDER_NUMBER,
-      customerName: CUSTOMER_NAME,
-    };
-
-    it("render the table's email for their status", async () => {
-      expect(await render(ServiceStartedEmail(props))).toBe(
-        await renderStatus("repair_in_progress", BRAND, false),
-      );
-      expect(await render(AwaitingEvaluationEmail(props))).toBe(
-        await renderStatus("awaiting_tech_evaluation", BRAND, false),
-      );
-      expect(
-        await render(
-          ServiceInProgressEmail({
-            ...props,
-            stage: "calibration_in_progress",
-          }),
-        ),
-      ).toBe(await renderStatus("calibration_in_progress", BRAND, false));
     });
   });
 });

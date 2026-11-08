@@ -22,7 +22,7 @@ import {
   submitJob,
   editJob,
 } from "../../../jobs";
-import { notifyJobAssigned } from "@calibra-facil/notifications";
+import { notify } from "@calibra-facil/notifications";
 import { type PublicApiV2Env } from "./env";
 import { JobCreatePublicSchema, PublicUpdateJobSchema } from "./schemas";
 import { apiKeyActor } from "./actor";
@@ -120,7 +120,11 @@ export const jobWriteRoutes = createRouter<PublicApiV2Env>()
           if (input.technicianId) {
             const technicianId = input.technicianId;
             ctx.afterCommit(() =>
-              notifyJobAssigned(created.id, technicianId, ctx.actor.userId),
+              notify("JOB_ASSIGNED", {
+                jobId: created.id,
+                technicianId,
+                assignedByUserId: ctx.actor.userId,
+              }),
             );
           }
           await stagePublicApiWebhookEvent(ctx, {

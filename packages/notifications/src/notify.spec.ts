@@ -2,11 +2,11 @@
  * notify(type, payload): the one path every notification takes, and the
  * recipes behind it (recipes/*.ts).
  *
- * What is pinned here is what each of the notifyXxx entry points delivers:
+ * What is pinned here is what each notification type delivers:
  * for a fixed set of database rows, the in-app rows inserted (recipient,
  * organization, type, priority, title, message, link) and how many e-mails go
  * out. The expected rows are what the hand-written notifyXxx functions
- * produced before they became a table of recipes, so a changed word, a lost
+ * (since replaced by `notify`) produced before they became a table of recipes, so a changed word, a lost
  * recipient or a different "do not notify the actor" rule goes red here.
  *
  * The database is a fake that answers each select by the names of the columns
@@ -187,48 +187,7 @@ vi.mock("@calibra-facil/email-sender", () => ({
   stripBrandSender: (brand: unknown) => brand,
 }));
 
-import {
-  notify,
-  notifyAccreditationExpiring,
-  notifyAccreditedScopeLineExpiring,
-  notifyAssetDueForLegalVerification,
-  notifyAssetDueForRecalibration,
-  notifyAssetFoundOutOfTolerance,
-  notifyAuditChainBroken,
-  notifyAuditPackReady,
-  notifyCalibrationRequestApproved,
-  notifyCalibrationRequestConverted,
-  notifyCalibrationRequestRejected,
-  notifyCalibrationRequestSubmitted,
-  notifyCalibrationRequestUnderReview,
-  notifyCertificateAmended,
-  notifyCertificateReady,
-  notifyCompetenceApproved,
-  notifyCompetenceExpired,
-  notifyCompetenceExpiring,
-  notifyCompetenceRequested,
-  notifyJobApproved,
-  notifyJobAssigned,
-  notifyJobOverdue,
-  notifyJobRejected,
-  notifyJobSubmittedForReview,
-  notifyNCCreated,
-  notifyNCEscalatedToCapa,
-  notifyOotAcknowledged,
-  notifyPtPlanDue,
-  notifySigningCertificateExpiring,
-  notifySigningCertificateLapsed,
-  notifyStandardExpired,
-  notifyStandardExpiring,
-  notifyVisitCancelled,
-  notifyVisitConfirmed,
-  notifyVisitCustomerConfirmed,
-  notifyVisitRescheduleDeclined,
-  notifyVisitRescheduleRequested,
-  notifyVisitRescheduled,
-  notifyVisitReminder,
-  notifyVisitScheduled,
-} from "./service";
+import { notify } from "./service";
 import { NOTIFICATION_RECIPES } from "./recipes";
 
 interface ExpectedRow {
@@ -249,7 +208,8 @@ const CASES: readonly {
   rows: readonly ExpectedRow[];
 }[] = [
   {
-    run: () => notifyJobSubmittedForReview(7, "u1"),
+    run: () =>
+      notify("JOB_SUBMITTED_FOR_REVIEW", { jobId: 7, submittedByUserId: "u1" }),
     emails: 1,
     rows: [
       {
@@ -265,7 +225,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyJobSubmittedForReview(7, "x"),
+    run: () =>
+      notify("JOB_SUBMITTED_FOR_REVIEW", { jobId: 7, submittedByUserId: "x" }),
     emails: 2,
     rows: [
       {
@@ -281,12 +242,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyJobApproved(7, "tech-1"),
+    run: () => notify("JOB_APPROVED", { jobId: 7, approvedByUserId: "tech-1" }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyJobApproved(7, "boss"),
+    run: () => notify("JOB_APPROVED", { jobId: 7, approvedByUserId: "boss" }),
     emails: 1,
     rows: [
       {
@@ -302,12 +263,22 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyJobRejected(7, "tech-1", "motivo"),
+    run: () =>
+      notify("JOB_REJECTED", {
+        jobId: 7,
+        rejectedByUserId: "tech-1",
+        reason: "motivo",
+      }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyJobRejected(7, "boss", "motivo"),
+    run: () =>
+      notify("JOB_REJECTED", {
+        jobId: 7,
+        rejectedByUserId: "boss",
+        reason: "motivo",
+      }),
     emails: 1,
     rows: [
       {
@@ -323,12 +294,22 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyJobAssigned(7, "tech-1", "tech-1"),
+    run: () =>
+      notify("JOB_ASSIGNED", {
+        jobId: 7,
+        technicianId: "tech-1",
+        assignedByUserId: "tech-1",
+      }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyJobAssigned(7, "tech-1", "boss"),
+    run: () =>
+      notify("JOB_ASSIGNED", {
+        jobId: 7,
+        technicianId: "tech-1",
+        assignedByUserId: "boss",
+      }),
     emails: 0,
     rows: [
       {
@@ -344,7 +325,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCertificateReady(7),
+    run: () => notify("CERTIFICATE_READY", { jobId: 7 }),
     emails: 2,
     rows: [
       {
@@ -361,7 +342,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyAssetFoundOutOfTolerance(7),
+    run: () => notify("ASSET_FOUND_OUT_OF_TOLERANCE", { jobId: 7 }),
     emails: 2,
     rows: [
       {
@@ -378,7 +359,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyAuditPackReady(3),
+    run: () => notify("AUDIT_PACK_READY", { exportId: 3 }),
     emails: 2,
     rows: [
       {
@@ -395,7 +376,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCertificateAmended(7, 8, "razão"),
+    run: () =>
+      notify("CERTIFICATE_AMENDED", {
+        originalJobId: 7,
+        amendedJobId: 8,
+        reason: "razão",
+      }),
     emails: 4,
     rows: [
       {
@@ -423,7 +409,11 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyAssetDueForRecalibration(9, "org-lab"),
+    run: () =>
+      notify("ASSET_DUE_FOR_RECALIBRATION", {
+        assetId: 9,
+        organizationId: "org-lab",
+      }),
     emails: 2,
     rows: [
       {
@@ -440,7 +430,11 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyAssetDueForLegalVerification(9, "org-lab"),
+    run: () =>
+      notify("ASSET_DUE_FOR_LEGAL_VERIFICATION", {
+        assetId: 9,
+        organizationId: "org-lab",
+      }),
     emails: 2,
     rows: [
       {
@@ -457,7 +451,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyStandardExpiring(4, "org-lab"),
+    run: () =>
+      notify("STANDARD_EXPIRING", { standardId: 4, organizationId: "org-lab" }),
     emails: 2,
     rows: [
       {
@@ -474,7 +469,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyPtPlanDue(2, "org-lab"),
+    run: () =>
+      notify("PT_PLAN_DUE", { planItemId: 2, organizationId: "org-lab" }),
     emails: 2,
     rows: [
       {
@@ -491,7 +487,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyStandardExpired(4, "org-lab"),
+    run: () =>
+      notify("STANDARD_EXPIRED", { standardId: 4, organizationId: "org-lab" }),
     emails: 2,
     rows: [
       {
@@ -509,7 +506,11 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifySigningCertificateExpiring(1, "org-lab", { daysRemaining: 3 }),
+      notify("SIGNING_CERTIFICATE_EXPIRING", {
+        certificateId: 1,
+        organizationId: "org-lab",
+        context: { daysRemaining: 3 },
+      }),
     emails: 2,
     rows: [
       {
@@ -526,7 +527,11 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifySigningCertificateExpiring(1, "org-lab", { daysRemaining: 20 }),
+      notify("SIGNING_CERTIFICATE_EXPIRING", {
+        certificateId: 1,
+        organizationId: "org-lab",
+        context: { daysRemaining: 20 },
+      }),
     emails: 2,
     rows: [
       {
@@ -543,11 +548,14 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyAuditChainBroken("org-lab", {
-        table: "t",
-        kind: "row_hash_mismatch",
-        chainSeq: 5,
-        rowId: 9,
+      notify("AUDIT_CHAIN_BROKEN", {
+        organizationId: "org-lab",
+        context: {
+          table: "t",
+          kind: "row_hash_mismatch",
+          chainSeq: 5,
+          rowId: 9,
+        },
       }),
     emails: 2,
     rows: [
@@ -564,11 +572,14 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyAuditChainBroken("org-lab", {
-        table: "t",
-        kind: "weird",
-        chainSeq: null,
-        rowId: 3,
+      notify("AUDIT_CHAIN_BROKEN", {
+        organizationId: "org-lab",
+        context: {
+          table: "t",
+          kind: "weird",
+          chainSeq: null,
+          rowId: 3,
+        },
       }),
     emails: 2,
     rows: [
@@ -585,11 +596,14 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyAuditChainBroken("org-lab", {
-        table: "t",
-        kind: "sequence_gap",
-        chainSeq: 4,
-        rowId: null,
+      notify("AUDIT_CHAIN_BROKEN", {
+        organizationId: "org-lab",
+        context: {
+          table: "t",
+          kind: "sequence_gap",
+          chainSeq: 4,
+          rowId: null,
+        },
       }),
     emails: 2,
     rows: [
@@ -606,11 +620,14 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyAuditChainBroken("org-lab", {
-        table: "t",
-        kind: "sequence_gap",
-        chainSeq: null,
-        rowId: null,
+      notify("AUDIT_CHAIN_BROKEN", {
+        organizationId: "org-lab",
+        context: {
+          table: "t",
+          kind: "sequence_gap",
+          chainSeq: null,
+          rowId: null,
+        },
       }),
     emails: 2,
     rows: [
@@ -626,7 +643,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifySigningCertificateLapsed(7, "expirou"),
+    run: () =>
+      notify("SIGNING_CERTIFICATE_LAPSED", { jobId: 7, reason: "expirou" }),
     emails: 2,
     rows: [
       {
@@ -643,9 +661,12 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyAccreditationExpiring("org-lab", {
-        daysRemaining: 1,
-        validUntil: day(1),
+      notify("ACCREDITATION_EXPIRING", {
+        organizationId: "org-lab",
+        context: {
+          daysRemaining: 1,
+          validUntil: day(1),
+        },
       }),
     emails: 2,
     rows: [
@@ -663,9 +684,12 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyAccreditationExpiring("org-lab", {
-        daysRemaining: 30,
-        validUntil: day(30),
+      notify("ACCREDITATION_EXPIRING", {
+        organizationId: "org-lab",
+        context: {
+          daysRemaining: 30,
+          validUntil: day(30),
+        },
       }),
     emails: 2,
     rows: [
@@ -683,7 +707,11 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyAccreditedScopeLineExpiring(5, "org-lab", { daysRemaining: 3 }),
+      notify("ACCREDITED_SCOPE_LINE_EXPIRING", {
+        scopeLineId: 5,
+        organizationId: "org-lab",
+        context: { daysRemaining: 3 },
+      }),
     emails: 2,
     rows: [
       {
@@ -699,7 +727,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyJobOverdue(7),
+    run: () => notify("JOB_OVERDUE", { jobId: 7 }),
     emails: 4,
     rows: [
       {
@@ -716,7 +744,15 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyNCCreated(1, "NC-1", "equipment", "desc", "org-lab", "u1"),
+    run: () =>
+      notify("NC_CREATED", {
+        ncId: 1,
+        ncNumber: "NC-1",
+        ncType: "equipment",
+        description: "desc",
+        organizationId: "org-lab",
+        createdByUserId: "u1",
+      }),
     emails: 1,
     rows: [
       {
@@ -732,7 +768,15 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyNCCreated(1, "NC-1", "work", "desc", "org-lab", "x"),
+    run: () =>
+      notify("NC_CREATED", {
+        ncId: 1,
+        ncNumber: "NC-1",
+        ncType: "work",
+        description: "desc",
+        organizationId: "org-lab",
+        createdByUserId: "x",
+      }),
     emails: 2,
     rows: [
       {
@@ -749,7 +793,14 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyNCCreated(1, "NC-1", "out_of_tolerance", "desc", "org-lab", "x"),
+      notify("NC_CREATED", {
+        ncId: 1,
+        ncNumber: "NC-1",
+        ncType: "out_of_tolerance",
+        description: "desc",
+        organizationId: "org-lab",
+        createdByUserId: "x",
+      }),
     emails: 2,
     rows: [
       {
@@ -766,7 +817,14 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyNCCreated(1, "NC-1", "documentation", "desc", "org-lab", "x"),
+      notify("NC_CREATED", {
+        ncId: 1,
+        ncNumber: "NC-1",
+        ncType: "documentation",
+        description: "desc",
+        organizationId: "org-lab",
+        createdByUserId: "x",
+      }),
     emails: 2,
     rows: [
       {
@@ -782,7 +840,13 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyOotAcknowledged(11, 1, "NC-1", "org-lab"),
+    run: () =>
+      notify("OOT_NOTIFICATION_ACKNOWLEDGED", {
+        notificationId: 11,
+        ncId: 1,
+        ncNumber: "NC-1",
+        organizationId: "org-lab",
+      }),
     emails: 2,
     rows: [
       {
@@ -800,7 +864,15 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyNCEscalatedToCapa(1, "NC-1", 2, "CAPA-2", "desc", "org-lab", "u1"),
+      notify("NC_ESCALATED_TO_CAPA", {
+        ncId: 1,
+        ncNumber: "NC-1",
+        capaId: 2,
+        capaNumber: "CAPA-2",
+        description: "desc",
+        organizationId: "org-lab",
+        escalatedByUserId: "u1",
+      }),
     emails: 1,
     rows: [
       {
@@ -817,7 +889,15 @@ const CASES: readonly {
   },
   {
     run: () =>
-      notifyNCEscalatedToCapa(1, "NC-1", 2, "CAPA-2", "desc", "org-lab", "x"),
+      notify("NC_ESCALATED_TO_CAPA", {
+        ncId: 1,
+        ncNumber: "NC-1",
+        capaId: 2,
+        capaNumber: "CAPA-2",
+        description: "desc",
+        organizationId: "org-lab",
+        escalatedByUserId: "x",
+      }),
     emails: 2,
     rows: [
       {
@@ -833,7 +913,11 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCompetenceExpiring(3, "org-lab"),
+    run: () =>
+      notify("COMPETENCE_EXPIRING", {
+        competenceId: 3,
+        organizationId: "org-lab",
+      }),
     emails: 2,
     rows: [
       {
@@ -850,7 +934,11 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCompetenceExpired(3, "org-lab"),
+    run: () =>
+      notify("COMPETENCE_EXPIRED", {
+        competenceId: 3,
+        organizationId: "org-lab",
+      }),
     emails: 2,
     rows: [
       {
@@ -867,7 +955,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCompetenceRequested(3, "org-lab", "u1"),
+    run: () =>
+      notify("COMPETENCE_REQUESTED", {
+        competenceId: 3,
+        organizationId: "org-lab",
+        requestedByUserId: "u1",
+      }),
     emails: 1,
     rows: [
       {
@@ -883,7 +976,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCompetenceRequested(3, "org-lab", "x"),
+    run: () =>
+      notify("COMPETENCE_REQUESTED", {
+        competenceId: 3,
+        organizationId: "org-lab",
+        requestedByUserId: "x",
+      }),
     emails: 2,
     rows: [
       {
@@ -899,12 +997,22 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCompetenceApproved(3, "org-lab", "tech-1"),
+    run: () =>
+      notify("COMPETENCE_APPROVED", {
+        competenceId: 3,
+        organizationId: "org-lab",
+        approvedByUserId: "tech-1",
+      }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyCompetenceApproved(3, "org-lab", "boss"),
+    run: () =>
+      notify("COMPETENCE_APPROVED", {
+        competenceId: 3,
+        organizationId: "org-lab",
+        approvedByUserId: "boss",
+      }),
     emails: 1,
     rows: [
       {
@@ -920,7 +1028,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCalibrationRequestSubmitted(5),
+    run: () => notify("CALIBRATION_REQUEST_SUBMITTED", { requestId: 5 }),
     emails: 2,
     rows: [
       {
@@ -936,12 +1044,20 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCalibrationRequestUnderReview(5, "cust-1"),
+    run: () =>
+      notify("CALIBRATION_REQUEST_UNDER_REVIEW", {
+        requestId: 5,
+        actorUserId: "cust-1",
+      }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyCalibrationRequestUnderReview(5, "boss"),
+    run: () =>
+      notify("CALIBRATION_REQUEST_UNDER_REVIEW", {
+        requestId: 5,
+        actorUserId: "boss",
+      }),
     emails: 1,
     rows: [
       {
@@ -957,12 +1073,20 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCalibrationRequestApproved(5, "cust-1"),
+    run: () =>
+      notify("CALIBRATION_REQUEST_APPROVED", {
+        requestId: 5,
+        actorUserId: "cust-1",
+      }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyCalibrationRequestApproved(5, "boss"),
+    run: () =>
+      notify("CALIBRATION_REQUEST_APPROVED", {
+        requestId: 5,
+        actorUserId: "boss",
+      }),
     emails: 1,
     rows: [
       {
@@ -978,7 +1102,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCalibrationRequestRejected(5, "boss", "motivo"),
+    run: () =>
+      notify("CALIBRATION_REQUEST_REJECTED", {
+        requestId: 5,
+        actorUserId: "boss",
+        reason: "motivo",
+      }),
     emails: 1,
     rows: [
       {
@@ -994,7 +1123,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCalibrationRequestConverted(5, "boss", ["J1", "J2"]),
+    run: () =>
+      notify("CALIBRATION_REQUEST_CONVERTED", {
+        requestId: 5,
+        actorUserId: "boss",
+        jobCodes: ["J1", "J2"],
+      }),
     emails: 1,
     rows: [
       {
@@ -1010,7 +1144,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyCalibrationRequestConverted(5, "boss", ["J1"]),
+    run: () =>
+      notify("CALIBRATION_REQUEST_CONVERTED", {
+        requestId: 5,
+        actorUserId: "boss",
+        jobCodes: ["J1"],
+      }),
     emails: 1,
     rows: [
       {
@@ -1026,12 +1165,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitScheduled(1, "tech-1"),
+    run: () => notify("VISIT_SCHEDULED", { visitId: 1, actorUserId: "tech-1" }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyVisitScheduled(1, "boss"),
+    run: () => notify("VISIT_SCHEDULED", { visitId: 1, actorUserId: "boss" }),
     emails: 0,
     rows: [
       {
@@ -1048,12 +1187,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitConfirmed(1, "cust-1"),
+    run: () => notify("VISIT_CONFIRMED", { visitId: 1, actorUserId: "cust-1" }),
     emails: 0,
     rows: [],
   },
   {
-    run: () => notifyVisitConfirmed(1, "boss"),
+    run: () => notify("VISIT_CONFIRMED", { visitId: 1, actorUserId: "boss" }),
     emails: 1,
     rows: [
       {
@@ -1070,7 +1209,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitRescheduled(1, "boss"),
+    run: () => notify("VISIT_RESCHEDULED", { visitId: 1, actorUserId: "boss" }),
     emails: 2,
     rows: [
       {
@@ -1097,7 +1236,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitRescheduled(1, "tech-1"),
+    run: () =>
+      notify("VISIT_RESCHEDULED", { visitId: 1, actorUserId: "tech-1" }),
     emails: 1,
     rows: [
       {
@@ -1114,7 +1254,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitCancelled(1, "boss", "  razão "),
+    run: () =>
+      notify("VISIT_CANCELLED", {
+        visitId: 1,
+        actorUserId: "boss",
+        reason: "  razão ",
+      }),
     emails: 2,
     rows: [
       {
@@ -1141,7 +1286,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitCancelled(1, "boss"),
+    run: () => notify("VISIT_CANCELLED", { visitId: 1, actorUserId: "boss" }),
     emails: 2,
     rows: [
       {
@@ -1167,7 +1312,7 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitReminder(1),
+    run: () => notify("VISIT_REMINDER", { visitId: 1 }),
     emails: 2,
     rows: [
       {
@@ -1194,7 +1339,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitCustomerConfirmed(1, "u1"),
+    run: () =>
+      notify("VISIT_CUSTOMER_CONFIRMED", { visitId: 1, actorUserId: "u1" }),
     emails: 0,
     rows: [
       {
@@ -1211,7 +1357,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitRescheduleRequested(1, "u1"),
+    run: () =>
+      notify("VISIT_RESCHEDULE_REQUESTED", { visitId: 1, actorUserId: "u1" }),
     emails: 1,
     rows: [
       {
@@ -1228,7 +1375,12 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitRescheduleDeclined(1, "boss", "motivo"),
+    run: () =>
+      notify("VISIT_RESCHEDULE_DECLINED", {
+        visitId: 1,
+        actorUserId: "boss",
+        reason: "motivo",
+      }),
     emails: 1,
     rows: [
       {
@@ -1244,7 +1396,8 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitRescheduleDeclined(1, "boss"),
+    run: () =>
+      notify("VISIT_RESCHEDULE_DECLINED", { visitId: 1, actorUserId: "boss" }),
     emails: 1,
     rows: [
       {
@@ -1261,7 +1414,11 @@ const CASES: readonly {
     ],
   },
   {
-    run: () => notifyVisitRescheduleDeclined(1, "cust-1"),
+    run: () =>
+      notify("VISIT_RESCHEDULE_DECLINED", {
+        visitId: 1,
+        actorUserId: "cust-1",
+      }),
     emails: 0,
     rows: [],
   },
@@ -1314,7 +1471,7 @@ describe("notify", () => {
   );
 
   it("is what a notifyXxx wrapper calls", async () => {
-    await notifyJobApproved(7, "boss");
+    await notify("JOB_APPROVED", { jobId: 7, approvedByUserId: "boss" });
     const viaWrapper = [...recorded.inserts];
     recorded.inserts.length = 0;
 
@@ -1332,7 +1489,7 @@ describe("notify", () => {
       return originalSelect(fields);
     };
     try {
-      await notifyVisitRescheduled(1, "boss");
+      await notify("VISIT_RESCHEDULED", { visitId: 1, actorUserId: "boss" });
     } finally {
       fakeDb.select = originalSelect;
     }
