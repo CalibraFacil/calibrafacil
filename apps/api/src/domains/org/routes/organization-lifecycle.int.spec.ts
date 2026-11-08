@@ -8,6 +8,7 @@
  *   REQ-RET-3  the owner soft-deletes: who / when / why, suspended, event log
  *   REQ-RET-3  a wrong confirmation or a missing reason is a 400 with a code
  */
+import { z } from "zod";
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -19,7 +20,7 @@ import {
 import { loginAs } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedApiKey, seedOrg } from "../../../../test/integration/seed";
-import { getExecuteRows } from "../../../lib/db";
+import { executeRows } from "../../../lib/db";
 import { organizationLifecycleRouter } from "./organization-lifecycle";
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -198,10 +199,11 @@ describe("POST /soft-delete — owner-only soft delete of the laboratory", () =>
     );
     expect(keys.find((key) => key.id === "key-a")?.revokedBy).toBe(org.userId);
     expect(keys.find((key) => key.id === "key-b")?.revokedAt).toBeNull();
-    const [audit] = getExecuteRows<{ n: number }>(
+    const [audit] = executeRows(
       await db.execute(
         sql`select count(*)::int as n from organization_api_key_audit_log where api_key_id = 'key-a' and action = 'revoke'`,
       ),
+      z.object({ n: z.number() }),
     );
     expect(audit?.n).toBe(1);
   });

@@ -58,7 +58,7 @@ import { executableMethodSnapshot } from "../../../../test/integration/executabl
 import { jobRow } from "../../../../test/integration/job-cas";
 import { failEventAuditInsert } from "../../../../test/integration/sync-faults";
 import { openAppRoleDb, sqlStateOf } from "../../../../test/integration/rls";
-import { getExecuteRows } from "../../../lib/db";
+import { executeRows } from "../../../lib/db";
 import { syncRouter } from "./";
 
 vi.mock("../../../lib/background-jobs", () => ({
@@ -195,10 +195,11 @@ async function countRows(
   orgColumn: string,
   orgId: string,
 ) {
-  const rows = getExecuteRows<{ n: number }>(
+  const rows = executeRows(
     await db.execute(
       sql`select count(*)::int as n from ${sql.identifier(table)} where ${sql.identifier(orgColumn)} = ${orgId}`,
     ),
+    z.object({ n: z.number() }),
   );
   return rows[0]?.n ?? 0;
 }
@@ -520,7 +521,7 @@ async function changeLogEntries(
   organizationId: string,
   entityType?: string,
 ): Promise<LogEntry[]> {
-  const rows = getExecuteRows<LogEntry>(
+  const rows = executeRows(
     await db.execute(
       entityType === undefined
         ? sql`select entity_type, entity_id, op, organization_id from sync_change_log
@@ -528,8 +529,14 @@ async function changeLogEntries(
         : sql`select entity_type, entity_id, op, organization_id from sync_change_log
               where organization_id = ${organizationId} and entity_type = ${entityType} order by seq`,
     ),
+    z.object({
+      entity_type: z.string(),
+      entity_id: z.coerce.number(),
+      op: z.string(),
+      organization_id: z.string(),
+    }),
   );
-  return rows.map((row) => ({ ...row, entity_id: Number(row.entity_id) }));
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -540,11 +547,12 @@ type Pull = z.infer<typeof syncPullResponseSchema>;
 
 async function waitUntilServable() {
   for (let attempt = 0; attempt < 600; attempt += 1) {
-    const rows = getExecuteRows<{ ready: boolean }>(
+    const rows = executeRows(
       await db.execute(sql`
         SELECT coalesce(
           (SELECT max(xid) FROM sync_change_log) < pg_snapshot_xmin(pg_current_snapshot()),
           true) AS ready`),
+      z.object({ ready: z.boolean() }),
     );
     if (rows[0]?.ready) return;
     await new Promise((resolve) => setTimeout(resolve, 100));

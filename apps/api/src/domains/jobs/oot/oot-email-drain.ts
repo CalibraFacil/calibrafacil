@@ -40,6 +40,7 @@ import {
   r2EnvForStorageDependentWork,
   resolveBucketName,
 } from "../../../lib/storage";
+import { executeRowCount } from "../../../lib/db";
 
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -77,11 +78,7 @@ async function claimOutboxRow(
         RETURNING id`,
       ),
   );
-  const rows: unknown =
-    typeof result === "object" && result !== null
-      ? (Reflect.get(result, "rows") ?? result)
-      : result;
-  return Array.isArray(rows) && rows.length > 0;
+  return executeRowCount(result) > 0;
 }
 
 async function releaseOutboxRow(

@@ -17,7 +17,8 @@ import { withOrg, SYSTEM_ACTOR } from "../../lib/org-context";
 import { sql } from "drizzle-orm";
 import { systemDb } from "@calibra-facil/db";
 import { readSyncConfig } from "@calibra-facil/config";
-import { getExecuteRows } from "../../lib/db";
+import { executeRows } from "../../lib/db";
+import { z } from "zod";
 
 export type SyncChangeLogPurgeResult = {
   /** Entries deleted. */
@@ -40,13 +41,14 @@ export async function purgeSyncChangeLog(
   // (one statement, only the organization ids). `changed_at` is a `timestamp`
   // written in the session time zone (`now()`), so it is compared with
   // `localtimestamp`, which is in the same zone.
-  const owed = getExecuteRows<{ organization_id: string }>(
+  const owed = executeRows(
     await systemDb.execute(sql`
       SELECT DISTINCT organization_id
       FROM sync_change_log
       WHERE changed_at < localtimestamp - make_interval(days => ${retentionDays})
       ORDER BY organization_id
     `),
+    z.object({ organization_id: z.string() }),
   );
 
   let purged = 0;
@@ -106,13 +108,16 @@ function purgeOrganization(organizationId: string, retentionDays: number) {
         (SELECT count(*) FROM purged)::int AS purged,
         (SELECT count(*) FROM horizon)::int AS organizations
     `);
-    const [row] = getExecuteRows<{
-      purged: number | string;
-      organizations: number | string;
-    }>(result);
+    const [row] = executeRows(
+      result,
+      z.object({
+        purged: z.coerce.number(),
+        organizations: z.coerce.number(),
+      }),
+    );
     return {
-      purged: Number(row?.purged ?? 0),
-      organizations: Number(row?.organizations ?? 0),
+      purged: row?.purged ?? 0,
+      organizations: row?.organizations ?? 0,
     };
   });
 }

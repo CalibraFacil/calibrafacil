@@ -22,6 +22,7 @@
  * database pushed from main's schema.ts, that revert is identical (columns,
  * constraints, indexes, triggers), so the data below sits in main's shape.
  */
+import { z } from "zod";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
@@ -38,7 +39,7 @@ import {
   seedTenantChildren,
   type Tenant,
 } from "../../test/integration/tenancy-fixture";
-import { getExecuteRows } from "./db";
+import { executeRows } from "./db";
 
 const MIGRATION = readFileSync(
   new URL(
@@ -226,10 +227,11 @@ describe("migration 0118 on a database in main's shape", () => {
     // Two laboratories, every seeded table holds a row of each.
     for (const table of SEEDED_CHILD_TABLES) {
       const owners = new Set(
-        getExecuteRows<{ organization_id: string }>(
+        executeRows(
           await db.execute(
             sql`select organization_id from ${sql.identifier(table)}`,
           ),
+          z.object({ organization_id: z.string() }),
         ).map((row) => row.organization_id),
       );
       expect([...owners].toSorted(), table).toEqual(["org-a", "org-b"]);

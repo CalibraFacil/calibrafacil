@@ -9,6 +9,7 @@
  * organization, with a second laboratory seeded alongside so a mis-attribution would
  * show.
  */
+import { z } from "zod";
 import { CURRENT_DESKTOP_BUILD } from "../../../../test/integration/desktop-build";
 import { insertJobs } from "../../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,7 +27,7 @@ import { truncateAll } from "../../../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../../../test/integration/seed";
 import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
-import { getExecuteRows } from "../../../lib/db";
+import { executeRows } from "../../../lib/db";
 import { syncRouter } from "./";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
@@ -256,10 +257,11 @@ async function organizationsOf(
   table: string,
   where = sql`true`,
 ): Promise<{ owners: Array<string | null>; rows: number }> {
-  const rows = getExecuteRows<{ organization_id: string | null }>(
+  const rows = executeRows(
     await db.execute(
       sql`select organization_id from ${sql.identifier(table)} where ${where}`,
     ),
+    z.object({ organization_id: z.string().nullable() }),
   );
   return {
     owners: [...new Set(rows.map((row) => row.organization_id))],

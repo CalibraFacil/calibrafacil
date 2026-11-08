@@ -45,7 +45,7 @@ import {
   seedService,
 } from "../../../../test/integration/seed";
 import { seedJobForOrg } from "../../../../test/integration/tenant-refs";
-import { getExecuteRows } from "../../../lib/db";
+import { executeRows } from "../../../lib/db";
 import { purgeSyncChangeLog } from "../sync-change-log-purge";
 import { syncRouter } from "./";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
@@ -97,13 +97,14 @@ async function pullOk(
  */
 async function waitUntilServable(organizationId: string) {
   for (let attempt = 0; attempt < 600; attempt += 1) {
-    const rows = getExecuteRows<{ ready: boolean }>(
+    const rows = executeRows(
       // eslint-disable-next-line no-await-in-loop
       await db.execute(sql`
         SELECT coalesce(
           (SELECT xid FROM sync_change_log WHERE organization_id = ${organizationId}
            ORDER BY xid DESC LIMIT 1) < pg_snapshot_xmin(pg_current_snapshot()),
           true) AS ready`),
+      z.object({ ready: z.boolean() }),
     );
     if (rows[0]?.ready) return;
     // eslint-disable-next-line no-await-in-loop
@@ -237,13 +238,16 @@ async function logRows(organizationId: string) {
     sql`SELECT entity_type, entity_id, op, unit_id, organization_id
         FROM sync_change_log WHERE organization_id = ${organizationId} ORDER BY seq`,
   );
-  return getExecuteRows<{
-    entity_type: string;
-    entity_id: number | string;
-    op: string;
-    unit_id: number | null;
-    organization_id: string;
-  }>(result);
+  return executeRows(
+    result,
+    z.object({
+      entity_type: z.string(),
+      entity_id: z.union([z.number(), z.string()]),
+      op: z.string(),
+      unit_id: z.number().nullable(),
+      organization_id: z.string(),
+    }),
+  );
 }
 
 const ORG = "org-cs-a";
@@ -871,11 +875,12 @@ describe("sync change sequence (protocol 3)", () => {
   it("REQ-CS-5: the log table is tenant data of its laboratory (organization_id NOT NULL, removed with the laboratory)", async () => {
     const org = await seedOrg({ orgId: ORG, role: "admin" });
     await seedCustomer({ labOrganizationId: org.orgId, name: "A" });
-    const columns = getExecuteRows<{ is_nullable: string }>(
+    const columns = executeRows(
       await db.execute(
         sql`SELECT is_nullable FROM information_schema.columns
             WHERE table_name = 'sync_change_log' AND column_name = 'organization_id'`,
       ),
+      z.object({ is_nullable: z.string() }),
     );
     expect(columns[0]?.is_nullable).toBe("NO");
   });

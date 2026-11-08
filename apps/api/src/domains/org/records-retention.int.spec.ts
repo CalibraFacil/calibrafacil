@@ -17,6 +17,7 @@
  *              organizations, never touches legal-hold or in-retention ones,
  *              writes the platform audit event first
  */
+import { z } from "zod";
 import { insertJobs } from "../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../../test/integration/organization-of";
@@ -67,7 +68,7 @@ import {
   type SeededOrg,
 } from "../../../test/integration/seed";
 import { hardDeleteOrganizationAsPurge } from "../../../test/integration/records-retention";
-import { getExecuteRows } from "../../lib/db";
+import { executeRows } from "../../lib/db";
 import {
   evidenceTablesHoldingRecords,
   removeLabOrganization,
@@ -341,10 +342,11 @@ async function organizationExists(id: string): Promise<boolean> {
 }
 
 async function count(table: string, where = sql`true`): Promise<number> {
-  const rows = getExecuteRows<{ n: number }>(
+  const rows = executeRows(
     await db.execute(
       sql`select count(*)::int as n from ${sql.identifier(table)} where ${where}`,
     ),
+    z.object({ n: z.number() }),
   );
   return rows[0]?.n ?? 0;
 }
@@ -361,7 +363,7 @@ describe("REQ-RET-2: evidence is never reached by a cascading foreign key", () =
   });
 
   it("REQ-RET-2 [HIGH RISK]: in the built database no evidence table has a CASCADE foreign key unless it is a listed owned part", async () => {
-    const rows = getExecuteRows<{ tbl: string; col: string; parent: string }>(
+    const rows = executeRows(
       await db.execute(sql`
         select c.conrelid::regclass::text as tbl,
                a.attname as col,
@@ -369,6 +371,7 @@ describe("REQ-RET-2: evidence is never reached by a cascading foreign key", () =
           from pg_constraint c
           join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
          where c.contype = 'f' and c.confdeltype = 'c'`),
+      z.object({ tbl: z.string(), col: z.string(), parent: z.string() }),
     );
     const evidence = new Set(listEvidenceTables());
     const owned = new Set(
@@ -960,17 +963,18 @@ describe("REQ-RET-4: retention period, legal hold and calibra_retain_until", () 
       .set({ retentionYears: 5 })
       .where(eq(organization.id, "org-five"));
 
-    const [rows] = getExecuteRows<{
-      ten: string;
-      five: string;
-      unknown_org: string;
-      no_date: string | null;
-    }>(
+    const [rows] = executeRows(
       await db.execute(sql`
         select to_char(calibra_retain_until('org-ten', '2020-02-29 12:00:00'::timestamp), 'YYYY-MM-DD HH24:MI:SS') as ten,
                to_char(calibra_retain_until('org-five', '2020-02-29 12:00:00'::timestamp), 'YYYY-MM-DD HH24:MI:SS') as five,
                to_char(calibra_retain_until('nobody', '2020-01-01 00:00:00'::timestamp), 'YYYY-MM-DD HH24:MI:SS') as unknown_org,
                to_char(calibra_retain_until('org-ten', null), 'YYYY-MM-DD') as no_date`),
+      z.object({
+        ten: z.string(),
+        five: z.string(),
+        unknown_org: z.string(),
+        no_date: z.string().nullable(),
+      }),
     );
     expect(rows?.ten).toBe("2030-02-28 12:00:00");
     expect(rows?.five).toBe("2025-02-28 12:00:00");

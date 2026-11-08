@@ -111,7 +111,7 @@ import {
   frozenSealOf,
 } from "../certificates/frozen-seal";
 import { alias } from "drizzle-orm/pg-core";
-import { getExecuteRows } from "../../../lib/db";
+import { executeRows } from "../../../lib/db";
 import { buildUnitScopeCondition } from "../../../lib/units";
 import { r2EnvFromUnknown, methodSnapshotDisplay } from "../commands/helpers";
 import { approveJob } from "../commands/approve-job";
@@ -1418,30 +1418,28 @@ jobsRouter.get(
         FROM chain
         ORDER BY depth ASC;
       `);
-          const chainRows = getExecuteRows<{
-            id: number;
-            job_id: string;
-            status: string;
-            amendment_number: number | null;
-            amendment_reason: string | null;
-            approved_at: Date | string | null;
-            superseded_at: Date | string | null;
-          }>(chainResult);
+          const chainRows = executeRows(
+            chainResult,
+            z.object({
+              id: z.coerce.number(),
+              job_id: z.string(),
+              status: z.string(),
+              amendment_number: z.coerce.number().nullable(),
+              amendment_reason: z.string().nullable(),
+              approved_at: z.coerce.date().nullable(),
+              superseded_at: z.coerce.date().nullable(),
+            }),
+          );
 
           return chainRows.map((row) => ({
-            id: Number(row.id),
+            id: row.id,
             jobId: row.job_id,
             status: row.status,
-            amendmentNumber:
-              row.amendment_number === null
-                ? null
-                : Number(row.amendment_number),
+            amendmentNumber: row.amendment_number,
             amendmentReason: row.amendment_reason,
-            approvedAt: row.approved_at ? new Date(row.approved_at) : null,
-            supersededAt: row.superseded_at
-              ? new Date(row.superseded_at)
-              : null,
-            isCurrent: Number(row.id) === job.id,
+            approvedAt: row.approved_at,
+            supersededAt: row.superseded_at,
+            isCurrent: row.id === job.id,
           }));
         },
       );
