@@ -17,7 +17,16 @@ import { createHmac } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import { emailSuppression, emailWebhookEvent } from "@calibra-facil/db/schema";
 import { truncateAll } from "../../../../test/integration/db";
+import { suppressEmail } from "@calibra-facil/notifications";
 import { webhooksRouter } from "./webhooks";
+
+// The real suppression, wrapped so a case can make a later recipient's write
+// fail (a transient database fault) and watch what the webhook leaves behind.
+vi.mock("@calibra-facil/notifications", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@calibra-facil/notifications")>();
+  return { ...actual, suppressEmail: vi.fn(actual.suppressEmail) };
+});
 
 const SECRET = "whsec_dGVzdHNlY3JldA=="; // base64("testsecret")
 const PREVIOUS_SECRET = process.env.RESEND_WEBHOOK_SECRET;
@@ -234,5 +243,56 @@ describe("REQ-WH-002: idempotent by svix-id", () => {
 
     expect(await suppressions()).toHaveLength(2);
     expect(await ledger()).toHaveLength(2);
+  });
+});
+
+describe("REQ-WH-004: a failed suppression is not lost", () => {
+  it("REQ-WH-004 a failing suppression answers 5xx and rolls the ledger row back with it; the redelivery then suppresses every recipient and a third is a duplicate", async () => {
+    const real = vi.mocked(suppressEmail).getMockImplementation();
+    if (!real) throw new Error("suppressEmail mock lost its implementation");
+    const payload = {
+      type: "email.complained",
+      data: { to: ["first@lab.com", "second@lab.com"] },
+    };
+
+    // The first recipient is written, the second fails: neither may stay.
+    vi.mocked(suppressEmail)
+      .mockImplementationOnce(real)
+      .mockRejectedValueOnce(new Error("database unavailable"));
+    const failed = await postSigned(payload, "msg_retry");
+
+    expect(failed.status).toBeGreaterThanOrEqual(500);
+    expect(await suppressions()).toEqual([]);
+    expect(await ledger()).toEqual([]);
+
+    const redelivered = await postSigned(payload, "msg_retry");
+    expect(redelivered.status).toBe(200);
+    expect((await suppressions()).map((row) => row.email).toSorted()).toEqual([
+      "first@lab.com",
+      "second@lab.com",
+    ]);
+    expect(await ledger()).toEqual([
+      { svixId: "msg_retry", eventType: "email.complained" },
+    ]);
+
+    const third = await postSigned(payload, "msg_retry");
+    expect(third.status).toBe(200);
+    await expect(third.json()).resolves.toMatchObject({ duplicate: true });
+    expect(await suppressions()).toHaveLength(2);
+  });
+
+  it("REQ-WH-004 concurrent deliveries of one svix-id apply the suppression once", async () => {
+    const payload = {
+      type: "email.complained",
+      data: { to: ["race@lab.com"] },
+    };
+    const responses = await Promise.all([
+      postSigned(payload, "msg_race"),
+      postSigned(payload, "msg_race"),
+    ]);
+
+    expect(responses.map((res) => res.status)).toEqual([200, 200]);
+    expect(await suppressions()).toHaveLength(1);
+    expect(await ledger()).toHaveLength(1);
   });
 });

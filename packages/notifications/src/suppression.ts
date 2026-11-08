@@ -38,12 +38,16 @@ export function suppressionScopesToCheck(
  * (email, scope) updates the reason/source/note rather than inserting a
  * duplicate (UNIQUE (email, scope)).
  */
-export async function suppressEmail(input: SuppressEmailInput): Promise<void> {
+export async function suppressEmail(
+  input: SuppressEmailInput,
+  /** A transaction of the caller, so the suppression commits (or rolls back) with it. */
+  executor: Pick<typeof db, "insert"> = db,
+): Promise<void> {
   const email = normalizeSuppressionEmail(input.email);
   const note = input.note ?? null;
   const now = new Date();
 
-  await db
+  await executor
     .insert(emailSuppression)
     .values({
       email,
