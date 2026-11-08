@@ -67,7 +67,6 @@ export {
   buildInitialNextScheduledRunAt,
   createSyncRun,
   failSyncRunAsBlocked,
-  runIntegrationSync,
 } from "./sync-run";
 export { hasActiveSyncRun } from "./sync-state";
 export { type IntegrationOverview } from "./types";

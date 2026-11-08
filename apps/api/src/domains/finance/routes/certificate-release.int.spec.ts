@@ -22,6 +22,9 @@
  *   REQ-CREL-003  Exception override: reason + APPROVED job → RELEASED_BY_EXCEPTION
  *                 (sticky on subsequent GET); empty reason → 400; non-APPROVED
  *                 job → 400 {code:"NOT_APPROVED"}.
+ *   REQ-CREL-007  Boundary: a hold and a release (by payment, through the
+ *                 reconciliation hook) leave the calibration job row exactly as
+ *                 it was; technical approval is separate from commercial release.
  *   REQ-CREL-004  RBAC: member/technician lacking financial:export → 403 on
  *                 exception-release; member lacking financial:contract_create →
  *                 403 on POST /settings/; admin succeeds.
@@ -43,6 +46,7 @@ import {
   asset,
   assetType,
   billingDocument,
+  calibrationJob,
   certificateRelease,
   certificateReleasePolicy,
   customer,
@@ -58,6 +62,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedOrg } from "../../../../test/integration/seed";
+import { recomputeCertificateReleasesForBillingDocument } from "../certificate-release-reconciliation";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
@@ -664,6 +669,92 @@ describe("financeCertificateReleaseRouter — payment gate + RBAC (real DB)", ()
     );
     // Route maps NOT_APPROVED → 409
     expect(notApprovedRes.status).toBe(409);
+  });
+
+  // =======================================================================
+  // REQ-CREL-007 [HIGH RISK]: commercial release never touches technical approval
+  // =======================================================================
+  it("REQ-CREL-007 [HIGH RISK]: a hold and a release by payment (the reconciliation hook) leave the calibration job row exactly as it was (technical approval is separate from commercial release)", async () => {
+    const org = await seedOrgFixture({
+      orgId: "org-boundary",
+      tagSuffix: "bnd",
+    });
+    await seedReleasePolicy({
+      orgId: org.orgId,
+      createdByUserId: org.userId,
+      mode: "release_after_full_payment",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const billingId = await seedBillingDocument({
+      orgId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      createdBy: org.userId,
+      status: "DRAFT",
+    });
+    await seedInstallment({ documentId: billingId, status: "OPEN" });
+    const jobId = await seedJob({
+      jobId: "JOB-BOUNDARY-001",
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "APPROVED",
+    });
+    await seedServiceOrderWithLink({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      openedByUserId: org.userId,
+      jobId,
+      billingDocumentId: billingId,
+    });
+    const readJob = async () => {
+      const [row] = await db
+        .select()
+        .from(calibrationJob)
+        .where(eq(calibrationJob.id, jobId));
+      return row;
+    };
+    const before = await readJob();
+    expect(before?.status).toBe("APPROVED");
+
+    // Held for payment.
+    const held = await financeCertificateReleaseRouter.request(`/${jobId}`, {
+      headers: JSON_HEADERS,
+    });
+    expect((await held.json()).data.status).toBe("HELD_FOR_PAYMENT");
+    expect(await readJob()).toEqual(before);
+
+    // The payment arrives; the financial reconciliation hook recomputes.
+    await withStatusRepair((tx) =>
+      tx
+        .update(billingDocument)
+        .set({ status: "PAID" })
+        .where(eq(billingDocument.id, billingId)),
+    );
+    await withStatusRepair((tx) =>
+      tx
+        .update(receivableInstallment)
+        .set({ status: "PAID" })
+        .where(eq(receivableInstallment.documentId, billingId)),
+    );
+    await expect(
+      recomputeCertificateReleasesForBillingDocument({
+        organizationId: org.orgId,
+        billingDocumentId: billingId,
+      }),
+    ).resolves.toEqual({ recomputedJobIds: [jobId] });
+    const [released] = await db
+      .select({ status: certificateRelease.status })
+      .from(certificateRelease)
+      .where(eq(certificateRelease.calibrationJobId, jobId));
+    expect(released?.status).toBe("RELEASED");
+    expect(await readJob()).toEqual(before);
   });
 
   // =======================================================================
