@@ -1,5 +1,5 @@
 /**
- * unit-admin-elevation.int.spec.ts - architecture review P0-11 [HIGH RISK].
+ * unit-admin-elevation.int.spec.ts [HIGH RISK].
  *
  * `requirePermission` raises a member's EFFECTIVE role from the unit role
  * (`unit_admin` -> `admin`, `technician` -> `technician`) for the resources in
@@ -112,7 +112,7 @@ const TECHNICIAN_GRADE: readonly Probe[] = [
 ];
 
 /**
- * `create` on the five quality resources (decision Q49): the one action a unit
+ * `create` on the five quality resources: the one action a unit
  * role elevates there, because it adds a record and touches no existing row.
  */
 const UNIT_CREATE: readonly Probe[] = [

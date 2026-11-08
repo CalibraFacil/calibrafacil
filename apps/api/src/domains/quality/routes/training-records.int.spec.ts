@@ -35,7 +35,7 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 //    competence:create → technician, admin, owner   (member + operator: read only)
 //    competence:update → admin, owner               (technician: create+read only)
 //    competence:delete → admin, owner
-//  `competence` is NOT in UNIT_SCOPED_RESOURCES (P0-11): the unit role never
+//  `competence` is NOT in UNIT_SCOPED_RESOURCES: the unit role never
 //  changes the effective role here, so the org-role table above is the whole
 //  story (unit-admin-elevation.int.spec.ts pins it).
 //

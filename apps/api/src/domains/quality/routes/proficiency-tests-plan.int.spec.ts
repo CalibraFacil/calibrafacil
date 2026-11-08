@@ -1,6 +1,4 @@
 /**
- * proficiency-tests-plan.int.spec.ts - P2-18d.
- *
  * The participation-plan handlers and the audit log of proficiency-tests.int.spec.ts'
  * neighbours (ISO/IEC 17025 §7.7.2, NIT-DICLA-026 §9.4): GET /plan, PUT /plan/:id,
  * DELETE /plan/:id and GET /:id/audit-log. Success paths and cross-laboratory

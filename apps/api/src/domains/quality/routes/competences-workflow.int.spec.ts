@@ -1,5 +1,5 @@
 /**
- * competences-workflow.int.spec.ts - P2-18d [HIGH RISK].
+ * competences-workflow.int.spec.ts [HIGH RISK].
  *
  * Success paths (and a cross-laboratory negative for each) of the competence
  * workflow handlers that competences.int.spec.ts does not reach: label,
@@ -10,7 +10,7 @@
  *
  *   REQ-18D-COMP-1  Each transition moves the status exactly as the state machine
  *                   says and writes its audit row (DB-verified).
- *   REQ-D4-1        a refused record rolls the whole assign-training back (roadmap 2 D4)
+ *   REQ-D4-1        a refused record rolls the whole assign-training back
  *   REQ-18D-COMP-2  assign-training links only training records of the same lab AND
  *                   the same technician; lab B's training record id from lab A is a
  *                   400 and nothing is linked.

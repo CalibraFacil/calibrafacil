@@ -75,9 +75,6 @@ export const nonConformancesRouter = createRouter<{
   Variables: AuthVariables;
 }>();
 
-// =========================================================================
-// GET / - List non-conformances with pagination and filtering
-// =========================================================================
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -126,13 +123,11 @@ mount(
 
       const whereCondition = and(...conditions);
 
-      // Get total count
       const [countResult] = await o
         .select({ total: count() })
         .from(nonConformance)
         .where(whereCondition);
 
-      // Get paginated data with detector user name
       const ncs = await o
         .select({
           id: nonConformance.id,
@@ -184,9 +179,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /summary - Dashboard summary of open NCs by type and age
-// =========================================================================
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -197,7 +189,6 @@ mount(
       const member = c.get("member");
       const orgId = member.organizationId;
 
-      // Count by status
       const statusCounts = await o
         .select({
           status: nonConformance.status,
@@ -207,7 +198,6 @@ mount(
         .where(eq(nonConformance.organizationId, orgId))
         .groupBy(nonConformance.status);
 
-      // Count open NCs by type
       const typeCounts = await o
         .select({
           type: nonConformance.type,
@@ -261,7 +251,6 @@ mount(
   },
 );
 
-// GET /:id/label - Get NC label by ID
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -274,9 +263,6 @@ mount(
     }),
 );
 
-// =========================================================================
-// GET /:id - Get single NC by ID
-// =========================================================================
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -323,7 +309,6 @@ mount(
         job = jobResult ?? null;
       }
 
-      // Get user names
       const [detectedByUser] = await o
         .select({ name: user.name })
         .from(user)
@@ -367,9 +352,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST / - Create new non-conformance
-// =========================================================================
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -417,9 +399,6 @@ mount(
   },
 );
 
-// =========================================================================
-// PUT /:id/disposition - Set disposition on an NC
-// =========================================================================
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -461,7 +440,6 @@ mount(
           );
         }
 
-        // Update NC
         const updateData: Record<string, unknown> = {
           disposition: input.disposition,
           dispositionJustification: input.justification || null,
@@ -480,7 +458,7 @@ mount(
         const [row] = await ctx.o
           .update(nonConformance)
           .set(updateData)
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // Defense-in-depth: repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
           // refactored away. Reuses the in-scope member.organizationId.
           .where(
@@ -521,9 +499,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /:id/resolve - Resolve/close an NC
-// =========================================================================
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -564,7 +539,7 @@ mount(
               "resolve",
             ),
           })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // Defense-in-depth: repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
           // refactored away. Reuses the in-scope member.organizationId.
           .where(
@@ -653,7 +628,7 @@ mount(
             title: `CAPA originada da ${existing.ncNumber}`,
             description: existing.description,
             source: "nc_detection",
-            // #426 Phase 2: OOT provenance — assessors can trace a CAPA
+            // OOT provenance — assessors can trace a CAPA
             // back to the out-of-tolerance event (and its trigger) from
             // the reference alone.
             sourceReference:
@@ -678,7 +653,7 @@ mount(
         await ctx.o
           .update(nonConformance)
           .set({ capaId: newCapa.id })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // Defense-in-depth: repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
           // refactored away. Reuses the in-scope member.organizationId.
           .where(
@@ -721,9 +696,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/audit-log - Get audit log for an NC
-// =========================================================================
 mount(
   nonConformancesRouter,
   PREFIX,
@@ -731,7 +703,6 @@ mount(
   withLabPermission({ non_conformance: ["read"] }),
   async (c, { params }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      // Verify NC exists and belongs to organization
       const { id } = await requireLabNonConformance(o, params.id);
 
       const logs = await o
@@ -747,7 +718,7 @@ mount(
 
 // =========================================================================
 // GET /:id/oot-notification - §7.10 customer-notification record for an
-// out-of-tolerance NC (#426 Phase 0). Null when the NC has none.
+// out-of-tolerance NC. Null when the NC has none.
 // =========================================================================
 mount(
   nonConformancesRouter,
@@ -818,11 +789,11 @@ mount(
           );
         }
 
-        // First acknowledgement wins (decision Q34): the stamp is the
+        // First acknowledgement wins: the stamp is the
         // regulated evidence of receipt, so the update is conditional on
         // `acknowledged_at IS NULL` and a manual registration racing the
         // e-mailed link (or another registration) can never overwrite it.
-        // Defense-in-depth (SEC-08): org predicate repeated in the WHERE.
+        // Defense-in-depth: org predicate repeated in the WHERE.
         const [row] = await ctx.o
           .update(ootNotification)
           .set({
@@ -881,7 +852,7 @@ mount(
 
 // =========================================================================
 // GET /:id/oot-impact-assessment - Guided §7.10 impact-assessment record
-// for an out-of-tolerance NC (#426 Phase 2). Null while none exists.
+// for an out-of-tolerance NC. Null while none exists.
 // =========================================================================
 mount(
   nonConformancesRouter,

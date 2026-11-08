@@ -15,7 +15,7 @@ import { insertWithSequentialNumber } from "../../lib/sequential-number";
 /**
  * Shared CAPA creator (ISO 17025 §8.7). Single code path for the cloud route
  * (POST /api/capa), the NC escalate-to-capa flow and the §7.7 auto-escalations
- * (unsatisfactory proficiency test, out-of-control SPC chart — issue #60), so
+ * (unsatisfactory proficiency test, out-of-control SPC chart), so
  * every entry point produces the same CAPA number sequence and audit-log entry.
  */
 

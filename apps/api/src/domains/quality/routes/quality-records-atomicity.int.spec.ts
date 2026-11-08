@@ -1,5 +1,5 @@
 /**
- * quality-records-atomicity.int.spec.ts - P2-18d [HIGH RISK].
+ * quality-records-atomicity.int.spec.ts [HIGH RISK].
  *
  * A regulated change and its audit entry commit together or not at all. The
  * proficiency-test results handler (ISO/IEC 17025 §7.7.2, §7.7.3) writes the

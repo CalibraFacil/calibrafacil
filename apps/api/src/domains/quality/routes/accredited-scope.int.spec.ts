@@ -12,7 +12,7 @@ import { truncateAll } from "../../../../test/integration/db";
 import { grantUnitAdmin, seedOrg } from "../../../../test/integration/seed";
 
 // Real-DB + real-RBAC integration tests for the accredited-scope router
-// (#427 — ISO/IEC 17025 §7.6/§7.8.3 CMC guard, Phase 0). Only the better-auth
+// (ISO/IEC 17025 §7.6/§7.8.3 CMC guard). Only the better-auth
 // session is mocked (test/integration/setup.ts); requireLabProtected +
 // requireOrgType("LAB") + requireUnitOperationalSettingsManager all run for
 // real against the seeded Postgres.
@@ -306,7 +306,7 @@ describe("accreditedScopeRouter — real DB + real middleware", () => {
     },
   );
 
-  // Q45 — a lab that never chose a mode is enforced while accredited.
+  // A lab that never chose a mode is enforced while accredited.
   async function seedUnsetLab(accreditationActive: boolean) {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
     await db

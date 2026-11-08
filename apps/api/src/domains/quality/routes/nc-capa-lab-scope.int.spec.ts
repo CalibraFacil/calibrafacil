@@ -1,5 +1,5 @@
 /**
- * nc-capa-lab-scope.int.spec.ts - P2-18e [HIGH RISK].
+ * nc-capa-lab-scope.int.spec.ts [HIGH RISK].
  *
  * Success paths (and a cross-laboratory negative for each) of the NC / CAPA
  * handlers that non-conformances.int.spec.ts and capa.int.spec.ts do not reach,
@@ -26,7 +26,7 @@
  *                  notification of the laboratory the token belongs to (and only that one),
  *                  notifies once, an unknown token is a 404.
  *   REQ-18E-ACK-2  Concurrent public-link clicks stamp once, notify once, keep the first stamp.
- *   REQ-18E-ACK-3  A manual acknowledgement racing the public link (Q34): exactly one stamp, one
+ *   REQ-18E-ACK-3  A manual acknowledgement racing the public link: exactly one stamp, one
  *                  notification, the loser is a 409 / "already confirmed" and writes nothing;
  *                  a later manual acknowledgement is a 409 and leaves the first timestamp.
  */
