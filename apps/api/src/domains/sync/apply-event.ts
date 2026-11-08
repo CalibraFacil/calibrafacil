@@ -1,4 +1,4 @@
-import { jobCreationClientErrors } from "../jobs";
+import { DomainError } from "../../lib/domain-errors";
 import {
   type ApplyDesktopSyncEventInput,
   type ApplyDesktopSyncEventResult,
@@ -41,15 +41,29 @@ export async function applyDesktopSyncEvent(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Desktop sync event failed.";
-    const code = jobCreationClientErrors.has(message)
-      ? "DOMAIN_VALIDATION_FAILED"
-      : "DESKTOP_SYNC_APPLY_FAILED";
+    const code = applyFailureCode(error);
     return {
       ok: false,
       code,
       reason: message,
     };
   }
+}
+
+/**
+ * A typed refusal (a 4xx `DomainError` other than "slow down") can never
+ * succeed on retry: permanent. Anything else is an internal fault the desktop
+ * retries. The refusal's wording is never the signal.
+ */
+export function applyFailureCode(
+  error: unknown,
+): "DOMAIN_VALIDATION_FAILED" | "DESKTOP_SYNC_APPLY_FAILED" {
+  return error instanceof DomainError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 429
+    ? "DOMAIN_VALIDATION_FAILED"
+    : "DESKTOP_SYNC_APPLY_FAILED";
 }
 
 function assertNever(command: never): never {

@@ -39,12 +39,7 @@ import { requestActor } from "../../../middleware/request-actor";
 import { requireScopedVisit } from "../visit-access";
 import { isAssignableTechnician } from "../../../lib/tenant-refs";
 import { notify } from "@calibra-facil/notifications";
-import {
-  cancelJob,
-  createCalibrationJob,
-  jobCreationClientErrors,
-  jobStatusConflict,
-} from "../../jobs";
+import { cancelJob, createCalibrationJob, jobStatusConflict } from "../../jobs";
 import { formatOnsiteAddressText } from "../onsite-address";
 import {
   assertAssetBelongsToVisitCustomer,
@@ -722,29 +717,20 @@ mount(
         assertGuard(assertAssetBelongsToVisitCustomer(foundAsset, visit));
 
         // REQ-VISITJOB-001,002: create job via createCalibrationJob with onsiteLocation
-        try {
-          return await createCalibrationJob({
-            organizationId: member.organizationId,
-            unitId: visit.unitId,
-            createdBy: ctx.actor.userId,
-            assetId,
-            serviceId,
-            onsiteLocation: {
-              addressText: formatOnsiteAddressText(visit.address),
-            },
-            visitId: id,
-            executor: ctx.tx,
-          });
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            jobCreationClientErrors.has(error.message)
-          ) {
-            // Thrown out of the door: nothing of the refused job stays.
-            throw invalid("invalid_request", error.message);
-          }
-          throw error;
-        }
+        // A refusal is a typed DomainError (asset_not_found, service_not_found,
+        // ...): it keeps its status and code, and nothing of the job stays.
+        return createCalibrationJob({
+          organizationId: member.organizationId,
+          unitId: visit.unitId,
+          createdBy: ctx.actor.userId,
+          assetId,
+          serviceId,
+          onsiteLocation: {
+            addressText: formatOnsiteAddressText(visit.address),
+          },
+          visitId: id,
+          executor: ctx.tx,
+        });
       },
     );
 

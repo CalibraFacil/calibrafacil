@@ -641,6 +641,28 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
     expect(auditRows[0]?.reason).toContain(`visita #${fx.visitId}`);
   });
 
+  it("REQ-VISITJOB-011: POST adding a job with a service that does not exist → 404 service_not_found (not 400 invalid_request), no job written", async () => {
+    const fx = await seedVisitJobFixture({
+      orgId: "org-vjb",
+      userId: "user-vjb",
+    });
+
+    loginAs({ userId: fx.userId, organizationId: fx.orgId });
+    const res = await visitJobsRouter.request(`/${fx.visitId}/jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ assetId: fx.assetId, serviceId: 999999 }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: "service_not_found" });
+    const jobs = await db
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.organizationId, fx.orgId));
+    expect(jobs).toHaveLength(0);
+  });
+
   it("REQ-VISITJOB-007: non-DRAFT job → 409, status unchanged, NO audit row", async () => {
     const fx = await seedVisitJobFixture({
       orgId: "org-vjb",

@@ -35,7 +35,7 @@ export {
   findImpactedCertificates,
   findInFlightJobsUsingStandard,
 } from "./job-standards";
-export { createCalibrationJob, jobCreationClientErrors } from "./jobs";
+export { createCalibrationJob } from "./jobs";
 export { drainOotEmailOutbox } from "./oot/oot-email-drain";
 export {
   createStandardRecallNotifications,

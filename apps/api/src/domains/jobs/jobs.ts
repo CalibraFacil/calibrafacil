@@ -54,24 +54,6 @@ type CreateCalibrationJobParams = {
   visitId?: number | null;
 };
 
-export const jobCreationClientErrors = new Set([
-  "Ativo nao encontrado",
-  "Ativo foi removido",
-  "Ativo nao pertence a esta unidade",
-  "Servico nao encontrado",
-  "Servico nao pertence a esta unidade",
-  "Servico esta inativo",
-  "Servico nao possui metodo vinculado",
-  "Metodo do servico nao encontrado",
-  "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
-  "Método publicado sem artefato compilado consistente não pode gerar job regulado.",
-  "Tipo do ativo nao e compativel com o servico selecionado",
-  "Tecnico nao encontrado ou sem permissao",
-  "Técnico não possui competência ativa para este tipo de instrumento",
-  "Cliente suspenso. Reative a qualificação antes de criar novas ordens de serviço.",
-  "Ativo nao possui especificacao obrigatoria para este metodo",
-]);
-
 function hasSpecificationValue(
   specifications: Record<string, unknown> | null | undefined,
   key: string | undefined,
