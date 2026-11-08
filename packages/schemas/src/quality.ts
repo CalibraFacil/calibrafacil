@@ -18,7 +18,8 @@ export const CreateNonConformanceSchema = z.object({
     .refine((value) => !Number.isNaN(new Date(value).getTime()), {
       message: "Data de detecção inválida",
     }),
-  jobId: z.coerce.number().int().positive().optional(),
+  // null: a client that clears the field sends it explicitly.
+  jobId: z.coerce.number().int().positive().nullish(),
 });
 
 export type CreateNonConformanceInput = z.infer<
@@ -155,7 +156,7 @@ export const RegisterOotAcknowledgementSchema = z.object({
     .max(2000),
 });
 
-const CapaSourceSchema = z.enum([
+export const CorrectiveActionSourceSchema = z.enum([
   "internal_audit",
   "customer_complaint",
   "nc_detection",
@@ -165,11 +166,15 @@ const CapaSourceSchema = z.enum([
   "spc_signal",
 ]);
 
-const CapaTypeSchema = z.enum(["corrective", "preventive"]);
+export const CorrectiveActionTypeSchema = z.enum(["corrective", "preventive"]);
 
-const CapaSeveritySchema = z.enum(["minor", "major", "critical"]);
+export const CorrectiveActionSeveritySchema = z.enum([
+  "minor",
+  "major",
+  "critical",
+]);
 
-const CapaCategorySchema = z.enum([
+export const CorrectiveActionCategorySchema = z.enum([
   "method",
   "equipment",
   "personnel",
@@ -178,7 +183,7 @@ const CapaCategorySchema = z.enum([
   "other",
 ]);
 
-const CapaRootCauseAnalysisMethodSchema = z.enum([
+export const RootCauseAnalysisMethodSchema = z.enum([
   "5_whys",
   "fishbone",
   "pareto",
@@ -193,27 +198,32 @@ function validIsoDate(message: string) {
     });
 }
 
+/**
+ * The one CAPA create payload: the contract, the server and the web form all
+ * parse through it. The optional fields accept null because API clients send
+ * an explicit null for "none".
+ */
 export const CreateCapaSchema = z.object({
   title: z.string().trim().min(5, "Título deve ter pelo menos 5 caracteres"),
   description: z
     .string()
     .trim()
     .min(10, "Descrição deve ter pelo menos 10 caracteres"),
-  source: CapaSourceSchema,
-  sourceReference: z.string().trim().optional(),
+  source: CorrectiveActionSourceSchema,
+  sourceReference: z.string().trim().nullish(),
   detectionDate: validIsoDate("Data de detecção inválida"),
-  type: CapaTypeSchema,
-  severity: CapaSeveritySchema,
-  category: CapaCategorySchema,
+  type: CorrectiveActionTypeSchema,
+  severity: CorrectiveActionSeveritySchema,
+  category: CorrectiveActionCategorySchema,
   actionPlan: z
     .string()
     .trim()
     .min(10, "Plano de ação deve ter pelo menos 10 caracteres"),
   responsibleId: z.string().trim().min(1, "Responsável é obrigatório"),
   dueDate: validIsoDate("Data alvo inválida"),
-  rootCauseAnalysis: z.string().trim().optional(),
-  rootCauseAnalysisMethod: CapaRootCauseAnalysisMethodSchema.optional(),
-  preventiveMeasures: z.string().trim().optional(),
+  rootCauseAnalysis: z.string().trim().nullish(),
+  rootCauseAnalysisMethod: RootCauseAnalysisMethodSchema.nullish(),
+  preventiveMeasures: z.string().trim().nullish(),
 });
 
 export type CreateCapaInput = z.infer<typeof CreateCapaSchema>;

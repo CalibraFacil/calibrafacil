@@ -29,6 +29,14 @@ import {
 } from "@calibra-facil/shared/calibration-record";
 import type { Address } from "@calibra-facil/shared/address";
 import { z } from "zod";
+import {
+  CorrectiveActionCategorySchema,
+  CorrectiveActionSeveritySchema,
+  CorrectiveActionSourceSchema,
+  CorrectiveActionTypeSchema,
+  NonConformanceTypeSchema,
+  RootCauseAnalysisMethodSchema,
+} from "./quality";
 import { queryFlag } from "./query-flag";
 import { VISIT_STATUSES } from "./machines/visits";
 import { NOTIFICATION_STATUSES } from "./machines/tenancy";
@@ -2145,17 +2153,6 @@ export const PortalListNotificationsQuerySchema = z.object({
 // =============================================================================
 
 /**
- * NC type values
- */
-// NOTE: shadows the copy star-exported from ./quality — keep both in sync.
-export const NonConformanceTypeSchema = z.enum([
-  "work",
-  "equipment",
-  "documentation",
-  "out_of_tolerance",
-]);
-
-/**
  * NC disposition values
  */
 export const NonConformanceDispositionSchema = z.enum([
@@ -2169,15 +2166,6 @@ export const NonConformanceDispositionSchema = z.enum([
  * NC status values
  */
 export const NonConformanceStatusSchema = z.enum(NON_CONFORMANCE_STATUSES);
-
-export const CreateNonConformanceSchema = z.object({
-  jobId: z.coerce.number().optional().nullable(),
-  type: NonConformanceTypeSchema,
-  description: z
-    .string()
-    .min(10, "Descrição deve ter pelo menos 10 caracteres"),
-  detectedAt: z.string().min(1, "Data de detecção é obrigatória"),
-});
 
 /**
  * Schema for setting disposition on an NC
@@ -2246,69 +2234,6 @@ export const ListNonConformancesQuerySchema = z.object({
  * CAPA status values
  */
 const CorrectiveActionStatusSchema = z.enum(CORRECTIVE_ACTION_STATUSES);
-
-/**
- * CAPA source - where the CAPA originated from
- */
-const CorrectiveActionSourceSchema = z.enum([
-  "internal_audit",
-  "customer_complaint",
-  "nc_detection",
-  "external_audit",
-  "management_review",
-  "proficiency_test",
-  "spc_signal",
-]);
-
-/**
- * CAPA type - corrective vs preventive
- */
-const CorrectiveActionTypeSchema = z.enum(["corrective", "preventive"]);
-
-/**
- * CAPA severity classification
- */
-const CorrectiveActionSeveritySchema = z.enum(["minor", "major", "critical"]);
-
-/**
- * CAPA category - affected area
- */
-const CorrectiveActionCategorySchema = z.enum([
-  "method",
-  "equipment",
-  "personnel",
-  "procedure",
-  "environment",
-  "other",
-]);
-
-const RootCauseAnalysisMethodSchema = z.enum([
-  "5_whys",
-  "fishbone",
-  "pareto",
-  "other",
-]);
-
-export const CreateCorrectiveActionSchema = z.object({
-  title: z.string().min(5, "Título deve ter pelo menos 5 caracteres"),
-  description: z
-    .string()
-    .min(10, "Descrição deve ter pelo menos 10 caracteres"),
-  source: CorrectiveActionSourceSchema,
-  sourceReference: z.string().optional().nullable(),
-  detectionDate: z.string().min(1, "Data de detecção é obrigatória"),
-  type: CorrectiveActionTypeSchema,
-  severity: CorrectiveActionSeveritySchema,
-  category: CorrectiveActionCategorySchema,
-  actionPlan: z
-    .string()
-    .min(10, "Plano de acão deve ter pelo menos 10 caracteres"),
-  responsibleId: z.string().min(1, "Responsavel é obrigatório"),
-  dueDate: z.string().min(1, "Data alvo é obrigatória"),
-  rootCauseAnalysis: z.string().optional().nullable(),
-  rootCauseAnalysisMethod: RootCauseAnalysisMethodSchema.optional().nullable(),
-  preventiveMeasures: z.string().optional().nullable(),
-});
 
 /**
  * Schema for updating a CAPA

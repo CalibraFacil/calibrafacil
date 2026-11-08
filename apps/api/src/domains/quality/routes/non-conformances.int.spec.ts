@@ -746,3 +746,39 @@ describe("nonConformancesRouter — ISO 17025 §8.7 NC workflow", () => {
     expect(capas).toHaveLength(0);
   });
 });
+
+describe("nonConformancesRouter — one create schema (strict payload)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it.each([
+    ["an unparseable detectedAt", { detectedAt: "abc" }],
+    ["a negative jobId", { jobId: -1 }],
+    ["a fractional jobId", { jobId: 1.5 }],
+  ])("POST / with %s → 400, no NC row", async (_label, patch) => {
+    const org = await seedOrg({
+      orgId: "org-a",
+      userId: "user-a",
+      role: "technician",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await nonConformancesRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        type: "work",
+        description: "Medicao fora de tolerancia no ensaio de balanca",
+        detectedAt: DETECTED_AT,
+        ...patch,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const rows = await db
+      .select({ id: nonConformance.id })
+      .from(nonConformance);
+    expect(rows).toHaveLength(0);
+  });
+});
