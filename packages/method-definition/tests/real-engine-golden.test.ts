@@ -5,6 +5,7 @@ import {
   compileMethodDraft,
   executeCompiledMethod,
   createMethodExecutionEngine,
+  parseCompiledMethod,
   type CalculationEngineLike,
   type MethodDraft,
 } from "../src";
@@ -155,5 +156,44 @@ describe("real-engine golden uncertainty budget", () => {
 
     // The execution output carries the measurand value for the certificate
     expect(Number(execution.outputs.y)).toBeCloseTo(20, 12);
+  });
+});
+
+describe("CompiledMethodSchema on a real compiled method", () => {
+  function compiledGolden() {
+    const compiled = compileMethodDraft(goldenDraft, {
+      engine: realMethodEngine(),
+    });
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+    // A snapshot is stored as JSON: parse what comes back from the database.
+    const stored: unknown = JSON.parse(JSON.stringify(compiled.method));
+    return stored;
+  }
+
+  it("accepts the compilation as it is stored and returns it unchanged", () => {
+    const stored = compiledGolden();
+    expect(parseCompiledMethod(stored)).toEqual(stored);
+  });
+
+  it("refuses a value that passes a shallow field check but is not a compiled method", () => {
+    const stored = compiledGolden();
+    if (typeof stored !== "object" || stored === null) throw new Error("shape");
+
+    // The old guard checked 8 fields: a model whose quantities are junk passed.
+    const junkModel = {
+      ...stored,
+      measurementModels: [{ key: "y", quantities: "nope" }],
+    };
+    expect(parseCompiledMethod(junkModel)).toBeNull();
+
+    const junkInput = { ...stored, inputs: [{ kind: "scalar" }] };
+    expect(parseCompiledMethod(junkInput)).toBeNull();
+
+    expect(parseCompiledMethod({ ...stored, status: "error" })).toBeNull();
+    expect(
+      parseCompiledMethod({ ...stored, engine: { version: "1" } }),
+    ).toBeNull();
+    expect(parseCompiledMethod(null)).toBeNull();
+    expect(parseCompiledMethod([])).toBeNull();
   });
 });

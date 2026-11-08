@@ -822,9 +822,13 @@ describe("syncRouter", () => {
             normalizedMethodJson: "{}",
             dataFields: [],
             compiledMethod: {
+              methodId: "method-1",
+              methodVersion: 1,
               status: "compiled",
+              coreVersion: "0.1.0",
               methodFingerprint: "method-v2",
               engine: {
+                packageName: "@calibra-facil/math-engine",
                 version: "engine-1",
                 optionsFingerprint: "options-1",
               },
@@ -833,6 +837,7 @@ describe("syncRouter", () => {
               formulas: [],
               measurementModels: [],
               acceptanceCriteria: [],
+              diagnostics: [],
             },
           },
           assetSnapshot: {

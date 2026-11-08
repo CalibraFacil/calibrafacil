@@ -10,10 +10,8 @@ import {
   decodeRouteIdentifier,
   stringFromUnknown,
   r2EnvFromUnknown,
-  isMethodInputField,
   methodInputFieldsFromSnapshot,
   methodSnapshotDisplay,
-  isCompiledMethod,
   checkEnvironmentWithinLimits,
   hasSpecificationValue,
   findMissingRequiredAssetSpecs,
@@ -81,21 +79,6 @@ describe("r2EnvFromUnknown", () => {
   });
 });
 
-describe("isMethodInputField", () => {
-  it("accepts an object with string key and string type", () => {
-    expect(isMethodInputField({ key: "reading_1", type: "number" })).toBe(true);
-  });
-
-  it("rejects objects missing key or type, and non-objects", () => {
-    expect(isMethodInputField({ key: "reading_1" })).toBe(false);
-    expect(isMethodInputField({ type: "number" })).toBe(false);
-    expect(isMethodInputField({ key: 1, type: "number" })).toBe(false);
-    expect(isMethodInputField({ key: "x", type: 2 })).toBe(false);
-    expect(isMethodInputField(null)).toBe(false);
-    expect(isMethodInputField("text")).toBe(false);
-  });
-});
-
 describe("methodInputFieldsFromSnapshot", () => {
   it("returns only the valid input-field entries", () => {
     const snapshot = {
@@ -103,6 +86,11 @@ describe("methodInputFieldsFromSnapshot", () => {
         { key: "a", label: "A", type: "number" },
         { nope: true },
         { key: "b", label: "B", type: "text" },
+        // a select without options, a key that is no identifier, a type that
+        // does not exist: each is what the method editor refuses, so none is a field
+        { key: "c", label: "C", type: "select" },
+        { key: "1bad", label: "D", type: "number" },
+        { key: "e", label: "E", type: "matrix" },
       ],
     } satisfies Partial<MethodSnapshot>;
 
@@ -131,38 +119,6 @@ describe("methodSnapshotDisplay", () => {
       methodName: undefined,
       methodVersion: undefined,
     });
-  });
-});
-
-describe("isCompiledMethod", () => {
-  const valid = {
-    status: "compiled",
-    methodFingerprint: "fp",
-    normalizedMethodJson: "{}",
-    engine: { version: "0.3.0", optionsFingerprint: "opt" },
-    inputs: [],
-    formulas: [],
-    measurementModels: [],
-    acceptanceCriteria: [],
-  };
-
-  it("accepts a fully-formed compiled method", () => {
-    expect(isCompiledMethod(valid)).toBe(true);
-  });
-
-  it("rejects when status is not 'compiled'", () => {
-    expect(isCompiledMethod({ ...valid, status: "error" })).toBe(false);
-  });
-
-  it("rejects when a required engine field is missing", () => {
-    expect(isCompiledMethod({ ...valid, engine: { version: "0.3.0" } })).toBe(
-      false,
-    );
-  });
-
-  it("rejects when a required array field is not an array", () => {
-    expect(isCompiledMethod({ ...valid, formulas: "nope" })).toBe(false);
-    expect(isCompiledMethod(null)).toBe(false);
   });
 });
 
@@ -332,6 +288,7 @@ describe("stripAssetSpecData", () => {
         label: "Capacidade",
         type: "number",
         source: "asset_spec",
+        assetSpecKey: "capacity",
       },
       {
         key: "reading",

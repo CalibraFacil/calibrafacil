@@ -1,7 +1,5 @@
 import { OOT_NOTIFICATION_STATUSES } from "@calibra-facil/schemas/machines";
 import {
-  CALIBRATION_LOCATION_TYPES,
-  CALIBRATION_PHASE_MODES,
   FINANCIAL_STATUSES,
   ACCEPTANCE_CRITERION_SEVERITIES,
   CERTIFICATE_SECTION_DISPLAYS,
@@ -26,7 +24,10 @@ import {
 } from "@calibra-facil/shared";
 import { z } from "zod";
 import {
+  CalibrationLocationSnapshotSchema,
+  CalibrationPhaseSnapshotSchema,
   CERTIFICATE_LIFECYCLE_STATUS,
+  EnvironmentalSnapshotSchema,
   JobStatusSchema,
   MeasurementUnitSchema,
   NonConformanceStatusSchema,
@@ -487,44 +488,9 @@ const jobStandardSnapshotSchema = z.object({
     .optional(),
 });
 
-const limitRangeSchema = z.object({ min: z.number(), max: z.number() });
-
-const jobEnvironmentalSnapshotSchema = z.object({
-  temperature: nullableNumber,
-  humidity: nullableNumber,
-  pressure: nullableNumber,
-  recordedAt: isoTimestamp,
-  recordedBy: z.string(),
-  limits: z
-    .object({
-      temperature: limitRangeSchema.optional(),
-      humidity: limitRangeSchema.optional(),
-      pressure: limitRangeSchema.optional(),
-    })
-    .nullable(),
-  withinLimits: z.boolean(),
-  outOfLimitsJustification: nullableString,
-});
-
-const jobCalibrationLocationSnapshotSchema = z.object({
-  type: z.enum(CALIBRATION_LOCATION_TYPES),
-  addressText: z.string(),
-  notes: nullableString.optional(),
-  recordedAt: isoTimestamp,
-  recordedBy: z.string(),
-});
-
-const jobCalibrationPhaseSnapshotSchema = z.object({
-  blocks: z.record(
-    z.string(),
-    z.object({
-      mode: z.enum(CALIBRATION_PHASE_MODES),
-      reason: nullableString.optional(),
-    }),
-  ),
-  recordedAt: isoTimestamp,
-  recordedBy: z.string(),
-});
+const jobEnvironmentalSnapshotSchema = EnvironmentalSnapshotSchema;
+const jobCalibrationLocationSnapshotSchema = CalibrationLocationSnapshotSchema;
+const jobCalibrationPhaseSnapshotSchema = CalibrationPhaseSnapshotSchema;
 
 const jobAssetSnapshotSchema = z.object({
   assetId: z.number(),

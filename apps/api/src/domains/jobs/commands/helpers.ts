@@ -1,11 +1,14 @@
 import {
   type MethodSnapshot,
-  type MethodInputField,
   type AssetSnapshot,
   type EnvironmentalLimitsSnapshot,
 } from "@calibra-facil/db/schema";
 import { type R2Env } from "../../../lib/storage";
-import { type CompiledMethod } from "@calibra-facil/method-definition";
+import {
+  MethodInputFieldSchema,
+  type MethodInputField,
+} from "@calibra-facil/schemas";
+import { log } from "../../../lib/logger";
 import { toRecord } from "@calibra-facil/shared/record";
 
 export function decodeRouteIdentifier(identifier: string) {
@@ -32,17 +35,28 @@ export function r2EnvFromUnknown(value: unknown): R2Env {
   };
 }
 
-export function isMethodInputField(value: unknown): value is MethodInputField {
-  const field = toRecord(value);
-  return typeof field.key === "string" && typeof field.type === "string";
-}
-
+/**
+ * The input fields a method snapshot froze, each proved with the schema the
+ * method editor validates them with. An entry that does not match is left out
+ * and logged (it is never taken for a field it is not).
+ */
 export function methodInputFieldsFromSnapshot(
   methodSnapshot: MethodSnapshot | null | undefined,
-) {
-  return Array.isArray(methodSnapshot?.dataFields)
-    ? methodSnapshot.dataFields.filter(isMethodInputField)
-    : [];
+): MethodInputField[] {
+  const dataFields: unknown = methodSnapshot?.dataFields;
+  if (!Array.isArray(dataFields)) return [];
+  return dataFields.flatMap((entry) => {
+    const parsed = MethodInputFieldSchema.safeParse(entry);
+    if (parsed.success) return [parsed.data];
+    log("warn", "method_snapshot_input_field_invalid", {
+      key:
+        typeof toRecord(entry).key === "string"
+          ? String(toRecord(entry).key)
+          : null,
+      methodId: methodSnapshot?.methodId ?? null,
+    });
+    return [];
+  });
 }
 
 export function methodSnapshotDisplay(value: unknown) {
@@ -55,22 +69,6 @@ export function methodSnapshotDisplay(value: unknown) {
         ? snapshot.methodVersion
         : undefined,
   };
-}
-
-export function isCompiledMethod(value: unknown): value is CompiledMethod {
-  const candidate = toRecord(value);
-  const engine = toRecord(candidate.engine);
-  return (
-    candidate.status === "compiled" &&
-    typeof candidate.methodFingerprint === "string" &&
-    typeof candidate.normalizedMethodJson === "string" &&
-    typeof engine.version === "string" &&
-    typeof engine.optionsFingerprint === "string" &&
-    Array.isArray(candidate.inputs) &&
-    Array.isArray(candidate.formulas) &&
-    Array.isArray(candidate.measurementModels) &&
-    Array.isArray(candidate.acceptanceCriteria)
-  );
 }
 
 export function checkEnvironmentWithinLimits(

@@ -125,3 +125,29 @@ describe("executeLocalCompiledMethod — engine reconciliation", () => {
     ).toThrowError(/motor/i);
   });
 });
+
+describe("executeLocalCompiledMethod — the snapshot is proved, not trusted", () => {
+  it("refuses a snapshot that declares itself compiled but is not a compiled method", () => {
+    expect(() =>
+      execute({
+        compiledMethod: {
+          status: "compiled",
+          methodFingerprint: "x",
+          measurementModels: "nope",
+        },
+      }),
+    ).toThrowError(/formato inválido/);
+  });
+
+  it("falls back to the desktop's own results only when the job froze no compiled method", () => {
+    const fallback = { total: 1 };
+    expect(
+      executeLocalCompiledMethod({
+        methodSnapshot: { compiledMethod: null },
+        assetSnapshot: {},
+        data: {},
+        fallbackResults: fallback,
+      }),
+    ).toBe(fallback);
+  });
+});

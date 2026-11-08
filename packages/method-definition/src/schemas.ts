@@ -12,6 +12,7 @@ import {
 } from "@calibra-facil/shared";
 import { CALIBRATION_PHASE_MODES } from "@calibra-facil/shared/calibration-record";
 import { z } from "zod";
+import { METHOD_ENGINE_PACKAGE_NAME, type CompiledMethod } from "./types";
 
 const SafeKeySchema = z
   .string()
@@ -442,3 +443,78 @@ export const MethodDraftSchema = z
     metadata: SafeMetadataSchema.default({}),
   })
   .strict();
+
+const MethodDiagnosticSchema = z
+  .object({
+    code: z.string(),
+    severity: z.enum(["info", "warning", "error"]),
+    message: z.string(),
+    path: z.string().optional(),
+    details: z.record(z.string(), SafeMetadataValueSchema).optional(),
+  })
+  .strict();
+
+const CompiledFormulaSchema = MethodFormulaSchema.omit({
+  required: true,
+  dependencies: true,
+})
+  .extend({
+    normalizedFormula: z.string(),
+    formulaFingerprint: z.string(),
+    variables: z.array(z.string()),
+  })
+  .strip();
+
+const CompiledMeasurementModelSchema = MethodMeasurementModelSchema.omit({
+  label: true,
+  measurand: true,
+  outputUnit: true,
+})
+  .extend({
+    formulaKey: SafeKeySchema.optional(),
+    normalizedFormula: z.string(),
+    modelFingerprint: z.string(),
+  })
+  .strip();
+
+const NormalizedAcceptanceCriterionSchema =
+  MethodAcceptanceCriterionSchema.extend({
+    normalizedFormula: z.string(),
+    variables: z.array(z.string()),
+    criterionFingerprint: z.string(),
+  }).strip();
+
+/**
+ * The compiled method a job freezes (`methodSnapshot.compiledMethod`) and the
+ * desktop pushes back: what the executor reads, proved field by field, with the
+ * same sub-schemas the draft is validated with. The top level tolerates keys a
+ * later compiler adds; the parts the engine reads do not.
+ */
+const CompiledMethodSchema = z
+  .object({
+    methodId: z.string(),
+    methodVersion: z.number(),
+    status: z.literal("compiled"),
+    engine: z
+      .object({
+        packageName: z.literal(METHOD_ENGINE_PACKAGE_NAME),
+        version: z.string(),
+        optionsFingerprint: z.string(),
+      })
+      .strip(),
+    coreVersion: z.string(),
+    normalizedMethodJson: z.string(),
+    methodFingerprint: z.string(),
+    inputs: z.array(MethodInputSchema),
+    formulas: z.array(CompiledFormulaSchema),
+    measurementModels: z.array(CompiledMeasurementModelSchema),
+    acceptanceCriteria: z.array(NormalizedAcceptanceCriterionSchema),
+    diagnostics: z.array(MethodDiagnosticSchema),
+  })
+  .strip();
+
+/** The compiled method a stored or pushed value really is, or null. */
+export function parseCompiledMethod(value: unknown): CompiledMethod | null {
+  const parsed = CompiledMethodSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
