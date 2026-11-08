@@ -988,6 +988,13 @@
       "when": 1794300000000,
       "tag": "0141_lifecycle_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1794400000000,
+      "tag": "0142_platform_event_log_append_only",
+      "breakpoints": true
     }
   ]
 }

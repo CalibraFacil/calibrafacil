@@ -56,7 +56,6 @@ export type UpdateNotificationPreferencesInput = z.input<
 >;
 
 import type {
-  SelfServeSignupResponse,
   ActivationChecklistResponse,
   ActivationStepId,
   FinanceAccessResponse,
@@ -293,8 +292,6 @@ export type {
   ActivationStepId,
   FinanceAccessResponse,
 };
-
-export type { SelfServeSignupResponse };
 
 export type { SsoSettingsResponse, SsoVerificationRecord };
 

@@ -11,7 +11,6 @@ export { organizationMediaRouter } from "./organization-media";
 export { organizationProfileRouter } from "./organization-profile";
 export { portalDomainsRouter } from "./portal-domains";
 export { profileMediaRouter } from "./profile-media";
-export { publicSignupRouter } from "./public-signup";
 export { sessionsRouter } from "./sessions";
 export { signaturesRouter } from "./signatures";
 export { signingRouter } from "./signing";

@@ -13,7 +13,7 @@ Calibra Facil uses separate Better Auth instances for each product surface:
 - LAB dashboard: mounted under `/api/auth/lab`
 - Client portal: mounted under `/api/auth/portal`
 
-LAB access is passwordless. A new laboratory is provisioned by the self-service sign-up (off unless `PUBLIC_SIGNUP_ENABLED=true`) or by the dev seed, and its owner receives a setup link to `/claim-account?token=...`. The claim flow is passkey-first and only offers magic-link or email OTP fallback after the setup token proves the user is allowed to claim a LAB account. Raw setup tokens are never stored; only hashed token secrets are persisted.
+LAB access is passwordless. A new laboratory is provisioned by the operator (`pnpm --dir apps/api create-lab`) or by the dev seed, and its owner receives a setup link to `/claim-account?token=...`. The claim flow is passkey-first and only offers magic-link or email OTP fallback after the setup token proves the user is allowed to claim a LAB account. Raw setup tokens are never stored; only hashed token secrets are persisted.
 
 Other LAB users enter through a pending LAB invitation, while client portal users continue to use the portal-specific auth flow.
 

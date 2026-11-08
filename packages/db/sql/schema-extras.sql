@@ -116,9 +116,7 @@ $$;
 --   * the seed escape hatch above;
 --   * a referential ON DELETE SET NULL action (an UPDATE issued by a foreign
 --     key, so pg_trigger_depth() > 1) that only nulls columns out: deleting a
---     user/unit/rule must not be blocked by, nor erase, the evidence naming it;
---   * a trigger argument 'signup_reservation' (platform_event_log only): the
---     public-signup reservation row is operational until the signup completes.
+--     user/unit/rule must not be blocked by, nor erase, the evidence naming it.
 -- TRUNCATE does not fire row triggers; it stays available to test harnesses.
 CREATE OR REPLACE FUNCTION calibra_append_only()
 RETURNS trigger
@@ -129,13 +127,6 @@ DECLARE
   new_j jsonb;
 BEGIN
   IF calibra_history_rewrite_allowed() THEN
-    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
-    RETURN NEW;
-  END IF;
-
-  IF TG_NARGS > 0 AND TG_ARGV[0] = 'signup_reservation'
-     AND old_j ->> 'action' = 'public.signup.provisioned'
-     AND old_j -> 'details' ->> 'status' = 'RESERVED' THEN
     IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
   END IF;
@@ -285,14 +276,13 @@ BEGIN
   END LOOP;
 END
 $$;
--- platform_event_log holds the public-signup reservation row, which
--- public-signup.ts updates when the signup completes and deletes when it fails.
--- Only that row (action public.signup.provisioned, details.status RESERVED) may
--- be changed; every other platform event is append-only.
+-- platform_event_log (platform events and the audit-chain checkpoints) is
+-- append-only like the logs above (migration 0142); its own statement because
+-- migration 0115 created it separately.
 DROP TRIGGER IF EXISTS platform_event_log_append_only ON public.platform_event_log;
 CREATE TRIGGER platform_event_log_append_only
   BEFORE UPDATE OR DELETE ON public.platform_event_log
-  FOR EACH ROW EXECUTE FUNCTION calibra_append_only('signup_reservation');
+  FOR EACH ROW EXECUTE FUNCTION calibra_append_only();
 -- Append-only trigger of the compliance audit log (migration 0133). Its own
 -- statement (not in the list above, which migration 0115 repeats verbatim).
 DROP TRIGGER IF EXISTS organization_compliance_audit_log_append_only ON public.organization_compliance_audit_log;
@@ -809,6 +799,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_api_key_audit_log" FROM 
 REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_compliance_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_event_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."personnel_competence_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."platform_event_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."proficiency_test_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."reference_standard_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."reference_standard_calibration" FROM calibra_app;

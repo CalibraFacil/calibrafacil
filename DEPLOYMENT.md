@@ -675,9 +675,9 @@ pnpm --dir apps/api create-lab --name "Laboratório Exemplo" --email voce@labora
 ```
 
 Both read the API's environment (Bun loads `apps/api/.env`). `init` is idempotent: run it
-before every deploy. Self-service sign-up (`PUBLIC_SIGNUP_ENABLED=true`) is another way to open
-laboratories, restricted to corporate e-mail domains. Every laboratory gets every feature: there
-are no plans or limits to configure.
+before every deploy. `create-lab` is the only way to open a laboratory (there is no public
+self-service sign-up); its people then join by invitation. Every laboratory gets every feature:
+there are no plans or limits to configure.
 
 ### Scheduled jobs
 

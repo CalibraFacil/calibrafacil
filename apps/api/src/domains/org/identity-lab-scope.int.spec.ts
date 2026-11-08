@@ -93,12 +93,6 @@ import {
   ensureLabProvisioningUser,
   provisionLabAccount,
 } from "./lab-provisioning";
-import {
-  completeSignupReservation,
-  hasLabMembership,
-  releaseSignupSlot,
-  reserveSignupSlot,
-} from "./public-signup-store";
 import { getActivationChecklist } from "./activation-checklist";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
@@ -395,56 +389,6 @@ describe("identity as calibra_app (P2-18j)", () => {
     );
     expect(second.organization.slug).toBe("laboratorio-provisionado-2");
     expect(second.organization.id).not.toBe(provisioned.organization.id);
-  });
-
-  it("REQ-18J-SIGNUP-1: the public sign-up store answers 'already a laboratory member' across laboratories and keeps its slot ledger in the global audit log", async () => {
-    const labMember = await seedUser("lab-member");
-    const clientOnly = await seedUser("client-only");
-    const ghost = await seedUser("ghost");
-    await seedLab("lab-live");
-    await seedLab("client-org", "CLIENT");
-    await seedLab("lab-gone", "LAB", new Date("2025-12-01T00:00:00.000Z"));
-    await seedMember("lab-live", labMember.id, NOW);
-    await seedMember("client-org", clientOnly.id, NOW);
-    await seedMember("lab-gone", ghost.id, NOW);
-
-    await asApplicationRole(async () => {
-      expect(await hasLabMembership(labMember.id)).toBe(true);
-      // A portal login is not a laboratory of their own; a deleted one is no account.
-      expect(await hasLabMembership(clientOnly.id)).toBe(false);
-      expect(await hasLabMembership(ghost.id)).toBe(false);
-
-      const slot = await reserveSignupSlot(
-        "new-lab.test",
-        "owner@new-lab.test",
-      );
-      expect(typeof slot).toBe("number");
-      // The same address again is a duplicate submit, not a second laboratory.
-      expect(
-        await reserveSignupSlot("new-lab.test", "owner@new-lab.test"),
-      ).toBe("duplicate");
-      if (typeof slot !== "number") throw new Error("no slot");
-      await completeSignupReservation({
-        reservationId: slot,
-        ownerUserId: labMember.id,
-        organizationId: "lab-live",
-        emailDomain: "new-lab.test",
-        mx: "ok",
-      });
-      const [completed] = await db
-        .select()
-        .from(platformEventLog)
-        .where(eq(platformEventLog.id, slot));
-      expect(completed?.entityId).toBe("lab-live");
-      // An abandoned attempt (provisioning failed before completion) gives its
-      // slot back; a completed one is evidence and stays (append-only).
-      const abandoned = await reserveSignupSlot("other.test", "x@other.test");
-      if (typeof abandoned !== "number") throw new Error("no slot");
-      await releaseSignupSlot(abandoned);
-    });
-
-    const events = await db.select().from(platformEventLog);
-    expect(events.map((event) => event.entityId)).toEqual(["lab-live"]);
   });
 
   it("REQ-18J-ONB-1: the activation checklist reads one laboratory's state, never another's", async () => {

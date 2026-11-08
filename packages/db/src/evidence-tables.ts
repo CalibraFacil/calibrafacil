@@ -50,6 +50,7 @@ export const APPEND_ONLY_EVIDENCE_TABLES: readonly string[] = [
   "organization_compliance_audit_log",
   "organization_event_log",
   "personnel_competence_audit_log",
+  "platform_event_log",
   "proficiency_test_audit_log",
   "reference_standard_audit_log",
   "reference_standard_calibration",
@@ -77,8 +78,6 @@ export const NO_UPDATE_EVIDENCE_TABLES: readonly string[] = [
 export const TRIGGER_ONLY_EVIDENCE_TABLES: Readonly<Record<string, string>> = {
   calibration_job:
     "the application UPDATEs a job all through its life (draft, execution, review, approval); only an APPROVED or SUPERSEDED job is frozen, and that is the trigger's decision (calibra_calibration_job_guard)",
-  platform_event_log:
-    "the public-signup reservation row (action public.signup.provisioned, status RESERVED) is updated when the signup completes and deleted when it fails; every other row is append-only by trigger",
   organization:
     "a LAB organization cannot be hard-deleted (calibra_organization_delete_guard) except by the owner path; the application still UPDATEs organizations and deletes CLIENT organizations",
 };

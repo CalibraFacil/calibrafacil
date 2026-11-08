@@ -13,7 +13,7 @@ import type { Env } from "./env";
  * middleware (`VerifiedCredentials`). A credential the limiter merely finds in a
  * header or cookie is attacker-chosen text: keying on it would let a caller who
  * sends a different fake value each time escape every counter. The
- * unauthenticated endpoints (certificate verification, magic links, sign-up, the
+ * unauthenticated endpoints (certificate verification, magic links, the
  * out-of-tolerance acknowledgement, service-order access codes) have a stricter
  * limit of their own, per client address.
  *
@@ -54,7 +54,6 @@ const WINDOW_MS = 60_000;
 const PUBLIC_PREFIXES = [
   "/api/verify",
   "/api/magic-link",
-  "/api/public/signup",
   "/api/public/oot-ack",
   "/api/public/service-order-access",
 ];

@@ -16,6 +16,24 @@ function normalized(path: string): string {
     .trim();
 }
 
+/** The `calibra_append_only` definition in a normalized migration. */
+function appendOnlyFunction(sql: string): string {
+  const start = sql.indexOf("CREATE OR REPLACE FUNCTION calibra_append_only");
+  const body = sql.indexOf("AS $$", start);
+  return sql.slice(start, sql.indexOf("$$;", body + 5) + 3);
+}
+
+/** The DROP + CREATE of the platform_event_log trigger in a normalized migration. */
+function platformTrigger(sql: string): string {
+  const start = sql.indexOf(
+    "DROP TRIGGER IF EXISTS platform_event_log_append_only",
+  );
+  return sql.slice(
+    start,
+    sql.indexOf(";", sql.indexOf("CREATE TRIGGER", start)) + 1,
+  );
+}
+
 describe("immutability SQL: migration 0115 and schema-extras.sql", () => {
   it("schema-extras.sql repeats every function and trigger the migration creates", () => {
     const migration = normalized("../drizzle/0115_db_immutability.sql");
@@ -23,12 +41,24 @@ describe("immutability SQL: migration 0115 and schema-extras.sql", () => {
 
     // Everything after the escape-hatch function is shared. The hatch function
     // itself is redefined by migration 0130 (gated on the table owner), so the
-    // extras carry that newer version; it is checked below.
-    const shared = migration.slice(
-      migration.indexOf("CREATE OR REPLACE FUNCTION calibra_append_only"),
+    // extras carry that newer version; it is checked below. Migration 0142
+    // redefines calibra_append_only and the platform_event_log trigger (the
+    // sign-up exception is gone): the extras carry those, so they are swapped in.
+    const later = normalized(
+      "../drizzle/0142_platform_event_log_append_only.sql",
+    );
+    const shared = [
+      [appendOnlyFunction(migration), appendOnlyFunction(later)],
+      [platformTrigger(migration), platformTrigger(later)],
+    ].reduce(
+      (text, [old, current]) => text.replace(old, () => current),
+      migration.slice(
+        migration.indexOf("CREATE OR REPLACE FUNCTION calibra_append_only"),
+      ),
     );
     expect(shared).toContain("calibra_append_only");
     expect(shared).toContain("calibra_calibration_job_guard");
+    expect(shared).not.toContain("signup_reservation");
     expect(extras).toContain(shared);
   });
 

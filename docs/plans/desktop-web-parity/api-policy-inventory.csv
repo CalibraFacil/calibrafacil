@@ -264,7 +264,6 @@ reports,getTrend,cloud-only
 publicCheckout,getSnapshot,cloud-only
 publicCheckout,getStatus,cloud-only
 publicCheckout,start,cloud-only
-publicSignup,start,cloud-only
 publicLeads,create,cloud-only
 publicInvitations,get,cloud-only
 publicInvitations,requestSetupLink,cloud-only

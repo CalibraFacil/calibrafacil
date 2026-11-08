@@ -21,7 +21,6 @@ import {
   emailDomainsRouter,
   portalDomainsRouter,
   profileMediaRouter,
-  publicSignupRouter,
   sessionsRouter,
   signaturesRouter,
   signingRouter,
@@ -189,7 +188,6 @@ export function mountApiRoutes(
       .route("/api/organization", organizationProfileRouter)
       .route("/api/organization-media", organizationMediaRouter)
       .route("/api/profile-media", profileMediaRouter)
-      .route("/api/public/signup", publicSignupRouter)
       .route("/api/public/oot-ack", ootAckRouter)
       .route("/api/public/service-order-access", publicServiceOrderAccessRouter)
       .route("/api/public/v1", publicApiRouter)
