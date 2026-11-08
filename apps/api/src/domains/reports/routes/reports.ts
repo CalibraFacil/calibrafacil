@@ -31,6 +31,11 @@ import { forbidden, invalid } from "../../../lib/domain-errors";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
+import {
+  type ConsolidatedCutoffs,
+  readConsolidatedUnitCounts,
+  sumCounts,
+} from "../consolidated-counts";
 import { resolvePeriodRange } from "../report-period";
 import {
   buildReportScopeSummary,
@@ -46,14 +51,22 @@ type UnitSummary = {
   slug: string;
 };
 
-function mapCountsByUnit<
-  T extends { unitId: number | null; value: number | string },
->(rows: T[]) {
-  return new Map(
-    rows
-      .filter((row): row is T & { unitId: number } => row.unitId !== null)
-      .map((row) => [row.unitId, Number(row.value)]),
-  );
+/**
+ * The laboratory's reports measure against the report window's end (now): a job is overdue
+ * when its due date is before it, a standard is expiring when it is ACTIVE and its next
+ * calibration falls in the 30 days after it. (Public API v2 answers both by laboratory
+ * calendar day instead; see `domains/public-api/routes/public-api-v2/reports.ts`.)
+ */
+function labCutoffs(range: ReturnType<typeof resolvePeriodRange>) {
+  return {
+    startDate: range.startDate,
+    overdueBefore: range.endDate,
+    expiring: {
+      from: range.endDate,
+      until: new Date(range.endDate.getTime() + 30 * 24 * 60 * 60 * 1000),
+      activeOnly: true,
+    },
+  } satisfies ConsolidatedCutoffs;
 }
 
 const requireConsolidatedReportingAccess = createMiddleware<{
@@ -196,152 +209,20 @@ mount(
         };
       }
 
-      const buildGroupedJobCount = async (
-        condition: SQL<unknown> | undefined,
-      ) =>
-        o
-          .select({
-            unitId: calibrationJob.unitId,
-            value: sql<number>`count(*)`,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              condition,
-            ),
-          )
-          .groupBy(calibrationJob.unitId);
-
-      const buildGroupedStandardCount = async (
-        condition: SQL<unknown> | undefined,
-      ) =>
-        o
-          .select({
-            unitId: referenceStandard.unitId,
-            value: sql<number>`count(*)`,
-          })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.organizationId, memberData.organizationId),
-              inArray(referenceStandard.unitId, selectedUnitIds),
-              condition,
-            ),
-          )
-          .groupBy(referenceStandard.unitId);
-
-      const [
-        pendingResult,
-        approvedResult,
-        rejectedResult,
-        overdueResult,
-        expiringStandardsResult,
-        createdRows,
-        approvedRows,
-        rejectedRows,
-        overdueRows,
-        expiringRows,
-      ] = await Promise.all([
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              eq(calibrationJob.status, "APPROVED"),
-              gte(calibrationJob.approvedAt, range.startDate),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              eq(calibrationJob.status, "REJECTED"),
-              gte(calibrationJob.rejectedAt, range.startDate),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              lt(calibrationJob.dueDate, range.endDate),
-              inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.organizationId, memberData.organizationId),
-              inArray(referenceStandard.unitId, selectedUnitIds),
-              eq(referenceStandard.status, "ACTIVE"),
-              lte(
-                referenceStandard.nextCalibrationDate,
-                new Date(range.endDate.getTime() + 30 * 24 * 60 * 60 * 1000),
-              ),
-              gte(referenceStandard.nextCalibrationDate, range.endDate),
-            ),
-          ),
-        buildGroupedJobCount(gte(calibrationJob.createdAt, range.startDate)),
-        buildGroupedJobCount(
-          and(
-            eq(calibrationJob.status, "APPROVED"),
-            gte(calibrationJob.approvedAt, range.startDate),
-          ),
-        ),
-        buildGroupedJobCount(
-          and(
-            eq(calibrationJob.status, "REJECTED"),
-            gte(calibrationJob.rejectedAt, range.startDate),
-          ),
-        ),
-        buildGroupedJobCount(
-          and(
-            inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-            lt(calibrationJob.dueDate, range.endDate),
-          ),
-        ),
-        buildGroupedStandardCount(
-          and(
-            eq(referenceStandard.status, "ACTIVE"),
-            lte(
-              referenceStandard.nextCalibrationDate,
-              new Date(range.endDate.getTime() + 30 * 24 * 60 * 60 * 1000),
-            ),
-            gte(referenceStandard.nextCalibrationDate, range.endDate),
-          ),
-        ),
-      ]);
-
-      const approvedInPeriod = approvedResult[0]?.count ?? 0;
-      const rejectedInPeriod = rejectedResult[0]?.count ?? 0;
+      const counts = await readConsolidatedUnitCounts(o, {
+        organizationId: memberData.organizationId,
+        unitIds: selectedUnitIds,
+        cutoffs: labCutoffs(range),
+      });
+      const approvedInPeriod = sumCounts(counts.approvedInPeriod);
+      const rejectedInPeriod = sumCounts(counts.rejectedInPeriod);
       const totalDecisions = approvedInPeriod + rejectedInPeriod;
 
-      const createdByUnit = mapCountsByUnit(createdRows);
-      const approvedByUnit = mapCountsByUnit(approvedRows);
-      const rejectedByUnit = mapCountsByUnit(rejectedRows);
-      const overdueByUnit = mapCountsByUnit(overdueRows);
-      const expiringByUnit = mapCountsByUnit(expiringRows);
+      const createdByUnit = counts.createdInPeriod;
+      const approvedByUnit = counts.approvedInPeriod;
+      const rejectedByUnit = counts.rejectedInPeriod;
+      const overdueByUnit = counts.overdueNow;
+      const expiringByUnit = counts.expiringStandardsSoon;
 
       const unitRows = selectedUnits.map((unit) => {
         const unitApproved = approvedByUnit.get(unit.id) ?? 0;
@@ -427,15 +308,15 @@ mount(
         selectedUnits,
         scopeSummary,
         metrics: {
-          pendingCalibrations: pendingResult[0]?.count ?? 0,
+          pendingCalibrations: sumCounts(counts.pendingNow),
           approvedInPeriod,
           rejectedInPeriod,
           approvalRate:
             totalDecisions > 0
               ? Math.round((approvedInPeriod / totalDecisions) * 1000) / 10
               : 0,
-          overdueJobs: overdueResult[0]?.count ?? 0,
-          expiringStandards: expiringStandardsResult[0]?.count ?? 0,
+          overdueJobs: sumCounts(counts.overdueNow),
+          expiringStandards: sumCounts(counts.expiringStandardsSoon),
           unitsIncluded: scopeSummary.unitsIncluded,
           atRiskUnitsCount: unitRows.filter(
             (row) => row.healthStatus !== "healthy",
@@ -494,77 +375,13 @@ reportsRouter.get(
         });
       }
 
-      const [
-        pendingResult,
-        approvedResult,
-        rejectedResult,
-        overdueResult,
-        expiringStandardsResult,
-      ] = await Promise.all([
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              eq(calibrationJob.status, "APPROVED"),
-              gte(calibrationJob.approvedAt, range.startDate),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              eq(calibrationJob.status, "REJECTED"),
-              gte(calibrationJob.rejectedAt, range.startDate),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              lt(calibrationJob.dueDate, range.endDate),
-              inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-            ),
-          ),
-        o
-          .select({ count: count() })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.organizationId, memberData.organizationId),
-              inArray(referenceStandard.unitId, selectedUnitIds),
-              eq(referenceStandard.status, "ACTIVE"),
-              lte(
-                referenceStandard.nextCalibrationDate,
-                new Date(range.endDate.getTime() + 30 * 24 * 60 * 60 * 1000),
-              ),
-              gte(referenceStandard.nextCalibrationDate, range.endDate),
-            ),
-          ),
-      ]);
-
-      const approvedInPeriod = pendingResult
-        ? (approvedResult[0]?.count ?? 0)
-        : 0;
-      const rejectedInPeriod = rejectedResult[0]?.count ?? 0;
+      const counts = await readConsolidatedUnitCounts(o, {
+        organizationId: memberData.organizationId,
+        unitIds: selectedUnitIds,
+        cutoffs: labCutoffs(range),
+      });
+      const approvedInPeriod = sumCounts(counts.approvedInPeriod);
+      const rejectedInPeriod = sumCounts(counts.rejectedInPeriod);
       const totalDecisions = approvedInPeriod + rejectedInPeriod;
 
       return c.json({
@@ -577,15 +394,15 @@ reportsRouter.get(
         availableUnits,
         selectedUnits,
         metrics: {
-          pendingCalibrations: pendingResult[0]?.count ?? 0,
+          pendingCalibrations: sumCounts(counts.pendingNow),
           approvedInPeriod,
           rejectedInPeriod,
           approvalRate:
             totalDecisions > 0
               ? Math.round((approvedInPeriod / totalDecisions) * 1000) / 10
               : 0,
-          overdueJobs: overdueResult[0]?.count ?? 0,
-          expiringStandards: expiringStandardsResult[0]?.count ?? 0,
+          overdueJobs: sumCounts(counts.overdueNow),
+          expiringStandards: sumCounts(counts.expiringStandardsSoon),
         },
       });
     });
@@ -625,86 +442,17 @@ mount(
         };
       }
 
-      const buildGroupedCount = async (condition: SQL<unknown> | undefined) =>
-        o
-          .select({
-            unitId: calibrationJob.unitId,
-            value: sql<number>`count(*)`,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.unitId, selectedUnitIds),
-              condition,
-            ),
-          )
-          .groupBy(calibrationJob.unitId);
-
-      const buildGroupedStandardCount = async (
-        condition: SQL<unknown> | undefined,
-      ) =>
-        o
-          .select({
-            unitId: referenceStandard.unitId,
-            value: sql<number>`count(*)`,
-          })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.organizationId, memberData.organizationId),
-              inArray(referenceStandard.unitId, selectedUnitIds),
-              condition,
-            ),
-          )
-          .groupBy(referenceStandard.unitId);
-
-      const [
-        createdRows,
-        approvedRows,
-        rejectedRows,
-        pendingRows,
-        overdueRows,
-        expiringRows,
-      ] = await Promise.all([
-        buildGroupedCount(gte(calibrationJob.createdAt, range.startDate)),
-        buildGroupedCount(
-          and(
-            eq(calibrationJob.status, "APPROVED"),
-            gte(calibrationJob.approvedAt, range.startDate),
-          ),
-        ),
-        buildGroupedCount(
-          and(
-            eq(calibrationJob.status, "REJECTED"),
-            gte(calibrationJob.rejectedAt, range.startDate),
-          ),
-        ),
-        buildGroupedCount(inArray(calibrationJob.status, OPEN_JOB_STATUSES)),
-        buildGroupedCount(
-          and(
-            inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-            lt(calibrationJob.dueDate, range.endDate),
-          ),
-        ),
-        buildGroupedStandardCount(
-          and(
-            eq(referenceStandard.status, "ACTIVE"),
-            lte(
-              referenceStandard.nextCalibrationDate,
-              new Date(range.endDate.getTime() + 30 * 24 * 60 * 60 * 1000),
-            ),
-            gte(referenceStandard.nextCalibrationDate, range.endDate),
-          ),
-        ),
-      ]);
-
-      const createdByUnit = mapCountsByUnit(createdRows);
-      const approvedByUnit = mapCountsByUnit(approvedRows);
-      const rejectedByUnit = mapCountsByUnit(rejectedRows);
-      const pendingByUnit = mapCountsByUnit(pendingRows);
-      const overdueByUnit = mapCountsByUnit(overdueRows);
-      const expiringByUnit = mapCountsByUnit(expiringRows);
+      const counts = await readConsolidatedUnitCounts(o, {
+        organizationId: memberData.organizationId,
+        unitIds: selectedUnitIds,
+        cutoffs: labCutoffs(range),
+      });
+      const createdByUnit = counts.createdInPeriod;
+      const approvedByUnit = counts.approvedInPeriod;
+      const rejectedByUnit = counts.rejectedInPeriod;
+      const pendingByUnit = counts.pendingNow;
+      const overdueByUnit = counts.overdueNow;
+      const expiringByUnit = counts.expiringStandardsSoon;
 
       return {
         period: range.period,

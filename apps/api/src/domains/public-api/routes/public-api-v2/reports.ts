@@ -1,11 +1,7 @@
 import { createRouter } from "../../../../server/router";
 import { zValidator } from "@hono/zod-validator";
-import {
-  calibrationJob,
-  organizationUnit,
-  referenceStandard,
-} from "@calibra-facil/db/schema";
-import { and, count, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import { organizationUnit } from "@calibra-facil/db/schema";
+import { and, eq } from "drizzle-orm";
 import { addCalendarDays, labToday } from "@calibra-facil/shared";
 import { requireApiScope } from "../../../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
@@ -16,10 +12,33 @@ import {
   getHealthStatus,
   getPeriodLabel,
   parseRequestedUnitIds,
+  readConsolidatedUnitCounts,
   resolvePeriodRange,
+  sumCounts,
+  type ConsolidatedCutoffs,
 } from "../../../reports";
 import { orgDb } from "../../../../lib/org-db";
-import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
+
+/**
+ * The public API answers "overdue" and "expiring" by laboratory calendar day: an open job is
+ * overdue when its due date is before today, a standard is expiring when its next calibration
+ * is within 30 days of today (a lapsed one included, whatever its status). The laboratory's
+ * own reports measure against the window's end instead; the queries are the same ones
+ * (`reports/consolidated-counts.ts`), only these cut-offs differ.
+ */
+function v2Cutoffs(
+  range: ReturnType<typeof resolvePeriodRange>,
+): ConsolidatedCutoffs {
+  return {
+    startDate: range.startDate,
+    overdueBefore: labToday(),
+    expiring: {
+      from: null,
+      until: addCalendarDays(labToday(), 30),
+      activeOnly: false,
+    },
+  };
+}
 
 export const reportRoutes = createRouter<PublicApiV2Env>()
   .get(
@@ -90,169 +109,20 @@ export const reportRoutes = createRouter<PublicApiV2Env>()
         });
       }
 
-      const [
-        pendingResult,
-        approvedResult,
-        rejectedResult,
-        overdueResult,
-        expiringStandardsResult,
-        createdRows,
-        approvedRows,
-        rejectedRows,
-        overdueRows,
-        expiringRows,
-      ] = await orgDb(apiKey.organizationId).transaction((o) =>
-        Promise.all([
-          o
-            .select({ count: count() })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-              ),
-            ),
-          o
-            .select({ count: count() })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                eq(calibrationJob.status, "APPROVED"),
-                gte(calibrationJob.approvedAt, range.startDate),
-              ),
-            ),
-          o
-            .select({ count: count() })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                eq(calibrationJob.status, "REJECTED"),
-                gte(calibrationJob.rejectedAt, range.startDate),
-              ),
-            ),
-          o
-            .select({ count: count() })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-                lt(calibrationJob.dueDate, labToday()),
-              ),
-            ),
-          o
-            .select({ count: count() })
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.organizationId, apiKey.organizationId),
-                inArray(referenceStandard.unitId, selectedUnitIds),
-                lte(
-                  referenceStandard.nextCalibrationDate,
-                  addCalendarDays(labToday(), 30),
-                ),
-              ),
-            ),
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                gte(calibrationJob.createdAt, range.startDate),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                eq(calibrationJob.status, "APPROVED"),
-                gte(calibrationJob.approvedAt, range.startDate),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                eq(calibrationJob.status, "REJECTED"),
-                gte(calibrationJob.rejectedAt, range.startDate),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-                lt(calibrationJob.dueDate, labToday()),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: referenceStandard.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.organizationId, apiKey.organizationId),
-                inArray(referenceStandard.unitId, selectedUnitIds),
-                lte(
-                  referenceStandard.nextCalibrationDate,
-                  addCalendarDays(labToday(), 30),
-                ),
-              ),
-            )
-            .groupBy(referenceStandard.unitId),
-        ]),
+      const counts = await orgDb(apiKey.organizationId).transaction((o) =>
+        readConsolidatedUnitCounts(o, {
+          organizationId: apiKey.organizationId,
+          unitIds: selectedUnitIds,
+          cutoffs: v2Cutoffs(range),
+        }),
       );
-
-      const createdByUnit = new Map(
-        createdRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const approvedByUnit = new Map(
-        approvedRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const rejectedByUnit = new Map(
-        rejectedRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const overdueByUnit = new Map(
-        overdueRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const expiringByUnit = new Map(
-        expiringRows.map((row) => [row.unitId, Number(row.value)]),
-      );
+      const createdByUnit = counts.createdInPeriod;
+      const approvedByUnit = counts.approvedInPeriod;
+      const rejectedByUnit = counts.rejectedInPeriod;
+      const overdueByUnit = counts.overdueNow;
+      const expiringByUnit = counts.expiringStandardsSoon;
+      const approvedTotal = sumCounts(approvedByUnit);
+      const rejectedTotal = sumCounts(rejectedByUnit);
 
       const comparison = selectedUnits.map((unit) => {
         const created = createdByUnit.get(unit.id) ?? 0;
@@ -318,22 +188,17 @@ export const reportRoutes = createRouter<PublicApiV2Env>()
           selectedUnits,
           scopeSummary,
           metrics: {
-            pendingCalibrations: pendingResult[0]?.count ?? 0,
-            approvedInPeriod: approvedResult[0]?.count ?? 0,
-            rejectedInPeriod: rejectedResult[0]?.count ?? 0,
+            pendingCalibrations: sumCounts(counts.pendingNow),
+            approvedInPeriod: approvedTotal,
+            rejectedInPeriod: rejectedTotal,
             approvalRate:
-              (approvedResult[0]?.count ?? 0) +
-                (rejectedResult[0]?.count ?? 0) >
-              0
+              approvedTotal + rejectedTotal > 0
                 ? Math.round(
-                    ((approvedResult[0]?.count ?? 0) /
-                      ((approvedResult[0]?.count ?? 0) +
-                        (rejectedResult[0]?.count ?? 0))) *
-                      100,
+                    (approvedTotal / (approvedTotal + rejectedTotal)) * 100,
                   )
                 : 0,
-            overdueJobs: overdueResult[0]?.count ?? 0,
-            expiringStandards: expiringStandardsResult[0]?.count ?? 0,
+            overdueJobs: sumCounts(counts.overdueNow),
+            expiringStandards: sumCounts(counts.expiringStandardsSoon),
             unitsIncluded: selectedUnits.length,
             atRiskUnitsCount: comparison.filter(
               (row) => row.healthStatus !== "healthy",
@@ -385,108 +250,18 @@ export const reportRoutes = createRouter<PublicApiV2Env>()
         return c.json({ data: [] });
       }
 
-      const [
-        createdRows,
-        approvedRows,
-        rejectedRows,
-        overdueRows,
-        expiringRows,
-      ] = await orgDb(apiKey.organizationId).transaction((o) =>
-        Promise.all([
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                gte(calibrationJob.createdAt, range.startDate),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                eq(calibrationJob.status, "APPROVED"),
-                gte(calibrationJob.approvedAt, range.startDate),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                eq(calibrationJob.status, "REJECTED"),
-                gte(calibrationJob.rejectedAt, range.startDate),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: calibrationJob.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.unitId, selectedUnitIds),
-                inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-                lt(calibrationJob.dueDate, labToday()),
-              ),
-            )
-            .groupBy(calibrationJob.unitId),
-          o
-            .select({
-              unitId: referenceStandard.unitId,
-              value: sql<number>`count(*)`,
-            })
-            .from(referenceStandard)
-            .where(
-              and(
-                eq(referenceStandard.organizationId, apiKey.organizationId),
-                inArray(referenceStandard.unitId, selectedUnitIds),
-                lte(
-                  referenceStandard.nextCalibrationDate,
-                  addCalendarDays(labToday(), 30),
-                ),
-              ),
-            )
-            .groupBy(referenceStandard.unitId),
-        ]),
+      const counts = await orgDb(apiKey.organizationId).transaction((o) =>
+        readConsolidatedUnitCounts(o, {
+          organizationId: apiKey.organizationId,
+          unitIds: selectedUnitIds,
+          cutoffs: v2Cutoffs(range),
+        }),
       );
-
-      const createdByUnit = new Map(
-        createdRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const approvedByUnit = new Map(
-        approvedRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const rejectedByUnit = new Map(
-        rejectedRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const overdueByUnit = new Map(
-        overdueRows.map((row) => [row.unitId, Number(row.value)]),
-      );
-      const expiringByUnit = new Map(
-        expiringRows.map((row) => [row.unitId, Number(row.value)]),
-      );
+      const createdByUnit = counts.createdInPeriod;
+      const approvedByUnit = counts.approvedInPeriod;
+      const rejectedByUnit = counts.rejectedInPeriod;
+      const overdueByUnit = counts.overdueNow;
+      const expiringByUnit = counts.expiringStandardsSoon;
 
       return c.json({
         data: selectedUnits.map((unit) => {

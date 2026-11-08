@@ -8,3 +8,8 @@ export {
   getPeriodLabel,
   parseRequestedUnitIds,
 } from "./report-support";
+export {
+  readConsolidatedUnitCounts,
+  sumCounts,
+  type ConsolidatedCutoffs,
+} from "./consolidated-counts";
