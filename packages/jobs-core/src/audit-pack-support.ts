@@ -9,10 +9,8 @@ import { portalBaseUrl as sharedPortalBaseUrl } from "@calibra-facil/shared/publ
 // + fleet-status report + verification-links index, zipped and uploaded to R2.
 // =============================================================================
 
-// Mirror the API-side enqueue caps (apps/api/src/domains/portal/routes/portal.ts). Both are
-// re-checked here because the certificate set is re-derived at generation time.
-export const AUDIT_PACK_MAX_CERTIFICATES = 500;
-
+// The certificate cap (AUDIT_PACK_MAX_CERTIFICATES) is shared with the API's enqueue check;
+// it is re-checked at generation because the certificate set is re-derived then.
 export const AUDIT_PACK_MAX_TOTAL_BYTES = 512 * 1024 * 1024;
 
 // 512 MB

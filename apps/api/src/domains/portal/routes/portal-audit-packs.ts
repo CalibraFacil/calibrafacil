@@ -25,6 +25,10 @@ import {
   applyUnitFilter,
   resolvePortalCustomerScope,
 } from "../portal-customer-scope";
+import {
+  AUDIT_PACK_MAX_CERTIFICATES,
+  auditPackTooLargeMessage,
+} from "@calibra-facil/shared/audit-pack";
 import { orgDb } from "../../../lib/org-db";
 import { conflict, gone, invalid, notFound } from "../../../lib/domain-errors";
 import { withOrg } from "../../../lib/org-context";
@@ -32,8 +36,8 @@ import { requestActor } from "../../../middleware/request-actor";
 
 // Audit pack: bulk export of released certificates + fleet status for
 // customer audits. Hard cap so a single request can never fan out into an
-// unbounded ZIP; the worker re-checks the same cap at generation time.
-const AUDIT_PACK_MAX_CERTIFICATES = 500;
+// unbounded ZIP; the worker re-checks the same cap (one constant, shared) at
+// generation time.
 
 /**
  * Portal routes - endpoints specific to the client portal.
@@ -101,10 +105,7 @@ mount(
     );
 
     if (candidates.length > AUDIT_PACK_MAX_CERTIFICATES) {
-      throw invalid(
-        "audit_pack_too_large",
-        `O período selecionado tem mais de ${AUDIT_PACK_MAX_CERTIFICATES} certificados. Reduza o período e gere pacotes menores.`,
-      );
+      throw invalid("audit_pack_too_large", auditPackTooLargeMessage());
     }
 
     const releaseStatuses = await loadPortalReleaseStatuses({

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { authClient } from '@calibra-facil/auth/client'
+import { labAuthClient } from '@calibra-facil/auth/client'
 
 import { isDesktopRuntime } from '@/runtime/desktop'
 import {
@@ -49,7 +49,7 @@ export function useLocalPartition({
       }
 
       const identity = await verifyCloudIdentity(() =>
-        authClient.getSession({ query: { disableCookieCache: true } }),
+        labAuthClient.getSession({ query: { disableCookieCache: true } }),
       )
 
       // Verification is bound to the partition being requested, not merely to

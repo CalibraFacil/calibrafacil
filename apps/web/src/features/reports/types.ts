@@ -4,10 +4,8 @@ import type { ReportPeriod } from '@calibra-facil/contracts'
 // `endpoints/reports.ts`); only the cache-key input is web-local.
 export type {
   ComparisonResponse,
-  ExecutiveOverviewResponse,
   ReportPeriod,
   ReportUnitOption,
-  TrendResponse,
 } from '@calibra-facil/contracts'
 
 export type ReportsQueryInput = {

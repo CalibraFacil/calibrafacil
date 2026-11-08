@@ -50,7 +50,7 @@ export function classifyResendErrorName(name: string): ResendFailureClass {
   }
 }
 
-export interface ResendDomainSummary {
+interface ResendDomainSummary {
   id: string;
   name: string;
   status: DomainStatus;

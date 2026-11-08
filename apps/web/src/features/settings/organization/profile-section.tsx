@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Building06Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { authClient } from '@calibra-facil/auth/client'
+import { labAuthClient } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import {
   ACCREDITATION_NUMBER_PREFIX,
@@ -212,7 +212,7 @@ export function OrganizationProfileSection({
 
     setIsUpdating(true)
     try {
-      const result = await authClient.organization.update({
+      const result = await labAuthClient.organization.update({
         data: buildOrganizationIdentityPayload({ name, slug }),
       })
       if (result.error) {
@@ -265,7 +265,7 @@ export function OrganizationProfileSection({
         }),
       })
       // The active organization is read through Better Auth: refetch it.
-      authClient.$store.notify('$activeOrgSignal')
+      labAuthClient.$store.notify('$activeOrgSignal')
       toast.success('Informações ISO 17025 atualizadas com sucesso!')
     } catch (err) {
       const message =

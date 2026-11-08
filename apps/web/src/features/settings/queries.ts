@@ -1,6 +1,6 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
-import { authClient } from '@calibra-facil/auth/client'
+import { labAuthClient } from '@calibra-facil/auth/client'
 import type { ContaAzulCatalogKey } from '@calibra-facil/contracts'
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
@@ -226,7 +226,7 @@ export function organizationMembersQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: organizationKeys.members(organizationId),
     queryFn: async () => {
-      const result = await authClient.organization.listMembers({
+      const result = await labAuthClient.organization.listMembers({
         query: { organizationId },
       })
 
@@ -244,7 +244,7 @@ export function organizationInvitationsQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: organizationKeys.invitations(organizationId),
     queryFn: async () => {
-      const result = await authClient.organization.listInvitations({
+      const result = await labAuthClient.organization.listInvitations({
         query: { organizationId },
       })
 

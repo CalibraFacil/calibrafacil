@@ -1,4 +1,4 @@
-import { authClient } from '@calibra-facil/auth/client'
+import { labAuthClient } from '@calibra-facil/auth/client'
 
 import { calibraApi } from '@/utils/api'
 import { isDesktopRuntime } from '@/runtime/desktop'
@@ -97,7 +97,7 @@ function resetDesktopSessionCheck() {
 
 async function hasCloudSession() {
   try {
-    const { data } = await authClient.getSession()
+    const { data } = await labAuthClient.getSession()
     return Boolean(data?.user.id)
   } catch {
     return false

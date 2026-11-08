@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  authClient,
+  labAuthClient,
   useActiveOrganization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
@@ -88,7 +88,7 @@ export function OrganizationOnboardingPage({
           email: optionalFormText(formData.get('email')),
         },
       })
-      authClient.$store.notify('$activeOrgSignal')
+      labAuthClient.$store.notify('$activeOrgSignal')
 
       setStoredDashboardOrganizationId(labOrganization.id)
 

@@ -38,7 +38,7 @@ async function loadDesktopAuth(options: {
     },
   }))
   vi.doMock('@calibra-facil/auth/client', () => ({
-    authClient: {
+    labAuthClient: {
       getSession: getCloudSession,
     },
   }))

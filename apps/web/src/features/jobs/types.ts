@@ -5,8 +5,6 @@ import type {
   JobsListResponse,
 } from '@calibra-facil/contracts'
 
-export type { JobStatus }
-
 /** Statuses the list can be filtered by in the UI (a superseded job is not offered). */
 export type JobsListStatus = Exclude<JobStatus, 'SUPERSEDED'>
 

@@ -9,7 +9,7 @@ export function invitationQueryOptions(id: string) {
   return queryOptions({
     queryKey: publicKeys.acceptInvitation(id),
     queryFn: async (): Promise<InvitationData> => {
-      // Use the PUBLIC invitation endpoint, not authClient.organization
+      // Use the PUBLIC invitation endpoint, not labAuthClient.organization
       // .getInvitation: the latter requires an authenticated session whose
       // email matches the invite, so a not-yet-signed-up invitee would only
       // ever get "Not authenticated" and never reach the access-setup flow.

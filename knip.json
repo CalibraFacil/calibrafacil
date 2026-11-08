@@ -93,12 +93,8 @@
       "ignoreDependencies": ["next"]
     },
     "packages/auth": {
-      // Declared but not imported; left for the branch that owns packages/auth.
       // vite-env.d.ts imports a type from @calibra-facil/contracts.
-      "ignoreDependencies": [
-        "@calibra-facil/shared",
-        "@calibra-facil/contracts"
-      ]
+      "ignoreDependencies": ["@calibra-facil/contracts"]
     },
     "packages/config": {
       // The env-example generator is run by `pnpm config:env-example`.

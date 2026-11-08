@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { authClient, useSession } from '@calibra-facil/auth/client'
+import { labAuthClient, useSession } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 
 import { calibraApi } from '@/utils/api'
@@ -87,7 +87,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const sessionsQuery = useQuery({
     queryKey: accountKeys.sessions,
     queryFn: async (): Promise<Array<SessionInfo>> => {
-      const result = await authClient.listSessions()
+      const result = await labAuthClient.listSessions()
       return (result.data ?? []).map((s) => ({
         id: s.id,
         expiresAt: new Date(s.expiresAt),
@@ -111,7 +111,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setIsUpdating(true)
       setError(null)
       try {
-        const result = await authClient.updateUser(data)
+        const result = await labAuthClient.updateUser(data)
         if (result.error) {
           throw new Error(
             translateAuthErrorMessage(
@@ -163,7 +163,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setIsUpdating(true)
     setError(null)
     try {
-      const result = await authClient.revokeOtherSessions()
+      const result = await labAuthClient.revokeOtherSessions()
       if (result.error) {
         throw new Error(
           translateAuthErrorMessage(
@@ -188,7 +188,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setIsUpdating(true)
     setError(null)
     try {
-      const result = await authClient.revokeSessions()
+      const result = await labAuthClient.revokeSessions()
       if (result.error) {
         throw new Error(
           translateAuthErrorMessage(

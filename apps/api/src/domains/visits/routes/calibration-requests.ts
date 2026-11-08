@@ -22,7 +22,7 @@ import {
 import { createCalibrationJob } from "../../jobs";
 import { notify } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../../../lib/units";
-import { formatOnsiteAddressText } from "../onsite-address";
+import { formatAddress } from "@calibra-facil/shared/address";
 import { isAssignableTechnician } from "../../../lib/tenant-refs";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
@@ -595,7 +595,7 @@ mount(
         const onsiteLocation =
           request.deliveryMethod === "onsite"
             ? {
-                addressText: formatOnsiteAddressText(request.onsiteAddress),
+                addressText: formatAddress(request.onsiteAddress),
               }
             : null;
 

@@ -1,7 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import type {
   DashboardJob,
-  DashboardJobStatus,
   DashboardStats,
 } from '@calibra-facil/client-runtime'
 
@@ -12,7 +11,7 @@ import {
 import { calibraApi } from '@/utils/api'
 import { dashboardKeys } from '@/features/dashboard/keys'
 
-export type { DashboardJob, DashboardJobStatus, DashboardStats }
+export type { DashboardJob, DashboardStats }
 
 export function dashboardStatsQueryOptions(organizationId: string) {
   return queryOptions({

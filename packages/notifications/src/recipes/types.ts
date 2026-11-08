@@ -120,7 +120,7 @@ export interface NotificationPayloads {
  * own `type`. The yield is lazy:
  * the next recipient's reads happen only after the previous row was sent.
  */
-export type NotificationRecipe<T extends NotificationType> = (
+type NotificationRecipe<T extends NotificationType> = (
   payload: NotificationPayloads[T],
 ) => AsyncGenerator<SendNotificationOptions & { type: T }, void, undefined>;
 

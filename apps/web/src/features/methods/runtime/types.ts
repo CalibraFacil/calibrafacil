@@ -75,7 +75,7 @@ interface MassCompositionConfig {
  * row to a reference standard's certifiedValue by nominal and fills the named
  * target columns. No composition profiles / buoyancy / mass-unit model.
  */
-export interface StandardValueConfig {
+interface StandardValueConfig {
   matchBy?: 'nominal'
   targetColumns?: {
     value?: string
