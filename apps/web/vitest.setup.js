@@ -1,3 +1,5 @@
+import { configure } from '@testing-library/react'
+
 // Shared vitest setup (jsdom + node suites).
 //
 // jsdom implements getClientRects/getBoundingClientRect on Element but NOT on
@@ -43,3 +45,10 @@ if (
 ) {
   document.elementFromPoint = () => null
 }
+
+// A busy CI runner can take longer than Testing Library's 1 s default to
+// settle a page whose content arrives after its queries resolve (the methods
+// from-template catalog timed out there twice, first test of its file, cold).
+// Waiting longer costs nothing when a test passes, so findBy* and waitFor get
+// 5 s, as in the portal's setup.
+configure({ asyncUtilTimeout: 5_000 })
