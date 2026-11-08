@@ -33,6 +33,7 @@ import {
   decidePoint,
   isNonConformingDecision,
 } from "@calibra-facil/shared/decision-rule";
+import { parseNumericValue } from "@calibra-facil/shared/units";
 
 type AsFoundConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
 
@@ -60,22 +61,12 @@ const AS_FOUND_MARGIN_KEY = "margem_conformidade_antes";
 /** The as-found expanded uncertainty per point: the guard band of guarded rules. */
 const AS_FOUND_UNCERTAINTY_KEY = "incerteza_expandida_antes";
 
-/** Parse a number from unknown, tolerating comma decimals (matches the dashboard). */
-function numberFromUnknown(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
 /** Flatten nested arrays of point values into a flat list of finite numbers. */
 function numericValues(value: unknown): number[] {
   if (Array.isArray(value)) {
     return value.flatMap((item) => numericValues(item));
   }
-  const parsed = numberFromUnknown(value);
+  const parsed = parseNumericValue(value);
   return parsed === null ? [] : [parsed];
 }
 

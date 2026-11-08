@@ -10,6 +10,7 @@
  * like any other; its regulation-fixed verification periodicity is a separate track.
  */
 
+import { DRIFT_REGRESSION_MS_PER_MONTH } from "@calibra-facil/contracts";
 import {
   analyzeInterval,
   type CycleVerdict,
@@ -17,8 +18,6 @@ import {
   type IntervalConfig,
   type Recommendation,
 } from "@calibra-facil/interval-analysis";
-
-const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375; // 365.25 / 12 days per month
 
 export type ReliabilityJobRow = {
   approvedAt: Date | null;
@@ -75,7 +74,9 @@ export function buildFamilyStats(
       const prev = dates[i - 1];
       const curr = dates[i];
       if (prev && curr) {
-        deltas.push((curr.getTime() - prev.getTime()) / MS_PER_MONTH);
+        deltas.push(
+          (curr.getTime() - prev.getTime()) / DRIFT_REGRESSION_MS_PER_MONTH,
+        );
       }
     }
   }
@@ -139,7 +140,7 @@ export function buildIntervalInsight(input: {
   const cycles = dated.map((r) => ({
     verdict: r.asFoundConformity ?? "UNKNOWN",
     margins: r.asFoundMargins ?? [],
-    tMonths: (r.approvedAt.getTime() - firstMs) / MS_PER_MONTH,
+    tMonths: (r.approvedAt.getTime() - firstMs) / DRIFT_REGRESSION_MS_PER_MONTH,
   }));
 
   const family = input.familyRows ? buildFamilyStats(input.familyRows) : null;

@@ -36,7 +36,7 @@ import {
   publicApiIdempotencyKey,
   publicApiWebhookSubscription,
 } from "@calibra-facil/db/schema";
-import { ALL_PUBLIC_API_SCOPES } from "../../../lib/api-keys";
+import { PUBLIC_API_SCOPES } from "@calibra-facil/shared";
 import { hashIdempotencyPayload } from "../public-api";
 import { truncateAll } from "../../../../test/integration/db";
 import {
@@ -102,7 +102,7 @@ async function seedWorld(): Promise<World> {
   const key = await seedApiKey({
     organizationId: lab.orgId,
     createdBy: lab.userId,
-    scopes: [...ALL_PUBLIC_API_SCOPES],
+    scopes: [...PUBLIC_API_SCOPES],
     keyId: "key-a",
   });
   return { lab, key: key.rawKey, keyId: key.keyId };

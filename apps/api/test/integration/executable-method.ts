@@ -1,12 +1,8 @@
 import {
   compileMethodDraft,
-  fingerprintJson,
   createMethodExecutionEngine,
+  methodEngineMetadata,
 } from "@calibra-facil/method-definition";
-import {
-  METHOD_ENGINE_OPTIONS,
-  normalizeEngineOptions,
-} from "@calibra-facil/math-engine";
 
 /** The minimal NOT NULL method snapshot a calibration_job row needs. */
 export function minimalMethodSnapshot() {
@@ -30,13 +26,7 @@ export function minimalMethodSnapshot() {
  * with.
  */
 export function executableMethodSnapshot() {
-  const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
-  const engine = createMethodExecutionEngine();
-  const engineVersion = normalizedOptions.engineVersion;
-  const optionsFingerprint = fingerprintJson(
-    normalizedOptions,
-    "engine-options",
-  );
+  const engineMetadata = methodEngineMetadata();
   const compiled = compileMethodDraft(
     {
       id: "erro_indicacao",
@@ -71,12 +61,8 @@ export function executableMethodSnapshot() {
       ],
     },
     {
-      engine,
-      engineMetadata: {
-        packageName: "@calibra-facil/math-engine",
-        version: engineVersion,
-        optionsFingerprint,
-      },
+      engine: createMethodExecutionEngine(),
+      engineMetadata,
     },
   );
   if (!compiled.ok) {
@@ -88,8 +74,8 @@ export function executableMethodSnapshot() {
     ...minimalMethodSnapshot(),
     compiledMethod: compiled.method,
     methodFingerprint: compiled.method.methodFingerprint,
-    engineVersion,
-    engineOptionsFingerprint: optionsFingerprint,
+    engineVersion: engineMetadata.version,
+    engineOptionsFingerprint: engineMetadata.optionsFingerprint,
     normalizedMethodJson: compiled.method.normalizedMethodJson,
   };
 }

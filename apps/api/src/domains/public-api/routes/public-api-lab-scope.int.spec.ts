@@ -45,7 +45,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { parseBackgroundJobMessage } from "@calibra-facil/schemas";
 import { routeOutboundThroughGlobalFetch } from "@calibra-facil/shared/outbound-testing";
-import { ALL_PUBLIC_API_SCOPES } from "../../../lib/api-keys";
+import { PUBLIC_API_SCOPES } from "@calibra-facil/shared";
 import { withOrg } from "../../../lib/org-context";
 import { stagePublicApiWebhookEvent } from "../public-api-webhooks";
 import { truncateAll } from "../../../../test/integration/db";
@@ -168,13 +168,13 @@ async function seedWorld(): Promise<World> {
   const keyA = await seedApiKey({
     organizationId: a.orgId,
     createdBy: a.userId,
-    scopes: [...ALL_PUBLIC_API_SCOPES],
+    scopes: [...PUBLIC_API_SCOPES],
     keyId: "key-a",
   });
   const keyB = await seedApiKey({
     organizationId: b.orgId,
     createdBy: b.userId,
-    scopes: [...ALL_PUBLIC_API_SCOPES],
+    scopes: [...PUBLIC_API_SCOPES],
     keyId: "key-b",
   });
   const jobA = await seedApprovedJob(a, "CAL-A-0001");

@@ -27,16 +27,13 @@ import {
   canonicalJson,
   parseMethodDraft,
   createMethodExecutionEngine,
+  methodEngineMetadata,
   type CompiledMethod,
   type DimensionalDiagnostic,
   type MethodDraft,
   type MethodDiagnostic,
   type MethodPreviewResult,
 } from "@calibra-facil/method-definition";
-import {
-  METHOD_ENGINE_OPTIONS,
-  normalizeEngineOptions,
-} from "@calibra-facil/math-engine";
 import { eq, and, ilike, or, count, desc, ne, inArray } from "drizzle-orm";
 import {
   conflict,
@@ -104,16 +101,9 @@ function compileDraftWithEngine(
     includePreviewScenariosInFingerprint?: boolean;
   } = {},
 ) {
-  const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
-  const engine = createMethodExecutionEngine();
-
   return compileMethodDraft(draft, {
-    engine,
-    engineMetadata: {
-      packageName: "@calibra-facil/math-engine",
-      version: normalizedOptions.engineVersion,
-      optionsFingerprint: fingerprintJson(normalizedOptions, "engine-options"),
-    },
+    engine: createMethodExecutionEngine(),
+    engineMetadata: methodEngineMetadata(),
     requirePublishable: options.requirePublishable,
     previewScenarios: options.previewScenarios,
     includePreviewScenariosInFingerprint:

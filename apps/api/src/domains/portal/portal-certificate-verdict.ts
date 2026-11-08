@@ -1,4 +1,5 @@
 import { formatCalibrationValue } from "@calibra-facil/shared";
+import { parseNumericValue } from "@calibra-facil/shared/units";
 
 /**
  * Compact, customer-facing calibration verdict for the client portal.
@@ -31,22 +32,12 @@ type FormulaLike = {
   unit?: string | null;
 };
 
-/** Parse a number from unknown, tolerating comma decimals (matches dashboard). */
-function numberFromUnknown(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
 /** Flatten nested arrays of point values into a flat list of finite numbers. */
 function numericValues(value: unknown): number[] {
   if (Array.isArray(value)) {
     return value.flatMap((item) => numericValues(item));
   }
-  const parsed = numberFromUnknown(value);
+  const parsed = parseNumericValue(value);
   return parsed === null ? [] : [parsed];
 }
 
