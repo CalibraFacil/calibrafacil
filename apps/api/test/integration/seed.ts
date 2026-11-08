@@ -8,7 +8,10 @@ import {
   organizationApiKey,
   customer,
   customerGroup,
+  asset,
+  assetType,
 } from "@calibra-facil/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { createApiKeySecret } from "../../src/lib/api-keys";
 import { withStatusRepair } from "./state-fixtures";
 
@@ -180,6 +183,46 @@ export async function seedPortalContext(params?: {
     clientOrgId,
     customerId,
   };
+}
+
+/**
+ * Seed an ACTIVE instrument of a customer (any unit of its laboratory), creating the shared
+ * fixture asset type on first use. `nextCalibrationDate` null leaves it unscheduled.
+ */
+export async function seedPortalAsset(params: {
+  labUnitId: number;
+  customerId: number;
+  tag: string;
+  name?: string;
+  nextCalibrationDate?: Date | null;
+}): Promise<number> {
+  const slug = "portal-fixture-type";
+  await db
+    .insert(assetType)
+    .values({ name: "Instrumento", slug, definition: [] })
+    .onConflictDoNothing();
+  const [type] = await db
+    .select({ id: assetType.id })
+    .from(assetType)
+    .where(eq(assetType.slug, slug));
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: type?.id ?? 0,
+        name: params.name ?? `Instrumento ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        nextCalibrationDate: params.nextCalibrationDate ?? null,
+      })
+      .returning({ id: asset.id }),
+  );
+  if (!row) throw new Error("seedPortalAsset: insert failed");
+  return row.id;
 }
 
 export type SeededPortalGroup = {
