@@ -61,7 +61,7 @@ vi.mock("../../../lib/storage", () => ({
 // ---------------------------------------------------------------------------
 // Multipart helper: a tiny PNG-typed file for the logo field.
 // The handler checks the declared type, the size and the file's signature (the
-// PNG magic bytes; roadmap 2 D3), never decodes pixels.
+// PNG magic bytes), never decodes pixels.
 // ---------------------------------------------------------------------------
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 

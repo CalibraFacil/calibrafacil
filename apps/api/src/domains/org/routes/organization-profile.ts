@@ -15,16 +15,15 @@ import {
 import { mount } from "../../../lib/endpoint-mount";
 
 /**
- * The laboratory profile (architecture review P0-1).
+ * The laboratory profile.
  *
  * CNPJ, the accreditation claim (CGCRE/RBC number, body, active toggle, vigência
  * window), the legal-metrology repair authorization, the address, the contacts
- * and the technical manager used to be written through Better Auth's
- * `organization/update`, where any field could be sent by any member that holds
- * `organization:update`. Every one of them is now `input: false` there and is
- * written only here: the role is checked on the server, the write is bound to the
- * member's own laboratory, and each change leaves an audit event naming the
- * fields (and the before/after of the accreditation claim).
+ * and the technical manager are `input: false` in Better Auth's
+ * `organization/update` and are written only here: the role is checked on the
+ * server, the write is bound to the member's own laboratory, and each change
+ * leaves an audit event naming the fields (and the before/after of the
+ * accreditation claim).
  */
 const PROFILE_COLUMNS = {
   cnpj: organization.cnpj,
@@ -199,7 +198,7 @@ mount(
           ctx.o,
         );
 
-        // B4a: the append-only compliance trail records the accreditation claim
+        // The append-only compliance trail records the accreditation claim
         // (number, body, active toggle, vigência window = the seal's settings)
         // with before and after, in this same transaction.
         const changedClaims = CLAIM_FIELDS.filter((field) =>

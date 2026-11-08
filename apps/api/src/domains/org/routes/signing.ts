@@ -39,13 +39,6 @@ import {
 } from "../unit-operational-settings";
 
 import { requireFreshSession } from "../../../middleware/fresh-session";
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-// =============================================================================
-// ENVIRONMENT
-// =============================================================================
 
 interface SigningEnv {
   SIGNING_MASTER_KEY: string; // The current KEK (256-bit AES key) wrapping the credentials' data keys
@@ -66,10 +59,6 @@ function certificateNotFound() {
   return notFound("certificate_not_found", "Certificado não encontrado");
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
 const PREFIX = "/api/signing";
 
 export const signingRouter = createRouter<{
@@ -77,9 +66,6 @@ export const signingRouter = createRouter<{
   Bindings: SigningEnv;
 }>();
 
-// ===========================================================================
-// GET /certificates - List organization's signing certificates
-// ===========================================================================
 mount(
   signingRouter,
   PREFIX,
@@ -122,7 +108,6 @@ mount(
         )
         .orderBy(desc(organizationSigningCertificate.createdAt));
 
-      // Calculate status for each certificate
       const now = new Date();
       const certificatesWithStatus = certificates.map((cert) => ({
         ...cert,
@@ -135,7 +120,7 @@ mount(
               : ("valid" as const),
       }));
 
-      // #644: the unit's signing policy rides along so the settings page can
+      // The unit's signing policy rides along so the settings page can
       // render the "assinatura obrigatória" toggle without a second call.
       const policyRow = await o
         .select({
@@ -158,7 +143,7 @@ mount(
         certificates: certificatesWithStatus,
         unit,
         requireSignature: policyRow[0]?.requireSignature ?? false,
-        // Q51: the explicit "emitir sem assinatura digital" setting.
+        // The explicit "emitir sem assinatura digital" setting.
         unsignedIssuance: {
           enabled: Boolean(policyRow[0]?.unsignedIssuanceReason),
           reason: policyRow[0]?.unsignedIssuanceReason ?? null,
@@ -171,10 +156,10 @@ mount(
 );
 
 // ===========================================================================
-// PATCH /unsigned-issuance - "Emitir sem assinatura digital" (Q51)
+// PATCH /unsigned-issuance - "Emitir sem assinatura digital"
 //
 // Once a unit has had a signing certificate, issuance fails closed when none is
-// valid (P0-8). This explicit setting is the only way to issue unsigned again:
+// valid. This explicit setting is the only way to issue unsigned again:
 // admin/owner only (a unit_admin must not relax the lab's signing), a mandatory
 // reason, never implicit, and every change lands in the organization audit
 // trail in the same transaction.
@@ -301,9 +286,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// PATCH /policy - Set the unit's "assinatura obrigatória" flag (#644)
-// ===========================================================================
 mount(
   signingRouter,
   PREFIX,
@@ -380,9 +362,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// POST /certificates - Upload new signing certificate
-// ===========================================================================
 mount(
   signingRouter,
   PREFIX,
@@ -479,7 +458,6 @@ mount(
           keyring,
         );
 
-        // Unset current default if setting this as default
         let displaced: { id: number; serialNumber: string } | null = null;
         if (input.setAsDefault) {
           const [previous] = await ctx.o
@@ -615,9 +593,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// POST /certificates/:id/set-default - Set certificate as default
-// ===========================================================================
 mount(
   signingRouter,
   PREFIX,
@@ -634,7 +609,6 @@ mount(
         throw invalid("invalid_request", "ID inválido");
       }
 
-      // Verify certificate belongs to organization
       const [cert] = await ctx.o
         .select({
           id: organizationSigningCertificate.id,
@@ -702,7 +676,7 @@ mount(
       await ctx.o
         .update(organizationSigningCertificate)
         .set({ isDefault: true })
-        // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
+        // Defense-in-depth: repeat the org + unit scope proven by the
         // SELECT above so this custody UPDATE stays tenant-scoped even if the
         // guarding read is refactored away. Reuses the in-scope member values.
         .where(
@@ -748,9 +722,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// DELETE /certificates/:id - Revoke certificate
-// ===========================================================================
 mount(
   signingRouter,
   PREFIX,
@@ -768,7 +739,6 @@ mount(
         throw invalid("invalid_request", "ID inválido");
       }
 
-      // Verify certificate belongs to organization
       const [cert] = await ctx.o
         .select({
           id: organizationSigningCertificate.id,
@@ -798,7 +768,6 @@ mount(
         throw invalid("invalid_request", "Certificado já está revogado");
       }
 
-      // Revoke certificate
       await ctx.o
         .update(organizationSigningCertificate)
         .set({
@@ -808,7 +777,7 @@ mount(
           revokedBy: ctx.actor.userId,
           revokedReason: reason,
         })
-        // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
+        // Defense-in-depth: repeat the org + unit scope proven by the
         // SELECT above so this custody UPDATE stays tenant-scoped even if the
         // guarding read is refactored away. Reuses the in-scope member values.
         .where(
@@ -849,9 +818,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// GET /certificates/:id - Get certificate details
-// ===========================================================================
 signingRouter.get(
   "/certificates/:id",
   ...requireLabProtected,

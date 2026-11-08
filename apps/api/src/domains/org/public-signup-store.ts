@@ -32,7 +32,7 @@ const SIGNUP_EVENT_ACTION = "public.signup.provisioned";
  * `organization.type` is nullable on rows that predate the column, and those
  * are all laboratories.
  *
- * System path (P2-18j): an unauthenticated visitor has no organization, and the
+ * System path: an unauthenticated visitor has no organization, and the
  * question is "does this person belong to ANY laboratory", so it reads the
  * person's own memberships by `user_id` across laboratories (one row, only its
  * existence is used).

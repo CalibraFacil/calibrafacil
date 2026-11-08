@@ -1,5 +1,5 @@
 /**
- * signatures-signing-lab-scope.int.spec.ts - P2-18e [HIGH RISK].
+ * signatures-signing-lab-scope.int.spec.ts [HIGH RISK].
  *
  * Success paths (each with a cross-laboratory negative) of the visual-signature
  * and signing-certificate handlers that signatures.int.spec.ts and

@@ -1,5 +1,5 @@
 /**
- * Helpers for the lab-owned email sending domain routes (issue #584).
+ * Helpers for the lab-owned email sending domain routes.
  * Mirrors domains/org/portal-domains.ts, but verification is Resend's verdict (DKIM/
  * SPF records generated and checked by the lab's own Resend account) rather
  * than a self-issued TXT token.
@@ -55,7 +55,7 @@ export async function getOrganizationEmailDomain(
  * Whether a laboratory other than `organizationId` already holds a sending
  * hostname.
  *
- * System path (P2-18j): a hostname is unique across the platform
+ * System path: a hostname is unique across the platform
  * (`org_email_domain_hostname_uidx`), so "does ANOTHER laboratory hold it" is
  * cross-organization by design and cannot be asked under one laboratory's
  * `calibra.organization_id` (it would always answer "nobody"). One row, only its

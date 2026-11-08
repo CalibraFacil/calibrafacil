@@ -1,6 +1,6 @@
 /**
  * records-retention.int.spec.ts — Real-Postgres proof of the retention of
- * regulated records (decision Q16, migration 0117, docs/architecture/records-retention.md).
+ * regulated records (migration 0117, docs/architecture/records-retention.md).
  *
  *   REQ-RET-2  deleting an organization / customer / asset that has evidence is
  *              refused; evidence never cascades away; SET NULL on actors stays

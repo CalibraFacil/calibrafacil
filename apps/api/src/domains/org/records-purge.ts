@@ -1,6 +1,6 @@
 import { readRetentionConfig } from "@calibra-facil/config";
 /**
- * Records purge (decision Q16, docs/architecture/records-retention.md).
+ * Records purge (docs/architecture/records-retention.md).
  *
  * Hard-deletes a LAB organization, with everything it owns, only when ALL of:
  *   - it is soft-deleted (`organization.deleted_at`);
@@ -17,7 +17,7 @@ import { readRetentionConfig } from "@calibra-facil/config";
  * Cross-tenant by design (a platform maintenance job, like certificate-drift),
  * so it appears in test/integration/tenant-sql-allowlist.ts.
  *
- * It runs on the SYSTEM path (`systemDb`, the owner connection, P2-18j), whole:
+ * It runs on the SYSTEM path (`systemDb`, the owner connection), whole:
  * erasing a laboratory deletes the organization root and the portal-login CLIENT
  * organizations of its customers (their `member` / `invitation` rows belong to
  * THOSE organizations, and "is another laboratory's customer still using this

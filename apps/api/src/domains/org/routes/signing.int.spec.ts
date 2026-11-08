@@ -3,7 +3,7 @@
  * signingRouter (ICP-Brasil A1 certificate credential custody).
  *
  * Cut-line class: HIGH-SENSITIVITY (ICP-Brasil A1 credential-custody surface;
- * MP 2.200-2 / DOC-ICP-15.03 — NIT-DICLA-083 was a mis-citation, see #646).
+ * MP 2.200-2 / DOC-ICP-15.03).
  * Only the better-auth session is mocked (test/integration/setup.ts).
  * requireLabProtected → requireOrganization → requireOrgType("LAB") →
  * requireUnitOperationalSettingsManager + resolveAccessibleUnitContext
@@ -661,7 +661,7 @@ describe("signingRouter — real DB + real middleware", () => {
   });
 
   // =========================================================================
-  // #644 (CMP-01): per-unit signing policy — "assinatura obrigatória"
+  // Per-unit signing policy — "assinatura obrigatória"
   // =========================================================================
 
   it("REQ-CMP-SIGN-POL-001: PATCH /policy toggles organization_unit.require_signature (DB + GET round-trip)", async () => {
@@ -720,7 +720,7 @@ describe("signingRouter — real DB + real middleware", () => {
   });
 
   // =========================================================================
-  // Q51: "emitir sem assinatura digital" — explicit, audited, admin/owner only
+  // "emitir sem assinatura digital" — explicit, audited, admin/owner only
   // =========================================================================
 
   const REASON = "O laboratório decidiu deixar de assinar digitalmente.";

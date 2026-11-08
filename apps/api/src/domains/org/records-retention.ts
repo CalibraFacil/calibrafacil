@@ -1,5 +1,5 @@
 /**
- * Retention of regulated records (decision Q16, docs/architecture/records-retention.md).
+ * Retention of regulated records (docs/architecture/records-retention.md).
  *
  * A LAB organization that holds evidence is never hard-deleted: it is
  * soft-deleted (`organization.deleted_at`) and, in the same statement,

@@ -1,5 +1,5 @@
 /**
- * organization-profile.int.spec.ts - architecture review P0-1.
+ * organization-profile.int.spec.ts.
  *
  * The laboratory profile (CNPJ, accreditation claim, address, contacts, technical
  * manager) is `input: false` in Better Auth and written by

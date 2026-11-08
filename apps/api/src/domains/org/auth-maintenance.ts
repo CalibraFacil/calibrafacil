@@ -10,7 +10,7 @@ import { session, verification } from "@calibra-facil/db/schema";
  * auth-maintenance cron; both tables carry an expires_at index (migration
  * 0049) so the sweep stays cheap.
  *
- * Row-level security (P2-18j): `session` and `verification` are GLOBAL identity
+ * Row-level security: `session` and `verification` are GLOBAL identity
  * tables (tenancy.ts: no organization column, no policy), and the sweep is
  * expiry-based across all users by design, so it needs no organization and runs
  * on the plain application handle as any role.

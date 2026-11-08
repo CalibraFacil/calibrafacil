@@ -253,7 +253,7 @@ export async function cleanupFailedLabProvisioning(params: {
 }) {
   try {
     if (params.organizationId) {
-      // Retention (decision Q16): the organization was created a moment ago, so
+      // Retention: the organization was created a moment ago, so
       // it normally holds nothing and is hard-deleted; removeLabOrganization
       // proves that first and soft-deletes it instead if any evidence exists.
       await removeLabOrganization({
