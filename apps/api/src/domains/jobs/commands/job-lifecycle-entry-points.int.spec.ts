@@ -238,7 +238,7 @@ type Case = {
   entries: EntryPoint[];
 };
 
-const cloudConflict = "JOB_STATUS_CONFLICT";
+const cloudConflict = "job_status_conflict";
 const publicConflict = "job_status_conflict";
 
 const REJECT: Case = {

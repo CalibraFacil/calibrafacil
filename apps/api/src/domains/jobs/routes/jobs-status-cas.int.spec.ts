@@ -7,7 +7,7 @@
  * together with their audit row.
  *
  *   REQ-CAS-1  the UPDATE matches on the validated status AND organization_id;
- *              zero rows → 409 JOB_STATUS_CONFLICT, never a silent success
+ *              zero rows → 409 job_status_conflict, never a silent success
  *   REQ-CAS-2  the UPDATE and its job_audit_log insert share one transaction
  *   REQ-CAS-3  non-status writes (technician/due date/asset snapshot) carry the
  *              same guards, matching the statuses the route allows
@@ -120,7 +120,7 @@ describe("jobsRouter — PUT /:id and POST /:id/assign are compare-and-set, org-
       expect(await auditActions(jobId)).toEqual([site.action]);
     });
 
-    it(`REQ-CAS-1 [HIGH RISK]: a job moved to ${site.rival} between the read and the write → 409 JOB_STATUS_CONFLICT; the other actor's status stands; nothing else written; no audit row`, async () => {
+    it(`REQ-CAS-1 [HIGH RISK]: a job moved to ${site.rival} between the read and the write → 409 job_status_conflict; the other actor's status stands; nothing else written; no audit row`, async () => {
       const { orgA, jobId } = await seedWorld(site.from);
       const before = await jobRow(jobId);
       changeJobBeforeNextTransaction(jobId, { status: site.rival });
@@ -129,7 +129,7 @@ describe("jobsRouter — PUT /:id and POST /:id/assign are compare-and-set, org-
 
       expect(res.status).toBe(409);
       expect(await res.json()).toMatchObject({
-        code: "JOB_STATUS_CONFLICT",
+        code: "job_status_conflict",
         currentStatus: site.rival,
       });
       const after = await jobRow(jobId);
@@ -164,7 +164,7 @@ describe("jobsRouter — PUT /:id and POST /:id/assign are compare-and-set, org-
 
       expect(res.status).toBe(409);
       expect(await res.json()).toMatchObject({
-        code: "JOB_STATUS_CONFLICT",
+        code: "job_status_conflict",
         currentStatus: null,
         details: { currentStatus: null },
       });
@@ -259,7 +259,7 @@ describe("jobsRouter — the asset snapshot frozen before execute/submit is a gu
       expect(after.assetSnapshot).not.toBeNull();
     });
 
-    it("REQ-CAS-3 [HIGH RISK]: a job cancelled while the snapshot write waits on its row → 409 JOB_STATUS_CONFLICT; the snapshot is not written; no audit row", async () => {
+    it("REQ-CAS-3 [HIGH RISK]: a job cancelled while the snapshot write waits on its row → 409 job_status_conflict; the snapshot is not written; no audit row", async () => {
       const { jobId } = await seedWorld(site.from);
       const before = await jobRow(jobId);
 
@@ -271,7 +271,7 @@ describe("jobsRouter — the asset snapshot frozen before execute/submit is a gu
 
       expect(res.status).toBe(409);
       expect(await res.json()).toMatchObject({
-        code: "JOB_STATUS_CONFLICT",
+        code: "job_status_conflict",
         currentStatus: "CANCELED",
       });
       const after = await jobRow(jobId);

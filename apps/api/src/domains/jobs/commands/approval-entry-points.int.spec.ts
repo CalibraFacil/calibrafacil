@@ -384,8 +384,6 @@ const publicApi: EntryPoint = {
     // The public API reports roster/role refusals under one code.
     const codes: Record<string, string> = {
       approval_requires_signatory: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
-      self_approval_blocked: "SELF_APPROVAL_BLOCKED",
-      scope_violation: "SCOPE_VIOLATION",
       environmental_justification_required:
         "ENVIRONMENTAL_JUSTIFICATION_REQUIRED",
     };
@@ -451,7 +449,7 @@ describe("approval policy — one policy across every entry point", () => {
 
       await expect(entry.approve(jobId, MAKER)).resolves.toEqual({
         approved: false,
-        code: "SELF_APPROVAL_BLOCKED",
+        code: "self_approval_blocked",
       });
 
       expect(await readJob(jobId)).toMatchObject({
@@ -473,7 +471,7 @@ describe("approval policy — one policy across every entry point", () => {
 
       await expect(entry.approve(jobId, MAKER)).resolves.toEqual({
         approved: false,
-        code: "SELF_APPROVAL_BLOCKED",
+        code: "self_approval_blocked",
       });
       expect((await readJob(jobId)).status).toBe("REVIEW");
     },
@@ -513,7 +511,7 @@ describe("approval policy — one policy across every entry point", () => {
 
       await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
         approved: false,
-        code: "SCOPE_VIOLATION",
+        code: "scope_violation",
       });
 
       expect((await readJob(jobId)).status).toBe("REVIEW");
@@ -634,7 +632,7 @@ describe("approval policy — one policy across every entry point", () => {
     expect(await releaseAuditRows(jobId)).toHaveLength(0);
   });
 
-  it("REQ-APPROVAL-006: the cloud route maps a lost compare-and-set to 409 APPROVAL_CONFLICT", async () => {
+  it("REQ-APPROVAL-006: the cloud route maps a lost compare-and-set to 409 approval_conflict", async () => {
     const jobId = await seedReviewJob(fixture);
     // A concurrent reviewer rejects the job between the policy read and the write.
     mocks.scope.hook = () => concurrentReviewerRejects(jobId);
@@ -648,7 +646,7 @@ describe("approval policy — one policy across every entry point", () => {
 
     expect(res.status).toBe(409);
     const body: { code: string } = await res.json();
-    expect(body.code).toBe("APPROVAL_CONFLICT");
+    expect(body.code).toBe("approval_conflict");
     expect(await readJob(jobId)).toMatchObject({
       status: "REJECTED",
       approvedBy: null,

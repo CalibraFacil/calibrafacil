@@ -47,7 +47,7 @@ export type FlagJobOutOfToleranceResult =
   | {
       ok: false;
       status: 404 | 409;
-      code: "JOB_NOT_FOUND" | "JOB_NOT_APPROVED" | "OOT_ALREADY_FLAGGED";
+      code: "job_not_found" | "JOB_NOT_APPROVED" | "OOT_ALREADY_FLAGGED";
       message: string;
     }
   | {
@@ -190,7 +190,7 @@ export async function flagJobOutOfTolerance(
     return {
       ok: false,
       status: 404,
-      code: "JOB_NOT_FOUND",
+      code: "job_not_found",
       message: "Calibração não encontrada",
     };
   }

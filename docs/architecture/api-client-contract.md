@@ -161,10 +161,10 @@ every domain failure carries a stable `code`.
   (one file, a closed TypeScript union exported as `ApiErrorCode`; the response
   body type is `ApiErrorBody = { error, code, details? }`). Codes are
   snake_case and never reused for another meaning. A few upper-case codes shipped
-  before the registry and are kept because clients read them; six of them have a
-  snake_case twin (the public API v2 sends it), listed in
-  `LEGACY_API_ERROR_CODE_ALIASES`. `CalibraApiError.code` reports the canonical
-  snake_case spelling for either.
+  before the registry and are kept because clients read them; none has a
+  snake_case twin (the job status, approval, scope and not-found refusals that did
+  were moved to their snake_case codes, and the internal API and public API v2
+  now send the same spelling).
 - **Server side:** new endpoints **throw `DomainError`** (`invalid`, `unauthenticated`,
   `forbidden`, `notFound`, `conflict`, `unprocessable` in
   `apps/api/src/lib/domain-errors.ts`); **never `c.json({ error })` for a domain

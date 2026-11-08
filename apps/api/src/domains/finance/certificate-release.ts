@@ -441,7 +441,7 @@ export interface ReleaseByExceptionInput {
 }
 
 export interface ExceptionReleaseError {
-  code: "JOB_NOT_FOUND" | "REASON_REQUIRED" | "NOT_APPROVED";
+  code: "job_not_found" | "reason_required" | "not_approved";
 }
 
 /**
@@ -453,7 +453,7 @@ export async function releaseByException(
   o: OrgDb,
 ): Promise<RecomputedCertificateRelease | ExceptionReleaseError> {
   const reason = input.reason?.trim?.() ?? "";
-  if (!reason) return { code: "REASON_REQUIRED" };
+  if (!reason) return { code: "reason_required" };
 
   const [job] = await o
     .select({
@@ -470,9 +470,9 @@ export async function releaseByException(
     )
     .limit(1);
 
-  if (!job) return { code: "JOB_NOT_FOUND" };
+  if (!job) return { code: "job_not_found" };
   if (job.status !== "APPROVED" && job.status !== "SUPERSEDED") {
-    return { code: "NOT_APPROVED" };
+    return { code: "not_approved" };
   }
 
   const paymentState = await buildPaymentStateForJob(
@@ -547,7 +547,7 @@ export async function releaseByException(
     })
     .returning();
 
-  if (!inserted) return { code: "JOB_NOT_FOUND" };
+  if (!inserted) return { code: "job_not_found" };
 
   await o.insert(certificateReleaseAuditLog).values({
     organizationId: job.organizationId,

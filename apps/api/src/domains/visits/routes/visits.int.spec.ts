@@ -680,7 +680,7 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
     expect(auditRows).toHaveLength(0);
   });
 
-  it("REQ-JOBST-VISIT-001: a job that leaves DRAFT between the guard read and the write is not cancelled → 409 JOB_STATUS_CONFLICT, status unchanged, NO audit row", async () => {
+  it("REQ-JOBST-VISIT-001: a job that leaves DRAFT between the guard read and the write is not cancelled → 409 job_status_conflict, status unchanged, NO audit row", async () => {
     const fx = await seedVisitJobFixture({
       orgId: "org-vjc",
       userId: "user-vjc",
@@ -710,7 +710,7 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
 
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({
-      code: "JOB_STATUS_CONFLICT",
+      code: "job_status_conflict",
       currentStatus: "IN_PROGRESS",
     });
     const [job] = await db
@@ -757,7 +757,7 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
     expect(await res.json()).toEqual({
       error:
         "O status do job mudou durante a operacao. Recarregue e tente novamente.",
-      code: "JOB_STATUS_CONFLICT",
+      code: "job_status_conflict",
       currentStatus: "IN_PROGRESS",
       details: { currentStatus: "IN_PROGRESS" },
     });

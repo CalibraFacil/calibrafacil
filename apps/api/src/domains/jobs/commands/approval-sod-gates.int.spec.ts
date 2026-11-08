@@ -370,7 +370,7 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
   });
 
   describe("REQ-B5-1: the actual submitter cannot approve", () => {
-    it("REQ-B5-1 [HIGH RISK]: an admin who submitted the job for the assigned technician is refused 403 SELF_APPROVAL_BLOCKED while another admin exists", async () => {
+    it("REQ-B5-1 [HIGH RISK]: an admin who submitted the job for the assigned technician is refused 403 self_approval_blocked while another admin exists", async () => {
       const jobId = await seedReviewJob(world);
 
       const outcome = await approveCloud(jobId, SUBMITTER);
@@ -378,7 +378,7 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
       expect(outcome).toMatchObject({
         approved: false,
         status: 403,
-        code: "SELF_APPROVAL_BLOCKED",
+        code: "self_approval_blocked",
       });
       await expectNotReleased(jobId);
     });
@@ -449,12 +449,12 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
       ).resolves.toMatchObject({
         approved: false,
         status: 403,
-        code: "SELF_APPROVAL_BLOCKED",
+        code: "self_approval_blocked",
       });
       await expect(approveCloud(asCreator, SUBMITTER)).resolves.toMatchObject({
         approved: false,
         status: 403,
-        code: "SELF_APPROVAL_BLOCKED",
+        code: "self_approval_blocked",
       });
       await expectNotReleased(asTechnician);
       await expectNotReleased(asCreator);
@@ -499,7 +499,7 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
       await expect(approveCloud(row.id, SUBMITTER)).resolves.toMatchObject({
         approved: false,
         status: 403,
-        code: "SELF_APPROVAL_BLOCKED",
+        code: "self_approval_blocked",
       });
       await expect(approveCloud(row.id, CHECKER)).resolves.toEqual({
         approved: true,
@@ -612,7 +612,7 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
       await expect(approveCloud(jobId, SUBMITTER)).resolves.toMatchObject({
         approved: false,
         status: 403,
-        code: "SELF_APPROVAL_BLOCKED",
+        code: "self_approval_blocked",
       });
       await expectNotReleased(jobId);
     });

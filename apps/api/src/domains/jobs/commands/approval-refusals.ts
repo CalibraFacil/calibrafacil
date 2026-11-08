@@ -13,10 +13,10 @@ import { approvalStandardsRefusalDomainError } from "./standards-judgement";
 /**
  * The cloud route's answer to an approval that did not release the
  * certificate: the refusal as the `DomainError` the route throws. Status, the
- * stable code (upper-case for the ones that predate the registry) and the pt-BR
- * message are the ones clients have always received; `environmentalSnapshot`
- * and `scopeCompliance` stay top-level fields of their bodies. The public API
- * (`public-api-v2/jobs-decisions.ts`) maps the same results to its own codes.
+ * stable code and the pt-BR message; `environmentalSnapshot` and
+ * `scopeCompliance` stay top-level fields of their bodies. The public API
+ * (`public-api-v2/jobs-decisions.ts`) maps the same results to its own codes
+ * (the same spelling for the refusals both answer).
  */
 export function approvalRefusalError(
   result: Exclude<ApproveJobResult, { status: "approved" }>,
@@ -41,19 +41,19 @@ export function approvalRefusalError(
       );
     case "dispatch_failed":
       return new DomainError({
-        code: "APPROVAL_DISPATCH_FAILED",
+        code: "approval_dispatch_failed",
         status: 503,
         message:
           "Não foi possível enfileirar a geração do certificado. A aprovação foi revertida; tente novamente.",
       });
     case "concurrent_approval":
       return conflict(
-        "APPROVAL_CONFLICT",
+        "approval_conflict",
         "A calibração foi alterada por outra aprovação ou revisão em andamento. Atualize e tente novamente.",
       );
     case "self_approval_blocked":
       return forbidden(
-        "SELF_APPROVAL_BLOCKED",
+        "self_approval_blocked",
         "Separação de responsabilidades (ISO/IEC 17025): quem executou, criou ou submeteu a calibração para revisão não pode aprová-la. Solicite a aprovação a outro membro autorizado.",
       );
     case "signatory_roster_empty":
@@ -80,7 +80,7 @@ export function approvalRefusalError(
       );
     case "scope_violation":
       return unprocessable(
-        "SCOPE_VIOLATION",
+        "scope_violation",
         "Violação do escopo acreditado (CMC): a emissão acreditada está bloqueada. Corrija o resultado ou aprove com justificativa documentada. Nesse caso o certificado sai sem o selo de acreditação.",
         {
           legacyBody: {

@@ -10,9 +10,7 @@ export * from "./sync-attachments";
 export * from "./diagnostics";
 export {
   API_ERROR_CODES,
-  canonicalApiErrorCode,
   isApiErrorCode,
-  LEGACY_API_ERROR_CODE_ALIASES,
   type ApiErrorBody,
   type ApiErrorCode,
   type ApiErrorDetails,
