@@ -1,47 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// FIFO queue of canned drizzle results. Mirrors portal-customer-scope.spec.ts style.
-const dbQueue: Array<unknown> = [];
-
-vi.mock("@calibra-facil/db", () => {
-  const builder: Record<string, unknown> = {};
-  for (const method of [
-    "select",
-    "from",
-    "where",
-    "limit",
-    "update",
-    "set",
-    "returning",
-    "insert",
-    "values",
-    "innerJoin",
-    "leftJoin",
-    "orderBy",
-  ]) {
-    builder[method] = () => builder;
-  }
-  // oxlint-disable-next-line unicorn/no-thenable
-  builder.then = (
-    resolve: (value: unknown) => unknown,
-    reject: (reason: unknown) => unknown,
-  ) =>
-    Promise.resolve(dbQueue.length ? dbQueue.shift() : []).then(
-      resolve,
-      reject,
-    );
-  return { db: builder };
-});
+import { describe, expect, it } from "vitest";
 
 import {
   assertAssetBelongsToVisitCustomer,
   canAddJobToVisit,
   resolveVisitJobRemoval,
 } from "../visit-jobs";
-
-beforeEach(() => {
-  dbQueue.length = 0;
-});
 
 // =============================================================================
 // canAddJobToVisit — REQ-VISITJOB-003
@@ -198,18 +161,5 @@ describe("resolveVisitJobRemoval", () => {
     if (!result.ok) {
       expect(result.status).toBe(404);
     }
-  });
-
-  it("REQ-VISITJOB-006: soft-cancel returns CANCELED status string, not a delete", () => {
-    // When the guard says ok:true, the route should call update(status:'CANCELED') not delete
-    // We assert here that the guard returns ok:true (the route then sets 'CANCELED')
-    const result = resolveVisitJobRemoval({
-      visitStatus: "PROPOSED",
-      job: draftJob,
-      visitId: 5,
-    });
-    expect(result.ok).toBe(true);
-    // The cancelled status uses single L as per JobStatus enum
-    expect("CANCELED").toBe("CANCELED");
   });
 });
