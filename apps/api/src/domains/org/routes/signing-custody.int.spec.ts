@@ -18,7 +18,15 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { setTransactionOrganization } from "@calibra-facil/db/for-org";
@@ -172,6 +180,51 @@ describe("REQ-B4A-3: the P12 is validated at upload", () => {
       expect(await auditRows(org.orgId)).toHaveLength(0);
     },
   );
+
+  describe("the validity boundary, on a controlled clock", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("a certificate valid until 23:59 today is accepted at 23:00 and listed valid; at 00:01 it is expired in the list and a new upload of it is refused (422)", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const org = await seedOrg({ orgId: "org-boundary", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const evening = new Date(Date.now() + 2 * DAY);
+      evening.setUTCHours(23, 0, 0, 0);
+      const expiresAt = new Date(evening.getTime() + 59 * 60_000);
+      const signer = {
+        notBefore: new Date(evening.getTime() - DAY),
+        notAfter: expiresAt,
+      };
+      const statusOfListed = async () => {
+        const list = await signingRouter.request(
+          "/certificates",
+          { headers: headers(org) },
+          TRUSTED_ENV,
+        );
+        expect(list.status).toBe(200);
+        const body = await list.json();
+        return body.certificates.map(
+          (entry: { status: string }) => entry.status,
+        );
+      };
+
+      vi.setSystemTime(evening);
+      expect((await upload(org, { signer })).status).toBe(200);
+      expect(await statusOfListed()).toEqual(["valid"]);
+
+      vi.setSystemTime(new Date(expiresAt.getTime() + 2 * 60_000));
+      expect(await statusOfListed()).toEqual(["expired"]);
+      const refused = await upload(org, { signer });
+      expect(refused.status).toBe(422);
+      expect((await refused.json()).details).toMatchObject({
+        reason: "CERTIFICATE_EXPIRED",
+      });
+      expect(await certRows(org.orgId)).toHaveLength(1);
+    });
+  });
 
   it("rejects a P12 whose chain does not build to the configured trust store (422)", async () => {
     const org = await seedOrg({ orgId: "org-chain", role: "admin" });

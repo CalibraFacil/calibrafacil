@@ -106,19 +106,24 @@ describe("API start-up configuration (REQ-CFG-2)", () => {
 
 const bun = spawnSync("bun", ["--version"], { encoding: "utf8" });
 
-describe.skipIf(bun.status !== 0)("the Bun entry (src/bun.ts)", () => {
-  it("REQ-CFG-2: exits non-zero with the aggregated message when production variables are missing", () => {
-    const run = spawnSync("bun", [join(apiRoot, "src", "bun.ts")], {
-      cwd: apiRoot,
-      encoding: "utf8",
-      timeout: 60_000,
-      // Nothing but PATH: no inherited secrets, no .env (production skips it).
-      env: { PATH: process.env.PATH ?? "", NODE_ENV: "production" },
-    });
+// A developer machine without Bun skips this; CI must have it (the API runs under
+// Bun), so there a missing Bun fails the run instead of silently skipping.
+describe.skipIf(bun.status !== 0 && !process.env.CI)(
+  "the Bun entry (src/bun.ts)",
+  () => {
+    it("REQ-CFG-2: exits non-zero with the aggregated message when production variables are missing", () => {
+      const run = spawnSync("bun", [join(apiRoot, "src", "bun.ts")], {
+        cwd: apiRoot,
+        encoding: "utf8",
+        timeout: 60_000,
+        // Nothing but PATH: no inherited secrets, no .env (production skips it).
+        env: { PATH: process.env.PATH ?? "", NODE_ENV: "production" },
+      });
 
-    expect(run.status).toBe(1);
-    expect(run.stderr).toMatch(/Invalid api configuration/);
-    expect(run.stderr).toContain("DATABASE_URL");
-    expect(run.stdout).not.toContain("listening");
-  });
-});
+      expect(run.status).toBe(1);
+      expect(run.stderr).toMatch(/Invalid api configuration/);
+      expect(run.stderr).toContain("DATABASE_URL");
+      expect(run.stdout).not.toContain("listening");
+    });
+  },
+);

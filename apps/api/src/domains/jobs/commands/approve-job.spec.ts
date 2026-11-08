@@ -881,3 +881,22 @@ describe("approveJob automatic ERP send", () => {
     expect(mockReportServerError).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("REQ-P01-2: approval has one completion, the cloud's render", () => {
+  it("approving a job queues the certificate render and never writes a certificate URL or bytes itself", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+
+    const result = await callApprove();
+
+    expect(result.status).toBe("approved");
+    expect(mockEnqueueBackgroundJob).toHaveBeenCalledWith({
+      jobId: 10,
+      userId: "approver-1",
+    });
+    for (const written of state.updateCalls) {
+      expect(written).not.toHaveProperty("certificateUrl");
+      expect(written).not.toHaveProperty("certificatePdf");
+    }
+  });
+});
