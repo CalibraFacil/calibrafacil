@@ -55,7 +55,8 @@ function baseUrl(value: string | undefined, fallback: string): string {
 }
 
 export function appBaseUrl(env: PublicUrlEnv = processEnv()): string {
-  return baseUrl(env.APP_URL ?? env.WEB_URL, DEFAULT_APP_URL);
+  // A blank APP_URL counts as unset (as in packages/config), so it cannot hide WEB_URL.
+  return baseUrl(env.APP_URL?.trim() || env.WEB_URL, DEFAULT_APP_URL);
 }
 
 export function portalBaseUrl(env: PublicUrlEnv = processEnv()): string {

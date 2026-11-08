@@ -27,6 +27,18 @@ describe("public URLs", () => {
     );
   });
 
+  it("falls back to WEB_URL when APP_URL is absent or blank", () => {
+    expect(appBaseUrl({ WEB_URL: "https://web.example.com/" })).toBe(
+      "https://web.example.com",
+    );
+    expect(
+      appBaseUrl({ APP_URL: "", WEB_URL: "https://web.example.com" }),
+    ).toBe("https://web.example.com");
+    expect(
+      appBaseUrl({ APP_URL: "  ", WEB_URL: "https://web.example.com" }),
+    ).toBe("https://web.example.com");
+  });
+
   it("lets VERIFY_URL move verification to its own host", () => {
     expect(
       certificateVerificationUrl("tok-2", {

@@ -39,7 +39,7 @@ export const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/cli/seed-demo.ts", 3],
   ["apps/docs/lib/site.ts", 2],
   ["packages/auth/src/auth-env.ts", 1],
-  ["packages/auth/src/auth.ts", 2],
+  ["packages/auth/src/auth.ts", 1],
   ["packages/shared/src/storage-endpoint.ts", 1],
 ]);
 

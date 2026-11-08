@@ -31,6 +31,7 @@ import {
   type EmailBrand,
 } from "@calibra-facil/email";
 import { readEnv } from "./auth-env";
+import { readOriginsConfig } from "@calibra-facil/config";
 import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { log } from "./log";
 
@@ -43,10 +44,7 @@ function getEmailLogoSrc(): string {
   const explicitLogoUrl = readEnv("EMAIL_LOGO_URL");
   if (explicitLogoUrl) return explicitLogoUrl;
 
-  const appUrl = readEnv("APP_URL") ?? readEnv("WEB_URL");
-  if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
-
-  return "http://localhost:5173/logo192.png";
+  return `${readOriginsConfig().appBaseUrl}/logo192.png`;
 }
 
 /**
