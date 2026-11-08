@@ -42,9 +42,6 @@ const PREFIX = "/api/notifications";
 
 export const notificationsRouter = createRouter<{ Variables: AuthVariables }>();
 
-// =========================================================================
-// GET / - List notifications with pagination and filters
-// =========================================================================
 mount(
   notificationsRouter,
   PREFIX,
@@ -56,7 +53,6 @@ mount(
     const { page, limit, status, type, priority } = query;
     const offset = (page - 1) * limit;
 
-    // Build conditions - scope to user and organization
     const conditions = [
       eq(notification.recipientUserId, session.user.id),
       eq(notification.organizationId, member.organizationId),
@@ -76,12 +72,10 @@ mount(
 
     const whereCondition = and(...conditions);
 
-    // Get total count
     const [countResult] = await orgDb(member.organizationId).transaction((o) =>
       o.select({ total: count() }).from(notification).where(whereCondition),
     );
 
-    // Get paginated data
     const notifications = await orgDb(member.organizationId).transaction((o) =>
       o
         .select()
@@ -104,9 +98,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /unread-count - Get unread notification count for bell badge
-// =========================================================================
 mount(
   notificationsRouter,
   PREFIX,
@@ -133,9 +124,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /mark-read - Mark specific notifications as read
-// =========================================================================
 mount(
   notificationsRouter,
   PREFIX,
@@ -174,9 +162,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /mark-all-read - Mark all notifications as read
-// =========================================================================
 mount(
   notificationsRouter,
   PREFIX,
@@ -249,9 +234,6 @@ notificationsRouter.delete("/:id", ...requireLabProtected, async (c) => {
   return c.json({ message: "Notificacao arquivada", data: updated });
 });
 
-// =========================================================================
-// GET /preferences - Get user notification preferences
-// =========================================================================
 mount(
   notificationsRouter,
   PREFIX,
@@ -288,9 +270,6 @@ mount(
   },
 );
 
-// =========================================================================
-// PUT /preferences - Update user notification preferences
-// =========================================================================
 mount(
   notificationsRouter,
   PREFIX,
@@ -302,7 +281,6 @@ mount(
     const input = body;
 
     return withOrg(member.organizationId, requestActor(c), async (ctx) => {
-      // Check if preferences exist
       const [existing] = await ctx.o
         .select()
         .from(notificationPreference)
@@ -310,11 +288,9 @@ mount(
         .limit(1);
 
       if (existing) {
-        // Update existing preferences
         const updateData: Record<string, unknown> = {};
 
         if (input.preferences !== undefined) {
-          // Merge with existing preferences
           updateData.preferences = {
             ...existing.preferences,
             ...input.preferences,
@@ -352,7 +328,6 @@ mount(
         };
       }
 
-      // Create new preferences record
       const [created] = await ctx.o
         .insert(notificationPreference)
         .values({

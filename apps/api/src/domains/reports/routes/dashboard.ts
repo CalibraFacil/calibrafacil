@@ -62,9 +62,6 @@ const PREFIX = "/api/dashboard";
 
 export const dashboardRouter = createRouter<{ Variables: AuthVariables }>();
 
-// =========================================================================
-// GET /stats - Get all dashboard statistics
-// =========================================================================
 mount(
   dashboardRouter,
   PREFIX,
@@ -105,7 +102,6 @@ mount(
 
       try {
         const dbStartedAt = performance.now();
-        // Run all queries in parallel for performance
         const [
           pendingResult,
           approvedResult,
@@ -519,7 +515,7 @@ mount(
             )
             .limit(6),
 
-          // 22. PT participation-plan items past their §7.7.2 cycle (issue #60)
+          // 22. PT participation-plan items past their §7.7.2 cycle
           o
             .select({ count: count() })
             .from(ptPlanItem)
@@ -554,14 +550,12 @@ mount(
         ]);
         addServerTiming(c, "dashboard_db", dbStartedAt);
 
-        // Extract counts
         const pendingCalibrations = pendingResult[0]?.count ?? 0;
         const approvedThisMonth = approvedResult[0]?.count ?? 0;
         const rejectedThisMonth = rejectedResult[0]?.count ?? 0;
         const expiringStandards = expiringStandardsResult[0]?.count ?? 0;
         const overdueJobs = overdueResult[0]?.count ?? 0;
 
-        // Calculate approval rate
         const totalDecisions = approvedThisMonth + rejectedThisMonth;
         const approvalRate =
           totalDecisions > 0
@@ -574,7 +568,6 @@ mount(
           count: row.count,
         }));
 
-        // Format trend data
         const calibrationTrend = trendResult.map((row) => ({
           date: row.date,
           approved: parseInt(row.approved, 10) || 0,
@@ -622,7 +615,7 @@ mount(
           competencesExpiring: competencesExpiringResult[0]?.count ?? 0,
           competencesPendingEvaluation:
             competencesPendingEvaluationResult[0]?.count ?? 0,
-          // §7.7 validity-of-results signals (issue #60)
+          // §7.7 validity-of-results signals
           ptPlanOverdue: ptPlanOverdueResult[0]?.count ?? 0,
           ptRoundsPending: ptRoundsPendingResult[0]?.count ?? 0,
           spcChartsWithSignals: spcSignalsResult[0]?.count ?? 0,

@@ -17,8 +17,8 @@ import { truncateAll } from "../../../../test/integration/db";
 import { seedOrg, seedCustomer } from "../../../../test/integration/seed";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-// Real-DB integration tests for the legal-metrology regulation catalog (deferred #3 of
-// #423). Covers the GLOBAL seed (REQ-CATALOG-002), the read endpoint + auth gate
+// Real-DB integration tests for the legal-metrology regulation catalog.
+// Covers the GLOBAL seed (REQ-CATALOG-002), the read endpoint + auth gate
 // (REQ-CATALOG-003), and the seed's data-only / idempotent guarantee (REQ-CATALOG-006).
 //
 // The catalog is GLOBAL reference data (no organizationId / unitId) — every authed lab
@@ -151,7 +151,7 @@ describe("legal-metrology regulation catalog — real DB", () => {
         .values({
           unitId: org.unitId,
           customerId,
-          // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+          // Per-org tag uniqueness — derive lab org from the customer.
           labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
           assetTypeId: type.id,
           name: "Hidrômetro do cliente",

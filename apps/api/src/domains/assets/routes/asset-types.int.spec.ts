@@ -106,7 +106,7 @@ describe("assetTypesRouter — real DB + real middleware", () => {
   });
 
   // REQ-AT-001b ---------------------------------------------------------------
-  // #637: no write route exists on the lab router at all — a CLIENT org (like
+  // No write route exists on the lab router at all — a CLIENT org (like
   // any tenant) gets 404 on POST. The global catalog is seeded centrally
   // (`packages/db/src/seed-asset-types.ts`), never written by a tenant.
   it("REQ-AT-001b: POST / from a CLIENT org -> 404 (write routes removed)", async () => {
@@ -135,7 +135,7 @@ describe("assetTypesRouter — real DB + real middleware", () => {
     expect(rows).toHaveLength(0);
   });
 
-  // REQ-AT-002 (#637) -----------------------------------------------------
+  // REQ-AT-002 -----------------------------------------------------
   // The asset-type catalog is GLOBAL — it is curated CENTRALLY in
   // `packages/db/src/seed-asset-types.ts`. The lab router no longer exposes any
   // write route: a tenant admin (owner of org A) must not be able to mutate a

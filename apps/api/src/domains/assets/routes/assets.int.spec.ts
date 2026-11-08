@@ -127,7 +127,7 @@ async function seedAsset(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b (#638): asset now carries its lab org (== the customer's) so
+        // Asset now carries its lab org (== the customer's) so
         // UNIQUE(lab_organization_id, tag) is enforced per org. Derive it from the
         // seeded customer to hold the invariant asset.lab_org == customer.lab_org.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
@@ -771,7 +771,7 @@ describe("assetsRouter — real DB + real middleware", () => {
   });
 
   // =========================================================================
-  // SEC-03 — dashboard tag-collision checks are org-scoped. Same-org duplicates
+  // Dashboard tag-collision checks are org-scoped. Same-org duplicates
   // are rejected by the app check (with the per-org unique asset_lab_org_tag_uidx
   // as a race backstop, mapped to the SAME response); cross-org duplicates now
   // succeed (see the REQ-SEC-TAG-001 tests below).
@@ -843,9 +843,7 @@ describe("assetsRouter — real DB + real middleware", () => {
   });
 
   // REQ-SEC-TAG-001 (dashboard POST) — cross-org duplicate tag now SUCCEEDS --
-  // BEHAVIOR CHANGE (SEC-03b, #638): part (a) mapped a tag used only by another
-  // org to a 400 tag-conflict because the GLOBAL unique still fired. Now that
-  // uniqueness is per-org — UNIQUE(lab_organization_id, tag) — org A may reuse a
+  // Uniqueness is per-org — UNIQUE(lab_organization_id, tag) — so org A may reuse a
   // tag org B already has: the create returns 201 and BOTH orgs hold the tag,
   // each scoped to its own lab org. This closes the cross-tenant existence
   // oracle (the 409-vs-201 signal that leaked another lab's tags). Intended flip

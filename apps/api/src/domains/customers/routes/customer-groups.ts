@@ -39,7 +39,7 @@ import { orgDb } from "../../../lib/org-db";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 
-// Mirrors the portal's DUE_SOON window (apps/portal calibration-status / portal.ts).
+// Mirrors the portal's DUE_SOON window (apps/portal/src/lib/calibration-status.ts).
 const DUE_SOON_DAYS = 30;
 
 function getStringProperty(value: unknown, key: string) {

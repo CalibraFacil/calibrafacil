@@ -91,7 +91,6 @@ export const customersRouter = createRouter<{ Variables: AuthVariables }>();
 // Route order matters: the static `/search`, `/cnpj-lookup/:cnpj` and
 // `/:id/...` segments are registered before the bare `/:id` routes.
 
-// POST / - Create a new customer
 mount(
   customersRouter,
   PREFIX,
@@ -217,7 +216,6 @@ mount(
   },
 );
 
-// GET / - List customers with pagination and search
 mount(
   customersRouter,
   PREFIX,
@@ -228,7 +226,6 @@ mount(
 
     const offset = (page - 1) * limit;
 
-    // Build conditions - always filter by LAB organization
     const conditions = [
       eq(customer.labOrganizationId, memberData.organizationId),
     ];
@@ -242,7 +239,6 @@ mount(
     }
 
     return await orgDb(memberData.organizationId).transaction(async (o) => {
-      // Get customers with pagination (filtered by organization)
       const customers = await o
         .select()
         .from(customer)
@@ -251,7 +247,6 @@ mount(
         .limit(limit)
         .offset(offset);
 
-      // Get total count for pagination (filtered by organization)
       const countResult = await o
         .select({ total: count() })
         .from(customer)
@@ -340,7 +335,7 @@ customersRouter.get(
 );
 
 // GET /:id/oot-events - customer's asset OOT events + assessment status
-// #740 Track B lab visibility: read-only view of whether the customer has
+// Lab visibility: read-only view of whether the customer has
 // closed their ISO 9001 §7.1.5.2 impact-assessment loop per OOT event.
 mount(
   customersRouter,
@@ -399,7 +394,6 @@ mount(
   },
 );
 
-// GET /:id - Get customer by ID
 mount(
   customersRouter,
   PREFIX,
@@ -409,7 +403,6 @@ mount(
     requireLabCustomer(params.id, c.get("member").organizationId),
 );
 
-// PUT /:id - Update customer
 mount(
   customersRouter,
   PREFIX,
@@ -449,7 +442,7 @@ customersRouter.delete(
     // TODO: Check for active calibrations before deleting
     // For now, we allow deletion
 
-    // Retention (decision Q16): a customer that still has regulated records
+    // Retention: a customer that still has regulated records
     // (jobs, certificates, service orders, billing documents, requests,
     // visits, OOT events) cannot be deleted. Those foreign keys are RESTRICT, so
     // Postgres refuses the DELETE; the audit rows below are written in the same
@@ -472,7 +465,6 @@ customersRouter.delete(
   },
 );
 
-// GET /:id/members - List portal users for customer
 mount(
   customersRouter,
   PREFIX,
@@ -480,7 +472,6 @@ mount(
   withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    // Get customer to find authOrganizationId
     const foundCustomer = await requireLabCustomer(
       params.id,
       memberData.organizationId,
@@ -513,7 +504,6 @@ mount(
   },
 );
 
-// GET /:id/invitations - List invitations for customer
 mount(
   customersRouter,
   PREFIX,
@@ -521,7 +511,6 @@ mount(
   withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
-    // Get customer to find authOrganizationId
     const foundCustomer = await requireLabCustomer(
       params.id,
       memberData.organizationId,
@@ -549,7 +538,6 @@ mount(
   },
 );
 
-// POST /:id/invitations - Create invitation for portal user
 mount(
   customersRouter,
   PREFIX,
@@ -558,7 +546,6 @@ mount(
   async (c, { params, body: { email, role } }) => {
     const memberData = c.get("member");
     const portalRole = role || PORTAL_MANAGEABLE_MEMBER_ROLES[0];
-    // Get customer to find authOrganizationId
     const foundCustomer = await requireLabCustomer(
       params.id,
       memberData.organizationId,
@@ -582,7 +569,6 @@ mount(
       });
     }
 
-    // Log audit entry
     await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
       ctx.audit("customer", foundCustomer.id, {
         action: "user_invited",
@@ -598,7 +584,6 @@ mount(
   },
 );
 
-// POST /:id/invitations/:invId/resend - Resend invitation
 mount(
   customersRouter,
   PREFIX,
@@ -606,13 +591,11 @@ mount(
   withLabPermission({ client: ["manage_portal"] }),
   async (c, { params: { id, invId } }) => {
     const memberData = c.get("member");
-    // Get customer to verify ownership
     const foundCustomer = await requireLabCustomer(
       id,
       memberData.organizationId,
     );
 
-    // Get invitation to verify it belongs to this customer
     const [foundInvitation] = await orgDb(
       foundCustomer.authOrganizationId,
     ).transaction((o) =>
@@ -661,7 +644,6 @@ mount(
   },
 );
 
-// DELETE /:id/invitations/:invId - Cancel invitation
 mount(
   customersRouter,
   PREFIX,
@@ -669,13 +651,11 @@ mount(
   withLabPermission({ client: ["manage_portal"] }),
   async (c, { params: { id, invId } }) => {
     const memberData = c.get("member");
-    // Get customer to verify ownership
     const foundCustomer = await requireLabCustomer(
       id,
       memberData.organizationId,
     );
 
-    // Get invitation to verify it belongs to this customer
     const [foundInvitation] = await orgDb(
       foundCustomer.authOrganizationId,
     ).transaction((o) =>
@@ -711,7 +691,6 @@ mount(
       organizationId: foundCustomer.authOrganizationId,
     });
 
-    // Log audit entry
     await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
       ctx.audit("customer", foundCustomer.id, {
         action: "invitation_canceled",
@@ -723,7 +702,6 @@ mount(
   },
 );
 
-// DELETE /:id/members/:memberId - Remove member from portal
 mount(
   customersRouter,
   PREFIX,
@@ -731,13 +709,11 @@ mount(
   withLabPermission({ client: ["manage_portal"] }),
   async (c, { params: { id, memberId } }) => {
     const memberData = c.get("member");
-    // Get customer to verify ownership
     const foundCustomer = await requireLabCustomer(
       id,
       memberData.organizationId,
     );
 
-    // Get member to verify it belongs to this customer's organization
     const [foundMember] = await orgDb(
       foundCustomer.authOrganizationId,
     ).transaction((o) =>
@@ -780,7 +756,6 @@ mount(
       organizationId: foundCustomer.authOrganizationId,
     });
 
-    // Log audit entry
     await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
       ctx.audit("customer", foundCustomer.id, {
         action: "user_removed",
@@ -796,7 +771,6 @@ mount(
   },
 );
 
-// PUT /:id/compliance - Update compliance data
 mount(
   customersRouter,
   PREFIX,
@@ -818,7 +792,6 @@ mount(
     const mergedCompliance = {
       ...baseCompliance,
       ...compliance,
-      // Ensure qualificationStatus has a value
       qualificationStatus:
         compliance.qualificationStatus ??
         baseCompliance.qualificationStatus ??
@@ -879,7 +852,6 @@ mount(
   },
 );
 
-// GET /:id/audit-log - The customer's audit trail
 mount(
   customersRouter,
   PREFIX,
@@ -887,7 +859,6 @@ mount(
   withLabPermission({ client: ["manage_portal"] }),
   async (c, { params, query: { page, limit } }) => {
     const memberData = c.get("member");
-    // Verify customer exists
     const foundCustomer = await requireLabCustomer(
       params.id,
       memberData.organizationId,
@@ -897,7 +868,6 @@ mount(
     const offset = (page - 1) * limit;
 
     return await orgDb(memberData.organizationId).transaction(async (o) => {
-      // Get audit log entries with user details
       const entries = await o
         .select({
           id: customerAuditLog.id,
@@ -915,7 +885,6 @@ mount(
         .limit(limit)
         .offset(offset);
 
-      // Get total count
       const countResult = await o
         .select({ total: count() })
         .from(customerAuditLog)

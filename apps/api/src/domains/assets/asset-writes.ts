@@ -24,7 +24,7 @@ type AssetRow = typeof asset.$inferSelect;
 
 /**
  * Throws 400 `asset_tag_conflict` when the laboratory already has an asset with
- * this tag. SEC-03a: scoped to the caller's org (join asset -> customer), so it
+ * this tag. Scoped to the caller's org (join asset -> customer), so it
  * cannot read another tenant's assets. A SAME-org race that slips past it hits
  * the per-org unique (`asset_lab_org_tag_uidx`, 23505): the caller maps that
  * violation to the same refusal.
@@ -163,7 +163,7 @@ export async function createLabAsset(
     .values({
       unitId,
       customerId: foundCustomer.id,
-      // SEC-03b (#638): denormalize the lab org from the (already org-scoped)
+      // Denormalize the lab org from the (already org-scoped)
       // customer so UNIQUE(lab_organization_id, tag) is enforced per org.
       labOrganizationId: foundCustomer.labOrganizationId,
       assetTypeId: input.assetTypeId,

@@ -207,10 +207,9 @@ mount(
 
       return created;
     } catch (error) {
-      // SEC-03b: the org-scoped tag check ran first; this catch backstops
+      // The org-scoped tag check ran first; this catch backstops
       // a SAME-org race that slips past it and hits the per-org unique
-      // (asset_lab_org_tag_uidx → 23505). A cross-org duplicate no longer
-      // raises (different lab_organization_id). Map 23505 to the SAME response
+      // (asset_lab_org_tag_uidx → 23505). Map 23505 to the SAME response
       // the app check returns (never a 500).
       if (isUniqueViolation(error)) {
         throw invalid("asset_tag_conflict", "Tag já está em uso");
@@ -276,16 +275,13 @@ mount(
     const offset = (page - 1) * limit;
 
     return await orgDb(member.organizationId).transaction(async (o) => {
-      // Build conditions array - always exclude soft-deleted assets
       const conditions = [isNull(asset.deletedAt)];
       const assetScopeCondition = getAssetScopeCondition(member);
       if (assetScopeCondition) {
         conditions.push(assetScopeCondition);
       }
 
-      // If user is a client_user, they can only see their organization's assets
       if (member.organizationType === "CLIENT") {
-        // Find the customer linked to this client organization
         const [linkedCustomer] = await o
           .select()
           .from(customer)
@@ -293,31 +289,25 @@ mount(
           .limit(1);
 
         if (!linkedCustomer) {
-          // Client has no linked customer, return empty
           return {
             data: [],
             pagination: { page, limit, total: 0, totalPages: 0 },
           };
         }
 
-        // Force filter by linked customer
         conditions.push(eq(asset.customerId, linkedCustomer.id));
       } else if (customerId) {
-        // Lab staff can optionally filter by customer
         conditions.push(eq(asset.customerId, customerId));
       }
 
-      // Filter by asset type
       if (assetTypeId) {
         conditions.push(eq(asset.assetTypeId, assetTypeId));
       }
 
-      // Filter by status
       if (status) {
         conditions.push(eq(asset.status, status));
       }
 
-      // Search by name, tag, or serialNumber
       if (query) {
         const searchCondition = or(
           ilike(asset.name, `%${query}%`),
@@ -334,7 +324,6 @@ mount(
       const whereCondition =
         conditions.length > 0 ? and(...conditions) : undefined;
 
-      // Get assets with customer and asset type info
       const assets = await o
         .select({
           id: asset.id,
@@ -368,7 +357,6 @@ mount(
         .limit(limit)
         .offset(offset);
 
-      // Get total count for pagination
       const countResult = await o
         .select({ total: count() })
         .from(asset)
@@ -488,7 +476,6 @@ mount(
         throw notFound("asset_not_found", "Ativo não encontrado");
       }
 
-      // If user is a client_user, verify they can access this asset
       await requireClientCustomerLink(o, member, foundAsset.customerId);
 
       return serializeAssetForResponse(foundAsset);
@@ -510,7 +497,6 @@ mount(
         member.organizationId,
         requestActor(c),
         async (ctx) => {
-          // Get existing asset (exclude soft-deleted)
           const [existingAsset] = await ctx.o
             .select({
               id: asset.id,
@@ -550,7 +536,6 @@ mount(
             throw notFound("asset_not_found", "Ativo nao encontrado");
           }
 
-          // If user is a client_user, verify they can update this asset
           const linkedCustomerId = await requireClientCustomerLink(
             ctx.o,
             member,
@@ -580,7 +565,6 @@ mount(
             ? new Date(input.installedAt)
             : undefined;
 
-          // Build update object
           const updateData: Record<string, unknown> = {
             updatedAt: new Date(),
           };
@@ -643,7 +627,6 @@ mount(
             }
           }
 
-          // Build changes object for audit log
           for (const [key, value] of Object.entries(updateData)) {
             if (key === "updatedAt") continue;
             const oldValue = Object.fromEntries(Object.entries(existingAsset))[
@@ -654,7 +637,6 @@ mount(
             }
           }
 
-          // Update asset
           const [updatedAsset] = await ctx.o
             .update(asset)
             .set(updateData)
@@ -674,7 +656,6 @@ mount(
             throw notFound("asset_not_found", "Ativo nao encontrado");
           }
 
-          // Log audit entry if there were changes
           if (Object.keys(changes).length > 0) {
             const isStatusChange = "status" in changes;
             await ctx.audit("asset", id, {
@@ -692,10 +673,9 @@ mount(
 
       return updated;
     } catch (error) {
-      // SEC-03b: the org-scoped tag check above ran first; this catch backstops
+      // The org-scoped tag check above ran first; this catch backstops
       // a SAME-org race that hits the per-org unique (asset_lab_org_tag_uidx →
-      // 23505). A cross-org duplicate no longer raises (different
-      // lab_organization_id). Map 23505 to the SAME response the app check
+      // 23505). Map 23505 to the SAME response the app check
       // returns (never a 500).
       if (isUniqueViolation(error)) {
         throw invalid("asset_tag_conflict", "Tag ja esta em uso");
@@ -773,10 +753,8 @@ mount(
         throw notFound("asset_not_found", "Ativo não encontrado");
       }
 
-      // If user is a client_user, verify they can access this asset's audit log
       await requireClientCustomerLink(o, member, existingAsset.customerId);
 
-      // Get audit logs with performer details
       const logs = await o
         .select({
           id: assetAuditLog.id,

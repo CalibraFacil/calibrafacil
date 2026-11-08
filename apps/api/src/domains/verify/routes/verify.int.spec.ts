@@ -22,8 +22,8 @@ import { isRecord } from "@calibra-facil/shared/record";
 // ---------------------------------------------------------------------------
 // Real-DB integration test for the PUBLIC certificate-verification router.
 //
-// This surface is UNAUTHENTICATED by design (verify.calibrafacil.com / epic
-// #431): an auditor or client resolves a certificate by its unguessable
+// This surface is UNAUTHENTICATED by design (verify.calibrafacil.com):
+// an auditor or client resolves a certificate by its unguessable
 // `verification_token` UUID. There is therefore NO tenant boundary to prove
 // here — the correctness property is "right token → that certificate's own
 // public data, and nothing else; unknown/invalid token → not-found with no
@@ -173,7 +173,7 @@ async function seedVerifiableLab(params: {
       .values({
         unitId: unit.id,
         customerId: customerRow.id,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        // Per-org tag uniqueness — derive lab org from the customer.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
         assetTypeId: assetTypeRow.id,
         name: assetName,
@@ -497,7 +497,7 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     expect(body.verdict.overall).toBe("VALID");
     expect(body.verdict.hashMatch).toBe(true);
     expect(body.verdict.signerChainsToIcpRoot).toBe(true);
-    // The signer's CPF is shown masked on the public page (roadmap 2 D3, LGPD).
+    // The signer's CPF is shown masked on the public page (LGPD).
     expect(isRecord(body.verdict.signer) && body.verdict.signer.cpfCnpj).toBe(
       "***.456.789-**",
     );
@@ -528,7 +528,7 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   });
 
   // =========================================================================
-  // REQ-SEC-VER-001 (SEC-07)
+  // REQ-SEC-VER-001
   // `supersedesInfo` (the "supersedes" field: the ORIGINAL job this amendment
   // replaces) must apply the same terminal-status filter
   // `inArray(status, ["APPROVED","SUPERSEDED"])` that `supersededByInfo` and
@@ -618,7 +618,7 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   });
 
   // =========================================================================
-  // P2-18a: the amendment link is bound to the laboratory that issued the
+  // The amendment link is bound to the laboratory that issued the
   // certificate the token resolved to. A (corrupt) supersedes link into ANOTHER
   // laboratory's terminal certificate must not surface its jobId or token.
   // =========================================================================
@@ -699,7 +699,7 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     if (!isRecord(body.digitalSignature)) throw new Error("unreachable");
     expect(body.digitalSignature.signed).toBe(true);
     expect(body.digitalSignature.signerName).toBe("SIGNER NAME");
-    // Masked on the public page (roadmap 2 D3, LGPD): middle six digits only.
+    // Masked on the public page (LGPD): middle six digits only.
     expect(body.digitalSignature.signerCpfCnpj).toBe("***.654.321-**");
 
     // Amendment fields are present and null for an original certificate.
@@ -734,7 +734,7 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     expect(body.accreditation.number).toBeNull();
   });
   // =========================================================================
-  // Q42 — the seal is the decision FROZEN at approval (certificate_input.seal);
+  // The seal is the decision FROZEN at approval (certificate_input.seal);
   // the lab's current accreditation fields never re-decide an issued
   // certificate. Both directions are pinned, on a lab whose live fields say the
   // opposite of the frozen decision.
