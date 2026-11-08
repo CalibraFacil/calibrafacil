@@ -12,11 +12,8 @@ import {
   parseIp,
   unwrapIpv4,
 } from "@calibra-facil/shared/ip-range";
-import {
-  type PublicApiScope,
-  extractApiKeyFromRequest,
-  hashApiKey,
-} from "../lib/api-keys";
+import type { PublicApiScope } from "@calibra-facil/shared";
+import { extractApiKeyFromRequest, hashApiKey } from "../lib/api-keys";
 import { and, eq, isNull } from "drizzle-orm";
 import { domainErrorBody, forbidden } from "../lib/domain-errors";
 import { orgDb } from "../lib/org-db";

@@ -1,6 +1,7 @@
 import { orgDb } from "../../../lib/org-db";
 import { integrationConnection } from "@calibra-facil/db/schema";
 import {
+  INTEGRATION_SYNC_TARGETS,
   normalizeContaAzulConnectionConfig,
   type IntegrationSyncTarget,
 } from "@calibra-facil/shared";
@@ -10,10 +11,7 @@ import type { IntegrationsEnv } from "./integrations-env";
 import { listActiveContaAzulConnections } from "./active-connections";
 import { isContaAzulTargetEnabled } from "./payload-guards";
 import { parseRemoteDate } from "./conta-azul-due";
-import {
-  CONTA_AZUL_SCHEDULED_SYNC_TARGETS,
-  DEFAULT_INTEGRATION_SYNC_LIMIT,
-} from "./constants";
+import { DEFAULT_INTEGRATION_SYNC_LIMIT } from "./constants";
 import { hasActiveSyncRun } from "./sync-state";
 import {
   buildNextScheduledRunAtFrom,
@@ -65,7 +63,7 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
   for (const row of rows) {
     let currentConfig = normalizeContaAzulConnectionConfig(row.config);
 
-    for (const target of CONTA_AZUL_SCHEDULED_SYNC_TARGETS) {
+    for (const target of INTEGRATION_SYNC_TARGETS) {
       const schedule = currentConfig.schedules[target];
       if (
         !isContaAzulScheduledSyncDue({ config: currentConfig, target, now })

@@ -17,13 +17,12 @@
  *   ILAC-G8); nothing here recomputes conformity.
  */
 
+import { DRIFT_REGRESSION_MS_PER_MONTH } from "@calibra-facil/contracts";
 import {
   linearRegression,
   slopeIsSignificant,
   type RegressionResult,
 } from "@calibra-facil/interval-analysis";
-
-const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
 
 /** Confidence used for the drift-series slope test — matches drift.ts usage. */
 const DRIFT_SERIES_CONFIDENCE = 0.95;
@@ -337,7 +336,7 @@ export function buildAssetDriftSeries(
       margin: r.asFoundMargins?.[j] ?? 0,
     }));
     const regressionInput = matched.map((r) => ({
-      t: (r.approvedAt.getTime() - firstMs) / MS_PER_MONTH,
+      t: (r.approvedAt.getTime() - firstMs) / DRIFT_REGRESSION_MS_PER_MONTH,
       y: r.asFoundMargins?.[j] ?? 0,
     }));
     const reg: RegressionResult | null = linearRegression(regressionInput);

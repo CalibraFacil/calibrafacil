@@ -10,9 +10,9 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   DEFAULT_PUBLIC_API_SCOPES,
-  type PublicApiScope,
   createApiKeySecret,
 } from "../../../lib/api-keys";
+import type { PublicApiScope } from "@calibra-facil/shared";
 import {
   type AuthVariables,
   requireLabProtected,

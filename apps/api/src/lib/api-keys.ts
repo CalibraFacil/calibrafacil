@@ -1,21 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-const API_KEY_PREFIX = "cf_live";
+import type { PublicApiScope } from "@calibra-facil/shared";
 
-export type PublicApiScope =
-  | "customers:read"
-  | "customers:write"
-  | "assets:read"
-  | "assets:write"
-  | "requests:read"
-  | "requests:write"
-  | "jobs:read"
-  | "jobs:write"
-  | "services:read"
-  | "units:read"
-  | "reports:read"
-  | "certificates:read"
-  | "webhooks:manage";
+const API_KEY_PREFIX = "cf_live";
 
 export const DEFAULT_PUBLIC_API_SCOPES: PublicApiScope[] = [
   "customers:read",
@@ -26,22 +13,6 @@ export const DEFAULT_PUBLIC_API_SCOPES: PublicApiScope[] = [
   "units:read",
   "reports:read",
   "certificates:read",
-];
-
-export const ALL_PUBLIC_API_SCOPES: PublicApiScope[] = [
-  "customers:read",
-  "customers:write",
-  "assets:read",
-  "assets:write",
-  "requests:read",
-  "requests:write",
-  "jobs:read",
-  "jobs:write",
-  "services:read",
-  "units:read",
-  "reports:read",
-  "certificates:read",
-  "webhooks:manage",
 ];
 
 export function createApiKeySecret() {

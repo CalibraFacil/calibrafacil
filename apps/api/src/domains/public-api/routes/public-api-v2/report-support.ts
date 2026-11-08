@@ -1,9 +1,6 @@
-import { z } from "zod";
-import { ReportQuerySchema } from "./schemas";
+import type { ReportPeriod } from "@calibra-facil/contracts";
 
-export function resolvePeriodRange(
-  period: z.infer<typeof ReportQuerySchema>["period"],
-) {
+export function resolvePeriodRange(period: ReportPeriod) {
   const now = new Date();
   const startDate = new Date(now);
 
@@ -33,9 +30,7 @@ export function parseRequestedUnitIds(raw?: string) {
   return unitIds.length > 0 ? Array.from(new Set(unitIds)) : null;
 }
 
-export function getPeriodLabel(
-  period: z.infer<typeof ReportQuerySchema>["period"],
-) {
+export function getPeriodLabel(period: ReportPeriod) {
   switch (period) {
     case "7d":
       return "Últimos 7 dias";

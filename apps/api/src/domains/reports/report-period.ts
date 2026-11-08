@@ -1,6 +1,5 @@
+import type { ReportPeriod } from "@calibra-facil/contracts";
 import { startOfLabMonth } from "@calibra-facil/shared/calendar-date";
-
-export type ReportPeriod = "7d" | "30d" | "90d" | "month";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

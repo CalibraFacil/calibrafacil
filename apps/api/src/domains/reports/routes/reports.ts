@@ -1,5 +1,9 @@
 import { createRouter } from "../../../server/router";
-import { ReportQuerySchema, reportEndpoints } from "@calibra-facil/contracts";
+import {
+  ReportQuerySchema,
+  reportEndpoints,
+  type ReportPeriod,
+} from "@calibra-facil/contracts";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { createMiddleware } from "hono/factory";
 import { zValidator } from "@hono/zod-validator";
@@ -32,7 +36,7 @@ import { forbidden, invalid } from "../../../lib/domain-errors";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { resolvePeriodRange, type ReportPeriod } from "../report-period";
+import { resolvePeriodRange } from "../report-period";
 
 type HealthStatus = "healthy" | "attention" | "critical";
 

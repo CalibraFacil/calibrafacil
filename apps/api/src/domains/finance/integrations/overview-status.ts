@@ -4,6 +4,7 @@ import {
   organizationIntegration,
 } from "@calibra-facil/db/schema";
 import {
+  INTEGRATION_SYNC_TARGETS,
   type IntegrationDependencyWarning,
   type IntegrationReadinessStatus,
   type IntegrationRunMode,
@@ -12,10 +13,7 @@ import {
   type IntegrationSyncTarget,
   type IntegrationTargetCoverageSummary,
 } from "@calibra-facil/shared";
-import {
-  CONTA_AZUL_SCHEDULED_SYNC_TARGETS,
-  INTEGRATION_TARGETS,
-} from "./constants";
+import { INTEGRATION_TARGETS } from "./constants";
 import {
   type GenericConnectionRecord,
   type IntegrationSyncPayload,
@@ -27,7 +25,7 @@ export function getIntegrationOverviewTargets(
   provider: (typeof organizationIntegration.$inferSelect)["provider"],
 ): readonly IntegrationSyncTarget[] {
   return provider === "conta_azul"
-    ? CONTA_AZUL_SCHEDULED_SYNC_TARGETS
+    ? INTEGRATION_SYNC_TARGETS
     : INTEGRATION_TARGETS;
 }
 

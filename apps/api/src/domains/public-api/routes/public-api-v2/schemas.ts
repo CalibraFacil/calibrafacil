@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { REPORT_PERIODS } from "@calibra-facil/contracts";
 import {
   CreateAssetSchema,
   CreateCalibrationRequestSchema,
@@ -117,7 +118,7 @@ export const WebhookSubscriptionSchema = z.object({
 });
 
 export const ReportQuerySchema = z.object({
-  period: z.enum(["7d", "30d", "90d", "month"]).optional().default("30d"),
+  period: z.enum(REPORT_PERIODS).optional().default("30d"),
   unitIds: z.string().optional(),
 });
 

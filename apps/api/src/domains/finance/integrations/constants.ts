@@ -7,17 +7,6 @@ export const INTEGRATION_TARGETS = [
   "billing_document",
 ] as const satisfies readonly IntegrationSyncTarget[];
 
-export const CONTA_AZUL_SCHEDULED_SYNC_TARGETS = [
-  "catalog_item",
-  "contract",
-  "customer",
-  "supplier",
-  "transporter",
-  "service_order",
-  "billing_document",
-  "payable",
-] as const satisfies readonly IntegrationSyncTarget[];
-
 export const DEFAULT_INTEGRATION_SYNC_LIMIT = 50;
 
 export const DEFAULT_CONTA_AZUL_PAYMENT_POLLING_INTERVAL_MS = 30 * 60 * 1000;
