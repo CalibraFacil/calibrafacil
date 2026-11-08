@@ -352,6 +352,44 @@ describe("releaseStaleQueueJobs (real Postgres)", () => {
   });
 });
 
+describe("runStaleJobBackstop reclaim and count (real Postgres)", () => {
+  it("REQ-REL-PDF-001 an expired lease goes back to PENDING and is counted with a row stranded in PENDING, without enqueueing anything", async () => {
+    const org = await seedOrg();
+    const expired = await seedQueueRow({
+      jobId: 1,
+      userId: org.userId,
+      status: "PROCESSING",
+      attempts: 1,
+    });
+    const stranded = await seedQueueRow({
+      jobId: 2,
+      userId: org.userId,
+      status: "PENDING",
+      attempts: 0,
+    });
+    const rowsBefore = (
+      await db.select({ id: appQueueJob.id }).from(appQueueJob)
+    ).length;
+
+    const result = await runStaleJobBackstop(backstopOverrides);
+
+    expect(result).toEqual({
+      released: 1,
+      deadLettered: 0,
+      rejectedRenders: 0,
+      stuckRendersRejected: 0,
+      pending: 2,
+      prunedReceipts: 0,
+    });
+    expect((await queueRow(expired.id)).status).toBe("PENDING");
+    expect((await queueRow(stranded.id)).status).toBe("PENDING");
+    // The backstop re-drives the same rows: it never enqueues a duplicate.
+    expect(
+      (await db.select({ id: appQueueJob.id }).from(appQueueJob)).length,
+    ).toBe(rowsBefore);
+  });
+});
+
 describe("runStaleJobBackstop dead-letter handling (real Postgres)", () => {
   it("REQ-QDL-002 a dead-lettered certificate job goes GENERATING_PDF -> RENDER_FAILED with an audit row", async () => {
     const org = await seedOrg();
