@@ -5,7 +5,7 @@ import {
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { service } from "@calibra-facil/db/schema";
 import { and, eq, or } from "drizzle-orm";
-import type { AuthVariables } from "../../middleware/permission";
+import type { MemberData } from "../../middleware/permission";
 import { invalid, notFound } from "../../lib/domain-errors";
 import { buildUnitScopeCondition } from "../../lib/units";
 
@@ -16,7 +16,7 @@ import { buildUnitScopeCondition } from "../../lib/units";
  */
 async function resolveServiceRouteId(
   identifier: string,
-  member: AuthVariables["member"],
+  member: MemberData,
   o: OrgDb,
 ): Promise<number | null> {
   const legacyId = parseNumericRouteIdentifier(identifier);
@@ -62,7 +62,7 @@ async function resolveServiceRouteId(
 /** The id a route parameter names; throws 400 for an unreadable identifier. */
 export async function requireServiceRouteId(
   identifier: string,
-  member: AuthVariables["member"],
+  member: MemberData,
   o: OrgDb,
 ): Promise<number> {
   const id = await resolveServiceRouteId(identifier, member, o);
@@ -76,7 +76,7 @@ export async function requireServiceRouteId(
  */
 export async function requireLabService(
   identifier: string,
-  member: AuthVariables["member"],
+  member: MemberData,
   o: OrgDb,
 ) {
   const id = await requireServiceRouteId(identifier, member, o);

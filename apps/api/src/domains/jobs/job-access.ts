@@ -2,7 +2,7 @@ import { parseNumericRouteIdentifier } from "@calibra-facil/shared/route-identif
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import { and, eq, or } from "drizzle-orm";
-import type { AuthVariables } from "../../middleware/permission";
+import type { MemberData } from "../../middleware/permission";
 import { decodeRouteIdentifier } from "./commands/helpers";
 import { notFound } from "../../lib/domain-errors";
 import { orgDb } from "../../lib/org-db";
@@ -21,7 +21,7 @@ export function jobNotFound() {
  */
 export async function resolveJobRouteId(
   identifier: string,
-  memberData: AuthVariables["member"],
+  memberData: MemberData,
   executor: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const routeIdentifier = decodeRouteIdentifier(identifier);
@@ -49,7 +49,7 @@ export async function resolveJobRouteId(
 /** The id of the job a route parameter names; throws 404 when none matches. */
 export async function requireJobRouteId(
   identifier: string,
-  memberData: AuthVariables["member"],
+  memberData: MemberData,
 ): Promise<number> {
   const id = await orgDb(memberData.organizationId).transaction((o) =>
     resolveJobRouteId(identifier, memberData, o),

@@ -3,7 +3,7 @@ import { calibrationRequest } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "../../lib/domain-errors";
 import { buildUnitScopeCondition } from "../../lib/units";
-import type { AuthVariables } from "../../middleware/permission";
+import type { MemberData } from "../../middleware/permission";
 
 /**
  * The laboratory's calibration request scoped to the caller's organization and
@@ -13,7 +13,7 @@ import type { AuthVariables } from "../../middleware/permission";
  */
 export async function requireLockedLabRequest(
   id: number,
-  member: AuthVariables["member"],
+  member: MemberData,
   o: Pick<OrgDb, "select">,
 ) {
   const [request] = await o

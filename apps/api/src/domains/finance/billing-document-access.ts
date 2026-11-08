@@ -12,7 +12,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { forbidden, invalid, notFound } from "../../lib/domain-errors";
-import type { AuthVariables } from "../../middleware/permission";
+import type { MemberData } from "../../middleware/permission";
 
 export async function getDocumentById(
   o: OrgDb,
@@ -159,18 +159,12 @@ export async function getDocumentByPublicId(
   return getDocumentById(o, organizationId, row.id);
 }
 
-function isDocumentOutsideActiveUnitScope(
-  member: AuthVariables["member"],
-  unitId: number,
-) {
+function isDocumentOutsideActiveUnitScope(member: MemberData, unitId: number) {
   return member.selectedUnitScope !== "all" && unitId !== member.activeUnitId;
 }
 
 /** Throws 403 when the document belongs to a unit the caller is not working in. */
-export function requireDocumentInUnitScope(
-  member: AuthVariables["member"],
-  unitId: number,
-) {
+export function requireDocumentInUnitScope(member: MemberData, unitId: number) {
   if (isDocumentOutsideActiveUnitScope(member, unitId)) {
     throw forbidden(
       "billing_document_outside_unit_scope",
@@ -187,7 +181,7 @@ export function requireDocumentInUnitScope(
  */
 export async function requireLabDocument(
   o: OrgDb,
-  member: AuthVariables["member"],
+  member: MemberData,
   id: number,
 ) {
   const document = await getDocumentById(o, member.organizationId, id);

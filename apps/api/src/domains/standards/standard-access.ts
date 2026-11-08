@@ -5,11 +5,11 @@ import { referenceStandard } from "@calibra-facil/db/schema";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { notFound } from "../../lib/domain-errors";
 import { buildUnitScopeCondition } from "../../lib/units";
-import type { AuthVariables } from "../../middleware/permission";
+import type { MemberData } from "../../middleware/permission";
 
 async function resolveStandardRouteId(
   identifier: string,
-  member: AuthVariables["member"],
+  member: MemberData,
   executor: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const stableId =
@@ -94,7 +94,7 @@ function isPlaceholderSerialIdentifier(value: string | null | undefined) {
  */
 export async function requireLabStandardId(
   identifier: string,
-  member: AuthVariables["member"],
+  member: MemberData,
   executor: Pick<OrgExecutor, "select">,
   message = "Padrão não encontrado",
 ): Promise<number> {
@@ -109,7 +109,7 @@ export async function requireLabStandardId(
  */
 export async function requireLabStandard(
   identifier: string,
-  member: AuthVariables["member"],
+  member: MemberData,
   executor: Pick<OrgExecutor, "select">,
 ) {
   const id = await requireLabStandardId(identifier, member, executor);
