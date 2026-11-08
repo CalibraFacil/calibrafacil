@@ -16,15 +16,15 @@
  * as-left key. When no as-found margin is present the verdict is UNKNOWN (the job is
  * excluded from reliability), never silently counted as conforming.
  *
- * Margin convention ground truth: `apps/web/src/features/jobs/detail-model.ts`
+ * Margin convention ground truth: `apps/web/src/features/jobs/detail-model/`
  * (`margem_conformidade_antes` / `_apos`) and `portal-certificate-verdict.ts`.
  *
  * The verdict follows the method's declared decision rule (ISO/IEC 17025 7.8.6,
- * ILAC-G8; roadmap 2 C4, `@calibra-facil/shared/decision-rule`): with a guard band
+ * ILAC-G8; `@calibra-facil/shared/decision-rule`): with a guard band
  * (w = U) the per-point as-found expanded uncertainty
  * (`incerteza_expandida_antes`) takes part. A method that declares none is judged
- * by simple acceptance, as before, and the verdict says the rule was undeclared
- * (Q57). The verdict drives the out-of-tolerance event and the customer alert.
+ * by simple acceptance, as before, and the verdict says the rule was undeclared.
+ * The verdict drives the out-of-tolerance event and the customer alert.
  */
 
 import {

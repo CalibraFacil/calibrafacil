@@ -20,8 +20,8 @@ import {
 } from "./certificate-drift";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-// Real-DB integration for the drift-detection cron (roadmap item 6, epic
-// backlog #1): seed a full issued-snapshot graph, then run the check with an
+// Real-DB integration for the drift-detection cron: seed a full issued-snapshot
+// graph, then run the check with an
 // injected artifact fetcher — intact bytes pass, tampered bytes and missing
 // objects produce audit events. Regulated records are never mutated.
 
@@ -105,7 +105,7 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
       jobId: jobRow!.id,
       pdfR2Key: "certs/drift.pdf",
       pdfSha256: PDF_SHA,
-      // #865 Phase 3: a snapshot describes a LAYOUT now, not a workbook. The
+      // A snapshot describes a LAYOUT now, not a workbook. The
       // template link and the filled-XLSX columns went with migration 0108.
       renderPipeline: "FIXED_LAYOUT",
       layoutKey: "calibration-certificate-fixed",

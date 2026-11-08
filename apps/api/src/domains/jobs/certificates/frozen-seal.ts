@@ -8,7 +8,7 @@ import { isRecord } from "@calibra-facil/shared/record";
 
 /**
  * The accreditation-seal decision of an issued certificate is the one frozen at
- * approval (`certificate_input.seal`, Q42); the screens that show it (public
+ * approval (`certificate_input.seal`); the screens that show it (public
  * verification, the portal, the lab's job page) read it from here and never
  * re-decide it from the lab's live accreditation fields.
  *

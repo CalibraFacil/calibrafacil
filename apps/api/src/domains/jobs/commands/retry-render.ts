@@ -17,7 +17,7 @@ import {
 
 /**
  * Retry the certificate render of an approved job whose render failed
- * (RENDER_FAILED -> GENERATING_PDF, roadmap 2 C5). The approval, its verdict and
+ * (RENDER_FAILED -> GENERATING_PDF). The approval, its verdict and
  * its frozen certificate input stand: only the PDF is produced again, by the same
  * worker path an approval dispatches. The failure message is cleared from the
  * job and kept in the audit row.

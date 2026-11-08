@@ -1,6 +1,6 @@
 /**
  * draft-standards-warning.int.spec.ts: a standard that went stale mid-job must
- * not make every autosave fail and lose the readings (roadmap P1-11).
+ * not make every autosave fail and lose the readings.
  *
  * A draft save (`POST /jobs/:id/execute`, `POST /v2/jobs/:id/results`, the
  * desktop's `save_local_execution`) runs the one standards judgement. The save

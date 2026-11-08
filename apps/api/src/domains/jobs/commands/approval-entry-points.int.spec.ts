@@ -1108,7 +1108,7 @@ describe("approval policy — public API (key creator is the approver)", () => {
       {},
     );
 
-    // Refused at authentication since roadmap 2 D3 (the creator's live role).
+    // Refused at authentication (the creator's live role).
     expect(res.status).toBe(401);
     expect((await readJob(jobId)).status).toBe("REVIEW");
   });
@@ -1180,12 +1180,11 @@ describe("approval policy — public API (key creator is the approver)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Roadmap 2 B2 (supersedes the retry model of Q39): the pure database effects
-// of an approval (the asset calibration-date advance, the asset out-of-tolerance
-// event, each with its audit row) are written in the approval's OWN transaction,
-// and the notifications are staged as queue jobs in it. "Never lost, never
-// without audit" is now met by atomicity: an approval cannot commit without
-// them, and they cannot exist without the approval.
+// The pure database effects of an approval (the asset calibration-date advance,
+// the asset out-of-tolerance event, each with its audit row) are written in the
+// approval's OWN transaction, and the notifications are staged as queue jobs in
+// it. "Never lost, never without audit" is met by atomicity: an approval cannot
+// commit without them, and they cannot exist without the approval.
 // ---------------------------------------------------------------------------
 
 /**

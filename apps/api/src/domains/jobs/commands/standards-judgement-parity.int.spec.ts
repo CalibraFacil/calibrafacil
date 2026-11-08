@@ -1,6 +1,6 @@
 /**
  * standards-judgement-parity.int.spec.ts: real-Postgres half of the parity test
- * of the one standards judgement (REQ-SJ-3, REQ-SJ-4, Q12). Every row of the
+ * of the one standards judgement (REQ-SJ-3, REQ-SJ-4). Every row of the
  * shared fixture table is loaded into the standards table and judged through the
  * cloud adapter (`judgeSnapshotStandards`); the verdict and refusal code must be
  * the ones the pure function gives. The offline half runs the same table through

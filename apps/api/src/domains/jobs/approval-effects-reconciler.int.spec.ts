@@ -1,5 +1,5 @@
 /**
- * approval-effects-reconciler.int.spec.ts - roadmap 2 B2 [HIGH RISK].
+ * approval-effects-reconciler.int.spec.ts [HIGH RISK].
  *
  * ISO/IEC 17025 7.10. The approval transaction writes the asset out-of-tolerance
  * event and the asset calibration-date advance and stages the notification

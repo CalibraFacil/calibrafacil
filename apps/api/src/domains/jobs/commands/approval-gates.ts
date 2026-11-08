@@ -14,14 +14,14 @@ import {
 /**
  * The approval gates that depend on WHO did the work and on WHAT the
  * laboratory is, kept apart from `approveJob` so each rule is one small,
- * testable function (roadmap 2 B5, ISO/IEC 17025 §6.2.4, §6.2.6, §6.4, §7.10).
+ * testable function (ISO/IEC 17025 §6.2.4, §6.2.6, §6.4, §7.10).
  */
 
 type Reader = Pick<OrgExecutor, "select">;
 type JobRow = typeof calibrationJob.$inferSelect;
 
 /**
- * Is the laboratory accredited? An accredited laboratory (Q45) is held to the
+ * Is the laboratory accredited? An accredited laboratory is held to the
  * gates unconditionally: the authorized-signatory roster is mandatory and the
  * "no other approver exists" exemption of a solo laboratory does not apply.
  * A laboratory that is not accredited keeps the auto-detected behaviour.

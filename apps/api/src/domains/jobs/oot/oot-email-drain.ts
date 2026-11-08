@@ -1,5 +1,5 @@
 /**
- * §7.10 out-of-tolerance notification email drain (#426 Phase 0).
+ * §7.10 out-of-tolerance notification email drain.
  *
  * Drains `oot_email_outbox` and sends the customer notification email with the
  * generated §7.10 PDF attached. Same reliability contract as
@@ -223,7 +223,7 @@ export async function drainOotEmailOutbox(options?: {
                 eq(ootNotification.jobId, calibrationJob.id),
               )
               .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-              // #426 Phase 1: recall context (null for as-found notifications).
+              // Recall context (null for as-found notifications).
               .leftJoin(
                 standardRecall,
                 eq(ootNotification.recallId, standardRecall.id),

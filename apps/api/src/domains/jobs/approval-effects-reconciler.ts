@@ -1,5 +1,5 @@
 /**
- * Nightly reconciler of the post-approval effects (roadmap 2 B2, ISO/IEC
+ * Nightly reconciler of the post-approval effects (ISO/IEC
  * 17025 7.10).
  *
  * Since B2 the approval transaction writes the asset out-of-tolerance event and

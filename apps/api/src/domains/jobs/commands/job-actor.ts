@@ -41,7 +41,7 @@ export type JobActor =
       kind: "desktop_session";
       userId: string;
       ipAddress?: string | null;
-      /** Device clock minus server clock (ms), when beyond the tolerance (E2). */
+      /** Device clock minus server clock (ms), when beyond the tolerance. */
       deviceClockSkewMs?: number;
     };
 

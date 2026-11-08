@@ -22,7 +22,7 @@ type Reader = Pick<OrgExecutor, "select">;
  * The technician to assign, or null when they may not be: not a member of the
  * organization (also null for another tenant's user: one generic answer), or
  * an organization member without a technician / unit_admin assignment in the
- * job's unit (org admins and owners need none). Decision Q25: this is the ONE
+ * job's unit (org admins and owners need none). This is the ONE
  * rule, for `assignJob` and `editJob` alike.
  */
 export async function findAssignableTechnician(
@@ -112,8 +112,8 @@ async function competenceHeld(
 }
 
 /**
- * The competence gate of putting a technician on a job (ISO/IEC 17025 §6.2.5,
- * decision Q26): shared by `assignJob` and `editJob`, so every way of naming a
+ * The competence gate of putting a technician on a job (ISO/IEC 17025 §6.2.5):
+ * shared by `assignJob` and `editJob`, so every way of naming a
  * technician asks the same question. The instrument type is the job's
  * service's; a service without one has nothing to check. Like the submit's
  * gate it applies once the organization keeps competence records at all, and

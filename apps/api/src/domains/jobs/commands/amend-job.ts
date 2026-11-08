@@ -62,7 +62,7 @@ export function technicalRecordOf(original: JobRow) {
     // Carried forward verbatim as a historical record of what the
     // superseded certificate rendered from. Nothing resolves it any
     // more: the amendment cannot be approved until the fixed layouts
-    // land (#865), and it will render with whatever layout is current
+    // land, and it will render with whatever layout is current
     // then, not with the original's XLSX template.
     certificateTemplateSnapshot: original.certificateTemplateSnapshot,
   } satisfies Partial<typeof calibrationJob.$inferInsert>;

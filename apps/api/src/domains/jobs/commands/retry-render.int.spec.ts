@@ -1,6 +1,6 @@
 /**
- * retry-render.int.spec.ts: a failed certificate render is its own state
- * (roadmap 2 C5), against a real Postgres (the transition guard of migration
+ * retry-render.int.spec.ts: a failed certificate render is its own state,
+ * against a real Postgres (the transition guard of migration
  * 0139 included).
  *
  *   REQ-C5-RF-1  retryRender: RENDER_FAILED -> GENERATING_PDF, the failure

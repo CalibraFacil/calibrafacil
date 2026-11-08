@@ -31,9 +31,9 @@ import {
  *   1. load the job (organization + unit scope)
  *   2. the transition table (`edit`): APPROVED, SUPERSEDED (an issued
  *      certificate an amendment replaced) and CANCELED jobs are frozen
- *   3. a changed technician must be assignable in the job's unit (decision
- *      Q25, the same rule as `assignJob`) and hold an active competence for
- *      the job's instrument type (§6.2.5, decision Q26, the same gate)
+ *   3. a changed technician must be assignable in the job's unit (the same rule
+ *      as `assignJob`) and hold an active competence for
+ *      the job's instrument type (§6.2.5, the same gate)
  *   4. what actually changed: a field sent with its current value is not a
  *      change, and the due date is a calendar day (the same day at another
  *      hour is not a change). Nothing changed: nothing is written
@@ -122,8 +122,7 @@ export async function editJobIn(
     command.technicianId !== existing.technicianId
   ) {
     if (command.technicianId) {
-      // Q25: the one technician rule; Q26: the one competence gate, as in
-      // `assignJob`.
+      // The one technician rule and the one competence gate, as in `assignJob`.
       const technician = await findAssignableTechnician(
         {
           organizationId,

@@ -15,9 +15,9 @@
  *   REQ-SUB-5c  the assigned technician must hold an active competence
  *   REQ-SUB-5d  a performed date beyond 7 days needs a written reason
  *   REQ-SUB-5e  an expired reference standard is refused
- *   REQ-SUB-5f  saving a REJECTED job keeps it REJECTED (Q18)
+ *   REQ-SUB-5f  saving a REJECTED job keeps it REJECTED
  *   REQ-SUB-5g  an illegal transition is refused, nothing written
- *   REQ-SUB-5h  the desktop's payload status is checked, not trusted (Q20)
+ *   REQ-SUB-5h  the desktop's payload status is checked, not trusted
  *   REQ-SUB-5i  the public API now runs the whole submit policy
  *   REQ-SUB-5j  a sync event for a job outside the session's unit scope is out of reach
  */

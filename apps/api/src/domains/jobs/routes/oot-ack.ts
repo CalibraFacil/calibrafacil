@@ -6,7 +6,7 @@ import {
 } from "../oot/oot-acknowledgement";
 
 /**
- * Public §7.10 acknowledgement router - NO AUTH REQUIRED (#426 Phase 0).
+ * Public §7.10 acknowledgement router - NO AUTH REQUIRED.
  *
  * The out-of-tolerance notification e-mail carries an unguessable ack-token
  * link. GET renders a small pt-BR confirmation page (a plain link must never

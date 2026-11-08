@@ -130,8 +130,8 @@ async function seedFixture() {
     role: "admin",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
   });
-  // The standard the jobs below name in their snapshot: the approval re-judges it
-  // (roadmap 2 B5), so it exists in this laboratory and is valid on the performed date.
+  // The standard the jobs below name in their snapshot: the approval re-judges it,
+  // so it exists in this laboratory and is valid on the performed date.
   await withStatusRepair((tx) =>
     tx.insert(referenceStandard).values({
       id: 11,
@@ -151,7 +151,7 @@ async function seedFixture() {
       uncertainty: 0.001,
     }),
   );
-  // An accredited laboratory keeps an authorized-signatory roster (roadmap 2 B5):
+  // An accredited laboratory keeps an authorized-signatory roster:
   // the approver is on it.
   await withStatusRepair((tx) =>
     tx.insert(authorizedSignatory).values({
@@ -426,7 +426,7 @@ describe("REQ-CIN-1: approval freezes the certificate input", () => {
       methodVersion: 2,
     });
     // the seal decision, as of approved_at. This fixture's unit has no
-    // accredited scope lines, so (Q42) the scope could not be verified and the
+    // accredited scope lines, so the scope could not be verified and the
     // certificate is frozen WITHOUT the seal, with the reason and the
     // evaluation it rests on; the positive case lives in jobs.int.spec.ts.
     const [approved] = await db

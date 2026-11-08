@@ -1,7 +1,7 @@
 /**
  * certificate-lifecycle-surfaces.int.spec.ts: the certificate lifecycle as the
- * customer portal and the public API v2 report it over HTTP (roadmap 2 B3;
- * ISO/IEC 17025 §7.8.8, §7.10). Real Postgres; only the portal session is mocked.
+ * customer portal and the public API v2 report it over HTTP (ISO/IEC 17025
+ * §7.8.8, §7.10). Real Postgres; only the portal session is mocked.
  *
  *   REQ-B3-S1  portal list and detail: ISSUED (with an amendment in progress),
  *              WITHDRAWN (with its date) and SUPERSEDED
@@ -219,7 +219,7 @@ function lifecycleByNumber(rows: Record<string, unknown>[]) {
 
 async function seedApiKey(world: Seeded) {
   const { key, keyPrefix, keyHash } = createApiKeySecret();
-  // A key acts with its creator's live role in the laboratory (roadmap 2 D3):
+  // A key acts with its creator's live role in the laboratory:
   // the creator is a lab admin, not the portal user.
   const { userId: labAdminId } = await seedExtraMember({
     orgId: world.ctx.labOrgId,

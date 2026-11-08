@@ -1,5 +1,5 @@
 /**
- * job-submitted-by-migration.int.spec.ts: migration 0134 (roadmap 2 B5, REQ-B5-1).
+ * job-submitted-by-migration.int.spec.ts: migration 0134 (REQ-B5-1).
  *
  * `calibration_job.submitted_by / submitted_at` are backfilled from the job audit
  * log for the jobs that are not frozen yet. The test database is built from

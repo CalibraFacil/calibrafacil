@@ -1,5 +1,5 @@
 /**
- * Tests for the reverse-traceability helpers (#426 Phase 1).
+ * Tests for the reverse-traceability helpers.
  *
  * Mocks Drizzle `db` to assert:
  *   - syncJobStandardLinks: full rewrite semantics (undefined = keep,

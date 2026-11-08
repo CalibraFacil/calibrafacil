@@ -12,7 +12,7 @@ import {
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 
 /**
- * Reverse traceability (#426 Phase 1): keeps the `job_standard` join table in
+ * Reverse traceability: keeps the `job_standard` join table in
  * sync with `calibration_job.standards_snapshot`. The frozen JSONB snapshot
  * remains the source of truth — these rows are a derived, indexed projection
  * that makes "which certificates relied on standard X" a relational query.
@@ -86,7 +86,7 @@ export type ImpactedCertificate = {
 };
 
 /**
- * Reverse-traceability query (#426 Phase 1): approved certificates that
+ * Reverse-traceability query: approved certificates that
  * relied on a reference standard, date-bounded by approval time. Amendment
  * chains are collapsed — when both the superseded original and its
  * replacement relied on the standard, only the current certificate is
@@ -215,7 +215,7 @@ export type InFlightJob = {
 };
 
 /**
- * Recall impact beyond the issued certificates (roadmap 2 B5, ISO/IEC 17025
+ * Recall impact beyond the issued certificates (ISO/IEC 17025
  * §6.4, §7.10): the jobs in flight (`IN_FLIGHT_JOB_STATUSES`) that carry the
  * standard in their saved snapshot (the `job_standard` projection). Not
  * date-bounded: none of them is issued yet. Tenant-scoped in SQL.

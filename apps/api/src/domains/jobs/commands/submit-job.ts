@@ -81,7 +81,7 @@ import {
  *
  *   1. load the job (organization + unit scope)
  *   2. the transition table (`submit` / `execute`) and, for the desktop, the
- *      status its payload claims (Q20: the server derives the target)
+ *      status its payload claims (the server derives the target)
  *   3. when the work was performed (`resolveExecutionPerformedAt`: not in the
  *      future, a written reason beyond 7 days)
  *   4. the reference standards (`judgeSnapshotStandards`, the one judgement).
@@ -156,7 +156,7 @@ export type JobExecutionCommand = {
   /**
    * The status the caller's payload says the job lands in (the desktop sends
    * its own). It is only checked against the transition table, never written:
-   * a payload that disagrees is refused (Q20).
+   * a payload that disagrees is refused.
    */
   claimedStatus?: JobStatus | null;
   /**
@@ -206,7 +206,7 @@ export type JobExecutionResult =
       error: DomainError;
     }
   | {
-      /** The payload's status is not where the transition table lands the job (Q20). */
+      /** The payload's status is not where the transition table lands the job. */
       status: "status_payload_mismatch";
       currentStatus: JobStatus;
       job: JobRow;
@@ -245,7 +245,7 @@ export type JobExecutionResult =
    */
   | { status: "concurrent_update" };
 
-/** Save the worksheet / record results. A REJECTED job stays REJECTED (Q18). */
+/** Save the worksheet / record results. A REJECTED job stays REJECTED. */
 export function executeJob(
   command: JobExecutionCommand,
 ): Promise<JobExecutionResult> {
@@ -688,7 +688,7 @@ async function runJobExecutionIn(
       };
     }
 
-    // ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427 Phase 0). Classified here so
+    // ISO/IEC 17025 §7.6/§7.8.3, ILAC P14. Classified here so
     // the technician and the signer see the warning during review; approval
     // re-classifies at the emission date and is authoritative. Warn-only:
     // never blocks the submit. `now`, not performedAt: it predicts the seal
@@ -922,7 +922,7 @@ async function runJobExecutionIn(
   })(o);
   if (!updated) return { status: "concurrent_update" };
 
-  // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into the
+  // Reverse traceability: mirror the frozen snapshot into the
   // indexed job_standard projection, in the same transaction as the write that
   // froze it: a failure rolls the submit (or save) back instead of leaving the
   // index missing.

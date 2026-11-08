@@ -123,7 +123,7 @@ export type ApproveJobResult =
   | { status: "self_approval_blocked" }
   | { status: "not_authorized_signatory" }
   /**
-   * An accredited laboratory (Q45) keeps no active authorized-signatory
+   * An accredited laboratory keeps no active authorized-signatory
    * roster: nobody is authorized to release a certificate, so the approval
    * fails closed instead of letting every approver through.
    */
@@ -156,7 +156,7 @@ export type ApproveJobResult =
     }
   | {
       /**
-       * #427 Phase 1: adverse CMC classification under enforce mode and no
+       * Adverse CMC classification under enforce mode and no
        * documented override — accredited issuance is blocked.
        */
       status: "scope_violation";
@@ -165,7 +165,7 @@ export type ApproveJobResult =
   | {
       status: "approved";
       job: JobRow;
-      /** Accredited-scope (CMC) classification frozen at approval (#427). */
+      /** Accredited-scope (CMC) classification frozen at approval. */
       scopeCompliance: JobRow["scopeComplianceStatus"];
     };
 
@@ -229,15 +229,15 @@ async function evaluateRelease(
   // Derive the AS-FOUND (pre-adjustment) reliability verdict from the frozen
   // results, for ILAC-G24 / NCSL RP-1 interval analysis and the out-of-tolerance
   // event. Read-only over `results`; it does not block the approval.
-  // The method's declared decision rule (roadmap 2 C4) decides which as-found
+  // The method's declared decision rule decides which as-found
   // points do not conform, and so whether the out-of-tolerance alert goes out.
   const asFound = buildAsFoundReliabilityVerdict({
     results: existing.results,
     decisionRule: existing.methodSnapshot?.certificateContent?.decisionRuleKind,
   });
 
-  // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
-  // (#427). Re-classified here at the emission date so the frozen record is
+  // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14.
+  // Re-classified here at the emission date so the frozen record is
   // authoritative even if scope lines changed since submit. In 'warn' mode
   // the classification never blocks; in 'enforce' mode an adverse result
   // blocks accredited issuance unless a documented override downgrades the
@@ -291,7 +291,7 @@ async function evaluateRelease(
  * approval matches zero rows and yields `concurrent_approval` instead of
  * double-releasing.
  *
- * What the approval implies is split by its nature (roadmap 2 B2, ISO/IEC
+ * What the approval implies is split by its nature (ISO/IEC
  * 17025 7.10):
  * - the pure database effects (the asset out-of-tolerance event and the asset
  *   calibration-date advance, each with its audit row) are written in the SAME
@@ -354,7 +354,6 @@ export async function approveJob(
         return { kind: "refused", result: { status: "not_found" } };
       }
 
-      // Can only approve from REVIEW status
       if (!canTransition(existing.status, "approve")) {
         return {
           kind: "refused",
@@ -362,7 +361,7 @@ export async function approveJob(
         };
       }
 
-      // The gates below are mandatory for an accredited laboratory (Q45) and
+      // The gates below are mandatory for an accredited laboratory and
       // auto-detected for one that is not.
       const accredited = await laboratoryIsAccredited(
         memberData.organizationId,
@@ -439,7 +438,6 @@ export async function approveJob(
         };
       }
 
-      // Check environmental conditions - block approval if out of limits without justification
       if (
         existing.environmentalSnapshot &&
         !existing.environmentalSnapshot.withinLimits &&
@@ -885,7 +883,7 @@ function runCloudApprovalSideEffects(params: {
   const { existing, approverId, organizationId } = params;
   const jobId = existing.id;
 
-  // Phase 2 slice 4 wire-up: fire automatic-send for every SO linked
+  // Fire automatic-send for every SO linked
   // to this job. Fire-and-forget — never block the approval response
   // on the financial-send pathway. Engine writes an audit row per
   // call regardless of outcome.
