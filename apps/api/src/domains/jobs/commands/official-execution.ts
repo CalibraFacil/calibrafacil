@@ -6,12 +6,12 @@ import type {
   StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import {
+  parseCompiledMethod,
   runOfficialExecution,
   type CompiledMethod,
   type CompiledMethodExecutionResult,
   type MethodDiagnostic,
 } from "@calibra-facil/method-definition";
-import { isCompiledMethod } from "./helpers";
 
 /**
  * The official execution of a job's frozen compiled method: the ONE place the
@@ -77,7 +77,8 @@ function getCompiledMethodSnapshot(
     };
   }
 
-  if (!isCompiledMethod(compiledMethod)) {
+  const candidate = parseCompiledMethod(compiledMethod);
+  if (!candidate) {
     const message = "Snapshot compilado do método possui formato inválido";
     return {
       ok: false,
@@ -93,7 +94,6 @@ function getCompiledMethodSnapshot(
     };
   }
 
-  const candidate = compiledMethod;
   const mismatches: MethodDiagnostic[] = [];
   if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
     mismatches.push(
@@ -104,7 +104,7 @@ function getCompiledMethodSnapshot(
       ),
     );
   }
-  if (candidate.engine?.version !== methodSnapshot.engineVersion) {
+  if (candidate.engine.version !== methodSnapshot.engineVersion) {
     mismatches.push(
       executionDiagnostic(
         "COMPILED_METHOD_SNAPSHOT_MISMATCH",
@@ -114,7 +114,7 @@ function getCompiledMethodSnapshot(
     );
   }
   if (
-    candidate.engine?.optionsFingerprint !==
+    candidate.engine.optionsFingerprint !==
     methodSnapshot.engineOptionsFingerprint
   ) {
     mismatches.push(
@@ -143,7 +143,7 @@ function getCompiledMethodSnapshot(
     };
   }
 
-  return { ok: true, compiledMethod };
+  return { ok: true, compiledMethod: candidate };
 }
 
 type OfficialExecutionOutcome =

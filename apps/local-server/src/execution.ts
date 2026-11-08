@@ -1,9 +1,9 @@
 import {
   createMethodExecutionEngine,
+  parseCompiledMethod,
   reconcileCompiledMethodEngine,
   runOfficialExecution,
   type CalibrationPhaseSnapshot,
-  type CompiledMethod,
 } from "@calibra-facil/method-definition";
 import { LocalUnprocessableError } from "@calibra-facil/local-db";
 import { toRecord } from "@calibra-facil/shared/record";
@@ -28,18 +28,33 @@ type ExecutionInput = {
 };
 
 export function executeLocalCompiledMethod(input: ExecutionInput) {
-  const snapshotCompiledMethod = input.methodSnapshot.compiledMethod;
+  const frozenCompiledMethod = input.methodSnapshot.compiledMethod;
 
-  if (!isCompiledMethod(snapshotCompiledMethod)) {
+  if (!isCompiledSnapshot(frozenCompiledMethod)) {
     return input.fallbackResults ?? null;
+  }
+  // A snapshot that declares itself compiled is proved with the schema the
+  // cloud proves it with; a malformed one is refused like the cloud refuses it
+  // (`snapshot_invalid`), never executed and never read as "no compiled method".
+  const snapshotCompiledMethod = parseCompiledMethod(frozenCompiledMethod);
+  if (!snapshotCompiledMethod) {
+    throw new LocalUnprocessableError(
+      "Snapshot compilado do método possui formato inválido",
+      [
+        {
+          code: "COMPILED_METHOD_SNAPSHOT_INVALID",
+          severity: "error",
+          message: "Snapshot compilado do método possui formato inválido",
+          path: "methodSnapshot.compiledMethod",
+        },
+      ],
+    );
   }
 
   const engine = createMethodExecutionEngine();
   const { compiledMethod } = reconcileCompiledMethodEngine({
     snapshot: snapshotCompiledMethod,
-    current: isCompiledMethod(input.currentCompiledMethod)
-      ? input.currentCompiledMethod
-      : null,
+    current: parseCompiledMethod(input.currentCompiledMethod),
     engine,
   });
 
@@ -74,12 +89,7 @@ function standardsOf(snapshot: unknown) {
   return Array.isArray(snapshot) ? snapshot : null;
 }
 
-function isCompiledMethod(value: unknown): value is CompiledMethod {
-  const record = toRecord(value);
-  return (
-    Boolean(value) &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    record.status === "compiled"
-  );
+/** The snapshot says it holds a compiled method (what it holds is parsed after). */
+function isCompiledSnapshot(value: unknown): boolean {
+  return toRecord(value).status === "compiled";
 }

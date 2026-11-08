@@ -5,11 +5,10 @@ import {
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
 import {
+  parseCompiledMethod,
   reconcileCompiledMethodEngine,
   type CalculationEngineLike,
 } from "@calibra-facil/method-definition";
-
-import { isCompiledMethod } from "./commands/helpers";
 
 /**
  * Re-point a job's frozen method snapshot at the method's current compilation
@@ -35,8 +34,8 @@ export async function reconcileMethodSnapshotEngine(params: {
   executor: Pick<OrgExecutor, "select">;
 }): Promise<{ methodSnapshot: MethodSnapshot; adopted: boolean }> {
   const { methodSnapshot, organizationId, engine } = params;
-  const snapshotCompiled = methodSnapshot.compiledMethod;
-  if (!isCompiledMethod(snapshotCompiled)) {
+  const snapshotCompiled = parseCompiledMethod(methodSnapshot.compiledMethod);
+  if (!snapshotCompiled) {
     return { methodSnapshot, adopted: false };
   }
 
@@ -62,7 +61,7 @@ export async function reconcileMethodSnapshotEngine(params: {
   const currentCompiled = current?.compiledMethod;
   const reconciled = reconcileCompiledMethodEngine({
     snapshot: snapshotCompiled,
-    current: isCompiledMethod(currentCompiled) ? currentCompiled : null,
+    current: parseCompiledMethod(currentCompiled),
     engine,
   });
   if (!reconciled.adopted) return { methodSnapshot, adopted: false };

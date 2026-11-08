@@ -6,6 +6,9 @@ import {
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import {
+  CalibrationLocationSnapshotSchema,
+  CalibrationPhaseSnapshotSchema,
+  EnvironmentalSnapshotSchema,
   StandardSnapshotSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
 } from "@calibra-facil/schemas";
@@ -102,7 +105,8 @@ export function getEnvironmentalSnapshotOrNull(
   key: string,
 ): EnvironmentalSnapshot | null {
   const value = row[key];
-  return isEnvironmentalSnapshot(value) ? value : null;
+  const parsed = EnvironmentalSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export function getCalibrationLocationSnapshotOrNull(
@@ -110,7 +114,8 @@ export function getCalibrationLocationSnapshotOrNull(
   key: string,
 ): CalibrationLocationSnapshot | null {
   const value = row[key];
-  return isCalibrationLocationSnapshot(value) ? value : null;
+  const parsed = CalibrationLocationSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export function getMethodDeviationsOrNull(
@@ -129,42 +134,8 @@ export function getCalibrationPhaseSnapshotOrNull(
   key: string,
 ): CalibrationPhaseSnapshot | null {
   const value = row[key];
-  return isCalibrationPhaseSnapshot(value) ? value : null;
-}
-
-function isEnvironmentalSnapshot(
-  value: unknown,
-): value is EnvironmentalSnapshot {
-  const row = toRecord(value);
-  return (
-    ("temperature" in row || "humidity" in row || "pressure" in row) &&
-    typeof row.recordedAt === "string" &&
-    typeof row.recordedBy === "string"
-  );
-}
-
-function isCalibrationLocationSnapshot(
-  value: unknown,
-): value is CalibrationLocationSnapshot {
-  const row = toRecord(value);
-  return (
-    typeof row.type === "string" &&
-    typeof row.addressText === "string" &&
-    typeof row.recordedAt === "string" &&
-    typeof row.recordedBy === "string"
-  );
-}
-
-function isCalibrationPhaseSnapshot(
-  value: unknown,
-): value is CalibrationPhaseSnapshot {
-  const row = toRecord(value);
-  return (
-    typeof row.blocks === "object" &&
-    row.blocks !== null &&
-    typeof row.recordedAt === "string" &&
-    typeof row.recordedBy === "string"
-  );
+  const parsed = CalibrationPhaseSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export function hasOwn(row: Record<string, unknown>, key: string) {

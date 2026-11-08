@@ -1,4 +1,9 @@
+import {
+  CALIBRATION_LOCATION_TYPES,
+  CALIBRATION_PHASE_MODES,
+} from "@calibra-facil/shared/calibration-record";
 import { isRecord } from "@calibra-facil/shared/record";
+import { z } from "zod";
 /**
  * The calibration record a submit must carry: where the work was done, and a
  * written reason for every phase block that was not performed.
@@ -86,3 +91,47 @@ export function desktopEventCarriesCalibrationRecordRule(
     version >= DESKTOP_EXECUTION_PAYLOAD_VERSION
   );
 }
+
+/**
+ * What a job froze about the calibration, as it is stored on the job and as a
+ * desktop pushes it. Unlike the `*Input` schemas the request bodies use, nothing
+ * is trimmed or defaulted: this proves a value that already is a record.
+ */
+export const CalibrationLocationSnapshotSchema = z.object({
+  type: z.enum(CALIBRATION_LOCATION_TYPES),
+  addressText: z.string(),
+  notes: z.string().nullable().optional(),
+  recordedAt: z.string(),
+  recordedBy: z.string(),
+});
+
+export const CalibrationPhaseSnapshotSchema = z.object({
+  blocks: z.record(
+    z.string(),
+    z.object({
+      mode: z.enum(CALIBRATION_PHASE_MODES),
+      reason: z.string().nullable().optional(),
+    }),
+  ),
+  recordedAt: z.string(),
+  recordedBy: z.string(),
+});
+
+const EnvironmentalRangeSchema = z.object({ min: z.number(), max: z.number() });
+
+export const EnvironmentalSnapshotSchema = z.object({
+  temperature: z.number().nullable(),
+  humidity: z.number().nullable(),
+  pressure: z.number().nullable(),
+  recordedAt: z.string(),
+  recordedBy: z.string(),
+  limits: z
+    .object({
+      temperature: EnvironmentalRangeSchema.optional(),
+      humidity: EnvironmentalRangeSchema.optional(),
+      pressure: EnvironmentalRangeSchema.optional(),
+    })
+    .nullable(),
+  withinLimits: z.boolean(),
+  outOfLimitsJustification: z.string().nullable(),
+});

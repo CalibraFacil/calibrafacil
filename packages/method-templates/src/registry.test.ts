@@ -3,6 +3,7 @@ import {
   compileMethodDraft,
   createMethodExecutionEngine,
   methodEngineMetadata,
+  parseCompiledMethod,
 } from "@calibra-facil/method-definition";
 
 import { listTemplates } from "./registry";
@@ -44,6 +45,13 @@ describe("method-templates registry — publishable oracle", () => {
           );
         }
         expect(result.ok).toBe(true);
+      });
+
+      it("compiles to a method the compiled-method schema accepts, as stored", () => {
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const stored: unknown = JSON.parse(JSON.stringify(result.method));
+        expect(parseCompiledMethod(stored)).toEqual(stored);
       });
 
       it("passes every declared preview scenario", () => {
