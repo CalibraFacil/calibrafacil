@@ -1,3 +1,4 @@
+import type { OutboxRejectionCode } from "@calibra-facil/contracts/outbox-rejections";
 import { createRouter } from "../../../server/router";
 import {
   SYNC_MIN_PROTOCOL_VERSION,
@@ -122,7 +123,7 @@ export const pushRoutes = createRouter<SyncRouterEnv>().post(
     const rejected: Array<{
       eventId: string;
       reason: string;
-      code: string;
+      code: OutboxRejectionCode;
     }> = [];
     const conflicts: Array<{
       id: string;

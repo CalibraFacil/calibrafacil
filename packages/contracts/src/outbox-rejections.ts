@@ -14,10 +14,10 @@ import { isRegulatedSyncOperation } from "./sync-protocol";
  *   scope or session problem the user can clear). It stays `failed` and is
  *   retried with exponential backoff.
  *
- * This table is the one place the decision lives. The codes are the ones
- * sync routes in `apps/api/src/domains/sync` put in a push response's
- * `rejected` list; a code missing here falls into the default class, so list
- * every new refusal.
+ * This table is the one place the decision lives. Its keys are the codes the
+ * API's sync push puts in a response's `rejected` list: the API types every
+ * refusal as `OutboxRejectionCode`, so a new refusal must be classified here
+ * before it compiles.
  *
  * Network failures, HTTP 5xx and rate limits never reach this table: they fail
  * the whole push request, not a single event, and always back off.
@@ -84,9 +84,14 @@ export const OUTBOX_REJECTION_CLASSES = {
 } as const satisfies Record<string, OutboxRejectionClass>;
 
 /**
+ * A code the cloud may put in a push response's `rejected` list. The API types
+ * every refusal it builds with it, so a new refusal cannot ship unclassified.
+ */
+export type OutboxRejectionCode = keyof typeof OUTBOX_REJECTION_CLASSES;
+
+/**
  * Failures the desktop itself records on an event it cannot send (no cloud
- * answer is involved, so the API never emits them and the spec that compares
- * the table with the API does not list them). All permanent: the file behind the
+ * answer is involved, so they are not `OutboxRejectionCode`s). All permanent: the file behind the
  * attachment is gone or is no longer the file that was recorded, or the cloud
  * refused the upload with a 4xx that names no code.
  */

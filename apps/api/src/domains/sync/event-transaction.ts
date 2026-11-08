@@ -1,3 +1,4 @@
+import type { OutboxRejectionCode } from "@calibra-facil/contracts/outbox-rejections";
 import { db, runInTransactionScope } from "@calibra-facil/db";
 import {
   setTransactionOrganization,
@@ -23,7 +24,7 @@ export type AppliedEventResult = {
 
 export type RefusedEventResult = {
   ok: false;
-  code: string;
+  code: OutboxRejectionCode;
   reason: string;
   /** Answered as a reviewable conflict instead of a refusal. */
   conflict?: {

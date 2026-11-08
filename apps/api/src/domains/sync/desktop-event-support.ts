@@ -1,3 +1,4 @@
+import type { OutboxRejectionCode } from "@calibra-facil/contracts/outbox-rejections";
 import { toRecord } from "@calibra-facil/shared/record";
 import { type SyncCommand } from "@calibra-facil/contracts";
 import type { OrgDb } from "@calibra-facil/db/for-org";
@@ -68,7 +69,7 @@ export type ApplyDesktopSyncEventInput = {
  */
 export type PreparedDesktopEventSideEffects = {
   /** The event cannot be applied (permanent): reported without opening a transaction. */
-  refusal?: { code: string; reason: string };
+  refusal?: { code: OutboxRejectionCode; reason: string };
 };
 
 export type ApplyDesktopSyncEventResult =

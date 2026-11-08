@@ -1,3 +1,4 @@
+import type { OutboxRejectionCode } from "@calibra-facil/contracts/outbox-rejections";
 import {
   SYNC_COMMAND_OPERATIONS,
   SYNC_OPERATIONS,
@@ -103,7 +104,7 @@ export function memberForEventUnit(
 
 export type SyncPermissionDecision =
   | { allowed: true }
-  | { allowed: false; code: string; reason: string };
+  | { allowed: false; code: OutboxRejectionCode; reason: string };
 
 /**
  * Whether the pushing member may send `operation`. The same evaluation as the
