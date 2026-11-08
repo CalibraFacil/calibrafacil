@@ -1,6 +1,6 @@
 /**
- * The image type of an upload, read from its first bytes (roadmap 2 D3, review
- * 3.3), never from the type the client declared. Only raster formats: an SVG can
+ * The image type of an upload, read from its first bytes, never from the type the
+ * client declared. Only raster formats: an SVG can
  * carry script and markup, and a laboratory logo ends up embedded in certificates.
  */
 export type RasterImageType = "image/png" | "image/jpeg" | "image/webp";

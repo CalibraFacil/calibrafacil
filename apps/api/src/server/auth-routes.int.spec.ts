@@ -1,5 +1,5 @@
 /**
- * auth-routes.int.spec.ts - architecture review P0-1 [HIGH RISK].
+ * auth-routes.int.spec.ts [HIGH RISK].
  *
  * Better Auth's organization plugin let any signed-in user, a portal customer
  * included, `POST /api/auth/{lab,portal}/organization/create` with `type: "LAB"`

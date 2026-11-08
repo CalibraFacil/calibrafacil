@@ -5,12 +5,12 @@ import { flushErrorReporter, reportServerError } from "../lib/observability";
 // Wraps every cron handler so the whole cron system fails loudly and safely:
 //
 //  - Failure isolation: a throw becomes a structured 500 (never an uncaught
-//    rejection), so one broken cron can't take down the function with an
+//    rejection), so one broken cron can't take down the process with an
 //    unstructured stack.
 //  - Visibility: the run's outcome is written to the `cron_run` heartbeat table
 //    (last_success_at / last_status / consecutive_failures), and a failed run
 //    returns a non-2xx so the trigger sees it failed. Both are how a
-//    silently-broken cron (the kind that 404'd unnoticed) becomes detectable.
+//    silently-broken cron becomes detectable.
 //  - Overlap protection: a short row-lease (`locked_until`) prevents a slow run
 //    from overlapping the next trigger. A row-lease — not pg_advisory_lock — is
 //    used because a pooled endpoint (PgBouncer in transaction mode) makes
@@ -141,8 +141,8 @@ export async function runCron(
   } catch (error) {
     const message = getErrorMessage(error);
     console.error("[Cron] task failed", { job, message });
-    // surface cron failures in error tracking, not just the
-    // heartbeat table. Flush before returning: the function freezes after.
+    // Report the failure as well as recording it in the heartbeat table; flush so
+    // the report is written before the run answers.
     reportServerError(error, { surface: "cron", tags: { job } });
     await flushErrorReporter();
     if (leased) {

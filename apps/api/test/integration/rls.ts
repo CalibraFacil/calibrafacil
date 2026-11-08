@@ -5,7 +5,7 @@ import {
 } from "@calibra-facil/db/role-connection";
 import { assertHarnessWorkerDb } from "./guard";
 
-// Shadow tier of row-level security (roadmap P2-3). The test Postgres user is a
+// Shadow tier of row-level security. The test Postgres user is a
 // superuser, which no policy binds; a connection that starts with
 // `role = calibra_app` is an ordinary role subject to the grants and the
 // `tenant_isolation` policies of migration 0123. Seed with the global `db` (the

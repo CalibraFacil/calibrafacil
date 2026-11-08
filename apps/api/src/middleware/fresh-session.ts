@@ -7,8 +7,8 @@ import { HTTPException } from "hono/http-exception";
 import type { AuthVariables } from "./permission";
 
 /**
- * Re-validates the session against the database before a sensitive action
- * (roadmap 2 D3, review 3.3): approving a calibration, managing the signing
+ * Re-validates the session against the database before a sensitive action:
+ * approving a calibration, managing the signing
  * credentials, managing API keys.
  *
  * Routine requests are served from Better Auth's signed cookie cache (up to five

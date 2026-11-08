@@ -4,7 +4,7 @@ import { clientIp } from "../lib/client-ip";
 import type { Env } from "./env";
 
 /**
- * Request rate limits (roadmap 2 D1, review 3.3): one fixed one-minute window per
+ * Request rate limits: one fixed one-minute window per
  * caller, answered 429 with `Retry-After` once spent.
  *
  * The caller is, in order: the API key of a public API request, the session

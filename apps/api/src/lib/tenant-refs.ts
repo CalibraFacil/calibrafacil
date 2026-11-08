@@ -51,7 +51,6 @@ async function findOrganizationMember(
   return row ?? null;
 }
 
-/** True when `userId` is a member of `organizationId`. */
 export async function userIsOrganizationMember(
   organizationId: string,
   userId: string,
@@ -132,7 +131,6 @@ export async function servicesBelongToOrganization(
   return rows.length === ids.length;
 }
 
-/** True when the commercial agreement belongs to `organizationId`. */
 export async function agreementBelongsToOrganization(
   organizationId: string,
   agreementId: number,
@@ -151,7 +149,6 @@ export async function agreementBelongsToOrganization(
   return Boolean(row);
 }
 
-/** True when the service order belongs to `organizationId`. */
 export async function serviceOrderBelongsToOrganization(
   organizationId: string,
   serviceOrderId: number,
@@ -170,7 +167,6 @@ export async function serviceOrderBelongsToOrganization(
   return Boolean(row);
 }
 
-/** True when the calibration job belongs to `organizationId`. */
 export async function calibrationJobBelongsToOrganization(
   organizationId: string,
   jobId: number,

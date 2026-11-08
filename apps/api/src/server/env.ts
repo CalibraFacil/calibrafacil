@@ -23,7 +23,7 @@ export interface Env {
   SMTP_HOST?: string;
   RESEND_API_KEY?: string;
   /**
-   * 256-bit base64 key encrypting lab-owned Resend API keys at rest (#584).
+   * 256-bit base64 key encrypting lab-owned Resend API keys at rest.
    * Optional: without it the email-domain settings routes refuse key intake
    * and every send uses the platform sender. NEVER reuse SIGNING_MASTER_KEY.
    */

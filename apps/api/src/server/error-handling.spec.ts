@@ -54,7 +54,7 @@ describe("applyErrorHandling", () => {
       surface: "api",
       tags: { method: "GET", path: "/api/jobs/:id" },
     });
-    // The event must be flushed before the serverless function freezes.
+    // The event must be flushed before the handler returns.
     expect(deps.flush).toHaveBeenCalledTimes(1);
   });
 

@@ -1,6 +1,6 @@
 /**
  * health-alerts.int.spec.ts — the operator alerts of /api/health against a real
- * Postgres (roadmap 2 G2): cron heartbeats in cron_run and dead letters in
+ * Postgres: cron heartbeats in cron_run and dead letters in
  * app_queue_job.
  */
 import { beforeEach, describe, expect, it } from "vitest";

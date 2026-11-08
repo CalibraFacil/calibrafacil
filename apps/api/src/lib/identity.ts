@@ -17,7 +17,7 @@ import { alias } from "drizzle-orm/pg-core";
  * sign-up). Routes may not touch `db` / `systemDb` (calibra/no-raw-db-in-routes),
  * so they call these.
  *
- * Two kinds of statement live here, and the split is the point (P2-18j):
+ * Two kinds of statement live here, and the split is the point:
  *
  *  - GLOBAL tables (`user`, `session`, `verification`, `organization`,
  *    `platform_event_log`): no organization column and no row-level-security

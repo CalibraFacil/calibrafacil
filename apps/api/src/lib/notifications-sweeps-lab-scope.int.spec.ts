@@ -1,5 +1,5 @@
 /**
- * notifications-sweeps-lab-scope.int.spec.ts - P2-18h [HIGH RISK].
+ * notifications-sweeps-lab-scope.int.spec.ts [HIGH RISK].
  *
  * Notifications, the portal due-digest, the e-mail drains and the Conta Azul
  * scheduled sync run outside a request: nobody names a laboratory. Each of them

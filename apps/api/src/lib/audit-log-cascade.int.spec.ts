@@ -1,5 +1,5 @@
 /**
- * audit-log-cascade.int.spec.ts — Real-DB integration proof for CMP-07 (#692):
+ * audit-log-cascade.int.spec.ts — Real-DB integration proof for CMP-07:
  * the append-only ISO/IEC 17025 audit trail must SURVIVE deletion of the
  * subject entity it documents. Historically each audit-log table's subject FK
  * carried ON DELETE CASCADE, so deleting the subject (or, for the two-FK tables,

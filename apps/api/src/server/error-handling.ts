@@ -41,9 +41,8 @@ export type ErrorHandlingDeps = {
   flush: typeof flushErrorReporter;
 };
 
-// Uncaught request errors used to fall through to Hono's default handler —
-// a plain-text 500 visible only in the process logs. Now they are structured-logged
-// and reported before returning a generic JSON 500. Intentional
+// Uncaught request errors are structured-logged and reported before a generic
+// JSON 500 is returned (not Hono's plain-text default). Intentional
 // HTTP errors (HTTPException 4xx/5xx thrown by routes) pass through untouched:
 // they are control flow, not defects.
 export function applyErrorHandling<E extends HonoEnv>(
@@ -56,8 +55,7 @@ export function applyErrorHandling<E extends HonoEnv>(
   app.onError(async (error, c) => {
     if (error instanceof HTTPException) {
       // A response the route built itself (a domain body, a challenge) is kept;
-      // otherwise the same JSON shape as every other failure, never plain text
-      // (roadmap 2 D2).
+      // otherwise the same JSON shape as every other failure, never plain text.
       if (error.res) return error.getResponse();
       return c.json(httpExceptionBody(error), error.status);
     }
@@ -106,8 +104,7 @@ export function applyErrorHandling<E extends HonoEnv>(
     }
 
     reportDefect();
-    // Serverless: the function may freeze right after the response — give the
-    // delivery a bounded window instead of losing the event.
+    // Give the report's delivery a bounded window before the handler returns.
     await deps.flush();
 
     // P0001 comes only from the immutability triggers (migration 0115): the

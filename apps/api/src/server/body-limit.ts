@@ -4,7 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { Env } from "./env";
 
 /**
- * The largest request body the API reads (roadmap 2 D1, review 3.3):
+ * The largest request body the API reads:
  * `API_MAX_BODY_BYTES`, 413 above it. The Bun entry also caps the socket
  * (`maxRequestBodySize`) at the same size, so an oversized body is not buffered.
  */

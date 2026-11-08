@@ -1,6 +1,6 @@
 /**
  * db-session-timeouts.int.spec.ts: the application connections carry server-side
- * limits (roadmap 2 D4, review 3.2), so a runaway statement or a transaction left
+ * limits, so a runaway statement or a transaction left
  * open cannot hold a connection of the pool indefinitely.
  *
  *   REQ-D4-3  statement_timeout and idle_in_transaction_session_timeout are set

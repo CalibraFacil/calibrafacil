@@ -1,6 +1,6 @@
 /**
  * master-data-lab-scope.int.spec.ts — success paths of the master-data routes
- * (P2-18c) that the per-router specs do not reach, each with a cross-laboratory
+ * that the per-router specs do not reach, each with a cross-laboratory
  * negative: laboratory B's id used in laboratory A's session answers 404/400,
  * with nothing read or written.
  *

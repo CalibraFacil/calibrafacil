@@ -6,8 +6,8 @@ import type { CronEntry } from "./cron-scheduler";
 import { CRON_ENTRIES } from "../cron/schedule";
 
 /**
- * What an operator must look at, apart from whether the API can serve
- * (roadmap 2 G2, review 3.6): a scheduled job that stopped succeeding, and
+ * What an operator must look at, apart from whether the API can serve:
+ * a scheduled job that stopped succeeding, and
  * background jobs the queue gave up on (dead letters).
  *
  * These are alerts, not readiness: a stale cron does not take the API out of

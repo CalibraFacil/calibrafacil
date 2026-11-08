@@ -190,7 +190,7 @@ const CRON_TASKS = {
     run: () => enqueueBackgroundJob({ type: "EMAIL_DOMAIN_HEALTH" }),
   },
   "certificate-drift": { run: runCertificateDrift },
-  // Retention of regulated records (decision Q16). Off unless
+  // Retention of regulated records. Off unless
   // RECORDS_PURGE_ENABLED=true, and a dry run unless RECORDS_PURGE_MODE=execute.
   "records-purge": { run: runRecordsPurge },
   // A desktop whose cursor is older than what was purged bootstraps again.

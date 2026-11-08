@@ -267,8 +267,8 @@ export async function withOrg<R>(
   });
 
   for (const task of deferred) {
-    // Inside the desktop sync's transaction this was a savepoint: the work
-    // waits for that transaction's commit.
+    // Inside the desktop sync's transaction (a savepoint) the work waits for
+    // that transaction's commit.
     if (isInTransactionScope()) afterTransactionCommit(() => runLogged(task));
     else await runLogged(task);
   }

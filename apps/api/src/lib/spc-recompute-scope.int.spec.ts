@@ -1,5 +1,5 @@
 /**
- * spc-recompute-scope.int.spec.ts - P2-18d [HIGH RISK].
+ * spc-recompute-scope.int.spec.ts [HIGH RISK].
  *
  * The SPC nightly sweep (ISO/IEC 17025 §7.7.1, jobs-core `processSpcRecompute`)
  * runs outside a request: nobody names a laboratory. Proves, against the real

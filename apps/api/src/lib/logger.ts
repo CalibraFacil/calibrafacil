@@ -1,10 +1,7 @@
 /**
- * The API's structured log (roadmap 2 G2, review 3.6): one JSON object per line
+ * The API's structured log: one JSON object per line
  * on stdout (info) or stderr (warn, error), so `docker compose logs` and any log
  * shipper read the same fields. Nothing leaves the host; there is no SDK.
- *
- * New code logs through here. The older `console.*` calls are moved over as
- * their files are touched.
  */
 export type LogLevel = "info" | "warn" | "error";
 

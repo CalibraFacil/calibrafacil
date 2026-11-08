@@ -1,5 +1,5 @@
 /**
- * reference-data-contract.int.spec.ts: P2-15 REQ-TC-4. The cloud half of the
+ * reference-data-contract.int.spec.ts: REQ-TC-4. The cloud half of the
  * desktop parity contract: the REAL responses (real handlers, real middleware,
  * real Postgres) of the endpoints the offline desktop mirrors must parse with
  * the same schemas in `@calibra-facil/contracts` that

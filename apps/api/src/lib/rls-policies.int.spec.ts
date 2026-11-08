@@ -21,8 +21,8 @@ import {
 import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
 
-// Real-database proof of the row-level-security policies (migration 0123,
-// roadmap P2-3). The global `db` is the test superuser, which no policy binds
+// Real-database proof of the row-level-security policies (migration 0123).
+// The global `db` is the test superuser, which no policy binds
 // (it stands for the owner: the system path, migrations); `openAppRoleDb()`
 // connects as `calibra_app`, which is bound by the `tenant_isolation` policies.
 

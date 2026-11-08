@@ -1,8 +1,7 @@
 import { rawEnv, readRuntimeConfig } from "@calibra-facil/config";
 
 /**
- * The client's address, for the audit trail, rate limits and throttles
- * (roadmap 2 D1, review 3.3).
+ * The client's address, for the audit trail, rate limits and throttles.
  *
  * The connection's peer (`REMOTE_ADDRESS`, set by the Bun entry from the socket)
  * is the client unless reverse proxies stand in front of the API. Each trusted

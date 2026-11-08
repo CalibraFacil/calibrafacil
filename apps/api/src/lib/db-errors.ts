@@ -4,8 +4,7 @@
 // insert/update as a Drizzle `DrizzleQueryError` wrapper whose OWN `code` is
 // undefined — the real SQLSTATE (`23505` for unique_violation) lives on
 // `error.cause`. Unwrap recursively so both the bare `PostgresError` and the
-// wrapped `DrizzleQueryError` are recognized. Mirrors the pattern already used
-// in domains/catalog/routes/materials.ts and services/commercial/reconcile-webhook.ts.
+// wrapped `DrizzleQueryError` are recognized.
 
 /** Walk `error` (and its `.cause` chain) for a string `code` property. */
 export function extractPgErrorCode(error: unknown): string | undefined {
@@ -28,7 +27,7 @@ export function isUniqueViolation(error: unknown): boolean {
  * True when Postgres refused a DELETE because a row still references the one
  * being removed (SQLSTATE 23001 restrict_violation or 23503
  * foreign_key_violation). A customer that still has regulated records fails
- * this way (retention, decision Q16).
+ * this way (retention).
  */
 export function isReferencedRowViolation(error: unknown): boolean {
   const code = extractPgErrorCode(error);

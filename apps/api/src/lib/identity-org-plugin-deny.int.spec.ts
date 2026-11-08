@@ -1,5 +1,5 @@
 /**
- * identity-org-plugin-deny.int.spec.ts - P2-18j, Q40 [HIGH RISK].
+ * identity-org-plugin-deny.int.spec.ts [HIGH RISK].
  *
  * Better Auth runs on the owner connection (the identity adapter is
  * `getSystemDb()`), so row-level security is NOT a backstop for its organization

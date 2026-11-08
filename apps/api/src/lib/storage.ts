@@ -338,12 +338,9 @@ function isObjectNotFoundError(error: unknown): boolean {
  */
 export function extractKeyFromUrl(certificateUrl: string): string {
   const url = new URL(certificateUrl);
-  return url.pathname.slice(1); // Remove leading slash
+  return url.pathname.slice(1);
 }
 
-/**
- * Upload a file to R2 bucket
- */
 export async function uploadToR2(
   client: R2S3Client,
   bucket: string,
@@ -360,9 +357,6 @@ export async function uploadToR2(
   await client.send(command);
 }
 
-/**
- * Download an object from R2.
- */
 export type StreamedObjectHash =
   | { ok: true; sha256: string; sizeBytes: number }
   /** Not there any more, or no longer the object the ETag named (overwritten since the HEAD). */
@@ -470,9 +464,6 @@ export async function downloadFromR2(
   throw new Error(`R2 object body is not readable: ${key}`);
 }
 
-/**
- * Delete a file from R2 bucket
- */
 export async function deleteFromR2(
   client: R2S3Client,
   bucket: string,

@@ -11,7 +11,7 @@ import {
   rejectStuckCertificateRenders,
 } from "@calibra-facil/db/queue-render-recovery";
 
-// REL-03 — periodic orphan-job backstop (#652).
+// Periodic orphan-job backstop.
 //
 // The worker reclaims expired leases on every poll, but it can be down, and the
 // lease of a job that crashed it on its final attempt has to be settled by
