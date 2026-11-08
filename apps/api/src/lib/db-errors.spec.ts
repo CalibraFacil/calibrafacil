@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { DrizzleQueryError } from "drizzle-orm";
 import {
   extractPgConstraintName,
   extractPgErrorCode,
+  isDatabaseError,
   isUniqueViolation,
   isUniqueViolationOf,
 } from "./db-errors";
@@ -91,5 +93,27 @@ describe("db-errors: isUniqueViolationOf / extractPgConstraintName", () => {
   it("returns undefined for errors without a constraint name", () => {
     expect(extractPgConstraintName(new Error("boom"))).toBeUndefined();
     expect(extractPgConstraintName({ code: "23505" })).toBeUndefined();
+  });
+});
+
+describe("db-errors: isDatabaseError", () => {
+  it("recognizes a failed statement, bare or anywhere on a cause chain", () => {
+    const failed = new DrizzleQueryError("select 1", [], new Error("boom"));
+    expect(isDatabaseError(failed)).toBe(true);
+    expect(isDatabaseError(new Error("wrapped", { cause: failed }))).toBe(true);
+    expect(isDatabaseError({ name: "PostgresError", code: "42P01" })).toBe(
+      true,
+    );
+  });
+
+  it("does not take a domain refusal, a plain error or a vendor error for one", () => {
+    expect(isDatabaseError(new Error("Failed query: look-alike text"))).toBe(
+      false,
+    );
+    expect(isDatabaseError({ name: "ContaAzulApiError", code: "42P01" })).toBe(
+      false,
+    );
+    expect(isDatabaseError(null)).toBe(false);
+    expect(isDatabaseError("PostgresError")).toBe(false);
   });
 });

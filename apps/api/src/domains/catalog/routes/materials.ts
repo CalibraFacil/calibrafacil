@@ -1,4 +1,3 @@
-import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { createRouter } from "../../../server/router";
 import { materialEndpoints } from "@calibra-facil/contracts";
 import { material } from "@calibra-facil/db/schema";
@@ -278,24 +277,20 @@ mount(
       requireLabMaterial(id, member, o),
     );
 
-    try {
-      const result = await adjustMaterialErpStock({
-        organizationId: member.organizationId,
-        materialId: id,
-        quantity: input.quantityOnHand,
-        env: c.env,
-      });
-      return {
-        stockQuantity: result.stockQuantity,
-        stockSyncedAt: result.stockSyncedAt,
-      };
-    } catch (error) {
-      // Lab-actionable preconditions (no integration, unlinked material,
-      // products sync disabled, plan gate) surface as a conflict with the
-      // pt-BR message; unexpected failures still bubble to the 500 handler.
-      const message = errorMessage(error);
-      throw conflict("conflict", message);
-    }
+    // Lab-actionable preconditions (no integration, unlinked material, products
+    // sync disabled, a refusal by the ERP) are typed 409s with a fixed pt-BR
+    // message, thrown by `adjustMaterialErpStock`; anything else (a failed
+    // query included) bubbles to the error handler: reported, opaque 500.
+    const result = await adjustMaterialErpStock({
+      organizationId: member.organizationId,
+      materialId: id,
+      quantity: input.quantityOnHand,
+      env: c.env,
+    });
+    return {
+      stockQuantity: result.stockQuantity,
+      stockSyncedAt: result.stockSyncedAt,
+    };
   },
 );
 
