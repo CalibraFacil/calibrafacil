@@ -1,39 +1,51 @@
 import type { MethodStatus } from '@calibra-facil/schemas/machines'
 import type { DecisionRuleKind } from '@calibra-facil/shared/decision-rule'
+import {
+  METHOD_QUANTITY_KINDS,
+  type ECCENTRICITY_INDICATOR_VARIANTS,
+  type ENVIRONMENT_FIELDS,
+  type FORMULA_REPORTING_GROUPS,
+  type FORMULA_REPORTING_ROLES,
+  type GUM_TYPE_B_DISTRIBUTIONS,
+  type MASS_COMPOSITION_OPTION_SOURCES,
+  type MASS_COMPOSITION_QUANTITY_MODES,
+  type MASS_COMPOSITION_UNCERTAINTY_MODES,
+  type MASS_UNITS,
+  type METHOD_INPUT_FIELD_SOURCES,
+  type METHOD_INPUT_FIELD_TYPES,
+  type METHOD_TABLE_COLUMN_ROLES,
+  type METHOD_TABLE_COLUMN_TYPES,
+  type METHOD_VALIDATION_OPERATORS,
+  type METHOD_VALIDATION_SEVERITIES,
+  type STANDARD_CHANNEL_PROPERTIES,
+  type TABLE_STATISTICS,
+  type UNCERTAINTY_DISTRIBUTIONS,
+} from '@calibra-facil/shared'
 type MethodDraftStatus = MethodStatus
 
-export type MethodDraftInputType = 'text' | 'number' | 'select' | 'table'
+export type MethodDraftInputType = (typeof METHOD_INPUT_FIELD_TYPES)[number]
 
 /**
  * Semantic role of a numeric field/column. Delta-valued roles
  * (correction/tolerance/uncertainty/resolution) convert factor-only for affine
  * kinds (temperature) — see DELTA_QUANTITY_KINDS in @calibra-facil/shared.
- * Mirrors the ScalarInput.quantityKind enum in @calibra-facil/method-definition.
+ * The list is METHOD_QUANTITY_KINDS in @calibra-facil/shared.
  */
-export const methodDraftQuantityKinds = [
-  'indication',
-  'reference',
-  'environment',
-  'correction',
-  'tolerance',
-  'uncertainty',
-  'resolution',
-  'other',
-] as const
+export const methodDraftQuantityKinds = METHOD_QUANTITY_KINDS
 
 export type MethodDraftQuantityKind = (typeof methodDraftQuantityKinds)[number]
 
 export type MethodDraftTableColumn = {
   key: string
   label: string
-  type: 'text' | 'number'
+  type: (typeof METHOD_TABLE_COLUMN_TYPES)[number]
   unit?: string
-  role?: 'standard_value' | 'mass_standard_composition'
+  role?: (typeof METHOD_TABLE_COLUMN_ROLES)[number]
   quantityKind?: MethodDraftQuantityKind
   includeInCertificate?: boolean
   massComposition?: {
-    targetUnit?: 'mg' | 'g' | 'kg'
-    optionSource?: 'certified_values' | 'composition_profiles'
+    targetUnit?: (typeof MASS_UNITS)[number]
+    optionSource?: (typeof MASS_COMPOSITION_OPTION_SOURCES)[number]
     targetColumns?: {
       certifiedValue?: string
       compositionLabel?: string
@@ -42,14 +54,14 @@ export type MethodDraftTableColumn = {
       drift?: string
       buoyancy?: string
     }
-    uncertaintyMode?: 'expanded_rss' | 'expanded_arithmetic'
-    quantityMode?: 'linear_per_item_then_rss' | 'profile_linear'
+    uncertaintyMode?: (typeof MASS_COMPOSITION_UNCERTAINTY_MODES)[number]
+    quantityMode?: (typeof MASS_COMPOSITION_QUANTITY_MODES)[number]
   }
 }
 
 interface MethodDraftEccentricityIndicatorConfig {
   enabled?: boolean
-  variant?: 'circular_platform' | 'road_scale'
+  variant?: (typeof ECCENTRICITY_INDICATOR_VARIANTS)[number]
   pointColumn?: string
   loadPoints?: string[]
 }
@@ -58,7 +70,7 @@ interface MethodDraftWeighingRangeResolverConfig {
   enabled?: boolean
   assetSpecKey?: string
   pointColumn?: string
-  pointUnit?: 'mg' | 'g' | 'kg'
+  pointUnit?: (typeof MASS_UNITS)[number]
   targetColumns?: {
     rangeLabel?: string
     rangeMin?: string
@@ -79,7 +91,7 @@ export type MethodDraftInput = {
   options?: Array<string>
   defaultValue?: string | number
   columns?: Array<MethodDraftTableColumn>
-  source?: 'manual' | 'asset_spec'
+  source?: (typeof METHOD_INPUT_FIELD_SOURCES)[number]
   assetSpecKey?: string
   allowOverride?: boolean
   eccentricityIndicator?: MethodDraftEccentricityIndicatorConfig
@@ -106,13 +118,13 @@ export type MethodDraftVariableBinding =
       source: 'table_statistic'
       fieldKey: string
       columnKey: string
-      statistic: 'mean' | 'sample_stddev' | 'count' | 'min' | 'max'
+      statistic: (typeof TABLE_STATISTICS)[number]
     }
   | {
       key: string
       label?: string
       source: 'environment'
-      field: 'temperature' | 'humidity' | 'pressure'
+      field: (typeof ENVIRONMENT_FIELDS)[number]
     }
   | {
       key: string
@@ -127,12 +139,7 @@ export type MethodDraftVariableBinding =
       source: 'standard_channel'
       standardId?: number
       channelKey: string
-      property:
-        | 'value'
-        | 'correction'
-        | 'uncertainty'
-        | 'coverageFactor'
-        | 'drift'
+      property: (typeof STANDARD_CHANNEL_PROPERTIES)[number]
     }
 
 export type MethodDraftFormula = {
@@ -143,31 +150,24 @@ export type MethodDraftFormula = {
   unit?: string
   reporting?: {
     includeInCertificate?: boolean
-    role?:
-      | 'primary_result'
-      | 'expanded_uncertainty'
-      | 'coverage_factor'
-      | 'conformity_margin'
-      | 'conformity_verdict'
-      | 'uncertainty_component'
-      | 'auxiliary'
-    group?: 'calibration_result' | 'uncertainty_budget' | 'raw_calculation'
+    role?: (typeof FORMULA_REPORTING_ROLES)[number]
+    group?: (typeof FORMULA_REPORTING_GROUPS)[number]
     phase?: 'before' | 'after'
   }
 }
 
 export type MethodDraftValidation = {
   leftExpression: string
-  operator: '<' | '<=' | '>' | '>=' | '==' | '!='
+  operator: (typeof METHOD_VALIDATION_OPERATORS)[number]
   rightExpression: string
   message: string
-  severity: 'error' | 'warning'
+  severity: (typeof METHOD_VALIDATION_SEVERITIES)[number]
 }
 
 export type MethodDraftUncertaintyComponent = {
   name: string
   value: number
-  distribution: 'normal' | 'rectangular' | 'triangular' | 'u-shaped'
+  distribution: (typeof UNCERTAINTY_DISTRIBUTIONS)[number]
   coverageFactor?: number
   divisor?: number
   degreesOfFreedom?: number
@@ -193,12 +193,7 @@ export type MethodDraftMeasurementModelQuantity = {
       }
     | {
         kind: 'type_b'
-        distribution:
-          | 'normal'
-          | 'rectangular'
-          | 'triangular'
-          | 'u_shaped'
-          | 'custom'
+        distribution: (typeof GUM_TYPE_B_DISTRIBUTIONS)[number]
         standardUncertainty?: string | number
         halfWidth?: string | number
         limits?: { lower: string | number; upper: string | number }

@@ -7,6 +7,7 @@ import {
   type FinancialPaymentMethod,
   BILLING_DOCUMENT_EXPORT_STATUS,
   BILLING_DOCUMENT_STATUS,
+  FINANCIAL_PAYMENT_METHODS,
   RECEIVABLE_INSTALLMENT_STATUS,
 } from '@calibra-facil/shared'
 
@@ -74,6 +75,7 @@ import {
 } from '@/features/finance/date-defaults'
 import type { ReceivablesSearch } from '@/features/finance/receivables/receivables-search'
 
+// Display order of the picker; the vocabulary is FINANCIAL_PAYMENT_METHODS.
 const PAYMENT_METHODS: readonly FinancialPaymentMethod[] = [
   'BANK_TRANSFER',
   'PIX',
@@ -93,7 +95,10 @@ const PAYMENT_METHOD_LABELS: Record<FinancialPaymentMethod, string> = {
 }
 
 function parsePaymentMethod(value: string): FinancialPaymentMethod {
-  return PAYMENT_METHODS.find((method) => method === value) ?? 'BANK_TRANSFER'
+  return (
+    FINANCIAL_PAYMENT_METHODS.find((method) => method === value) ??
+    'BANK_TRANSFER'
+  )
 }
 
 async function runBulkFinance(

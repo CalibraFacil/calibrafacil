@@ -1,4 +1,5 @@
 import type { CalibrationPhaseMode } from "@calibra-facil/shared/calibration-record";
+import type { GUM_TYPE_B_DISTRIBUTIONS } from "@calibra-facil/shared";
 import type {
   InputQuantity,
   MeasurementModelInput,
@@ -303,7 +304,7 @@ type TypeAUncertaintySource = {
 
 type TypeBUncertaintySource = {
   kind: "type_b";
-  distribution: "normal" | "rectangular" | "triangular" | "u_shaped" | "custom";
+  distribution: (typeof GUM_TYPE_B_DISTRIBUTIONS)[number];
   standardUncertainty?: string | number;
   halfWidth?: string | number;
   limits?: {

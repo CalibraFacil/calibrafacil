@@ -11,7 +11,9 @@ import {
 import type {
   BillingDocumentExportStatus,
   BillingDocumentStatus,
+  OperationsToCashStage,
   ReceivableInstallmentStatus,
+  RevenueLeakageClass,
 } from "@calibra-facil/shared";
 import {
   isServiceOrderBillable,
@@ -24,17 +26,7 @@ import {
   resolveServiceOrderBillingDocumentLinks,
 } from "./finance";
 import { buildUnitScopeCondition } from "../../lib/units";
-import {
-  classifyServiceOrder,
-  type OperationsToCashStage,
-} from "./operations-to-cash";
-
-export type RevenueLeakageClass =
-  | "STUCK_READY_TO_BILL"
-  | "STUCK_SENT_TO_FINANCE"
-  | "STUCK_INVOICED"
-  | "LONG_OVERDUE"
-  | "BLOCKED_TOO_LONG";
+import { classifyServiceOrder } from "./operations-to-cash";
 
 const REVENUE_LEAKAGE_THRESHOLDS = {
   stuckReadyToBillDays: 7,

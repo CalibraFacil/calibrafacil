@@ -7,10 +7,10 @@ import {
   type AuthVariables,
 } from "../../../middleware/permission";
 import {
-  buildOperationsToCash,
   OPERATIONS_TO_CASH_STAGES,
   type OperationsToCashStage,
-} from "../operations-to-cash";
+} from "@calibra-facil/shared";
+import { buildOperationsToCash } from "../operations-to-cash";
 
 function parseStage(
   value: string | undefined,

@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table'
 import {
+  BILLING_READINESS_STATUSES,
   type BillingReadinessItem,
   type BillingReadinessStatus,
   type BillingReadinessSummary,
@@ -52,12 +53,7 @@ function ReadinessStatusBadge({ status }: { status: BillingReadinessStatus }) {
   )
 }
 
-const READINESS_STATUSES: BillingReadinessStatus[] = [
-  'READY',
-  'BLOCKED',
-  'BILLED',
-  'SENT',
-]
+const READINESS_STATUSES = BILLING_READINESS_STATUSES
 
 const READINESS_FACETS: FacetConfig[] = [
   {

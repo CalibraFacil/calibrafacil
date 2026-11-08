@@ -1,6 +1,7 @@
 // Tables of the "assets" area. Part of the schema entry packages/db/src/schema.ts.
 import { sql } from "drizzle-orm";
 import type { AssetStatus } from "@calibra-facil/schemas/machines";
+import type { RegulatedIntervalKind } from "@calibra-facil/shared";
 import {
   pgTable,
   text,
@@ -255,11 +256,7 @@ export const assetAuditLog = pgTable(
  * `schema.ts` carries no cross-package type import). Spec:
  * `specs/legal-metrology-regime/spec.md` (REQ-MLR-010/011).
  */
-export type LegalMetrologyRegulationKind =
-  | "fixed_months"
-  | "max_months_from_install"
-  | "per_technology"
-  | "not_nationally_fixed";
+export type LegalMetrologyRegulationKind = RegulatedIntervalKind;
 
 /**
  * Provenance of a catalog row. `primary` → the period shape was confirmed against the

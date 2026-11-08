@@ -9,6 +9,7 @@ import {
   MASS_COMPOSITION_UNCERTAINTY_MODES,
   MASS_UNITS,
   METHOD_COLUMN_PHASES,
+  METROLOGY_REGIMES,
   METHOD_INPUT_FIELD_SOURCES,
   METHOD_INPUT_FIELD_TYPES,
   METHOD_TABLE_COLUMN_ROLES,
@@ -443,7 +444,7 @@ export const SetCalibrationIntervalSchema = z.object({
  * carries both. `UNKNOWN` = the lab has not yet determined the enquadramento.
  * Spec: `specs/legal-metrology-regime/spec.md` (REQ-MLR-001).
  */
-export const MetrologyRegimeSchema = z.enum(["INDUSTRIAL", "LEGAL", "UNKNOWN"]);
+export const MetrologyRegimeSchema = z.enum(METROLOGY_REGIMES);
 export type MetrologyRegime = z.infer<typeof MetrologyRegimeSchema>;
 
 const regulatedMonths = () =>

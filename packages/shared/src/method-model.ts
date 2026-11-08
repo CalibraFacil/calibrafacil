@@ -127,5 +127,35 @@ export const UNCERTAINTY_DISTRIBUTIONS = [
   "u-shaped",
 ] as const;
 
+/**
+ * The semantic role of a numeric input field or table column. Delta-valued roles
+ * (correction, tolerance, uncertainty, resolution) convert factor-only for affine
+ * kinds (temperature), see DELTA_QUANTITY_KINDS.
+ */
+export const METHOD_QUANTITY_KINDS = [
+  "indication",
+  "reference",
+  "environment",
+  "correction",
+  "tolerance",
+  "uncertainty",
+  "resolution",
+  "other",
+] as const;
+
+/**
+ * The distributions of a Type B source in a GUM measurement model (the method
+ * definition's `measurementModels`). Stored spelling is snake_case (`u_shaped`),
+ * unlike the legacy uncertainty components above (`u-shaped`, UNCERTAINTY_DISTRIBUTIONS);
+ * the measurement-model input builder maps it to the engine's `u-shaped`.
+ */
+export const GUM_TYPE_B_DISTRIBUTIONS = [
+  "normal",
+  "rectangular",
+  "triangular",
+  "u_shaped",
+  "custom",
+] as const;
+
 /** Whether a block of the method is printed on the certificate. */
 export const CERTIFICATE_SECTION_DISPLAYS = ["full", "hidden"] as const;

@@ -36,3 +36,23 @@ export function regulationCategoryForAssetTypeSlug(
   const map: Record<string, string> = REGULATION_CATEGORY_BY_ASSET_TYPE_SLUG;
   return map[slug] ?? null;
 }
+
+/**
+ * The legal-metrology regime of an instrument (`INDUSTRIAL` = no regulation,
+ * `LEGAL` = under Inmetro/RBMLQ-I control, `UNKNOWN` = not yet determined).
+ */
+export const METROLOGY_REGIMES = ["INDUSTRIAL", "LEGAL", "UNKNOWN"] as const;
+export type MetrologyRegimeValue = (typeof METROLOGY_REGIMES)[number];
+
+/**
+ * The shapes of a regulation-fixed verification periodicity (the discriminant of
+ * `RegulatedIntervalSchema` in @calibra-facil/schemas, the `kind` of a catalog
+ * row and of the portal's view of an instrument's `regulatedInterval`).
+ */
+export const REGULATED_INTERVAL_KINDS = [
+  "fixed_months",
+  "max_months_from_install",
+  "per_technology",
+  "not_nationally_fixed",
+] as const;
+export type RegulatedIntervalKind = (typeof REGULATED_INTERVAL_KINDS)[number];

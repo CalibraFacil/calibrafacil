@@ -1,4 +1,8 @@
 import {
+  METHOD_VALIDATION_OPERATORS,
+  TABLE_STATISTICS,
+} from '@calibra-facil/shared'
+import {
   createCalculationEngine,
   isCalculationEngineError,
   METHOD_ENGINE_OPTIONS,
@@ -96,13 +100,7 @@ function buildDefaultVariableBindings(
           columnKey: column.key,
         })
 
-        for (const statistic of [
-          'mean',
-          'sample_stddev',
-          'count',
-          'min',
-          'max',
-        ] as const) {
+        for (const statistic of TABLE_STATISTICS) {
           bindings.push({
             key: `${field.key}_${column.key}_${statistic}`,
             label: `${field.label} / ${column.label} / ${statistic}`,
@@ -748,7 +746,7 @@ function validationFallback(expression: string): MethodValidation {
 function isValidationOperator(
   operator: string,
 ): operator is MethodValidation['operator'] {
-  return ['<', '<=', '>', '>=', '==', '!='].includes(operator)
+  return METHOD_VALIDATION_OPERATORS.some((known) => known === operator)
 }
 
 function toFormulaScalar(value: unknown): FormulaScalar | null {

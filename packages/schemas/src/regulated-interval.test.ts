@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { RegulatedIntervalSchema } from "./index";
+import { MetrologyRegimeSchema, RegulatedIntervalSchema } from "./index";
 
 describe("RegulatedIntervalSchema", () => {
   // REQ-MLR-010: a valid fixed_months period parses (taxímetro: 24m, last_verification).
@@ -132,5 +132,17 @@ describe("RegulatedIntervalSchema", () => {
         operationalizedByDelegate: false,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("regulated interval vocabulary", () => {
+  it("the schema's kinds and regimes are the shared lists (one source)", async () => {
+    const { REGULATED_INTERVAL_KINDS, METROLOGY_REGIMES } =
+      await import("@calibra-facil/shared");
+    const kinds = RegulatedIntervalSchema.options.map(
+      (option) => option.shape.kind.value,
+    );
+    expect([...kinds].sort()).toEqual([...REGULATED_INTERVAL_KINDS].sort());
+    expect(MetrologyRegimeSchema.options).toEqual([...METROLOGY_REGIMES]);
   });
 });
