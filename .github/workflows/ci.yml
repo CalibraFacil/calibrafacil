@@ -10,9 +10,12 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request supersedes the older run. A push to main never
+# does: each merged commit keeps its own complete verdict (a cancelled run would
+# leave the commit red in the history although nothing failed).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Optional Turborepo remote cache. Pull requests from forks get no secrets, so
 # both stay empty there and turbo simply builds without the remote cache.
