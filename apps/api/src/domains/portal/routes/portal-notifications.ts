@@ -36,7 +36,7 @@ import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 
 /**
- * Portal notification center (#741): the read surface for the IN_APP rows the
+ * Portal notification center: the read surface for the IN_APP rows the
  * dispatchers already address to portal users (certificate ready/amended,
  * calibration-request statuses, visit lifecycle, audit packs, OOT findings).
  * Not to be confused with the §7.10 acknowledgment feed at

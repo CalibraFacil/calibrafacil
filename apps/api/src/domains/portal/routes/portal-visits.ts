@@ -196,7 +196,7 @@ export const portalVisitsRouter = createRouter<{ Variables: AuthVariables }>()
     },
   )
   /**
-   * #739: customer confirms attendance ("Confirmar presença"). An
+   * Customer confirms attendance ("Confirmar presença"). An
    * acknowledgement, not a status transition — the lab lifecycle is untouched.
    * Gated on request:["read"] like the quote-approve precedent: the write
    * authority is the customer scope, enforced below.
@@ -265,7 +265,7 @@ export const portalVisitsRouter = createRouter<{ Variables: AuthVariables }>()
     },
   )
   /**
-   * #739: customer asks the lab to move the visit ("Solicitar reagendamento").
+   * Customer asks the lab to move the visit ("Solicitar reagendamento").
    * Creates a first-class PENDING request the lab resolves — it does NOT move
    * the visit. At most one PENDING request per visit.
    */

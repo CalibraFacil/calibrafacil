@@ -13,7 +13,7 @@ import {
 } from "../../../../test/integration/seed";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-// Real-DB + real-RBAC integration test for SEC-05 (#640): the four portal
+// Real-DB + real-RBAC integration test for SEC-05: the four portal
 // certificate routes (list + single + download + reference-standard download)
 // used only `requirePortalAuth`, skipping the `organization.status = SUSPENDED`
 // gate that `requirePortalProtected` (requirePortalAuth + requireOrganization +

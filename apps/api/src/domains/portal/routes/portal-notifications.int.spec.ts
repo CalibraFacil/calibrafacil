@@ -24,7 +24,7 @@ import {
 } from "../../../../test/integration/seed";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
-// Real-DB integration tests for the portal notification center (#741). Only
+// Real-DB integration tests for the portal notification center. Only
 // the portal better-auth getSession is mocked; requirePortalProtected and
 // resolvePortalNotificationOrgIds run for real. The properties under test are
 // the tenant boundaries: own rows only, CLIENT orgs only (a dual-role user's

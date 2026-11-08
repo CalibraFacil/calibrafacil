@@ -188,7 +188,7 @@ function portalPreferencesPayload(
   };
 }
 
-// Audit pack (#738): bulk export of released certificates + fleet status for
+// Audit pack: bulk export of released certificates + fleet status for
 // customer audits. Hard cap so a single request can never fan out into an
 // unbounded ZIP; the worker re-checks the same cap at generation time.
 const AUDIT_PACK_MAX_CERTIFICATES = 500;
@@ -849,9 +849,6 @@ export const portalRouter = createRouter<{
     });
   })
 
-  // =========================================================================
-  // GET /assets - List assets for active portal organization
-  // =========================================================================
   .get(
     "/assets",
     ...requirePortalProtected,
@@ -1009,9 +1006,6 @@ export const portalRouter = createRouter<{
     },
   )
 
-  // =========================================================================
-  // GET /assets/:id - Get single asset details for active portal organization
-  // =========================================================================
   .get(
     "/assets/:id",
     ...requirePortalProtected,
@@ -1054,12 +1048,12 @@ export const portalRouter = createRouter<{
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
-            // Track 1 — customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
+            // Customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
             // periodicity the customer sets/owns in the portal (for EVERY regime).
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
             intervalSetBy: asset.intervalSetBy,
-            // Track 2 — legal-metrology regime + the regulation-fixed verification
-            // periodicity (independent of Track 1; lab-recorded, read-only for the customer).
+            // Legal-metrology regime + the regulation-fixed verification
+            // periodicity (independent of the customer-owned interval; lab-recorded, read-only for the customer).
             metrologyRegime: asset.metrologyRegime,
             regulatedInterval: asset.regulatedInterval,
             nextLegalVerificationDate: asset.nextLegalVerificationDate,
@@ -1118,7 +1112,7 @@ export const portalRouter = createRouter<{
           .orderBy(desc(calibrationJob.approvedAt))
           .limit(5);
 
-        // Phase 2 slice 1: hide certificateUrl for held releases.
+        // Hide certificateUrl for held releases.
         const certificates = await applyPortalCertificateReleaseGate(
           certificatesRaw,
           scope.labOrganizationId,
@@ -1469,7 +1463,7 @@ export const portalRouter = createRouter<{
   )
 
   // =========================================================================
-  // GET /assets/:id/interval-insight/report - printable HTML report (Phase E2)
+  // GET /assets/:id/interval-insight/report - printable HTML report
   // =========================================================================
   // Self-contained, print-optimized HTML of the reliability analysis the customer
   // can save as a PDF. Explicitly NOT a calibration certificate (§7.8.4.3 disclaimer);
@@ -1691,7 +1685,7 @@ export const portalRouter = createRouter<{
               intervalRationale: rationale,
               nextCalibrationDate,
             })
-            // Defense-in-depth (SEC-08): the portal tenant boundary is the customer
+            // Defense-in-depth: the portal tenant boundary is the customer
             // (asset has no organizationId; org is derived via unit). Repeat the
             // exact scope `decidePortalIntervalWrite` already proved — the asset's
             // customer must be in the caller's in-scope set — so the UPDATE stays
@@ -1795,7 +1789,6 @@ export const portalRouter = createRouter<{
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
 
-    // Parse pagination params
     const page = Math.max(1, parseInt(c.req.query("page") || "1"));
     const limit = Math.min(
       100,
@@ -1856,7 +1849,6 @@ export const portalRouter = createRouter<{
       dateTo ? sql`${approvedAtPortalDate} <= ${dateTo}` : undefined,
     );
 
-    // Count total certificates
     const [totalResult] = await o
       .select({ count: count() })
       .from(calibrationJob)
@@ -1866,7 +1858,6 @@ export const portalRouter = createRouter<{
 
     const total = totalResult?.count ?? 0;
 
-    // Get certificates with pagination
     const certificatesRaw = await o
       .select({
         id: calibrationJob.id,
@@ -1902,7 +1893,7 @@ export const portalRouter = createRouter<{
       .limit(limit)
       .offset(offset);
 
-    // Phase 2 slice 1: hide certificateUrl for held releases.
+    // Hide certificateUrl for held releases.
     const gatedCertificates = await applyPortalCertificateReleaseGate(
       certificatesRaw,
       labOrganizationIds,
@@ -1946,9 +1937,6 @@ export const portalRouter = createRouter<{
     } satisfies ServerShape<PortalCertificatesResponse>);
   })
 
-  // =========================================================================
-  // GET /certificates/:id - Get single certificate details
-  // =========================================================================
   .get("/certificates/:id", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
@@ -1966,7 +1954,6 @@ export const portalRouter = createRouter<{
 
     const o = orgSetDb(labOrganizationIds);
 
-    // Get certificate with all details
     const [certificate] = await o
       .select({
         id: calibrationJob.id,
@@ -2005,7 +1992,7 @@ export const portalRouter = createRouter<{
         labAccreditationNumber: organization.accreditationNumber,
         labAccreditationValidFrom: organization.accreditationValidFrom,
         labAccreditationValidUntil: organization.accreditationValidUntil,
-        // The seal decision frozen at approval (Q42); null before migration 0120.
+        // The seal decision frozen at approval; null before migration 0120.
         frozenSeal: frozenSealColumn,
         frozenAccreditationNumber: frozenAccreditationNumberColumn,
       })
@@ -2037,7 +2024,7 @@ export const portalRouter = createRouter<{
       normalizePortalReferenceStandards(certificate.standardsSnapshot),
     );
 
-    // Phase 2 slice 1: hide certificateUrl when the release is held.
+    // Hide certificateUrl when the release is held.
     const [gated] = await applyPortalCertificateReleaseGate(
       [certificate],
       labOrganizationIds,
@@ -2049,9 +2036,9 @@ export const portalRouter = createRouter<{
       ])
     ).get(certificate.id);
 
-    // The seal is the decision frozen at approval (Q42); only a record
+    // The seal is the decision frozen at approval; only a record
     // approved before it was frozen falls back to the rule it was issued
-    // under (#647 vigência at EMISSION, #427 Phase 1 override).
+    // under (vigência at EMISSION).
     const { accredited, accreditationNumber } = issuedSealOf({
       frozenSeal: certificate.frozenSeal,
       frozenAccreditationNumber: certificate.frozenAccreditationNumber,
@@ -2144,9 +2131,6 @@ export const portalRouter = createRouter<{
     return c.json(body satisfies ServerShape<PortalCertificateDetail>);
   })
 
-  // =========================================================================
-  // GET /certificates/:id/download - Get download URL for certificate
-  // =========================================================================
   .get("/certificates/:id/download", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
@@ -2187,7 +2171,7 @@ export const portalRouter = createRouter<{
       throw notFound("certificate_not_found", "Certificado nao encontrado");
     }
 
-    // Phase 2 slice 1: deny download when the release is held for billing
+    // Deny download when the release is held for billing
     // or for payment. Customer-facing copy is provider-neutral.
     const releaseStatuses = await loadPortalReleaseStatuses({
       organizationId: labOrganizationIds,
@@ -2221,7 +2205,7 @@ export const portalRouter = createRouter<{
   })
 
   // =========================================================================
-  // POST /audit-packs - Request an audit pack (async bulk export, #738)
+  // POST /audit-packs - Request an audit pack (async bulk export)
   // =========================================================================
   // Enqueues an AUDIT_PACK background job that builds a ZIP with every
   // RELEASED certificate in the period + a fleet-status report + a
@@ -2344,9 +2328,6 @@ export const portalRouter = createRouter<{
     },
   )
 
-  // =========================================================================
-  // GET /audit-packs - List audit packs requested by the active portal org
-  // =========================================================================
   .get("/audit-packs", ...requirePortalProtected, async (c) => {
     const portalMember = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
@@ -2402,9 +2383,6 @@ export const portalRouter = createRouter<{
     });
   })
 
-  // =========================================================================
-  // GET /audit-packs/:id/download - Presigned download URL for a ready pack
-  // =========================================================================
   .get("/audit-packs/:id/download", ...requirePortalProtected, async (c) => {
     const portalMember = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
@@ -2495,7 +2473,7 @@ export const portalRouter = createRouter<{
 
   // =========================================================================
   // GET /oot-notifications - §7.10 out-of-tolerance notifications addressed
-  // to this portal customer (#426 Phase 2). Opaque id = the notification's
+  // to this portal customer. Opaque id = the notification's
   // ackToken (already the customer's ack credential in the e-mail link).
   // The general in-app notification center lives at /api/portal/notifications
   // (portal-notifications.ts) — this endpoint is OOT-specific.
@@ -2663,9 +2641,6 @@ export const portalRouter = createRouter<{
     },
   )
 
-  // =========================================================================
-  // GET /certificates/:id/reference-standards/:standardId/certificate/download
-  // =========================================================================
   .get(
     "/certificates/:id/reference-standards/:standardId/certificate/download",
     ...requirePortalProtected,
@@ -2770,7 +2745,7 @@ export const portalRouter = createRouter<{
   )
 
   // =========================================================================
-  // GET /analytics/fleet - fleet reliability analytics (#740 Track A)
+  // GET /analytics/fleet - fleet reliability analytics
   // =========================================================================
   // Aggregates the lab-computed as-found verdicts (never recomputed here —
   // ISO/IEC 17025 §7.8.6 / ILAC-G8): OOT rate trend, per-type breakdown and
@@ -2850,7 +2825,7 @@ export const portalRouter = createRouter<{
   )
 
   // =========================================================================
-  // GET /assets/:id/drift-series - matched-point as-found margin series (#740)
+  // GET /assets/:id/drift-series - matched-point as-found margin series
   // =========================================================================
   // The data drift.ts regresses, exposed for the portal drift chart: per
   // positional point, the signed margin toward the 0 tolerance limit over
@@ -2918,9 +2893,6 @@ export const portalRouter = createRouter<{
     },
   )
 
-  // =========================================================================
-  // GET /oot-events - customer's out-of-tolerance events (#740 Track B)
-  // =========================================================================
   .get(
     "/oot-events",
     ...requirePortalProtected,

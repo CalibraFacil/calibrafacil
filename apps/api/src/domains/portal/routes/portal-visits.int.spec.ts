@@ -211,7 +211,7 @@ describe("portalVisitsRouter GET / — real DB + real portal middleware", () => 
     expect(visit).toHaveProperty("address");
     expect(visit).toHaveProperty("assetCount");
     expect(visit.assetCount).toBe(0);
-    // #739 customer-facing acknowledgement + reschedule state
+    // Customer-facing acknowledgement + reschedule state
     expect(visit).toHaveProperty("customerConfirmedAt");
     expect(visit).toHaveProperty("rescheduleRequest");
     expect(visit.rescheduleRequest).toBeNull();
@@ -219,7 +219,7 @@ describe("portalVisitsRouter GET / — real DB + real portal middleware", () => 
 });
 
 // ---------------------------------------------------------------------------
-// #739 — customer writes: POST /:id/confirm and POST /:id/reschedule-request.
+// Customer writes: POST /:id/confirm and POST /:id/reschedule-request.
 // Same real-DB, real-middleware tier as the GET tests above. Notifications are
 // best-effort (try/catch in the routes) so no mail/env is needed.
 // ---------------------------------------------------------------------------

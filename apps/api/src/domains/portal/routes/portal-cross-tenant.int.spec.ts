@@ -11,7 +11,7 @@
  * Only the portal session is mocked (test/integration/setup). The tenant SQL
  * guard runs in enforce mode: a statement on a tenant table without an
  * organization predicate fails the test that issued it, which is how the
- * statements decision Q30 names (request-detail visit lookup, request-batch
+ * statements (request-detail visit lookup, request-batch
  * duplicate check, service-order resolvers, out-of-tolerance acknowledge
  * update, publicId asset resolver) are held to the predicate.
  */

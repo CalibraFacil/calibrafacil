@@ -42,12 +42,11 @@ export const assetCreateRoutes = createRouter<PublicApiV2Env>().post(
           throw notFound("customer_not_found", "Cliente não encontrado");
         }
 
-        // SEC-03b: the org-scoped check inside `createLabAsset` ran first; the
+        // The org-scoped check inside `createLabAsset` ran first; the
         // per-org unique (asset_lab_org_tag_uidx → 23505) backstops a SAME-org
         // race. The violation rolls the transaction back and `mapError` (below)
         // answers the SAME 409 asset_tag_conflict the app check returns (never
-        // 500). A cross-org duplicate no longer raises (different
-        // lab_organization_id).
+        // 500).
         //
         // The asset, its audit entry and the caller's external id commit
         // together (and with the idempotency record).

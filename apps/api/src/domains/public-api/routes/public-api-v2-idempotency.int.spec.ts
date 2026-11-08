@@ -1,12 +1,11 @@
 /**
- * public-api-v2-idempotency.int.spec.ts - Q38 [HIGH RISK].
+ * public-api-v2-idempotency.int.spec.ts [HIGH RISK].
  *
- * The idempotency record of a public-API mutation used to be written in a
- * transaction of its own AFTER the mutation: a failure between the two let a
- * retry run the mutation again (or left a record for a mutation that rolled
- * back), and two concurrent requests with the same key both ran. The key is now
- * reserved first (in-progress, committed at once) and the mutation and the final
- * record commit in ONE transaction.
+ * The idempotency key of a public-API mutation is reserved first (in-progress,
+ * committed at once); the mutation and the final record commit in ONE
+ * transaction. So a failure between the two cannot let a retry run the mutation
+ * again (or leave a record for a mutation that rolled back), and two concurrent
+ * requests with the same key do not both run.
  *
  * (The v1 public API is read-only: it has no mutation and no idempotency
  * record. The mutations below are v2: webhook subscriptions and calibration

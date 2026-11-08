@@ -281,7 +281,7 @@ describe("portal endpoints: real responses honor the contract schemas (P2-15 REQ
       await get("/certificates/CAL-PC-2"),
       portalCertificateDetailSchema,
     );
-    // The page reads the method name from `methodName` (it used to read `name`).
+    // The page reads the method name from `methodName`.
     expect(detail.methodSnapshot?.methodName).toBe("Erro de indicação");
     expect(detail.releaseStatus).toBe("RELEASED");
 

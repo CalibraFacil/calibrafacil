@@ -18,7 +18,7 @@ import {
 } from "../../../../test/integration/seed";
 
 // Real-DB + real-RBAC integration tier for the portal AUDIT PACK endpoints
-// (#738) — a customer-facing bulk export, so the two properties that matter
+// — a customer-facing bulk export, so the two properties that matter
 // most are (1) tenant scope: a portal session can only export ITS customers'
 // certificates, and (2) the certificate release gate: payment-held
 // certificates block/never enter a pack. Only the portal getSession and the

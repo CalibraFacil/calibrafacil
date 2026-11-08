@@ -333,7 +333,6 @@ export async function createPortalInvitationAsService(params: {
       );
     }
 
-    // Normalize old pending invites that already expired
     await clientOrg
       .update(invitation)
       .set({ status: "expired" })

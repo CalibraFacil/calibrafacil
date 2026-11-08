@@ -152,7 +152,7 @@ export const assetUpdateRoutes = createRouter<PublicApiV2Env>()
                   : input.installedAt
                     ? new Date(input.installedAt)
                     : null;
-              // Track-2 install anchor + legal-metrology regime: the lab's rule.
+              // Install anchor + legal-metrology regime: the lab's rule.
               const regimeUpdate = planAssetRegimeUpdate(existing, {
                 metrologyRegime: input.metrologyRegime,
                 regulatedInterval: input.regulatedInterval,
@@ -228,10 +228,9 @@ export const assetUpdateRoutes = createRouter<PublicApiV2Env>()
             },
           );
         } catch (error) {
-          // SEC-03b: the org-scoped check ran first; this backstops a SAME-org
+          // The org-scoped check ran first; this backstops a SAME-org
           // race that hits the per-org unique (asset_lab_org_tag_uidx → 23505).
-          // A cross-org duplicate no longer raises (different
-          // lab_organization_id). Answer the SAME 409 asset_tag_conflict the app
+          // Answer the SAME 409 asset_tag_conflict the app
           // check returns (never 500).
           if (isUniqueViolation(error)) {
             throw invalid("asset_tag_conflict", "Tag já está em uso");
