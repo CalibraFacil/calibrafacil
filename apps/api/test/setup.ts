@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, vi } from "vitest";
-import { checkEndpointResponses } from "../src/lib/endpoint-mount";
+import { checkEndpointResponses } from "../src/lib/endpoint-response-check";
 
 // A mounted endpoint whose response drifts from its contract schema fails the request.
 checkEndpointResponses();

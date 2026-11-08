@@ -1,10 +1,30 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { endpoint, noContent, routeId } from "@calibra-facil/contracts";
 
 import { mount } from "./endpoint-mount";
+
+// The permission guard is the real `withLabPermission` in the integration
+// specs (RBAC, the mounted domains). Here it is recorded: what `mount` passes
+// it, and where it sits among the other middleware.
+const permissionCalls = vi.hoisted(() => {
+  const log: unknown[] = [];
+  const trace: string[] = [];
+  return { log, trace };
+});
+vi.mock("../middleware/permission", () => ({
+  withLabPermission: (permission: unknown) => {
+    permissionCalls.log.push(permission);
+    return [
+      async (_c: unknown, next: () => Promise<void>) => {
+        permissionCalls.trace.push("permission");
+        await next();
+      },
+    ];
+  },
+}));
 
 const itemSchema = z.object({ id: z.number(), name: z.string() });
 
@@ -225,5 +245,86 @@ describe("mount", () => {
         page: 1,
       })),
     ).toThrow(/cannot be mounted under \/api\/other/);
+  });
+
+  describe("the definition's permission", () => {
+    const guarded = endpoint({
+      method: "post",
+      path: "/api/things/guarded",
+      body: z.object({ name: z.string().min(2) }),
+      response: itemSchema,
+      failure: "Falha",
+      policy: "cloud-only",
+      desktopLabel: "Coisas",
+      permission: { client: ["create"] },
+    });
+
+    it("is applied as withLabPermission, before the route's middleware and the validators", async () => {
+      permissionCalls.log.length = 0;
+      permissionCalls.trace.length = 0;
+      const router = new Hono();
+      const extra = createMiddleware(async (_c, next) => {
+        permissionCalls.trace.push("extra");
+        await next();
+      });
+      mount(router, "/api/things", guarded, [extra], async (_c, input) => ({
+        id: 1,
+        name: input.body.name,
+      }));
+
+      expect(permissionCalls.log).toEqual([{ client: ["create"] }]);
+      // A body the validator refuses never reaches the handler, but the
+      // guards ran first: permission, then the route's own middleware.
+      const refused = await new Hono()
+        .route("/api/things", router)
+        .request("/api/things/guarded", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "x" }),
+        });
+      expect(refused.status).toBe(400);
+      expect(permissionCalls.trace).toEqual(["permission", "extra"]);
+    });
+
+    it("also works without any other middleware (the 4-argument form)", async () => {
+      permissionCalls.trace.length = 0;
+      const router = new Hono();
+      mount(router, "/api/things", guarded, async (_c, input) => ({
+        id: 1,
+        name: input.body.name,
+      }));
+
+      const response = await new Hono()
+        .route("/api/things", router)
+        .request("/api/things/guarded", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "novo" }),
+        });
+      expect(response.status).toBe(200);
+      expect(permissionCalls.trace).toEqual(["permission"]);
+    });
+
+    it("adds no guard when the definition has no permission", () => {
+      permissionCalls.log.length = 0;
+      mount(new Hono(), "/api/things", endpoints.list, [], async () => ({
+        data: [],
+        page: 1,
+      }));
+      expect(permissionCalls.log).toEqual([]);
+    });
+
+    it("refuses, when the route is registered, a permission the access statements do not have", () => {
+      const unknownResource = { ...guarded, permission: { nothing: ["read"] } };
+      const unknownAction = { ...guarded, permission: { client: ["fly"] } };
+      for (const def of [unknownResource, unknownAction]) {
+        expect(() =>
+          mount(new Hono(), "/api/things", def, async () => ({
+            id: 1,
+            name: "x",
+          })),
+        ).toThrow(/not an access-control statement/);
+      }
+    });
   });
 });

@@ -4,7 +4,8 @@ import {
   SYNC_OPERATIONS,
   type SyncCommandOperation,
 } from "@calibra-facil/contracts";
-import { ac, type PermissionCheck } from "@calibra-facil/auth/access";
+import type { PermissionCheck } from "@calibra-facil/auth/access";
+import { isPermissionCheck } from "../../lib/permission-check";
 import {
   type MemberData,
   getEffectivePermissionRole,
@@ -30,21 +31,6 @@ import {
  * `operation-permissions.spec.ts` also reads the online route sources and fails when
  * a route's guard and the table disagree.
  */
-function isPermissionCheck(value: unknown): value is PermissionCheck {
-  if (typeof value !== "object" || value === null) return false;
-  const known = new Map<string, readonly string[]>(
-    Object.entries(ac.statements),
-  );
-  return Object.entries(value).every(([resource, actions]) => {
-    const allowed = known.get(resource);
-    return (
-      allowed !== undefined &&
-      Array.isArray(actions) &&
-      actions.every((action) => allowed.includes(action))
-    );
-  });
-}
-
 /** The permission an operation needs, as the access-control statements spell it. */
 export function syncOperationPermission(
   operation: SyncCommandOperation,

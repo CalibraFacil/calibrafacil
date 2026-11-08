@@ -25,6 +25,18 @@ export type EndpointMethod = "get" | "post" | "put" | "patch" | "delete";
 /** Wording of the desktop's "not available offline" error (`<label> requer ...`). */
 export type DesktopUnsupportedFlavor = "web-api" | "cloud-sync";
 
+/**
+ * What a lab member must hold to call an endpoint: resources and the actions
+ * on them, as the access-control statements of `@calibra-facil/auth/access`
+ * spell them (`{ client: ["read"] }`). Typed structurally because the contract
+ * cannot import auth's runtime; the names are checked against the statements by
+ * `isPermissionCheck` (auth) when the API mounts the endpoint and in the API's
+ * endpoint-permission spec.
+ */
+export type EndpointPermission = {
+  readonly [resource: string]: readonly string[];
+};
+
 type EndpointBase = {
   method: EndpointMethod;
   /** The full path, `:name` for a path parameter (`/api/customers/:id`). */
@@ -47,6 +59,14 @@ type EndpointBase = {
   status?: 200 | 201 | 204;
   /** pt-BR message of the `CalibraApiError` when the body carries no `error`. */
   failure: string;
+  /**
+   * The permission a LAB member needs: `mount` puts `withLabPermission(permission)`
+   * (lab session, active organization, LAB type, then this check) in front of
+   * the route's own `middleware`. Leave it out for a route that asks for none,
+   * or one guarded by something else (a role, a scope, the portal): that stays
+   * the `middleware` argument of `mount`.
+   */
+  permission?: EndpointPermission;
 };
 
 type EndpointPolicy =
