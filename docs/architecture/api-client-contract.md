@@ -164,8 +164,9 @@ in `define.ts`): what a LAB member must hold, spelled as the access statements o
 `packages/auth/src/access.ts` do. `mount` puts `withLabPermission(def.permission)`
 (lab session, active organization, LAB type, the check) in front of the route's own
 `middleware` argument, so the same data is what the API enforces and what anything
-else can read (the sync operation table checks its `permission` against the
-definition `onlineRoute` names). A route with a `permission` and nothing else to add
+else can read: REQ-SYNC-RBAC-2 (`apps/api/src/domains/sync/operation-permissions.spec.ts`)
+compares each `SYNC_OPERATIONS[op].permission` with the `permission` of the definition
+its `onlineRoute` names, data against data. A route with a `permission` and nothing else to add
 takes the 4-argument form, `mount(router, PREFIX, def, handler)`.
 
 - The contract types it structurally (strings): it cannot import auth's runtime, and

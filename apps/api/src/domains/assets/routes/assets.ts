@@ -176,7 +176,6 @@ mount(
   assetsRouter,
   PREFIX,
   assetEndpoints.create,
-  withLabPermission({ equipment: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 

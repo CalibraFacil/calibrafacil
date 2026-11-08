@@ -354,6 +354,7 @@ export const serviceOrderEndpoints = {
     status: 201,
     failure: "Erro ao criar OS",
     policy: "local-command-sync",
+    permission: { service_order: ["create"] },
   }),
   update: endpoint({
     method: "patch",

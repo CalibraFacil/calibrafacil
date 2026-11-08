@@ -200,7 +200,8 @@ export type SyncCommandOperation = SyncCommand["operation"];
 
 /**
  * The rights an operation needs, as the online route that does the same thing states
- * them (`withLabPermission({...})`): resource -> actions. The API checks the names
+ * them (the `permission` of its endpoint definition, which `mount` applies as
+ * `withLabPermission`): resource -> actions. The API checks the names
  * against its access-control statements when it loads the table.
  */
 export type SyncOperationPermission = {

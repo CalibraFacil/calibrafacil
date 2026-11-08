@@ -832,7 +832,6 @@ mount(
   jobsRouter,
   PREFIX,
   jobEndpoints.submitExecution,
-  withLabPermission({ calibration: ["submit"] }),
   async (c, { params, body }) => {
     const memberData = c.get("member");
     const session = c.get("session");
@@ -886,7 +885,6 @@ mount(
   jobsRouter,
   PREFIX,
   jobEndpoints.saveExecution,
-  withLabPermission({ calibration: ["execute"] }),
   async (c, { params, body }) => {
     const memberData = c.get("member");
     const session = c.get("session");
