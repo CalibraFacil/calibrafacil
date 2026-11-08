@@ -17,11 +17,9 @@ import {
   count,
   desc,
   eq,
-  gte,
   ilike,
   isNotNull,
   isNull,
-  lte,
   or,
 } from "drizzle-orm";
 import type { ServiceOrderScope } from "./service-order-scope";
@@ -41,8 +39,6 @@ export type ServiceOrdersListQuery = {
   awaitingApproval?: boolean;
   readyForPickup?: boolean;
   warranty?: boolean;
-  dateFrom?: string;
-  dateTo?: string;
   query?: string;
 };
 
@@ -126,10 +122,6 @@ export async function listServiceOrdersForLab(
   if (query.readyForPickup)
     conditions.push(eq(serviceOrder.status, "ready_for_pickup"));
   if (query.warranty) conditions.push(eq(serviceOrder.priority, "warranty"));
-  if (query.dateFrom)
-    conditions.push(gte(serviceOrder.openedAt, new Date(query.dateFrom)));
-  if (query.dateTo)
-    conditions.push(lte(serviceOrder.openedAt, new Date(query.dateTo)));
   if (query.query) {
     const searchCondition = or(
       ilike(serviceOrder.serviceOrderNumber, `%${query.query}%`),

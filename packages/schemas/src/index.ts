@@ -580,18 +580,6 @@ export const ListCalibrationRequestsQuerySchema = z.object({
   query: z.string().optional(),
   status: CalibrationRequestStatusSchema.optional(),
   customerId: z.coerce.number().optional(),
-  dateFrom: z
-    .string()
-    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
-      message: "Data inicial invalida",
-    })
-    .optional(),
-  dateTo: z
-    .string()
-    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
-      message: "Data final invalida",
-    })
-    .optional(),
 });
 
 export const ReviewCalibrationRequestSchema = z.object({
@@ -695,8 +683,6 @@ export const ListVisitsQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   status: VisitStatusSchema.optional(),
   technicianId: z.string().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
   mine: queryFlag.optional(),
   rescheduleRequested: queryFlag.optional(),
 });
@@ -2044,8 +2030,6 @@ export const ListJobsQuerySchema = z.object({
   assetId: z.coerce.number().optional(),
   serviceId: z.coerce.number().optional(),
   technicianId: z.string().optional(),
-  dateFrom: z.string().optional(), // ISO date string
-  dateTo: z.string().optional(), // ISO date string
   dueSoon: queryFlag.optional(), // Filter jobs due in next 7 days
   overdue: queryFlag.optional(), // Filter overdue jobs
 });
@@ -2223,8 +2207,6 @@ export const ListNonConformancesQuerySchema = z.object({
   status: NonConformanceStatusSchema.optional(),
   type: NonConformanceTypeSchema.optional(),
   jobId: z.coerce.number().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
 });
 
 // =============================================================================

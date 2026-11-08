@@ -275,8 +275,6 @@ mount(
       assetId,
       serviceId,
       technicianId,
-      dateFrom,
-      dateTo,
       dueSoon,
       overdue,
     } = filters;
@@ -314,14 +312,6 @@ mount(
 
     if (technicianId) {
       conditions.push(eq(calibrationJob.technicianId, technicianId));
-    }
-
-    if (dateFrom) {
-      conditions.push(gte(calibrationJob.createdAt, new Date(dateFrom)));
-    }
-
-    if (dateTo) {
-      conditions.push(lte(calibrationJob.createdAt, new Date(dateTo)));
     }
 
     // Filter jobs due within 7 days. due_date is a calendar day: compare it

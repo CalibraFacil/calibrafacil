@@ -1,17 +1,7 @@
 import { createRouter } from "../../../server/router";
 import { visitEndpoints } from "@calibra-facil/contracts";
 import { alias } from "drizzle-orm/pg-core";
-import {
-  and,
-  count,
-  desc,
-  eq,
-  exists,
-  gte,
-  inArray,
-  lte,
-  sql,
-} from "drizzle-orm";
+import { and, count, desc, eq, exists, inArray, sql } from "drizzle-orm";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   VISIT_MACHINE,
@@ -133,16 +123,8 @@ mount(
   async (c, { query }) => {
     const member = c.get("member");
     const session = c.get("session");
-    const {
-      page,
-      limit,
-      status,
-      technicianId,
-      dateFrom,
-      dateTo,
-      mine,
-      rescheduleRequested,
-    } = query;
+    const { page, limit, status, technicianId, mine, rescheduleRequested } =
+      query;
     const offset = (page - 1) * limit;
 
     return await orgDb(member.organizationId).transaction(async (o) => {
@@ -155,12 +137,6 @@ mount(
         conditions.push(eq(calibrationVisit.technicianId, session.user.id));
       } else if (technicianId) {
         conditions.push(eq(calibrationVisit.technicianId, technicianId));
-      }
-      if (dateFrom) {
-        conditions.push(gte(calibrationVisit.scheduledAt, new Date(dateFrom)));
-      }
-      if (dateTo) {
-        conditions.push(lte(calibrationVisit.scheduledAt, new Date(dateTo)));
       }
       if (rescheduleRequested) {
         conditions.push(

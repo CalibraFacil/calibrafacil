@@ -25,4 +25,11 @@ describe("endpoint definitions", () => {
     expect(defined.length).toBeGreaterThan(0);
     expect(defined.filter((label) => !served.has(label))).toEqual([]);
   });
+
+  it("serve no template leftover (GET /hello answered a greeting nobody calls)", () => {
+    const served = createApiApp().routes.map(
+      (route) => `${route.method} ${route.path}`,
+    );
+    expect(served).not.toContain("GET /hello");
+  });
 });
