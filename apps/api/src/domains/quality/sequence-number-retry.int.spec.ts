@@ -1,5 +1,5 @@
 /**
- * sequence-number-retry.int.spec.ts - P2-18d [HIGH RISK].
+ * sequence-number-retry.int.spec.ts [HIGH RISK].
  *
  * CAPA and NC numbers are sequential per laboratory and year; two creators that
  * read the same last number collide on the unique index. The retry loop must

@@ -1,6 +1,4 @@
 /**
- * unit-role-quality-records.int.spec.ts - architecture review P0-11, decision Q49.
- *
  * A unit role elevates exactly one thing on the organization-wide quality
  * records: `create`. On the REAL routes, an organization-role `member` who is a
  * `technician` of their unit creates an NC, a CAPA, a proficiency-test round, an

@@ -9,7 +9,7 @@ import {
 import { hasPermissionLocally } from "../../middleware/permission";
 
 /**
- * Who may verify the effectiveness of a CAPA (ISO/IEC 17025 §8.7; decision Q50).
+ * Who may verify the effectiveness of a CAPA (ISO/IEC 17025 §8.7).
  *
  * A verifier is NOT independent when they are the CAPA's current owner
  * (`responsibleId`), were ever its responsible person (the audit history of

@@ -1,6 +1,4 @@
 /**
- * spc-charts-readings.int.spec.ts - P2-18d.
- *
  * The SPC handlers spc.int.spec.ts does not reach (ISO/IEC 17025 §7.7.1): PUT and
  * DELETE /charts/:id, GET /readings, DELETE /readings/:id. Success paths and the
  * cross-laboratory negatives, run as the owner here and as `calibra_app` by

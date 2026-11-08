@@ -870,7 +870,7 @@ describe("capaRouter — responsibleId is tenant-scoped", () => {
   });
 
   // =========================================================================
-  // REQ-CAPA-008  Anyone who was ever responsible is not independent (Q50)
+  // REQ-CAPA-008  Anyone who was ever responsible is not independent
   // =========================================================================
   it("REQ-CAPA-008: reassigning the CAPA does not make the former owner independent; an admin who never touched it can verify", async () => {
     const creator = await seedOrg({
@@ -970,7 +970,7 @@ describe("capaRouter — responsibleId is tenant-scoped", () => {
   });
 
   // =========================================================================
-  // REQ-CAPA-009  The sole eligible verifier may verify with a justification (Q50)
+  // REQ-CAPA-009  The sole eligible verifier may verify with a justification
   // =========================================================================
   it("REQ-CAPA-009: a lab with one eligible verifier needs a written justification; a normal lab never waives", async () => {
     const sole = await seedOrg({

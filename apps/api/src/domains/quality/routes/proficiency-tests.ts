@@ -34,7 +34,7 @@ import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 
 /**
- * Proficiency Testing Router - ISO/IEC 17025 §7.7.2 (issue #60 Phase 0)
+ * Proficiency Testing Router - ISO/IEC 17025 §7.7.2
  *
  * PT register (rounds + provider reports scored per ISO 13528) and the
  * risk-based participation plan (NIT-DICLA-026 §9.4, 4-year default cycle).
@@ -152,9 +152,6 @@ export const proficiencyTestsRouter = createRouter<{
   Variables: AuthVariables;
 }>();
 
-// =========================================================================
-// GET / - List PT rounds with pagination and filtering
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -238,9 +235,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /summary - Status counts + participation-plan compliance
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -327,9 +321,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /plan - Create a plan item
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -375,9 +366,6 @@ mount(
   },
 );
 
-// =========================================================================
-// PUT /plan/:id - Update a plan item
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -448,9 +436,6 @@ mount(
   },
 );
 
-// =========================================================================
-// DELETE /plan/:id - Remove a plan item
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -480,9 +465,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id - PT round detail
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -541,9 +523,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/audit-log
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -577,9 +556,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST / - Register a PT round
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,
@@ -867,9 +843,6 @@ mount(
   },
 );
 
-// =========================================================================
-// DELETE /:id - Remove a PT round
-// =========================================================================
 mount(
   proficiencyTestsRouter,
   PREFIX,

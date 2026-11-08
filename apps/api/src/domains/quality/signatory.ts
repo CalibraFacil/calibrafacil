@@ -56,7 +56,7 @@ export type SignatoryGateResult =
  * Optional for a laboratory that is not accredited: auto-detected, so when it
  * has zero ACTIVE signatory records the gate is a no-op (`ok: true, enforced:
  * false`) and orgs that don't use the roster are unaffected. MANDATORY for an
- * accredited laboratory (`mandatory: true`, roadmap 2 B5, decision Q45): an
+ * accredited laboratory (`mandatory: true`): an
  * empty roster means nobody is authorized to sign, so it fails CLOSED
  * (`empty_roster`) instead of letting every approver through.
  */

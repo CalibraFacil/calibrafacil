@@ -9,7 +9,7 @@ import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedOrg } from "../../../../test/integration/seed";
 
-// Migration 0128 (Q45): the scope enforcement mode becomes "never chosen" (NULL)
+// Migration 0128: the scope enforcement mode becomes "never chosen" (NULL)
 // where it was only the old column default, and an explicit choice survives. The
 // test database is built from schema.ts (already nullable), so the SQL of the
 // migration is run here against rows seeded the way a pre-0128 database holds them.

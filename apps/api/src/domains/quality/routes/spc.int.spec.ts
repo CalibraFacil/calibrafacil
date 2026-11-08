@@ -1,6 +1,6 @@
 /**
  * spc.int.spec.ts — Real-DB + real-RBAC integration tests for the ISO/IEC
- * 17025 §7.7.1 check-standard SPC module (issue #60 Phase 1).
+ * 17025 §7.7.1 check-standard SPC module.
  *
  * REQ-SPC-001  Tenant isolation on charts
  * REQ-SPC-002  Reading ingestion re-evaluates the chart:

@@ -1,6 +1,6 @@
 /**
  * Accredited-scope (CMC) classification for a calibration job — the server
- * side of the ISO/IEC 17025 §7.6/§7.8.3 · ILAC P14 guard (#427 Phase 0).
+ * side of the ISO/IEC 17025 §7.6/§7.8.3 · ILAC P14 guard.
  *
  * Runs at submit (technician warning) and at approval (authoritative,
  * frozen into `calibration_job.scope_compliance_*`). Server-side on purpose:
@@ -11,7 +11,7 @@
  * method is not eligible for the accreditation seal at all (nothing to guard;
  * the seal is withheld for that reason). A unit WITHOUT scope lines is not
  * "nothing to guard": it yields the distinct `NO_SCOPE_LINES` status, which is
- * never positive — the certificate issues without the seal (Q42). Only
+ * never positive — the certificate issues without the seal. Only
  * `enforce` mode blocks, and only on an adverse verdict.
  */
 
@@ -35,7 +35,7 @@ import { and, eq } from "drizzle-orm";
 export type JobScopeClassification = {
   /** Null when the guard does not apply (lab or method not eligible for the seal). */
   compliance: ScopeComplianceResult | null;
-  /** Org-level guard behavior (#427 Phase 1); 'warn' when the org is absent. */
+  /** Org-level guard behavior; 'warn' when the org is absent. */
   enforcementMode: ScopeEnforcementMode;
 };
 
@@ -74,7 +74,7 @@ export async function classifyJobScopeCompliance(
     .from(organization)
     .where(eq(organization.id, input.organizationId))
     .limit(1);
-  // Q45: a lab that never chose a mode is enforced while it is accredited.
+  // A lab that never chose a mode is enforced while it is accredited.
   const enforcementMode = resolveScopeEnforcementMode({
     stored: lab?.scopeEnforcementMode,
     accreditationActive: lab?.accreditationActive,

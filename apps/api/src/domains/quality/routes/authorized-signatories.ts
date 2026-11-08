@@ -34,7 +34,7 @@ const GrantSignatorySchema = z.object({
   userId: z.string().min(1),
   assetTypeId: z.number().int().positive().nullable().optional(),
   scopeDescription: z.string().max(500).optional(),
-  /** The title printed under the signature of the certificates this person approves (C1). */
+  /** The title printed under the signature of the certificates this person approves. */
   title: z.string().trim().max(160).optional(),
   expiresAt: z.string().datetime().optional(),
   notes: z.string().max(1000).optional(),
@@ -57,9 +57,6 @@ const RevokeSignatorySchema = z.object({
 export const authorizedSignatoriesRouter = createRouter<{
   Variables: AuthVariables;
 }>()
-  // =========================================================================
-  // GET / - List the organization's signatory roster
-  // =========================================================================
   .get("/", ...withLabPermission({ competence: ["read"] }), async (c) => {
     const memberData = c.get("member");
     return await orgDb(memberData.organizationId).transaction(async (tx) => {
@@ -90,9 +87,6 @@ export const authorizedSignatoriesRouter = createRouter<{
     });
   })
 
-  // =========================================================================
-  // POST / - Grant a signatory authorization
-  // =========================================================================
   .post(
     "/",
     ...withLabPermission({ competence: ["approve"] }),
@@ -158,7 +152,7 @@ export const authorizedSignatoriesRouter = createRouter<{
   )
 
   // =========================================================================
-  // PATCH /:id - Set or clear the title printed under the signature (C1)
+  // PATCH /:id - Set or clear the title printed under the signature
   // =========================================================================
   .patch(
     "/:id",
@@ -225,9 +219,6 @@ export const authorizedSignatoriesRouter = createRouter<{
     },
   )
 
-  // =========================================================================
-  // POST /:id/revoke - Revoke a signatory authorization
-  // =========================================================================
   .post(
     "/:id/revoke",
     ...withLabPermission({ competence: ["approve"] }),
@@ -263,8 +254,8 @@ export const authorizedSignatoriesRouter = createRouter<{
           if (!existing) {
             throw notFound("not_found", "Signatário não encontrado");
           }
-          // `revoke` (SIGNATORY_MACHINE): only an active grant is revoked. A second
-          // revoke used to overwrite who revoked it and when.
+          // `revoke` (SIGNATORY_MACHINE): only an active grant is revoked, so a second
+          // revoke cannot overwrite who revoked it and when.
           if (!SIGNATORY_MACHINE.canTransition(existing.status, "revoke")) {
             throw conflict(
               "status_transition_conflict",
@@ -282,7 +273,7 @@ export const authorizedSignatoriesRouter = createRouter<{
               revokedBy: session.user.id,
               revokedAt: new Date(),
             })
-            // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+            // Defense-in-depth: repeat the tenant scope proven by the SELECT
             // above so the UPDATE stays org-scoped even if the guarding read is
             // refactored away. Reuses the in-scope memberData.organizationId.
             .where(

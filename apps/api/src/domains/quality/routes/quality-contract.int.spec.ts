@@ -191,7 +191,7 @@ describe("non-conformances endpoints: real responses honor the definitions' resp
       capaEndpoints.implement.response,
     );
 
-    // The implementer cannot verify: a second admin does (decision Q50).
+    // The implementer cannot verify: a second admin does.
     loginAs({ userId: verifier.userId, organizationId: lab.orgId });
     await parsedBody(
       await send(capaRouter, "POST", `/${id}/verify`, {

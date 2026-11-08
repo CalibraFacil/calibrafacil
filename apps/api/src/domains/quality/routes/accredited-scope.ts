@@ -61,7 +61,7 @@ function diffScopeLine(
 }
 
 /**
- * Accredited-scope (CMC) lines — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427).
+ * Accredited-scope (CMC) lines — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14.
  * Unit-scoped like environmental limits: Cgcre accredits each laboratory site
  * with its own scope. Writes are restricted to unit operational-settings
  * managers and leave an append-only audit trail. The org-level enforcement mode
@@ -75,9 +75,6 @@ export const accreditedScopeRouter = createRouter<{
 
 const labMiddleware = [...requireLabProtected, requireOrgType("LAB")];
 
-// ===========================================================================
-// GET / - List accredited-scope lines for the selected unit
-// ===========================================================================
 mount(
   accreditedScopeRouter,
   PREFIX,
@@ -116,7 +113,7 @@ mount(
       return {
         lines,
         unit,
-        // The EFFECTIVE mode (Q45); a lab that never chose gets the default.
+        // The EFFECTIVE mode; a lab that never chose gets the default.
         enforcementMode: resolveScopeEnforcementMode({
           stored: org?.scopeEnforcementMode,
           accreditationActive: org?.accreditationActive,
@@ -127,9 +124,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// PUT /enforcement - Switch the org-level guard mode (#427 Phase 1)
-// ===========================================================================
 mount(
   accreditedScopeRouter,
   PREFIX,
@@ -154,7 +148,7 @@ mount(
         .where(eq(organization.id, memberData.organizationId))
         .limit(1);
 
-      // What was in force (Q45: for a lab that never chose, the default),
+      // What was in force (for a lab that never chose, the default),
       // so the trail reads "enforce -> warn" even when the stored value was
       // still unset.
       const effectiveBefore = before
@@ -194,7 +188,7 @@ mount(
           performedBy: ctx.actor.userId,
           ipAddress: ctx.actor.ipAddress,
         });
-        // B4a: also on the compliance trail the accreditation profile uses.
+        // Also on the compliance trail the accreditation profile uses.
         await writeComplianceAuditEvent(
           {
             organizationId: memberData.organizationId,

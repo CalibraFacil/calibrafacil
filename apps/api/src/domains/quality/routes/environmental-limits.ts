@@ -27,9 +27,6 @@ export const environmentalLimitsRouter = createRouter<{
 
 const labMiddleware = [...requireLabProtected, requireOrgType("LAB")];
 
-// ===========================================================================
-// GET / - List environmental limits for the selected unit
-// ===========================================================================
 mount(
   environmentalLimitsRouter,
   PREFIX,
@@ -127,9 +124,6 @@ mount(
     return { limits, source, unit };
   },
 );
-// ===========================================================================
-// PUT / - Upsert environmental limits
-// ===========================================================================
 mount(
   environmentalLimitsRouter,
   PREFIX,
@@ -193,9 +187,6 @@ mount(
   },
 );
 
-// ===========================================================================
-// DELETE /:id - Delete environmental limits configuration
-// ===========================================================================
 mount(
   environmentalLimitsRouter,
   PREFIX,

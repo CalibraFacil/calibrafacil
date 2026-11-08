@@ -1,8 +1,6 @@
 /**
- * training-records-complete.int.spec.ts - P2-18d.
- *
- * POST /:id/complete (ISO/IEC 17025 §6.2.3 training evidence) had no integration
- * spec. Success path plus the cross-laboratory negative, run as the owner here and
+ * POST /:id/complete (ISO/IEC 17025 §6.2.3 training evidence): success path plus the
+ * cross-laboratory negative, run as the owner here and
  * as `calibra_app` by `pnpm --filter @calibra-facil/api rls:shadow-report`.
  *
  *   REQ-18D-TR-1  complete marks the record `completed`, stamps the end date when it

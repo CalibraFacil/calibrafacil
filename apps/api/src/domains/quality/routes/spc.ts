@@ -28,11 +28,11 @@ import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 
 /**
- * SPC Router - ISO/IEC 17025 §7.7.1 (issue #60 Phase 1)
+ * SPC Router - ISO/IEC 17025 §7.7.1
  *
  * Check/working-standard readings + per-standard control charts. The pure
  * evaluation engine lives in @calibra-facil/interval-analysis (shared with
- * the interval-optimization drift work, #423). Signals escalate to CAPA.
+ * the interval-optimization drift work). Signals escalate to CAPA.
  */
 
 async function loadChartScoped(
@@ -151,9 +151,6 @@ const PREFIX = "/api/spc";
 
 export const spcRouter = createRouter<{ Variables: AuthVariables }>();
 
-// =========================================================================
-// GET /charts - List control charts (org-wide overview)
-// =========================================================================
 mount(
   spcRouter,
   PREFIX,
@@ -217,9 +214,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /charts/:id - Chart detail incl. chronological readings
-// =========================================================================
 mount(
   spcRouter,
   PREFIX,
@@ -269,9 +263,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /charts - Create a control chart for a standard/parameter pair
-// =========================================================================
 mount(
   spcRouter,
   PREFIX,
@@ -402,9 +393,6 @@ mount(
   },
 );
 
-// =========================================================================
-// DELETE /charts/:id
-// =========================================================================
 mount(
   spcRouter,
   PREFIX,
@@ -435,9 +423,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /charts/:id/recalculate - Re-run the SPC evaluation
-// =========================================================================
 mount(
   spcRouter,
   PREFIX,

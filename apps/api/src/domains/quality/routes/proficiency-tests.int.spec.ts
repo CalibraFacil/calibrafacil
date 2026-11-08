@@ -1,6 +1,6 @@
 /**
  * proficiency-tests.int.spec.ts — Real-DB + real-RBAC integration tests for
- * the ISO/IEC 17025 §7.7.2 proficiency-testing register (issue #60 Phase 0).
+ * the ISO/IEC 17025 §7.7.2 proficiency-testing register.
  *
  * Only the better-auth session is mocked (see test/integration/setup.ts).
  * requireLabAuth → requireOrganization → withLabPermission all run for real

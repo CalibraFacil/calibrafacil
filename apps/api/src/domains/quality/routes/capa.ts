@@ -49,9 +49,6 @@ const PREFIX = "/api/capa";
 
 export const capaRouter = createRouter<{ Variables: AuthVariables }>();
 
-// =========================================================================
-// GET / - List CAPAs with pagination and filtering
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -198,9 +195,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /summary - Dashboard summary
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -211,7 +205,6 @@ mount(
       const member = c.get("member");
       const orgId = member.organizationId;
 
-      // Count by status
       const statusCounts = await o
         .select({
           status: correctiveAction.status,
@@ -221,7 +214,6 @@ mount(
         .where(eq(correctiveAction.organizationId, orgId))
         .groupBy(correctiveAction.status);
 
-      // Count by severity (non-closed)
       const severityCounts = await o
         .select({
           severity: correctiveAction.severity,
@@ -236,7 +228,6 @@ mount(
         )
         .groupBy(correctiveAction.severity);
 
-      // Count by category (non-closed)
       const categoryCounts = await o
         .select({
           category: correctiveAction.category,
@@ -251,7 +242,6 @@ mount(
         )
         .groupBy(correctiveAction.category);
 
-      // Count overdue
       const now = new Date();
       const [overdueResult] = await o
         .select({ count: count() })
@@ -309,7 +299,6 @@ mount(
   },
 );
 
-// GET /:id/label - Get CAPA label by ID
 mount(
   capaRouter,
   PREFIX,
@@ -322,9 +311,6 @@ mount(
     }),
 );
 
-// =========================================================================
-// GET /:id - Get single CAPA by ID
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -334,7 +320,6 @@ mount(
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const capa = await requireLabCapa(o, params.id);
 
-      // Get linked NCs
       const linkedNCs = await o
         .select({
           id: nonConformance.id,
@@ -347,7 +332,6 @@ mount(
         .from(nonConformance)
         .where(eq(nonConformance.capaId, capa.id));
 
-      // Get user names
       const userNames: Record<string, string | null> = {};
 
       const userIds = [
@@ -400,9 +384,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST / - Create new CAPA
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -459,9 +440,6 @@ mount(
   },
 );
 
-// =========================================================================
-// PUT /:id - Update CAPA
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -535,7 +513,7 @@ mount(
         const [row] = await ctx.o
           .update(correctiveAction)
           .set(updateData)
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // Defense-in-depth: repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
           // refactored away. Reuses the in-scope member.organizationId.
           .where(
@@ -568,9 +546,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /:id/implement - Mark CAPA as implemented
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -605,7 +580,7 @@ mount(
               "implement",
             ),
           })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // Defense-in-depth: repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
           // refactored away. Reuses the in-scope member.organizationId.
           .where(
@@ -644,9 +619,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /:id/verify - Verify CAPA effectiveness
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -680,7 +652,7 @@ mount(
           );
         }
 
-        // Separation of duties (ISO/IEC 17025 §8.7, decision Q50): the verifier
+        // Separation of duties (ISO/IEC 17025 §8.7): the verifier
         // is independent of the CAPA, i.e. neither its owner now or ever nor
         // anyone who implemented it. A lab with no other eligible verifier lets
         // the sole one verify with a written justification (recorded, flagged).
@@ -715,7 +687,7 @@ mount(
           : "independent";
 
         // `verify` (CORRECTIVE_ACTION_MACHINE): effective → VERIFICATION, not
-        // effective → back to IMPLEMENTATION (decision Q61).
+        // effective → back to IMPLEMENTATION.
         const verifiedStatus = CORRECTIVE_ACTION_MACHINE.requireTransition(
           existing.status,
           "verify",
@@ -739,7 +711,7 @@ mount(
               ? {}
               : { implementedAt: null, implementationEvidence: null }),
           })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // Defense-in-depth: repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
           // refactored away. Reuses the in-scope member.organizationId.
           .where(
@@ -783,9 +755,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST /:id/close - Close CAPA
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -821,7 +790,7 @@ mount(
             closedAt: new Date(),
             closedBy: session.user.id,
           })
-          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // Defense-in-depth: repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
           // refactored away. Reuses the in-scope member.organizationId.
           .where(
@@ -861,9 +830,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/audit-log - Get audit log for a CAPA
-// =========================================================================
 mount(
   capaRouter,
   PREFIX,
@@ -871,7 +837,6 @@ mount(
   withLabPermission({ capa: ["read"] }),
   async (c, { params }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
-      // Verify CAPA exists and belongs to organization
       const { id } = await requireLabCapa(o, params.id);
 
       const logs = await o

@@ -46,9 +46,6 @@ const PREFIX = "/api/competences";
  */
 export const competencesRouter = createRouter<{ Variables: AuthVariables }>();
 
-// =========================================================================
-// GET / - List competences with pagination and filtering
-// =========================================================================
 mount(
   competencesRouter,
   PREFIX,
@@ -144,7 +141,6 @@ mount(
   async (c) => {
     const memberData = c.get("member");
 
-    // Get all technician/admin/owner members
     return await orgDb(memberData.organizationId).transaction(async (tx) => {
       const technicians = await tx
         .select({
@@ -161,13 +157,11 @@ mount(
           ),
         );
 
-      // Get all asset types
       const assetTypes = await tx
         .select({ id: assetType.id, name: assetType.name })
         .from(assetType)
         .orderBy(assetType.name);
 
-      // Get all competence records for this org
       const competences = await tx
         .select({
           id: personnelCompetence.id,
@@ -189,9 +183,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/label - Get competence label by ID
-// =========================================================================
 mount(
   competencesRouter,
   PREFIX,
@@ -227,9 +218,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id - Single competence with training records
-// =========================================================================
 mount(
   competencesRouter,
   PREFIX,
@@ -283,7 +271,6 @@ mount(
             .limit(1)
         : [];
 
-      // Get asset type name
       let assetTypeName: string | null = null;
       if (comp.assetTypeId) {
         const [at] = await tx
@@ -294,7 +281,6 @@ mount(
         assetTypeName = at?.name ?? null;
       }
 
-      // Get related training records (scoped to same org)
       const trainings = await tx
         .select()
         .from(trainingRecord)
@@ -307,7 +293,6 @@ mount(
         )
         .orderBy(desc(trainingRecord.startDate));
 
-      // Get requestedBy, evaluatedBy, approvedBy names
       const userIds = [
         comp.requestedBy,
         comp.evaluatedBy,
@@ -342,9 +327,6 @@ mount(
   },
 );
 
-// =========================================================================
-// POST / - Create competence request (status=REQUESTED)
-// =========================================================================
 mount(
   competencesRouter,
   PREFIX,
@@ -354,7 +336,6 @@ mount(
     const memberData = c.get("member");
     const session = c.get("session");
 
-    // Validate user is a member of the org
     const created = await withOrg(
       memberData.organizationId,
       requestActor(c),
@@ -394,7 +375,6 @@ mount(
           throw new Error("Falha ao criar solicitação");
         }
 
-        // Audit log
         await ctx.audit("competence", row.id, {
           action: "create",
           changes: {
@@ -422,9 +402,6 @@ mount(
   },
 );
 
-// =========================================================================
-// PUT /:id - Update competence details
-// =========================================================================
 competencesRouter.put(
   "/:id",
   ...withLabPermission({ competence: ["update"] }),
@@ -529,7 +506,7 @@ mount(
 
           if (result.length === 0) {
             // Thrown, not returned: a return would commit the records linked
-            // in the earlier iterations (roadmap 2 D4).
+            // in the earlier iterations.
             throw invalid(
               "training_record_mismatch",
               `Registro de treinamento ${trId} não encontrado ou não pertence ao mesmo técnico`,
@@ -814,7 +791,6 @@ mount(
 
           return approved;
         } else {
-          // Reject → back to TRAINING_ASSIGNED (needs more training)
           const [rejected] = await ctx.o
             .update(personnelCompetence)
             .set({
@@ -1085,9 +1061,6 @@ mount(
   },
 );
 
-// =========================================================================
-// DELETE /:id - Soft delete
-// =========================================================================
 mount(
   competencesRouter,
   PREFIX,
@@ -1115,9 +1088,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id/audit-log - Audit log for a competence
-// =========================================================================
 mount(
   competencesRouter,
   PREFIX,
@@ -1127,7 +1097,6 @@ mount(
     const memberData = c.get("member");
     const { id } = params;
 
-    // Verify competence belongs to org
     return await orgDb(memberData.organizationId).transaction(async (tx) => {
       const [comp] = await tx
         .select({ id: personnelCompetence.id })

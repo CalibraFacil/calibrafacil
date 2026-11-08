@@ -29,9 +29,6 @@ export const trainingRecordsRouter = createRouter<{
   Variables: AuthVariables;
 }>();
 
-// =========================================================================
-// GET / - List training records with pagination and filtering
-// =========================================================================
 mount(
   trainingRecordsRouter,
   PREFIX,
@@ -105,9 +102,6 @@ mount(
   },
 );
 
-// =========================================================================
-// GET /:id - Single training record
-// =========================================================================
 trainingRecordsRouter.get(
   "/:id",
   ...withLabPermission({ competence: ["read"] }),
@@ -163,9 +157,6 @@ trainingRecordsRouter.get(
   },
 );
 
-// =========================================================================
-// POST / - Create training record
-// =========================================================================
 mount(
   trainingRecordsRouter,
   PREFIX,
@@ -175,7 +166,6 @@ mount(
     const memberData = c.get("member");
     const session = c.get("session");
 
-    // Validate user is a member of the org
     const created = await withOrg(
       memberData.organizationId,
       requestActor(c),
@@ -268,9 +258,6 @@ mount(
   },
 );
 
-// =========================================================================
-// PUT /:id - Update training record
-// =========================================================================
 trainingRecordsRouter.put(
   "/:id",
   ...withLabPermission({ competence: ["update"] }),
@@ -354,9 +341,6 @@ trainingRecordsRouter.put(
   },
 );
 
-// =========================================================================
-// POST /:id/complete - Mark training completed
-// =========================================================================
 trainingRecordsRouter.post(
   "/:id/complete",
   ...withLabPermission({ competence: ["update"] }),
@@ -413,9 +397,6 @@ trainingRecordsRouter.post(
   },
 );
 
-// =========================================================================
-// DELETE /:id - Delete training record
-// =========================================================================
 trainingRecordsRouter.delete(
   "/:id",
   ...withLabPermission({ competence: ["delete"] }),
