@@ -11,10 +11,9 @@ import {
   invalid,
   unauthenticated,
 } from "../../../lib/domain-errors";
-import { recordResendWebhookEvent } from "../resend-webhook-ledger";
+import { processResendWebhookOnce } from "../resend-webhook-ledger";
 import { isRecord } from "@calibra-facil/shared/record";
 import { log } from "../../../lib/logger";
-import { reportServerError } from "../../../lib/observability";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
@@ -71,46 +70,50 @@ export const webhooksRouter = createRouter().post("/resend", async (c) => {
     return c.json({ received: true }, 200);
   }
 
-  // Idempotency: insert-first by svix-id (domains/notifications/resend-webhook-ledger.ts). A
-  // redelivery skips the suppression side effect (delivery is at-least-once).
-  const { firstDelivery } = await recordResendWebhookEvent({
-    svixId,
-    eventType: event.type,
-    payload: isRecord(payload) ? payload : {},
-  });
+  // The ledger row and the suppression commit together
+  // (domains/notifications/resend-webhook-ledger.ts). A failure of the
+  // suppression is not swallowed: it rolls the ledger row back and answers 5xx,
+  // so Resend redelivers and the address is suppressed on the retry.
+  const { firstDelivery } = await processResendWebhookOnce(
+    {
+      svixId,
+      eventType: event.type,
+      payload: isRecord(payload) ? payload : {},
+    },
+    async (tx) => {
+      if (event.type === "email.complained") {
+        for (const email of resendEventRecipients(event.data)) {
+          await suppressEmail(
+            {
+              email,
+              scope: "all",
+              reason: "complaint",
+              source: "resend_webhook",
+            },
+            tx,
+          );
+        }
+      } else if (
+        event.type === "email.bounced" &&
+        resendBounceIsHard(event.data)
+      ) {
+        for (const email of resendEventRecipients(event.data)) {
+          await suppressEmail(
+            {
+              email,
+              scope: "all",
+              reason: "hard_bounce",
+              source: "resend_webhook",
+            },
+            tx,
+          );
+        }
+      }
+    },
+  );
 
   if (!firstDelivery) {
     return c.json({ received: true, duplicate: true }, 200);
-  }
-
-  try {
-    if (event.type === "email.complained") {
-      for (const email of resendEventRecipients(event.data)) {
-        await suppressEmail({
-          email,
-          scope: "all",
-          reason: "complaint",
-          source: "resend_webhook",
-        });
-      }
-    } else if (
-      event.type === "email.bounced" &&
-      resendBounceIsHard(event.data)
-    ) {
-      for (const email of resendEventRecipients(event.data)) {
-        await suppressEmail({
-          email,
-          scope: "all",
-          reason: "hard_bounce",
-          source: "resend_webhook",
-        });
-      }
-    }
-  } catch (error) {
-    reportServerError(error, {
-      surface: "resend-webhook",
-      tags: { step: "processing" },
-    });
   }
 
   return c.json({ received: true }, 200);
