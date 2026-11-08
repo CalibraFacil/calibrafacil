@@ -72,6 +72,14 @@ export type PreparedDesktopEventSideEffects = {
   refusal?: { code: OutboxRejectionCode; reason: string };
 };
 
+/**
+ * What the device is told when an event failed for a reason that is not a domain refusal (a
+ * failed write, the audit row, the commit). Fixed on purpose: the raw error text of a failed
+ * query carries the bound row values; the cause is in the server log (redacted).
+ */
+export const DESKTOP_EVENT_APPLY_FAILED_REASON =
+  "Desktop sync event could not be applied.";
+
 export type ApplyDesktopSyncEventResult =
   | AppliedEventResult
   | RefusedEventResult;

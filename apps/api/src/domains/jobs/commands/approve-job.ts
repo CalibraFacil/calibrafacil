@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { canPerformCalibrationAction } from "@calibra-facil/auth/access";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
@@ -755,8 +756,7 @@ async function revertApprovalAfterDispatchFailure(params: {
   dateAdvance: AssetCalibrationAdvanceApplied | null;
 }) {
   const { existing, approverId } = params;
-  const message =
-    params.error instanceof Error ? params.error.message : "unknown error";
+  const message = errorMessage(params.error);
   try {
     const approvedStatus = requireTargetOf(existing.status, "approve");
     const revertedStatus = requireTargetOf(approvedStatus, "revert_approval");
@@ -938,7 +938,7 @@ async function runCloudApprovalSideEffects(params: {
           } catch (error) {
             return {
               ok: false,
-              reason: error instanceof Error ? error.message : "send_threw",
+              reason: errorMessage(error),
             };
           }
         },

@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { timingSafeEqual } from "node:crypto";
 import { readJobsConfig, readRuntimeConfig } from "@calibra-facil/config";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
@@ -43,10 +44,6 @@ import { reportServerError } from "../lib/observability";
 // curl-able.
 
 type CronTaskResult<T> = { ok: true; value: T } | { ok: false; error: string };
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
 
 function isCronSecretRequired() {
   const runtime = readRuntimeConfig();
@@ -100,7 +97,7 @@ async function runCronTask<T>(
   try {
     return { ok: true, value: await task() };
   } catch (error) {
-    const message = getErrorMessage(error, "Falha ao processar tarefa do cron");
+    const message = errorMessage(error);
     reportServerError(error, { surface: "cron", tags: { task: name } });
     return { ok: false, error: message };
   }
@@ -237,8 +234,7 @@ export async function GET(request: Request) {
       task.run,
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Erro desconhecido no cron";
+    const message = errorMessage(error);
     reportServerError(error, {
       surface: "cron",
       tags: { job, step: "handler-crashed" },

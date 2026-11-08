@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { withOrg } from "../../lib/org-context";
 import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
@@ -1074,10 +1075,7 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
           details: {
             documentId: params.documentId,
             provider: record.integration.provider,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Falha ao exportar documento",
+            error: errorMessage(error),
           },
         },
         o,
@@ -1389,10 +1387,7 @@ async function sendServiceOrderToFinance(params: {
       serviceOrderId,
       ok: false,
       billingDocumentId: null,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Falha ao enviar a ordem para o financeiro",
+      error: errorMessage(error),
     };
   }
 }

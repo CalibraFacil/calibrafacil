@@ -1,5 +1,7 @@
 import { DomainError } from "../../lib/domain-errors";
+import { reportServerError } from "../../lib/observability";
 import {
+  DESKTOP_EVENT_APPLY_FAILED_REASON,
   type ApplyDesktopSyncEventInput,
   type ApplyDesktopSyncEventResult,
 } from "./desktop-event-support";
@@ -39,13 +41,26 @@ export async function applyDesktopSyncEvent(
         return assertNever(input.event);
     }
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Desktop sync event failed.";
     const code = applyFailureCode(error);
+    // A `DomainError` words its refusal for the client: that is the reason the device
+    // shows. Anything else is an unexpected failure (a failed query's message carries the
+    // bound row values): the device gets a fixed reason, the cause goes to the redacted
+    // reporter.
+    if (error instanceof DomainError) {
+      return { ok: false, code, reason: error.message };
+    }
+    reportServerError(error, {
+      surface: "sync",
+      tags: {
+        step: "apply-event",
+        organizationId: input.memberData.organizationId,
+        eventId: input.event.eventId,
+      },
+    });
     return {
       ok: false,
       code,
-      reason: message,
+      reason: DESKTOP_EVENT_APPLY_FAILED_REASON,
     };
   }
 }

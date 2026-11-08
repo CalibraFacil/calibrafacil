@@ -1397,6 +1397,15 @@ describe(
         "records.purge.started",
         "records.purge.failed",
       ]);
+      // The failed statement is described, never the bound values it carried (the
+      // laboratory's id stands for row data): not in the event, not in the outcome.
+      const [failed] = await db
+        .select({ details: platformEventLog.details })
+        .from(platformEventLog)
+        .where(eq(platformEventLog.action, "records.purge.failed"));
+      expect(JSON.stringify(failed?.details)).toContain("Failed query");
+      expect(JSON.stringify(failed?.details)).not.toContain("org-doomed");
+      expect(JSON.stringify(result.outcomes)).not.toContain("params: org-");
     });
   },
 );

@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { createRouter } from "../../../server/router";
 import { labSetupEndpoints } from "@calibra-facil/contracts";
 import { randomBytes } from "node:crypto";
@@ -369,7 +370,7 @@ mount(
         needsOnboarding: !org?.cnpj || !org.email || !org.phone,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "UNKNOWN";
+      const message = errorMessage(error);
       const status = message === "TOKEN_CONSUMED" ? 409 : 400;
 
       await logClaimEvent({

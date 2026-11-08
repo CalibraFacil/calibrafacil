@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { createRouter } from "../../../server/router";
 import { financeEndpoints } from "@calibra-facil/contracts";
 import { mount } from "../../../lib/endpoint-mount";
@@ -99,10 +100,7 @@ mount(
       // A status the definition does not describe: answered as a ready Response.
       return c.json(
         {
-          error:
-            error instanceof Error
-              ? error.message
-              : "Falha ao exportar documento",
+          error: errorMessage(error),
         },
         502,
       );

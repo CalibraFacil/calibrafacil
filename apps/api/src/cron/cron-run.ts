@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { log } from "../lib/logger";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
 import { executeRowCount } from "../lib/db";
@@ -24,10 +25,6 @@ import { executeRowCount } from "../lib/db";
 // migration — the routing/handler work keeps functioning regardless.
 
 const DEFAULT_LEASE_SECONDS = 120;
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Erro desconhecido no cron";
-}
 
 async function recordOutcome(
   job: string,
@@ -133,7 +130,9 @@ export async function runCron(
       status: isFailure ? 500 : 200,
     });
   } catch (error) {
-    const message = getErrorMessage(error);
+    // A failed query's message carries the bound row values: the heartbeat row and the
+    // answer keep the scrubbed message, as the error log line does.
+    const message = errorMessage(error);
     // Report the failure as well as recording it in the heartbeat table; flush so
     // the report is written before the run answers.
     reportServerError(error, { surface: "cron", tags: { job } });

@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { readRetentionConfig } from "@calibra-facil/config";
 /**
  * Records purge (docs/architecture/records-retention.md).
@@ -318,7 +319,7 @@ async function executePurge(
       });
       return { organizationId, status: "skipped", reason: error.reason };
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     await writePlatformEvent("records.purge.failed", organizationId, {
       message,
     });

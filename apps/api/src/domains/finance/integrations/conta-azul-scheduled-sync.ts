@@ -1,3 +1,4 @@
+import { errorMessage } from "@calibra-facil/shared/telemetry";
 import { orgDb } from "../../../lib/org-db";
 import { integrationConnection } from "@calibra-facil/db/schema";
 import {
@@ -172,10 +173,7 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
         }
       } catch (error) {
         failedRuns += 1;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha na sincronização Conta Azul agendada";
+        const message = errorMessage(error);
         if (!syncStarted) {
           await failIntegrationSyncRun({
             integrationId: row.integrationId,

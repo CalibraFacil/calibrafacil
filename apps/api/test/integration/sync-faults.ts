@@ -28,3 +28,31 @@ export async function failEventAuditInsert(eventId: string) {
     await db.execute(sql`DROP FUNCTION IF EXISTS sp_test_fail_event_audit()`);
   };
 }
+
+/**
+ * A temporary trigger that makes the "applied" record of ONE event fail to write: the
+ * change and its audit rows succeed, the transaction then fails at the claim's completion.
+ */
+export async function failAppliedEventCompletion(eventId: string) {
+  await db.execute(sql`
+    CREATE OR REPLACE FUNCTION sp_test_fail_event_claim() RETURNS trigger AS $$
+    BEGIN
+      IF NEW.event_id = ${sql.raw(`'${eventId}'`)} AND NEW.applied_at IS NOT NULL THEN
+        RAISE EXCEPTION 'sp_test: sync_applied_event completion forced to fail';
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await db.execute(sql`
+    CREATE TRIGGER sp_test_fail_event_claim
+    BEFORE UPDATE ON sync_applied_event
+    FOR EACH ROW EXECUTE FUNCTION sp_test_fail_event_claim()
+  `);
+  return async () => {
+    await db.execute(
+      sql`DROP TRIGGER IF EXISTS sp_test_fail_event_claim ON sync_applied_event`,
+    );
+    await db.execute(sql`DROP FUNCTION IF EXISTS sp_test_fail_event_claim()`);
+  };
+}

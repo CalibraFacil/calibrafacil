@@ -99,6 +99,26 @@ describe("runCron against cron_run", () => {
     });
   });
 
+  it("stores and answers the sanitized message, never the bound row values of a failed query", async () => {
+    const leaky = () =>
+      Promise.reject(
+        new Error(
+          'Failed query: insert into "customer" ("name", "email") values ($1, $2)\nparams: Maria Silva,maria@example.com',
+        ),
+      );
+
+    const response = await runCron("demo", {}, leaky);
+
+    const row = await readRun("demo");
+    expect(row?.lastStatus).toBe("error");
+    expect(row?.lastError).toContain('insert into "customer"');
+    expect(row?.lastError).not.toContain("maria@example.com");
+    expect(row?.lastError).not.toContain("Maria Silva");
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: false });
+    expect(JSON.stringify(body)).not.toContain("maria@example.com");
+  });
+
   it("resets the failure count on the next success", async () => {
     await runCron("demo", {}, () => Promise.reject(new Error("boom")));
 
