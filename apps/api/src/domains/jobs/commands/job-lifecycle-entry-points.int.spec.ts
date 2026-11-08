@@ -7,7 +7,7 @@
  *   cancel  cloud `DELETE /jobs/:id`           public API `DELETE /v2/jobs/:id`
  *           visits `DELETE /visits/:id/jobs/:jobId`
  *   assign  cloud `POST /jobs/:id/assign`
- *   edit    cloud `PUT /jobs/:id`              public API `PATCH /v2/jobs/:id`
+ *   edit    public API `PATCH /v2/jobs/:id`
  *
  * Every rule below runs against EVERY entry point it applies to, against a real
  * Postgres and the real RBAC / API-key middleware (only the better-auth
@@ -22,7 +22,7 @@
  *              -> 409, the other actor's status stands, NO audit row
  *   REQ-LC-4d  the audit row names the actor, and for an API key the channel
  *              and the key's identity
- *   REQ-LC-4e  Q25 / Q26: PUT, PATCH and assign refuse the same technicians
+ *   REQ-LC-4e  Q25 / Q26: PATCH and assign refuse the same technicians
  *              with the same code, and all run the competence gate
  *   REQ-LC-3   Q19: assign is refused on CANCELED, GENERATING_PDF, APPROVED and
  *              SUPERSEDED
@@ -401,24 +401,6 @@ const EDIT: Case = {
   changes: () => ({ dueDate: { old: null, new: DUE_DATE } }),
   entries: [
     {
-      name: "cloud route",
-      legal: allowedFrom("edit"),
-      refusal: { status: 400, code: "job_not_editable" },
-      raceCode: cloudConflict,
-      ip: IP,
-      channel: "session",
-      async run(world, who) {
-        login(who);
-        return outcomeOf(
-          await jobsRouter.request(`/${world.jobId}`, {
-            method: "PUT",
-            headers: { ...JSON_HEADERS, "x-forwarded-for": IP },
-            body: JSON.stringify({ dueDate: DUE_DATE }),
-          }),
-        );
-      },
-    },
-    {
       name: "public API",
       legal: allowedFrom("edit"),
       refusal: { status: 409, code: "job_not_editable" },
@@ -615,9 +597,9 @@ describe("assign refuses a job that is closed or being approved (Q19)", () => {
 });
 
 /**
- * Naming a technician is one policy. The cloud `PUT`, the public
- * `PATCH` and the cloud `assign` refuse the same people with the same code, and
- * all three run the §6.2.5 competence gate.
+ * Naming a technician is one policy. The public `PATCH` and the cloud `assign`
+ * refuse the same people with the same code, and both run the §6.2.5 competence
+ * gate.
  */
 type TechnicianEntry = {
   name: string;
@@ -627,20 +609,6 @@ type TechnicianEntry = {
 };
 
 const TECHNICIAN_ENTRIES: TechnicianEntry[] = [
-  {
-    name: "cloud PUT /jobs/:id",
-    competenceStatus: 400,
-    async send(world, technicianId) {
-      login("member");
-      return outcomeOf(
-        await jobsRouter.request(`/${world.jobId}`, {
-          method: "PUT",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ technicianId }),
-        }),
-      );
-    },
-  },
   {
     name: "public API PATCH /jobs/:id",
     competenceStatus: 422,

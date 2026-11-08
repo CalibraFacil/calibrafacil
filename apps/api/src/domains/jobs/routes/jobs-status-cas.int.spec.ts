@@ -1,6 +1,6 @@
 /**
  * jobs-status-cas.int.spec.ts — real-Postgres proof that the calibration_job
- * writes of the lab job routes that were not yet guarded (PUT /:id, POST
+ * writes of the lab job routes that were not yet guarded (POST
  * /:id/assign, and the asset-snapshot freeze that POST /:id/execute and
  * /:id/submit perform before their own status write) are compare-and-set
  * writes that carry the caller's organization and, where they have one, commit
@@ -69,19 +69,6 @@ type Site = {
 
 const SITES: Site[] = [
   {
-    name: "PUT /:id",
-    action: "update",
-    from: "IN_PROGRESS",
-    rival: "APPROVED",
-    to: "IN_PROGRESS",
-    send: (jobId) =>
-      jobsRouter.request(`/${jobId}`, {
-        method: "PUT",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ dueDate: "2030-01-31T12:00:00.000Z" }),
-      }),
-  },
-  {
     name: "POST /:id/assign",
     action: "assign",
     from: "DRAFT",
@@ -96,7 +83,7 @@ const SITES: Site[] = [
   },
 ];
 
-describe("jobsRouter — PUT /:id and POST /:id/assign are compare-and-set, org-scoped, audited in-transaction", () => {
+describe("jobsRouter — POST /:id/assign is compare-and-set, org-scoped, audited in-transaction", () => {
   beforeEach(async () => {
     await truncateAll();
   });

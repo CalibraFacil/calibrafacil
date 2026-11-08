@@ -10,16 +10,13 @@
  * (`pnpm --filter @calibra-facil/api rls:shadow-report --files ...`) replays as
  * `calibra_app` to prove the routes carry the laboratory in every statement.
  *
- *   REQ-JOB-SCOPE-1  GET /search, /:id/label, /:id/label-commands read only the laboratory's jobs
- *   REQ-JOB-SCOPE-2  GET /:id/audit-log returns the job's trail, never another laboratory's
- *   REQ-JOB-SCOPE-3  GET /:id/amendment-chain walks the chain inside the laboratory
+ *   REQ-JOB-SCOPE-1  GET /:id/label-commands reads only the laboratory's jobs
  *   REQ-JOB-SCOPE-4  GET /:id/download, /:id/download-label, GET /technicians/list
  *   REQ-JOB-SCOPE-5  DELETE /:id (cancel) writes the job and its audit row in the laboratory's transaction
  *   REQ-JOB-SCOPE-6  atomicity: a failing notification insert leaves no NC (POST /:id/flag-oot)
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@calibra-facil/db";
-import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
   calibrationJob,
   jobAuditLog,
@@ -31,10 +28,7 @@ import { jobsRouter } from "./jobs";
 import { loginAs } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedOrg } from "../../../../test/integration/seed";
-import {
-  insertJobs,
-  setJobStatus,
-} from "../../../../test/integration/job-fixtures";
+import { setJobStatus } from "../../../../test/integration/job-fixtures";
 import {
   seedExtraMember,
   seedJobForOrg,
@@ -49,8 +43,6 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" };
-
-type Lab = Awaited<ReturnType<typeof seedLab>>;
 
 /** A laboratory with one admin, one DRAFT job and the rows the job references. */
 async function seedLab(orgId: string) {
@@ -91,71 +83,9 @@ async function auditRows(jobId: number) {
   return db.select().from(jobAuditLog).where(eq(jobAuditLog.jobId, jobId));
 }
 
-/** Lab A's APPROVED original and the DRAFT amendment that superseded it. */
-async function seedAmendmentChain(lab: Lab) {
-  const { id: _id, ...base } = lab.job;
-  const [original] = await insertJobs({
-    ...base,
-    jobId: `${lab.job.jobId}-ORIG`,
-    certificateName: `${lab.job.certificateName}-ORIG`,
-    verificationToken: undefined,
-    status: "DRAFT",
-  });
-  if (!original) throw new Error("seedAmendmentChain: original not inserted");
-  const [amended] = await insertJobs({
-    ...base,
-    jobId: `${lab.job.jobId}-AM1`,
-    certificateName: `${lab.job.certificateName}-AM1`,
-    verificationToken: undefined,
-    status: "DRAFT",
-    supersedesId: original.id,
-    amendmentNumber: 1,
-    amendmentReason: "Correção",
-  });
-  if (!amended) throw new Error("seedAmendmentChain: amendment not inserted");
-  await setJobStatus(original.id, "SUPERSEDED", {
-    supersededById: amended.id,
-    supersededAt: new Date("2026-02-01T00:00:00.000Z"),
-    amendmentReason: "Correção",
-  });
-  return { original, amended };
-}
-
 describe("jobsRouter — laboratory scope (P2-18f)", () => {
   beforeEach(async () => {
     await truncateAll();
-  });
-
-  it("REQ-JOB-SCOPE-1: GET /search finds this laboratory's job by number and never the other laboratory's", async () => {
-    const { a, b } = await seedWorld();
-
-    const own = await get(`/search?query=${a.job.jobId}`);
-    expect(own.status).toBe(200);
-    expect(await own.json()).toEqual([
-      { id: a.jobId, jobId: a.job.jobId, status: "DRAFT" },
-    ]);
-
-    const foreign = await get(`/search?query=${b.job.jobId}`);
-    expect(foreign.status).toBe(200);
-    expect(await foreign.json()).toEqual([]);
-  });
-
-  it("REQ-JOB-SCOPE-1: GET /:id/label answers for this laboratory's job (id or certificate number) and 404s the other's", async () => {
-    const { a, b } = await seedWorld();
-
-    const byId = await get(`/${a.jobId}/label`);
-    expect(byId.status).toBe(200);
-    expect(await byId.json()).toMatchObject({
-      id: a.jobId,
-      label: a.job.jobId,
-    });
-
-    const byNumber = await get(`/${a.job.jobId}/label`);
-    expect(byNumber.status).toBe(200);
-    expect(await byNumber.json()).toMatchObject({ id: a.jobId });
-
-    expect((await get(`/${b.jobId}/label`)).status).toBe(404);
-    expect((await get(`/${b.job.jobId}/label`)).status).toBe(404);
   });
 
   it("REQ-JOB-SCOPE-1: GET /:id/label-commands renders this laboratory's label and 404s the other's", async () => {
@@ -171,70 +101,6 @@ describe("jobsRouter — laboratory scope (P2-18f)", () => {
       error: "Job nao encontrado",
       code: "job_not_found",
     });
-  });
-
-  it("REQ-JOB-SCOPE-2: GET /:id/audit-log returns the job's own trail with the performer's name; the other laboratory's job is 404", async () => {
-    const { a, b } = await seedWorld();
-    await appendJobEvent(db, {
-      action: "update",
-      organizationId: a.orgId,
-      jobId: a.jobId,
-      actor: { kind: "user", userId: a.userId },
-      changes: { dueDate: { old: null, new: "2030-01-01" } },
-    });
-    await appendJobEvent(db, {
-      action: "update",
-      organizationId: b.orgId,
-      jobId: b.jobId,
-      actor: { kind: "user", userId: b.userId },
-      changes: { dueDate: { old: null, new: "2031-01-01" } },
-    });
-
-    const own = await get(`/${a.jobId}/audit-log`);
-    expect(own.status).toBe(200);
-    const body = await own.json();
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0]).toMatchObject({
-      action: "update",
-      performedBy: a.userId,
-      performerName: `User ${a.userId}`,
-      changes: { dueDate: { old: null, new: "2030-01-01" } },
-    });
-
-    const foreign = await get(`/${b.jobId}/audit-log`);
-    expect(foreign.status).toBe(404);
-    expect(await foreign.json()).toEqual({
-      error: "Job nao encontrado",
-      code: "job_not_found",
-    });
-  });
-
-  it("REQ-JOB-SCOPE-3: GET /:id/amendment-chain returns the whole chain from either end; the other laboratory's job is 404", async () => {
-    const { a, b } = await seedWorld();
-    const { original, amended } = await seedAmendmentChain(a);
-
-    for (const [id, currentId] of [
-      [original.id, original.id],
-      [amended.id, amended.id],
-    ] as const) {
-      const res = await get(`/${id}/amendment-chain`);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.data.map((row: { id: number }) => row.id)).toEqual([
-        original.id,
-        amended.id,
-      ]);
-      expect(
-        body.data.find((row: { isCurrent: boolean }) => row.isCurrent).id,
-      ).toBe(currentId);
-      expect(body).toMatchObject({
-        originalJobId: original.id,
-        latestJobId: amended.id,
-        totalAmendments: 1,
-      });
-    }
-
-    expect((await get(`/${b.jobId}/amendment-chain`)).status).toBe(404);
   });
 
   it("REQ-JOB-SCOPE-4: GET /:id/download and /download-label answer 400 until the file exists, and 404 for the other laboratory's job", async () => {

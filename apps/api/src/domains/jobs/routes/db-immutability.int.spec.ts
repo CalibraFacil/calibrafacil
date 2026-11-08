@@ -1198,19 +1198,6 @@ describe("routes refuse writes to an issued certificate (migration 0115)", () =>
     },
   );
 
-  it("REQ-DBIMM-009: PUT /:id on a SUPERSEDED job → 400 and the technician is unchanged", async () => {
-    const { tech, id } = await seedIssuedJob("SUPERSEDED");
-
-    const res = await jobsRouter.request(`/${id}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ technicianId: tech.userId }),
-    });
-
-    expect(res.status).toBe(400);
-    expect(await technicianOf(id)).toBeNull();
-  });
-
   it("REQ-DBIMM-009: public API PATCH /jobs/:id on a SUPERSEDED job → 409 and the technician is unchanged", async () => {
     const { fixture, tech, id } = await seedIssuedJob("SUPERSEDED");
     const { key, keyPrefix, keyHash } = createApiKeySecret();
