@@ -25,7 +25,8 @@ import { seedOrg } from "../../../../test/integration/seed";
 //   REQ-VSIG-001  Owner upload persists scoped to (member, org) -- DB-verified dims
 //   REQ-VSIG-002  Cross-org guard on GET /member/:memberId -> 404 (no cross-tenant leak)
 //   REQ-VSIG-003  RBAC on GET /member/:memberId: technician->403; admin->200
-//   REQ-VSIG-004  Upload validation: non-PNG -> 400, no DB row inserted
+//   REQ-VSIG-004  Upload validation: non-PNG -> 400, no DB row inserted;
+//                 size and dimension limits on both sides of each edge
 //   REQ-VSIG-005  Unauthenticated GET /my-signature -> 401
 
 // ---------------------------------------------------------------------------
@@ -337,6 +338,49 @@ describe("signaturesRouter -- real DB + real RBAC middleware", () => {
       );
     expect(rows).toHaveLength(0);
   });
+
+  // REQ-VSIG-004c: the size and dimension limits, on both sides of each edge.
+  // The handler reads only the PNG magic and the IHDR width/height, so a stub
+  // padded to the wanted size is enough.
+  const KB = 1024;
+  const padded = (width: number, height: number, bytes: number) =>
+    Buffer.concat([
+      makePngBuffer(width, height),
+      Buffer.alloc(Math.max(0, bytes - 25)),
+    ]);
+
+  it.each([
+    ["exactly 500KB", 200, 100, 500 * KB, 200],
+    ["501KB", 200, 100, 501 * KB, 400],
+    ["the minimum 100x50", 100, 50, KB, 200],
+    ["width 99", 99, 50, KB, 400],
+    ["height 49", 100, 49, KB, 400],
+    ["the maximum 800x400", 800, 400, KB, 200],
+    ["width 801", 801, 400, KB, 400],
+    ["height 401", 800, 401, KB, 400],
+  ])(
+    "REQ-VSIG-004c: POST /my-signature with %s is accepted or refused by the limits",
+    async (_label, width, height, bytes, expected) => {
+      const org = await seedOrg({ orgId: "org-vsig-004c", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const res = await signaturesRouter.request("/my-signature", {
+        method: "POST",
+        headers: unitHeader(org.unitId),
+        body: makePngFormData(padded(width, height, bytes)),
+      });
+
+      expect(res.status).toBe(expected);
+      const rows = await db
+        .select({
+          width: memberVisualSignature.width,
+          height: memberVisualSignature.height,
+        })
+        .from(memberVisualSignature)
+        .where(eq(memberVisualSignature.memberId, org.memberId));
+      expect(rows).toEqual(expected === 200 ? [{ width, height }] : []);
+    },
+  );
 
   // =========================================================================
   // REQ-VSIG-005: Unauthenticated GET /my-signature -> 401
