@@ -22,7 +22,10 @@ import {
 import { portalServiceOrdersRouter } from "../../service-orders/routes/service-orders";
 import { loginAsPortal } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
-import { seedPortalContext } from "../../../../test/integration/seed";
+import {
+  seedPortalContext,
+  seedPortalCustomer,
+} from "../../../../test/integration/seed";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 import { isRecord } from "@calibra-facil/shared/record";
 
@@ -226,11 +229,24 @@ describe("portal service orders: own-order success paths (P2-18a)", () => {
       .from(serviceOrder)
       .where(eq(serviceOrder.id, world.order.id));
     expect(order?.status).toBe("quote_approved");
+    // The e-mail owed for the decision is queued with it: one stable event key, the
+    // customer's name from the portal scope, never a second row.
     const outbox = await db
-      .select({ id: serviceOrderEmailOutbox.id })
+      .select({
+        eventKey: serviceOrderEmailOutbox.eventKey,
+        payload: serviceOrderEmailOutbox.payload,
+      })
       .from(serviceOrderEmailOutbox)
       .where(eq(serviceOrderEmailOutbox.serviceOrderId, world.order.id));
-    expect(outbox.length).toBeGreaterThan(0);
+    const approved = outbox.filter(
+      (row) => row.eventKey === `quote_approved:${world.quoteId}`,
+    );
+    expect(approved).toHaveLength(1);
+    expect(approved[0]?.payload).toMatchObject({
+      serviceOrderId: world.order.id,
+      quoteId: world.quoteId,
+    });
+    expect(approved[0]?.payload).toHaveProperty("customerName");
   });
 
   it("the customer rejects its own sent quote: 200, quote rejected with the reason, order moves", async () => {
@@ -250,11 +266,70 @@ describe("portal service orders: own-order success paths (P2-18a)", () => {
       .from(serviceOrderQuote)
       .where(eq(serviceOrderQuote.id, world.quoteId));
     expect(quote).toEqual({ status: "rejected", reason: "Fora do orcamento" });
+    const outbox = await db
+      .select({
+        eventKey: serviceOrderEmailOutbox.eventKey,
+        payload: serviceOrderEmailOutbox.payload,
+      })
+      .from(serviceOrderEmailOutbox)
+      .where(eq(serviceOrderEmailOutbox.serviceOrderId, world.order.id));
+    const rejected = outbox.filter(
+      (row) => row.eventKey === `quote_rejected:${world.quoteId}`,
+    );
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.payload).toMatchObject({
+      serviceOrderId: world.order.id,
+      quoteId: world.quoteId,
+      rejectionReason: "Fora do orcamento",
+    });
     const [order] = await db
       .select({ status: serviceOrder.status })
       .from(serviceOrder)
       .where(eq(serviceOrder.id, world.order.id));
     expect(order?.status).toBe("quote_rejected");
+  });
+
+  it("rejecting without a reason queues the e-mail with a null reason", async () => {
+    const result = await request(
+      "POST",
+      `/${world.order.publicId}/quotes/${world.quoteId}/reject`,
+      {},
+    );
+
+    expect(result.status).toBe(200);
+    const [row] = await db
+      .select({ payload: serviceOrderEmailOutbox.payload })
+      .from(serviceOrderEmailOutbox)
+      .where(
+        eq(serviceOrderEmailOutbox.eventKey, `quote_rejected:${world.quoteId}`),
+      );
+    expect(row?.payload).toMatchObject({ rejectionReason: null });
+  });
+
+  it("another customer of the same laboratory cannot decide this quote: 404, the quote stays sent and nothing is queued", async () => {
+    await seedPortalCustomer({
+      labOrgId: world.ctx.labOrgId,
+      clientOrgId: "client-sb",
+      portalUserId: "user-sb",
+      customerName: "Cliente SB",
+    });
+    loginAsPortal({ userId: "user-sb", organizationId: "client-sb" });
+
+    const approve = await request(
+      "POST",
+      `/${world.order.publicId}/quotes/${world.quoteId}/approve`,
+      { acceptedTerms: true },
+    );
+    const reject = await request(
+      "POST",
+      `/${world.order.publicId}/quotes/${world.quoteId}/reject`,
+      { rejectionReason: "Não é meu" },
+    );
+
+    expect(approve.status).toBe(404);
+    expect(reject.status).toBe(404);
+    expect(await quoteStatus(world.quoteId)).toBe("sent");
+    expect(await db.select().from(serviceOrderEmailOutbox)).toEqual([]);
   });
 
   it("a quote that was already decided answers 409 and stays as it was", async () => {
