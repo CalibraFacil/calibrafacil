@@ -6,7 +6,7 @@ import {
   type QueueDepth,
 } from "@calibra-facil/db/queue";
 import { isProductionEnv } from "@calibra-facil/config";
-import { createR2Client, r2EnvFromSettings, type R2Env } from "./storage";
+import { createR2Client, r2EnvFromSettings, type R2Env } from "../lib/storage";
 
 // dependency-checking readiness probe behind GET /api/health.
 //

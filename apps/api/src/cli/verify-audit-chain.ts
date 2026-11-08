@@ -20,7 +20,7 @@ import { systemDb as ownerDb } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 
-import { verifyAuditChains } from "../lib/audit-chain";
+import { verifyAuditChains } from "../domains/jobs";
 
 const USAGE = `Usage: verify-audit-chain [--org <organization id> | --slug <laboratory slug>] [--record]`;
 

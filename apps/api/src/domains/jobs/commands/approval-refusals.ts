@@ -1,4 +1,4 @@
-import { toApiErrorJson } from "../../../lib/api-error-json";
+import { toApiErrorJson } from "../api-error-json";
 import {
   DomainError,
   conflict,

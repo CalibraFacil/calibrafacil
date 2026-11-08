@@ -14,8 +14,8 @@ import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { invalid } from "../../lib/domain-errors";
 import type { OrgContext } from "../../lib/org-context";
-import { createClientOrganizationAsServiceOwner } from "../portal";
-import { uniqueSlug } from "../../lib/unique-slug";
+import { createClientOrganizationAsServiceOwner } from "./portal-service-account";
+import { uniqueSlug } from "./unique-slug";
 
 /**
  * The customer writes of a laboratory, shared by the lab routes

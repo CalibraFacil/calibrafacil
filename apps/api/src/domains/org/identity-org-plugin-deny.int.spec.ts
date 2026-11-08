@@ -29,8 +29,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { invitation, member, organization } from "@calibra-facil/db/schema";
 import { createLabAuth } from "@calibra-facil/auth";
-import { truncateAll } from "../../test/integration/db";
-import { asApplicationRole } from "../../test/integration/application-role";
+import { truncateAll } from "../../../test/integration/db";
+import { asApplicationRole } from "../../../test/integration/application-role";
 import {
   FUTURE,
   seedLab,
@@ -38,7 +38,7 @@ import {
   seedUser,
   sessionRowFor,
   signInWithMagicLink,
-} from "../../test/integration/identity-fixtures";
+} from "../../../test/integration/identity-fixtures";
 
 // The REAL Better Auth lab instance (the harness's fake only has `getSession`).
 vi.mock("@calibra-facil/auth", async (importOriginal) => importOriginal());

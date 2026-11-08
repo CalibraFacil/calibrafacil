@@ -1,9 +1,10 @@
 // Public entry of the "jobs" domain: the only module other domains, cron and cli import.
 // Extend it by adding the name another module needs.
 export { reconcileApprovalEffects } from "./approval-effects-reconciler";
+export { runAuditChainVerification, verifyAuditChains } from "./audit-chain";
+export { runStaleJobBackstop } from "./stale-job-backstop";
 export {
   createPortalAmendmentChainLoader,
-  PORTAL_TERMINAL_CERTIFICATE_STATUSES,
   resolvePortalAmendmentInfo,
 } from "./certificates/certificate-amendment-chain";
 export { runCertificateDriftCheck } from "./certificates/certificate-drift";
@@ -11,12 +12,7 @@ export {
   loadCertificateLifecycles,
   withdrawalOf,
 } from "./certificates/certificate-lifecycle";
-export {
-  frozenAccreditationNumberColumn,
-  frozenSealColumn,
-  frozenSealJoin,
-  issuedSealOf,
-} from "./certificates/frozen-seal";
+export { issuedSealOf, loadFrozenSeal } from "./certificates/frozen-seal";
 export { approveJob } from "./commands/approve-job";
 export { cancelJob } from "./commands/cancel-job";
 export { editJob } from "./commands/edit-job";

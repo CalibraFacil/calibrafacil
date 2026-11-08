@@ -9,18 +9,22 @@ apps/api/src/
                       background work, cron tasks, notifications, access helpers and their specs;
                       index.ts is the library entry
   lib/                platform: org-db / org-context / org-transaction, audit, background-jobs and the
-                      outbox, endpoint-mount, errors (domain-errors, db-errors, api-error-json),
-                      storage, logger, observability, runtime-env, client-ip, route ids,
-                      sequential-number, tenant-refs, identity, units, api-keys, cron scheduler
+                      outbox, endpoint-mount, errors (domain-errors, db-errors), storage, logger,
+                      observability, runtime-env, client-ip, tenant-refs, units, api-keys, outbox-release,
+                      cron scheduler
   middleware/         permission, request-actor, api-key-auth, fresh-session
-  server/             Hono wiring (mounts every domain's routers), CORS, rate limit, error handling
+  server/             Hono wiring (mounts every domain's routers), CORS, rate limit, error handling,
+                      health and health alerts; router.ts (createRouter) is platform code domains import
   cron/               the schedule table, the runner and the dispatcher (the tasks live in domains)
   cli/                operator commands
 ```
 
 ## Rules (enforced by `calibra/no-api-domain-boundary-violations`, empty baseline)
 
-- `lib/` and `middleware/` never import `domains/*`.
+- `lib/` and `middleware/` never import `domains/*`, nor `server/`, `cron/` or `cli/` (the layers that use them).
+- A domain never imports `cron/`, `cli/` or `server/`, except `server/router` (`createRouter`, the Hono factory
+  every route file builds on). Code that is one domain's goes in the domain: a file that only one domain
+  uses does not belong in `lib/`.
 - Another domain, `server/`, `cron/`, `cli/` and `app.ts` reach a domain only through its library
   entry, `domains/<d>/index.ts`. A name another module needs is added to that `index.ts`
   (`export { name } from "./path"`); a deep import into another domain's folder is a lint error.
@@ -32,8 +36,8 @@ apps/api/src/
 - Specs are exempt (a spec may reach any module; `vi.mock` needs the real module id) and live next
   to the file they test. Cross-cutting specs live in `lib/` (database level) or `server/` (request
   level).
-- Domains form a DAG (`pnpm check:cycles` enforces no import cycles): `customers -> portal -> {jobs, visits,
-assets, org}`, `visits -> jobs`, `jobs -> {assets, finance, org, quality}`, `quality -> org`, `standards -> jobs`,
+- Domains form a DAG (`pnpm check:cycles` enforces no import cycles): `customers -> {org, assets}`, `portal ->
+{jobs, visits, assets, org}`, `visits -> jobs`, `jobs -> {assets, finance, org, quality}`, `quality -> org`, `standards -> jobs`,
   `verify -> jobs`, `service-orders -> finance`, `catalog -> finance`, `sync -> {jobs, assets, service-orders}`,
   `public-api -> {jobs, assets, customers, visits, finance, reports}`; `org`, `finance`, `assets`, `methods`,
   `notifications` and `reports` import no other domain. Two things that look like they belong to one

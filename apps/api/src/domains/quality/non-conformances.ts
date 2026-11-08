@@ -8,7 +8,7 @@ import { notify } from "@calibra-facil/notifications";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "../../lib/domain-errors";
 import type { OrgContext } from "../../lib/org-context";
-import { insertWithSequentialNumber } from "../../lib/sequential-number";
+import { insertWithSequentialNumber } from "./sequential-number";
 
 /**
  * Shared non-conformance creator (ISO 17025 §8.7 / §7.10). Single code path

@@ -113,7 +113,7 @@ that no longer exist (`inOrgTransaction`, `withOrgReader`, `OrgScope`, `afterCom
 them (`import * as x`, `x.db`), a dynamic `import("@calibra-facil/db")`, and importing `db` or
 `getDb` by name from ANY module (so a lib that re-exports the raw handle is no way around it). No route is
 grandfathered since P2-18j (the baseline is gone, and so is the rule's `baseline` option): a route that needs a statement
-outside an organization calls a named lib function (`lib/identity.ts`, `domains/org/public-signup-store.ts`, ...),
+outside an organization calls a named lib function (`domains/org/identity.ts`, `domains/org/public-signup-store.ts`, ...),
 never the raw handle.
 
 ## Row-level security (enforced since P2-18k)
@@ -401,7 +401,7 @@ added or removed without a migration.
     membership, the laboratory behind a client organization), the CORS check of a portal custom domain, and
     `deleteUser`, which preserves the regulated records of a person in EVERY laboratory in one transaction (so one
     system-path transaction, bound to that user id, keeps it atomic).
-  - **Routes.** `lib/identity.ts` holds what the pre-organization routes need: global-table reads
+  - **Routes.** `domains/org/identity.ts` holds what the pre-organization routes need: global-table reads
     (`findUserByEmail`, `findUserImage`, the magic-link verification row, own-session revocation, platform events)
     and two system-path lookups, the public invitation by its id (the bearer secret; its row names the
     laboratory) and the user's own primary organization for the magic-link preview. `lab-setup` runs the whole
@@ -447,7 +447,7 @@ added or removed without a migration.
   - **CLI (`apps/api/src/cli`).** Operator tools: they run as the table OWNER by design, now explicit:
     `systemDb` imported as `ownerDb` (the owner URL, or `DATABASE_URL` when the roles are not split). Nothing was
     migrated to `orgDb`.
-  - **Specs.** `lib/identity-lab-scope.int.spec.ts` runs the REAL Better Auth lab instance and the real routes with
+  - **Specs.** `domains/org/identity-lab-scope.int.spec.ts` runs the REAL Better Auth lab instance and the real routes with
     `DATABASE_URL` as `calibra_app` and `DATABASE_OWNER_URL` as the owner (`test/integration/application-role.ts`):
     magic-link sign-in, default laboratory, lab switching, the sign-in gate, claiming an invited account, the
     cross-laboratory token negative, provisioning of a laboratory and its first member, `deleteUser`, the

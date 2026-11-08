@@ -1,6 +1,7 @@
 import { createRouter } from "../../../server/router";
 import { mount } from "../../../lib/endpoint-mount";
 import {
+  CERTIFICATE_ISSUED_JOB_STATUSES,
   DEFAULT_NOTIFICATION_PREFERENCES,
   PORTAL_NOTIFICATION_TYPES,
 } from "@calibra-facil/schemas";
@@ -72,13 +73,10 @@ import {
 } from "@calibra-facil/schemas/machines";
 import { normalizeAccreditationNumber } from "@calibra-facil/shared";
 import {
-  frozenAccreditationNumberColumn,
-  frozenSealColumn,
-  frozenSealJoin,
   issuedSealOf,
+  loadFrozenSeal,
   createPortalAmendmentChainLoader,
   resolvePortalAmendmentInfo,
-  PORTAL_TERMINAL_CERTIFICATE_STATUSES,
   loadCertificateLifecycles,
   withdrawalOf,
 } from "../../jobs";
@@ -1677,7 +1675,7 @@ mount(
     // must be able to tell them apart, not lose them), flagged below.
     const whereCondition = and(
       inArray(calibrationJob.customerId, customerIds),
-      inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
+      inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
       assetId !== undefined ? eq(calibrationJob.assetId, assetId) : undefined,
       search
         ? or(
@@ -1808,6 +1806,7 @@ mount(
     const [certificate] = await o
       .select({
         id: calibrationJob.id,
+        organizationId: calibrationJob.organizationId,
         jobId: calibrationJob.jobId,
         status: calibrationJob.status,
         performedAt: calibrationJob.performedAt,
@@ -1843,9 +1842,6 @@ mount(
         labAccreditationNumber: organization.accreditationNumber,
         labAccreditationValidFrom: organization.accreditationValidFrom,
         labAccreditationValidUntil: organization.accreditationValidUntil,
-        // The seal decision frozen at approval; null before migration 0120.
-        frozenSeal: frozenSealColumn,
-        frozenAccreditationNumber: frozenAccreditationNumberColumn,
       })
       .from(calibrationJob)
       .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
@@ -1855,13 +1851,12 @@ mount(
         eq(calibrationJob.organizationId, organization.id),
       )
       .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
-      .leftJoin(certificateInput, frozenSealJoin)
       .where(
         and(
           matchPortalCertificateParam(certificateParam),
           inArray(calibrationJob.customerId, customerIds),
           // Superseded originals stay reachable (§7.8.8) — flagged below.
-          inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
+          inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
         ),
       )
       .limit(1);
@@ -1890,9 +1885,13 @@ mount(
     // The seal is the decision frozen at approval; only a record
     // approved before it was frozen falls back to the rule it was issued
     // under (vigência at EMISSION).
+    const frozen = await loadFrozenSeal(o, {
+      id: certificate.id,
+      organizationId: certificate.organizationId,
+    });
     const { accredited, accreditationNumber } = issuedSealOf({
-      frozenSeal: certificate.frozenSeal,
-      frozenAccreditationNumber: certificate.frozenAccreditationNumber,
+      frozenSeal: frozen.frozenSeal,
+      frozenAccreditationNumber: frozen.frozenAccreditationNumber,
       legacy: {
         lab: {
           accreditationActive: certificate.labAccreditationActive,
@@ -2019,7 +2018,7 @@ mount(
         and(
           matchPortalCertificateParam(certificateParam),
           inArray(calibrationJob.customerId, customerIds),
-          inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
+          inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
         ),
       )
       .limit(1);
@@ -2551,7 +2550,7 @@ mount(
         and(
           matchPortalCertificateParam(certificateParam),
           inArray(calibrationJob.customerId, customerIds),
-          inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
+          inArray(calibrationJob.status, CERTIFICATE_ISSUED_JOB_STATUSES),
         ),
       )
       .limit(1);

@@ -13,6 +13,10 @@ import {
 //   - lib/ and middleware/ (the cross-domain platform) never import a domain;
 //   - everything else (another domain, server/, cron/, cli/, app.ts) reaches a domain only
 //     through its library entry, domains/<d>/index.ts, never through a deep path;
+//   - lib/ and middleware/ also never import the layers above them (server/, cron/, cli/),
+//     and a domain imports none of cron/, cli/ or server/ either, except `server/router`
+//     (`createRouter`: the Hono factory every route file builds on is platform code that
+//     happens to live next to the wiring);
 //   - server/ also mounts a domain's routers through its mount entry, domains/<d>/routes
 //     (routes/index.ts). The library entry carries no routers, so reaching another domain's
 //     code never loads its route handlers.
@@ -27,6 +31,10 @@ const PLATFORM_MESSAGE =
   "lib/ and middleware/ are the platform layer: they must not import apps/api/src/domains/*. Move the shared piece down into the platform (or the platform file into the domain that owns it). See docs/architecture/api-domains.md.";
 const DEEP_MESSAGE =
   "Import another domain only through its public entry (apps/api/src/domains/<domain>, i.e. its index.ts), not a deep path. Export the name from the target domain's index.ts. See docs/architecture/api-domains.md.";
+const UPPER_LAYER_MESSAGE =
+  "lib/ and middleware/ are the platform layer: they must not import server/, cron/ or cli/ (the layers that use them). Move the shared piece down into lib/, or the file up into the layer that owns it. See docs/architecture/api-domains.md.";
+const DOMAIN_UPPER_MESSAGE =
+  "A domain must not import cron/, cli/ or server/ (they use the domains): the schedule and the runner call a domain's entry. Only server/router (createRouter) is platform code a domain may import. See docs/architecture/api-domains.md.";
 const ROUTES_MESSAGE =
   "A domain's routers are mounted only by server/ (through domains/<domain>/routes). Another domain imports the domain's library entry (domains/<domain>), which carries no routers. See docs/architecture/api-domains.md.";
 
@@ -54,6 +62,18 @@ const rule: RuleModule = {
       if (resolved === null) return;
       const target = API_SRC.exec(resolved)?.[2];
       if (target === undefined) return;
+      const upper = /^(server|cron|cli)(\/|$)/.exec(target)?.[1];
+      if (upper !== undefined) {
+        if (isPlatform) {
+          context.report({ node, message: UPPER_LAYER_MESSAGE });
+        } else if (
+          ownDomain !== null &&
+          !(upper === "server" && /^server\/router(\.ts)?$/.test(target))
+        ) {
+          context.report({ node, message: DOMAIN_UPPER_MESSAGE });
+        }
+        return;
+      }
       const hit = DOMAIN_PATH.exec(target);
       if (!hit) return;
       const [, targetDomain, rest = ""] = hit;

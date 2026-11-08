@@ -71,9 +71,9 @@ import {
   findDefaultActiveOrganizationId,
   preserveRegulatedRecordsOnUserDeletion,
 } from "@calibra-facil/auth";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { asApplicationRole } from "../../test/integration/application-role";
+import { truncateAll } from "../../../test/integration/db";
+import { seedOrg } from "../../../test/integration/seed";
+import { asApplicationRole } from "../../../test/integration/application-role";
 import {
   FUTURE,
   NOW,
@@ -82,25 +82,25 @@ import {
   seedUser,
   sessionRowFor,
   signInWithMagicLink,
-} from "../../test/integration/identity-fixtures";
-import { cleanupExpiredAuthRecords } from "../domains/org/auth-maintenance";
-import { purgeSyncChangeLog } from "../domains/sync/sync-change-log-purge";
-import { invitationsRouter } from "../domains/org/routes/invitations";
-import { labSetupRouter } from "../domains/org/routes/lab-setup";
+} from "../../../test/integration/identity-fixtures";
+import { cleanupExpiredAuthRecords } from "./auth-maintenance";
+import { purgeSyncChangeLog } from "../sync/sync-change-log-purge";
+import { invitationsRouter } from "./routes/invitations";
+import { labSetupRouter } from "./routes/lab-setup";
 import {
   cleanupFailedLabProvisioning,
   createLabOrganizationWithUniqueSlug,
   ensureLabProvisioningUser,
   provisionLabAccount,
-} from "../domains/org/lab-provisioning";
+} from "./lab-provisioning";
 import {
   completeSignupReservation,
   hasLabMembership,
   releaseSignupSlot,
   reserveSignupSlot,
-} from "../domains/org/public-signup-store";
-import { getActivationChecklist } from "../domains/org/activation-checklist";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+} from "./public-signup-store";
+import { getActivationChecklist } from "./activation-checklist";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // This file runs the REAL Better Auth lab instance: the harness's fake
 // `createLabAuth` (only `getSession`) is replaced by the real module.

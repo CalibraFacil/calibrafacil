@@ -383,7 +383,7 @@ export type ReleaseStaleQueueJobsResult = {
 // caller can settle whatever the job left in flight (a certificate stuck in
 // GENERATING_PDF — see queue-render-recovery.ts). A periodic backstop uses the
 // counts to decide whether to re-drive the drain (see
-// apps/api/src/lib/stale-job-backstop.ts / the queue-backstop cron).
+// apps/api/src/domains/jobs/stale-job-backstop.ts / the queue-backstop cron).
 export async function releaseStaleQueueJobs(
   staleAfterMs = 10 * 60_000,
 ): Promise<ReleaseStaleQueueJobsResult> {

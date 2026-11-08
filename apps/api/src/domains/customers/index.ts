@@ -6,3 +6,4 @@ export {
   provisionCustomerOrganization,
   updateLabCustomer,
 } from "./customer-writes";
+export { ensurePortalServiceUser } from "./portal-service-account";

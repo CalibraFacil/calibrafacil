@@ -34,12 +34,12 @@ import { systemDb } from "@calibra-facil/db";
 import { platformEventLog } from "@calibra-facil/db/schema";
 import { notify } from "@calibra-facil/notifications";
 
-import { writeOrganizationAuditEvent } from "./audit";
-import { executeRows } from "./db";
-import { orgDb } from "./org-db";
+import { writeOrganizationAuditEvent } from "../../lib/audit";
+import { executeRows } from "../../lib/db";
+import { orgDb } from "../../lib/org-db";
 import { isRecord } from "@calibra-facil/shared/record";
 import { z } from "zod";
-import { reportServerError } from "./observability";
+import { reportServerError } from "../../lib/observability";
 
 /** The tables that carry a chain (the SQL function `calibra_audit_chain_columns`). */
 const CHAINED_AUDIT_TABLES = ["job_audit_log"] as const;

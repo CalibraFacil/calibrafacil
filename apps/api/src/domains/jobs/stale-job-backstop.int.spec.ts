@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { insertJobs } from "../../test/integration/job-fixtures";
+import { insertJobs } from "../../../test/integration/job-fixtures";
 import { eq, sql } from "drizzle-orm";
 import { releaseStaleQueueJobs } from "@calibra-facil/db/queue";
 import { rejectCertificateRender } from "@calibra-facil/db/queue-render-recovery";
@@ -18,10 +18,10 @@ import {
   type AppQueueJobStatus,
   type JobStatus,
 } from "@calibra-facil/db/schema";
-import { db, truncateAll } from "../../test/integration/db";
-import { seedOrg, type SeededOrg } from "../../test/integration/seed";
+import { db, truncateAll } from "../../../test/integration/db";
+import { seedOrg, type SeededOrg } from "../../../test/integration/seed";
 import { runStaleJobBackstop } from "./stale-job-backstop";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // Real-Postgres tier for the crash/dead-letter backstop. The tenant SQL guard
 // runs in enforce mode here (test/integration/setup.ts), so every statement the

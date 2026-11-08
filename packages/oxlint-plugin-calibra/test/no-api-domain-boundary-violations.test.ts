@@ -60,6 +60,38 @@ describe("calibra/no-api-domain-boundary-violations (real oxlint)", () => {
     });
   });
 
+  it("keeps lib/ and middleware/ from importing server/, cron/ or cli/", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/lib/health-alerts.ts": `import { x } from "../cron/schedule";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/middleware/thing.ts": `import { x } from "../server/env";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/lib/thing.ts": `import { x } from "../server/router";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/lib/thing.ts": `import { x } from "../cli/init";\n${USE}`,
+    });
+  });
+
+  it("keeps a domain from importing cron/, cli/ or server/, except server/router", async () => {
+    await expectClean(RULE, {
+      "apps/api/src/domains/jobs/routes/jobs.ts": `import { createRouter } from "../../../server/router";\n${USE}`,
+      "apps/api/src/server/health-alerts.ts": `import { x } from "../cron/schedule";\n${USE}`,
+      "apps/api/src/cron/dispatch.ts": `import { x } from "../server/env";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/domains/jobs/commands/thing.ts": `import { x } from "../../../cron/schedule";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/domains/jobs/commands/thing.ts": `import { x } from "../../../server/env";\n${USE}`,
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/domains/jobs/commands/thing.ts": `import { x } from "../../../cli/init";\n${USE}`,
+    });
+  });
+
   it("exempts specs and files outside apps/api/src", async () => {
     await expectClean(RULE, {
       "apps/api/src/domains/portal/routes/portal.spec.ts": `import { x } from "../../jobs/commands/approve-job";\n${USE}`,

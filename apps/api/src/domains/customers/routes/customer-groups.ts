@@ -1,5 +1,5 @@
 import { createRouter } from "../../../server/router";
-import { uniqueSlug } from "../../../lib/unique-slug";
+import { uniqueSlug } from "../unique-slug";
 import { customerGroupEndpoints } from "@calibra-facil/contracts";
 import {
   customer,
@@ -24,7 +24,7 @@ import {
   createPortalInvitationAsService,
   enforceClientPortalMembershipBoundary,
   removePortalMemberAsService,
-} from "../../portal";
+} from "../portal-service-account";
 import { requireGroupRouteId, requireLabGroup } from "../customer-group-access";
 import {
   DomainError,
@@ -38,12 +38,10 @@ import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 import { reportServerError } from "../../../lib/observability";
 import { fleetDueCountsByCustomer } from "../../assets";
+import { toRecord } from "@calibra-facil/shared/record";
 
 function getStringProperty(value: unknown, key: string) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-  const property = Object.fromEntries(Object.entries(value))[key];
+  const property = toRecord(value)[key];
   return typeof property === "string" ? property : undefined;
 }
 

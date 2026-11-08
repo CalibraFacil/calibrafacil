@@ -3,7 +3,7 @@ import { sessionEndpoints } from "@calibra-facil/contracts";
 
 import { notFound } from "../../../lib/domain-errors";
 import { mount } from "../../../lib/endpoint-mount";
-import { revokeOwnSession } from "../../../lib/identity";
+import { revokeOwnSession } from "../identity";
 import {
   requireLabAuth,
   type AuthVariables,

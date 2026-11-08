@@ -21,7 +21,7 @@ import {
   forbidden,
   unauthenticated,
 } from "../../../lib/domain-errors";
-import { recordPlatformEvent } from "../../../lib/identity";
+import { recordPlatformEvent } from "../identity";
 import { orgDb } from "../../../lib/org-db";
 import { mount } from "../../../lib/endpoint-mount";
 import { resolveTrustedAppUrl } from "../trusted-app-url";

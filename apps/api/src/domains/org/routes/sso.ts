@@ -10,7 +10,7 @@ import {
   withLabPermission,
 } from "../../../middleware/permission";
 import { writeOrganizationAuditEvent } from "../../../lib/audit";
-import { findLabOrganizationBySlug } from "../../../lib/identity";
+import { findLabOrganizationBySlug } from "../identity";
 import {
   DomainError,
   conflict,

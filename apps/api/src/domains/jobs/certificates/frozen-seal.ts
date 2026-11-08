@@ -1,3 +1,4 @@
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { calibrationJob, certificateInput } from "@calibra-facil/db/schema";
 import {
   resolveIssuedAccreditationSeal,
@@ -9,13 +10,14 @@ import { isRecord } from "@calibra-facil/shared/record";
 /**
  * The accreditation-seal decision of an issued certificate is the one frozen at
  * approval (`certificate_input.seal`); the screens that show it (public
- * verification, the portal, the lab's job page) read it from here and never
- * re-decide it from the lab's live accreditation fields.
- *
- * Usage: `leftJoin(certificateInput, frozenSealJoin)` and select
- * `frozenSeal: frozenSealColumn`. The join carries the organization predicate
- * (a record approved before the input was frozen has no row: `null`).
+ * verification, the portal, the lab's job page) read it through this module and
+ * never re-decide it from the lab's live accreditation fields.
  */
+
+// The seal as the frozen input stores it, and the accreditation number printed on
+// the PDF (`certificate_input.input.job.lab.accreditationNumber`), whatever the
+// lab's profile says today. `jobs.ts` selects them next to the job row; the other
+// domains read them with `loadFrozenSeal`.
 export const frozenSealJoin = and(
   eq(certificateInput.jobId, calibrationJob.id),
   eq(certificateInput.organizationId, calibrationJob.organizationId),
@@ -23,14 +25,37 @@ export const frozenSealJoin = and(
 
 export const frozenSealColumn = sql<unknown>`${certificateInput.input} -> 'seal'`;
 
-/**
- * The accreditation number as it was frozen with the certificate
- * (`certificate_input.input.job.lab.accreditationNumber`): the number printed on
- * the PDF, whatever the lab's profile says today.
- */
 export const frozenAccreditationNumberColumn = sql<
   string | null
 >`${certificateInput.input} #>> '{job,lab,accreditationNumber}'`;
+
+/**
+ * The frozen seal decision and accreditation number of one issued job, to be
+ * handed to `issuedSealOf` (a record approved before the input was frozen has no
+ * row: both are null). The query carries the organization predicate.
+ */
+export async function loadFrozenSeal(
+  executor: Pick<OrgExecutor, "select">,
+  job: { id: number; organizationId: string },
+): Promise<{ frozenSeal: unknown; frozenAccreditationNumber: string | null }> {
+  const [row] = await executor
+    .select({
+      frozenSeal: frozenSealColumn,
+      frozenAccreditationNumber: frozenAccreditationNumberColumn,
+    })
+    .from(certificateInput)
+    .where(
+      and(
+        eq(certificateInput.jobId, job.id),
+        eq(certificateInput.organizationId, job.organizationId),
+      ),
+    )
+    .limit(1);
+  return {
+    frozenSeal: row?.frozenSeal ?? null,
+    frozenAccreditationNumber: row?.frozenAccreditationNumber ?? null,
+  };
+}
 
 /** The seal as the lab's job page and the public pages show it. */
 export type IssuedSeal = {

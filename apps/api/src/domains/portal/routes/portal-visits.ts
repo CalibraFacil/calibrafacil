@@ -20,7 +20,7 @@ import { orgDb } from "../../../lib/org-db";
 import { mount } from "../../../lib/endpoint-mount";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
-import { requireRouteId } from "../../../lib/route-id";
+import { requireRouteId } from "../route-id";
 import { conflict, notFound } from "../../../lib/domain-errors";
 
 /**

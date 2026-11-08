@@ -13,7 +13,7 @@ import {
   findPublicInvitation,
   findUserByEmail,
   recordPlatformEvent,
-} from "../../../lib/identity";
+} from "../identity";
 import { toRecord } from "@calibra-facil/shared/record";
 import { mount } from "../../../lib/endpoint-mount";
 import { resolveTrustedAppUrl } from "../trusted-app-url";

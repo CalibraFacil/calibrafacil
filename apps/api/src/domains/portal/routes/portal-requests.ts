@@ -33,7 +33,7 @@ import { mount } from "../../../lib/endpoint-mount";
 import { withOrg } from "../../../lib/org-context";
 import { submitCalibrationRequest } from "../../visits";
 import { requestActor } from "../../../middleware/request-actor";
-import { requireRouteId } from "../../../lib/route-id";
+import { requireRouteId } from "../route-id";
 
 function requestAlreadyActive() {
   return invalid(
