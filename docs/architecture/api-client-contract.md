@@ -101,7 +101,7 @@ What derives from it:
 | SDK namespace | `createCloudApiClient` spreads `endpointClients(ENDPOINT_GROUPS, ...)`: one client per group, and the `CalibraApi` type is computed from `ENDPOINT_GROUPS` the same way. A `modules/<ns>.ts` overrides it only where the client adds logic.                                                                                   |
 | Data policy   | `calibraApiPolicyRegistry` spreads `endpointGroupPolicies(ENDPOINT_GROUPS)`: the `policy` of every definition.                                                                                                                                                                                                                |
 | Desktop stubs | `desktopEndpointStubs()` throws for every `cloud-only` endpoint of every group with its `desktopLabel`; local-first methods are the group's own client over `createDesktopEndpointTransport` (the local server answers the same `response`).                                                                                  |
-| Route drift   | `apps/api/src/server/api-app-routes.spec.ts` checks every definition is served at its method + path.                                                                                                                                                                                                                          |
+| Route drift   | `apps/api/src/server/api-app-routes.spec.ts` checks every definition (`ENDPOINT_GROUPS` and `PORTAL_ENDPOINT_GROUPS`) is served at its method + path.                                                                                                                                                                         |
 
 The client portal's `/api/portal/*` surface is declared the same way
 (`endpoints/portal.ts`, `endpoints/portal-engagement.ts`), as `PORTAL_ENDPOINT_GROUPS`
@@ -109,7 +109,12 @@ beside `ENDPOINT_GROUPS`, not inside it: the lab SDK, the policy registry and th
 desktop stubs are computed from `ENDPOINT_GROUPS`, and none of them call the portal.
 The portal calls the definitions through its own transport (`portalApi` in
 `apps/portal/src/lib/portal-api.ts`, see `portal-frontend.md`); both clients build
-the request from the definition with `buildEndpointRequest`.
+the request from the definition with `buildEndpointRequest`. The API serves them with
+`mount(...)` (`domains/portal/routes/*`, and `portalServiceOrdersRouter` in
+`domains/service-orders/routes/service-orders.ts`), and `api-app-routes.spec.ts` checks
+`PORTAL_ENDPOINT_GROUPS` beside `ENDPOINT_GROUPS`. The one exception is
+`portalAssetEndpoints.intervalInsightReport`, a print-ready HTML page the handler answers
+with `c.html(...)`: it stays a plain route.
 
 To convert a domain:
 

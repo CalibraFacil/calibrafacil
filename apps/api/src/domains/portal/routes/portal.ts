@@ -1,19 +1,14 @@
 import { createRouter } from "../../../server/router";
+import { mount } from "../../../lib/endpoint-mount";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
-  ListAssetsQuerySchema,
-  SetCalibrationIntervalSchema,
-  FleetAnalyticsQuerySchema,
-  RecordOotImpactAssessmentSchema,
   PORTAL_NOTIFICATION_TYPES,
-  PortalUpdateNotificationPreferencesSchema,
 } from "@calibra-facil/schemas";
 import {
   requirePortalLabScope,
   resolvePortalLabScope,
 } from "../portal-lab-scope";
 import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
 import {
   member,
   user,
@@ -37,30 +32,23 @@ import {
   assetOotEvent,
   assetOotImpactAssessment,
 } from "@calibra-facil/db/schema";
-import type {
-  PortalAssetDetailResponse,
-  PortalAuditPackRequestedResponse,
-  PortalAuditPacksResponse,
-  PortalBrandingResponse,
-  PortalCalendarResponse,
-  PortalCertificateDetail,
-  PortalOotAssessmentResponse,
-  PortalCertificatesResponse,
-  PortalDownloadLinkResponse,
-  PortalDriftSeriesResponse,
-  PortalFleetAnalyticsResponse,
-  PortalFleetAssetsResponse,
-  PortalIntervalInsight,
-  PortalIntervalUpdateResponse,
-  PortalNotificationPreferencesResponse,
-  PortalOotAcknowledgeResponse,
-  PortalOotEventsResponse,
-  PortalOotNotificationsResponse,
-  PortalOrganizationsResponse,
-  PortalOverviewResponse,
-  PortalUnitsResponse,
-  PortalUnitsSummaryResponse,
-  ServerShape,
+import {
+  PortalListAssetsQuerySchema,
+  portalAssetEndpoints,
+  portalAuditPackEndpoints,
+  portalCertificateEndpoints,
+  portalDashboardEndpoints,
+  portalNotificationEndpoints,
+  portalOotNotificationEndpoints,
+  portalReliabilityEndpoints,
+  portalShellEndpoints,
+  type PortalAuditPackRequestedResponse,
+  type PortalOotAcknowledgeResponse,
+  type PortalOotAssessmentResponse,
+  type PortalIntervalUpdateResponse,
+  type PortalNotificationPreferencesResponse,
+  type PortalOverviewResponse,
+  type ServerShape,
 } from "@calibra-facil/contracts";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
@@ -88,7 +76,6 @@ import {
 } from "drizzle-orm";
 import {
   ASSET_OOT_EVENT_MACHINE,
-  ASSET_OOT_EVENT_STATUSES,
   OOT_NOTIFICATION_MACHINE,
 } from "@calibra-facil/schemas/machines";
 import {
@@ -114,48 +101,12 @@ import { isRecord } from "@calibra-facil/shared/record";
 // An instrument is "due soon" within this many days of its next calibration.
 const DUE_SOON_DAYS = 30;
 
-// Portal-local extension of the shared asset query. Adds an optional
-// calibration-status filter so the command center can deep-link the equipment
-// list to "overdue" / "due soon" without touching the shared schema or web,
-// plus server-side sorting (pagination is server-side, so sort must be too).
-const PortalListAssetsQuerySchema = ListAssetsQuerySchema.extend({
-  dueStatus: z
-    .enum(["overdue", "due_soon", "scheduled", "unscheduled", "in_lab"])
-    .optional(),
-  sortBy: z
-    .enum(["tag", "name", "nextCalibrationDate", "lastCalibrationDate"])
-    .default("tag"),
-  sortDir: z.enum(["asc", "desc"]).default("asc"),
-  // Exact-id lookup used by the self-service recall flow to resolve the
-  // preselected instruments. Comma-separated, bounded; still combined with
-  // the customer scope below, so foreign ids simply drop out.
-  ids: z
-    .string()
-    .regex(/^\d+(,\d+)*$/)
-    .optional()
-    .transform((value) => {
-      if (!value) return undefined;
-      const ids = value.split(",").map((id) => Number.parseInt(id, 10));
-      return ids.slice(0, 50);
-    }),
-  // Group cockpit: narrow the consolidated view to one unit (= branch customer
-  // id). Ignored in single mode (only that customer is ever in scope).
-  unitId: z.coerce.number().int().positive().optional(),
-});
-
 type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
 
 // Upcoming-dues calendar: a bounded date window of instruments coming due.
 // The frontend asks for the visible month grid padded by a day on each side,
 // so the cap just guards against unbounded scans.
 const CALENDAR_MAX_RANGE_DAYS = 100;
-
-const PortalCalendarQuerySchema = z.object({
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  // Group cockpit: narrow to one unit (= branch customer id). Ignored in single mode.
-  unitId: z.coerce.number().int().positive().optional(),
-});
 
 // Notification preferences exposed to the portal: the digest opt-in, the
 // global email switch and the per-type channel map — the map restricted to
@@ -193,30 +144,6 @@ function portalPreferencesPayload(
 // unbounded ZIP; the worker re-checks the same cap at generation time.
 const AUDIT_PACK_MAX_CERTIFICATES = 500;
 const AUDIT_PACK_EXPIRY_DAYS = 7;
-
-const PortalAuditPackRequestSchema = z
-  .object({
-    dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    // Group cockpit: narrow to one unit (= branch customer id). Ignored in
-    // single mode (only that customer is ever in scope).
-    unitId: z.number().int().positive().optional(),
-    include: z.object({
-      certificates: z.boolean(),
-      fleetReport: z.boolean(),
-      verificationIndex: z.boolean(),
-    }),
-  })
-  .refine((value) => value.dateFrom <= value.dateTo, {
-    message: "Período inválido",
-  })
-  .refine(
-    (value) =>
-      value.include.certificates ||
-      value.include.fleetReport ||
-      value.include.verificationIndex,
-    { message: "Selecione ao menos um conteúdo para o pacote" },
-  );
 
 // The portal routes assets by the opaque `publicId` (uuid) so URLs never
 // expose the enumerable serial id; plain numeric params stay accepted so
@@ -576,51 +503,59 @@ async function withMatchingPortalStandardDocuments(
  * These routes handle client-facing functionality.
  * Uses Portal auth (portal_session cookie) for authentication.
  */
+const PREFIX = "/api/portal";
+
 export const portalRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env;
-}>()
-  // =========================================================================
-  // GET /branding - Public white-label identity for the active portal host
-  // =========================================================================
-  // Unauthenticated on purpose: the sign-in page needs the lab's name + logo
-  // before a session exists. Resolved from the request Origin via the custom
-  // domain (resolvePortalLabScope). Degrades to nulls on the default portal host
-  // or an unrecognized domain, so the SPA falls back to CalibraFácil branding.
-  // =========================================================================
-  .get("/branding", async (c) => {
-    const portalLabScope = await resolvePortalLabScope(c);
-    if (!portalLabScope.labOrganizationId) {
-      return c.json({
-        name: null,
-        logo: null,
-      } satisfies ServerShape<PortalBrandingResponse>);
-    }
+}>();
 
-    // `organization` is a global table (no policy): no transaction needed.
-    const [labOrganization] = await orgDb(portalLabScope.labOrganizationId)
-      .select({ name: organization.name, logo: organization.logo })
-      .from(organization)
-      .where(eq(organization.id, portalLabScope.labOrganizationId))
-      .limit(1);
+// =========================================================================
+// GET /branding - Public white-label identity for the active portal host
+// =========================================================================
+// Unauthenticated on purpose: the sign-in page needs the lab's name + logo
+// before a session exists. Resolved from the request Origin via the custom
+// domain (resolvePortalLabScope). Degrades to nulls on the default portal host
+// or an unrecognized domain, so the SPA falls back to CalibraFácil branding.
+// =========================================================================
+mount(portalRouter, PREFIX, portalShellEndpoints.branding, [], async (c) => {
+  const portalLabScope = await resolvePortalLabScope(c);
+  if (!portalLabScope.labOrganizationId) {
+    return {
+      name: null,
+      logo: null,
+    };
+  }
 
-    return c.json({
-      name: labOrganization?.name ?? null,
-      logo: labOrganization?.logo ?? null,
-    } satisfies ServerShape<PortalBrandingResponse>);
-  })
+  // `organization` is a global table (no policy): no transaction needed.
+  const [labOrganization] = await orgDb(portalLabScope.labOrganizationId)
+    .select({ name: organization.name, logo: organization.logo })
+    .from(organization)
+    .where(eq(organization.id, portalLabScope.labOrganizationId))
+    .limit(1);
 
-  // =========================================================================
-  // GET /organizations - List CLIENT organizations for the portal
-  // =========================================================================
-  // Returns only organizations where:
-  // 1. The organization type is "CLIENT"
-  // 2. The user's role is in PORTAL_ACCESS_ROLES (external portal roles)
-  //
-  // This ensures only external portal members can access client organizations
-  // in the portal, regardless of internal/system ownership members.
-  // =========================================================================
-  .get("/organizations", requirePortalAuth, async (c) => {
+  return {
+    name: labOrganization?.name ?? null,
+    logo: labOrganization?.logo ?? null,
+  };
+});
+
+// =========================================================================
+// GET /organizations - List CLIENT organizations for the portal
+// =========================================================================
+// Returns only organizations where:
+// 1. The organization type is "CLIENT"
+// 2. The user's role is in PORTAL_ACCESS_ROLES (external portal roles)
+//
+// This ensures only external portal members can access client organizations
+// in the portal, regardless of internal/system ownership members.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalShellEndpoints.organizations,
+  [requirePortalAuth],
+  async (c) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -633,19 +568,23 @@ export const portalRouter = createRouter<{
       labScope: portalLabScope,
     });
 
-    return c.json(
-      clientOrganizations satisfies ServerShape<PortalOrganizationsResponse>,
-    );
-  })
+    return clientOrganizations;
+  },
+);
 
-  // =========================================================================
-  // GET /overview - Command-center aggregation for the active portal org
-  // =========================================================================
-  // One round-trip that powers the dashboard with accurate, fleet-wide numbers
-  // (not guessed from the first page of a list). Scoped to the active org's
-  // linked customer, exactly like /assets.
-  // =========================================================================
-  .get("/overview", ...requirePortalProtected, async (c) => {
+// =========================================================================
+// GET /overview - Command-center aggregation for the active portal org
+// =========================================================================
+// One round-trip that powers the dashboard with accurate, fleet-wide numbers
+// (not guessed from the first page of a list). Scoped to the active org's
+// linked customer, exactly like /assets.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalDashboardEndpoints.overview,
+  [...requirePortalProtected],
+  async (c) => {
     const member = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -657,7 +596,7 @@ export const portalRouter = createRouter<{
     });
 
     if (!scope || scope.customerIds.length === 0) {
-      return c.json(emptyOverview());
+      return emptyOverview();
     }
     const { customerIds } = scope;
     return await orgDb(scope.labOrganizationId).transaction(async (o) => {
@@ -833,7 +772,7 @@ export const portalRouter = createRouter<{
         readyForPickup: 0,
       };
 
-      return c.json({
+      return {
         equipment: { ...equipment, attention: equipmentAttention },
         certificates: {
           available: certificateCounts[0]?.available ?? 0,
@@ -845,387 +784,393 @@ export const portalRouter = createRouter<{
           awaitingQuote: awaitingQuoteOrders,
           recent: recentServiceOrders,
         },
-      } satisfies ServerShape<PortalOverviewResponse>);
+      };
     });
-  })
+  },
+);
 
-  .get(
-    "/assets",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    zValidator("query", PortalListAssetsQuerySchema),
-    async (c) => {
-      const member = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
+mount(
+  portalRouter,
+  PREFIX,
+  portalAssetEndpoints.list,
+  [...requirePortalProtected, requirePermission({ equipment: ["read"] })],
+  async (c, { query: filters }) => {
+    const member = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
 
-      const { page, limit, query, dueStatus, sortBy, sortDir, ids, unitId } =
-        c.req.valid("query");
-      const offset = (page - 1) * limit;
+    const { page, limit, query, dueStatus, sortBy, sortDir, ids, unitId } =
+      filters;
+    const offset = (page - 1) * limit;
 
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: member.organizationId,
-        labScope: portalLabScope,
-      });
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: member.organizationId,
+      labScope: portalLabScope,
+    });
 
-      if (!scope) {
-        return c.json({
-          data: [],
-          pagination: { page, limit, total: 0, totalPages: 0 },
-        });
-      }
+    if (!scope) {
+      return {
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
 
-      const customerIds = applyUnitFilter(scope, unitId);
-      if (customerIds.length === 0) {
-        return c.json({
-          data: [],
-          pagination: { page, limit, total: 0, totalPages: 0 },
-        });
-      }
+    const customerIds = applyUnitFilter(scope, unitId);
+    if (customerIds.length === 0) {
+      return {
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
 
-      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
-        const whereCondition = and(
-          inArray(asset.customerId, customerIds),
-          eq(asset.status, "ACTIVE"),
-          isNull(asset.deletedAt),
-          ids && ids.length > 0 ? inArray(asset.id, ids) : undefined,
-          query
-            ? or(
-                ilike(asset.name, `%${query}%`),
-                ilike(asset.tag, `%${query}%`),
-                ilike(asset.serialNumber, `%${query}%`),
-                ilike(asset.manufacturer, `%${query}%`),
-                ilike(asset.model, `%${query}%`),
-              )
-            : undefined,
-          buildDueStatusCondition(dueStatus, o),
-        );
-
-        const [countResult] = await o
-          .select({ total: count() })
-          .from(asset)
-          .where(whereCondition);
-
-        const sortColumn = {
-          tag: asset.tag,
-          name: asset.name,
-          nextCalibrationDate: asset.nextCalibrationDate,
-          lastCalibrationDate: asset.lastCalibrationDate,
-        }[sortBy];
-        // "nulls last" so unscheduled instruments don't lead a desc date sort;
-        // tie-break on tag for a stable page order.
-        const primaryOrder =
-          sortDir === "desc"
-            ? sql`${sortColumn} desc nulls last`
-            : sql`${sortColumn} asc nulls last`;
-
-        const assets = await o
-          .select({
-            id: asset.id,
-            publicId: asset.publicId,
-            customerId: asset.customerId,
-            customerName: customer.name,
-            assetTypeId: asset.assetTypeId,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
-            assetTypeDefinition: assetType.definition,
-            name: asset.name,
-            manufacturer: asset.manufacturer,
-            model: asset.model,
-            serialNumber: asset.serialNumber,
-            tag: asset.tag,
-            status: asset.status,
-            baseMeasurementUnit: asset.baseMeasurementUnit,
-            specifications: asset.specifications,
-            lastCalibrationDate: asset.lastCalibrationDate,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            inLab: assetInLabSql(o),
-            comments: asset.comments,
-            createdAt: asset.createdAt,
-            updatedAt: asset.updatedAt,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(whereCondition)
-          .orderBy(primaryOrder, asc(asset.tag))
-          .limit(limit)
-          .offset(offset);
-
-        // Latest approved certificate per instrument on this page, one query.
-        const assetIds = assets.map((assetItem) => assetItem.id);
-        const lastCertificateByAssetId = new Map<
-          number,
-          { id: number; jobId: string; approvedAt: string | Date | null }
-        >();
-        if (assetIds.length > 0) {
-          const lastCertificates = await o
-            .selectDistinctOn([calibrationJob.assetId], {
-              assetId: calibrationJob.assetId,
-              id: calibrationJob.id,
-              jobId: calibrationJob.jobId,
-              approvedAt: calibrationJob.approvedAt,
-            })
-            .from(calibrationJob)
-            .where(
-              and(
-                inArray(calibrationJob.assetId, assetIds),
-                inArray(calibrationJob.customerId, customerIds),
-                eq(calibrationJob.status, "APPROVED"),
-              ),
+    return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+      const whereCondition = and(
+        inArray(asset.customerId, customerIds),
+        eq(asset.status, "ACTIVE"),
+        isNull(asset.deletedAt),
+        ids && ids.length > 0 ? inArray(asset.id, ids) : undefined,
+        query
+          ? or(
+              ilike(asset.name, `%${query}%`),
+              ilike(asset.tag, `%${query}%`),
+              ilike(asset.serialNumber, `%${query}%`),
+              ilike(asset.manufacturer, `%${query}%`),
+              ilike(asset.model, `%${query}%`),
             )
-            .orderBy(calibrationJob.assetId, desc(calibrationJob.approvedAt));
+          : undefined,
+        buildDueStatusCondition(dueStatus, o),
+      );
 
-          for (const certificate of lastCertificates) {
-            lastCertificateByAssetId.set(certificate.assetId, {
-              id: certificate.id,
-              jobId: certificate.jobId,
-              approvedAt: certificate.approvedAt,
-            });
-          }
-        }
+      const [countResult] = await o
+        .select({ total: count() })
+        .from(asset)
+        .where(whereCondition);
 
-        return c.json({
-          data: assets.map((assetItem) => ({
-            ...assetItem,
-            specifications:
-              denormalizeAssetSpecificationsForResponse({
-                specifications: assetItem.specifications,
-                definition: assetItem.assetTypeDefinition,
-                baseMeasurementUnit: assetItem.baseMeasurementUnit,
-              }) ?? null,
-            lastCertificate: lastCertificateByAssetId.get(assetItem.id) ?? null,
-          })),
-          pagination: {
-            page,
-            limit,
-            total: countResult?.total ?? 0,
-            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-          },
-        } satisfies ServerShape<PortalFleetAssetsResponse>);
-      });
-    },
-  )
+      const sortColumn = {
+        tag: asset.tag,
+        name: asset.name,
+        nextCalibrationDate: asset.nextCalibrationDate,
+        lastCalibrationDate: asset.lastCalibrationDate,
+      }[sortBy];
+      // "nulls last" so unscheduled instruments don't lead a desc date sort;
+      // tie-break on tag for a stable page order.
+      const primaryOrder =
+        sortDir === "desc"
+          ? sql`${sortColumn} desc nulls last`
+          : sql`${sortColumn} asc nulls last`;
 
-  .get(
-    "/assets/:id",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    async (c) => {
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
+      const assets = await o
+        .select({
+          id: asset.id,
+          publicId: asset.publicId,
+          customerId: asset.customerId,
+          customerName: customer.name,
+          assetTypeId: asset.assetTypeId,
+          assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+          assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
+          assetTypeDefinition: assetType.definition,
+          name: asset.name,
+          manufacturer: asset.manufacturer,
+          model: asset.model,
+          serialNumber: asset.serialNumber,
+          tag: asset.tag,
+          status: asset.status,
+          baseMeasurementUnit: asset.baseMeasurementUnit,
+          specifications: asset.specifications,
+          lastCalibrationDate: asset.lastCalibrationDate,
+          nextCalibrationDate: asset.nextCalibrationDate,
+          inLab: assetInLabSql(o),
+          comments: asset.comments,
+          createdAt: asset.createdAt,
+          updatedAt: asset.updatedAt,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+        .where(whereCondition)
+        .orderBy(primaryOrder, asc(asset.tag))
+        .limit(limit)
+        .offset(offset);
 
-      if (!scope || scope.customerIds.length === 0) {
-        throw notFound("asset_not_found", "Ativo nao encontrado");
-      }
-      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          throw notFound("asset_not_found", "Ativo nao encontrado");
-        }
-        const { customerIds } = scope;
-
-        const [assetDetails] = await o
-          .select({
-            id: asset.id,
-            publicId: asset.publicId,
-            customerId: asset.customerId,
-            customerName: customer.name,
-            assetTypeId: asset.assetTypeId,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
-            assetTypeDefinition: assetType.definition,
-            name: asset.name,
-            manufacturer: asset.manufacturer,
-            model: asset.model,
-            serialNumber: asset.serialNumber,
-            tag: asset.tag,
-            status: asset.status,
-            baseMeasurementUnit: asset.baseMeasurementUnit,
-            specifications: asset.specifications,
-            lastCalibrationDate: asset.lastCalibrationDate,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            // Customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
-            // periodicity the customer sets/owns in the portal (for EVERY regime).
-            calibrationIntervalMonths: asset.calibrationIntervalMonths,
-            intervalSetBy: asset.intervalSetBy,
-            // Legal-metrology regime + the regulation-fixed verification
-            // periodicity (independent of the customer-owned interval; lab-recorded, read-only for the customer).
-            metrologyRegime: asset.metrologyRegime,
-            regulatedInterval: asset.regulatedInterval,
-            nextLegalVerificationDate: asset.nextLegalVerificationDate,
-            inLab: assetInLabSql(o),
-            comments: asset.comments,
-            createdAt: asset.createdAt,
-            updatedAt: asset.updatedAt,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .limit(1);
-
-        if (!assetDetails) {
-          throw notFound("asset_not_found", "Ativo nao encontrado");
-        }
-
-        const assetCertificateWhere = and(
-          eq(calibrationJob.assetId, assetDetails.id),
-          inArray(calibrationJob.customerId, customerIds),
-          eq(calibrationJob.status, "APPROVED"),
-        );
-
-        const [certificateCountResult] = await o
-          .select({ total: count() })
-          .from(calibrationJob)
-          .where(assetCertificateWhere);
-
-        const certificatesRaw = await o
-          .select({
+      // Latest approved certificate per instrument on this page, one query.
+      const assetIds = assets.map((assetItem) => assetItem.id);
+      const lastCertificateByAssetId = new Map<
+        number,
+        { id: number; jobId: string; approvedAt: string | Date | null }
+      >();
+      if (assetIds.length > 0) {
+        const lastCertificates = await o
+          .selectDistinctOn([calibrationJob.assetId], {
+            assetId: calibrationJob.assetId,
             id: calibrationJob.id,
             jobId: calibrationJob.jobId,
-            certificateName: calibrationJob.certificateName,
-            status: calibrationJob.status,
-            performedAt: calibrationJob.performedAt,
             approvedAt: calibrationJob.approvedAt,
-            certificateUrl: calibrationJob.certificateUrl,
-            verificationToken: calibrationJob.verificationToken,
-            serviceName: service.name,
-            labName: organization.name,
           })
           .from(calibrationJob)
-          .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-          .innerJoin(
-            organization,
-            eq(calibrationJob.organizationId, organization.id),
-          )
-          .where(assetCertificateWhere)
-          .orderBy(desc(calibrationJob.approvedAt))
-          .limit(5);
-
-        // Hide certificateUrl for held releases.
-        const certificates = await applyPortalCertificateReleaseGate(
-          certificatesRaw,
-          scope.labOrganizationId,
-        );
-
-        return c.json({
-          data: {
-            ...assetDetails,
-            specifications:
-              denormalizeAssetSpecificationsForResponse({
-                specifications: assetDetails.specifications,
-                definition: assetDetails.assetTypeDefinition,
-                baseMeasurementUnit: assetDetails.baseMeasurementUnit,
-              }) ?? null,
-            certificates,
-            certificateCount: certificateCountResult?.total ?? 0,
-          },
-        } satisfies ServerShape<PortalAssetDetailResponse>);
-      });
-    },
-  )
-
-  // =========================================================================
-  // GET /calendar - Instruments coming due inside a date window
-  // =========================================================================
-  // Powers the portal's upcoming-dues calendar. Same customer scoping as
-  // /assets; the window is inclusive of both bounds and capped so a client
-  // can't request an unbounded scan.
-  // =========================================================================
-  .get(
-    "/calendar",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    zValidator("query", PortalCalendarQuerySchema),
-    async (c) => {
-      const member = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-
-      const { from, to, unitId } = c.req.valid("query");
-      const fromDate = new Date(`${from}T00:00:00.000Z`);
-      const toExclusive = new Date(`${to}T00:00:00.000Z`);
-      toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
-
-      const rangeDays =
-        (toExclusive.getTime() - fromDate.getTime()) / 86_400_000;
-      if (
-        Number.isNaN(fromDate.getTime()) ||
-        Number.isNaN(toExclusive.getTime()) ||
-        rangeDays <= 0 ||
-        rangeDays > CALENDAR_MAX_RANGE_DAYS
-      ) {
-        throw invalid("invalid_request", "Periodo invalido");
-      }
-
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: member.organizationId,
-        labScope: portalLabScope,
-      });
-
-      if (!scope) {
-        return c.json({ data: [] });
-      }
-      const customerIds = applyUnitFilter(scope, unitId);
-      if (customerIds.length === 0) {
-        return c.json({ data: [] });
-      }
-
-      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
-        const dues = await o
-          .select({
-            id: asset.id,
-            publicId: asset.publicId,
-            name: asset.name,
-            tag: asset.tag,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            inLab: assetInLabSql(o),
-            customerId: asset.customerId,
-            customerName: customer.name,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
           .where(
             and(
-              inArray(asset.customerId, customerIds),
-              eq(asset.status, "ACTIVE"),
-              isNull(asset.deletedAt),
-              gte(asset.nextCalibrationDate, fromDate),
-              lt(asset.nextCalibrationDate, toExclusive),
+              inArray(calibrationJob.assetId, assetIds),
+              inArray(calibrationJob.customerId, customerIds),
+              eq(calibrationJob.status, "APPROVED"),
             ),
           )
-          .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag));
+          .orderBy(calibrationJob.assetId, desc(calibrationJob.approvedAt));
 
-        // The window filter above keeps only dated assets; narrow the type with it.
-        const data = dues.flatMap((due) =>
-          due.nextCalibrationDate
-            ? [{ ...due, nextCalibrationDate: due.nextCalibrationDate }]
-            : [],
-        );
-        return c.json({ data } satisfies ServerShape<PortalCalendarResponse>);
-      });
-    },
-  )
+        for (const certificate of lastCertificates) {
+          lastCertificateByAssetId.set(certificate.assetId, {
+            id: certificate.id,
+            jobId: certificate.jobId,
+            approvedAt: certificate.approvedAt,
+          });
+        }
+      }
 
-  // =========================================================================
-  // GET /units - Units (branch customers) in the active scope
-  // =========================================================================
-  // Powers the group cockpit's unit filter. Single mode returns the one
-  // customer; group mode returns every branch. The portal shows the filter
-  // only when more than one unit is present.
-  // =========================================================================
-  .get("/units", ...requirePortalProtected, async (c) => {
+      return {
+        data: assets.map((assetItem) => ({
+          ...assetItem,
+          specifications:
+            denormalizeAssetSpecificationsForResponse({
+              specifications: assetItem.specifications,
+              definition: assetItem.assetTypeDefinition,
+              baseMeasurementUnit: assetItem.baseMeasurementUnit,
+            }) ?? null,
+          lastCertificate: lastCertificateByAssetId.get(assetItem.id) ?? null,
+        })),
+        pagination: {
+          page,
+          limit,
+          total: countResult?.total ?? 0,
+          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+        },
+      };
+    });
+  },
+);
+
+mount(
+  portalRouter,
+  PREFIX,
+  portalAssetEndpoints.get,
+  [...requirePortalProtected, requirePermission({ equipment: ["read"] })],
+  async (c, { params }) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+
+    if (!scope || scope.customerIds.length === 0) {
+      throw notFound("asset_not_found", "Ativo nao encontrado");
+    }
+    return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+      const id = await resolvePortalAssetIdParam(o, params.id);
+      if (id === null) {
+        throw notFound("asset_not_found", "Ativo nao encontrado");
+      }
+      const { customerIds } = scope;
+
+      const [assetDetails] = await o
+        .select({
+          id: asset.id,
+          publicId: asset.publicId,
+          customerId: asset.customerId,
+          customerName: customer.name,
+          assetTypeId: asset.assetTypeId,
+          assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+          assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
+          assetTypeDefinition: assetType.definition,
+          name: asset.name,
+          manufacturer: asset.manufacturer,
+          model: asset.model,
+          serialNumber: asset.serialNumber,
+          tag: asset.tag,
+          status: asset.status,
+          baseMeasurementUnit: asset.baseMeasurementUnit,
+          specifications: asset.specifications,
+          lastCalibrationDate: asset.lastCalibrationDate,
+          nextCalibrationDate: asset.nextCalibrationDate,
+          // Customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
+          // periodicity the customer sets/owns in the portal (for EVERY regime).
+          calibrationIntervalMonths: asset.calibrationIntervalMonths,
+          intervalSetBy: asset.intervalSetBy,
+          // Legal-metrology regime + the regulation-fixed verification
+          // periodicity (independent of the customer-owned interval; lab-recorded, read-only for the customer).
+          metrologyRegime: asset.metrologyRegime,
+          regulatedInterval: asset.regulatedInterval,
+          nextLegalVerificationDate: asset.nextLegalVerificationDate,
+          inLab: assetInLabSql(o),
+          comments: asset.comments,
+          createdAt: asset.createdAt,
+          updatedAt: asset.updatedAt,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+        .where(
+          and(
+            eq(asset.id, id),
+            inArray(asset.customerId, customerIds),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!assetDetails) {
+        throw notFound("asset_not_found", "Ativo nao encontrado");
+      }
+
+      const assetCertificateWhere = and(
+        eq(calibrationJob.assetId, assetDetails.id),
+        inArray(calibrationJob.customerId, customerIds),
+        eq(calibrationJob.status, "APPROVED"),
+      );
+
+      const [certificateCountResult] = await o
+        .select({ total: count() })
+        .from(calibrationJob)
+        .where(assetCertificateWhere);
+
+      const certificatesRaw = await o
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          certificateName: calibrationJob.certificateName,
+          status: calibrationJob.status,
+          performedAt: calibrationJob.performedAt,
+          approvedAt: calibrationJob.approvedAt,
+          certificateUrl: calibrationJob.certificateUrl,
+          verificationToken: calibrationJob.verificationToken,
+          serviceName: service.name,
+          labName: organization.name,
+        })
+        .from(calibrationJob)
+        .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+        .innerJoin(
+          organization,
+          eq(calibrationJob.organizationId, organization.id),
+        )
+        .where(assetCertificateWhere)
+        .orderBy(desc(calibrationJob.approvedAt))
+        .limit(5);
+
+      // Hide certificateUrl for held releases.
+      const certificates = await applyPortalCertificateReleaseGate(
+        certificatesRaw,
+        scope.labOrganizationId,
+      );
+
+      return {
+        data: {
+          ...assetDetails,
+          specifications:
+            denormalizeAssetSpecificationsForResponse({
+              specifications: assetDetails.specifications,
+              definition: assetDetails.assetTypeDefinition,
+              baseMeasurementUnit: assetDetails.baseMeasurementUnit,
+            }) ?? null,
+          certificates,
+          certificateCount: certificateCountResult?.total ?? 0,
+        },
+      };
+    });
+  },
+);
+
+// =========================================================================
+// GET /calendar - Instruments coming due inside a date window
+// =========================================================================
+// Powers the portal's upcoming-dues calendar. Same customer scoping as
+// /assets; the window is inclusive of both bounds and capped so a client
+// can't request an unbounded scan.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalDashboardEndpoints.calendar,
+  [...requirePortalProtected, requirePermission({ equipment: ["read"] })],
+  async (c, { query }) => {
+    const member = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+
+    const { from, to, unitId } = query;
+    const fromDate = new Date(`${from}T00:00:00.000Z`);
+    const toExclusive = new Date(`${to}T00:00:00.000Z`);
+    toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+
+    const rangeDays = (toExclusive.getTime() - fromDate.getTime()) / 86_400_000;
+    if (
+      Number.isNaN(fromDate.getTime()) ||
+      Number.isNaN(toExclusive.getTime()) ||
+      rangeDays <= 0 ||
+      rangeDays > CALENDAR_MAX_RANGE_DAYS
+    ) {
+      throw invalid("invalid_request", "Periodo invalido");
+    }
+
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: member.organizationId,
+      labScope: portalLabScope,
+    });
+
+    if (!scope) {
+      return { data: [] };
+    }
+    const customerIds = applyUnitFilter(scope, unitId);
+    if (customerIds.length === 0) {
+      return { data: [] };
+    }
+
+    return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+      const dues = await o
+        .select({
+          id: asset.id,
+          publicId: asset.publicId,
+          name: asset.name,
+          tag: asset.tag,
+          assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+          nextCalibrationDate: asset.nextCalibrationDate,
+          inLab: assetInLabSql(o),
+          customerId: asset.customerId,
+          customerName: customer.name,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+        .where(
+          and(
+            inArray(asset.customerId, customerIds),
+            eq(asset.status, "ACTIVE"),
+            isNull(asset.deletedAt),
+            gte(asset.nextCalibrationDate, fromDate),
+            lt(asset.nextCalibrationDate, toExclusive),
+          ),
+        )
+        .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag));
+
+      // The window filter above keeps only dated assets; narrow the type with it.
+      const data = dues.flatMap((due) =>
+        due.nextCalibrationDate
+          ? [{ ...due, nextCalibrationDate: due.nextCalibrationDate }]
+          : [],
+      );
+      return { data };
+    });
+  },
+);
+
+// =========================================================================
+// GET /units - Units (branch customers) in the active scope
+// =========================================================================
+// Powers the group cockpit's unit filter. Single mode returns the one
+// customer; group mode returns every branch. The portal shows the filter
+// only when more than one unit is present.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalDashboardEndpoints.units,
+  [...requirePortalProtected],
+  async (c) => {
     const member = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -1235,27 +1180,33 @@ export const portalRouter = createRouter<{
     });
 
     if (!scope) {
-      return c.json({ units: [] } satisfies ServerShape<PortalUnitsResponse>);
+      return { units: [] };
     }
 
     const units = [...scope.customerById.values()]
       .map((unit) => ({ id: unit.id, name: unit.name }))
       .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
 
-    return c.json({
+    return {
       mode: scope.mode,
       units,
-    } satisfies ServerShape<PortalUnitsResponse>);
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // GET /units/summary - Per-unit calibration status breakdown (group KPIs)
-  // =========================================================================
-  // For the network manager: each unit (branch) with its overdue / due-soon /
-  // total active-instrument counts, worst-first. Single mode returns one row;
-  // the portal shows the breakdown only in group mode.
-  // =========================================================================
-  .get("/units/summary", ...requirePortalProtected, async (c) => {
+// =========================================================================
+// GET /units/summary - Per-unit calibration status breakdown (group KPIs)
+// =========================================================================
+// For the network manager: each unit (branch) with its overdue / due-soon /
+// total active-instrument counts, worst-first. Single mode returns one row;
+// the portal shows the breakdown only in group mode.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalDashboardEndpoints.unitsSummary,
+  [...requirePortalProtected],
+  async (c) => {
     const member = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -1265,7 +1216,7 @@ export const portalRouter = createRouter<{
     });
 
     if (!scope || scope.customerIds.length === 0) {
-      return c.json({ units: [] });
+      return { units: [] };
     }
 
     const labToday = sql.raw(LAB_TODAY_SQL);
@@ -1309,17 +1260,23 @@ export const portalRouter = createRouter<{
           left.name.localeCompare(right.name, "pt-BR"),
       );
 
-    return c.json({
+    return {
       mode: scope.mode,
       units,
-    } satisfies ServerShape<PortalUnitsSummaryResponse>);
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // GET /notification-preferences - Digest opt-in + per-type channel map
-  // (whitelisted types only) for the portal user
-  // =========================================================================
-  .get("/notification-preferences", ...requirePortalProtected, async (c) => {
+// =========================================================================
+// GET /notification-preferences - Digest opt-in + per-type channel map
+// (whitelisted types only) for the portal user
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalNotificationEndpoints.preferences,
+  [...requirePortalProtected],
+  async (c) => {
     const session = c.get("session");
     await requirePortalLabScope(c);
 
@@ -1336,479 +1293,471 @@ export const portalRouter = createRouter<{
           .limit(1),
     );
 
-    return c.json(
-      portalPreferencesPayload(
-        prefs,
-      ) satisfies ServerShape<PortalNotificationPreferencesResponse>,
-    );
-  })
+    return portalPreferencesPayload(prefs);
+  },
+);
 
-  // =========================================================================
-  // PUT /notification-preferences - Update digest opt-in
-  // =========================================================================
-  // =========================================================================
-  // GET /assets/:id/interval-insight - reliability-based suggestion (read-only)
-  // =========================================================================
-  // Computes the ILAC-G24 / NCSL RP-1 classification + suggestion from the asset's
-  // approved as-found history. Tenant-scoped. Regime-agnostic (REQ-MLR-050): a
-  // legal-metrology asset is analyzed like any other — there is NO LEGAL_FIXED
-  // suppression; its mandatory legal-verification periodicity is a separate,
-  // independent Track-2. This NEVER writes — the customer applies via PUT.
-  // =========================================================================
-  .get(
-    "/assets/:id/interval-insight",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    async (c) => {
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
+// =========================================================================
+// PUT /notification-preferences - Update digest opt-in
+// =========================================================================
+// =========================================================================
+// GET /assets/:id/interval-insight - reliability-based suggestion (read-only)
+// =========================================================================
+// Computes the ILAC-G24 / NCSL RP-1 classification + suggestion from the asset's
+// approved as-found history. Tenant-scoped. Regime-agnostic (REQ-MLR-050): a
+// legal-metrology asset is analyzed like any other — there is NO LEGAL_FIXED
+// suppression; its mandatory legal-verification periodicity is a separate,
+// independent Track-2. This NEVER writes — the customer applies via PUT.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalAssetEndpoints.intervalInsight,
+  [...requirePortalProtected, requirePermission({ equipment: ["read"] })],
+  async (c, { params }) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
 
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      throw notFound("asset_not_found", "Ativo nao encontrado");
+    }
+    return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+      const id = await resolvePortalAssetIdParam(o, params.id);
+      if (id === null) {
         throw notFound("asset_not_found", "Ativo nao encontrado");
       }
-      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+      const { customerIds } = scope;
+
+      const [existing] = await o
+        .select({
+          assetTypeId: asset.assetTypeId,
+          model: asset.model,
+          calibrationIntervalMonths: asset.calibrationIntervalMonths,
+        })
+        .from(asset)
+        .where(
+          and(
+            eq(asset.id, id),
+            inArray(asset.customerId, customerIds),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw notFound("asset_not_found", "Ativo nao encontrado");
+      }
+
+      const rows = await o
+        .select({
+          approvedAt: calibrationJob.approvedAt,
+          asFoundConformity: calibrationJob.asFoundConformity,
+          asFoundMargins: calibrationJob.asFoundMargins,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.assetId, id),
+            inArray(calibrationJob.customerId, customerIds),
+            eq(calibrationJob.status, "APPROVED"),
+          ),
+        )
+        .orderBy(asc(calibrationJob.approvedAt));
+
+      // Family borrow-strength (REQ-ENGINE-FAMILY-001): only when this unit's own
+      // history is thin and it has a model to pool by; same assetType+model,
+      // tenant-scoped, excluding legal-metrology siblings.
+      const singleKnown = rows.filter(
+        (r) =>
+          r.asFoundConformity === "CONFORMING" ||
+          r.asFoundConformity === "NON_CONFORMING",
+      ).length;
+      // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+      // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+      // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+      const singleCoverageLow =
+        rows.length > 0 &&
+        singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
+      const familyModel = existing.model;
+      const familyRows =
+        (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+          singleCoverageLow) &&
+        familyModel !== null
+          ? await o
+              .select({
+                assetId: calibrationJob.assetId,
+                approvedAt: calibrationJob.approvedAt,
+                asFoundConformity: calibrationJob.asFoundConformity,
+              })
+              .from(calibrationJob)
+              .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+              .where(
+                and(
+                  eq(asset.assetTypeId, existing.assetTypeId),
+                  eq(asset.model, familyModel),
+                  ne(asset.metrologyRegime, "LEGAL"),
+                  isNull(asset.deletedAt),
+                  inArray(calibrationJob.customerId, customerIds),
+                  eq(calibrationJob.status, "APPROVED"),
+                ),
+              )
+          : [];
+
+      const insight = buildIntervalInsight({
+        rows,
+        currentIntervalMonths: existing.calibrationIntervalMonths,
+        familyRows,
+      });
+      return insight;
+    });
+  },
+);
+
+// =========================================================================
+// GET /assets/:id/interval-insight/report - printable HTML report
+// =========================================================================
+// Self-contained, print-optimized HTML of the reliability analysis the customer
+// can save as a PDF. Explicitly NOT a calibration certificate (§7.8.4.3 disclaimer);
+// never rendered through the certificate path. Tenant-scoped, read-only.
+// =========================================================================
+portalRouter.get(
+  "/assets/:id/interval-insight/report",
+  ...requirePortalProtected,
+  requirePermission({ equipment: ["read"] }),
+  async (c) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      throw notFound("asset_not_found", "Ativo nao encontrado");
+    }
+    return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+      const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+      if (id === null) {
+        throw notFound("asset_not_found", "Ativo nao encontrado");
+      }
+      const { customerIds } = scope;
+
+      const [existing] = await o
+        .select({
+          name: asset.name,
+          tag: asset.tag,
+          serialNumber: asset.serialNumber,
+          customerName: customer.name,
+          assetTypeId: asset.assetTypeId,
+          model: asset.model,
+          calibrationIntervalMonths: asset.calibrationIntervalMonths,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .where(
+          and(
+            eq(asset.id, id),
+            inArray(asset.customerId, customerIds),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw notFound("asset_not_found", "Ativo nao encontrado");
+      }
+
+      const rows = await o
+        .select({
+          approvedAt: calibrationJob.approvedAt,
+          asFoundConformity: calibrationJob.asFoundConformity,
+          asFoundMargins: calibrationJob.asFoundMargins,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.assetId, id),
+            inArray(calibrationJob.customerId, customerIds),
+            eq(calibrationJob.status, "APPROVED"),
+          ),
+        )
+        .orderBy(asc(calibrationJob.approvedAt));
+
+      const singleKnown = rows.filter(
+        (r) =>
+          r.asFoundConformity === "CONFORMING" ||
+          r.asFoundConformity === "NON_CONFORMING",
+      ).length;
+      // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+      // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+      // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+      const singleCoverageLow =
+        rows.length > 0 &&
+        singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
+      const familyModel = existing.model;
+      const familyRows =
+        (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+          singleCoverageLow) &&
+        familyModel !== null
+          ? await o
+              .select({
+                assetId: calibrationJob.assetId,
+                approvedAt: calibrationJob.approvedAt,
+                asFoundConformity: calibrationJob.asFoundConformity,
+              })
+              .from(calibrationJob)
+              .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+              .where(
+                and(
+                  eq(asset.assetTypeId, existing.assetTypeId),
+                  eq(asset.model, familyModel),
+                  ne(asset.metrologyRegime, "LEGAL"),
+                  isNull(asset.deletedAt),
+                  inArray(calibrationJob.customerId, customerIds),
+                  eq(calibrationJob.status, "APPROVED"),
+                ),
+              )
+          : [];
+
+      const insight = buildIntervalInsight({
+        rows,
+        currentIntervalMonths: existing.calibrationIntervalMonths,
+        familyRows,
+      });
+
+      const html = renderIntervalReportHtml({
+        assetName: existing.name,
+        assetTag: existing.tag,
+        serialNumber: existing.serialNumber,
+        customerName: existing.customerName,
+        classification: insight.classification,
+        reliability: insight.reliability,
+        coverage: insight.coverage,
+        currentIntervalMonths: existing.calibrationIntervalMonths,
+        recommendation: insight.recommendation,
+        generatedAtIso: new Date().toISOString(),
+      });
+      return c.html(html);
+    });
+  },
+);
+
+// =========================================================================
+// PUT /assets/:id/interval - Customer sets their OWN calibration interval
+// =========================================================================
+// The interval/periodicity is the equipment owner's decision, never the lab's
+// (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). Tenant scope (404) is
+// decided by the pure, unit-tested resolver `decidePortalIntervalWrite` — the
+// ONLY guard: the customer owns the calibration interval for every regime
+// (REQ-MLR-040/041; a legal instrument's regulation-fixed VERIFICATION
+// periodicity is a separate, lab-recorded track). `rationale` is the required
+// §7.5 technical record, persisted on the asset and the audit log.
+// `next_calibration_date` is derived from the asset's last-calibration date +
+// the chosen interval.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalAssetEndpoints.setInterval,
+  [...requirePortalProtected, requirePermission({ equipment: ["update"] })],
+  async (c, { params, body }) => {
+    const session = c.get("session");
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+
+    const { intervalMonths, rationale, source } = body;
+    // REQ-ENGINE-APPLY-001: applying an engine suggestion records `engine_applied`.
+    const intervalSetBy =
+      source === "engine" ? "engine_applied" : "customer_confirmed";
+
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope) {
+      throw notFound("asset_not_found", "Ativo nao encontrado");
+    }
+    const scopedCustomerIds = scope.customerIds;
+    const result = await withOrg(
+      scope.labOrganizationId,
+      requestActor(c),
+      async (ctx) => {
+        const id = await resolvePortalAssetIdParam(ctx.o, params.id);
         if (id === null) {
           throw notFound("asset_not_found", "Ativo nao encontrado");
         }
-        const { customerIds } = scope;
 
-        const [existing] = await o
+        const [existing] = await ctx.o
           .select({
-            assetTypeId: asset.assetTypeId,
-            model: asset.model,
+            id: asset.id,
+            labOrganizationId: asset.labOrganizationId,
+            customerId: asset.customerId,
+            lastCalibrationDate: asset.lastCalibrationDate,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            nextCalibrationDate: asset.nextCalibrationDate,
           })
           .from(asset)
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
+          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
           .limit(1);
 
+        const decision = decidePortalIntervalWrite({
+          asset: existing ?? null,
+          scopedCustomerIds,
+        });
+
+        // REQ-MLR-040/041: the only guard is tenant scope (404). The customer owns the
+        // calibration interval for every regime — a legal asset is NOT locked here.
+        if (!decision.allowed) {
+          throw notFound("asset_not_found", "Ativo nao encontrado");
+        }
+
+        // `decision.allowed` guarantees a row matched; narrow explicitly for TS.
         if (!existing) {
           throw notFound("asset_not_found", "Ativo nao encontrado");
         }
 
-        const rows = await o
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            asFoundMargins: calibrationJob.asFoundMargins,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.assetId, id),
-              inArray(calibrationJob.customerId, customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-            ),
-          )
-          .orderBy(asc(calibrationJob.approvedAt));
+        // next = last + interval (REQ-INTERVAL-003). When the asset has no
+        // last-calibration date yet, the interval alone derives nothing — keep
+        // any pre-existing (grandfathered, pre-flip lab-set) next date instead
+        // of erasing it, so the asset does not silently drop out of the
+        // due-calibration reminders the moment the customer sets an interval.
+        const nextCalibrationDate =
+          deriveNextCalibrationDate(
+            existing.lastCalibrationDate,
+            intervalMonths,
+          ) ?? existing.nextCalibrationDate;
 
-        // Family borrow-strength (REQ-ENGINE-FAMILY-001): only when this unit's own
-        // history is thin and it has a model to pool by; same assetType+model,
-        // tenant-scoped, excluding legal-metrology siblings.
-        const singleKnown = rows.filter(
-          (r) =>
-            r.asFoundConformity === "CONFORMING" ||
-            r.asFoundConformity === "NON_CONFORMING",
-        ).length;
-        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
-        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
-        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
-        const singleCoverageLow =
-          rows.length > 0 &&
-          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
-        const familyModel = existing.model;
-        const familyRows =
-          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
-            singleCoverageLow) &&
-          familyModel !== null
-            ? await o
-                .select({
-                  assetId: calibrationJob.assetId,
-                  approvedAt: calibrationJob.approvedAt,
-                  asFoundConformity: calibrationJob.asFoundConformity,
-                })
-                .from(calibrationJob)
-                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-                .where(
-                  and(
-                    eq(asset.assetTypeId, existing.assetTypeId),
-                    eq(asset.model, familyModel),
-                    ne(asset.metrologyRegime, "LEGAL"),
-                    isNull(asset.deletedAt),
-                    inArray(calibrationJob.customerId, customerIds),
-                    eq(calibrationJob.status, "APPROVED"),
-                  ),
-                )
-            : [];
-
-        const insight = buildIntervalInsight({
-          rows,
-          currentIntervalMonths: existing.calibrationIntervalMonths,
-          familyRows,
-        });
-        return c.json(insight satisfies ServerShape<PortalIntervalInsight>);
-      });
-    },
-  )
-
-  // =========================================================================
-  // GET /assets/:id/interval-insight/report - printable HTML report
-  // =========================================================================
-  // Self-contained, print-optimized HTML of the reliability analysis the customer
-  // can save as a PDF. Explicitly NOT a calibration certificate (§7.8.4.3 disclaimer);
-  // never rendered through the certificate path. Tenant-scoped, read-only.
-  // =========================================================================
-  .get(
-    "/assets/:id/interval-insight/report",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    async (c) => {
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        throw notFound("asset_not_found", "Ativo nao encontrado");
-      }
-      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          throw notFound("asset_not_found", "Ativo nao encontrado");
-        }
-        const { customerIds } = scope;
-
-        const [existing] = await o
-          .select({
-            name: asset.name,
-            tag: asset.tag,
-            serialNumber: asset.serialNumber,
-            customerName: customer.name,
-            assetTypeId: asset.assetTypeId,
-            model: asset.model,
-            calibrationIntervalMonths: asset.calibrationIntervalMonths,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          throw notFound("asset_not_found", "Ativo nao encontrado");
-        }
-
-        const rows = await o
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            asFoundMargins: calibrationJob.asFoundMargins,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.assetId, id),
-              inArray(calibrationJob.customerId, customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-            ),
-          )
-          .orderBy(asc(calibrationJob.approvedAt));
-
-        const singleKnown = rows.filter(
-          (r) =>
-            r.asFoundConformity === "CONFORMING" ||
-            r.asFoundConformity === "NON_CONFORMING",
-        ).length;
-        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
-        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
-        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
-        const singleCoverageLow =
-          rows.length > 0 &&
-          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
-        const familyModel = existing.model;
-        const familyRows =
-          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
-            singleCoverageLow) &&
-          familyModel !== null
-            ? await o
-                .select({
-                  assetId: calibrationJob.assetId,
-                  approvedAt: calibrationJob.approvedAt,
-                  asFoundConformity: calibrationJob.asFoundConformity,
-                })
-                .from(calibrationJob)
-                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-                .where(
-                  and(
-                    eq(asset.assetTypeId, existing.assetTypeId),
-                    eq(asset.model, familyModel),
-                    ne(asset.metrologyRegime, "LEGAL"),
-                    isNull(asset.deletedAt),
-                    inArray(calibrationJob.customerId, customerIds),
-                    eq(calibrationJob.status, "APPROVED"),
-                  ),
-                )
-            : [];
-
-        const insight = buildIntervalInsight({
-          rows,
-          currentIntervalMonths: existing.calibrationIntervalMonths,
-          familyRows,
-        });
-
-        const html = renderIntervalReportHtml({
-          assetName: existing.name,
-          assetTag: existing.tag,
-          serialNumber: existing.serialNumber,
-          customerName: existing.customerName,
-          classification: insight.classification,
-          reliability: insight.reliability,
-          coverage: insight.coverage,
-          currentIntervalMonths: existing.calibrationIntervalMonths,
-          recommendation: insight.recommendation,
-          generatedAtIso: new Date().toISOString(),
-        });
-        return c.html(html);
-      });
-    },
-  )
-
-  // =========================================================================
-  // PUT /assets/:id/interval - Customer sets their OWN calibration interval
-  // =========================================================================
-  // The interval/periodicity is the equipment owner's decision, never the lab's
-  // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). Tenant scope (404) is
-  // decided by the pure, unit-tested resolver `decidePortalIntervalWrite` — the
-  // ONLY guard: the customer owns the calibration interval for every regime
-  // (REQ-MLR-040/041; a legal instrument's regulation-fixed VERIFICATION
-  // periodicity is a separate, lab-recorded track). `rationale` is the required
-  // §7.5 technical record, persisted on the asset and the audit log.
-  // `next_calibration_date` is derived from the asset's last-calibration date +
-  // the chosen interval.
-  // =========================================================================
-  .put(
-    "/assets/:id/interval",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["update"] }),
-    zValidator("json", SetCalibrationIntervalSchema),
-    async (c) => {
-      const session = c.get("session");
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-
-      const { intervalMonths, rationale, source } = c.req.valid("json");
-      // REQ-ENGINE-APPLY-001: applying an engine suggestion records `engine_applied`.
-      const intervalSetBy =
-        source === "engine" ? "engine_applied" : "customer_confirmed";
-
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope) {
-        throw notFound("asset_not_found", "Ativo nao encontrado");
-      }
-      const scopedCustomerIds = scope.customerIds;
-      const result = await withOrg(
-        scope.labOrganizationId,
-        requestActor(c),
-        async (ctx) => {
-          const id = await resolvePortalAssetIdParam(ctx.o, c.req.param("id"));
-          if (id === null) {
-            throw notFound("asset_not_found", "Ativo nao encontrado");
-          }
-
-          const [existing] = await ctx.o
-            .select({
-              id: asset.id,
-              labOrganizationId: asset.labOrganizationId,
-              customerId: asset.customerId,
-              lastCalibrationDate: asset.lastCalibrationDate,
-              calibrationIntervalMonths: asset.calibrationIntervalMonths,
-              nextCalibrationDate: asset.nextCalibrationDate,
-            })
-            .from(asset)
-            .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
-            .limit(1);
-
-          const decision = decidePortalIntervalWrite({
-            asset: existing ?? null,
-            scopedCustomerIds,
-          });
-
-          // REQ-MLR-040/041: the only guard is tenant scope (404). The customer owns the
-          // calibration interval for every regime — a legal asset is NOT locked here.
-          if (!decision.allowed) {
-            throw notFound("asset_not_found", "Ativo nao encontrado");
-          }
-
-          // `decision.allowed` guarantees a row matched; narrow explicitly for TS.
-          if (!existing) {
-            throw notFound("asset_not_found", "Ativo nao encontrado");
-          }
-
-          // next = last + interval (REQ-INTERVAL-003). When the asset has no
-          // last-calibration date yet, the interval alone derives nothing — keep
-          // any pre-existing (grandfathered, pre-flip lab-set) next date instead
-          // of erasing it, so the asset does not silently drop out of the
-          // due-calibration reminders the moment the customer sets an interval.
-          const nextCalibrationDate =
-            deriveNextCalibrationDate(
-              existing.lastCalibrationDate,
-              intervalMonths,
-            ) ?? existing.nextCalibrationDate;
-
-          await ctx.o
-            .update(asset)
-            .set({
-              calibrationIntervalMonths: intervalMonths,
-              intervalSetBy,
-              intervalSetByUserId: session.user.id,
-              intervalSetAt: new Date(),
-              intervalRationale: rationale,
-              nextCalibrationDate,
-            })
-            // Defense-in-depth: the portal tenant boundary is the customer
-            // (asset has no organizationId; org is derived via unit). Repeat the
-            // exact scope `decidePortalIntervalWrite` already proved — the asset's
-            // customer must be in the caller's in-scope set — so the UPDATE stays
-            // customer-scoped even if that guard is refactored away.
-            .where(
-              and(
-                eq(asset.id, id),
-                inArray(asset.customerId, scopedCustomerIds),
-              ),
-            );
-
-          await ctx.audit("asset", id, {
-            action: "interval_change",
-            changes: {
-              calibrationIntervalMonths: {
-                old: existing.calibrationIntervalMonths,
-                new: intervalMonths,
-              },
-              nextCalibrationDate: {
-                old: existing.nextCalibrationDate,
-                new: nextCalibrationDate,
-              },
-            },
-            reason: rationale,
-          });
-
-          return {
-            id,
+        await ctx.o
+          .update(asset)
+          .set({
             calibrationIntervalMonths: intervalMonths,
-            nextCalibrationDate,
             intervalSetBy,
-          } satisfies ServerShape<PortalIntervalUpdateResponse>;
-        },
-      );
-      return c.json(result);
-    },
-  )
+            intervalSetByUserId: session.user.id,
+            intervalSetAt: new Date(),
+            intervalRationale: rationale,
+            nextCalibrationDate,
+          })
+          // Defense-in-depth: the portal tenant boundary is the customer
+          // (asset has no organizationId; org is derived via unit). Repeat the
+          // exact scope `decidePortalIntervalWrite` already proved — the asset's
+          // customer must be in the caller's in-scope set — so the UPDATE stays
+          // customer-scoped even if that guard is refactored away.
+          .where(
+            and(eq(asset.id, id), inArray(asset.customerId, scopedCustomerIds)),
+          );
 
-  .put(
-    "/notification-preferences",
-    ...requirePortalProtected,
-    zValidator("json", PortalUpdateNotificationPreferencesSchema),
-    async (c) => {
-      const session = c.get("session");
-      await requirePortalLabScope(c);
+        await ctx.audit("asset", id, {
+          action: "interval_change",
+          changes: {
+            calibrationIntervalMonths: {
+              old: existing.calibrationIntervalMonths,
+              new: intervalMonths,
+            },
+            nextCalibrationDate: {
+              old: existing.nextCalibrationDate,
+              new: nextCalibrationDate,
+            },
+          },
+          reason: rationale,
+        });
 
-      const input = c.req.valid("json");
+        return {
+          id,
+          calibrationIntervalMonths: intervalMonths,
+          nextCalibrationDate,
+          intervalSetBy,
+        } satisfies ServerShape<PortalIntervalUpdateResponse>;
+      },
+    );
+    return result;
+  },
+);
 
-      const result = await withOrg(
-        c.get("member").organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [existing] = await ctx.o
-            .select({
-              preferences: notificationPreference.preferences,
-              emailEnabled: notificationPreference.emailEnabled,
-              digestFrequency: notificationPreference.digestFrequency,
-            })
-            .from(notificationPreference)
-            .where(eq(notificationPreference.userId, session.user.id))
-            .limit(1);
+mount(
+  portalRouter,
+  PREFIX,
+  portalNotificationEndpoints.updatePreferences,
+  [...requirePortalProtected],
+  async (c, { body }) => {
+    const session = c.get("session");
+    await requirePortalLabScope(c);
 
-          // Merge-write: the schema only lets whitelisted keys through, and the
-          // spread preserves every other stored key — a dual-role user's
-          // lab-side preferences survive portal edits untouched.
-          const mergedPreferences = {
-            ...(existing?.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES),
-            ...input.preferences,
-          };
-          const merged = {
-            preferences: mergedPreferences,
-            emailEnabled: input.emailEnabled ?? existing?.emailEnabled ?? true,
-            digestFrequency:
-              input.digestFrequency ?? existing?.digestFrequency ?? "NONE",
-          };
+    const input = body;
 
-          await ctx.o
-            .insert(notificationPreference)
-            .values({ userId: session.user.id, ...merged })
-            .onConflictDoUpdate({
-              target: notificationPreference.userId,
-              set: merged,
-            });
+    const result = await withOrg(
+      c.get("member").organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [existing] = await ctx.o
+          .select({
+            preferences: notificationPreference.preferences,
+            emailEnabled: notificationPreference.emailEnabled,
+            digestFrequency: notificationPreference.digestFrequency,
+          })
+          .from(notificationPreference)
+          .where(eq(notificationPreference.userId, session.user.id))
+          .limit(1);
 
-          return portalPreferencesPayload(
-            merged,
-          ) satisfies ServerShape<PortalNotificationPreferencesResponse>;
-        },
-      );
-      return c.json(result);
-    },
-  )
+        // Merge-write: the schema only lets whitelisted keys through, and the
+        // spread preserves every other stored key — a dual-role user's
+        // lab-side preferences survive portal edits untouched.
+        const mergedPreferences = {
+          ...(existing?.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES),
+          ...input.preferences,
+        };
+        const merged = {
+          preferences: mergedPreferences,
+          emailEnabled: input.emailEnabled ?? existing?.emailEnabled ?? true,
+          digestFrequency:
+            input.digestFrequency ?? existing?.digestFrequency ?? "NONE",
+        };
 
-  // =========================================================================
-  // GET /certificates - List certificates for portal user
-  // =========================================================================
-  // Returns approved calibration jobs (certificates) for the authenticated
-  // portal user's organizations.
-  // =========================================================================
-  .get("/certificates", ...requirePortalProtected, async (c) => {
+        await ctx.o
+          .insert(notificationPreference)
+          .values({ userId: session.user.id, ...merged })
+          .onConflictDoUpdate({
+            target: notificationPreference.userId,
+            set: merged,
+          });
+
+        return portalPreferencesPayload(
+          merged,
+        ) satisfies ServerShape<PortalNotificationPreferencesResponse>;
+      },
+    );
+    return result;
+  },
+);
+
+// =========================================================================
+// GET /certificates - List certificates for portal user
+// =========================================================================
+// Returns approved calibration jobs (certificates) for the authenticated
+// portal user's organizations.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalCertificateEndpoints.list,
+  [...requirePortalProtected],
+  async (c, { query }) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
 
-    const page = Math.max(1, parseInt(c.req.query("page") || "1"));
-    const limit = Math.min(
-      100,
-      Math.max(1, parseInt(c.req.query("limit") || "20")),
-    );
+    // Pagination: the contract coerces the numbers, the bounds are the route's.
+    const page = Math.max(1, Math.trunc(query.page ?? 1));
+    const limit = Math.min(100, Math.max(1, Math.trunc(query.limit || 20)));
     const offset = (page - 1) * limit;
-    const query = c.req.query("query")?.trim();
-    const dateFrom = c.req.query("dateFrom");
-    const dateTo = c.req.query("dateTo");
+    const search = query.query?.trim();
+    const { dateFrom, dateTo } = query;
 
     // Per-instrument archive: scope the certificate list to one asset.
     // Tenant safety is unchanged — the customerIds condition below still
     // applies, so a foreign assetId just yields an empty page.
-    const assetIdParam = c.req.query("assetId")?.trim();
-    const assetId = assetIdParam
-      ? Number.parseInt(assetIdParam, 10)
-      : undefined;
-    if (assetIdParam && Number.isNaN(assetId)) {
-      throw invalid("invalid_request", "ID invalido");
-    }
+    const assetId = query.assetId || undefined;
 
     // All customers this user can access (direct branch orgs + group orgs).
     const { customerIds, labOrganizationIds } =
@@ -1818,10 +1767,10 @@ export const portalRouter = createRouter<{
       });
 
     if (customerIds.length === 0) {
-      return c.json({
+      return {
         data: [],
         pagination: { page, limit, total: 0, totalPages: 0 },
-      });
+      };
     }
 
     const o = orgSetDb(labOrganizationIds);
@@ -1834,15 +1783,15 @@ export const portalRouter = createRouter<{
       inArray(calibrationJob.customerId, customerIds),
       inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
       assetId !== undefined ? eq(calibrationJob.assetId, assetId) : undefined,
-      query
+      search
         ? or(
-            ilike(calibrationJob.jobId, `%${query}%`),
-            ilike(calibrationJob.certificateName, `%${query}%`),
-            ilike(asset.name, `%${query}%`),
-            ilike(asset.tag, `%${query}%`),
-            ilike(asset.serialNumber, `%${query}%`),
-            ilike(asset.manufacturer, `%${query}%`),
-            ilike(service.name, `%${query}%`),
+            ilike(calibrationJob.jobId, `%${search}%`),
+            ilike(calibrationJob.certificateName, `%${search}%`),
+            ilike(asset.name, `%${search}%`),
+            ilike(asset.tag, `%${search}%`),
+            ilike(asset.serialNumber, `%${search}%`),
+            ilike(asset.manufacturer, `%${search}%`),
+            ilike(service.name, `%${search}%`),
           )
         : undefined,
       dateFrom ? sql`${approvedAtPortalDate} >= ${dateFrom}` : undefined,
@@ -1926,7 +1875,7 @@ export const portalRouter = createRouter<{
       };
     });
 
-    return c.json({
+    return {
       data: certificates,
       pagination: {
         page,
@@ -1934,13 +1883,19 @@ export const portalRouter = createRouter<{
         total,
         totalPages: Math.ceil(total / limit),
       },
-    } satisfies ServerShape<PortalCertificatesResponse>);
-  })
+    };
+  },
+);
 
-  .get("/certificates/:id", ...requirePortalProtected, async (c) => {
+mount(
+  portalRouter,
+  PREFIX,
+  portalCertificateEndpoints.get,
+  [...requirePortalProtected],
+  async (c, { params }) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
-    const certificateParam = c.req.param("id");
+    const certificateParam = params.id;
 
     const { customerIds, labOrganizationIds } =
       await resolvePortalAccessibleCustomers({
@@ -2128,13 +2083,19 @@ export const portalRouter = createRouter<{
       // Internal release-gate detail; the customer only sees `accredited`.
       scopeOverrideJustification: undefined,
     };
-    return c.json(body satisfies ServerShape<PortalCertificateDetail>);
-  })
+    return body;
+  },
+);
 
-  .get("/certificates/:id/download", ...requirePortalProtected, async (c) => {
+mount(
+  portalRouter,
+  PREFIX,
+  portalCertificateEndpoints.download,
+  [...requirePortalProtected],
+  async (c, { params }) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
-    const certificateParam = c.req.param("id");
+    const certificateParam = params.id;
 
     const { customerIds, labOrganizationIds } =
       await resolvePortalAccessibleCustomers({
@@ -2198,137 +2159,139 @@ export const portalRouter = createRouter<{
       responseContentDisposition: attachmentDisposition(filename),
     });
 
-    return c.json({
+    return {
       url,
       filename,
-    } satisfies ServerShape<PortalDownloadLinkResponse>);
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // POST /audit-packs - Request an audit pack (async bulk export)
-  // =========================================================================
-  // Enqueues an AUDIT_PACK background job that builds a ZIP with every
-  // RELEASED certificate in the period + a fleet-status report + a
-  // verification-links index. The certificate release gate is applied here
-  // (fail fast on an empty/oversized selection) AND again inside the worker
-  // at generation time, since release statuses can change in between.
-  // =========================================================================
-  .post(
-    "/audit-packs",
-    ...requirePortalProtected,
-    requirePermission({ certificate: ["read"] }),
-    zValidator("json", PortalAuditPackRequestSchema),
-    async (c) => {
-      const session = c.get("session");
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-      const body = c.req.valid("json");
+// =========================================================================
+// POST /audit-packs - Request an audit pack (async bulk export)
+// =========================================================================
+// Enqueues an AUDIT_PACK background job that builds a ZIP with every
+// RELEASED certificate in the period + a fleet-status report + a
+// verification-links index. The certificate release gate is applied here
+// (fail fast on an empty/oversized selection) AND again inside the worker
+// at generation time, since release statuses can change in between.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalAuditPackEndpoints.request,
+  [...requirePortalProtected, requirePermission({ certificate: ["read"] })],
+  async (c, { body }) => {
+    const session = c.get("session");
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
 
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        throw invalid("portal_customer_not_linked", "Nenhum cliente vinculado");
-      }
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      throw invalid("portal_customer_not_linked", "Nenhum cliente vinculado");
+    }
 
-      const customerIds = applyUnitFilter(scope, body.unitId);
-      if (customerIds.length === 0) {
-        throw invalid("invalid_request", "Unidade inválida");
-      }
+    const customerIds = applyUnitFilter(scope, body.unitId);
+    if (customerIds.length === 0) {
+      throw invalid("invalid_request", "Unidade inválida");
+    }
 
-      // Candidate set: latest (non-superseded) approved certificates whose
-      // approval date falls in the requested window. Same timezone
-      // semantics as the /certificates list.
-      const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
-      const candidates = await orgDb(scope.labOrganizationId).transaction((o) =>
-        o
-          .select({ id: calibrationJob.id })
-          .from(calibrationJob)
-          .where(
-            and(
-              inArray(calibrationJob.customerId, customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-              isNull(calibrationJob.supersededById),
-              isNotNull(calibrationJob.certificateUrl),
-              sql`${approvedAtPortalDate} >= ${body.dateFrom}`,
-              sql`${approvedAtPortalDate} <= ${body.dateTo}`,
-            ),
-          )
-          .limit(AUDIT_PACK_MAX_CERTIFICATES + 1),
+    // Candidate set: latest (non-superseded) approved certificates whose
+    // approval date falls in the requested window. Same timezone
+    // semantics as the /certificates list.
+    const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
+    const candidates = await orgDb(scope.labOrganizationId).transaction((o) =>
+      o
+        .select({ id: calibrationJob.id })
+        .from(calibrationJob)
+        .where(
+          and(
+            inArray(calibrationJob.customerId, customerIds),
+            eq(calibrationJob.status, "APPROVED"),
+            isNull(calibrationJob.supersededById),
+            isNotNull(calibrationJob.certificateUrl),
+            sql`${approvedAtPortalDate} >= ${body.dateFrom}`,
+            sql`${approvedAtPortalDate} <= ${body.dateTo}`,
+          ),
+        )
+        .limit(AUDIT_PACK_MAX_CERTIFICATES + 1),
+    );
+
+    if (candidates.length > AUDIT_PACK_MAX_CERTIFICATES) {
+      throw invalid(
+        "audit_pack_too_large",
+        `O período selecionado tem mais de ${AUDIT_PACK_MAX_CERTIFICATES} certificados. Reduza o período e gere pacotes menores.`,
       );
+    }
 
-      if (candidates.length > AUDIT_PACK_MAX_CERTIFICATES) {
-        throw invalid(
-          "audit_pack_too_large",
-          `O período selecionado tem mais de ${AUDIT_PACK_MAX_CERTIFICATES} certificados. Reduza o período e gere pacotes menores.`,
-        );
-      }
+    const releaseStatuses = await loadPortalReleaseStatuses({
+      organizationId: scope.labOrganizationId,
+      calibrationJobIds: candidates.map((row) => row.id),
+    });
+    const releasedCount = candidates.filter(
+      (row) => (releaseStatuses.get(row.id) ?? "RELEASED") === "RELEASED",
+    ).length;
 
-      const releaseStatuses = await loadPortalReleaseStatuses({
-        organizationId: scope.labOrganizationId,
-        calibrationJobIds: candidates.map((row) => row.id),
-      });
-      const releasedCount = candidates.filter(
-        (row) => (releaseStatuses.get(row.id) ?? "RELEASED") === "RELEASED",
-      ).length;
-
-      if (body.include.certificates && releasedCount === 0) {
-        throw invalid(
-          "audit_pack_empty",
-          "Nenhum certificado disponível no período selecionado.",
-        );
-      }
-
-      const exportRow = await withOrg(
-        scope.labOrganizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [created] = await ctx.o
-            .insert(portalExportJob)
-            .values({
-              kind: "AUDIT_PACK",
-              labOrganizationId: scope.labOrganizationId,
-              authOrganizationId: portalMember.organizationId,
-              requestedByUserId: session.user.id,
-              params: {
-                dateFrom: body.dateFrom,
-                dateTo: body.dateTo,
-                unitId: body.unitId ?? null,
-                include: body.include,
-                customerIds,
-              },
-              status: "PENDING",
-            })
-            // typed `.returning({...})` collapses to the 0-arg overload (TS2554).
-            .returning();
-
-          if (!created) {
-            throw new Error("Erro ao solicitar o pacote");
-          }
-
-          // The job reads the row it is queued for: it dispatches once the
-          // row has committed.
-          await ctx.emit({
-            type: "AUDIT_PACK",
-            exportId: created.id,
-            userId: session.user.id,
-          });
-          return created;
-        },
+    if (body.include.certificates && releasedCount === 0) {
+      throw invalid(
+        "audit_pack_empty",
+        "Nenhum certificado disponível no período selecionado.",
       );
+    }
 
-      return c.json(
-        {
-          id: exportRow.id,
-          status: "PENDING",
-        } satisfies ServerShape<PortalAuditPackRequestedResponse>,
-        201,
-      );
-    },
-  )
+    const exportRow = await withOrg(
+      scope.labOrganizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [created] = await ctx.o
+          .insert(portalExportJob)
+          .values({
+            kind: "AUDIT_PACK",
+            labOrganizationId: scope.labOrganizationId,
+            authOrganizationId: portalMember.organizationId,
+            requestedByUserId: session.user.id,
+            params: {
+              dateFrom: body.dateFrom,
+              dateTo: body.dateTo,
+              unitId: body.unitId ?? null,
+              include: body.include,
+              customerIds,
+            },
+            status: "PENDING",
+          })
+          // typed `.returning({...})` collapses to the 0-arg overload (TS2554).
+          .returning();
 
-  .get("/audit-packs", ...requirePortalProtected, async (c) => {
+        if (!created) {
+          throw new Error("Erro ao solicitar o pacote");
+        }
+
+        // The job reads the row it is queued for: it dispatches once the
+        // row has committed.
+        await ctx.emit({
+          type: "AUDIT_PACK",
+          exportId: created.id,
+          userId: session.user.id,
+        });
+        return created;
+      },
+    );
+
+    return {
+      id: exportRow.id,
+      status: "PENDING",
+    } satisfies PortalAuditPackRequestedResponse;
+  },
+);
+
+mount(
+  portalRouter,
+  PREFIX,
+  portalAuditPackEndpoints.list,
+  [...requirePortalProtected],
+  async (c) => {
     const portalMember = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -2337,7 +2300,7 @@ export const portalRouter = createRouter<{
       labScope: portalLabScope,
     });
     if (!scope) {
-      return c.json({ data: [] });
+      return { data: [] };
     }
     return await orgDb(scope.labOrganizationId).transaction(async (o) => {
       const rows = await o
@@ -2377,16 +2340,22 @@ export const portalRouter = createRouter<{
         createdAt: row.createdAt,
       }));
 
-      return c.json({
+      return {
         data,
-      } satisfies ServerShape<PortalAuditPacksResponse>);
+      };
     });
-  })
+  },
+);
 
-  .get("/audit-packs/:id/download", ...requirePortalProtected, async (c) => {
+mount(
+  portalRouter,
+  PREFIX,
+  portalAuditPackEndpoints.download,
+  [...requirePortalProtected],
+  async (c, { params }) => {
     const portalMember = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
-    const id = Number.parseInt(c.req.param("id"), 10);
+    const id = Number.parseInt(params.id, 10);
     if (Number.isNaN(id)) {
       throw invalid("invalid_request", "ID invalido");
     }
@@ -2465,20 +2434,26 @@ export const portalRouter = createRouter<{
       },
     );
 
-    return c.json({
+    return {
       url,
       filename,
-    } satisfies ServerShape<PortalDownloadLinkResponse>);
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // GET /oot-notifications - §7.10 out-of-tolerance notifications addressed
-  // to this portal customer. Opaque id = the notification's
-  // ackToken (already the customer's ack credential in the e-mail link).
-  // The general in-app notification center lives at /api/portal/notifications
-  // (portal-notifications.ts) — this endpoint is OOT-specific.
-  // =========================================================================
-  .get("/oot-notifications", ...requirePortalProtected, async (c) => {
+// =========================================================================
+// GET /oot-notifications - §7.10 out-of-tolerance notifications addressed
+// to this portal customer. Opaque id = the notification's
+// ackToken (already the customer's ack credential in the e-mail link).
+// The general in-app notification center lives at /api/portal/notifications
+// (portal-notifications.ts) — this endpoint is OOT-specific.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalOotNotificationEndpoints.list,
+  [...requirePortalProtected],
+  async (c) => {
     const portalMember = c.get("member");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -2487,7 +2462,7 @@ export const portalRouter = createRouter<{
       labScope: portalLabScope,
     });
     if (!scope || scope.customerIds.length === 0) {
-      return c.json({ data: [], counts: { total: 0, pending: 0 } });
+      return { data: [], counts: { total: 0, pending: 0 } };
     }
 
     const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
@@ -2530,572 +2505,567 @@ export const portalRouter = createRouter<{
       unitName: scope.customerById.get(row.customerId)?.name ?? null,
     }));
 
-    return c.json({
+    return {
       data,
       counts: {
         total: data.length,
         pending: data.filter((row) => row.acknowledgedAt === null).length,
       },
-    } satisfies ServerShape<PortalOotNotificationsResponse>);
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // POST /oot-notifications/:token/acknowledge - Registers receipt from the
-  // authenticated portal (acknowledgedVia portal_link). Idempotent; the WHERE
-  // re-checks customer scope so a token from another org can never be stamped.
-  // =========================================================================
-  .post(
-    "/oot-notifications/:token/acknowledge",
-    ...requirePortalProtected,
-    async (c) => {
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-      const token = c.req.param("token");
+// =========================================================================
+// POST /oot-notifications/:token/acknowledge - Registers receipt from the
+// authenticated portal (acknowledgedVia portal_link). Idempotent; the WHERE
+// re-checks customer scope so a token from another org can never be stamped.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalOotNotificationEndpoints.acknowledge,
+  [...requirePortalProtected],
+  async (c, { params }) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+    const token = params.token;
 
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        throw notFound(
-          "oot_notification_not_found",
-          "Notificação não encontrada",
-        );
-      }
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      throw notFound(
+        "oot_notification_not_found",
+        "Notificação não encontrada",
+      );
+    }
 
-      const response = await withOrg(
-        scope.labOrganizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [notification] = await ctx.o
-            .select({
-              id: ootNotification.id,
-              ncId: ootNotification.ncId,
-              organizationId: ootNotification.organizationId,
-              acknowledgedAt: ootNotification.acknowledgedAt,
-              ncNumber: nonConformance.ncNumber,
+    const response = await withOrg(
+      scope.labOrganizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [notification] = await ctx.o
+          .select({
+            id: ootNotification.id,
+            ncId: ootNotification.ncId,
+            organizationId: ootNotification.organizationId,
+            acknowledgedAt: ootNotification.acknowledgedAt,
+            ncNumber: nonConformance.ncNumber,
+          })
+          .from(ootNotification)
+          .innerJoin(
+            calibrationJob,
+            eq(ootNotification.jobId, calibrationJob.id),
+          )
+          .innerJoin(
+            nonConformance,
+            eq(ootNotification.ncId, nonConformance.id),
+          )
+          .where(
+            and(
+              eq(ootNotification.ackToken, token),
+              inArray(calibrationJob.customerId, scope.customerIds),
+            ),
+          )
+          .limit(1);
+
+        if (!notification) {
+          throw notFound(
+            "oot_notification_not_found",
+            "Notificação não encontrada",
+          );
+        }
+
+        if (!notification.acknowledgedAt) {
+          const [updated] = await ctx.o
+            .update(ootNotification)
+            .set({
+              status: "ACKNOWLEDGED",
+              acknowledgedAt: new Date(),
+              acknowledgedVia: "portal_link",
             })
-            .from(ootNotification)
-            .innerJoin(
-              calibrationJob,
-              eq(ootNotification.jobId, calibrationJob.id),
-            )
-            .innerJoin(
-              nonConformance,
-              eq(ootNotification.ncId, nonConformance.id),
-            )
             .where(
               and(
-                eq(ootNotification.ackToken, token),
-                inArray(calibrationJob.customerId, scope.customerIds),
+                eq(ootNotification.id, notification.id),
+                isNull(ootNotification.acknowledgedAt),
+                inArray(
+                  ootNotification.status,
+                  OOT_NOTIFICATION_MACHINE.allowedFrom("acknowledge"),
+                ),
               ),
             )
-            .limit(1);
+            .returning();
 
-          if (!notification) {
-            throw notFound(
-              "oot_notification_not_found",
-              "Notificação não encontrada",
+          // Notified after the commit: the notification reads the row it is about.
+          if (updated) {
+            ctx.afterCommit(() =>
+              notifyOotAcknowledged(
+                notification.id,
+                notification.ncId,
+                notification.ncNumber,
+                notification.organizationId,
+              ),
             );
           }
+        }
 
-          if (!notification.acknowledgedAt) {
-            const [updated] = await ctx.o
-              .update(ootNotification)
-              .set({
-                status: "ACKNOWLEDGED",
-                acknowledgedAt: new Date(),
-                acknowledgedVia: "portal_link",
-              })
-              .where(
-                and(
-                  eq(ootNotification.id, notification.id),
-                  isNull(ootNotification.acknowledgedAt),
-                  inArray(
-                    ootNotification.status,
-                    OOT_NOTIFICATION_MACHINE.allowedFrom("acknowledge"),
-                  ),
-                ),
-              )
-              .returning();
+        return {
+          message: "Recebimento confirmado",
+        } satisfies ServerShape<PortalOotAcknowledgeResponse>;
+      },
+    );
+    return response;
+  },
+);
 
-            // Notified after the commit: the notification reads the row it is about.
-            if (updated) {
-              ctx.afterCommit(() =>
-                notifyOotAcknowledged(
-                  notification.id,
-                  notification.ncId,
-                  notification.ncNumber,
-                  notification.organizationId,
-                ),
-              );
-            }
-          }
+mount(
+  portalRouter,
+  PREFIX,
+  portalCertificateEndpoints.referenceStandardDownload,
+  [...requirePortalProtected],
+  async (c, { params }) => {
+    const session = c.get("session");
+    const portalLabScope = await requirePortalLabScope(c);
+    const certificateParam = params.id;
+    const standardId = parseInt(params.standardId);
 
-          return {
-            message: "Recebimento confirmado",
-          } satisfies ServerShape<PortalOotAcknowledgeResponse>;
-        },
+    if (isNaN(standardId)) {
+      throw invalid("invalid_request", "ID invalido");
+    }
+
+    const { customerIds, labOrganizationIds } =
+      await resolvePortalAccessibleCustomers({
+        userId: session.user.id,
+        labScope: portalLabScope,
+      });
+
+    if (customerIds.length === 0) {
+      throw notFound("certificate_not_found", "Certificado nao encontrado");
+    }
+
+    const o = orgSetDb(labOrganizationIds);
+
+    const [certificate] = await o
+      .select({
+        standardsSnapshot: calibrationJob.standardsSnapshot,
+      })
+      .from(calibrationJob)
+      .where(
+        and(
+          matchPortalCertificateParam(certificateParam),
+          inArray(calibrationJob.customerId, customerIds),
+          inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
+        ),
+      )
+      .limit(1);
+
+    if (!certificate) {
+      throw notFound("certificate_not_found", "Certificado nao encontrado");
+    }
+
+    const standard = normalizePortalReferenceStandards(
+      certificate.standardsSnapshot,
+    ).find((item) => item.id === standardId);
+
+    if (!standard) {
+      throw notFound("standard_not_found", "Padrão não encontrado");
+    }
+
+    let document = standard.certificateDocument;
+    if (!document) {
+      const [matchingDocument] = await o
+        .select()
+        .from(referenceStandardCertificateDocument)
+        .where(
+          and(
+            eq(referenceStandardCertificateDocument.standardId, standardId),
+            eq(referenceStandardCertificateDocument.isCurrent, true),
+            eq(
+              referenceStandardCertificateDocument.certificateNumber,
+              standard.certificateNumber,
+            ),
+            finalizedStandardCertificateDocumentCondition(),
+          ),
+        )
+        .orderBy(
+          desc(referenceStandardCertificateDocument.isCurrent),
+          desc(referenceStandardCertificateDocument.uploadedAt),
+        )
+        .limit(1);
+
+      document = matchingDocument
+        ? portalStandardDocumentResponse(matchingDocument)
+        : null;
+    }
+
+    if (!document) {
+      throw notFound(
+        "standard_certificate_not_available",
+        "Certificado do padrão não disponível",
       );
-      return c.json(response);
-    },
-  )
+    }
 
-  .get(
-    "/certificates/:id/reference-standards/:standardId/certificate/download",
-    ...requirePortalProtected,
-    async (c) => {
-      const session = c.get("session");
-      const portalLabScope = await requirePortalLabScope(c);
-      const certificateParam = c.req.param("id");
-      const standardId = parseInt(c.req.param("standardId"));
+    const env = c.env;
+    const client = createR2Client(env);
+    const url = await generatePresignedUrl(
+      client,
+      env.R2_BUCKET_NAME,
+      document.r2Key,
+    );
 
-      if (isNaN(standardId)) {
-        throw invalid("invalid_request", "ID invalido");
-      }
+    return {
+      url,
+      filename: document.fileName,
+    };
+  },
+);
 
-      const { customerIds, labOrganizationIds } =
-        await resolvePortalAccessibleCustomers({
-          userId: session.user.id,
-          labScope: portalLabScope,
-        });
+// =========================================================================
+// GET /analytics/fleet - fleet reliability analytics
+// =========================================================================
+// Aggregates the lab-computed as-found verdicts (never recomputed here —
+// ISO/IEC 17025 §7.8.6 / ILAC-G8): OOT rate trend, per-type breakdown and
+// worst offenders. Rates use KNOWN cycles only; the UNKNOWN share and the
+// LEGAL-regime exclusion are always reported so nothing is overstated.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalReliabilityEndpoints.fleetAnalytics,
+  [...requirePortalProtected, requirePermission({ equipment: ["read"] })],
+  async (c, { query }) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+    const { periodMonths, bucket, assetTypeId, unitId } = query;
 
-      if (customerIds.length === 0) {
-        throw notFound("certificate_not_found", "Certificado nao encontrado");
-      }
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      throw notFound("customer_not_found", "Cliente nao encontrado");
+    }
+    const customerIds = applyUnitFilter(scope, unitId);
+    if (customerIds.length === 0) {
+      throw notFound("unit_not_found", "Unidade nao encontrada");
+    }
 
-      const o = orgSetDb(labOrganizationIds);
+    const to = new Date();
+    const from = new Date(to.getTime());
+    from.setMonth(from.getMonth() - periodMonths);
 
-      const [certificate] = await o
+    const conditions = [
+      inArray(calibrationJob.customerId, customerIds),
+      eq(calibrationJob.status, "APPROVED"),
+      gte(calibrationJob.approvedAt, from),
+      isNull(asset.deletedAt),
+    ];
+    if (assetTypeId) {
+      conditions.push(eq(asset.assetTypeId, assetTypeId));
+    }
+
+    const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
+      o
         .select({
-          standardsSnapshot: calibrationJob.standardsSnapshot,
+          approvedAt: calibrationJob.approvedAt,
+          asFoundConformity: calibrationJob.asFoundConformity,
+          assetId: calibrationJob.assetId,
+          assetPublicId: asset.publicId,
+          assetTag: asset.tag,
+          assetName: asset.name,
+          assetTypeId: asset.assetTypeId,
+          assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+          metrologyRegime: asset.metrologyRegime,
+        })
+        .from(calibrationJob)
+        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+        .where(and(...conditions)),
+    );
+
+    const summary = buildFleetReliabilitySummary(rows, { bucket });
+
+    return {
+      mode: scope.mode,
+      period: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+        bucket,
+      },
+      ...summary,
+      attribution:
+        "Pareceres de conformidade conforme a regra de decisão aplicada pelo laboratório em cada certificado; o portal reproduz os pareceres sem reavaliação.",
+    };
+  },
+);
+
+// =========================================================================
+// GET /assets/:id/drift-series - matched-point as-found margin series
+// =========================================================================
+// The data drift.ts regresses, exposed for the portal drift chart: per
+// positional point, the signed margin toward the 0 tolerance limit over
+// time + OLS regression. Degrades honestly: cycles without margins are
+// reported in coverage and simply absent from the series.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalAssetEndpoints.driftSeries,
+  [...requirePortalProtected, requirePermission({ equipment: ["read"] })],
+  async (c, { params }) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      throw notFound("asset_not_found", "Ativo nao encontrado");
+    }
+    return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+      const id = await resolvePortalAssetIdParam(o, params.id);
+      if (id === null) {
+        throw notFound("asset_not_found", "Ativo nao encontrado");
+      }
+
+      const [existing] = await o
+        .select({ id: asset.id })
+        .from(asset)
+        .where(
+          and(
+            eq(asset.id, id),
+            inArray(asset.customerId, scope.customerIds),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        throw notFound("asset_not_found", "Ativo nao encontrado");
+      }
+
+      const rows = await o
+        .select({
+          approvedAt: calibrationJob.approvedAt,
+          asFoundConformity: calibrationJob.asFoundConformity,
+          asFoundMargins: calibrationJob.asFoundMargins,
         })
         .from(calibrationJob)
         .where(
           and(
-            matchPortalCertificateParam(certificateParam),
-            inArray(calibrationJob.customerId, customerIds),
-            inArray(
-              calibrationJob.status,
-              PORTAL_TERMINAL_CERTIFICATE_STATUSES,
-            ),
+            eq(calibrationJob.assetId, id),
+            inArray(calibrationJob.customerId, scope.customerIds),
+            eq(calibrationJob.status, "APPROVED"),
           ),
         )
-        .limit(1);
+        .orderBy(asc(calibrationJob.approvedAt));
 
-      if (!certificate) {
-        throw notFound("certificate_not_found", "Certificado nao encontrado");
-      }
-
-      const standard = normalizePortalReferenceStandards(
-        certificate.standardsSnapshot,
-      ).find((item) => item.id === standardId);
-
-      if (!standard) {
-        throw notFound("standard_not_found", "Padrão não encontrado");
-      }
-
-      let document = standard.certificateDocument;
-      if (!document) {
-        const [matchingDocument] = await o
-          .select()
-          .from(referenceStandardCertificateDocument)
-          .where(
-            and(
-              eq(referenceStandardCertificateDocument.standardId, standardId),
-              eq(referenceStandardCertificateDocument.isCurrent, true),
-              eq(
-                referenceStandardCertificateDocument.certificateNumber,
-                standard.certificateNumber,
-              ),
-              finalizedStandardCertificateDocumentCondition(),
-            ),
-          )
-          .orderBy(
-            desc(referenceStandardCertificateDocument.isCurrent),
-            desc(referenceStandardCertificateDocument.uploadedAt),
-          )
-          .limit(1);
-
-        document = matchingDocument
-          ? portalStandardDocumentResponse(matchingDocument)
-          : null;
-      }
-
-      if (!document) {
-        throw notFound(
-          "standard_certificate_not_available",
-          "Certificado do padrão não disponível",
-        );
-      }
-
-      const env = c.env;
-      const client = createR2Client(env);
-      const url = await generatePresignedUrl(
-        client,
-        env.R2_BUCKET_NAME,
-        document.r2Key,
-      );
-
-      return c.json({
-        url,
-        filename: document.fileName,
-      } satisfies ServerShape<PortalDownloadLinkResponse>);
-    },
-  )
-
-  // =========================================================================
-  // GET /analytics/fleet - fleet reliability analytics
-  // =========================================================================
-  // Aggregates the lab-computed as-found verdicts (never recomputed here —
-  // ISO/IEC 17025 §7.8.6 / ILAC-G8): OOT rate trend, per-type breakdown and
-  // worst offenders. Rates use KNOWN cycles only; the UNKNOWN share and the
-  // LEGAL-regime exclusion are always reported so nothing is overstated.
-  // =========================================================================
-  .get(
-    "/analytics/fleet",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    zValidator("query", FleetAnalyticsQuerySchema),
-    async (c) => {
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-      const { periodMonths, bucket, assetTypeId, unitId } =
-        c.req.valid("query");
-
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        throw notFound("customer_not_found", "Cliente nao encontrado");
-      }
-      const customerIds = applyUnitFilter(scope, unitId);
-      if (customerIds.length === 0) {
-        throw notFound("unit_not_found", "Unidade nao encontrada");
-      }
-
-      const to = new Date();
-      const from = new Date(to.getTime());
-      from.setMonth(from.getMonth() - periodMonths);
-
-      const conditions = [
-        inArray(calibrationJob.customerId, customerIds),
-        eq(calibrationJob.status, "APPROVED"),
-        gte(calibrationJob.approvedAt, from),
-        isNull(asset.deletedAt),
-      ];
-      if (assetTypeId) {
-        conditions.push(eq(asset.assetTypeId, assetTypeId));
-      }
-
-      const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
-        o
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            assetId: calibrationJob.assetId,
-            assetPublicId: asset.publicId,
-            assetTag: asset.tag,
-            assetName: asset.name,
-            assetTypeId: asset.assetTypeId,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            metrologyRegime: asset.metrologyRegime,
-          })
-          .from(calibrationJob)
-          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(and(...conditions)),
-      );
-
-      const summary = buildFleetReliabilitySummary(rows, { bucket });
-
-      return c.json({
-        mode: scope.mode,
-        period: {
-          from: from.toISOString(),
-          to: to.toISOString(),
-          bucket,
-        },
-        ...summary,
+      return {
+        assetId: id,
+        ...buildAssetDriftSeries(rows),
         attribution:
-          "Pareceres de conformidade conforme a regra de decisão aplicada pelo laboratório em cada certificado; o portal reproduz os pareceres sem reavaliação.",
-      } satisfies ServerShape<PortalFleetAnalyticsResponse>);
-    },
-  )
+          "Margens conforme os resultados “como recebido” do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
+      };
+    });
+  },
+);
 
-  // =========================================================================
-  // GET /assets/:id/drift-series - matched-point as-found margin series
-  // =========================================================================
-  // The data drift.ts regresses, exposed for the portal drift chart: per
-  // positional point, the signed margin toward the 0 tolerance limit over
-  // time + OLS regression. Degrades honestly: cycles without margins are
-  // reported in coverage and simply absent from the series.
-  // =========================================================================
-  .get(
-    "/assets/:id/drift-series",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    async (c) => {
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        throw notFound("asset_not_found", "Ativo nao encontrado");
-      }
-      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          throw notFound("asset_not_found", "Ativo nao encontrado");
-        }
+mount(
+  portalRouter,
+  PREFIX,
+  portalReliabilityEndpoints.ootEvents,
+  [...requirePortalProtected, requirePermission({ equipment: ["read"] })],
+  async (c, { query }) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await requirePortalLabScope(c);
+    const { status, unitId } = query;
 
-        const [existing] = await o
-          .select({ id: asset.id })
-          .from(asset)
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, scope.customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!existing) {
-          throw notFound("asset_not_found", "Ativo nao encontrado");
-        }
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      return { data: [] };
+    }
+    const customerIds = applyUnitFilter(scope, unitId);
+    if (customerIds.length === 0) {
+      return { data: [] };
+    }
 
-        const rows = await o
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            asFoundMargins: calibrationJob.asFoundMargins,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.assetId, id),
-              inArray(calibrationJob.customerId, scope.customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-            ),
-          )
-          .orderBy(asc(calibrationJob.approvedAt));
+    const conditions = [inArray(assetOotEvent.customerId, customerIds)];
+    if (status) {
+      conditions.push(eq(assetOotEvent.status, status));
+    }
 
-        return c.json({
-          assetId: id,
-          ...buildAssetDriftSeries(rows),
-          attribution:
-            "Margens conforme os resultados “como recebido” do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
-        } satisfies ServerShape<PortalDriftSeriesResponse>);
-      });
-    },
-  )
-
-  .get(
-    "/oot-events",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["read"] }),
-    zValidator(
-      "query",
-      z.object({
-        status: z.enum(ASSET_OOT_EVENT_STATUSES).optional(),
-        unitId: z.coerce.number().int().positive().optional(),
-      }),
-    ),
-    async (c) => {
-      const portalMember = c.get("member");
-      const portalLabScope = await requirePortalLabScope(c);
-      const { status, unitId } = c.req.valid("query");
-
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        return c.json({ data: [] });
-      }
-      const customerIds = applyUnitFilter(scope, unitId);
-      if (customerIds.length === 0) {
-        return c.json({ data: [] });
-      }
-
-      const conditions = [inArray(assetOotEvent.customerId, customerIds)];
-      if (status) {
-        conditions.push(eq(assetOotEvent.status, status));
-      }
-
-      const events = await orgDb(scope.labOrganizationId).transaction((o) =>
-        o
-          .select({
-            id: assetOotEvent.id,
-            status: assetOotEvent.status,
-            detectedAt: assetOotEvent.detectedAt,
-            customerId: assetOotEvent.customerId,
-            assetId: assetOotEvent.assetId,
-            assetPublicId: asset.publicId,
-            assetTag: asset.tag,
-            assetName: asset.name,
-            jobId: assetOotEvent.jobId,
-            jobIdentifier: calibrationJob.jobId,
-            // Suspect-window default (ISO 9001 §7.1.5.2 guidance): last
-            // known-good as-found calibration before the failing one.
-            suggestedPeriodStart: sql<string | null>`(
+    const events = await orgDb(scope.labOrganizationId).transaction((o) =>
+      o
+        .select({
+          id: assetOotEvent.id,
+          status: assetOotEvent.status,
+          detectedAt: assetOotEvent.detectedAt,
+          customerId: assetOotEvent.customerId,
+          assetId: assetOotEvent.assetId,
+          assetPublicId: asset.publicId,
+          assetTag: asset.tag,
+          assetName: asset.name,
+          jobId: assetOotEvent.jobId,
+          jobIdentifier: calibrationJob.jobId,
+          // Suspect-window default (ISO 9001 §7.1.5.2 guidance): last
+          // known-good as-found calibration before the failing one.
+          suggestedPeriodStart: sql<string | null>`(
               select max(cj2.approved_at) from calibration_job cj2
               where cj2.asset_id = ${assetOotEvent.assetId}
                 and cj2.approved_at < ${assetOotEvent.detectedAt}
                 and cj2.as_found_conformity = 'CONFORMING'
                 and cj2.status = 'APPROVED'
             )`,
-            assessmentDecision: assetOotImpactAssessment.decision,
-            assessmentRationale: assetOotImpactAssessment.rationale,
-            assessmentPeriodStart: assetOotImpactAssessment.affectedPeriodStart,
-            assessmentPeriodEnd: assetOotImpactAssessment.affectedPeriodEnd,
-            assessmentSuspectShipped:
-              assetOotImpactAssessment.suspectProductShipped,
-            assessmentCustomerNotified:
-              assetOotImpactAssessment.customerNotified,
-            assessmentCreatedAt: assetOotImpactAssessment.createdAt,
-            assessmentBy: user.name,
-          })
+          assessmentDecision: assetOotImpactAssessment.decision,
+          assessmentRationale: assetOotImpactAssessment.rationale,
+          assessmentPeriodStart: assetOotImpactAssessment.affectedPeriodStart,
+          assessmentPeriodEnd: assetOotImpactAssessment.affectedPeriodEnd,
+          assessmentSuspectShipped:
+            assetOotImpactAssessment.suspectProductShipped,
+          assessmentCustomerNotified: assetOotImpactAssessment.customerNotified,
+          assessmentCreatedAt: assetOotImpactAssessment.createdAt,
+          assessmentBy: user.name,
+        })
+        .from(assetOotEvent)
+        .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
+        .innerJoin(calibrationJob, eq(assetOotEvent.jobId, calibrationJob.id))
+        .leftJoin(
+          assetOotImpactAssessment,
+          eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
+        )
+        .leftJoin(user, eq(assetOotImpactAssessment.portalUserId, user.id))
+        .where(and(...conditions))
+        .orderBy(desc(assetOotEvent.detectedAt)),
+    );
+
+    return {
+      data: events,
+    };
+  },
+);
+
+// =========================================================================
+// POST /oot-events/:id/assessment - record the customer's impact assessment
+// =========================================================================
+// ISO 9001:2015 §7.1.5.2 / IATF 16949 §7.1.5.2.1. The record is the
+// CUSTOMER'S own audit evidence — append-only with actor/ip/user-agent.
+// =========================================================================
+mount(
+  portalRouter,
+  PREFIX,
+  portalReliabilityEndpoints.assessOotEvent,
+  [...requirePortalProtected, requirePermission({ equipment: ["update"] })],
+  async (c, { params, body }) => {
+    const portalMember = c.get("member");
+    const session = c.get("session");
+    const portalLabScope = await requirePortalLabScope(c);
+    const id = Number.parseInt(params.id, 10);
+    if (Number.isNaN(id)) {
+      throw invalid("invalid_request", "ID invalido");
+    }
+    const input = body;
+
+    const scope = await resolvePortalCustomerScope({
+      activeOrgId: portalMember.organizationId,
+      labScope: portalLabScope,
+    });
+    if (!scope || scope.customerIds.length === 0) {
+      throw notFound("oot_event_not_found", "Evento nao encontrado");
+    }
+
+    const created = await withOrg(
+      scope.labOrganizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [event] = await ctx.o
+          .select()
           .from(assetOotEvent)
-          .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
-          .innerJoin(calibrationJob, eq(assetOotEvent.jobId, calibrationJob.id))
-          .leftJoin(
-            assetOotImpactAssessment,
-            eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
+          .where(
+            and(
+              eq(assetOotEvent.id, id),
+              inArray(assetOotEvent.customerId, scope.customerIds),
+            ),
           )
-          .leftJoin(user, eq(assetOotImpactAssessment.portalUserId, user.id))
-          .where(and(...conditions))
-          .orderBy(desc(assetOotEvent.detectedAt)),
-      );
+          .limit(1);
+        if (!event) {
+          throw notFound("oot_event_not_found", "Evento nao encontrado");
+        }
 
-      return c.json({
-        data: events,
-      } satisfies ServerShape<PortalOotEventsResponse>);
-    },
-  )
+        const [existingAssessment] = await ctx.o
+          .select({ id: assetOotImpactAssessment.id })
+          .from(assetOotImpactAssessment)
+          .where(eq(assetOotImpactAssessment.eventId, id))
+          .limit(1);
+        if (existingAssessment) {
+          throw invalid(
+            "oot_assessment_exists",
+            "Avaliação de impacto já registrada para este evento",
+          );
+        }
 
-  // =========================================================================
-  // POST /oot-events/:id/assessment - record the customer's impact assessment
-  // =========================================================================
-  // ISO 9001:2015 §7.1.5.2 / IATF 16949 §7.1.5.2.1. The record is the
-  // CUSTOMER'S own audit evidence — append-only with actor/ip/user-agent.
-  // =========================================================================
-  .post(
-    "/oot-events/:id/assessment",
-    ...requirePortalProtected,
-    requirePermission({ equipment: ["update"] }),
-    zValidator("json", RecordOotImpactAssessmentSchema),
-    async (c) => {
-      const portalMember = c.get("member");
-      const session = c.get("session");
-      const portalLabScope = await requirePortalLabScope(c);
-      const id = Number.parseInt(c.req.param("id"), 10);
-      if (Number.isNaN(id)) {
-        throw invalid("invalid_request", "ID invalido");
-      }
-      const input = c.req.valid("json");
+        const [assessment] = await ctx.o
+          .insert(assetOotImpactAssessment)
+          .values({
+            organizationId: event.labOrganizationId,
+            eventId: id,
+            decision: input.decision,
+            rationale: input.rationale,
+            affectedPeriodStart: input.affectedPeriodStart
+              ? new Date(input.affectedPeriodStart)
+              : null,
+            affectedPeriodEnd: input.affectedPeriodEnd
+              ? new Date(input.affectedPeriodEnd)
+              : null,
+            suspectProductShipped: input.suspectProductShipped ?? null,
+            customerNotified: input.customerNotified ?? null,
+            portalUserId: session.user.id,
+            ipAddress: ctx.actor.ipAddress,
+            userAgent: ctx.actor.userAgent ?? null,
+          })
+          .returning();
+        // Never report a success without the row.
+        if (!assessment)
+          throw new Error("OOT assessment insert returned no row");
 
-      const scope = await resolvePortalCustomerScope({
-        activeOrgId: portalMember.organizationId,
-        labScope: portalLabScope,
-      });
-      if (!scope || scope.customerIds.length === 0) {
-        throw notFound("oot_event_not_found", "Evento nao encontrado");
-      }
-
-      const created = await withOrg(
-        scope.labOrganizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [event] = await ctx.o
-            .select()
-            .from(assetOotEvent)
-            .where(
-              and(
-                eq(assetOotEvent.id, id),
-                inArray(assetOotEvent.customerId, scope.customerIds),
+        await ctx.o
+          .update(assetOotEvent)
+          .set({
+            status: ASSET_OOT_EVENT_MACHINE.requireTargetOf("OPEN", "assess"),
+          })
+          .where(
+            and(
+              eq(assetOotEvent.id, id),
+              inArray(assetOotEvent.customerId, scope.customerIds),
+              inArray(
+                assetOotEvent.status,
+                ASSET_OOT_EVENT_MACHINE.allowedFrom("assess"),
               ),
-            )
-            .limit(1);
-          if (!event) {
-            throw notFound("oot_event_not_found", "Evento nao encontrado");
-          }
+            ),
+          );
 
-          const [existingAssessment] = await ctx.o
-            .select({ id: assetOotImpactAssessment.id })
-            .from(assetOotImpactAssessment)
-            .where(eq(assetOotImpactAssessment.eventId, id))
-            .limit(1);
-          if (existingAssessment) {
-            throw invalid(
-              "oot_assessment_exists",
-              "Avaliação de impacto já registrada para este evento",
-            );
-          }
+        await ctx.audit("assetOotEvent", id, {
+          action: "assess",
+          changes: {
+            decision: input.decision,
+            affectedPeriodStart: input.affectedPeriodStart ?? null,
+            affectedPeriodEnd: input.affectedPeriodEnd ?? null,
+            suspectProductShipped: input.suspectProductShipped ?? null,
+            customerNotified: input.customerNotified ?? null,
+          },
+        });
 
-          const [assessment] = await ctx.o
-            .insert(assetOotImpactAssessment)
-            .values({
-              organizationId: event.labOrganizationId,
-              eventId: id,
-              decision: input.decision,
-              rationale: input.rationale,
-              affectedPeriodStart: input.affectedPeriodStart
-                ? new Date(input.affectedPeriodStart)
-                : null,
-              affectedPeriodEnd: input.affectedPeriodEnd
-                ? new Date(input.affectedPeriodEnd)
-                : null,
-              suspectProductShipped: input.suspectProductShipped ?? null,
-              customerNotified: input.customerNotified ?? null,
-              portalUserId: session.user.id,
-              ipAddress: ctx.actor.ipAddress,
-              userAgent: ctx.actor.userAgent ?? null,
-            })
-            .returning();
-          // Never report a success without the row.
-          if (!assessment)
-            throw new Error("OOT assessment insert returned no row");
-
-          await ctx.o
-            .update(assetOotEvent)
-            .set({
-              status: ASSET_OOT_EVENT_MACHINE.requireTargetOf("OPEN", "assess"),
-            })
-            .where(
-              and(
-                eq(assetOotEvent.id, id),
-                inArray(assetOotEvent.customerId, scope.customerIds),
-                inArray(
-                  assetOotEvent.status,
-                  ASSET_OOT_EVENT_MACHINE.allowedFrom("assess"),
-                ),
-              ),
-            );
-
-          await ctx.audit("assetOotEvent", id, {
-            action: "assess",
-            changes: {
-              decision: input.decision,
-              affectedPeriodStart: input.affectedPeriodStart ?? null,
-              affectedPeriodEnd: input.affectedPeriodEnd ?? null,
-              suspectProductShipped: input.suspectProductShipped ?? null,
-              customerNotified: input.customerNotified ?? null,
-            },
-          });
-
-          return {
-            message: "Avaliação registrada",
-            data: { event: { ...event, status: "ASSESSED" }, assessment },
-          } satisfies ServerShape<PortalOotAssessmentResponse>;
-        },
-      );
-      return c.json(created, 201);
-    },
-  );
+        return {
+          message: "Avaliação registrada",
+          data: { event: { ...event, status: "ASSESSED" }, assessment },
+        } satisfies ServerShape<PortalOotAssessmentResponse>;
+      },
+    );
+    return created;
+  },
+);
 
 function sanitizeCertificateFilename(value: string) {
   const sanitized = value

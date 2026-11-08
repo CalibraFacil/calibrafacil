@@ -150,6 +150,9 @@ describe("GET /calendar", () => {
       [
         {
           id: 5,
+          publicId: "00000000-0000-4000-8000-000000000005",
+          customerId: 1,
+          customerName: "Cliente",
           name: "Paquímetro",
           tag: "EQ-5",
           assetTypeName: "Paquímetro",
@@ -196,6 +199,8 @@ describe("GET /certificates assetId filter", () => {
           certificateUrl: "https://files/cert-7.pdf",
           verificationToken: "tok",
           assetId: 3,
+          assetPublicId: "00000000-0000-4000-8000-000000000003",
+          amendmentNumber: 0,
           assetName: "Balança",
           assetTag: "EQ-3",
           assetManufacturer: null,

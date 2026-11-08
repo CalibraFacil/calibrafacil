@@ -1,18 +1,8 @@
 import { createRouter } from "../../../server/router";
 import { requirePortalLabScope } from "../portal-lab-scope";
-import type {
-  PortalNotificationCountResponse,
-  PortalNotificationFeedResponse,
-  PortalNotificationMarkReadResponse,
-  ServerShape,
-} from "@calibra-facil/contracts";
-import { zValidator } from "@hono/zod-validator";
+import { portalNotificationEndpoints } from "@calibra-facil/contracts";
 import { notification } from "@calibra-facil/db/schema";
-import {
-  MarkNotificationsReadSchema,
-  PORTAL_NOTIFICATION_TYPES,
-  PortalListNotificationsQuerySchema,
-} from "@calibra-facil/schemas";
+import { PORTAL_NOTIFICATION_TYPES } from "@calibra-facil/schemas";
 import {
   and,
   count,
@@ -32,6 +22,7 @@ import {
 import { resolveLabOrganizationIdByPortalHostname } from "../../org";
 import { resolvePortalNotificationOrgIds } from "../portal-customer-scope";
 import { orgSetDb } from "../../../lib/org-db";
+import { mount } from "../../../lib/endpoint-mount";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 
@@ -65,74 +56,83 @@ function portalNotificationConditions(userId: string) {
   ];
 }
 
+const PREFIX = "/api/portal/notifications";
+
 export const portalNotificationsRouter = createRouter<{
   Variables: AuthVariables;
-}>()
-  // =========================================================================
-  // GET / - Chronological feed, cursor-paginated (id desc), 90-day window.
-  // =========================================================================
-  .get(
-    "/",
-    ...requirePortalProtected,
-    zValidator("query", PortalListNotificationsQuerySchema),
-    async (c) => {
-      const session = c.get("session");
-      const { cursor, limit, status } = c.req.valid("query");
-      const portalLabScope = await requirePortalLabScope(c);
+}>();
 
-      const orgIds = await resolvePortalNotificationOrgIds({
-        userId: session.user.id,
-        labScope: portalLabScope,
-      });
-      if (orgIds.length === 0) {
-        return c.json({ data: [], nextCursor: null });
-      }
+// =========================================================================
+// GET / - Chronological feed, cursor-paginated (id desc), 90-day window.
+// =========================================================================
+mount(
+  portalNotificationsRouter,
+  PREFIX,
+  portalNotificationEndpoints.list,
+  [...requirePortalProtected],
+  async (c, { query }) => {
+    const session = c.get("session");
+    const { cursor, limit, status } = query;
+    const portalLabScope = await requirePortalLabScope(c);
 
-      const now = new Date();
-      const conditions = [
-        ...portalNotificationConditions(session.user.id),
-        gt(notification.createdAt, windowStart()),
-        or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
-        status
-          ? eq(notification.status, status)
-          : ne(notification.status, "ARCHIVED"),
-      ];
-      if (cursor !== undefined) {
-        conditions.push(lt(notification.id, cursor));
-      }
+    const orgIds = await resolvePortalNotificationOrgIds({
+      userId: session.user.id,
+      labScope: portalLabScope,
+    });
+    if (orgIds.length === 0) {
+      return { data: [], nextCursor: null };
+    }
 
-      const rows = await orgSetDb(orgIds)
-        .select({
-          id: notification.id,
-          type: notification.type,
-          priority: notification.priority,
-          status: notification.status,
-          title: notification.title,
-          message: notification.message,
-          actionUrl: notification.actionUrl,
-          createdAt: notification.createdAt,
-          readAt: notification.readAt,
-        })
-        .from(notification)
-        .where(and(...conditions))
-        .orderBy(desc(notification.id))
-        .limit(limit + 1);
+    const now = new Date();
+    const conditions = [
+      ...portalNotificationConditions(session.user.id),
+      gt(notification.createdAt, windowStart()),
+      or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
+      status
+        ? eq(notification.status, status)
+        : ne(notification.status, "ARCHIVED"),
+    ];
+    if (cursor !== undefined) {
+      conditions.push(lt(notification.id, cursor));
+    }
 
-      const hasMore = rows.length > limit;
-      const data = hasMore ? rows.slice(0, limit) : rows;
-      const lastRow = data.at(-1);
+    const rows = await orgSetDb(orgIds)
+      .select({
+        id: notification.id,
+        type: notification.type,
+        priority: notification.priority,
+        status: notification.status,
+        title: notification.title,
+        message: notification.message,
+        actionUrl: notification.actionUrl,
+        createdAt: notification.createdAt,
+        readAt: notification.readAt,
+      })
+      .from(notification)
+      .where(and(...conditions))
+      .orderBy(desc(notification.id))
+      .limit(limit + 1);
 
-      return c.json({
-        data,
-        nextCursor: hasMore && lastRow ? lastRow.id : null,
-      } satisfies ServerShape<PortalNotificationFeedResponse>);
-    },
-  )
+    const hasMore = rows.length > limit;
+    const data = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = data.at(-1);
 
-  // =========================================================================
-  // GET /unread-count - Bell badge, same window as the list.
-  // =========================================================================
-  .get("/unread-count", ...requirePortalProtected, async (c) => {
+    return {
+      data,
+      nextCursor: hasMore && lastRow ? lastRow.id : null,
+    };
+  },
+);
+
+// =========================================================================
+// GET /unread-count - Bell badge, same window as the list.
+// =========================================================================
+mount(
+  portalNotificationsRouter,
+  PREFIX,
+  portalNotificationEndpoints.unreadCount,
+  [...requirePortalProtected],
+  async (c) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -141,9 +141,9 @@ export const portalNotificationsRouter = createRouter<{
       labScope: portalLabScope,
     });
     if (orgIds.length === 0) {
-      return c.json({
+      return {
         count: 0,
-      } satisfies ServerShape<PortalNotificationCountResponse>);
+      };
     }
 
     const now = new Date();
@@ -159,86 +159,93 @@ export const portalNotificationsRouter = createRouter<{
         ),
       );
 
-    return c.json({
+    return {
       count: result?.count ?? 0,
-    } satisfies ServerShape<PortalNotificationCountResponse>);
-  })
+    };
+  },
+);
 
-  // =========================================================================
-  // POST /mark-read - Mark specific notifications as read (ownership-checked).
-  // =========================================================================
-  .post(
-    "/mark-read",
-    ...requirePortalProtected,
-    zValidator("json", MarkNotificationsReadSchema),
-    async (c) => {
-      const session = c.get("session");
-      const { notificationIds } = c.req.valid("json");
-      const portalLabScope = await requirePortalLabScope(c);
+// =========================================================================
+// POST /mark-read - Mark specific notifications as read (ownership-checked).
+// =========================================================================
+mount(
+  portalNotificationsRouter,
+  PREFIX,
+  portalNotificationEndpoints.markRead,
+  [...requirePortalProtected],
+  async (c, { body }) => {
+    const session = c.get("session");
+    const { notificationIds } = body;
+    const portalLabScope = await requirePortalLabScope(c);
 
-      const orgIds = await resolvePortalNotificationOrgIds({
-        userId: session.user.id,
-        labScope: portalLabScope,
-      });
-      if (orgIds.length === 0) {
-        return c.json({
-          updatedIds: [],
-        } satisfies ServerShape<PortalNotificationMarkReadResponse>);
-      }
+    const orgIds = await resolvePortalNotificationOrgIds({
+      userId: session.user.id,
+      labScope: portalLabScope,
+    });
+    if (orgIds.length === 0) {
+      return {
+        updatedIds: [],
+      };
+    }
 
-      // The set handle only reads: find which organization each of the
-      // caller's unread rows belongs to, then write through a handle bound to
-      // exactly that organization.
-      const candidates = await orgSetDb(orgIds)
-        .select({
-          id: notification.id,
-          organizationId: notification.organizationId,
-        })
-        .from(notification)
-        .where(
-          and(
-            inArray(notification.id, notificationIds),
-            ...portalNotificationConditions(session.user.id),
-            eq(notification.status, "UNREAD"),
-          ),
-        );
-
-      const idsByOrganization = new Map<string, number[]>();
-      for (const row of candidates) {
-        const ids = idsByOrganization.get(row.organizationId) ?? [];
-        ids.push(row.id);
-        idsByOrganization.set(row.organizationId, ids);
-      }
-
-      const updatedPerOrganization = await Promise.all(
-        [...idsByOrganization].map(([organizationId, ids]) =>
-          withOrg(organizationId, requestActor(c), (ctx) =>
-            ctx.o
-              .update(notification)
-              .set({ status: "READ", readAt: new Date() })
-              .where(
-                and(
-                  inArray(notification.id, ids),
-                  ...portalNotificationConditions(session.user.id),
-                  eq(notification.status, "UNREAD"),
-                ),
-              )
-              .returning({ id: notification.id }),
-          ),
+    // The set handle only reads: find which organization each of the
+    // caller's unread rows belongs to, then write through a handle bound to
+    // exactly that organization.
+    const candidates = await orgSetDb(orgIds)
+      .select({
+        id: notification.id,
+        organizationId: notification.organizationId,
+      })
+      .from(notification)
+      .where(
+        and(
+          inArray(notification.id, notificationIds),
+          ...portalNotificationConditions(session.user.id),
+          eq(notification.status, "UNREAD"),
         ),
       );
 
-      return c.json({
-        updatedIds: updatedPerOrganization.flat().map((row) => row.id),
-      } satisfies ServerShape<PortalNotificationMarkReadResponse>);
-    },
-  )
+    const idsByOrganization = new Map<string, number[]>();
+    for (const row of candidates) {
+      const ids = idsByOrganization.get(row.organizationId) ?? [];
+      ids.push(row.id);
+      idsByOrganization.set(row.organizationId, ids);
+    }
 
-  // =========================================================================
-  // POST /mark-all-read - No window: clears the backlog too, so the badge
-  // stays at zero afterwards.
-  // =========================================================================
-  .post("/mark-all-read", ...requirePortalProtected, async (c) => {
+    const updatedPerOrganization = await Promise.all(
+      [...idsByOrganization].map(([organizationId, ids]) =>
+        withOrg(organizationId, requestActor(c), (ctx) =>
+          ctx.o
+            .update(notification)
+            .set({ status: "READ", readAt: new Date() })
+            .where(
+              and(
+                inArray(notification.id, ids),
+                ...portalNotificationConditions(session.user.id),
+                eq(notification.status, "UNREAD"),
+              ),
+            )
+            .returning({ id: notification.id }),
+        ),
+      ),
+    );
+
+    return {
+      updatedIds: updatedPerOrganization.flat().map((row) => row.id),
+    };
+  },
+);
+
+// =========================================================================
+// POST /mark-all-read - No window: clears the backlog too, so the badge
+// stays at zero afterwards.
+// =========================================================================
+mount(
+  portalNotificationsRouter,
+  PREFIX,
+  portalNotificationEndpoints.markAllRead,
+  [...requirePortalProtected],
+  async (c) => {
     const session = c.get("session");
     const portalLabScope = await requirePortalLabScope(c);
 
@@ -247,9 +254,9 @@ export const portalNotificationsRouter = createRouter<{
       labScope: portalLabScope,
     });
     if (orgIds.length === 0) {
-      return c.json({
+      return {
         count: 0,
-      } satisfies ServerShape<PortalNotificationCountResponse>);
+      };
     }
 
     // One write per organization, each through a handle bound to it (the
@@ -272,7 +279,8 @@ export const portalNotificationsRouter = createRouter<{
     );
     const updated = updatedPerOrganization.flat();
 
-    return c.json({
+    return {
       count: updated.length,
-    } satisfies ServerShape<PortalNotificationCountResponse>);
-  });
+    };
+  },
+);
