@@ -18,7 +18,10 @@ import type { JobStatus } from "@calibra-facil/schemas";
 import {
   type CalibrationAction,
   type RoleName,
+  CALIBRATION_APPROVER_ROLES,
+  CALIBRATION_EXECUTOR_ROLES,
   canPerformCalibrationAction,
+  roleIsOneOf,
   rolesAllowedTo,
 } from "./access.js";
 
@@ -114,6 +117,23 @@ describe("REQ-CAL-011: allowed actions match the oracle", () => {
   it("approve and reject are held by admin and owner only", () => {
     expect(rolesAllowedTo("approve")).toStrictEqual(["admin", "owner"]);
     expect(rolesAllowedTo("reject")).toStrictEqual(["admin", "owner"]);
+  });
+
+  it("the shared approver and executor role lists are the roles that hold the permission", () => {
+    expect([...CALIBRATION_APPROVER_ROLES].sort()).toStrictEqual([
+      "admin",
+      "owner",
+    ]);
+    // Who can do the work of a calibration, never the read-only staff role or the portal.
+    expect([...CALIBRATION_EXECUTOR_ROLES].sort()).toStrictEqual([
+      "admin",
+      "operator",
+      "owner",
+      "technician",
+    ]);
+    expect(roleIsOneOf("owner", CALIBRATION_APPROVER_ROLES)).toBe(true);
+    expect(roleIsOneOf("technician", CALIBRATION_APPROVER_ROLES)).toBe(false);
+    expect(roleIsOneOf("not-a-role", CALIBRATION_EXECUTOR_ROLES)).toBe(false);
   });
 });
 

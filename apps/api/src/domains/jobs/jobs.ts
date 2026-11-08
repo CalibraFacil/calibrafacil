@@ -6,9 +6,6 @@ import {
   calibrationJob,
   calibrationMethod,
   customer,
-  member,
-  memberUnitAssignment,
-  personnelCompetence,
   service,
   serviceOrder,
   type AssetSnapshot,
@@ -18,10 +15,12 @@ import {
 import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { addLabBusinessDays } from "@calibra-facil/shared";
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "../finance";
 import { generateCertificateIdentity } from "./certificates/certificate-numbering";
 import { invalid, notFound } from "../../lib/domain-errors";
+import { isAssignableTechnician } from "../../lib/tenant-refs";
+import { technicianHasCompetence } from "./commands/technician-assignment";
 import { toRecord } from "@calibra-facil/shared/record";
 
 type JobDbExecutor = Pick<
@@ -255,90 +254,39 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
   }
 
   if (params.technicianId) {
-    const [techMember] = await executor
-      .select()
-      .from(member)
-      .where(
-        and(
-          eq(member.userId, params.technicianId),
-          eq(member.organizationId, params.organizationId),
-        ),
-      )
-      .limit(1);
-
-    if (!techMember) {
+    // The same two questions as `POST /jobs/:id/assign` (commands/technician-assignment.ts).
+    if (
+      !(await isAssignableTechnician(
+        {
+          organizationId: params.organizationId,
+          userId: params.technicianId,
+          unitId: params.unitId,
+        },
+        executor,
+      ))
+    ) {
       throw invalid(
         "technician_not_found",
         "Tecnico nao encontrado ou sem permissao",
       );
     }
 
-    if (!["admin", "owner"].includes(techMember.role)) {
-      const [techAssignment] = await executor
-        .select({ id: memberUnitAssignment.id })
-        .from(memberUnitAssignment)
-        .where(
-          and(
-            eq(memberUnitAssignment.memberId, techMember.id),
-            eq(memberUnitAssignment.organizationId, params.organizationId),
-            eq(memberUnitAssignment.unitId, params.unitId),
-            inArray(memberUnitAssignment.role, ["technician", "unit_admin"]),
-          ),
-        )
-        .limit(1);
-
-      if (!techAssignment) {
-        throw invalid(
-          "technician_not_found",
-          "Tecnico nao encontrado ou sem permissao",
-        );
-      }
-    }
-
-    const [competenceCount] = await executor
-      .select({ total: count() })
-      .from(personnelCompetence)
-      .where(
-        and(
-          eq(personnelCompetence.organizationId, params.organizationId),
-          isNull(personnelCompetence.deletedAt),
-        ),
+    if (
+      assetData.assetTypeId &&
+      !(await technicianHasCompetence(
+        {
+          organizationId: params.organizationId,
+          technicianId: params.technicianId,
+          assetTypeId: assetData.assetTypeId,
+          performedAt: new Date(),
+        },
+        executor,
+      ))
+    ) {
+      throw invalid(
+        "technician_competence_missing",
+        "Técnico não possui competência ativa para este tipo de instrumento",
       );
-
-    if ((competenceCount?.total ?? 0) > 0 && assetData.assetTypeId) {
-      const [activeCompetence] = await executor
-        .select({
-          id: personnelCompetence.id,
-          expiresAt: personnelCompetence.expiresAt,
-        })
-        .from(personnelCompetence)
-        .where(
-          and(
-            eq(personnelCompetence.userId, params.technicianId),
-            eq(personnelCompetence.organizationId, params.organizationId),
-            eq(personnelCompetence.assetTypeId, assetData.assetTypeId),
-            eq(personnelCompetence.status, "ACTIVE"),
-            isNull(personnelCompetence.deletedAt),
-          ),
-        )
-        .limit(1);
-
-      if (!activeCompetence?.id) {
-        throw invalid(
-          "technician_competence_missing",
-          "Técnico não possui competência ativa para este tipo de instrumento",
-        );
-      }
-
-      if (
-        activeCompetence.expiresAt &&
-        activeCompetence.expiresAt < new Date()
-      ) {
-        throw invalid(
-          "technician_competence_missing",
-          "Técnico não possui competência ativa para este tipo de instrumento",
-        );
-      }
     }
   }
 

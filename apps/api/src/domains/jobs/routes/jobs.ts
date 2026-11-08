@@ -35,7 +35,6 @@ import {
   service,
   user,
   member,
-  memberUnitAssignment,
   type AssetSnapshot,
 } from "@calibra-facil/db/schema";
 import { notify } from "@calibra-facil/notifications";
@@ -94,6 +93,7 @@ import {
   ne,
   or,
 } from "drizzle-orm";
+import { assignableMemberCondition } from "../../../lib/tenant-refs";
 import {
   createR2Client,
   generatePresignedUrl,
@@ -1449,8 +1449,8 @@ mount(
     const memberData = c.get("member");
 
     const technicians = await orgDb(memberData.organizationId).transaction(
-      async (o) => {
-        const baseQuery = o
+      (o) =>
+        o
           .select({
             id: user.id,
             name: user.name,
@@ -1458,40 +1458,17 @@ mount(
             role: member.role,
           })
           .from(member)
-          .innerJoin(user, eq(member.userId, user.id));
-
-        return memberData.activeUnitId
-          ? baseQuery
-              .leftJoin(
-                memberUnitAssignment,
-                eq(memberUnitAssignment.memberId, member.id),
-              )
-              .where(
-                and(
-                  eq(member.organizationId, memberData.organizationId),
-                  inArray(member.role, ["technician", "admin", "owner"]),
-                  or(
-                    inArray(member.role, ["admin", "owner"]),
-                    and(
-                      eq(memberUnitAssignment.unitId, memberData.activeUnitId),
-                      inArray(memberUnitAssignment.role, [
-                        "technician",
-                        "unit_admin",
-                      ]),
-                    ),
-                  ),
-                ),
-              )
-              .orderBy(user.name)
-          : baseQuery
-              .where(
-                and(
-                  eq(member.organizationId, memberData.organizationId),
-                  inArray(member.role, ["technician", "admin", "owner"]),
-                ),
-              )
-              .orderBy(user.name);
-      },
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(
+            assignableMemberCondition(
+              {
+                organizationId: memberData.organizationId,
+                unitId: memberData.activeUnitId,
+              },
+              o,
+            ),
+          )
+          .orderBy(user.name),
     );
 
     return {

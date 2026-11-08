@@ -8,7 +8,9 @@ import {
   serviceOrder,
   calibrationJob,
 } from "@calibra-facil/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { CALIBRATION_EXECUTOR_ROLES } from "@calibra-facil/auth/access";
+import { and, eq, exists, inArray, or } from "drizzle-orm";
+import { GLOBAL_UNIT_ROLES } from "./units";
 
 /**
  * Tenancy guards for request-supplied foreign ids.
@@ -61,37 +63,65 @@ export async function userIsOrganizationMember(
   );
 }
 
+/** The unit assignments that make a non-global member assignable in a unit. */
+const ASSIGNABLE_UNIT_ROLES = ["technician", "unit_admin"] as const;
+
 /**
- * True when `userId` may be assigned work in `unitId`: a member of the
- * organization who is an org-level admin/owner, or holds a technician /
- * unit_admin assignment in that unit. Mirrors the rule in `POST /jobs/:id/assign`
- * and `createCalibrationJob`.
+ * THE rule of "may this member be assigned work in this unit", as a condition
+ * over `member`. The member's organization role must be one that does the work
+ * (`calibration.execute`, packages/auth access.ts); an org-level admin/owner
+ * reaches every unit, anyone else needs a technician / unit_admin assignment in
+ * `unitId` (a null unit is "any unit": the role alone decides). The technician
+ * picker, `POST /jobs/:id/assign`, `createCalibrationJob`, the service-order and
+ * visit assignments all ask through this.
  */
+export function assignableMemberCondition(
+  params: { organizationId: string; unitId: number | null },
+  executor: TenantRefsExecutor,
+) {
+  const { organizationId, unitId } = params;
+  return and(
+    eq(member.organizationId, organizationId),
+    inArray(member.role, [...CALIBRATION_EXECUTOR_ROLES]),
+    unitId === null
+      ? undefined
+      : or(
+          inArray(member.role, [...GLOBAL_UNIT_ROLES]),
+          exists(
+            executor
+              .select({ id: memberUnitAssignment.id })
+              .from(memberUnitAssignment)
+              .where(
+                and(
+                  eq(memberUnitAssignment.memberId, member.id),
+                  eq(memberUnitAssignment.organizationId, organizationId),
+                  eq(memberUnitAssignment.unitId, unitId),
+                  inArray(memberUnitAssignment.role, [
+                    ...ASSIGNABLE_UNIT_ROLES,
+                  ]),
+                ),
+              ),
+          ),
+        ),
+  );
+}
+
+/** True when `userId` may be assigned work in `unitId` (`assignableMemberCondition`). */
 export async function isAssignableTechnician(
   params: { organizationId: string; userId: string; unitId: number | null },
   executor: TenantRefsExecutor,
 ) {
-  const found = await findOrganizationMember(
-    params.organizationId,
-    params.userId,
-    executor,
-  );
-  if (!found) return false;
-  if (found.role === "admin" || found.role === "owner") return true;
-  if (params.unitId === null) return true;
-  const [assignment] = await executor
-    .select({ id: memberUnitAssignment.id })
-    .from(memberUnitAssignment)
+  const [found] = await executor
+    .select({ id: member.id })
+    .from(member)
     .where(
       and(
-        eq(memberUnitAssignment.memberId, found.id),
-        eq(memberUnitAssignment.organizationId, params.organizationId),
-        eq(memberUnitAssignment.unitId, params.unitId),
-        inArray(memberUnitAssignment.role, ["technician", "unit_admin"]),
+        eq(member.userId, params.userId),
+        assignableMemberCondition(params, executor),
       ),
     )
     .limit(1);
-  return Boolean(assignment);
+  return found !== undefined;
 }
 
 /** True when every unit id belongs to `organizationId` (empty list is true). */

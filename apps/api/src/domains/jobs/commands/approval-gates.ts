@@ -4,6 +4,7 @@ import {
   organization,
   type calibrationJob,
 } from "@calibra-facil/db/schema";
+import { CALIBRATION_APPROVER_ROLES } from "@calibra-facil/auth/access";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import {
   judgeSnapshotStandards,
@@ -60,9 +61,9 @@ function isApproverTheWorkDoer(
  * Is there another member who could approve instead? Used only by the
  * auto-detected exemption of a laboratory that is not accredited (a genuine
  * solo lab would otherwise be left with a REVIEW job nobody can release). An
- * eligible alternate holds `calibration.approve`, which access.ts grants to
- * admin and owner only; both are global multi-unit roles, so any such member
- * can access the job's unit by construction.
+ * eligible alternate is a member whose role may approve
+ * (`CALIBRATION_APPROVER_ROLES`, from the role definitions); today those are
+ * global multi-unit roles, so any such member can access the job's unit.
  */
 async function hasAlternateApprover(
   params: { organizationId: string; approverId: string },
@@ -74,7 +75,7 @@ async function hasAlternateApprover(
     .where(
       and(
         eq(member.organizationId, params.organizationId),
-        inArray(member.role, ["admin", "owner"]),
+        inArray(member.role, [...CALIBRATION_APPROVER_ROLES]),
         ne(member.userId, params.approverId),
       ),
     )

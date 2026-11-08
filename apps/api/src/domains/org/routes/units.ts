@@ -31,22 +31,18 @@ import {
 } from "../../../lib/domain-errors";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
-import { rolesAllowedTo } from "@calibra-facil/auth/access";
-import type { RoleName } from "@calibra-facil/auth/access";
+import {
+  CALIBRATION_APPROVER_ROLES,
+  roleIsOneOf,
+} from "@calibra-facil/auth/access";
 
 /**
- * Roles capable of APPROVING a calibration, derived from the role definitions
- * (`rolesAllowedTo`) rather than a hand-written "is admin" rule, so it stays in
- * sync if the workflow authority ever changes. Today this is `["admin", "owner"]`.
- */
-const CALIBRATION_APPROVER_ROLES: RoleName[] = rolesAllowedTo("approve");
-
-/**
- * Whether a (possibly free-form) member role can approve calibrations. Uses a
- * value comparison so an untyped DB `role` string narrows without an assertion.
+ * Whether a (possibly free-form) member role can approve calibrations: the
+ * role definitions' own answer (`CALIBRATION_APPROVER_ROLES`), so it stays in
+ * sync if the workflow authority ever changes.
  */
 function isCalibrationApprover(role: string): boolean {
-  return CALIBRATION_APPROVER_ROLES.some((approver) => approver === role);
+  return roleIsOneOf(role, CALIBRATION_APPROVER_ROLES);
 }
 
 const CALIBRATING_BODY_FIELDS = [

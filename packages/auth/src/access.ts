@@ -949,6 +949,31 @@ export function rolesAllowedTo(action: CalibrationAction): RoleName[] {
   return ROLE_NAMES.filter((role) => roleHoldsPermission(role, permission));
 }
 
+/**
+ * The organization roles that may approve a calibration (`calibration.approve`):
+ * the one answer to "who may approve" for every check that needs the list
+ * (the alternate-approver exemption of separation of duties, the unit
+ * workflow authority).
+ */
+export const CALIBRATION_APPROVER_ROLES: readonly RoleName[] =
+  rolesAllowedTo("approve");
+
+/**
+ * The organization roles whose members can do the work of a calibration
+ * (`calibration.execute`), so the roles a job may be assigned to (still subject
+ * to the unit assignment rule) and the people the competence matrix covers.
+ */
+export const CALIBRATION_EXECUTOR_ROLES: readonly RoleName[] =
+  rolesAllowedTo("edit");
+
+/** Whether a (possibly free-form) stored role string is one of `allowed`. */
+export function roleIsOneOf(
+  role: string,
+  allowed: readonly RoleName[],
+): boolean {
+  return allowed.some((candidate) => candidate === role);
+}
+
 // =============================================================================
 // PLATFORM ROLES (Better Auth admin plugin on the LAB instance)
 // =============================================================================
