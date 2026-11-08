@@ -13,6 +13,7 @@ import {
   resolveS3EndpointConfigFromProcess,
 } from "@calibra-facil/shared/storage-endpoint";
 import type { StorageBucket } from "@calibra-facil/shared/storage-keys";
+import { toRecord } from "@calibra-facil/shared/record";
 
 export interface R2Env {
   /** Cloudflare R2 account; not needed when R2_ENDPOINT names the store. */
@@ -307,10 +308,7 @@ export async function headObject(
     if (isObjectNotFoundError(error)) return null;
     throw error;
   }
-  const record =
-    response && typeof response === "object" && !Array.isArray(response)
-      ? Object.fromEntries(Object.entries(response))
-      : {};
+  const record = toRecord(response);
   const length = record.ContentLength;
   const contentType = record.ContentType;
   const etag = record.ETag;
@@ -439,15 +437,9 @@ export async function downloadFromR2(
 ): Promise<Uint8Array> {
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
   const response = await client.send(command);
-  const responseRecord =
-    response && typeof response === "object" && !Array.isArray(response)
-      ? Object.fromEntries(Object.entries(response))
-      : {};
+  const responseRecord = toRecord(response);
   const body = responseRecord.Body;
-  const bodyRecord =
-    body && typeof body === "object" && !Array.isArray(body)
-      ? Object.fromEntries(Object.entries(body))
-      : {};
+  const bodyRecord = toRecord(body);
 
   if (!body) {
     throw new Error(`R2 object not found: ${key}`);

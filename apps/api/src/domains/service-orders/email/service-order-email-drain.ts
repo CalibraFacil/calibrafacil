@@ -70,6 +70,7 @@ import { executeRows } from "../../../lib/db";
 import { z } from "zod";
 import { log } from "../../../lib/logger";
 import { reportServerError } from "../../../lib/observability";
+import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
 // Each row reloads the service order + customer, renders a template, and sends
 // an email (network) sequentially. A batch sized so the whole drain finishes
@@ -141,9 +142,7 @@ function toRecordOrNull(
   val: unknown,
 ): Record<string, unknown> | null | undefined {
   if (val === null) return null;
-  if (typeof val !== "object") return undefined;
-  // val is narrowed to `object` (non-null); Object.entries accepts object
-  return Object.fromEntries(Object.entries(val));
+  return isRecord(val) ? toRecord(val) : undefined;
 }
 
 /**

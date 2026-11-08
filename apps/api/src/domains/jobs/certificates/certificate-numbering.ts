@@ -13,6 +13,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { CertificateNumberingConfigSchema } from "@calibra-facil/schemas";
 import { and, eq, sql } from "drizzle-orm";
+import { toRecord } from "@calibra-facil/shared/record";
 
 type CertificateNumberingDbExecutor = Pick<
   typeof db,
@@ -76,16 +77,8 @@ const MONTH_ABBREVIATIONS = [
 ];
 
 function normalizeConfig(config: unknown): CertificateNumberingConfig {
-  const configRecord =
-    typeof config === "object" && config !== null && !Array.isArray(config)
-      ? Object.fromEntries(Object.entries(config))
-      : {};
-  const sequence =
-    configRecord.sequence &&
-    typeof configRecord.sequence === "object" &&
-    !Array.isArray(configRecord.sequence)
-      ? Object.fromEntries(Object.entries(configRecord.sequence))
-      : {};
+  const configRecord = toRecord(config);
+  const sequence = toRecord(configRecord.sequence);
 
   return CertificateNumberingConfigSchema.parse({
     ...DEFAULT_CERTIFICATE_NUMBERING_CONFIG,

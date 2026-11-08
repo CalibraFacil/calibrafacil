@@ -22,6 +22,7 @@ import {
   withLabPermission,
 } from "../../../middleware/permission";
 import { eq } from "drizzle-orm";
+import { toRecord } from "@calibra-facil/shared/record";
 
 function stripTxtQuotes(value: string): string {
   return value.replace(/^"+|"+$/g, "");
@@ -40,18 +41,11 @@ async function fetchTxtAnswers(hostname: string): Promise<string[]> {
   if (!response.ok) return [];
 
   const payload: unknown = await response.json();
-  const answerValue =
-    payload && typeof payload === "object" && !Array.isArray(payload)
-      ? Object.fromEntries(Object.entries(payload)).Answer
-      : null;
+  const answerValue = toRecord(payload).Answer;
   const answers = Array.isArray(answerValue) ? answerValue : [];
 
   return answers
-    .map((answer) =>
-      answer && typeof answer === "object" && !Array.isArray(answer)
-        ? Object.fromEntries(Object.entries(answer)).data
-        : null,
-    )
+    .map((answer) => toRecord(answer).data)
     .map((data) => (typeof data === "string" ? data.trim() : null))
     .filter((value): value is string => Boolean(value))
     .map(stripTxtQuotes);

@@ -40,6 +40,7 @@ import {
 } from "../asset-writes";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
+import { toRecord } from "@calibra-facil/shared/record";
 
 const CommandPaletteAssetSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -627,11 +628,10 @@ mount(
             }
           }
 
+          const existingValues = toRecord(existingAsset);
           for (const [key, value] of Object.entries(updateData)) {
             if (key === "updatedAt") continue;
-            const oldValue = Object.fromEntries(Object.entries(existingAsset))[
-              key
-            ];
+            const oldValue = existingValues[key];
             if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
               changes[key] = { old: oldValue, new: value };
             }

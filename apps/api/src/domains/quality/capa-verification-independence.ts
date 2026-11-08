@@ -7,6 +7,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { hasPermissionLocally } from "../../middleware/permission";
+import { isRecord, toRecord } from "@calibra-facil/shared/record";
 
 /**
  * Who may verify the effectiveness of a CAPA (ISO/IEC 17025 §8.7).
@@ -30,9 +31,7 @@ export type VerifierIndependence =
   | { status: "waivable" };
 
 function plainRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : null;
+  return isRecord(value) ? toRecord(value) : null;
 }
 
 /** The `responsibleId` values an audit entry's `changes` payload names. */
