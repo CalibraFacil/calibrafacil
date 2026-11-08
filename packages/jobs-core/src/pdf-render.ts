@@ -1,4 +1,11 @@
-import { Client, type QueryResult, type QueryResultRow } from "pg";
+import {
+  Client,
+  defaults,
+  types,
+  type CustomTypesConfig,
+  type QueryResult,
+  type QueryResultRow,
+} from "pg";
 import { inOrganizationTransaction } from "./job-events.js";
 import { type Env } from "./runtime-types.js";
 
@@ -11,13 +18,50 @@ export type SystemDatabaseEnv = Pick<
   "DATABASE_URL" | "DATABASE_OWNER_URL" | "DATABASE_RLS_MODE"
 >;
 
-// Helper to run a database operation with a fresh connection
+const DATE_OID = 1082;
+const TIMESTAMP_WITHOUT_TIME_ZONE_OID = 1114;
+const TIMESTAMP_WITH_TIME_ZONE_OID = 1184;
+
+/**
+ * `timestamp without time zone` columns hold UTC and `date` columns a calendar
+ * day (the API reads and writes both through drizzle/postgres.js as UTC). `pg`
+ * would parse them in the process's local time zone, shifting every value by
+ * the host's offset unless the worker happens to run with `TZ=UTC`; read them
+ * as UTC (a `date` as that day's UTC midnight).
+ */
+export const utcTimestampTypes: CustomTypesConfig = {
+  getTypeParser: ((oid: number, format?: "text" | "binary") => {
+    if (oid === DATE_OID && format !== "binary") {
+      return (value: string) =>
+        value === "infinity" || value === "-infinity"
+          ? types.getTypeParser(DATE_OID)(value)
+          : new Date(`${value}T00:00:00.000Z`);
+    }
+    if (oid === TIMESTAMP_WITHOUT_TIME_ZONE_OID && format !== "binary") {
+      const parseWithZone = types.getTypeParser(TIMESTAMP_WITH_TIME_ZONE_OID);
+      return (value: string) =>
+        parseWithZone(
+          value === "infinity" || value === "-infinity" ? value : `${value}+00`,
+        );
+    }
+    return types.getTypeParser(oid, format);
+  }) satisfies CustomTypesConfig["getTypeParser"],
+};
+
+// The writing half of the same rule: `pg` serializes a `Date` parameter in
+// local time unless told otherwise, so a date read back as UTC would be written
+// shifted. jobs-core is the only user of `pg` in the process (the API and the
+// local server use postgres.js / SQLite), so the process-wide switch is ours.
+defaults.parseInputDatesAsUTC = true;
+
+/** A fresh connection for one database operation. */
 export async function withDbClient<T>(
   env: DatabaseEnv,
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   const client = new Client({
     connectionString: env.DATABASE_URL,
+    types: utcTimestampTypes,
   });
   await client.connect();
   try {
