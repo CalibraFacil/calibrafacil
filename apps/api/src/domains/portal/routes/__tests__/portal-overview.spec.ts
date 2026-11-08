@@ -16,6 +16,7 @@ vi.mock("@calibra-facil/db", () => {
     "where",
     "orderBy",
     "limit",
+    "groupBy",
   ]) {
     builder[method] = () => builder;
   }
@@ -110,6 +111,7 @@ describe("GET /overview", () => {
       [{ id: 1, labOrganizationId: "lab-1" }], // linkedCustomer
       [
         {
+          customerId: 1,
           total: 12,
           overdue: 3,
           dueSoon: 2,

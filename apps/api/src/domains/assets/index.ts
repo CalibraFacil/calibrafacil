@@ -17,6 +17,13 @@ export {
   deleteLabAsset,
   planAssetRegimeUpdate,
 } from "./asset-writes";
+export {
+  assetInLab,
+  fleetDueCountsByCustomer,
+  fleetDueStatusCondition,
+  type FleetDueCounts,
+  type FleetDueStatus,
+} from "./fleet-due";
 export { buildIntervalInsight } from "./interval-insight";
 export {
   decidePortalIntervalWrite,

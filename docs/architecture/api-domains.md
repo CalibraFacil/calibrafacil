@@ -35,7 +35,7 @@ apps/api/src/
 - Domains form a DAG (`pnpm check:cycles` enforces no import cycles): `customers -> portal -> {jobs, visits,
 assets, org}`, `visits -> jobs`, `jobs -> {assets, finance, org, quality}`, `quality -> org`, `standards -> jobs`,
   `verify -> jobs`, `service-orders -> finance`, `catalog -> finance`, `sync -> {jobs, assets, service-orders}`,
-  `public-api -> {jobs, assets, customers, visits, finance}`; `org`, `finance`, `assets`, `methods`,
+  `public-api -> {jobs, assets, customers, visits, finance, reports}`; `org`, `finance`, `assets`, `methods`,
   `notifications` and `reports` import no other domain. Two things that look like they belong to one
   domain are not split because both directions exist (finance and the ERP integration are one domain).
 - Code that `middleware/` or `server/` needs from a domain moves down into `lib/` (the portal service

@@ -3,13 +3,11 @@ import { mount } from "../../../lib/endpoint-mount";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   PORTAL_NOTIFICATION_TYPES,
-  IN_FLIGHT_JOB_STATUSES,
 } from "@calibra-facil/schemas";
 import {
   requirePortalLabScope,
   resolvePortalLabScope,
 } from "../portal-lab-scope";
-import { z } from "zod";
 import {
   member,
   user,
@@ -34,7 +32,6 @@ import {
   assetOotImpactAssessment,
 } from "@calibra-facil/db/schema";
 import {
-  PortalListAssetsQuerySchema,
   portalAssetEndpoints,
   portalAuditPackEndpoints,
   portalCertificateEndpoints,
@@ -58,16 +55,12 @@ import {
   ne,
   and,
   inArray,
-  notInArray,
-  exists,
   asc,
   desc,
   count,
   isNull,
   isNotNull,
   lt,
-  lte,
-  gt,
   gte,
   ilike,
   or,
@@ -77,12 +70,7 @@ import {
   ASSET_OOT_EVENT_MACHINE,
   OOT_NOTIFICATION_MACHINE,
 } from "@calibra-facil/schemas/machines";
-import {
-  LAB_TODAY_SQL,
-  addCalendarDays,
-  labToday as labTodayDate,
-  normalizeAccreditationNumber,
-} from "@calibra-facil/shared";
+import { normalizeAccreditationNumber } from "@calibra-facil/shared";
 import {
   frozenAccreditationNumberColumn,
   frozenSealColumn,
@@ -97,9 +85,6 @@ import {
 import { isRecord } from "@calibra-facil/shared/record";
 import { finalizedStandardCertificateDocument } from "@calibra-facil/db/standard-certificate-documents";
 import { isPendingObjectKey } from "@calibra-facil/shared/storage-keys";
-import { FLEET_DUE_SOON_DAYS } from "@calibra-facil/shared/fleet-due";
-
-type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
 
 // Upcoming-dues calendar: a bounded date window of instruments coming due.
 // The frontend asks for the visible month grid padded by a day on each side,
@@ -164,60 +149,6 @@ async function resolvePortalAssetIdParam(
   return row?.id ?? null;
 }
 
-// An instrument is "in lab" while it has an open calibration job or an open
-// service order — i.e. it is physically at the laboratory right now. Open job
-// statuses are every non-terminal JobStatus; open service orders mirror the
-// /overview "inProgress" definition (anything not yet returned to the client).
-function assetInLabSql(o: Pick<OrgDb, "select">) {
-  const openJob = o
-    .select({ one: sql`1` })
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.assetId, asset.id),
-        inArray(calibrationJob.status, IN_FLIGHT_JOB_STATUSES),
-      ),
-    );
-  const openServiceOrder = o
-    .select({ one: sql`1` })
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.assetId, asset.id),
-        notInArray(serviceOrder.status, ["delivered", "closed", "canceled"]),
-      ),
-    );
-
-  return sql<boolean>`(${exists(openJob)} or ${exists(openServiceOrder)})`;
-}
-
-function buildDueStatusCondition(
-  dueStatus: DueStatus,
-  o: Pick<OrgDb, "select">,
-) {
-  if (!dueStatus) return undefined;
-  // next_calibration_date is a calendar day: compare it with the laboratory's
-  // today (a calibration due on D is not overdue until D is over).
-  const today = labTodayDate();
-  const soon = addCalendarDays(today, FLEET_DUE_SOON_DAYS);
-
-  switch (dueStatus) {
-    case "overdue":
-      return lt(asset.nextCalibrationDate, today);
-    case "due_soon":
-      return and(
-        gte(asset.nextCalibrationDate, today),
-        lte(asset.nextCalibrationDate, soon),
-      );
-    case "scheduled":
-      return gt(asset.nextCalibrationDate, soon);
-    case "unscheduled":
-      return isNull(asset.nextCalibrationDate);
-    case "in_lab":
-      return assetInLabSql(o);
-  }
-}
-
 function emptyOverview(): ServerShape<PortalOverviewResponse> {
   return {
     equipment: {
@@ -259,6 +190,9 @@ import {
   decidePortalIntervalWrite,
   deriveNextCalibrationDate,
   buildIntervalInsight,
+  assetInLab,
+  fleetDueCountsByCustomer,
+  fleetDueStatusCondition,
 } from "../../assets";
 import { resolveLabOrganizationIdByPortalHostname } from "../../org";
 import {
@@ -588,13 +522,6 @@ mount(
     }
     const { customerIds } = scope;
     return await orgDb(scope.labOrganizationId).transaction(async (o) => {
-      // next_calibration_date is a calendar day: compare it with the
-      // laboratory's today, derived from the DB clock in SQL (binding raw JS
-      // Date objects inside a sql`` template fails under postgres.js, and the
-      // UTC clock is already tomorrow from 21:00 in Sao Paulo).
-      const labToday = sql.raw(LAB_TODAY_SQL);
-      const labSoon = sql`(${labToday} + ${sql.raw(String(FLEET_DUE_SOON_DAYS))})`;
-
       const equipmentWhere = and(
         inArray(asset.customerId, customerIds),
         eq(asset.status, "ACTIVE"),
@@ -612,7 +539,7 @@ mount(
       const serviceOrderWhere = inArray(serviceOrder.customerId, customerIds);
 
       const [
-        equipmentCounts,
+        equipmentCountsByCustomer,
         equipmentAttention,
         certificateCounts,
         recentCertificatesRaw,
@@ -622,17 +549,7 @@ mount(
         awaitingQuoteOrders,
         recentServiceOrders,
       ] = await Promise.all([
-        o
-          .select({
-            total: sql<number>`cast(count(*) as int)`,
-            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
-            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
-            scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${labSoon}) as int)`,
-            unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
-            inLab: sql<number>`cast(count(*) filter (where ${assetInLabSql(o)}) as int)`,
-          })
-          .from(asset)
-          .where(equipmentWhere),
+        fleetDueCountsByCustomer(o, customerIds, { inLab: true }),
         o
           .select({
             id: asset.id,
@@ -744,14 +661,25 @@ mount(
         ready: cert.certificateUrl !== null,
       }));
 
-      const equipment = equipmentCounts[0] ?? {
-        total: 0,
-        overdue: 0,
-        dueSoon: 0,
-        scheduled: 0,
-        unscheduled: 0,
-        inLab: 0,
-      };
+      // The network's totals: the counts of every branch added up.
+      const equipment = [...equipmentCountsByCustomer.values()].reduce(
+        (sum, counts) => ({
+          total: sum.total + counts.total,
+          overdue: sum.overdue + counts.overdue,
+          dueSoon: sum.dueSoon + counts.dueSoon,
+          scheduled: sum.scheduled + counts.scheduled,
+          unscheduled: sum.unscheduled + counts.unscheduled,
+          inLab: sum.inLab + counts.inLab,
+        }),
+        {
+          total: 0,
+          overdue: 0,
+          dueSoon: 0,
+          scheduled: 0,
+          unscheduled: 0,
+          inLab: 0,
+        },
+      );
       const requests = requestCounts[0] ?? { total: 0, open: 0, rejected: 0 };
       const orders = serviceOrderCounts[0] ?? {
         total: 0,
@@ -825,7 +753,7 @@ mount(
               ilike(asset.model, `%${query}%`),
             )
           : undefined,
-        buildDueStatusCondition(dueStatus, o),
+        fleetDueStatusCondition(dueStatus, o),
       );
 
       const [countResult] = await o
@@ -866,7 +794,7 @@ mount(
           specifications: asset.specifications,
           lastCalibrationDate: asset.lastCalibrationDate,
           nextCalibrationDate: asset.nextCalibrationDate,
-          inLab: assetInLabSql(o),
+          inLab: assetInLab(o),
           comments: asset.comments,
           createdAt: asset.createdAt,
           updatedAt: asset.updatedAt,
@@ -986,7 +914,7 @@ mount(
           metrologyRegime: asset.metrologyRegime,
           regulatedInterval: asset.regulatedInterval,
           nextLegalVerificationDate: asset.nextLegalVerificationDate,
-          inLab: assetInLabSql(o),
+          inLab: assetInLab(o),
           comments: asset.comments,
           createdAt: asset.createdAt,
           updatedAt: asset.updatedAt,
@@ -1117,7 +1045,7 @@ mount(
           tag: asset.tag,
           assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
           nextCalibrationDate: asset.nextCalibrationDate,
-          inLab: assetInLabSql(o),
+          inLab: assetInLab(o),
           customerId: asset.customerId,
           customerName: customer.name,
         })
@@ -1207,29 +1135,9 @@ mount(
       return { units: [] };
     }
 
-    const labToday = sql.raw(LAB_TODAY_SQL);
-    const labSoon = sql`(${labToday} + ${sql.raw(String(FLEET_DUE_SOON_DAYS))})`;
-
-    const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
-      o
-        .select({
-          customerId: asset.customerId,
-          total: sql<number>`cast(count(*) as int)`,
-          overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
-          dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
-        })
-        .from(asset)
-        .where(
-          and(
-            inArray(asset.customerId, scope.customerIds),
-            eq(asset.status, "ACTIVE"),
-            isNull(asset.deletedAt),
-          ),
-        )
-        .groupBy(asset.customerId),
+    const byId = await orgDb(scope.labOrganizationId).transaction((o) =>
+      fleetDueCountsByCustomer(o, scope.customerIds),
     );
-
-    const byId = new Map(rows.map((row) => [row.customerId, row]));
     const units = [...scope.customerById.values()]
       .map((unit) => {
         const counts = byId.get(unit.id);
