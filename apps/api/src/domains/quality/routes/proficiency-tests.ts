@@ -21,10 +21,7 @@ import {
   zPrimeScore,
   zScore,
 } from "@calibra-facil/interval-analysis";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { createCorrectiveActionRecord } from "../corrective-actions";
 import { resolveAccessibleUnitContext } from "../../org";
 import { eq, and, or, ilike, desc, asc, count } from "drizzle-orm";
@@ -156,7 +153,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.list,
-  withLabPermission({ proficiency_test: ["read"] }),
   async (
     c,
     { query: { page, limit, query, status, activityType, scopePart } },
@@ -239,7 +235,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.summary,
-  withLabPermission({ proficiency_test: ["read"] }),
   async (c) => {
     const member = c.get("member");
     const orgScope = eq(proficiencyTest.organizationId, member.organizationId);
@@ -298,7 +293,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.listPlan,
-  withLabPermission({ proficiency_test: ["read"] }),
   async (c) => {
     const member = c.get("member");
     return await orgDb(member.organizationId).transaction(async (tx) => {
@@ -325,7 +319,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.createPlanItem,
-  withLabPermission({ proficiency_test: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -370,7 +363,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.updatePlanItem,
-  withLabPermission({ proficiency_test: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const id = params.id;
@@ -440,7 +432,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.removePlanItem,
-  withLabPermission({ proficiency_test: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -469,7 +460,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.get,
-  withLabPermission({ proficiency_test: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -527,7 +517,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.auditLog,
-  withLabPermission({ proficiency_test: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -560,7 +549,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.create,
-  withLabPermission({ proficiency_test: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -629,7 +617,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.update,
-  withLabPermission({ proficiency_test: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const id = params.id;
@@ -720,7 +707,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.recordResults,
-  withLabPermission({ proficiency_test: ["record_results"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const id = params.id;
@@ -847,7 +833,6 @@ mount(
   proficiencyTestsRouter,
   PREFIX,
   proficiencyTestEndpoints.remove,
-  withLabPermission({ proficiency_test: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;

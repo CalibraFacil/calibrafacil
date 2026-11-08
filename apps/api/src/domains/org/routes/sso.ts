@@ -7,7 +7,6 @@ import { and, eq } from "drizzle-orm";
 import {
   requireRole,
   type AuthVariables,
-  withLabPermission,
 } from "../../../middleware/permission";
 import { writeOrganizationAuditEvent } from "../../../lib/audit";
 import { findLabOrganizationBySlug } from "../identity";
@@ -256,10 +255,7 @@ mount(
   ssoRouter,
   PREFIX,
   ssoEndpoints.getProviders,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const provider = await getOrganizationProvider(member.organizationId);
@@ -279,7 +275,7 @@ mount(
   ssoRouter,
   PREFIX,
   ssoEndpoints.createProvider,
-  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  [requireRole(["owner"])],
   async (c, { body }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -369,7 +365,7 @@ mount(
   ssoRouter,
   PREFIX,
   ssoEndpoints.requestDomainVerification,
-  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  [requireRole(["owner"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -427,7 +423,7 @@ mount(
   ssoRouter,
   PREFIX,
   ssoEndpoints.verifyDomain,
-  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  [requireRole(["owner"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -484,7 +480,7 @@ mount(
   ssoRouter,
   PREFIX,
   ssoEndpoints.deleteProvider,
-  [...withLabPermission({ organization: ["update"] }), requireRole(["owner"])],
+  [requireRole(["owner"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");

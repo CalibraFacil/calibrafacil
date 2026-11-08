@@ -13,10 +13,7 @@ import {
   paymentReceipt,
   receivableInstallment,
 } from "@calibra-facil/db/schema";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { invalid, notFound } from "../../../lib/domain-errors";
 import { withOrg } from "../../../lib/org-context";
 import { orgDb } from "../../../lib/org-db";
@@ -32,7 +29,6 @@ mount(
   financeReceiptsRouter,
   RECEIPTS_PREFIX,
   financeEndpoints.listReceipts,
-  withLabPermission({ financial: ["read"] }),
   async (c) => {
     const member = c.get("member");
 
@@ -82,7 +78,6 @@ mount(
   financeInstallmentsRouter,
   INSTALLMENTS_PREFIX,
   financeEndpoints.receiveInstallment,
-  withLabPermission({ financial: ["receipt_record"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const installmentId = params.id;

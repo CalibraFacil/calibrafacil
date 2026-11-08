@@ -32,7 +32,6 @@ import {
   requireLabProtected,
   requireOrgType,
   requireRole,
-  withLabPermission,
 } from "../../../middleware/permission";
 import { eq } from "drizzle-orm";
 import {
@@ -160,10 +159,7 @@ mount(
   emailDomainsRouter,
   PREFIX,
   emailDomainEndpoints.create,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c, { body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -202,10 +198,7 @@ mount(
   emailDomainsRouter,
   PREFIX,
   emailDomainEndpoints.verify,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -301,10 +294,7 @@ mount(
   emailDomainsRouter,
   PREFIX,
   emailDomainEndpoints.activate,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -369,10 +359,7 @@ mount(
   emailDomainsRouter,
   PREFIX,
   emailDomainEndpoints.delete,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const session = c.get("session");

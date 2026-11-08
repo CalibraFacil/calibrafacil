@@ -10,10 +10,7 @@ import {
   exportBillingDocumentToPrimaryIntegration,
 } from "../finance";
 import type { IntegrationsEnv } from "../integrations";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { forbidden, invalid, notFound } from "../../../lib/domain-errors";
 import { orgDb } from "../../../lib/org-db";
 import { buildUnitScopeCondition } from "../../../lib/units";
@@ -25,48 +22,41 @@ export const financeErpRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
 }>();
-mount(
-  financeErpRouter,
-  PREFIX,
-  financeEndpoints.listErpExports,
-  withLabPermission({ financial: ["read"] }),
-  async (c) => {
-    const member = c.get("member");
-    const documents = await orgDb(member.organizationId).transaction((o) =>
-      o
-        .select({
-          id: billingDocument.id,
-          documentNumber: billingDocument.documentNumber,
-          customerName: customer.name,
-          status: billingDocument.status,
-          exportStatus: billingDocument.exportStatus,
-          exportedAt: billingDocument.exportedAt,
-          totalCents: billingDocument.totalCents,
-          currency: billingDocument.currency,
-          dueDate: billingDocument.dueDate,
-          issueDate: billingDocument.issueDate,
-        })
-        .from(billingDocument)
-        .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-        .where(
-          and(
-            eq(billingDocument.organizationId, member.organizationId),
-            buildUnitScopeCondition(billingDocument.unitId, member),
-            inArray(billingDocument.status, ISSUED_BILLING_DOCUMENT_STATUSES),
-          ),
-        )
-        .orderBy(desc(billingDocument.updatedAt))
-        .limit(50),
-    );
+mount(financeErpRouter, PREFIX, financeEndpoints.listErpExports, async (c) => {
+  const member = c.get("member");
+  const documents = await orgDb(member.organizationId).transaction((o) =>
+    o
+      .select({
+        id: billingDocument.id,
+        documentNumber: billingDocument.documentNumber,
+        customerName: customer.name,
+        status: billingDocument.status,
+        exportStatus: billingDocument.exportStatus,
+        exportedAt: billingDocument.exportedAt,
+        totalCents: billingDocument.totalCents,
+        currency: billingDocument.currency,
+        dueDate: billingDocument.dueDate,
+        issueDate: billingDocument.issueDate,
+      })
+      .from(billingDocument)
+      .innerJoin(customer, eq(billingDocument.customerId, customer.id))
+      .where(
+        and(
+          eq(billingDocument.organizationId, member.organizationId),
+          buildUnitScopeCondition(billingDocument.unitId, member),
+          inArray(billingDocument.status, ISSUED_BILLING_DOCUMENT_STATUSES),
+        ),
+      )
+      .orderBy(desc(billingDocument.updatedAt))
+      .limit(50),
+  );
 
-    return { data: documents };
-  },
-);
+  return { data: documents };
+});
 mount(
   financeErpRouter,
   PREFIX,
   financeEndpoints.exportErpDocument,
-  withLabPermission({ financial: ["export"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const documentId = params.id;

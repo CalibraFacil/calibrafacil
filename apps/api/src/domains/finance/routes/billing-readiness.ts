@@ -6,10 +6,7 @@ import type { BillingReadinessStatus } from "@calibra-facil/shared";
 import { computeBillingReadinessQueue } from "../billing-readiness";
 import { sendServiceOrdersToFinance } from "../finance";
 import type { IntegrationsEnv } from "../integrations";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 
 const READINESS_STATUSES: BillingReadinessStatus[] = [
   "READY",
@@ -32,7 +29,6 @@ mount(
   financeBillingReadinessRouter,
   PREFIX,
   financeEndpoints.listBillingReadiness,
-  withLabPermission({ financial: ["read"] }),
   async (c, { query }) => {
     const member = c.get("member");
 
@@ -72,7 +68,6 @@ mount(
   financeBillingReadinessRouter,
   PREFIX,
   financeEndpoints.sendBillingReadiness,
-  withLabPermission({ financial: ["export"] }),
   async (c, { body: { serviceOrderIds } }) => {
     const member = c.get("member");
     const session = c.get("session");

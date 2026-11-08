@@ -42,7 +42,6 @@ mount(
   servicesRouter,
   PREFIX,
   serviceEndpoints.list,
-  withLabPermission({ service: ["read"] }),
   async (
     c,
     { query: { page, limit, query, assetTypeId, methodId, isActive } },
@@ -159,61 +158,54 @@ servicesRouter.get(
   },
 );
 
-mount(
-  servicesRouter,
-  PREFIX,
-  serviceEndpoints.get,
-  withLabPermission({ service: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
+mount(servicesRouter, PREFIX, serviceEndpoints.get, async (c, { params }) => {
+  const member = c.get("member");
 
-    return orgDb(member.organizationId).transaction(async (o) => {
-      const id = await requireServiceRouteId(params.id, member, o);
+  return orgDb(member.organizationId).transaction(async (o) => {
+    const id = await requireServiceRouteId(params.id, member, o);
 
-      const [found] = await o
-        .select({
-          id: service.id,
-          name: service.name,
-          description: service.description,
-          methodId: service.methodId,
-          methodName: calibrationMethod.name,
-          methodVersion: calibrationMethod.version,
-          methodStatus: calibrationMethod.status,
-          assetTypeId: service.assetTypeId,
-          assetTypeName: assetType.name,
-          price: service.price,
-          currency: service.currency,
-          tat: service.tat,
-          isActive: service.isActive,
-          createdAt: service.createdAt,
-          updatedAt: service.updatedAt,
-        })
-        .from(service)
-        .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
-        .leftJoin(assetType, eq(service.assetTypeId, assetType.id))
-        .where(
-          and(
-            eq(service.id, id),
-            eq(service.organizationId, member.organizationId),
-            buildUnitScopeCondition(service.unitId, member),
-          ),
-        )
-        .limit(1);
+    const [found] = await o
+      .select({
+        id: service.id,
+        name: service.name,
+        description: service.description,
+        methodId: service.methodId,
+        methodName: calibrationMethod.name,
+        methodVersion: calibrationMethod.version,
+        methodStatus: calibrationMethod.status,
+        assetTypeId: service.assetTypeId,
+        assetTypeName: assetType.name,
+        price: service.price,
+        currency: service.currency,
+        tat: service.tat,
+        isActive: service.isActive,
+        createdAt: service.createdAt,
+        updatedAt: service.updatedAt,
+      })
+      .from(service)
+      .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
+      .leftJoin(assetType, eq(service.assetTypeId, assetType.id))
+      .where(
+        and(
+          eq(service.id, id),
+          eq(service.organizationId, member.organizationId),
+          buildUnitScopeCondition(service.unitId, member),
+        ),
+      )
+      .limit(1);
 
-      if (!found) {
-        throw notFound("service_not_found", "Serviço não encontrado");
-      }
+    if (!found) {
+      throw notFound("service_not_found", "Serviço não encontrado");
+    }
 
-      return found;
-    });
-  },
-);
+    return found;
+  });
+});
 
 mount(
   servicesRouter,
   PREFIX,
   serviceEndpoints.create,
-  withLabPermission({ service: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -304,7 +296,6 @@ mount(
   servicesRouter,
   PREFIX,
   serviceEndpoints.update,
-  withLabPermission({ service: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
 
@@ -447,7 +438,6 @@ mount(
   servicesRouter,
   PREFIX,
   serviceEndpoints.deactivate,
-  withLabPermission({ service: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
 
@@ -488,7 +478,6 @@ mount(
   servicesRouter,
   PREFIX,
   serviceEndpoints.auditLog,
-  withLabPermission({ service: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     return orgDb(member.organizationId).transaction(async (o) => {

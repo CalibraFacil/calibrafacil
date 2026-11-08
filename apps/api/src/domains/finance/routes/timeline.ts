@@ -6,10 +6,7 @@ import {
   buildCustomerFinancialTimeline,
   buildServiceOrderFinancialStatus,
 } from "../financial-timeline";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { resolveCustomerRouteId } from "../../../lib/customer-route-id";
 import { invalid, notFound } from "../../../lib/domain-errors";
 import { orgDb } from "../../../lib/org-db";
@@ -30,7 +27,6 @@ mount(
   financeTimelineRouter,
   PREFIX,
   financeEndpoints.getServiceOrderStatus,
-  withLabPermission({ financial: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { serviceOrderId } = params;
@@ -59,7 +55,6 @@ mount(
   financeTimelineRouter,
   PREFIX,
   financeEndpoints.getCustomerTimeline,
-  withLabPermission({ financial: ["read"] }),
   async (c, { params, query }) => {
     const member = c.get("member");
     const customerRouteId = params.customerId;

@@ -18,7 +18,6 @@ import {
   getGovernanceAccess,
   requireLabProtected,
   requireOrgType,
-  withLabPermission,
 } from "../../../middleware/permission";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
@@ -201,25 +200,19 @@ export const unitsRouter = createRouter<{ Variables: AuthVariables }>();
 /** The governance routes: a LAB organization member past the protected-route gate. */
 const labGovernance = [...requireLabProtected, requireOrgType("LAB")];
 
-mount(
-  unitsRouter,
-  PREFIX,
-  unitEndpoints.getDashboardUnits,
-  withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const { memberData, viewer } = getViewerAccess(c);
+mount(unitsRouter, PREFIX, unitEndpoints.getDashboardUnits, async (c) => {
+  const { memberData, viewer } = getViewerAccess(c);
 
-    return {
-      activeUnitId: memberData.activeUnitId,
-      activeUnitName: memberData.activeUnitName,
-      selectedUnitScope: memberData.selectedUnitScope,
-      canAccessAllUnits: memberData.canAccessAllUnits,
-      viewer,
-      scopeSummary: getScopeSummary(memberData, viewer),
-      data: memberData.accessibleUnits,
-    };
-  },
-);
+  return {
+    activeUnitId: memberData.activeUnitId,
+    activeUnitName: memberData.activeUnitName,
+    selectedUnitScope: memberData.selectedUnitScope,
+    canAccessAllUnits: memberData.canAccessAllUnits,
+    viewer,
+    scopeSummary: getScopeSummary(memberData, viewer),
+    data: memberData.accessibleUnits,
+  };
+});
 mount(
   unitsRouter,
   PREFIX,

@@ -47,5 +47,6 @@ export const organizationProfileEndpoints = {
     failure: "Falha ao atualizar o perfil do laboratório",
     policy: "cloud-only",
     desktopLabel: "Perfil do laboratório",
+    permission: { organization: ["update"] },
   }),
 } as const satisfies EndpointGroup;

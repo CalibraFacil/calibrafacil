@@ -91,6 +91,7 @@ export const assetEndpoints = {
     response: assetsListResponseSchema,
     failure: "Falha ao carregar ativos",
     policy: "local-first-read-through-sync",
+    permission: { equipment: ["read"] },
   }),
   // The desktop creates a minimal asset stub offline and syncs it.
   create: endpoint({
@@ -108,6 +109,7 @@ export const assetEndpoints = {
     response: assetDetailSchema,
     failure: "Falha ao carregar ativo",
     policy: "local-first-read-through-sync",
+    permission: { equipment: ["read"] },
   }),
   update: endpoint({
     method: "put",
@@ -117,6 +119,7 @@ export const assetEndpoints = {
     failure: "Erro ao atualizar ativo",
     policy: "cloud-only",
     desktopLabel: "Edição de ativos",
+    permission: { equipment: ["update"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -125,5 +128,6 @@ export const assetEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: "Edição de ativos",
+    permission: { equipment: ["read"] },
   }),
 } as const satisfies EndpointGroup;

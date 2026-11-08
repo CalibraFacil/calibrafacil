@@ -166,6 +166,7 @@ export const unitEndpoints = {
     failure: "Falha ao carregar unidades",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { calibration: ["read"] },
   }),
   listAdminUnits: endpoint({
     method: "get",

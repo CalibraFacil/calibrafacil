@@ -232,6 +232,7 @@ export const methodEndpoints = {
     response: methodsListResponseSchema,
     failure: "Falha ao carregar métodos",
     policy: "local-first-read-through-sync",
+    permission: { template: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -239,6 +240,7 @@ export const methodEndpoints = {
     response: methodDetailSchema,
     failure: "Falha ao carregar método",
     policy: "local-first-read-through-sync",
+    permission: { template: ["read"] },
   }),
   audit: endpoint({
     method: "get",
@@ -247,6 +249,7 @@ export const methodEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -257,6 +260,7 @@ export const methodEndpoints = {
     failure: "Erro ao criar método",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["create"] },
   }),
   update: endpoint({
     method: "put",
@@ -266,6 +270,7 @@ export const methodEndpoints = {
     failure: "Erro ao atualizar método",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["update"] },
   }),
   archive: endpoint({
     method: "post",
@@ -274,6 +279,7 @@ export const methodEndpoints = {
     failure: "Erro ao arquivar método",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["update"] },
   }),
   createNewVersion: endpoint({
     method: "post",
@@ -283,6 +289,7 @@ export const methodEndpoints = {
     failure: "Erro ao criar nova versão",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["create"] },
   }),
   technicalReview: endpoint({
     method: "post",
@@ -291,6 +298,7 @@ export const methodEndpoints = {
     failure: "Erro ao revisar tecnicamente",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["publish"] },
   }),
   qualityApprove: endpoint({
     method: "post",
@@ -300,6 +308,7 @@ export const methodEndpoints = {
     failure: "Erro ao aprovar qualidade",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["publish"] },
   }),
   returnToDraft: endpoint({
     method: "post",
@@ -309,6 +318,7 @@ export const methodEndpoints = {
     failure: "Erro ao retornar para rascunho",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { template: ["update"] },
   }),
   compileDraft: endpoint({
     method: "post",
@@ -318,6 +328,7 @@ export const methodEndpoints = {
     failure: "Erro ao compilar rascunho do método",
     policy: "cloud-only",
     desktopLabel: "Compilação de método",
+    permission: { template: ["read"] },
   }),
   previewDraft: endpoint({
     method: "post",
@@ -327,6 +338,7 @@ export const methodEndpoints = {
     failure: "Erro ao executar preview do método",
     policy: "cloud-only",
     desktopLabel: "Preview de método",
+    permission: { template: ["read"] },
   }),
   publishDraft: endpoint({
     method: "post",
@@ -336,6 +348,7 @@ export const methodEndpoints = {
     failure: "Erro ao publicar método",
     policy: "cloud-only",
     desktopLabel: "Publicação de método",
+    permission: { template: ["publish"] },
   }),
   requestApproval: endpoint({
     method: "post",
@@ -345,6 +358,7 @@ export const methodEndpoints = {
     failure: "Erro ao solicitar aprovação",
     policy: "cloud-only",
     desktopLabel: "Solicitação de aprovação",
+    permission: { template: ["update"] },
   }),
   // The curated catalog (only templates whose governance is complete).
   listMethodTemplates: endpoint({
@@ -354,6 +368,7 @@ export const methodEndpoints = {
     failure: "Falha ao carregar o catálogo de modelos",
     policy: "cloud-only",
     desktopLabel: "Catálogo de modelos de método",
+    permission: { template: ["read"] },
   }),
   fromTemplate: endpoint({
     method: "post",
@@ -364,5 +379,6 @@ export const methodEndpoints = {
     failure: "Erro ao criar método a partir do modelo",
     policy: "cloud-only",
     desktopLabel: "Adoção de método a partir de modelo",
+    permission: { template: ["create"] },
   }),
 } as const satisfies EndpointGroup;

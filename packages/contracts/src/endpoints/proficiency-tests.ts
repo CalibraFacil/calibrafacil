@@ -167,6 +167,7 @@ export const proficiencyTestEndpoints = {
     failure: "Falha ao carregar ensaios de proficiência",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["read"] },
   }),
   summary: endpoint({
     method: "get",
@@ -175,6 +176,7 @@ export const proficiencyTestEndpoints = {
     failure: "Falha ao carregar resumo",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -184,6 +186,7 @@ export const proficiencyTestEndpoints = {
     failure: "Ensaio de proficiência não encontrado",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["read"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -193,6 +196,7 @@ export const proficiencyTestEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -203,6 +207,7 @@ export const proficiencyTestEndpoints = {
     failure: "Erro ao registrar ensaio de proficiência",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["create"] },
   }),
   update: endpoint({
     method: "put",
@@ -213,6 +218,7 @@ export const proficiencyTestEndpoints = {
     failure: "Erro ao atualizar ensaio de proficiência",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["update"] },
   }),
   recordResults: endpoint({
     method: "post",
@@ -223,6 +229,7 @@ export const proficiencyTestEndpoints = {
     failure: "Erro ao registrar resultados",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["record_results"] },
   }),
   remove: endpoint({
     method: "delete",
@@ -232,6 +239,7 @@ export const proficiencyTestEndpoints = {
     failure: "Erro ao remover ensaio",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["delete"] },
   }),
   listPlan: endpoint({
     method: "get",
@@ -240,6 +248,7 @@ export const proficiencyTestEndpoints = {
     failure: "Falha ao carregar plano de participação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["read"] },
   }),
   createPlanItem: endpoint({
     method: "post",
@@ -250,6 +259,7 @@ export const proficiencyTestEndpoints = {
     failure: "Erro ao criar item do plano",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["create"] },
   }),
   updatePlanItem: endpoint({
     method: "put",
@@ -260,6 +270,7 @@ export const proficiencyTestEndpoints = {
     failure: "Erro ao atualizar item do plano",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["update"] },
   }),
   removePlanItem: endpoint({
     method: "delete",
@@ -269,5 +280,6 @@ export const proficiencyTestEndpoints = {
     failure: "Erro ao remover item do plano",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { proficiency_test: ["delete"] },
   }),
 } as const satisfies EndpointGroup;

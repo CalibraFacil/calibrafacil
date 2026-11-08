@@ -161,6 +161,7 @@ export const capaEndpoints = {
     failure: "Falha ao carregar CAPAs",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["read"] },
   }),
   summary: endpoint({
     method: "get",
@@ -169,6 +170,7 @@ export const capaEndpoints = {
     failure: "Falha ao carregar resumo",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -178,6 +180,7 @@ export const capaEndpoints = {
     failure: "CAPA não encontrada",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["read"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -187,6 +190,7 @@ export const capaEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -197,6 +201,7 @@ export const capaEndpoints = {
     failure: "Erro ao criar CAPA",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["create"] },
   }),
   update: endpoint({
     method: "put",
@@ -207,6 +212,7 @@ export const capaEndpoints = {
     failure: "Erro ao atualizar CAPA",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["update"] },
   }),
   implement: endpoint({
     method: "post",
@@ -217,6 +223,7 @@ export const capaEndpoints = {
     failure: "Erro ao implementar",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["implement"] },
   }),
   verify: endpoint({
     method: "post",
@@ -227,6 +234,7 @@ export const capaEndpoints = {
     failure: "Erro ao verificar",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["verify"] },
   }),
   close: endpoint({
     method: "post",
@@ -237,5 +245,6 @@ export const capaEndpoints = {
     failure: "Erro ao fechar CAPA",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["close"] },
   }),
 } as const satisfies EndpointGroup;

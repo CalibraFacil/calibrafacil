@@ -23,6 +23,7 @@ export const organizationMediaEndpoints = {
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
     desktopFlavor: "cloud-sync",
+    permission: { organization: ["update"] },
   }),
   deleteLogo: endpoint({
     method: "delete",
@@ -32,5 +33,6 @@ export const organizationMediaEndpoints = {
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
     desktopFlavor: "cloud-sync",
+    permission: { organization: ["update"] },
   }),
 } as const satisfies EndpointGroup;

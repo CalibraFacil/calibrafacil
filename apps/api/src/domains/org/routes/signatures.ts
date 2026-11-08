@@ -67,225 +67,199 @@ export const signaturesRouter = createRouter<{
   Bindings: R2Env;
 }>();
 
-mount(
-  signaturesRouter,
-  PREFIX,
-  signatureEndpoints.uploadMine,
-  withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
-    const env = c.env;
+mount(signaturesRouter, PREFIX, signatureEndpoints.uploadMine, async (c) => {
+  const memberData = c.get("member");
+  const env = c.env;
 
-    const formData = await c.req.formData();
-    const file = formData.get("signature");
+  const formData = await c.req.formData();
+  const file = formData.get("signature");
 
-    if (!(file instanceof File)) {
-      throw invalid("invalid_request", "Nenhum arquivo enviado");
-    }
+  if (!(file instanceof File)) {
+    throw invalid("invalid_request", "Nenhum arquivo enviado");
+  }
 
-    if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
-      throw invalid(
-        "invalid_request",
-        "Formato inválido. Apenas PNG é permitido.",
-      );
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      throw invalid(
-        "invalid_request",
-        `Arquivo muito grande. Máximo ${MAX_FILE_SIZE / 1024}KB.`,
-      );
-    }
-
-    const buffer = await file.arrayBuffer();
-
-    const dimensions = getPngDimensions(buffer);
-    if (!dimensions) {
-      throw invalid("invalid_request", "Arquivo não é uma imagem PNG válida.");
-    }
-
-    if (dimensions.width < MIN_WIDTH || dimensions.height < MIN_HEIGHT) {
-      throw invalid(
-        "invalid_request",
-        `Imagem muito pequena. Mínimo ${MIN_WIDTH}x${MIN_HEIGHT} pixels.`,
-      );
-    }
-
-    if (dimensions.width > MAX_WIDTH || dimensions.height > MAX_HEIGHT) {
-      throw invalid(
-        "invalid_request",
-        `Imagem muito grande. Máximo ${MAX_WIDTH}x${MAX_HEIGHT} pixels.`,
-      );
-    }
-
-    // Generate R2 key (readable org-slug prefix; media bucket)
-    const [orgRow] = await orgDb(memberData.organizationId)
-      .select({ slug: organization.slug })
-      .from(organization)
-      .where(eq(organization.id, memberData.organizationId))
-      .limit(1);
-    const { bucket, key: r2Key } = memberSignatureKey({
-      org: { id: memberData.organizationId, slug: orgRow?.slug ?? "" },
-      memberId: memberData.id,
-    });
-
-    const r2Client = createR2Client(env);
-    await uploadToR2(
-      r2Client,
-      resolveBucketName(env, bucket),
-      r2Key,
-      buffer,
-      file.type,
+  if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
+    throw invalid(
+      "invalid_request",
+      "Formato inválido. Apenas PNG é permitido.",
     );
+  }
 
-    // Upsert database record (read + write in one organization-bound
-    // transaction)
-    await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
-      const existingSignature = await ctx.o
-        .select()
-        .from(memberVisualSignature)
-        .where(
-          and(
-            eq(memberVisualSignature.memberId, memberData.id),
-            eq(memberVisualSignature.organizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
+  if (file.size > MAX_FILE_SIZE) {
+    throw invalid(
+      "invalid_request",
+      `Arquivo muito grande. Máximo ${MAX_FILE_SIZE / 1024}KB.`,
+    );
+  }
 
-      const existing = existingSignature[0];
-      if (existing) {
-        await ctx.o
-          .update(memberVisualSignature)
-          .set({
-            r2Key,
-            contentType: file.type,
-            width: dimensions.width,
-            height: dimensions.height,
-            fileSize: file.size,
-            updatedAt: new Date(),
-          })
-          .where(eq(memberVisualSignature.id, existing.id));
-      } else {
-        await ctx.o.insert(memberVisualSignature).values({
-          memberId: memberData.id,
-          organizationId: memberData.organizationId,
+  const buffer = await file.arrayBuffer();
+
+  const dimensions = getPngDimensions(buffer);
+  if (!dimensions) {
+    throw invalid("invalid_request", "Arquivo não é uma imagem PNG válida.");
+  }
+
+  if (dimensions.width < MIN_WIDTH || dimensions.height < MIN_HEIGHT) {
+    throw invalid(
+      "invalid_request",
+      `Imagem muito pequena. Mínimo ${MIN_WIDTH}x${MIN_HEIGHT} pixels.`,
+    );
+  }
+
+  if (dimensions.width > MAX_WIDTH || dimensions.height > MAX_HEIGHT) {
+    throw invalid(
+      "invalid_request",
+      `Imagem muito grande. Máximo ${MAX_WIDTH}x${MAX_HEIGHT} pixels.`,
+    );
+  }
+
+  // Generate R2 key (readable org-slug prefix; media bucket)
+  const [orgRow] = await orgDb(memberData.organizationId)
+    .select({ slug: organization.slug })
+    .from(organization)
+    .where(eq(organization.id, memberData.organizationId))
+    .limit(1);
+  const { bucket, key: r2Key } = memberSignatureKey({
+    org: { id: memberData.organizationId, slug: orgRow?.slug ?? "" },
+    memberId: memberData.id,
+  });
+
+  const r2Client = createR2Client(env);
+  await uploadToR2(
+    r2Client,
+    resolveBucketName(env, bucket),
+    r2Key,
+    buffer,
+    file.type,
+  );
+
+  // Upsert database record (read + write in one organization-bound
+  // transaction)
+  await withOrg(memberData.organizationId, requestActor(c), async (ctx) => {
+    const existingSignature = await ctx.o
+      .select()
+      .from(memberVisualSignature)
+      .where(
+        and(
+          eq(memberVisualSignature.memberId, memberData.id),
+          eq(memberVisualSignature.organizationId, memberData.organizationId),
+        ),
+      )
+      .limit(1);
+
+    const existing = existingSignature[0];
+    if (existing) {
+      await ctx.o
+        .update(memberVisualSignature)
+        .set({
           r2Key,
           contentType: file.type,
           width: dimensions.width,
           height: dimensions.height,
           fileSize: file.size,
-        });
-      }
-    });
-
-    return {
-      message: "Assinatura enviada com sucesso",
-      dimensions: { width: dimensions.width, height: dimensions.height },
-    };
-  },
-);
-
-mount(
-  signaturesRouter,
-  PREFIX,
-  signatureEndpoints.getMine,
-  withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
-    const env = c.env;
-
-    const [signature] = await orgDb(memberData.organizationId).transaction(
-      (o) =>
-        o
-          .select()
-          .from(memberVisualSignature)
-          .where(
-            and(
-              eq(memberVisualSignature.memberId, memberData.id),
-              eq(
-                memberVisualSignature.organizationId,
-                memberData.organizationId,
-              ),
-            ),
-          )
-          .limit(1),
-    );
-
-    if (!signature) {
-      return { hasSignature: false as const };
+          updatedAt: new Date(),
+        })
+        .where(eq(memberVisualSignature.id, existing.id));
+    } else {
+      await ctx.o.insert(memberVisualSignature).values({
+        memberId: memberData.id,
+        organizationId: memberData.organizationId,
+        r2Key,
+        contentType: file.type,
+        width: dimensions.width,
+        height: dimensions.height,
+        fileSize: file.size,
+      });
     }
+  });
 
-    const r2Client = createR2Client(env);
-    const bucketName = await resolveReadBucketName(
-      r2Client,
-      env,
-      "media",
-      signature.r2Key,
-    );
-    const url = await generatePresignedUrl(
-      r2Client,
-      bucketName,
-      signature.r2Key,
-      PRESIGNED_URL_EXPIRY,
-    );
+  return {
+    message: "Assinatura enviada com sucesso",
+    dimensions: { width: dimensions.width, height: dimensions.height },
+  };
+});
 
-    return {
-      hasSignature: true as const,
-      url,
-      dimensions: { width: signature.width, height: signature.height },
-      uploadedAt: signature.uploadedAt,
-    };
-  },
-);
+mount(signaturesRouter, PREFIX, signatureEndpoints.getMine, async (c) => {
+  const memberData = c.get("member");
+  const env = c.env;
 
-mount(
-  signaturesRouter,
-  PREFIX,
-  signatureEndpoints.deleteMine,
-  withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
-    const env = c.env;
+  const [signature] = await orgDb(memberData.organizationId).transaction((o) =>
+    o
+      .select()
+      .from(memberVisualSignature)
+      .where(
+        and(
+          eq(memberVisualSignature.memberId, memberData.id),
+          eq(memberVisualSignature.organizationId, memberData.organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
-    const [signature] = await orgDb(memberData.organizationId).transaction(
-      (o) =>
-        o
-          .select()
-          .from(memberVisualSignature)
-          .where(
-            and(
-              eq(memberVisualSignature.memberId, memberData.id),
-              eq(
-                memberVisualSignature.organizationId,
-                memberData.organizationId,
-              ),
-            ),
-          )
-          .limit(1),
-    );
+  if (!signature) {
+    return { hasSignature: false as const };
+  }
 
-    if (!signature) {
-      throw notFound("not_found", "Nenhuma assinatura encontrada");
-    }
+  const r2Client = createR2Client(env);
+  const bucketName = await resolveReadBucketName(
+    r2Client,
+    env,
+    "media",
+    signature.r2Key,
+  );
+  const url = await generatePresignedUrl(
+    r2Client,
+    bucketName,
+    signature.r2Key,
+    PRESIGNED_URL_EXPIRY,
+  );
 
-    const r2Client = createR2Client(env);
-    const bucketName = await resolveReadBucketName(
-      r2Client,
-      env,
-      "media",
-      signature.r2Key,
-    );
-    await deleteFromR2(r2Client, bucketName, signature.r2Key);
+  return {
+    hasSignature: true as const,
+    url,
+    dimensions: { width: signature.width, height: signature.height },
+    uploadedAt: signature.uploadedAt,
+  };
+});
 
-    await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
-      ctx.o
-        .delete(memberVisualSignature)
-        .where(eq(memberVisualSignature.id, signature.id)),
-    );
+mount(signaturesRouter, PREFIX, signatureEndpoints.deleteMine, async (c) => {
+  const memberData = c.get("member");
+  const env = c.env;
 
-    return { message: "Assinatura removida com sucesso" };
-  },
-);
+  const [signature] = await orgDb(memberData.organizationId).transaction((o) =>
+    o
+      .select()
+      .from(memberVisualSignature)
+      .where(
+        and(
+          eq(memberVisualSignature.memberId, memberData.id),
+          eq(memberVisualSignature.organizationId, memberData.organizationId),
+        ),
+      )
+      .limit(1),
+  );
+
+  if (!signature) {
+    throw notFound("not_found", "Nenhuma assinatura encontrada");
+  }
+
+  const r2Client = createR2Client(env);
+  const bucketName = await resolveReadBucketName(
+    r2Client,
+    env,
+    "media",
+    signature.r2Key,
+  );
+  await deleteFromR2(r2Client, bucketName, signature.r2Key);
+
+  await withOrg(memberData.organizationId, requestActor(c), (ctx) =>
+    ctx.o
+      .delete(memberVisualSignature)
+      .where(eq(memberVisualSignature.id, signature.id)),
+  );
+
+  return { message: "Assinatura removida com sucesso" };
+});
 
 // ===========================================================================
 // GET /member/:memberId - Get another member's signature (for certificate gen)

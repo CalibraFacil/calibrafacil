@@ -302,6 +302,7 @@ export const standardEndpoints = {
     response: standardsListResponseSchema,
     failure: "Falha ao carregar padrões",
     policy: "local-first-read-through-sync",
+    permission: { standard: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -309,6 +310,7 @@ export const standardEndpoints = {
     response: standardSchema,
     failure: "Falha ao carregar padrão",
     policy: "local-first-read-through-sync",
+    permission: { standard: ["read"] },
   }),
   listCompositionProfiles: endpoint({
     method: "get",
@@ -316,6 +318,7 @@ export const standardEndpoints = {
     response: massCompositionProfilesResponseSchema,
     failure: "Falha ao carregar perfis de composição",
     policy: "local-first-read-through-sync",
+    permission: { standard: ["read"] },
   }),
   createCompositionProfile: endpoint({
     method: "post",
@@ -326,6 +329,7 @@ export const standardEndpoints = {
     failure: "Erro ao criar perfil de composição",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["create"] },
   }),
   updateCompositionProfile: endpoint({
     method: "put",
@@ -335,6 +339,7 @@ export const standardEndpoints = {
     failure: "Erro ao atualizar perfil de composição",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["update"] },
   }),
   deleteCompositionProfile: endpoint({
     method: "delete",
@@ -343,6 +348,7 @@ export const standardEndpoints = {
     failure: "Erro ao remover perfil de composição",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["delete"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -351,6 +357,7 @@ export const standardEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -361,6 +368,7 @@ export const standardEndpoints = {
     failure: "Erro ao criar padrão",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["create"] },
   }),
   // The stored row: no validity verdict or certificate document.
   update: endpoint({
@@ -371,6 +379,7 @@ export const standardEndpoints = {
     failure: "Erro ao atualizar padrão",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["update"] },
   }),
   // Soft delete: the standard is retired.
   delete: endpoint({
@@ -380,6 +389,7 @@ export const standardEndpoints = {
     failure: "Erro ao remover padrão",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["delete"] },
   }),
   renew: endpoint({
     method: "post",
@@ -389,6 +399,7 @@ export const standardEndpoints = {
     failure: "Erro ao renovar certificado",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { standard: ["renew"] },
   }),
   getImpactedCertificates: endpoint({
     method: "get",
@@ -398,6 +409,7 @@ export const standardEndpoints = {
     failure: "Falha ao carregar certificados afetados",
     policy: "cloud-only",
     desktopLabel: RECALL_LABEL,
+    permission: { standard: ["read"] },
   }),
   getRecall: endpoint({
     method: "get",
@@ -406,6 +418,7 @@ export const standardEndpoints = {
     failure: "Falha ao carregar recall",
     policy: "cloud-only",
     desktopLabel: RECALL_LABEL,
+    permission: { standard: ["read"] },
   }),
   sendRecall: endpoint({
     method: "post",
@@ -415,6 +428,7 @@ export const standardEndpoints = {
     failure: "Erro ao enviar recall",
     policy: "cloud-only",
     desktopLabel: RECALL_LABEL,
+    permission: { standard: ["update"] },
   }),
   // The request is multipart/form-data (the `certificate` file), which a JSON
   // definition cannot describe: the route reads the form itself and the SDK
@@ -426,6 +440,7 @@ export const standardEndpoints = {
     failure: "Erro ao enviar certificado do padrão",
     policy: "cloud-only",
     desktopLabel: CERTIFICATE_LABEL,
+    permission: { standard: ["update"] },
   }),
   getCertificateDocumentDownloadUrl: endpoint({
     method: "get",
@@ -434,5 +449,6 @@ export const standardEndpoints = {
     failure: "Falha ao gerar link do certificado do padrão",
     policy: "cloud-only",
     desktopLabel: CERTIFICATE_LABEL,
+    permission: { standard: ["read"] },
   }),
 } as const satisfies EndpointGroup;

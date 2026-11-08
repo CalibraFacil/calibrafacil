@@ -313,6 +313,7 @@ export const serviceOrderEndpoints = {
     response: serviceOrdersListResponseSchema,
     failure: "Erro ao carregar ordens de serviço",
     policy: "local-first-read-through-sync",
+    permission: { service_order: ["read"] },
   }),
   // The opaque id is the dashboard's route key. The desktop does not call this
   // path (the local server routes on the local id): see `desktop-client.ts`.
@@ -324,6 +325,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao carregar OS",
     // Same policy as `get`: it is the same read, keyed by the opaque id.
     policy: "local-first-read-through-sync",
+    permission: { service_order: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -332,6 +334,7 @@ export const serviceOrderEndpoints = {
     response: serviceOrderDetailResponseSchema,
     failure: "Erro ao carregar OS",
     policy: "local-first-read-through-sync",
+    permission: { service_order: ["read"] },
   }),
   listCommunications: endpoint({
     method: "get",
@@ -341,6 +344,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao carregar comunicações da OS",
     policy: "cloud-only",
     desktopLabel: "Comunicações da OS",
+    permission: { service_order: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -360,6 +364,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao atualizar OS",
     policy: "cloud-only",
     desktopLabel: "Atualização da OS",
+    permission: { service_order: ["update"] },
   }),
   createQuote: endpoint({
     method: "post",
@@ -371,6 +376,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao salvar orçamento",
     policy: "cloud-only",
     desktopLabel: "Orçamento da OS",
+    permission: { service_order: ["quote_create"] },
   }),
   createEvaluation: endpoint({
     method: "post",
@@ -381,6 +387,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao salvar avaliação",
     policy: "cloud-only",
     desktopLabel: "Avaliação técnica",
+    permission: { service_order: ["evaluate"] },
   }),
   updateEvaluation: endpoint({
     method: "patch",
@@ -391,6 +398,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao salvar avaliação",
     policy: "cloud-only",
     desktopLabel: "Avaliação técnica",
+    permission: { service_order: ["evaluate"] },
   }),
   sendQuote: endpoint({
     method: "post",
@@ -404,6 +412,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao emitir orçamento",
     policy: "cloud-only",
     desktopLabel: "Emissão de orçamento",
+    permission: { service_order: ["quote_send"] },
   }),
   startExecution: endpoint({
     method: "post",
@@ -414,6 +423,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao iniciar execução",
     policy: "cloud-only",
     desktopLabel: "Execução da OS",
+    permission: { service_order: ["execute"] },
   }),
   saveExecution: endpoint({
     method: "post",
@@ -424,6 +434,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao salvar execução",
     policy: "cloud-only",
     desktopLabel: "Execução da OS",
+    permission: { service_order: ["execute"] },
   }),
   generateIntakeDocument: endpoint({
     method: "post",
@@ -433,6 +444,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao gerar comprovante",
     policy: "cloud-only",
     desktopLabel: "Geração de comprovante",
+    permission: { service_order: ["print_intake_document"] },
   }),
   getIntakeDocumentPdf: endpoint({
     method: "get",
@@ -442,6 +454,7 @@ export const serviceOrderEndpoints = {
     failure: "PDF ainda indisponível",
     policy: "cloud-only",
     desktopLabel: "Abertura de comprovante",
+    permission: { service_order: ["read"] },
   }),
   generateTag: endpoint({
     method: "post",
@@ -451,6 +464,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao gerar etiqueta",
     policy: "cloud-only",
     desktopLabel: "Geração de etiqueta",
+    permission: { service_order: ["print_tag"] },
   }),
   getTagPdf: endpoint({
     method: "get",
@@ -460,6 +474,7 @@ export const serviceOrderEndpoints = {
     failure: "PDF ainda indisponível",
     policy: "cloud-only",
     desktopLabel: "Abertura de etiqueta",
+    permission: { service_order: ["read"] },
   }),
   updateRepairMark: endpoint({
     method: "patch",
@@ -470,6 +485,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao salvar a Marca de Reparo",
     policy: "cloud-only",
     desktopLabel: "Marca de Reparo",
+    permission: { service_order: ["deliver"] },
   }),
   deliver: endpoint({
     method: "post",
@@ -480,6 +496,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao registrar entrega",
     policy: "cloud-only",
     desktopLabel: "Registro de entrega",
+    permission: { service_order: ["deliver"] },
   }),
   issueDeliveryDocument: endpoint({
     method: "post",
@@ -490,6 +507,7 @@ export const serviceOrderEndpoints = {
     failure: "Erro ao gerar comprovante de entrega",
     policy: "cloud-only",
     desktopLabel: "Documento de entrega",
+    permission: { service_order: ["deliver"] },
   }),
   getDeliveryDocumentPdf: endpoint({
     method: "get",
@@ -499,5 +517,6 @@ export const serviceOrderEndpoints = {
     failure: "PDF ainda indisponível",
     policy: "cloud-only",
     desktopLabel: "Abertura do comprovante de entrega",
+    permission: { service_order: ["read"] },
   }),
 } as const satisfies EndpointGroup;

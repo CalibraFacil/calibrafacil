@@ -74,6 +74,7 @@ export const serviceEndpoints = {
     failure: "Falha ao carregar serviços",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -82,6 +83,7 @@ export const serviceEndpoints = {
     failure: "Falha ao carregar serviço",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["read"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -90,6 +92,7 @@ export const serviceEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -100,6 +103,7 @@ export const serviceEndpoints = {
     failure: "Erro ao criar serviço",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["create"] },
   }),
   update: endpoint({
     method: "put",
@@ -109,6 +113,7 @@ export const serviceEndpoints = {
     failure: "Erro ao atualizar serviço",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["update"] },
   }),
   // Soft delete: the service stays, inactive.
   deactivate: endpoint({
@@ -118,5 +123,6 @@ export const serviceEndpoints = {
     failure: "Erro ao desativar serviço",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["delete"] },
   }),
 } as const satisfies EndpointGroup;

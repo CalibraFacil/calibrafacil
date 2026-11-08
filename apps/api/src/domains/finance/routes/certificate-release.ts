@@ -15,10 +15,7 @@ import {
   serviceOrderCertificateLink,
   user,
 } from "@calibra-facil/db/schema";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { buildUnitScopeCondition } from "../../../lib/units";
 import { agreementBelongsToOrganization } from "../../../lib/tenant-refs";
 import {
@@ -172,7 +169,6 @@ mount(
   financeCertificateReleaseRouter,
   RELEASES_PREFIX,
   financeEndpoints.getCertificateRelease,
-  withLabPermission({ financial: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { calibrationJobId } = params;
@@ -223,7 +219,6 @@ mount(
   financeCertificateReleaseRouter,
   RELEASES_PREFIX,
   financeEndpoints.releaseCertificateByException,
-  withLabPermission({ financial: ["export"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const { calibrationJobId } = params;
@@ -293,7 +288,6 @@ mount(
   settingsCertificateReleasePolicyRouter,
   POLICIES_PREFIX,
   financeEndpoints.listCertificateReleasePolicies,
-  withLabPermission({ financial: ["read"] }),
   async (c) => {
     const member = c.get("member");
     const rows = await orgDb(member.organizationId).transaction((o) =>
@@ -342,7 +336,6 @@ mount(
   settingsCertificateReleasePolicyRouter,
   POLICIES_PREFIX,
   financeEndpoints.createCertificateReleasePolicy,
-  withLabPermission({ financial: ["contract_create"] }),
   async (c, { body }) => {
     const member = c.get("member");
 
@@ -431,7 +424,6 @@ mount(
   settingsCertificateReleasePolicyRouter,
   POLICIES_PREFIX,
   financeEndpoints.updateCertificateReleasePolicy,
-  withLabPermission({ financial: ["contract_update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const { id } = params;

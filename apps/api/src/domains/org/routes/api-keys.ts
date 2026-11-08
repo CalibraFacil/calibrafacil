@@ -18,7 +18,6 @@ import {
   requireLabProtected,
   requireOrgType,
   requireRole,
-  withLabPermission,
 } from "../../../middleware/permission";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../../../lib/audit";
@@ -100,11 +99,7 @@ mount(
   apiKeysRouter,
   PREFIX,
   apiKeyEndpoints.create,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireFreshSession,
-    requireRole(["admin", "owner"]),
-  ],
+  [requireFreshSession, requireRole(["admin", "owner"])],
   async (c, { body }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -180,11 +175,7 @@ mount(
   apiKeysRouter,
   PREFIX,
   apiKeyEndpoints.rotate,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireFreshSession,
-    requireRole(["admin", "owner"]),
-  ],
+  [requireFreshSession, requireRole(["admin", "owner"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -264,11 +255,7 @@ mount(
   apiKeysRouter,
   PREFIX,
   apiKeyEndpoints.revoke,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireFreshSession,
-    requireRole(["admin", "owner"]),
-  ],
+  [requireFreshSession, requireRole(["admin", "owner"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");

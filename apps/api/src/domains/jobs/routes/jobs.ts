@@ -260,152 +260,146 @@ jobsRouter.get(
   },
 );
 
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.list,
-  withLabPermission({ calibration: ["read"] }),
-  async (c, { query: filters }) => {
-    const memberData = c.get("member");
-    const {
+mount(jobsRouter, PREFIX, jobEndpoints.list, async (c, { query: filters }) => {
+  const memberData = c.get("member");
+  const {
+    page,
+    limit,
+    query,
+    status,
+    customerId,
+    assetId,
+    serviceId,
+    technicianId,
+    dueSoon,
+    overdue,
+  } = filters;
+  const offset = (page - 1) * limit;
+
+  const conditions = [
+    eq(calibrationJob.organizationId, memberData.organizationId),
+    buildUnitScopeCondition(calibrationJob.unitId, memberData),
+  ];
+
+  if (query) {
+    conditions.push(
+      or(
+        ilike(calibrationJob.jobId, `%${query}%`),
+        ilike(calibrationJob.certificateName, `%${query}%`),
+      )!,
+    );
+  }
+
+  if (status) {
+    conditions.push(eq(calibrationJob.status, status));
+  }
+
+  if (customerId) {
+    conditions.push(eq(calibrationJob.customerId, customerId));
+  }
+
+  if (assetId) {
+    conditions.push(eq(calibrationJob.assetId, assetId));
+  }
+
+  if (serviceId) {
+    conditions.push(eq(calibrationJob.serviceId, serviceId));
+  }
+
+  if (technicianId) {
+    conditions.push(eq(calibrationJob.technicianId, technicianId));
+  }
+
+  // Filter jobs due within 7 days. due_date is a calendar day: compare it
+  // with the laboratory's days (today .. today + 7), both inclusive.
+  if (dueSoon) {
+    const today = labToday();
+    conditions.push(gte(calibrationJob.dueDate, today));
+    conditions.push(lte(calibrationJob.dueDate, addCalendarDays(today, 7)));
+  }
+
+  // Filter overdue jobs: due before today in the laboratory (a job due
+  // today is not overdue until the day is over).
+  if (overdue) {
+    conditions.push(lt(calibrationJob.dueDate, labToday()));
+    conditions.push(inArray(calibrationJob.status, OPEN_JOB_STATUSES));
+  }
+
+  const whereCondition = and(...conditions);
+
+  // The count, the page and the financial contexts read ONE consistent
+  // view, in a transaction that names the laboratory (row-level security).
+  const { countResult, jobs, financialContexts } = await orgDb(
+    memberData.organizationId,
+  ).transaction(async (o) => {
+    const [countResult] = await o
+      .select({ total: count() })
+      .from(calibrationJob)
+      .where(whereCondition);
+
+    const jobs = await o
+      .select({
+        id: calibrationJob.id,
+        jobId: calibrationJob.jobId,
+        certificateName: calibrationJob.certificateName,
+        status: calibrationJob.status,
+        dueDate: calibrationJob.dueDate,
+        performedAt: calibrationJob.performedAt,
+        createdAt: calibrationJob.createdAt,
+        updatedAt: calibrationJob.updatedAt,
+        approvedAt: calibrationJob.approvedAt,
+        customerId: calibrationJob.customerId,
+        customerName: customer.name,
+        assetId: calibrationJob.assetId,
+        assetName: asset.name,
+        assetTag: asset.tag,
+        serviceId: calibrationJob.serviceId,
+        serviceName: service.name,
+        technicianId: calibrationJob.technicianId,
+        technicianName: user.name,
+        methodSnapshot: calibrationJob.methodSnapshot,
+      })
+      .from(calibrationJob)
+      .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+      .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+      .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+      .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+      .where(whereCondition)
+      .orderBy(desc(calibrationJob.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const financialContexts = await loadJobFinancialContexts(
+      memberData.organizationId,
+      jobs.map((job) => job.id),
+      o,
+    );
+    return { countResult, jobs, financialContexts };
+  });
+
+  const now = new Date();
+  const jobsWithComputedFields = jobs.map((job) => ({
+    ...job,
+    isOverdue: job.dueDate
+      ? isCalendarDatePast(job.dueDate, now) &&
+        isOneOf(OPEN_JOB_STATUSES, job.status)
+      : null,
+    daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
+    methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
+    methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
+    ...financialContexts.get(job.id),
+  }));
+
+  return {
+    data: jobsWithComputedFields,
+    pagination: {
       page,
       limit,
-      query,
-      status,
-      customerId,
-      assetId,
-      serviceId,
-      technicianId,
-      dueSoon,
-      overdue,
-    } = filters;
-    const offset = (page - 1) * limit;
-
-    const conditions = [
-      eq(calibrationJob.organizationId, memberData.organizationId),
-      buildUnitScopeCondition(calibrationJob.unitId, memberData),
-    ];
-
-    if (query) {
-      conditions.push(
-        or(
-          ilike(calibrationJob.jobId, `%${query}%`),
-          ilike(calibrationJob.certificateName, `%${query}%`),
-        )!,
-      );
-    }
-
-    if (status) {
-      conditions.push(eq(calibrationJob.status, status));
-    }
-
-    if (customerId) {
-      conditions.push(eq(calibrationJob.customerId, customerId));
-    }
-
-    if (assetId) {
-      conditions.push(eq(calibrationJob.assetId, assetId));
-    }
-
-    if (serviceId) {
-      conditions.push(eq(calibrationJob.serviceId, serviceId));
-    }
-
-    if (technicianId) {
-      conditions.push(eq(calibrationJob.technicianId, technicianId));
-    }
-
-    // Filter jobs due within 7 days. due_date is a calendar day: compare it
-    // with the laboratory's days (today .. today + 7), both inclusive.
-    if (dueSoon) {
-      const today = labToday();
-      conditions.push(gte(calibrationJob.dueDate, today));
-      conditions.push(lte(calibrationJob.dueDate, addCalendarDays(today, 7)));
-    }
-
-    // Filter overdue jobs: due before today in the laboratory (a job due
-    // today is not overdue until the day is over).
-    if (overdue) {
-      conditions.push(lt(calibrationJob.dueDate, labToday()));
-      conditions.push(inArray(calibrationJob.status, OPEN_JOB_STATUSES));
-    }
-
-    const whereCondition = and(...conditions);
-
-    // The count, the page and the financial contexts read ONE consistent
-    // view, in a transaction that names the laboratory (row-level security).
-    const { countResult, jobs, financialContexts } = await orgDb(
-      memberData.organizationId,
-    ).transaction(async (o) => {
-      const [countResult] = await o
-        .select({ total: count() })
-        .from(calibrationJob)
-        .where(whereCondition);
-
-      const jobs = await o
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          certificateName: calibrationJob.certificateName,
-          status: calibrationJob.status,
-          dueDate: calibrationJob.dueDate,
-          performedAt: calibrationJob.performedAt,
-          createdAt: calibrationJob.createdAt,
-          updatedAt: calibrationJob.updatedAt,
-          approvedAt: calibrationJob.approvedAt,
-          customerId: calibrationJob.customerId,
-          customerName: customer.name,
-          assetId: calibrationJob.assetId,
-          assetName: asset.name,
-          assetTag: asset.tag,
-          serviceId: calibrationJob.serviceId,
-          serviceName: service.name,
-          technicianId: calibrationJob.technicianId,
-          technicianName: user.name,
-          methodSnapshot: calibrationJob.methodSnapshot,
-        })
-        .from(calibrationJob)
-        .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-        .leftJoin(user, eq(calibrationJob.technicianId, user.id))
-        .where(whereCondition)
-        .orderBy(desc(calibrationJob.createdAt))
-        .limit(limit)
-        .offset(offset);
-
-      const financialContexts = await loadJobFinancialContexts(
-        memberData.organizationId,
-        jobs.map((job) => job.id),
-        o,
-      );
-      return { countResult, jobs, financialContexts };
-    });
-
-    const now = new Date();
-    const jobsWithComputedFields = jobs.map((job) => ({
-      ...job,
-      isOverdue: job.dueDate
-        ? isCalendarDatePast(job.dueDate, now) &&
-          isOneOf(OPEN_JOB_STATUSES, job.status)
-        : null,
-      daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
-      methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
-      methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
-      ...financialContexts.get(job.id),
-    }));
-
-    return {
-      data: jobsWithComputedFields,
-      pagination: {
-        page,
-        limit,
-        total: countResult?.total ?? 0,
-        totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-      },
-    };
-  },
-);
+      total: countResult?.total ?? 0,
+      totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+    },
+  };
+});
 
 // GET /:id/label: no SDK method calls it, so no endpoint definition.
 jobsRouter.get(
@@ -455,318 +449,299 @@ jobsRouter.get(
   },
 );
 
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.get,
-  withLabPermission({ calibration: ["read"] }),
-  async (c, { params }) => {
-    const memberData = c.get("member");
+mount(jobsRouter, PREFIX, jobEndpoints.get, async (c, { params }) => {
+  const memberData = c.get("member");
 
-    const loaded = await orgDb(memberData.organizationId).transaction(
-      async (o) => {
-        const id = await resolveJobRouteId(params.id, memberData, o);
+  const loaded = await orgDb(memberData.organizationId).transaction(
+    async (o) => {
+      const id = await resolveJobRouteId(params.id, memberData, o);
 
-        if (id === null) {
-          return null;
-        }
+      if (id === null) {
+        return null;
+      }
 
-        const [job] = await o
-          .select({
-            id: calibrationJob.id,
-            jobId: calibrationJob.jobId,
-            certificateName: calibrationJob.certificateName,
-            certificateNumberingSnapshot:
-              calibrationJob.certificateNumberingSnapshot,
-            organizationId: calibrationJob.organizationId,
-            unitId: calibrationJob.unitId,
-            status: calibrationJob.status,
-            dueDate: calibrationJob.dueDate,
-            performedAt: calibrationJob.performedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            asFoundMargins: calibrationJob.asFoundMargins,
-            data: calibrationJob.data,
-            results: calibrationJob.results,
-            standardsSnapshot: calibrationJob.standardsSnapshot,
-            environmentalSnapshot: calibrationJob.environmentalSnapshot,
-            calibrationLocationSnapshot:
-              calibrationJob.calibrationLocationSnapshot,
-            calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
-            scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
-            scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
-            scopeOverrideJustification:
-              calibrationJob.scopeOverrideJustification,
-            // §7.8.2.1(n) — the worksheet prefills from this, so it must be in the
-            // detail projection or a saved deviation looks like it never persisted.
-            methodDeviations: calibrationJob.methodDeviations,
-            assetSnapshot: calibrationJob.assetSnapshot,
-            certificateUrl: calibrationJob.certificateUrl,
-            labelUrl: calibrationJob.labelUrl,
-            methodSnapshot: calibrationJob.methodSnapshot,
-            createdAt: calibrationJob.createdAt,
-            createdBy: calibrationJob.createdBy,
-            submittedBy: calibrationJob.submittedBy,
-            updatedAt: calibrationJob.updatedAt,
-            approvedBy: calibrationJob.approvedBy,
-            approvedAt: calibrationJob.approvedAt,
-            rejectedBy: calibrationJob.rejectedBy,
-            rejectedAt: calibrationJob.rejectedAt,
-            rejectionReason: calibrationJob.rejectionReason,
-            // Amendment fields - ISO 17025 Clause 7.8.4.1
-            supersedesId: calibrationJob.supersedesId,
-            supersededById: calibrationJob.supersededById,
-            amendmentNumber: calibrationJob.amendmentNumber,
-            amendmentReason: calibrationJob.amendmentReason,
-            supersededAt: calibrationJob.supersededAt,
-            customerId: calibrationJob.customerId,
-            customerName: customer.name,
-            customerTaxId: customer.taxId,
-            customerAddress: customer.address,
-            labName: organization.name,
-            labStreet: organization.street,
-            labNumber: organization.number,
-            labComplement: organization.complement,
-            labNeighbourhood: organization.neighbourhood,
-            labCity: organization.city,
-            labState: organization.state,
-            labCep: organization.cep,
-            assetId: calibrationJob.assetId,
-            assetName: asset.name,
-            assetTag: asset.tag,
-            assetTypeId: asset.assetTypeId,
-            assetSerialNumber: asset.serialNumber,
-            assetManufacturer: asset.manufacturer,
-            assetModel: asset.model,
-            assetBaseMeasurementUnit: asset.baseMeasurementUnit,
-            assetSpecifications: asset.specifications,
-            assetTypeName: assetType.name,
-            assetTypeSlug: assetType.slug,
-            assetTypeDefinition: assetType.definition,
-            serviceId: calibrationJob.serviceId,
-            serviceName: service.name,
-            servicePrice: service.price,
-            serviceTat: service.tat,
-            technicianId: calibrationJob.technicianId,
-            technicianName: user.name,
-            approverName: approverUser.name,
-            rejectorName: rejectorUser.name,
-            // The seal decision frozen at approval (null before approval
-            // and for records approved before migration 0120).
-            frozenSeal: frozenSealColumn,
-          })
-          .from(calibrationJob)
-          .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
-          .leftJoin(
-            organization,
-            eq(calibrationJob.organizationId, organization.id),
-          )
-          .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-          .leftJoin(user, eq(calibrationJob.technicianId, user.id))
-          .leftJoin(
-            approverUser,
-            eq(calibrationJob.approvedBy, approverUser.id),
-          )
-          .leftJoin(
-            rejectorUser,
-            eq(calibrationJob.rejectedBy, rejectorUser.id),
-          )
-          .leftJoin(certificateInput, frozenSealJoin)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1);
+      const [job] = await o
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          certificateName: calibrationJob.certificateName,
+          certificateNumberingSnapshot:
+            calibrationJob.certificateNumberingSnapshot,
+          organizationId: calibrationJob.organizationId,
+          unitId: calibrationJob.unitId,
+          status: calibrationJob.status,
+          dueDate: calibrationJob.dueDate,
+          performedAt: calibrationJob.performedAt,
+          asFoundConformity: calibrationJob.asFoundConformity,
+          asFoundMargins: calibrationJob.asFoundMargins,
+          data: calibrationJob.data,
+          results: calibrationJob.results,
+          standardsSnapshot: calibrationJob.standardsSnapshot,
+          environmentalSnapshot: calibrationJob.environmentalSnapshot,
+          calibrationLocationSnapshot:
+            calibrationJob.calibrationLocationSnapshot,
+          calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
+          scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+          scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
+          scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
+          // §7.8.2.1(n) — the worksheet prefills from this, so it must be in the
+          // detail projection or a saved deviation looks like it never persisted.
+          methodDeviations: calibrationJob.methodDeviations,
+          assetSnapshot: calibrationJob.assetSnapshot,
+          certificateUrl: calibrationJob.certificateUrl,
+          labelUrl: calibrationJob.labelUrl,
+          methodSnapshot: calibrationJob.methodSnapshot,
+          createdAt: calibrationJob.createdAt,
+          createdBy: calibrationJob.createdBy,
+          submittedBy: calibrationJob.submittedBy,
+          updatedAt: calibrationJob.updatedAt,
+          approvedBy: calibrationJob.approvedBy,
+          approvedAt: calibrationJob.approvedAt,
+          rejectedBy: calibrationJob.rejectedBy,
+          rejectedAt: calibrationJob.rejectedAt,
+          rejectionReason: calibrationJob.rejectionReason,
+          // Amendment fields - ISO 17025 Clause 7.8.4.1
+          supersedesId: calibrationJob.supersedesId,
+          supersededById: calibrationJob.supersededById,
+          amendmentNumber: calibrationJob.amendmentNumber,
+          amendmentReason: calibrationJob.amendmentReason,
+          supersededAt: calibrationJob.supersededAt,
+          customerId: calibrationJob.customerId,
+          customerName: customer.name,
+          customerTaxId: customer.taxId,
+          customerAddress: customer.address,
+          labName: organization.name,
+          labStreet: organization.street,
+          labNumber: organization.number,
+          labComplement: organization.complement,
+          labNeighbourhood: organization.neighbourhood,
+          labCity: organization.city,
+          labState: organization.state,
+          labCep: organization.cep,
+          assetId: calibrationJob.assetId,
+          assetName: asset.name,
+          assetTag: asset.tag,
+          assetTypeId: asset.assetTypeId,
+          assetSerialNumber: asset.serialNumber,
+          assetManufacturer: asset.manufacturer,
+          assetModel: asset.model,
+          assetBaseMeasurementUnit: asset.baseMeasurementUnit,
+          assetSpecifications: asset.specifications,
+          assetTypeName: assetType.name,
+          assetTypeSlug: assetType.slug,
+          assetTypeDefinition: assetType.definition,
+          serviceId: calibrationJob.serviceId,
+          serviceName: service.name,
+          servicePrice: service.price,
+          serviceTat: service.tat,
+          technicianId: calibrationJob.technicianId,
+          technicianName: user.name,
+          approverName: approverUser.name,
+          rejectorName: rejectorUser.name,
+          // The seal decision frozen at approval (null before approval
+          // and for records approved before migration 0120).
+          frozenSeal: frozenSealColumn,
+        })
+        .from(calibrationJob)
+        .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+        .leftJoin(
+          organization,
+          eq(calibrationJob.organizationId, organization.id),
+        )
+        .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+        .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+        .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+        .leftJoin(approverUser, eq(calibrationJob.approvedBy, approverUser.id))
+        .leftJoin(rejectorUser, eq(calibrationJob.rejectedBy, rejectorUser.id))
+        .leftJoin(certificateInput, frozenSealJoin)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1);
 
-        if (!job) {
-          return null;
-        }
+      if (!job) {
+        return null;
+      }
 
-        const financialContextMap = await loadJobFinancialContexts(
-          memberData.organizationId,
-          [job.id],
-          o,
-        );
-        // The lifecycle of the issued certificate (ISSUED / SUPERSEDED /
-        // WITHDRAWN, from its status events) and the open amendment, if any:
-        // an original with an amendment in progress is still the valid one.
-        const certificateLifecycle =
-          (await loadCertificateLifecycles(o, [job])).get(job.id) ?? null;
-        const [amendmentInProgress] =
-          job.status === "APPROVED"
-            ? await o
-                .select({
-                  id: calibrationJob.id,
-                  jobId: calibrationJob.jobId,
-                  status: calibrationJob.status,
-                })
-                .from(calibrationJob)
-                .where(
-                  and(
-                    eq(calibrationJob.supersedesId, job.id),
-                    ne(calibrationJob.status, "CANCELED"),
-                  ),
-                )
-                .limit(1)
-            : [];
-        // Separation of duties, for the allowed actions: would this
-        // member's approval be refused as approving their own work?
-        const approvalBlockedForMember =
-          job.status === "REVIEW"
-            ? await selfApprovalBlocked(
-                {
-                  job,
-                  organizationId: memberData.organizationId,
-                  approverId: memberData.userId,
-                  accredited: await laboratoryIsAccredited(
-                    memberData.organizationId,
-                    o,
-                  ),
-                },
-                o,
+      const financialContextMap = await loadJobFinancialContexts(
+        memberData.organizationId,
+        [job.id],
+        o,
+      );
+      // The lifecycle of the issued certificate (ISSUED / SUPERSEDED /
+      // WITHDRAWN, from its status events) and the open amendment, if any:
+      // an original with an amendment in progress is still the valid one.
+      const certificateLifecycle =
+        (await loadCertificateLifecycles(o, [job])).get(job.id) ?? null;
+      const [amendmentInProgress] =
+        job.status === "APPROVED"
+          ? await o
+              .select({
+                id: calibrationJob.id,
+                jobId: calibrationJob.jobId,
+                status: calibrationJob.status,
+              })
+              .from(calibrationJob)
+              .where(
+                and(
+                  eq(calibrationJob.supersedesId, job.id),
+                  ne(calibrationJob.status, "CANCELED"),
+                ),
               )
-            : false;
-        return {
-          job,
-          financialContextMap,
-          certificateLifecycle,
-          amendmentInProgress: amendmentInProgress ?? null,
-          approvalBlockedForMember,
-        };
-      },
-    );
-    if (!loaded) {
-      throw jobNotFound();
-    }
-    const {
-      job: loadedJob,
-      financialContextMap,
-      certificateLifecycle,
-      amendmentInProgress,
-      approvalBlockedForMember,
-    } = loaded;
-    const { frozenSeal, submittedBy: _submittedBy, ...job } = loadedJob;
-    const derivedAssetSnapshot =
-      job.assetSnapshot ??
-      (job.status === "REJECTED" ||
-      OPEN_JOB_STATUSES.some((status) => status === job.status)
-        ? ({
-            assetId: job.assetId,
-            assetTypeId: job.assetTypeId ?? 0,
-            assetTypeName: job.assetTypeName ?? "",
-            assetTypeSlug: job.assetTypeSlug ?? "",
-            baseMeasurementUnit: job.assetBaseMeasurementUnit ?? null,
-            name: job.assetName ?? "",
-            tag: job.assetTag ?? "",
-            serialNumber: job.assetSerialNumber ?? "",
-            manufacturer: job.assetManufacturer,
-            model: job.assetModel,
-            specifications: job.assetSpecifications,
-            capturedAt: new Date().toISOString(),
-          } satisfies AssetSnapshot)
-        : null);
+              .limit(1)
+          : [];
+      // Separation of duties, for the allowed actions: would this
+      // member's approval be refused as approving their own work?
+      const approvalBlockedForMember =
+        job.status === "REVIEW"
+          ? await selfApprovalBlocked(
+              {
+                job,
+                organizationId: memberData.organizationId,
+                approverId: memberData.userId,
+                accredited: await laboratoryIsAccredited(
+                  memberData.organizationId,
+                  o,
+                ),
+              },
+              o,
+            )
+          : false;
+      return {
+        job,
+        financialContextMap,
+        certificateLifecycle,
+        amendmentInProgress: amendmentInProgress ?? null,
+        approvalBlockedForMember,
+      };
+    },
+  );
+  if (!loaded) {
+    throw jobNotFound();
+  }
+  const {
+    job: loadedJob,
+    financialContextMap,
+    certificateLifecycle,
+    amendmentInProgress,
+    approvalBlockedForMember,
+  } = loaded;
+  const { frozenSeal, submittedBy: _submittedBy, ...job } = loadedJob;
+  const derivedAssetSnapshot =
+    job.assetSnapshot ??
+    (job.status === "REJECTED" ||
+    OPEN_JOB_STATUSES.some((status) => status === job.status)
+      ? ({
+          assetId: job.assetId,
+          assetTypeId: job.assetTypeId ?? 0,
+          assetTypeName: job.assetTypeName ?? "",
+          assetTypeSlug: job.assetTypeSlug ?? "",
+          baseMeasurementUnit: job.assetBaseMeasurementUnit ?? null,
+          name: job.assetName ?? "",
+          tag: job.assetTag ?? "",
+          serialNumber: job.assetSerialNumber ?? "",
+          manufacturer: job.assetManufacturer,
+          model: job.assetModel,
+          specifications: job.assetSpecifications,
+          capturedAt: new Date().toISOString(),
+        } satisfies AssetSnapshot)
+      : null);
 
-    const now = new Date();
-    const result = {
-      ...job,
-      assetSnapshot: derivedAssetSnapshot,
-      accreditationSeal: frozenSealOf(frozenSeal),
-      certificateLifecycle: certificateLifecycle
-        ? {
-            status: certificateLifecycle.status,
-            changedAt: certificateLifecycle.latest
-              ? new Date(certificateLifecycle.latest.occurredAt)
-              : null,
-            reason: certificateLifecycle.latest?.reason ?? null,
-          }
-        : null,
-      amendmentInProgress,
-      allowedActions: allowedJobActions({
-        status: job.status,
-        member: memberData,
-        selfApprovalBlocked: approvalBlockedForMember,
-        certificateStatus: certificateLifecycle?.status ?? null,
-        amendmentInProgress: amendmentInProgress !== null,
-      }),
-      isOverdue: job.dueDate
-        ? isCalendarDatePast(job.dueDate, now) &&
-          isOneOf(OPEN_JOB_STATUSES, job.status)
-        : null,
-      daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
-      ...financialContextMap.get(job.id),
-    };
+  const now = new Date();
+  const result = {
+    ...job,
+    assetSnapshot: derivedAssetSnapshot,
+    accreditationSeal: frozenSealOf(frozenSeal),
+    certificateLifecycle: certificateLifecycle
+      ? {
+          status: certificateLifecycle.status,
+          changedAt: certificateLifecycle.latest
+            ? new Date(certificateLifecycle.latest.occurredAt)
+            : null,
+          reason: certificateLifecycle.latest?.reason ?? null,
+        }
+      : null,
+    amendmentInProgress,
+    allowedActions: allowedJobActions({
+      status: job.status,
+      member: memberData,
+      selfApprovalBlocked: approvalBlockedForMember,
+      certificateStatus: certificateLifecycle?.status ?? null,
+      amendmentInProgress: amendmentInProgress !== null,
+    }),
+    isOverdue: job.dueDate
+      ? isCalendarDatePast(job.dueDate, now) &&
+        isOneOf(OPEN_JOB_STATUSES, job.status)
+      : null,
+    daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
+    ...financialContextMap.get(job.id),
+  };
 
-    return result;
-  },
-);
+  return result;
+});
 
 // =========================================================================
 // POST / - Create new job (THE CRITICAL SNAPSHOT LOGIC)
 // =========================================================================
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.create,
-  withLabPermission({ calibration: ["create"] }),
-  async (c, { body }) => {
-    const memberData = c.get("member");
-    const input = body;
+mount(jobsRouter, PREFIX, jobEndpoints.create, async (c, { body }) => {
+  const memberData = c.get("member");
+  const input = body;
 
-    const activeUnitId = memberData.activeUnitId;
-    if (!activeUnitId) {
-      throw invalid(
-        "unit_active_required",
-        "Selecione uma unidade específica para criar ordens",
-      );
-    }
-
-    // One transaction that names the laboratory (row-level security); the
-    // raw executor goes to the creator, whose advisory lock and certificate
-    // numbering run raw SQL.
-    const newJob = await withOrg(
-      memberData.organizationId,
-      requestActor(c),
-      async (ctx) => {
-        const job = await createCalibrationJob({
-          organizationId: ctx.org,
-          unitId: activeUnitId,
-          createdBy: ctx.actor.userId,
-          assetId: input.assetId,
-          serviceId: input.serviceId,
-          technicianId: input.technicianId,
-          dueDate: input.dueDate,
-          // Back-link to the repair OS this calibration came
-          // from, when opened from the pending-after-repair flow. Org-scoped
-          // in createCalibrationJob.
-          sourceServiceOrderId: input.sourceServiceOrderId ?? null,
-          ipAddress: ctx.actor.ipAddress,
-          executor: ctx.tx,
-        });
-
-        // The assignment notification waits for the commit: sending it from
-        // inside an open transaction that might still roll back would notify
-        // a technician about a job that never existed.
-        const { technicianId } = job;
-        if (technicianId) {
-          ctx.afterCommit(() =>
-            notify("JOB_ASSIGNED", {
-              jobId: job.id,
-              technicianId,
-              assignedByUserId: ctx.actor.userId,
-            }),
-          );
-        }
-        return job;
-      },
+  const activeUnitId = memberData.activeUnitId;
+  if (!activeUnitId) {
+    throw invalid(
+      "unit_active_required",
+      "Selecione uma unidade específica para criar ordens",
     );
+  }
 
-    return newJob;
-  },
-);
+  // One transaction that names the laboratory (row-level security); the
+  // raw executor goes to the creator, whose advisory lock and certificate
+  // numbering run raw SQL.
+  const newJob = await withOrg(
+    memberData.organizationId,
+    requestActor(c),
+    async (ctx) => {
+      const job = await createCalibrationJob({
+        organizationId: ctx.org,
+        unitId: activeUnitId,
+        createdBy: ctx.actor.userId,
+        assetId: input.assetId,
+        serviceId: input.serviceId,
+        technicianId: input.technicianId,
+        dueDate: input.dueDate,
+        // Back-link to the repair OS this calibration came
+        // from, when opened from the pending-after-repair flow. Org-scoped
+        // in createCalibrationJob.
+        sourceServiceOrderId: input.sourceServiceOrderId ?? null,
+        ipAddress: ctx.actor.ipAddress,
+        executor: ctx.tx,
+      });
+
+      // The assignment notification waits for the commit: sending it from
+      // inside an open transaction that might still roll back would notify
+      // a technician about a job that never existed.
+      const { technicianId } = job;
+      if (technicianId) {
+        ctx.afterCommit(() =>
+          notify("JOB_ASSIGNED", {
+            jobId: job.id,
+            technicianId,
+            assignedByUserId: ctx.actor.userId,
+          }),
+        );
+      }
+      return job;
+    },
+  );
+
+  return newJob;
+});
 
 // PUT /:id: no SDK method calls it (the technician is set with `assign`), so no endpoint definition.
 jobsRouter.put(
@@ -812,48 +787,42 @@ jobsRouter.put(
   },
 );
 
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.assign,
-  withLabPermission({ calibration: ["assign_technician"] }),
-  async (c, { params, body }) => {
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(params.id, memberData);
-    const input = body;
+mount(jobsRouter, PREFIX, jobEndpoints.assign, async (c, { params, body }) => {
+  const memberData = c.get("member");
+  const id = await requireJobRouteId(params.id, memberData);
+  const input = body;
 
-    const assigned = await withOrg(
-      memberData.organizationId,
-      requestActor(c),
-      async (ctx) => {
-        const result = await requireJobCommandOk(
-          ctx.o,
-          id,
-          await assignJobIn(ctx.o, {
-            actor: userJobActor(ctx.actor),
-            jobId: id,
-            organizationId: ctx.org,
-            unitScope: memberData,
-            technicianId: input.technicianId,
-          }),
-        );
-        ctx.afterCommit(() =>
-          notify("JOB_ASSIGNED", {
-            jobId: id,
-            technicianId: input.technicianId,
-            assignedByUserId: ctx.actor.userId,
-          }),
-        );
-        return result;
-      },
-    );
+  const assigned = await withOrg(
+    memberData.organizationId,
+    requestActor(c),
+    async (ctx) => {
+      const result = await requireJobCommandOk(
+        ctx.o,
+        id,
+        await assignJobIn(ctx.o, {
+          actor: userJobActor(ctx.actor),
+          jobId: id,
+          organizationId: ctx.org,
+          unitScope: memberData,
+          technicianId: input.technicianId,
+        }),
+      );
+      ctx.afterCommit(() =>
+        notify("JOB_ASSIGNED", {
+          jobId: id,
+          technicianId: input.technicianId,
+          assignedByUserId: ctx.actor.userId,
+        }),
+      );
+      return result;
+    },
+  );
 
-    return {
-      message: `Job atribuido a ${assigned.technicianName}`,
-      data: assigned.job,
-    };
-  },
-);
+  return {
+    message: `Job atribuido a ${assigned.technicianName}`,
+    data: assigned.job,
+  };
+});
 
 // =========================================================================
 // POST /:id/submit - Submit job for review (transition from DRAFT/IN_PROGRESS to REVIEW)
@@ -968,7 +937,7 @@ mount(
   jobsRouter,
   PREFIX,
   jobEndpoints.approve,
-  [...withLabPermission({ calibration: ["approve"] }), requireFreshSession],
+  [requireFreshSession],
   async (c, { params, body }) => {
     const memberData = c.get("member");
     const id = await requireJobRouteId(params.id, memberData);
@@ -998,84 +967,72 @@ mount(
   },
 );
 
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.reject,
-  withLabPermission({ calibration: ["reject"] }),
-  async (c, { params, body }) => {
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(params.id, memberData);
-    const input = body;
+mount(jobsRouter, PREFIX, jobEndpoints.reject, async (c, { params, body }) => {
+  const memberData = c.get("member");
+  const id = await requireJobRouteId(params.id, memberData);
+  const input = body;
 
-    const rejected = await withOrg(
-      memberData.organizationId,
-      requestActor(c),
-      async (ctx) => {
-        const result = await requireJobCommandOk(
-          ctx.o,
-          id,
-          await rejectJobIn(ctx.o, {
-            actor: userJobActor(ctx.actor),
-            jobId: id,
-            organizationId: ctx.org,
-            unitScope: memberData,
-            reason: input.reason,
-          }),
-        );
-        ctx.afterCommit(() =>
-          notify("JOB_REJECTED", {
-            jobId: id,
-            rejectedByUserId: ctx.actor.userId,
-            reason: input.reason,
-          }),
-        );
-        return result.job;
-      },
-    );
+  const rejected = await withOrg(
+    memberData.organizationId,
+    requestActor(c),
+    async (ctx) => {
+      const result = await requireJobCommandOk(
+        ctx.o,
+        id,
+        await rejectJobIn(ctx.o, {
+          actor: userJobActor(ctx.actor),
+          jobId: id,
+          organizationId: ctx.org,
+          unitScope: memberData,
+          reason: input.reason,
+        }),
+      );
+      ctx.afterCommit(() =>
+        notify("JOB_REJECTED", {
+          jobId: id,
+          rejectedByUserId: ctx.actor.userId,
+          reason: input.reason,
+        }),
+      );
+      return result.job;
+    },
+  );
 
-    return {
-      message: "Job rejeitado",
-      data: rejected,
-    };
-  },
-);
+  return {
+    message: "Job rejeitado",
+    data: rejected,
+  };
+});
 
 // =========================================================================
 // POST /:id/retry-render - Render again the certificate of an approved job
 // whose render failed (RENDER_FAILED -> GENERATING_PDF)
 // =========================================================================
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.retryRender,
-  withLabPermission({ calibration: ["approve"] }),
-  async (c, { params }) => {
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(params.id, memberData);
+mount(jobsRouter, PREFIX, jobEndpoints.retryRender, async (c, { params }) => {
+  const memberData = c.get("member");
+  const id = await requireJobRouteId(params.id, memberData);
 
-    const retried = await withOrg(
-      memberData.organizationId,
-      requestActor(c),
-      async (ctx) =>
-        requireJobCommandOk(
-          ctx.o,
-          id,
-          await retryRenderIn(ctx, {
-            actor: userJobActor(ctx.actor),
-            jobId: id,
-            organizationId: ctx.org,
-            unitScope: memberData,
-          }),
-        ),
-    );
+  const retried = await withOrg(
+    memberData.organizationId,
+    requestActor(c),
+    async (ctx) =>
+      requireJobCommandOk(
+        ctx.o,
+        id,
+        await retryRenderIn(ctx, {
+          actor: userJobActor(ctx.actor),
+          jobId: id,
+          organizationId: ctx.org,
+          unitScope: memberData,
+        }),
+      ),
+  );
 
-    return {
-      message: "Emissão do certificado reenviada",
-      data: retried.job,
-    };
-  },
-);
+  return {
+    message: "Emissão do certificado reenviada",
+    data: retried.job,
+  };
+});
 
 // =========================================================================
 // POST /:id/flag-oot - Flag an approved job as out-of-tolerance (as found):
@@ -1086,7 +1043,6 @@ mount(
   jobsRouter,
   PREFIX,
   jobEndpoints.flagOutOfTolerance,
-  withLabPermission({ non_conformance: ["create"] }),
   async (c, { params, body }) => {
     const memberData = c.get("member");
     const id = await requireJobRouteId(params.id, memberData);
@@ -1156,41 +1112,35 @@ mount(
 // =========================================================================
 // DELETE /:id - Cancel job (soft delete - sets status to CANCELED)
 // =========================================================================
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.cancel,
-  withLabPermission({ calibration: ["delete"] }),
-  async (c, { params, body }) => {
-    const memberData = c.get("member");
-    const id = await requireJobRouteId(params.id, memberData);
-    const input = body;
+mount(jobsRouter, PREFIX, jobEndpoints.cancel, async (c, { params, body }) => {
+  const memberData = c.get("member");
+  const id = await requireJobRouteId(params.id, memberData);
+  const input = body;
 
-    const canceled = await withOrg(
-      memberData.organizationId,
-      requestActor(c),
-      async (ctx) =>
-        requireJobCommandOk(
-          ctx.o,
-          id,
-          // The read and the compare-and-set write run on the context's one
-          // transaction; the write still matches on the status it read.
-          await cancelJob(ctx, {
-            actor: userJobActor(ctx.actor),
-            jobId: id,
-            organizationId: ctx.org,
-            unitScope: memberData,
-            reason: input.reason,
-          }),
-        ),
-    );
+  const canceled = await withOrg(
+    memberData.organizationId,
+    requestActor(c),
+    async (ctx) =>
+      requireJobCommandOk(
+        ctx.o,
+        id,
+        // The read and the compare-and-set write run on the context's one
+        // transaction; the write still matches on the status it read.
+        await cancelJob(ctx, {
+          actor: userJobActor(ctx.actor),
+          jobId: id,
+          organizationId: ctx.org,
+          unitScope: memberData,
+          reason: input.reason,
+        }),
+      ),
+  );
 
-    return {
-      message: "Job cancelado",
-      data: canceled.job,
-    };
-  },
-);
+  return {
+    message: "Job cancelado",
+    data: canceled.job,
+  };
+});
 
 // =========================================================================
 // POST /:id/amend - Create an amended version of an approved certificate
@@ -1200,10 +1150,7 @@ mount(
   jobsRouter,
   PREFIX,
   jobEndpoints.amend,
-  [
-    ...withLabPermission({ calibration: ["approve"] }),
-    zValidator("json", AmendJobSchema),
-  ],
+  [zValidator("json", AmendJobSchema)],
   async (c, { params, body }) => {
     const memberData = c.get("member");
     const id = await requireJobRouteId(params.id, memberData);
@@ -1272,7 +1219,6 @@ mount(
   PREFIX,
   jobEndpoints.withdrawCertificate,
   [
-    ...withLabPermission({ calibration: ["approve"] }),
     requireRole(["admin", "owner"]),
     zValidator("json", WithdrawCertificateSchema),
   ],
@@ -1436,48 +1382,40 @@ jobsRouter.get(
   },
 );
 
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.listTechnicians,
-  withLabPermission({ calibration: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
+mount(jobsRouter, PREFIX, jobEndpoints.listTechnicians, async (c) => {
+  const memberData = c.get("member");
 
-    const technicians = await orgDb(memberData.organizationId).transaction(
-      (o) =>
-        o
-          .select({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: member.role,
-          })
-          .from(member)
-          .innerJoin(user, eq(member.userId, user.id))
-          .where(
-            assignableMemberCondition(
-              {
-                organizationId: memberData.organizationId,
-                unitId: memberData.activeUnitId,
-              },
-              o,
-            ),
-          )
-          .orderBy(user.name),
-    );
+  const technicians = await orgDb(memberData.organizationId).transaction((o) =>
+    o
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: member.role,
+      })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(
+        assignableMemberCondition(
+          {
+            organizationId: memberData.organizationId,
+            unitId: memberData.activeUnitId,
+          },
+          o,
+        ),
+      )
+      .orderBy(user.name),
+  );
 
-    return {
-      data: technicians,
-    };
-  },
-);
+  return {
+    data: technicians,
+  };
+});
 
 mount(
   jobsRouter,
   PREFIX,
   jobEndpoints.getCertificateDownloadUrl,
-  withLabPermission({ calibration: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const id = await requireJobRouteId(params.id, memberData);
@@ -1517,63 +1455,56 @@ mount(
   },
 );
 
-mount(
-  jobsRouter,
-  PREFIX,
-  jobEndpoints.generateLabel,
-  withLabPermission({ calibration: ["read"] }),
-  async (c, { params }) => {
-    const memberData = c.get("member");
-    const session = c.get("session");
-    const id = await requireJobRouteId(params.id, memberData);
+mount(jobsRouter, PREFIX, jobEndpoints.generateLabel, async (c, { params }) => {
+  const memberData = c.get("member");
+  const session = c.get("session");
+  const id = await requireJobRouteId(params.id, memberData);
 
-    const [job] = await orgDb(memberData.organizationId).transaction((o) =>
-      o
-        .select({
-          id: calibrationJob.id,
-          status: calibrationJob.status,
-          labelUrl: calibrationJob.labelUrl,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1),
+  const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+    o
+      .select({
+        id: calibrationJob.id,
+        status: calibrationJob.status,
+        labelUrl: calibrationJob.labelUrl,
+      })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.id, id),
+          eq(calibrationJob.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(calibrationJob.unitId, memberData),
+        ),
+      )
+      .limit(1),
+  );
+
+  if (!job) {
+    throw jobNotFound();
+  }
+
+  if (job.status !== "APPROVED") {
+    throw invalid(
+      "invalid_request",
+      "Apenas jobs aprovados podem ter etiquetas geradas",
     );
+  }
 
-    if (!job) {
-      throw jobNotFound();
-    }
+  await enqueueBackgroundJob({
+    type: "LABEL",
+    jobId: id,
+    userId: session.user.id,
+  });
 
-    if (job.status !== "APPROVED") {
-      throw invalid(
-        "invalid_request",
-        "Apenas jobs aprovados podem ter etiquetas geradas",
-      );
-    }
-
-    await enqueueBackgroundJob({
-      type: "LABEL",
-      jobId: id,
-      userId: session.user.id,
-    });
-
-    return {
-      message: "Gerando etiqueta...",
-      jobId: id,
-    };
-  },
-);
+  return {
+    message: "Gerando etiqueta...",
+    jobId: id,
+  };
+});
 
 mount(
   jobsRouter,
   PREFIX,
   jobEndpoints.getLabelDownloadUrl,
-  withLabPermission({ calibration: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const id = await requireJobRouteId(params.id, memberData);

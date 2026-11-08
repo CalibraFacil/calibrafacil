@@ -4,7 +4,6 @@ import { materialEndpoints } from "@calibra-facil/contracts";
 import { material } from "@calibra-facil/db/schema";
 import { adjustMaterialErpStock, type IntegrationsEnv } from "../../finance";
 import {
-  withLabPermission,
   type AuthVariables,
   type MemberData,
 } from "../../../middleware/permission";
@@ -67,7 +66,6 @@ mount(
   materialsRouter,
   PREFIX,
   materialEndpoints.list,
-  withLabPermission({ service: ["read"] }),
   async (c, { query: filters }) => {
     const member = c.get("member");
     const { page, limit, query, controlsStock, isActive } = filters;
@@ -141,26 +139,19 @@ mount(
   },
 );
 
-mount(
-  materialsRouter,
-  PREFIX,
-  materialEndpoints.get,
-  withLabPermission({ service: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const { id } = params;
+mount(materialsRouter, PREFIX, materialEndpoints.get, async (c, { params }) => {
+  const member = c.get("member");
+  const { id } = params;
 
-    return await orgDb(member.organizationId).transaction((o) =>
-      requireLabMaterial(id, member, o),
-    );
-  },
-);
+  return await orgDb(member.organizationId).transaction((o) =>
+    requireLabMaterial(id, member, o),
+  );
+});
 
 mount(
   materialsRouter,
   PREFIX,
   materialEndpoints.create,
-  withLabPermission({ service: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -214,7 +205,6 @@ mount(
   materialsRouter,
   PREFIX,
   materialEndpoints.update,
-  withLabPermission({ service: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const { id } = params;
@@ -280,7 +270,6 @@ mount(
   materialsRouter,
   PREFIX,
   materialEndpoints.adjustStock,
-  withLabPermission({ service: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const { id } = params;
@@ -314,7 +303,6 @@ mount(
   materialsRouter,
   PREFIX,
   materialEndpoints.deactivate,
-  withLabPermission({ service: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { id } = params;
