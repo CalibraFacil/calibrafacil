@@ -344,7 +344,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.list,
-  withLabPermission({ standard: ["read"] }),
   async (c, { query: { page, limit, query, status, expiringWithinDays } }) => {
     const member = c.get("member");
     const offset = (page - 1) * limit;
@@ -455,7 +454,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.listCompositionProfiles,
-  withLabPermission({ standard: ["read"] }),
   async (c) => {
     const member = c.get("member");
     return await orgDb(member.organizationId).transaction(async (tx) => {
@@ -483,7 +481,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.createCompositionProfile,
-  withLabPermission({ standard: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -566,7 +563,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.updateCompositionProfile,
-  withLabPermission({ standard: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const id = Number.parseInt(params.id, 10);
@@ -636,7 +632,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.deleteCompositionProfile,
-  withLabPermission({ standard: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const id = Number.parseInt(params.id, 10);
@@ -688,36 +683,31 @@ standardsRouter.get(
   },
 );
 
-mount(
-  standardsRouter,
-  PREFIX,
-  standardEndpoints.get,
-  withLabPermission({ standard: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    return await orgDb(member.organizationId).transaction(async (tx) => {
-      const found = await requireLabStandard(params.id, member, tx);
+mount(standardsRouter, PREFIX, standardEndpoints.get, async (c, { params }) => {
+  const member = c.get("member");
+  return await orgDb(member.organizationId).transaction(async (tx) => {
+    const found = await requireLabStandard(params.id, member, tx);
 
-      const now = new Date();
-      const certificateDocuments =
-        await currentCertificateDocumentsByStandardId([found.id], tx);
-      const result = {
-        ...found,
-        certificateDocument: certificateDocuments.get(found.id) ?? null,
-        isExpired: isCalendarDatePast(found.nextCalibrationDate, now),
-        daysUntilExpiry: labDaysUntil(found.nextCalibrationDate, now),
-      };
+    const now = new Date();
+    const certificateDocuments = await currentCertificateDocumentsByStandardId(
+      [found.id],
+      tx,
+    );
+    const result = {
+      ...found,
+      certificateDocument: certificateDocuments.get(found.id) ?? null,
+      isExpired: isCalendarDatePast(found.nextCalibrationDate, now),
+      daysUntilExpiry: labDaysUntil(found.nextCalibrationDate, now),
+    };
 
-      return result;
-    });
-  },
-);
+    return result;
+  });
+});
 
 mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.uploadCertificateDocument,
-  withLabPermission({ standard: ["update"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -888,7 +878,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.getCertificateDocumentDownloadUrl,
-  withLabPermission({ standard: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const env = c.env;
@@ -947,7 +936,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.create,
-  withLabPermission({ standard: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1029,7 +1017,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.update,
-  withLabPermission({ standard: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1299,7 +1286,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.getImpactedCertificates,
-  withLabPermission({ standard: ["read"] }),
   async (c, { params, query }) => {
     const member = c.get("member");
     return await orgDb(member.organizationId).transaction(async (tx) => {
@@ -1364,7 +1350,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.getRecall,
-  withLabPermission({ standard: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     return await orgDb(member.organizationId).transaction(async (tx) => {
@@ -1474,7 +1459,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.sendRecall,
-  withLabPermission({ standard: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1633,7 +1617,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.delete,
-  withLabPermission({ standard: ["delete"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const updated = await withOrg(
@@ -1676,7 +1659,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.renew,
-  withLabPermission({ standard: ["renew"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1828,7 +1810,6 @@ mount(
   standardsRouter,
   PREFIX,
   standardEndpoints.auditLog,
-  withLabPermission({ standard: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     return await orgDb(member.organizationId).transaction(async (tx) => {

@@ -158,6 +158,7 @@ export const spcEndpoints = {
     failure: "Falha ao carregar cartas de controle",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["read"] },
   }),
   getChart: endpoint({
     method: "get",
@@ -167,6 +168,7 @@ export const spcEndpoints = {
     failure: "Carta de controle não encontrada",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["read"] },
   }),
   createChart: endpoint({
     method: "post",
@@ -177,6 +179,7 @@ export const spcEndpoints = {
     failure: "Erro ao criar carta de controle",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["create"] },
   }),
   updateChart: endpoint({
     method: "put",
@@ -187,6 +190,7 @@ export const spcEndpoints = {
     failure: "Erro ao atualizar carta de controle",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["update"] },
   }),
   removeChart: endpoint({
     method: "delete",
@@ -196,6 +200,7 @@ export const spcEndpoints = {
     failure: "Erro ao remover carta de controle",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["delete"] },
   }),
   recalculateChart: endpoint({
     method: "post",
@@ -205,6 +210,7 @@ export const spcEndpoints = {
     failure: "Erro ao recalcular carta",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["recalculate"] },
   }),
   escalateChart: endpoint({
     method: "post",
@@ -222,6 +228,7 @@ export const spcEndpoints = {
     failure: "Erro ao escalar sinal",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["escalate"] },
   }),
   listReadings: endpoint({
     method: "get",
@@ -231,6 +238,7 @@ export const spcEndpoints = {
     failure: "Falha ao carregar leituras",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["read"] },
   }),
   createReading: endpoint({
     method: "post",
@@ -241,6 +249,7 @@ export const spcEndpoints = {
     failure: "Erro ao registrar leitura",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["create"] },
   }),
   removeReading: endpoint({
     method: "delete",
@@ -250,5 +259,6 @@ export const spcEndpoints = {
     failure: "Erro ao remover leitura",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { spc: ["delete"] },
   }),
 } as const satisfies EndpointGroup;

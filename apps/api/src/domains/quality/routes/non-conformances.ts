@@ -13,10 +13,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { notify } from "@calibra-facil/notifications";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import {
   createNonConformanceRecord,
   requireLabNonConformance,
@@ -76,7 +73,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.list,
-  withLabPermission({ non_conformance: ["read"] }),
   async (c, { query: { page, limit, query, status, type, jobId } }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const member = c.get("member");
@@ -169,7 +165,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.summary,
-  withLabPermission({ non_conformance: ["read"] }),
   async (c) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const member = c.get("member");
@@ -241,7 +236,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   entityLabelEndpoints.getNonConformance,
-  withLabPermission({ non_conformance: ["read"] }),
   async (c, { params }) =>
     orgDb(c.get("member").organizationId).transaction(async (o) => {
       const nc = await requireLabNonConformance(o, params.id);
@@ -253,7 +247,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.get,
-  withLabPermission({ non_conformance: ["read"] }),
   async (c, { params }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const member = c.get("member");
@@ -342,7 +335,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.create,
-  withLabPermission({ non_conformance: ["create"] }),
   async (c, { body: input }) => {
     const org = c.get("member").organizationId;
 
@@ -389,7 +381,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.setDisposition,
-  withLabPermission({ non_conformance: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -489,7 +480,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.resolve,
-  withLabPermission({ non_conformance: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -574,7 +564,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.escalateToCapa,
-  withLabPermission({ non_conformance: ["escalate"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -686,7 +675,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.auditLog,
-  withLabPermission({ non_conformance: ["read"] }),
   async (c, { params }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const { id } = await requireLabNonConformance(o, params.id);
@@ -710,7 +698,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.getOotNotification,
-  withLabPermission({ non_conformance: ["read"] }),
   async (c, { params }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const { id } = await requireLabNonConformance(o, params.id);
@@ -751,7 +738,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.registerOotAcknowledgement,
-  withLabPermission({ non_conformance: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
 
@@ -844,7 +830,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.getImpactAssessment,
-  withLabPermission({ non_conformance: ["read"] }),
   async (c, { params }) => {
     return orgDb(c.get("member").organizationId).transaction(async (o) => {
       const { id } = await requireLabNonConformance(o, params.id);
@@ -868,7 +853,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.saveImpactAssessment,
-  withLabPermission({ non_conformance: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -957,7 +941,6 @@ mount(
   nonConformancesRouter,
   PREFIX,
   nonConformanceEndpoints.signImpactAssessment,
-  withLabPermission({ non_conformance: ["update"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");

@@ -75,5 +75,6 @@ export const dashboardEndpoints = {
     failure: "Falha ao carregar estatísticas",
     policy: "cloud-only",
     desktopLabel: "Painel",
+    permission: { calibration: ["read"] },
   }),
 } as const satisfies EndpointGroup;

@@ -33,7 +33,6 @@ mount(
   trainingRecordsRouter,
   PREFIX,
   trainingRecordEndpoints.list,
-  withLabPermission({ competence: ["read"] }),
   async (c, { query: { page, limit, userId, competenceId, status, type } }) => {
     const memberData = c.get("member");
     const offset = (page - 1) * limit;
@@ -161,7 +160,6 @@ mount(
   trainingRecordsRouter,
   PREFIX,
   trainingRecordEndpoints.create,
-  withLabPermission({ competence: ["create"] }),
   async (c, { body: input }) => {
     const memberData = c.get("member");
     const session = c.get("session");

@@ -72,6 +72,7 @@ export const materialEndpoints = {
     failure: "Falha ao carregar materiais",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -81,6 +82,7 @@ export const materialEndpoints = {
     failure: "Falha ao carregar material",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -91,6 +93,7 @@ export const materialEndpoints = {
     failure: "Erro ao criar material",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["create"] },
   }),
   update: endpoint({
     method: "put",
@@ -101,6 +104,7 @@ export const materialEndpoints = {
     failure: "Erro ao atualizar material",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["update"] },
   }),
   deactivate: endpoint({
     method: "delete",
@@ -110,6 +114,7 @@ export const materialEndpoints = {
     failure: "Erro ao desativar material",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["delete"] },
   }),
   adjustStock: endpoint({
     method: "post",
@@ -120,5 +125,6 @@ export const materialEndpoints = {
     failure: "Erro ao ajustar estoque do material",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { service: ["update"] },
   }),
 } as const satisfies EndpointGroup;

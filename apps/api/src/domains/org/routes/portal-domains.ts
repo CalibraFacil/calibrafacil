@@ -19,7 +19,6 @@ import {
   requireLabProtected,
   requireOrgType,
   requireRole,
-  withLabPermission,
 } from "../../../middleware/permission";
 import { eq } from "drizzle-orm";
 import { toRecord } from "@calibra-facil/shared/record";
@@ -203,10 +202,7 @@ mount(
   portalDomainsRouter,
   PREFIX,
   portalDomainEndpoints.create,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c, { body }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -328,10 +324,7 @@ mount(
   portalDomainsRouter,
   PREFIX,
   portalDomainEndpoints.verify,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -409,10 +402,7 @@ mount(
   portalDomainsRouter,
   PREFIX,
   portalDomainEndpoints.activate,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -474,10 +464,7 @@ mount(
   portalDomainsRouter,
   PREFIX,
   portalDomainEndpoints.delete,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const session = c.get("session");

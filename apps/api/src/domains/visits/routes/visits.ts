@@ -17,10 +17,7 @@ import {
   user,
   visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { buildUnitScopeCondition } from "../../../lib/units";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
@@ -115,219 +112,206 @@ export const visitsRouter = createRouter<{ Variables: AuthVariables }>();
 // ===========================================================================
 // GET / — list visits (status / technician / date filters; `mine` for técnico)
 // ===========================================================================
-mount(
-  visitsRouter,
-  PREFIX,
-  visitEndpoints.list,
-  withLabPermission({ request: ["read"] }),
-  async (c, { query }) => {
-    const member = c.get("member");
-    const session = c.get("session");
-    const { page, limit, status, technicianId, mine, rescheduleRequested } =
-      query;
-    const offset = (page - 1) * limit;
+mount(visitsRouter, PREFIX, visitEndpoints.list, async (c, { query }) => {
+  const member = c.get("member");
+  const session = c.get("session");
+  const { page, limit, status, technicianId, mine, rescheduleRequested } =
+    query;
+  const offset = (page - 1) * limit;
 
-    return await orgDb(member.organizationId).transaction(async (o) => {
-      const conditions = [
-        eq(calibrationVisit.organizationId, member.organizationId),
-        buildUnitScopeCondition(calibrationVisit.unitId, member),
-      ];
-      if (status) conditions.push(eq(calibrationVisit.status, status));
-      if (mine) {
-        conditions.push(eq(calibrationVisit.technicianId, session.user.id));
-      } else if (technicianId) {
-        conditions.push(eq(calibrationVisit.technicianId, technicianId));
-      }
-      if (rescheduleRequested) {
-        conditions.push(
-          exists(
-            o
-              .select({ one: sql`1` })
-              .from(visitRescheduleRequest)
-              .where(
-                and(
-                  eq(visitRescheduleRequest.visitId, calibrationVisit.id),
-                  eq(visitRescheduleRequest.status, "PENDING"),
-                ),
+  return await orgDb(member.organizationId).transaction(async (o) => {
+    const conditions = [
+      eq(calibrationVisit.organizationId, member.organizationId),
+      buildUnitScopeCondition(calibrationVisit.unitId, member),
+    ];
+    if (status) conditions.push(eq(calibrationVisit.status, status));
+    if (mine) {
+      conditions.push(eq(calibrationVisit.technicianId, session.user.id));
+    } else if (technicianId) {
+      conditions.push(eq(calibrationVisit.technicianId, technicianId));
+    }
+    if (rescheduleRequested) {
+      conditions.push(
+        exists(
+          o
+            .select({ one: sql`1` })
+            .from(visitRescheduleRequest)
+            .where(
+              and(
+                eq(visitRescheduleRequest.visitId, calibrationVisit.id),
+                eq(visitRescheduleRequest.status, "PENDING"),
               ),
-          ),
-        );
-      }
-      const where = and(...conditions);
-
-      const [countResult] = await o
-        .select({ total: count() })
-        .from(calibrationVisit)
-        .where(where);
-
-      const visits = await o
-        .select({
-          id: calibrationVisit.id,
-          status: calibrationVisit.status,
-          scheduledAt: calibrationVisit.scheduledAt,
-          address: calibrationVisit.address,
-          customerId: calibrationVisit.customerId,
-          customerName: customer.name,
-          technicianId: calibrationVisit.technicianId,
-          technicianName: technicianUser.name,
-          sourceRequestId: calibrationVisit.sourceRequestId,
-          createdAt: calibrationVisit.createdAt,
-          customerConfirmedAt: calibrationVisit.customerConfirmedAt,
-        })
-        .from(calibrationVisit)
-        .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
-        .leftJoin(
-          technicianUser,
-          eq(calibrationVisit.technicianId, technicianUser.id),
-        )
-        .where(where)
-        .orderBy(desc(calibrationVisit.scheduledAt), desc(calibrationVisit.id))
-        .limit(limit)
-        .offset(offset);
-
-      // Asset count per visit (one job per asset).
-      const visitIds = visits.map((visit) => visit.id);
-      const jobCounts =
-        visitIds.length > 0
-          ? await o
-              .select({
-                visitId: calibrationJob.visitId,
-                total: count(),
-              })
-              .from(calibrationJob)
-              .where(inArray(calibrationJob.visitId, visitIds))
-              .groupBy(calibrationJob.visitId)
-          : [];
-      const assetCountByVisit = new Map(
-        jobCounts.map((row) => [row.visitId, row.total] as const),
+            ),
+        ),
       );
+    }
+    const where = and(...conditions);
 
-      // Badge visits with a pending customer reschedule request.
-      const pendingReschedules =
-        visitIds.length > 0
-          ? await o
-              .select({ visitId: visitRescheduleRequest.visitId })
-              .from(visitRescheduleRequest)
-              .where(
-                and(
-                  inArray(visitRescheduleRequest.visitId, visitIds),
-                  eq(visitRescheduleRequest.status, "PENDING"),
-                ),
-              )
-          : [];
-      const pendingRescheduleVisitIds = new Set(
-        pendingReschedules.map((row) => row.visitId),
-      );
+    const [countResult] = await o
+      .select({ total: count() })
+      .from(calibrationVisit)
+      .where(where);
 
-      return {
-        data: visits.map((visit) => ({
-          ...visit,
-          assetCount: assetCountByVisit.get(visit.id) ?? 0,
-          rescheduleRequested: pendingRescheduleVisitIds.has(visit.id),
-        })),
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
-      };
-    });
-  },
-);
+    const visits = await o
+      .select({
+        id: calibrationVisit.id,
+        status: calibrationVisit.status,
+        scheduledAt: calibrationVisit.scheduledAt,
+        address: calibrationVisit.address,
+        customerId: calibrationVisit.customerId,
+        customerName: customer.name,
+        technicianId: calibrationVisit.technicianId,
+        technicianName: technicianUser.name,
+        sourceRequestId: calibrationVisit.sourceRequestId,
+        createdAt: calibrationVisit.createdAt,
+        customerConfirmedAt: calibrationVisit.customerConfirmedAt,
+      })
+      .from(calibrationVisit)
+      .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
+      .leftJoin(
+        technicianUser,
+        eq(calibrationVisit.technicianId, technicianUser.id),
+      )
+      .where(where)
+      .orderBy(desc(calibrationVisit.scheduledAt), desc(calibrationVisit.id))
+      .limit(limit)
+      .offset(offset);
 
-mount(
-  visitsRouter,
-  PREFIX,
-  visitEndpoints.get,
-  withLabPermission({ request: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const id = params.id;
+    // Asset count per visit (one job per asset).
+    const visitIds = visits.map((visit) => visit.id);
+    const jobCounts =
+      visitIds.length > 0
+        ? await o
+            .select({
+              visitId: calibrationJob.visitId,
+              total: count(),
+            })
+            .from(calibrationJob)
+            .where(inArray(calibrationJob.visitId, visitIds))
+            .groupBy(calibrationJob.visitId)
+        : [];
+    const assetCountByVisit = new Map(
+      jobCounts.map((row) => [row.visitId, row.total] as const),
+    );
 
-    return await orgDb(member.organizationId).transaction(async (o) => {
-      const [visit] = await o
-        .select({
-          id: calibrationVisit.id,
-          status: calibrationVisit.status,
-          scheduledAt: calibrationVisit.scheduledAt,
-          scheduledEndAt: calibrationVisit.scheduledEndAt,
-          address: calibrationVisit.address,
-          notes: calibrationVisit.notes,
-          customerId: calibrationVisit.customerId,
-          customerName: customer.name,
-          technicianId: calibrationVisit.technicianId,
-          technicianName: technicianUser.name,
-          sourceRequestId: calibrationVisit.sourceRequestId,
-          createdAt: calibrationVisit.createdAt,
-          confirmedAt: calibrationVisit.confirmedAt,
-          cancelledAt: calibrationVisit.cancelledAt,
-          cancelReason: calibrationVisit.cancelReason,
-          customerConfirmedAt: calibrationVisit.customerConfirmedAt,
-        })
-        .from(calibrationVisit)
-        .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
-        .leftJoin(
-          technicianUser,
-          eq(calibrationVisit.technicianId, technicianUser.id),
-        )
-        .where(
-          and(
-            eq(calibrationVisit.id, id),
-            eq(calibrationVisit.organizationId, member.organizationId),
-            buildUnitScopeCondition(calibrationVisit.unitId, member),
-          ),
-        )
-        .limit(1);
+    // Badge visits with a pending customer reschedule request.
+    const pendingReschedules =
+      visitIds.length > 0
+        ? await o
+            .select({ visitId: visitRescheduleRequest.visitId })
+            .from(visitRescheduleRequest)
+            .where(
+              and(
+                inArray(visitRescheduleRequest.visitId, visitIds),
+                eq(visitRescheduleRequest.status, "PENDING"),
+              ),
+            )
+        : [];
+    const pendingRescheduleVisitIds = new Set(
+      pendingReschedules.map((row) => row.visitId),
+    );
 
-      if (!visit) throw notFound("visit_not_found", "Visita nao encontrada");
-
-      const jobs = await o
-        .select({
-          jobId: calibrationJob.id,
-          jobCode: calibrationJob.jobId,
-          status: calibrationJob.status,
-          assetName: asset.name,
-          assetTag: asset.tag,
-        })
-        .from(calibrationJob)
-        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .where(eq(calibrationJob.visitId, id))
-        .orderBy(calibrationJob.id);
-
-      // Pending customer reschedule request (feeds the detail banner).
-      const [pendingReschedule] = await o
-        .select({
-          id: visitRescheduleRequest.id,
-          reason: visitRescheduleRequest.reason,
-          preferredWindows: visitRescheduleRequest.preferredWindows,
-          createdAt: visitRescheduleRequest.createdAt,
-          requestedByName: user.name,
-        })
-        .from(visitRescheduleRequest)
-        .leftJoin(user, eq(visitRescheduleRequest.requestedBy, user.id))
-        .where(
-          and(
-            eq(visitRescheduleRequest.visitId, id),
-            eq(visitRescheduleRequest.status, "PENDING"),
-          ),
-        )
-        .limit(1);
-
-      return {
+    return {
+      data: visits.map((visit) => ({
         ...visit,
-        jobs,
-        pendingRescheduleRequest: pendingReschedule ?? null,
-      };
-    });
-  },
-);
+        assetCount: assetCountByVisit.get(visit.id) ?? 0,
+        rescheduleRequested: pendingRescheduleVisitIds.has(visit.id),
+      })),
+      pagination: {
+        page,
+        limit,
+        total: countResult?.total ?? 0,
+        totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+      },
+    };
+  });
+});
+
+mount(visitsRouter, PREFIX, visitEndpoints.get, async (c, { params }) => {
+  const member = c.get("member");
+  const id = params.id;
+
+  return await orgDb(member.organizationId).transaction(async (o) => {
+    const [visit] = await o
+      .select({
+        id: calibrationVisit.id,
+        status: calibrationVisit.status,
+        scheduledAt: calibrationVisit.scheduledAt,
+        scheduledEndAt: calibrationVisit.scheduledEndAt,
+        address: calibrationVisit.address,
+        notes: calibrationVisit.notes,
+        customerId: calibrationVisit.customerId,
+        customerName: customer.name,
+        technicianId: calibrationVisit.technicianId,
+        technicianName: technicianUser.name,
+        sourceRequestId: calibrationVisit.sourceRequestId,
+        createdAt: calibrationVisit.createdAt,
+        confirmedAt: calibrationVisit.confirmedAt,
+        cancelledAt: calibrationVisit.cancelledAt,
+        cancelReason: calibrationVisit.cancelReason,
+        customerConfirmedAt: calibrationVisit.customerConfirmedAt,
+      })
+      .from(calibrationVisit)
+      .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
+      .leftJoin(
+        technicianUser,
+        eq(calibrationVisit.technicianId, technicianUser.id),
+      )
+      .where(
+        and(
+          eq(calibrationVisit.id, id),
+          eq(calibrationVisit.organizationId, member.organizationId),
+          buildUnitScopeCondition(calibrationVisit.unitId, member),
+        ),
+      )
+      .limit(1);
+
+    if (!visit) throw notFound("visit_not_found", "Visita nao encontrada");
+
+    const jobs = await o
+      .select({
+        jobId: calibrationJob.id,
+        jobCode: calibrationJob.jobId,
+        status: calibrationJob.status,
+        assetName: asset.name,
+        assetTag: asset.tag,
+      })
+      .from(calibrationJob)
+      .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+      .where(eq(calibrationJob.visitId, id))
+      .orderBy(calibrationJob.id);
+
+    // Pending customer reschedule request (feeds the detail banner).
+    const [pendingReschedule] = await o
+      .select({
+        id: visitRescheduleRequest.id,
+        reason: visitRescheduleRequest.reason,
+        preferredWindows: visitRescheduleRequest.preferredWindows,
+        createdAt: visitRescheduleRequest.createdAt,
+        requestedByName: user.name,
+      })
+      .from(visitRescheduleRequest)
+      .leftJoin(user, eq(visitRescheduleRequest.requestedBy, user.id))
+      .where(
+        and(
+          eq(visitRescheduleRequest.visitId, id),
+          eq(visitRescheduleRequest.status, "PENDING"),
+        ),
+      )
+      .limit(1);
+
+    return {
+      ...visit,
+      jobs,
+      pendingRescheduleRequest: pendingReschedule ?? null,
+    };
+  });
+});
 
 mount(
   visitsRouter,
   PREFIX,
   visitEndpoints.assign,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -390,7 +374,6 @@ mount(
   visitsRouter,
   PREFIX,
   visitEndpoints.confirm,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -481,7 +464,6 @@ mount(
   visitsRouter,
   PREFIX,
   visitEndpoints.reschedule,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -543,7 +525,6 @@ mount(
   visitsRouter,
   PREFIX,
   visitEndpoints.cancel,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -593,51 +574,45 @@ mount(
   },
 );
 
-mount(
-  visitsRouter,
-  PREFIX,
-  visitEndpoints.complete,
-  withLabPermission({ request: ["update"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const id = params.id;
+mount(visitsRouter, PREFIX, visitEndpoints.complete, async (c, { params }) => {
+  const member = c.get("member");
+  const id = params.id;
 
-    const updated = await withOrg(
-      member.organizationId,
-      requestActor(c),
-      async (ctx) => {
-        const visit = await requireScopedVisit(id, member, ctx.o);
-        assertVisitOpen(visit.status);
-        if (!VISIT_MACHINE.canTransition(visit.status, "complete")) {
-          throw conflict(
-            "status_transition_conflict",
-            "Confirme a visita antes de concluí-la",
-          );
-        }
+  const updated = await withOrg(
+    member.organizationId,
+    requestActor(c),
+    async (ctx) => {
+      const visit = await requireScopedVisit(id, member, ctx.o);
+      assertVisitOpen(visit.status);
+      if (!VISIT_MACHINE.canTransition(visit.status, "complete")) {
+        throw conflict(
+          "status_transition_conflict",
+          "Confirme a visita antes de concluí-la",
+        );
+      }
 
-        const [updated] = await ctx.o
-          .update(calibrationVisit)
-          .set({
-            status: VISIT_MACHINE.requireTargetOf(visit.status, "complete"),
-          })
-          .where(
-            and(
-              eq(calibrationVisit.id, id),
-              eq(calibrationVisit.status, visit.status),
-            ),
-          )
-          .returning();
-        if (!updated) {
-          throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
-        }
-        await supersedePendingRescheduleRequests(ctx.o, id, ctx.actor.userId);
-        return updated;
-      },
-    );
+      const [updated] = await ctx.o
+        .update(calibrationVisit)
+        .set({
+          status: VISIT_MACHINE.requireTargetOf(visit.status, "complete"),
+        })
+        .where(
+          and(
+            eq(calibrationVisit.id, id),
+            eq(calibrationVisit.status, visit.status),
+          ),
+        )
+        .returning();
+      if (!updated) {
+        throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
+      }
+      await supersedePendingRescheduleRequests(ctx.o, id, ctx.actor.userId);
+      return updated;
+    },
+  );
 
-    return updated;
-  },
-);
+  return updated;
+});
 
 /**
  * Visit-jobs sub-router — mounted separately to avoid Hono type chain length
@@ -654,7 +629,6 @@ mount(
   visitJobsRouter,
   PREFIX,
   visitEndpoints.addJob,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -721,7 +695,6 @@ mount(
   visitJobsRouter,
   PREFIX,
   visitEndpoints.removeJob,
-  withLabPermission({ request: ["update"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { id, jobId } = params;
@@ -848,7 +821,6 @@ mount(
   visitRescheduleRequestsRouter,
   PREFIX,
   visitEndpoints.acceptRescheduleRequest,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const { id, requestId } = params;
@@ -957,7 +929,6 @@ mount(
   visitRescheduleRequestsRouter,
   PREFIX,
   visitEndpoints.declineRescheduleRequest,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const { id, requestId } = params;

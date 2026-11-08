@@ -15,10 +15,7 @@ import {
   paymentReceipt,
   receivableInstallment,
 } from "@calibra-facil/db/schema";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { orgDb } from "../../../lib/org-db";
 import { buildUnitScopeCondition } from "../../../lib/units";
 
@@ -38,7 +35,6 @@ mount(
   financeOverviewRouter,
   PREFIX,
   financeEndpoints.getOverview,
-  withLabPermission({ financial: ["read"] }),
   async (c) => {
     const member = c.get("member");
     const { documentSummary, recentDocuments, openInstallments, receipts } =

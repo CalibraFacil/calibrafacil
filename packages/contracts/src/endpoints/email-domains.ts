@@ -84,6 +84,7 @@ export const emailDomainEndpoints = {
     failure: "Falha ao salvar domínio de e-mail",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   verify: endpoint({
     method: "post",
@@ -92,6 +93,7 @@ export const emailDomainEndpoints = {
     failure: "Falha ao verificar domínio de e-mail",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   activate: endpoint({
     method: "post",
@@ -100,6 +102,7 @@ export const emailDomainEndpoints = {
     failure: "Falha ao ativar domínio de e-mail",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   delete: endpoint({
     method: "delete",
@@ -108,5 +111,6 @@ export const emailDomainEndpoints = {
     failure: "Falha ao remover domínio de e-mail",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
 } as const satisfies EndpointGroup;

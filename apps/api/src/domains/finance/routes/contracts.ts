@@ -232,7 +232,6 @@ mount(
   financeContractsRouter,
   PREFIX,
   financeEndpoints.listContracts,
-  withLabPermission({ financial: ["read"] }),
   async (c, { query }) => {
     const member = c.get("member");
     const conditions = [
@@ -285,7 +284,6 @@ mount(
   financeContractsRouter,
   PREFIX,
   financeEndpoints.createContract,
-  withLabPermission({ financial: ["contract_create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -361,7 +359,6 @@ mount(
   financeContractsRouter,
   PREFIX,
   financeEndpoints.getContract,
-  withLabPermission({ financial: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { id } = params;
@@ -499,7 +496,6 @@ mount(
   financeContractsRouter,
   PREFIX,
   financeEndpoints.activateContract,
-  withLabPermission({ financial: ["contract_update"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { id } = params;
@@ -559,7 +555,6 @@ mount(
   financeContractsRouter,
   PREFIX,
   financeEndpoints.cancelContract,
-  withLabPermission({ financial: ["contract_update"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { id } = params;

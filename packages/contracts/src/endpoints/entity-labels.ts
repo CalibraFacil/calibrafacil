@@ -24,6 +24,7 @@ export const entityLabelEndpoints = {
     failure: "Falha ao carregar o rótulo da não conformidade",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["read"] },
   }),
   getCapa: endpoint({
     method: "get",
@@ -33,6 +34,7 @@ export const entityLabelEndpoints = {
     failure: "Falha ao carregar o rótulo da ação corretiva",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { capa: ["read"] },
   }),
   getCompetence: endpoint({
     method: "get",
@@ -42,5 +44,6 @@ export const entityLabelEndpoints = {
     failure: "Falha ao carregar o rótulo da competência",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["read"] },
   }),
 } as const satisfies EndpointGroup;

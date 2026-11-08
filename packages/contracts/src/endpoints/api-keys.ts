@@ -89,6 +89,7 @@ export const apiKeyEndpoints = {
     failure: "Falha ao criar API key",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   rotate: endpoint({
     method: "post",
@@ -97,6 +98,7 @@ export const apiKeyEndpoints = {
     failure: "Falha ao rotacionar API key",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   revoke: endpoint({
     method: "post",
@@ -105,5 +107,6 @@ export const apiKeyEndpoints = {
     failure: "Falha ao revogar API key",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
 } as const satisfies EndpointGroup;

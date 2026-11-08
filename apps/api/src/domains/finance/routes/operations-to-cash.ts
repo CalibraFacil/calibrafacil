@@ -2,10 +2,7 @@ import { createRouter } from "../../../server/router";
 import { financeEndpoints } from "@calibra-facil/contracts";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import {
   OPERATIONS_TO_CASH_STAGES,
   type OperationsToCashStage,
@@ -28,7 +25,6 @@ mount(
   financeOperationsToCashRouter,
   PREFIX,
   financeEndpoints.getOperationsToCash,
-  withLabPermission({ financial: ["read"] }),
   async (c, { query }) => {
     const member = c.get("member");
     const stageFilter = parseStage(query.stage);

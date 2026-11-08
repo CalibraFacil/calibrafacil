@@ -14,10 +14,7 @@ import {
   isPortalManageableMemberRole,
 } from "@calibra-facil/auth/access";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import {
   cancelPortalInvitationAsService,
   createClientOrganizationAsServiceOwner,
@@ -61,7 +58,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.create,
-  withLabPermission({ client: ["create"] }),
   async (c, { body: input }) => {
     const memberData = c.get("member");
 
@@ -121,39 +117,32 @@ mount(
   },
 );
 
-mount(
-  customerGroupsRouter,
-  PREFIX,
-  customerGroupEndpoints.list,
-  withLabPermission({ client: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
+mount(customerGroupsRouter, PREFIX, customerGroupEndpoints.list, async (c) => {
+  const memberData = c.get("member");
 
-    const groups = await orgDb(memberData.organizationId).transaction((o) =>
-      o
-        .select({
-          id: customerGroup.id,
-          name: customerGroup.name,
-          authOrganizationId: customerGroup.authOrganizationId,
-          createdAt: customerGroup.createdAt,
-          // Correlated to the scoped group row; the lab's tenant policy
-          // also applies to the customer rows it counts.
-          branchCount: sql<number>`cast((select count(*) from ${customer} where ${customer.groupId} = ${customerGroup.id}) as int)`,
-        })
-        .from(customerGroup)
-        .where(eq(customerGroup.labOrganizationId, memberData.organizationId))
-        .orderBy(desc(customerGroup.createdAt)),
-    );
+  const groups = await orgDb(memberData.organizationId).transaction((o) =>
+    o
+      .select({
+        id: customerGroup.id,
+        name: customerGroup.name,
+        authOrganizationId: customerGroup.authOrganizationId,
+        createdAt: customerGroup.createdAt,
+        // Correlated to the scoped group row; the lab's tenant policy
+        // also applies to the customer rows it counts.
+        branchCount: sql<number>`cast((select count(*) from ${customer} where ${customer.groupId} = ${customerGroup.id}) as int)`,
+      })
+      .from(customerGroup)
+      .where(eq(customerGroup.labOrganizationId, memberData.organizationId))
+      .orderBy(desc(customerGroup.createdAt)),
+  );
 
-    return { data: groups };
-  },
-);
+  return { data: groups };
+});
 
 mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.get,
-  withLabPermission({ client: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const id = requireGroupRouteId(params.id);
@@ -224,7 +213,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.addBranch,
-  withLabPermission({ client: ["update"] }),
   async (c, { params, body: { customerId } }) => {
     const memberData = c.get("member");
     const id = requireGroupRouteId(params.id);
@@ -280,7 +268,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.removeBranch,
-  withLabPermission({ client: ["update"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const id = requireGroupRouteId(params.id);
@@ -321,7 +308,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.listMembers,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const group = await requireLabGroup(params.id, memberData.organizationId);
@@ -358,7 +344,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.listInvitations,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const group = await requireLabGroup(params.id, memberData.organizationId);
@@ -390,7 +375,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.createInvitation,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params, body: { email, role } }) => {
     const memberData = c.get("member");
     const portalRole = role || PORTAL_MANAGEABLE_MEMBER_ROLES[0];
@@ -420,7 +404,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.resendInvitation,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const group = await requireLabGroup(params.id, memberData.organizationId);
@@ -471,7 +454,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.cancelInvitation,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const group = await requireLabGroup(params.id, memberData.organizationId);
@@ -514,7 +496,6 @@ mount(
   customerGroupsRouter,
   PREFIX,
   customerGroupEndpoints.removeMember,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const group = await requireLabGroup(params.id, memberData.organizationId);

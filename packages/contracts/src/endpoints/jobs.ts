@@ -53,6 +53,7 @@ export const jobEndpoints = {
     response: jobsListResponseSchema,
     failure: "Falha ao carregar calibrações",
     policy: "local-first-read-through-sync",
+    permission: { calibration: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -63,6 +64,7 @@ export const jobEndpoints = {
     failure: "Erro ao criar ordem",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { calibration: ["create"] },
   }),
   // Static segment: registered before the `/:id` routes.
   listTechnicians: endpoint({
@@ -72,6 +74,7 @@ export const jobEndpoints = {
     failure: "Falha ao carregar técnicos",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { calibration: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -79,6 +82,7 @@ export const jobEndpoints = {
     response: jobDetailSchema,
     failure: "Falha ao carregar job",
     policy: "local-first-read-through-sync",
+    permission: { calibration: ["read"] },
   }),
   approve: endpoint({
     method: "post",
@@ -88,6 +92,7 @@ export const jobEndpoints = {
     failure: "Erro ao aprovar",
     policy: "cloud-only",
     desktopLabel: "Aprovação de job",
+    permission: { calibration: ["approve"] },
   }),
   reject: endpoint({
     method: "post",
@@ -97,6 +102,7 @@ export const jobEndpoints = {
     failure: "Erro ao rejeitar",
     policy: "cloud-only",
     desktopLabel: "Rejeição de job",
+    permission: { calibration: ["reject"] },
   }),
   retryRender: endpoint({
     method: "post",
@@ -105,6 +111,7 @@ export const jobEndpoints = {
     failure: "Erro ao reemitir o certificado",
     policy: "cloud-only",
     desktopLabel: "Reemissão de certificado",
+    permission: { calibration: ["approve"] },
   }),
   cancel: endpoint({
     method: "delete",
@@ -114,6 +121,7 @@ export const jobEndpoints = {
     failure: "Erro ao cancelar",
     policy: "cloud-only",
     desktopLabel: "Cancelamento de job",
+    permission: { calibration: ["delete"] },
   }),
   assign: endpoint({
     method: "post",
@@ -123,6 +131,7 @@ export const jobEndpoints = {
     failure: "Erro ao atribuir",
     policy: "cloud-only",
     desktopLabel: "Atribuição de técnico",
+    permission: { calibration: ["assign_technician"] },
   }),
   // The cloud answers its whole job row; the local server the common core
   // (`jobExecutionResponseSchema`), which both satisfy.
@@ -149,6 +158,7 @@ export const jobEndpoints = {
     failure: "Falha ao gerar link",
     policy: "cloud-only",
     desktopLabel: "Download de certificado publicado",
+    permission: { calibration: ["read"] },
   }),
   generateLabel: endpoint({
     method: "post",
@@ -157,6 +167,7 @@ export const jobEndpoints = {
     failure: "Falha ao gerar etiqueta",
     policy: "cloud-only",
     desktopLabel: "Geração de etiqueta publicada",
+    permission: { calibration: ["read"] },
   }),
   getLabelDownloadUrl: endpoint({
     method: "get",
@@ -165,6 +176,7 @@ export const jobEndpoints = {
     failure: "Falha ao gerar link",
     policy: "cloud-only",
     desktopLabel: "Download de etiqueta publicada",
+    permission: { calibration: ["read"] },
   }),
   amend: endpoint({
     method: "post",
@@ -175,6 +187,7 @@ export const jobEndpoints = {
     failure: "Falha ao criar retificação",
     policy: "cloud-only",
     desktopLabel: "Retificação de certificado",
+    permission: { calibration: ["approve"] },
   }),
   withdrawCertificate: endpoint({
     method: "post",
@@ -184,6 +197,7 @@ export const jobEndpoints = {
     failure: "Falha ao retirar o certificado",
     policy: "cloud-only",
     desktopLabel: "Retirada de certificado",
+    permission: { calibration: ["approve"] },
   }),
   flagOutOfTolerance: endpoint({
     method: "post",
@@ -194,5 +208,6 @@ export const jobEndpoints = {
     failure: "Erro ao registrar fora de tolerância",
     policy: "cloud-only",
     desktopLabel: "Sinalização de fora de tolerância",
+    permission: { non_conformance: ["create"] },
   }),
 } as const satisfies EndpointGroup;

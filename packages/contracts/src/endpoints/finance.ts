@@ -838,6 +838,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar visão geral financeira",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   listDocuments: endpoint({
     method: "get",
@@ -847,6 +848,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar documentos",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   getDocument: endpoint({
     method: "get",
@@ -855,6 +857,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar documento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   updateDocument: endpoint({
     method: "put",
@@ -865,6 +868,7 @@ export const financeEndpoints = {
     failure: "Erro ao atualizar documento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["document_create"] },
   }),
   issueDocument: endpoint({
     method: "post",
@@ -874,6 +878,7 @@ export const financeEndpoints = {
     failure: "Erro ao emitir documento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["document_issue"] },
   }),
   voidDocument: endpoint({
     method: "post",
@@ -884,6 +889,7 @@ export const financeEndpoints = {
     failure: "Erro ao anular documento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["document_void"] },
   }),
   listEligibleJobs: endpoint({
     method: "get",
@@ -893,6 +899,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar OS elegíveis",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["document_create"] },
   }),
   createDocument: endpoint({
     method: "post",
@@ -903,6 +910,7 @@ export const financeEndpoints = {
     failure: "Erro ao criar documento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["document_create"] },
   }),
   listContracts: endpoint({
     method: "get",
@@ -912,6 +920,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar contratos",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   getContract: endpoint({
     method: "get",
@@ -921,6 +930,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar contrato",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   createContract: endpoint({
     method: "post",
@@ -931,6 +941,7 @@ export const financeEndpoints = {
     failure: "Erro ao criar contrato",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["contract_create"] },
   }),
   activateContract: endpoint({
     method: "post",
@@ -940,6 +951,7 @@ export const financeEndpoints = {
     failure: "Erro ao ativar contrato",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["contract_update"] },
   }),
   cancelContract: endpoint({
     method: "post",
@@ -949,6 +961,7 @@ export const financeEndpoints = {
     failure: "Erro ao cancelar contrato",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["contract_update"] },
   }),
   listReceipts: endpoint({
     method: "get",
@@ -957,6 +970,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar recebimentos",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   receiveInstallment: endpoint({
     method: "post",
@@ -976,6 +990,7 @@ export const financeEndpoints = {
     failure: "Erro ao registrar recebimento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["receipt_record"] },
   }),
   listErpExports: endpoint({
     method: "get",
@@ -984,6 +999,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar fila ERP",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   exportErpDocument: endpoint({
     method: "post",
@@ -993,6 +1009,7 @@ export const financeEndpoints = {
     failure: "Erro ao exportar documento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["export"] },
   }),
   listBillingReadiness: endpoint({
     method: "get",
@@ -1002,6 +1019,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar fila de faturamento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   sendBillingReadiness: endpoint({
     method: "post",
@@ -1011,6 +1029,7 @@ export const financeEndpoints = {
     failure: "Erro ao enviar para o financeiro",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["export"] },
   }),
   getServiceOrderStatus: endpoint({
     method: "get",
@@ -1020,6 +1039,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar status financeiro da OS",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   getCustomerTimeline: endpoint({
     method: "get",
@@ -1029,6 +1049,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar linha do tempo financeira",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   getCertificateRelease: endpoint({
     method: "get",
@@ -1038,6 +1059,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar status de liberação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   releaseCertificateByException: endpoint({
     method: "post",
@@ -1048,6 +1070,7 @@ export const financeEndpoints = {
     failure: "Erro ao liberar certificado com exceção",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["export"] },
   }),
   listCertificateReleasePolicies: endpoint({
     method: "get",
@@ -1056,6 +1079,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar políticas de liberação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   createCertificateReleasePolicy: endpoint({
     method: "post",
@@ -1065,6 +1089,7 @@ export const financeEndpoints = {
     failure: "Erro ao criar política de liberação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["contract_create"] },
   }),
   updateCertificateReleasePolicy: endpoint({
     method: "put",
@@ -1075,6 +1100,7 @@ export const financeEndpoints = {
     failure: "Erro ao atualizar política de liberação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["contract_update"] },
   }),
   listAutomaticSendRules: endpoint({
     method: "get",
@@ -1083,6 +1109,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar regras de envio automático",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   createAutomaticSendRule: endpoint({
     method: "post",
@@ -1092,6 +1119,7 @@ export const financeEndpoints = {
     failure: "Erro ao criar regra de envio automático",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["contract_create"] },
   }),
   updateAutomaticSendRule: endpoint({
     method: "put",
@@ -1102,6 +1130,7 @@ export const financeEndpoints = {
     failure: "Erro ao atualizar regra de envio automático",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["contract_update"] },
   }),
   getOperationsToCash: endpoint({
     method: "get",
@@ -1111,6 +1140,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar painel operação-ao-caixa",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   getRevenueLeakage: endpoint({
     method: "get",
@@ -1119,6 +1149,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar alertas de receita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   getCashForecast: endpoint({
     method: "get",
@@ -1127,6 +1158,7 @@ export const financeEndpoints = {
     failure: "Erro ao carregar previsão de caixa",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
   getMarginDashboards: endpoint({
     method: "get",
@@ -1135,5 +1167,6 @@ export const financeEndpoints = {
     failure: "Erro ao carregar painel de margens",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { financial: ["read"] },
   }),
 } as const satisfies EndpointGroup;

@@ -186,6 +186,7 @@ export const customerEndpoints = {
     response: customersListResponseSchema,
     failure: "Falha ao carregar clientes",
     policy: "local-first-read-through-sync",
+    permission: { client: ["read"] },
   }),
   // Reaches the external Receita Federal mirrors, which the offline local
   // server cannot proxy: the cadastro still works with manual entry.
@@ -196,6 +197,7 @@ export const customerEndpoints = {
     failure: "Falha ao consultar o CNPJ",
     policy: "cloud-only",
     desktopLabel: "Consulta de CNPJ",
+    permission: { client: ["read"] },
   }),
   ootEvents: endpoint({
     method: "get",
@@ -204,6 +206,7 @@ export const customerEndpoints = {
     failure: "Falha ao carregar eventos fora de tolerância",
     policy: "cloud-only",
     desktopLabel: "Eventos fora de tolerância",
+    permission: { client: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -214,6 +217,7 @@ export const customerEndpoints = {
     failure: "Erro ao criar cliente",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["create"] },
   }),
   get: endpoint({
     method: "get",
@@ -221,6 +225,7 @@ export const customerEndpoints = {
     response: customerDetailSchema,
     failure: "Falha ao carregar cliente",
     policy: "local-first-read-through-sync",
+    permission: { client: ["read"] },
   }),
   update: endpoint({
     method: "put",
@@ -230,6 +235,7 @@ export const customerEndpoints = {
     failure: "Falha ao atualizar cliente",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["update"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -242,6 +248,7 @@ export const customerEndpoints = {
     failure: "Falha ao carregar historico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["manage_portal"] },
   }),
   updateCompliance: endpoint({
     method: "put",
@@ -251,6 +258,7 @@ export const customerEndpoints = {
     failure: "Falha ao atualizar conformidade",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["update"] },
   }),
   listMembers: endpoint({
     method: "get",
@@ -259,6 +267,7 @@ export const customerEndpoints = {
     failure: "Falha ao carregar usuarios",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["manage_portal"] },
   }),
   listInvitations: endpoint({
     method: "get",
@@ -267,6 +276,7 @@ export const customerEndpoints = {
     failure: "Falha ao carregar convites",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["manage_portal"] },
   }),
   createInvitation: endpoint({
     method: "post",
@@ -281,6 +291,7 @@ export const customerEndpoints = {
     failure: "Falha ao enviar convite",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["manage_portal"] },
   }),
   resendInvitation: endpoint({
     method: "post",
@@ -289,6 +300,7 @@ export const customerEndpoints = {
     failure: "Falha ao reenviar convite",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["manage_portal"] },
   }),
   cancelInvitation: endpoint({
     method: "delete",
@@ -297,6 +309,7 @@ export const customerEndpoints = {
     failure: "Falha ao cancelar convite",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["manage_portal"] },
   }),
   removeMember: endpoint({
     method: "delete",
@@ -305,5 +318,6 @@ export const customerEndpoints = {
     failure: "Falha ao remover usuário",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { client: ["manage_portal"] },
   }),
 } as const satisfies EndpointGroup;

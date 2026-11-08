@@ -477,7 +477,6 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.list,
-  withLabPermission({ template: ["read"] }),
   async (
     c,
     { query: { page, limit, status, assetTypeId, query, includeArchived } },
@@ -560,169 +559,151 @@ mount(
   },
 );
 
-mount(
-  methodsRouter,
-  PREFIX,
-  methodEndpoints.compileDraft,
-  withLabPermission({ template: ["read"] }),
-  async (c) => {
-    const body = toRecord(await c.req.json().catch(() => ({})));
-    const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
-    if (!draftResult.ok) {
-      return c.json(
-        {
-          ok: false,
-          diagnostics: draftResult.diagnostics,
-          fingerprint: null,
-          normalizedFormulas: [],
-          compiledMethod: null,
-        },
-        422,
-      );
-    }
-    const result = compileDraftWithEngine(draftResult.draft);
-
-    const response = augmentCompileResponseWithDimensions(
-      methodCompileResponse(result),
-      draftResult.draft,
+mount(methodsRouter, PREFIX, methodEndpoints.compileDraft, async (c) => {
+  const body = toRecord(await c.req.json().catch(() => ({})));
+  const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+  if (!draftResult.ok) {
+    return c.json(
+      {
+        ok: false,
+        diagnostics: draftResult.diagnostics,
+        fingerprint: null,
+        normalizedFormulas: [],
+        compiledMethod: null,
+      },
+      422,
     );
-    return response.ok ? response : c.json(response, 422);
-  },
-);
+  }
+  const result = compileDraftWithEngine(draftResult.draft);
 
-mount(
-  methodsRouter,
-  PREFIX,
-  methodEndpoints.previewDraft,
-  withLabPermission({ template: ["read"] }),
-  async (c) => {
-    const body = toRecord(await c.req.json().catch(() => ({})));
-    const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
-    if (!draftResult.ok) {
-      return c.json(
-        {
-          ok: false,
-          diagnostics: draftResult.diagnostics,
-          fingerprint: null,
-          normalizedFormulas: [],
-          compiledMethod: null,
-        },
-        422,
-      );
+  const response = augmentCompileResponseWithDimensions(
+    methodCompileResponse(result),
+    draftResult.draft,
+  );
+  return response.ok ? response : c.json(response, 422);
+});
+
+mount(methodsRouter, PREFIX, methodEndpoints.previewDraft, async (c) => {
+  const body = toRecord(await c.req.json().catch(() => ({})));
+  const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+  if (!draftResult.ok) {
+    return c.json(
+      {
+        ok: false,
+        diagnostics: draftResult.diagnostics,
+        fingerprint: null,
+        normalizedFormulas: [],
+        compiledMethod: null,
+      },
+      422,
+    );
+  }
+  const result = compileDraftWithEngine(draftResult.draft, {
+    previewScenarios: [
+      {
+        key: "adhoc_preview",
+        label: "Preview",
+        inputs:
+          (isRecord(body.sampleData) ? body.sampleData : null) ??
+          (isRecord(body.inputs) ? body.inputs : null) ??
+          {},
+      },
+    ],
+    includePreviewScenariosInFingerprint: false,
+  });
+
+  if (!result.ok) {
+    return c.json(
+      augmentCompileResponseWithDimensions(
+        methodCompileResponse(result),
+        draftResult.draft,
+      ),
+      422,
+    );
+  }
+
+  const preview = result.previewResults[0];
+  const dimensional = dimensionalMethodDiagnostics(draftResult.draft);
+  return {
+    ok: (preview?.passed ?? false) && dimensional.length === 0,
+    diagnostics: [
+      ...result.diagnostics,
+      ...(preview?.diagnostics ?? []),
+      ...dimensional,
+    ],
+    fingerprint: result.method.methodFingerprint,
+    previewResults: result.previewResults,
+    results: Object.fromEntries([
+      ...result.method.formulas.map((formula) => {
+        const formulaResult = preview?.formulaResults.find(
+          (item) => item.key === formula.key,
+        );
+        return [formula.key, formulaResult?.value ?? null] as const;
+      }),
+      ...result.method.measurementModels.map((model) => {
+        const modelResult = preview?.measurementModelResults.find(
+          (item) => item.key === model.key,
+        );
+        const resultRecord = toRecord(modelResult?.result);
+        const value = modelResult
+          ? Array.isArray(modelResult.result)
+            ? modelResult.result.map((item) => item.value)
+            : scalarResultValue(resultRecord.value)
+          : null;
+        return [model.key, value] as const;
+      }),
+    ]),
+  };
+});
+
+mount(methodsRouter, PREFIX, methodEndpoints.listMethodTemplates, async (c) => {
+  const entries = listTemplates().flatMap((template) => {
+    const governance = template.governance;
+    if (
+      governance === undefined ||
+      governance.sources.length === 0 ||
+      governance.measurand.trim().length === 0 ||
+      governance.verificarItems.length === 0 ||
+      governance.reviewStatus !== "draft_pending_revalidation"
+    ) {
+      return [];
     }
-    const result = compileDraftWithEngine(draftResult.draft, {
-      previewScenarios: [
-        {
-          key: "adhoc_preview",
-          label: "Preview",
-          inputs:
-            (isRecord(body.sampleData) ? body.sampleData : null) ??
-            (isRecord(body.inputs) ? body.inputs : null) ??
-            {},
+    const def = template.productDefinition;
+    return [
+      {
+        templateKey: template.key,
+        templateVersion: template.templateVersion,
+        discipline: template.discipline,
+        defaultName: template.defaultName,
+        defaultAccreditedScope: template.defaultAccreditedScope,
+        assetTypeSlug: def.assetTypeSlug,
+        description: def.description ?? "",
+        model: governance.model,
+        counts: {
+          dataFields: def.dataFields.length,
+          formulas: def.formulas.length,
+          validations: def.validations.length,
+          uncertaintyParams: def.uncertaintyParams.length,
+          verificar: governance.verificarItems.length,
+          omitted: governance.omittedComponents.length,
         },
-      ],
-      includePreviewScenariosInFingerprint: false,
-    });
-
-    if (!result.ok) {
-      return c.json(
-        augmentCompileResponseWithDimensions(
-          methodCompileResponse(result),
-          draftResult.draft,
-        ),
-        422,
-      );
-    }
-
-    const preview = result.previewResults[0];
-    const dimensional = dimensionalMethodDiagnostics(draftResult.draft);
-    return {
-      ok: (preview?.passed ?? false) && dimensional.length === 0,
-      diagnostics: [
-        ...result.diagnostics,
-        ...(preview?.diagnostics ?? []),
-        ...dimensional,
-      ],
-      fingerprint: result.method.methodFingerprint,
-      previewResults: result.previewResults,
-      results: Object.fromEntries([
-        ...result.method.formulas.map((formula) => {
-          const formulaResult = preview?.formulaResults.find(
-            (item) => item.key === formula.key,
-          );
-          return [formula.key, formulaResult?.value ?? null] as const;
-        }),
-        ...result.method.measurementModels.map((model) => {
-          const modelResult = preview?.measurementModelResults.find(
-            (item) => item.key === model.key,
-          );
-          const resultRecord = toRecord(modelResult?.result);
-          const value = modelResult
-            ? Array.isArray(modelResult.result)
-              ? modelResult.result.map((item) => item.value)
-              : scalarResultValue(resultRecord.value)
-            : null;
-          return [model.key, value] as const;
-        }),
-      ]),
-    };
-  },
-);
-
-mount(
-  methodsRouter,
-  PREFIX,
-  methodEndpoints.listMethodTemplates,
-  withLabPermission({ template: ["read"] }),
-  async (c) => {
-    const entries = listTemplates().flatMap((template) => {
-      const governance = template.governance;
-      if (
-        governance === undefined ||
-        governance.sources.length === 0 ||
-        governance.measurand.trim().length === 0 ||
-        governance.verificarItems.length === 0 ||
-        governance.reviewStatus !== "draft_pending_revalidation"
-      ) {
-        return [];
-      }
-      const def = template.productDefinition;
-      return [
-        {
-          templateKey: template.key,
-          templateVersion: template.templateVersion,
-          discipline: template.discipline,
-          defaultName: template.defaultName,
-          defaultAccreditedScope: template.defaultAccreditedScope,
-          assetTypeSlug: def.assetTypeSlug,
-          description: def.description ?? "",
-          model: governance.model,
-          counts: {
-            dataFields: def.dataFields.length,
-            formulas: def.formulas.length,
-            validations: def.validations.length,
-            uncertaintyParams: def.uncertaintyParams.length,
-            verificar: governance.verificarItems.length,
-            omitted: governance.omittedComponents.length,
-          },
-          // Served verbatim: the picker's "informed, not trust-me" surface.
-          governance: wireGovernance(governance),
-          spec: {
-            dataFields: [...def.dataFields],
-            formulas: [...def.formulas],
-            measurementModels: [...def.measurementModels],
-            validations: [...def.validations],
-            uncertaintyParams: [...def.uncertaintyParams],
-            certificateContent: def.certificateContent,
-          },
-          previewScenarios: [...template.previewScenarios],
+        // Served verbatim: the picker's "informed, not trust-me" surface.
+        governance: wireGovernance(governance),
+        spec: {
+          dataFields: [...def.dataFields],
+          formulas: [...def.formulas],
+          measurementModels: [...def.measurementModels],
+          validations: [...def.validations],
+          uncertaintyParams: [...def.uncertaintyParams],
+          certificateContent: def.certificateContent,
         },
-      ];
-    });
+        previewScenarios: [...template.previewScenarios],
+      },
+    ];
+  });
 
-    return entries;
-  },
-);
+  return entries;
+});
 
 // Not client-facing (nothing in the frontends calls it), so a plain route.
 methodsRouter.get(
@@ -760,86 +741,72 @@ methodsRouter.get(
   },
 );
 
-mount(
-  methodsRouter,
-  PREFIX,
-  methodEndpoints.get,
-  withLabPermission({ template: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    return await orgDb(member.organizationId).transaction(async (tx) => {
-      const id = await requireMethodRouteId(
-        params.id,
-        member.organizationId,
-        tx,
-      );
+mount(methodsRouter, PREFIX, methodEndpoints.get, async (c, { params }) => {
+  const member = c.get("member");
+  return await orgDb(member.organizationId).transaction(async (tx) => {
+    const id = await requireMethodRouteId(params.id, member.organizationId, tx);
 
-      const [method] = await tx
-        .select({
-          id: calibrationMethod.id,
-          organizationId: calibrationMethod.organizationId,
-          name: calibrationMethod.name,
-          description: calibrationMethod.description,
-          version: calibrationMethod.version,
-          status: calibrationMethod.status,
-          assetTypeId: calibrationMethod.assetTypeId,
-          assetTypeName: assetType.name,
-          dataFields: calibrationMethod.dataFields,
-          variableBindings: calibrationMethod.variableBindings,
-          formulas: calibrationMethod.formulas,
-          measurementModels: calibrationMethod.measurementModels,
-          validations: calibrationMethod.validations,
-          uncertaintyParams: calibrationMethod.uncertaintyParams,
-          certificateContent: calibrationMethod.certificateContent,
-          accreditedScope: calibrationMethod.accreditedScope,
-          compiledMethod: calibrationMethod.compiledMethod,
-          methodFingerprint: calibrationMethod.methodFingerprint,
-          methodEngine: calibrationMethod.methodEngine,
-          methodCompiledAt: calibrationMethod.methodCompiledAt,
-          publicationEvidence: calibrationMethod.publicationEvidence,
-          parentId: calibrationMethod.parentId,
-          createdAt: calibrationMethod.createdAt,
-          createdByName: user.name,
-          technicalReviewedBy: calibrationMethod.technicalReviewedBy,
-          technicalReviewedByName: technicalReviewerUser.name,
-          publishedAt: calibrationMethod.publishedAt,
-          approvedBy: calibrationMethod.approvedBy,
-          approvedByName: approverUser.name,
-          archivedAt: calibrationMethod.archivedAt,
-        })
-        .from(calibrationMethod)
-        .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
-        .leftJoin(user, eq(calibrationMethod.createdBy, user.id))
-        .leftJoin(
-          technicalReviewerUser,
-          eq(calibrationMethod.technicalReviewedBy, technicalReviewerUser.id),
-        )
-        .leftJoin(
-          approverUser,
-          eq(calibrationMethod.approvedBy, approverUser.id),
-        )
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+    const [method] = await tx
+      .select({
+        id: calibrationMethod.id,
+        organizationId: calibrationMethod.organizationId,
+        name: calibrationMethod.name,
+        description: calibrationMethod.description,
+        version: calibrationMethod.version,
+        status: calibrationMethod.status,
+        assetTypeId: calibrationMethod.assetTypeId,
+        assetTypeName: assetType.name,
+        dataFields: calibrationMethod.dataFields,
+        variableBindings: calibrationMethod.variableBindings,
+        formulas: calibrationMethod.formulas,
+        measurementModels: calibrationMethod.measurementModels,
+        validations: calibrationMethod.validations,
+        uncertaintyParams: calibrationMethod.uncertaintyParams,
+        certificateContent: calibrationMethod.certificateContent,
+        accreditedScope: calibrationMethod.accreditedScope,
+        compiledMethod: calibrationMethod.compiledMethod,
+        methodFingerprint: calibrationMethod.methodFingerprint,
+        methodEngine: calibrationMethod.methodEngine,
+        methodCompiledAt: calibrationMethod.methodCompiledAt,
+        publicationEvidence: calibrationMethod.publicationEvidence,
+        parentId: calibrationMethod.parentId,
+        createdAt: calibrationMethod.createdAt,
+        createdByName: user.name,
+        technicalReviewedBy: calibrationMethod.technicalReviewedBy,
+        technicalReviewedByName: technicalReviewerUser.name,
+        publishedAt: calibrationMethod.publishedAt,
+        approvedBy: calibrationMethod.approvedBy,
+        approvedByName: approverUser.name,
+        archivedAt: calibrationMethod.archivedAt,
+      })
+      .from(calibrationMethod)
+      .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
+      .leftJoin(user, eq(calibrationMethod.createdBy, user.id))
+      .leftJoin(
+        technicalReviewerUser,
+        eq(calibrationMethod.technicalReviewedBy, technicalReviewerUser.id),
+      )
+      .leftJoin(approverUser, eq(calibrationMethod.approvedBy, approverUser.id))
+      .where(
+        and(
+          eq(calibrationMethod.id, id),
+          eq(calibrationMethod.organizationId, member.organizationId),
+        ),
+      )
+      .limit(1);
 
-      if (!method) {
-        throw notFound("method_not_found", "Método nao encontrado");
-      }
+    if (!method) {
+      throw notFound("method_not_found", "Método nao encontrado");
+    }
 
-      return normalizeMethodRecord(method);
-    });
-  },
-);
+    return normalizeMethodRecord(method);
+  });
+});
 
 mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.create,
-  withLabPermission({ template: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -912,7 +879,6 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.fromTemplate,
-  withLabPermission({ template: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1044,7 +1010,6 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.update,
-  withLabPermission({ template: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const result = await withOrg(
@@ -1219,7 +1184,6 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.requestApproval,
-  withLabPermission({ template: ["update"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1339,7 +1303,7 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.technicalReview,
-  [...withLabPermission({ template: ["publish"] }), requireRole(["admin"])],
+  [requireRole(["admin"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1408,7 +1372,7 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.qualityApprove,
-  [...withLabPermission({ template: ["publish"] }), requireRole(["owner"])],
+  [requireRole(["owner"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1568,10 +1532,7 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.returnToDraft,
-  [
-    ...withLabPermission({ template: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c, { params, body: { reason } }) => {
     const member = c.get("member");
     const result = await withOrg(
@@ -1643,7 +1604,7 @@ mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.publishDraft,
-  [...withLabPermission({ template: ["publish"] }), requireRole(["owner"])],
+  [requireRole(["owner"])],
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -1799,71 +1760,64 @@ mount(
   },
 );
 
-mount(
-  methodsRouter,
-  PREFIX,
-  methodEndpoints.archive,
-  withLabPermission({ template: ["update"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const result = await withOrg(
-      member.organizationId,
-      requestActor(c),
-      async (ctx) => {
-        const existing = await requireLabMethod(
-          params.id,
-          member.organizationId,
-          ctx.o,
+mount(methodsRouter, PREFIX, methodEndpoints.archive, async (c, { params }) => {
+  const member = c.get("member");
+  const result = await withOrg(
+    member.organizationId,
+    requestActor(c),
+    async (ctx) => {
+      const existing = await requireLabMethod(
+        params.id,
+        member.organizationId,
+        ctx.o,
+      );
+      const id = existing.id;
+
+      if (!METHOD_MACHINE.canTransition(existing.status, "archive")) {
+        throw invalid(
+          "method_not_archivable",
+          "Apenas métodos publicados podem ser arquivados",
         );
-        const id = existing.id;
+      }
 
-        if (!METHOD_MACHINE.canTransition(existing.status, "archive")) {
-          throw invalid(
-            "method_not_archivable",
-            "Apenas métodos publicados podem ser arquivados",
-          );
-        }
+      const [archived] = await ctx.o
+        .update(calibrationMethod)
+        .set({
+          status: METHOD_MACHINE.requireTargetOf(existing.status, "archive"),
+          archivedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(calibrationMethod.id, id),
+            eq(calibrationMethod.status, existing.status),
+          ),
+        )
+        .returning();
+      if (!archived) {
+        // The compare-and-set on the status matched no row: the method
+        // moved under the caller (METHOD_MACHINE).
+        throw conflict(
+          "status_transition_conflict",
+          "O método mudou de status durante a operação. Recarregue e tente novamente.",
+        );
+      }
 
-        const [archived] = await ctx.o
-          .update(calibrationMethod)
-          .set({
-            status: METHOD_MACHINE.requireTargetOf(existing.status, "archive"),
-            archivedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!archived) {
-          // The compare-and-set on the status matched no row: the method
-          // moved under the caller (METHOD_MACHINE).
-          throw conflict(
-            "status_transition_conflict",
-            "O método mudou de status durante a operação. Recarregue e tente novamente.",
-          );
-        }
+      await ctx.audit("method", id, {
+        action: "archive",
 
-        await ctx.audit("method", id, {
-          action: "archive",
+        changes: { status: { old: "PUBLISHED", new: "ARCHIVED" } },
+      });
 
-          changes: { status: { old: "PUBLISHED", new: "ARCHIVED" } },
-        });
-
-        return archived;
-      },
-    );
-    return result;
-  },
-);
+      return archived;
+    },
+  );
+  return result;
+});
 
 mount(
   methodsRouter,
   PREFIX,
   methodEndpoints.createNewVersion,
-  withLabPermission({ template: ["create"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const session = c.get("session");
@@ -2056,50 +2010,40 @@ methodsRouter.get(
   },
 );
 
-mount(
-  methodsRouter,
-  PREFIX,
-  methodEndpoints.audit,
-  withLabPermission({ template: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    return await orgDb(member.organizationId).transaction(async (tx) => {
-      const id = await requireMethodRouteId(
-        params.id,
-        member.organizationId,
-        tx,
-      );
+mount(methodsRouter, PREFIX, methodEndpoints.audit, async (c, { params }) => {
+  const member = c.get("member");
+  return await orgDb(member.organizationId).transaction(async (tx) => {
+    const id = await requireMethodRouteId(params.id, member.organizationId, tx);
 
-      const [method] = await tx
-        .select({ id: calibrationMethod.id })
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+    const [method] = await tx
+      .select({ id: calibrationMethod.id })
+      .from(calibrationMethod)
+      .where(
+        and(
+          eq(calibrationMethod.id, id),
+          eq(calibrationMethod.organizationId, member.organizationId),
+        ),
+      )
+      .limit(1);
 
-      if (!method) {
-        throw notFound("method_not_found", "Método nao encontrado");
-      }
+    if (!method) {
+      throw notFound("method_not_found", "Método nao encontrado");
+    }
 
-      const logs = await tx
-        .select({
-          id: methodAuditLog.id,
-          action: methodAuditLog.action,
-          changes: methodAuditLog.changes,
-          performedAt: methodAuditLog.performedAt,
-          performedByName: user.name,
-          reason: methodAuditLog.reason,
-        })
-        .from(methodAuditLog)
-        .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
-        .where(eq(methodAuditLog.methodId, id))
-        .orderBy(desc(methodAuditLog.performedAt));
+    const logs = await tx
+      .select({
+        id: methodAuditLog.id,
+        action: methodAuditLog.action,
+        changes: methodAuditLog.changes,
+        performedAt: methodAuditLog.performedAt,
+        performedByName: user.name,
+        reason: methodAuditLog.reason,
+      })
+      .from(methodAuditLog)
+      .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
+      .where(eq(methodAuditLog.methodId, id))
+      .orderBy(desc(methodAuditLog.performedAt));
 
-      return { data: logs };
-    });
-  },
-);
+    return { data: logs };
+  });
+});

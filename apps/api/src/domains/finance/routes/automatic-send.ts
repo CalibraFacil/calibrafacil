@@ -6,10 +6,7 @@ import { conflict, invalid, notFound } from "../../../lib/domain-errors";
 import { withOrg } from "../../../lib/org-context";
 import { orgDb } from "../../../lib/org-db";
 import { automaticSendRule, customer } from "@calibra-facil/db/schema";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { agreementBelongsToOrganization } from "../../../lib/tenant-refs";
 import { isUniqueViolationOf } from "../../../lib/db-errors";
 import { requestActor } from "../../../middleware/request-actor";
@@ -39,7 +36,6 @@ mount(
   financeAutomaticSendRouter,
   PREFIX,
   financeEndpoints.listAutomaticSendRules,
-  withLabPermission({ financial: ["read"] }),
   async (c) => {
     const member = c.get("member");
     const rows = await orgDb(member.organizationId).transaction((o) =>
@@ -83,7 +79,6 @@ mount(
   financeAutomaticSendRouter,
   PREFIX,
   financeEndpoints.createAutomaticSendRule,
-  withLabPermission({ financial: ["contract_create"] }),
   async (c, { body }) => {
     const member = c.get("member");
 
@@ -169,7 +164,6 @@ mount(
   financeAutomaticSendRouter,
   PREFIX,
   financeEndpoints.updateAutomaticSendRule,
-  withLabPermission({ financial: ["contract_update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const { id } = params;

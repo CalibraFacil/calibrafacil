@@ -10,7 +10,6 @@ import { requestActor } from "../../../middleware/request-actor";
 import {
   type AuthVariables,
   requireRole,
-  withLabPermission,
 } from "../../../middleware/permission";
 import { mount } from "../../../lib/endpoint-mount";
 
@@ -110,10 +109,7 @@ mount(
   organizationProfileRouter,
   PREFIX,
   organizationProfileEndpoints.update,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c, { body }) => {
     const member = c.get("member");
     const input = body;

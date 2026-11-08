@@ -23,10 +23,7 @@ import {
   resolveIssuedDueDate,
   LIVE_BILLING_DOCUMENT_STATUSES,
 } from "@calibra-facil/shared";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import {
   buildDefaultDueDate,
   ensureJobCommercialSnapshotFromJob,
@@ -64,7 +61,6 @@ mount(
   financeDocumentsRouter,
   PREFIX,
   financeEndpoints.listDocuments,
-  withLabPermission({ financial: ["read"] }),
   async (c, { query }) => {
     const member = c.get("member");
     const conditions = [
@@ -128,7 +124,6 @@ mount(
   financeDocumentsRouter,
   PREFIX,
   financeEndpoints.listEligibleJobs,
-  withLabPermission({ financial: ["document_create"] }),
   async (c, { query }) => {
     const member = c.get("member");
     const conditions = [
@@ -234,7 +229,6 @@ mount(
   financeDocumentsRouter,
   PREFIX,
   financeEndpoints.createDocument,
-  withLabPermission({ financial: ["document_create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -419,7 +413,6 @@ mount(
   financeDocumentsRouter,
   PREFIX,
   financeEndpoints.getDocument,
-  withLabPermission({ financial: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const publicId = params.id;
@@ -439,7 +432,6 @@ mount(
   financeDocumentsRouter,
   PREFIX,
   financeEndpoints.updateDocument,
-  withLabPermission({ financial: ["document_create"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const { id } = params;
@@ -559,7 +551,6 @@ mount(
   financeDocumentsRouter,
   PREFIX,
   financeEndpoints.issueDocument,
-  withLabPermission({ financial: ["document_issue"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const { id } = params;
@@ -657,7 +648,6 @@ mount(
   financeDocumentsRouter,
   PREFIX,
   financeEndpoints.voidDocument,
-  withLabPermission({ financial: ["document_void"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const { id } = params;

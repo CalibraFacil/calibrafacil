@@ -172,7 +172,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.list,
-  withLabPermission({ service_order: ["read"] }),
   async (c, { query }) => {
     const member = c.get("member");
     return await listServiceOrdersForLab(member, query);
@@ -244,7 +243,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.getByPublicId,
-  [...withLabPermission({ service_order: ["read"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const publicId = params.publicId;
@@ -268,7 +266,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.get,
-  [...withLabPermission({ service_order: ["read"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -292,7 +289,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.listCommunications,
-  [...withLabPermission({ service_order: ["read"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -313,7 +309,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.update,
-  [...withLabPermission({ service_order: ["update"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -329,7 +324,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.generateIntakeDocument,
-  [...withLabPermission({ service_order: ["print_intake_document"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -347,7 +341,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.generateTag,
-  [...withLabPermission({ service_order: ["print_tag"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -362,7 +355,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.getIntakeDocumentPdf,
-  [...withLabPermission({ service_order: ["read"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -384,7 +376,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.getTagPdf,
-  [...withLabPermission({ service_order: ["read"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -402,7 +393,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.issueDeliveryDocument,
-  [...withLabPermission({ service_order: ["deliver"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -424,7 +414,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.getDeliveryDocumentPdf,
-  [...withLabPermission({ service_order: ["read"] })],
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -451,7 +440,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.updateRepairMark,
-  [...withLabPermission({ service_order: ["deliver"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -485,7 +473,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.createEvaluation,
-  [...withLabPermission({ service_order: ["evaluate"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -501,7 +488,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.updateEvaluation,
-  [...withLabPermission({ service_order: ["evaluate"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -527,7 +513,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.createQuote,
-  [...withLabPermission({ service_order: ["quote_create"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -559,7 +544,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.sendQuote,
-  [...withLabPermission({ service_order: ["quote_send"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -633,7 +617,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.startExecution,
-  [...withLabPermission({ service_order: ["execute"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -664,7 +647,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.saveExecution,
-  [...withLabPermission({ service_order: ["execute"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -680,7 +662,6 @@ mount(
   serviceOrdersRouter,
   PREFIX,
   serviceOrderEndpoints.deliver,
-  [...withLabPermission({ service_order: ["deliver"] })],
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;

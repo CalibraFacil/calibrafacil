@@ -49,6 +49,7 @@ export const signatureEndpoints = {
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
     desktopFlavor: "cloud-sync",
+    permission: { calibration: ["read"] },
   }),
   // A multipart upload: the definition carries no `body` (the handler reads the
   // form itself) and the SDK overrides this method with the file upload
@@ -61,6 +62,7 @@ export const signatureEndpoints = {
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
     desktopFlavor: "cloud-sync",
+    permission: { calibration: ["read"] },
   }),
   deleteMine: endpoint({
     method: "delete",
@@ -70,5 +72,6 @@ export const signatureEndpoints = {
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
     desktopFlavor: "cloud-sync",
+    permission: { calibration: ["read"] },
   }),
 } as const satisfies EndpointGroup;

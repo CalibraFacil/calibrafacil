@@ -99,6 +99,7 @@ export const trainingRecordEndpoints = {
     failure: "Falha ao carregar treinamentos",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -109,5 +110,6 @@ export const trainingRecordEndpoints = {
     failure: "Erro ao criar registro de treinamento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["create"] },
   }),
 } as const satisfies EndpointGroup;

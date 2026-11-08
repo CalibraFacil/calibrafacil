@@ -137,6 +137,7 @@ export const competenceEndpoints = {
     failure: "Falha ao carregar competências",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["read"] },
   }),
   matrix: endpoint({
     method: "get",
@@ -145,6 +146,7 @@ export const competenceEndpoints = {
     failure: "Falha ao carregar matriz",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -154,6 +156,7 @@ export const competenceEndpoints = {
     failure: "Falha ao carregar competência",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["read"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -163,6 +166,7 @@ export const competenceEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -173,6 +177,7 @@ export const competenceEndpoints = {
     failure: "Erro ao criar solicitação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["create"] },
   }),
   startTraining: endpoint({
     method: "post",
@@ -182,6 +187,7 @@ export const competenceEndpoints = {
     failure: "Erro na operação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["update"] },
   }),
   completeTraining: endpoint({
     method: "post",
@@ -191,6 +197,7 @@ export const competenceEndpoints = {
     failure: "Erro na operação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["update"] },
   }),
   suspend: endpoint({
     method: "post",
@@ -200,6 +207,7 @@ export const competenceEndpoints = {
     failure: "Erro na operação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["update"] },
   }),
   evaluate: endpoint({
     method: "post",
@@ -210,6 +218,7 @@ export const competenceEndpoints = {
     failure: "Erro na avaliação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["evaluate"] },
   }),
   renew: endpoint({
     method: "post",
@@ -220,6 +229,7 @@ export const competenceEndpoints = {
     failure: "Erro na renovação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["update"] },
   }),
   cancel: endpoint({
     method: "post",
@@ -230,6 +240,7 @@ export const competenceEndpoints = {
     failure: "Erro ao cancelar competência",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["update"] },
   }),
   delete: endpoint({
     method: "delete",
@@ -239,6 +250,7 @@ export const competenceEndpoints = {
     failure: "Erro ao excluir competência",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["delete"] },
   }),
   assignTraining: endpoint({
     method: "post",
@@ -249,5 +261,6 @@ export const competenceEndpoints = {
     failure: "Erro ao atribuir treinamento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { competence: ["update"] },
   }),
 } as const satisfies EndpointGroup;

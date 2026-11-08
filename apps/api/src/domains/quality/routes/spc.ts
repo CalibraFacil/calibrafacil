@@ -13,7 +13,6 @@ import {
 } from "@calibra-facil/db/schema";
 import { evaluateChart } from "@calibra-facil/interval-analysis";
 import {
-  withLabPermission,
   type AuthVariables,
   type MemberData,
 } from "../../../middleware/permission";
@@ -155,7 +154,6 @@ mount(
   spcRouter,
   PREFIX,
   spcEndpoints.listCharts,
-  withLabPermission({ spc: ["read"] }),
   async (c, { query: { standardId, status, page, limit } }) => {
     const member = c.get("member");
     const offset = (page - 1) * limit;
@@ -214,60 +212,53 @@ mount(
   },
 );
 
-mount(
-  spcRouter,
-  PREFIX,
-  spcEndpoints.getChart,
-  withLabPermission({ spc: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const id = params.id;
-    return await orgDb(member.organizationId).transaction(async (tx) => {
-      const chart = await requireChart(id, member.organizationId, tx);
+mount(spcRouter, PREFIX, spcEndpoints.getChart, async (c, { params }) => {
+  const member = c.get("member");
+  const id = params.id;
+  return await orgDb(member.organizationId).transaction(async (tx) => {
+    const chart = await requireChart(id, member.organizationId, tx);
 
-      const [readings, [standard]] = await Promise.all([
-        tx
-          .select({
-            id: checkStandardReading.id,
-            value: checkStandardReading.value,
-            uncertainty: checkStandardReading.uncertainty,
-            measuredAt: checkStandardReading.measuredAt,
-            sourceJobId: checkStandardReading.sourceJobId,
-            createdBy: checkStandardReading.createdBy,
-          })
-          .from(checkStandardReading)
-          .where(
-            and(
-              eq(checkStandardReading.organizationId, member.organizationId),
-              eq(checkStandardReading.standardId, chart.standardId),
-              eq(checkStandardReading.parameter, chart.parameter),
-            ),
-          )
-          .orderBy(
-            asc(checkStandardReading.measuredAt),
-            asc(checkStandardReading.id),
+    const [readings, [standard]] = await Promise.all([
+      tx
+        .select({
+          id: checkStandardReading.id,
+          value: checkStandardReading.value,
+          uncertainty: checkStandardReading.uncertainty,
+          measuredAt: checkStandardReading.measuredAt,
+          sourceJobId: checkStandardReading.sourceJobId,
+          createdBy: checkStandardReading.createdBy,
+        })
+        .from(checkStandardReading)
+        .where(
+          and(
+            eq(checkStandardReading.organizationId, member.organizationId),
+            eq(checkStandardReading.standardId, chart.standardId),
+            eq(checkStandardReading.parameter, chart.parameter),
           ),
-        tx
-          .select({ id: referenceStandard.id, name: referenceStandard.name })
-          .from(referenceStandard)
-          .where(eq(referenceStandard.id, chart.standardId))
-          .limit(1),
-      ]);
+        )
+        .orderBy(
+          asc(checkStandardReading.measuredAt),
+          asc(checkStandardReading.id),
+        ),
+      tx
+        .select({ id: referenceStandard.id, name: referenceStandard.name })
+        .from(referenceStandard)
+        .where(eq(referenceStandard.id, chart.standardId))
+        .limit(1),
+    ]);
 
-      return {
-        ...chart,
-        standardName: standard?.name ?? null,
-        readings,
-      };
-    });
-  },
-);
+    return {
+      ...chart,
+      standardName: standard?.name ?? null,
+      readings,
+    };
+  });
+});
 
 mount(
   spcRouter,
   PREFIX,
   spcEndpoints.createChart,
-  withLabPermission({ spc: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -343,7 +334,6 @@ mount(
   spcRouter,
   PREFIX,
   spcEndpoints.updateChart,
-  withLabPermission({ spc: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const id = params.id;
@@ -393,41 +383,34 @@ mount(
   },
 );
 
-mount(
-  spcRouter,
-  PREFIX,
-  spcEndpoints.removeChart,
-  withLabPermission({ spc: ["delete"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const id = params.id;
-    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
-      const deleted = await ctx.o
-        .delete(controlChart)
-        .where(
-          and(
-            eq(controlChart.id, id),
-            eq(controlChart.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-      if (deleted.length === 0) {
-        throw notFound(
-          "control_chart_not_found",
-          "Carta de controle não encontrada",
-        );
-      }
-      await ctx.audit("controlChart", id, { action: "delete" });
-    });
-    return { message: "Carta removida" };
-  },
-);
+mount(spcRouter, PREFIX, spcEndpoints.removeChart, async (c, { params }) => {
+  const member = c.get("member");
+  const id = params.id;
+  await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+    const deleted = await ctx.o
+      .delete(controlChart)
+      .where(
+        and(
+          eq(controlChart.id, id),
+          eq(controlChart.organizationId, member.organizationId),
+        ),
+      )
+      .returning();
+    if (deleted.length === 0) {
+      throw notFound(
+        "control_chart_not_found",
+        "Carta de controle não encontrada",
+      );
+    }
+    await ctx.audit("controlChart", id, { action: "delete" });
+  });
+  return { message: "Carta removida" };
+});
 
 mount(
   spcRouter,
   PREFIX,
   spcEndpoints.recalculateChart,
-  withLabPermission({ spc: ["recalculate"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -466,7 +449,6 @@ mount(
   spcRouter,
   PREFIX,
   spcEndpoints.escalateChart,
-  withLabPermission({ spc: ["escalate"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const id = params.id;
@@ -561,7 +543,6 @@ mount(
   spcRouter,
   PREFIX,
   spcEndpoints.listReadings,
-  withLabPermission({ spc: ["read"] }),
   async (c, { query: { standardId, parameter, limit } }) => {
     const member = c.get("member");
 
@@ -608,7 +589,6 @@ mount(
   spcRouter,
   PREFIX,
   spcEndpoints.createReading,
-  withLabPermission({ spc: ["create"] }),
   async (c, { body: input }) => {
     const member = c.get("member");
 
@@ -674,47 +654,41 @@ mount(
 // =========================================================================
 // DELETE /readings/:id - Remove a mistyped reading (re-evaluates the chart)
 // =========================================================================
-mount(
-  spcRouter,
-  PREFIX,
-  spcEndpoints.removeReading,
-  withLabPermission({ spc: ["delete"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const id = params.id;
-    await withOrg(member.organizationId, requestActor(c), async (ctx) => {
-      const deleted = await ctx.o
-        .delete(checkStandardReading)
-        .where(
-          and(
-            eq(checkStandardReading.id, id),
-            eq(checkStandardReading.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-      const removed = deleted[0];
-      if (!removed) {
-        throw notFound(
-          "check_standard_reading_not_found",
-          "Leitura não encontrada",
-        );
-      }
+mount(spcRouter, PREFIX, spcEndpoints.removeReading, async (c, { params }) => {
+  const member = c.get("member");
+  const id = params.id;
+  await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+    const deleted = await ctx.o
+      .delete(checkStandardReading)
+      .where(
+        and(
+          eq(checkStandardReading.id, id),
+          eq(checkStandardReading.organizationId, member.organizationId),
+        ),
+      )
+      .returning();
+    const removed = deleted[0];
+    if (!removed) {
+      throw notFound(
+        "check_standard_reading_not_found",
+        "Leitura não encontrada",
+      );
+    }
 
-      const [chart] = await ctx.o
-        .select()
-        .from(controlChart)
-        .where(
-          and(
-            eq(controlChart.organizationId, member.organizationId),
-            eq(controlChart.standardId, removed.standardId),
-            eq(controlChart.parameter, removed.parameter),
-          ),
-        )
-        .limit(1);
-      if (chart) {
-        await recomputeControlChart(chart, ctx.o);
-      }
-    });
-    return { message: "Leitura removida" };
-  },
-);
+    const [chart] = await ctx.o
+      .select()
+      .from(controlChart)
+      .where(
+        and(
+          eq(controlChart.organizationId, member.organizationId),
+          eq(controlChart.standardId, removed.standardId),
+          eq(controlChart.parameter, removed.parameter),
+        ),
+      )
+      .limit(1);
+    if (chart) {
+      await recomputeControlChart(chart, ctx.o);
+    }
+  });
+  return { message: "Leitura removida" };
+});

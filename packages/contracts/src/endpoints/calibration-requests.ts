@@ -131,6 +131,7 @@ export const calibrationRequestEndpoints = {
     failure: "Falha ao carregar solicitações",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -140,6 +141,7 @@ export const calibrationRequestEndpoints = {
     failure: "Falha ao carregar solicitação",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["read"] },
   }),
   review: endpoint({
     method: "post",
@@ -150,6 +152,7 @@ export const calibrationRequestEndpoints = {
     failure: "Erro ao revisar",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   approve: endpoint({
     method: "post",
@@ -160,6 +163,7 @@ export const calibrationRequestEndpoints = {
     failure: "Erro ao aprovar",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   reject: endpoint({
     method: "post",
@@ -170,6 +174,7 @@ export const calibrationRequestEndpoints = {
     failure: "Erro ao rejeitar",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   convert: endpoint({
     method: "post",
@@ -180,5 +185,9 @@ export const calibrationRequestEndpoints = {
     failure: "Erro ao converter",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: {
+      request: ["convert"],
+      calibration: ["create"],
+    },
   }),
 } as const satisfies EndpointGroup;

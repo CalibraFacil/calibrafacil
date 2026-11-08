@@ -198,6 +198,7 @@ export const nonConformanceEndpoints = {
     failure: "Falha ao carregar não conformidades",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["read"] },
   }),
   summary: endpoint({
     method: "get",
@@ -206,6 +207,7 @@ export const nonConformanceEndpoints = {
     failure: "Falha ao carregar resumo",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -215,6 +217,7 @@ export const nonConformanceEndpoints = {
     failure: "Falha ao carregar NC",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["read"] },
   }),
   auditLog: endpoint({
     method: "get",
@@ -224,6 +227,7 @@ export const nonConformanceEndpoints = {
     failure: "Falha ao carregar histórico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["read"] },
   }),
   create: endpoint({
     method: "post",
@@ -234,6 +238,7 @@ export const nonConformanceEndpoints = {
     failure: "Erro ao registrar NC",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["create"] },
   }),
   setDisposition: endpoint({
     method: "put",
@@ -244,6 +249,7 @@ export const nonConformanceEndpoints = {
     failure: "Erro ao definir disposição",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["update"] },
   }),
   resolve: endpoint({
     method: "post",
@@ -254,6 +260,7 @@ export const nonConformanceEndpoints = {
     failure: "Erro ao resolver",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["update"] },
   }),
   escalateToCapa: endpoint({
     method: "post",
@@ -268,6 +275,7 @@ export const nonConformanceEndpoints = {
     failure: "Erro ao escalar para CAPA",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["escalate"] },
   }),
   getOotNotification: endpoint({
     method: "get",
@@ -277,6 +285,7 @@ export const nonConformanceEndpoints = {
     failure: "Falha ao carregar notificação 7.10",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["read"] },
   }),
   registerOotAcknowledgement: endpoint({
     method: "post",
@@ -290,6 +299,7 @@ export const nonConformanceEndpoints = {
     failure: "Erro ao registrar confirmação de recebimento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["update"] },
   }),
   getImpactAssessment: endpoint({
     method: "get",
@@ -299,6 +309,7 @@ export const nonConformanceEndpoints = {
     failure: "Falha ao carregar avaliação de impacto",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["read"] },
   }),
   saveImpactAssessment: endpoint({
     method: "put",
@@ -312,6 +323,7 @@ export const nonConformanceEndpoints = {
     failure: "Erro ao salvar avaliação de impacto",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["update"] },
   }),
   signImpactAssessment: endpoint({
     method: "post",
@@ -324,5 +336,6 @@ export const nonConformanceEndpoints = {
     failure: "Erro ao assinar avaliação de impacto",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { non_conformance: ["update"] },
   }),
 } as const satisfies EndpointGroup;

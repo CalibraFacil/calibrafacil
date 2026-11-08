@@ -266,7 +266,6 @@ mount(
   assetsRouter,
   PREFIX,
   assetEndpoints.list,
-  withLabPermission({ equipment: ["read"] }),
   async (
     c,
     { query: { page, limit, customerId, assetTypeId, status, query } },
@@ -423,72 +422,65 @@ assetsRouter.get(
   },
 );
 
-mount(
-  assetsRouter,
-  PREFIX,
-  assetEndpoints.get,
-  withLabPermission({ equipment: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const id = await requireAssetId(params.id, member, "ID inválido");
+mount(assetsRouter, PREFIX, assetEndpoints.get, async (c, { params }) => {
+  const member = c.get("member");
+  const id = await requireAssetId(params.id, member, "ID inválido");
 
-    return await orgDb(member.organizationId).transaction(async (o) => {
-      const [foundAsset] = await o
-        .select({
-          id: asset.id,
-          customerId: asset.customerId,
-          customerName: customer.name,
-          customerTaxId: customer.taxId,
-          assetTypeId: asset.assetTypeId,
-          assetTypeName: assetType.name,
-          assetTypeSlug: assetType.slug,
-          assetTypeDefinition: assetType.definition,
-          name: asset.name,
-          manufacturer: asset.manufacturer,
-          model: asset.model,
-          serialNumber: asset.serialNumber,
-          tag: asset.tag,
-          status: asset.status,
-          baseMeasurementUnit: asset.baseMeasurementUnit,
-          specifications: asset.specifications,
-          lastCalibrationDate: asset.lastCalibrationDate,
-          nextCalibrationDate: asset.nextCalibrationDate,
-          installedAt: asset.installedAt,
-          comments: asset.comments,
-          metrologyRegime: asset.metrologyRegime,
-          regulatedInterval: asset.regulatedInterval,
-          nextLegalVerificationDate: asset.nextLegalVerificationDate,
-          createdAt: asset.createdAt,
-          updatedAt: asset.updatedAt,
-        })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
-        .where(
-          and(
-            eq(asset.id, id),
-            getAssetScopeCondition(member),
-            isNull(asset.deletedAt),
-          ),
-        )
-        .limit(1);
+  return await orgDb(member.organizationId).transaction(async (o) => {
+    const [foundAsset] = await o
+      .select({
+        id: asset.id,
+        customerId: asset.customerId,
+        customerName: customer.name,
+        customerTaxId: customer.taxId,
+        assetTypeId: asset.assetTypeId,
+        assetTypeName: assetType.name,
+        assetTypeSlug: assetType.slug,
+        assetTypeDefinition: assetType.definition,
+        name: asset.name,
+        manufacturer: asset.manufacturer,
+        model: asset.model,
+        serialNumber: asset.serialNumber,
+        tag: asset.tag,
+        status: asset.status,
+        baseMeasurementUnit: asset.baseMeasurementUnit,
+        specifications: asset.specifications,
+        lastCalibrationDate: asset.lastCalibrationDate,
+        nextCalibrationDate: asset.nextCalibrationDate,
+        installedAt: asset.installedAt,
+        comments: asset.comments,
+        metrologyRegime: asset.metrologyRegime,
+        regulatedInterval: asset.regulatedInterval,
+        nextLegalVerificationDate: asset.nextLegalVerificationDate,
+        createdAt: asset.createdAt,
+        updatedAt: asset.updatedAt,
+      })
+      .from(asset)
+      .innerJoin(customer, eq(asset.customerId, customer.id))
+      .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+      .where(
+        and(
+          eq(asset.id, id),
+          getAssetScopeCondition(member),
+          isNull(asset.deletedAt),
+        ),
+      )
+      .limit(1);
 
-      if (!foundAsset) {
-        throw notFound("asset_not_found", "Ativo não encontrado");
-      }
+    if (!foundAsset) {
+      throw notFound("asset_not_found", "Ativo não encontrado");
+    }
 
-      await requireClientCustomerLink(o, member, foundAsset.customerId);
+    await requireClientCustomerLink(o, member, foundAsset.customerId);
 
-      return serializeAssetForResponse(foundAsset);
-    });
-  },
-);
+    return serializeAssetForResponse(foundAsset);
+  });
+});
 
 mount(
   assetsRouter,
   PREFIX,
   assetEndpoints.update,
-  withLabPermission({ equipment: ["update"] }),
   async (c, { params, body: input }) => {
     const member = c.get("member");
     const id = await requireAssetId(params.id, member, "ID invalido");
@@ -732,46 +724,40 @@ assetsRouter.delete(
   },
 );
 
-mount(
-  assetsRouter,
-  PREFIX,
-  assetEndpoints.auditLog,
-  withLabPermission({ equipment: ["read"] }),
-  async (c, { params }) => {
-    const member = c.get("member");
-    const id = await requireAssetId(params.id, member, "ID inválido");
+mount(assetsRouter, PREFIX, assetEndpoints.auditLog, async (c, { params }) => {
+  const member = c.get("member");
+  const id = await requireAssetId(params.id, member, "ID inválido");
 
-    return await orgDb(member.organizationId).transaction(async (o) => {
-      // Verify asset exists (include soft-deleted for audit trail access)
-      const [existingAsset] = await o
-        .select({ id: asset.id, customerId: asset.customerId })
-        .from(asset)
-        .where(and(eq(asset.id, id), getAssetScopeCondition(member)))
-        .limit(1);
+  return await orgDb(member.organizationId).transaction(async (o) => {
+    // Verify asset exists (include soft-deleted for audit trail access)
+    const [existingAsset] = await o
+      .select({ id: asset.id, customerId: asset.customerId })
+      .from(asset)
+      .where(and(eq(asset.id, id), getAssetScopeCondition(member)))
+      .limit(1);
 
-      if (!existingAsset) {
-        throw notFound("asset_not_found", "Ativo não encontrado");
-      }
+    if (!existingAsset) {
+      throw notFound("asset_not_found", "Ativo não encontrado");
+    }
 
-      await requireClientCustomerLink(o, member, existingAsset.customerId);
+    await requireClientCustomerLink(o, member, existingAsset.customerId);
 
-      const logs = await o
-        .select({
-          id: assetAuditLog.id,
-          action: assetAuditLog.action,
-          changes: assetAuditLog.changes,
-          performedAt: assetAuditLog.performedAt,
-          performedBy: assetAuditLog.performedBy,
-          performerName: user.name,
-          ipAddress: assetAuditLog.ipAddress,
-          reason: assetAuditLog.reason,
-        })
-        .from(assetAuditLog)
-        .leftJoin(user, eq(assetAuditLog.performedBy, user.id))
-        .where(eq(assetAuditLog.assetId, id))
-        .orderBy(desc(assetAuditLog.performedAt));
+    const logs = await o
+      .select({
+        id: assetAuditLog.id,
+        action: assetAuditLog.action,
+        changes: assetAuditLog.changes,
+        performedAt: assetAuditLog.performedAt,
+        performedBy: assetAuditLog.performedBy,
+        performerName: user.name,
+        ipAddress: assetAuditLog.ipAddress,
+        reason: assetAuditLog.reason,
+      })
+      .from(assetAuditLog)
+      .leftJoin(user, eq(assetAuditLog.performedBy, user.id))
+      .where(eq(assetAuditLog.assetId, id))
+      .orderBy(desc(assetAuditLog.performedAt));
 
-      return { data: logs };
-    });
-  },
-);
+    return { data: logs };
+  });
+});

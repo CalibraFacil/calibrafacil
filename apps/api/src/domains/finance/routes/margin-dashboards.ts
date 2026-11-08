@@ -2,10 +2,7 @@ import { createRouter } from "../../../server/router";
 import { financeEndpoints } from "@calibra-facil/contracts";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { buildMarginDashboards } from "../margin-dashboards";
 
 const PREFIX = "/api/finance/margin-dashboards";
@@ -17,7 +14,6 @@ mount(
   financeMarginDashboardsRouter,
   PREFIX,
   financeEndpoints.getMarginDashboards,
-  withLabPermission({ financial: ["read"] }),
   async (c) => {
     const member = c.get("member");
     const envelope = await orgDb(member.organizationId).transaction((o) =>

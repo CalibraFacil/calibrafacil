@@ -96,7 +96,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.create,
-  withLabPermission({ client: ["create"] }),
   async (c, { body: input }) => {
     const memberData = c.get("member");
 
@@ -195,7 +194,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.lookupCnpj,
-  withLabPermission({ client: ["read"] }),
   async (c, { params }) => {
     const outcome = await fetchCnpjRegistration(params.cnpj);
     switch (outcome.status) {
@@ -224,7 +222,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.list,
-  withLabPermission({ client: ["read"] }),
   async (c, { query: { page, limit, query } }) => {
     const memberData = c.get("member");
 
@@ -345,7 +342,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.ootEvents,
-  withLabPermission({ client: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const id = await requireLabCustomerId(params.id, memberData.organizationId);
@@ -398,20 +394,14 @@ mount(
   },
 );
 
-mount(
-  customersRouter,
-  PREFIX,
-  customerEndpoints.get,
-  withLabPermission({ client: ["read"] }),
-  async (c, { params }) =>
-    requireLabCustomer(params.id, c.get("member").organizationId),
+mount(customersRouter, PREFIX, customerEndpoints.get, async (c, { params }) =>
+  requireLabCustomer(params.id, c.get("member").organizationId),
 );
 
 mount(
   customersRouter,
   PREFIX,
   customerEndpoints.update,
-  withLabPermission({ client: ["update"] }),
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
     const existingCustomer = await requireLabCustomer(
@@ -470,7 +460,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.listMembers,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const foundCustomer = await requireLabCustomer(
@@ -509,7 +498,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.listInvitations,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const foundCustomer = await requireLabCustomer(
@@ -543,7 +531,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.createInvitation,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params, body: { email, role } }) => {
     const memberData = c.get("member");
     const portalRole = role || PORTAL_MANAGEABLE_MEMBER_ROLES[0];
@@ -589,7 +576,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.resendInvitation,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params: { id, invId } }) => {
     const memberData = c.get("member");
     const foundCustomer = await requireLabCustomer(
@@ -649,7 +635,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.cancelInvitation,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params: { id, invId } }) => {
     const memberData = c.get("member");
     const foundCustomer = await requireLabCustomer(
@@ -707,7 +692,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.removeMember,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params: { id, memberId } }) => {
     const memberData = c.get("member");
     const foundCustomer = await requireLabCustomer(
@@ -776,7 +760,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.updateCompliance,
-  withLabPermission({ client: ["update"] }),
   async (c, { params, body: { compliance, reason } }) => {
     const memberData = c.get("member");
     const existingCustomer = await requireLabCustomer(
@@ -857,7 +840,6 @@ mount(
   customersRouter,
   PREFIX,
   customerEndpoints.auditLog,
-  withLabPermission({ client: ["manage_portal"] }),
   async (c, { params, query: { page, limit } }) => {
     const memberData = c.get("member");
     const foundCustomer = await requireLabCustomer(

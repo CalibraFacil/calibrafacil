@@ -23,7 +23,6 @@ import { orgDb } from "../../../lib/org-db";
 import {
   type AuthVariables,
   requireRole,
-  withLabPermission,
 } from "../../../middleware/permission";
 
 import { sniffRasterImage } from "../../../lib/image-sniff";
@@ -52,10 +51,7 @@ mount(
   organizationMediaRouter,
   PREFIX,
   organizationMediaEndpoints.uploadLogo,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const env = c.env;
@@ -162,10 +158,7 @@ mount(
   organizationMediaRouter,
   PREFIX,
   organizationMediaEndpoints.deleteLogo,
-  [
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-  ],
+  [requireRole(["admin", "owner"])],
   async (c) => {
     const member = c.get("member");
     const env = c.env;

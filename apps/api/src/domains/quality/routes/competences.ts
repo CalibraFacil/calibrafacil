@@ -48,7 +48,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.list,
-  withLabPermission({ competence: ["read"] }),
   async (
     c,
     { query: { page, limit, userId, assetTypeId, status, expiringWithinDays } },
@@ -131,61 +130,54 @@ mount(
 // =========================================================================
 // GET /matrix - Competence matrix view (technicians × asset types)
 // =========================================================================
-mount(
-  competencesRouter,
-  PREFIX,
-  competenceEndpoints.matrix,
-  withLabPermission({ competence: ["read"] }),
-  async (c) => {
-    const memberData = c.get("member");
+mount(competencesRouter, PREFIX, competenceEndpoints.matrix, async (c) => {
+  const memberData = c.get("member");
 
-    return await orgDb(memberData.organizationId).transaction(async (tx) => {
-      const technicians = await tx
-        .select({
-          userId: member.userId,
-          userName: user.name,
-          role: member.role,
-        })
-        .from(member)
-        .innerJoin(user, eq(member.userId, user.id))
-        .where(
-          and(
-            eq(member.organizationId, memberData.organizationId),
-            inArray(member.role, [...CALIBRATION_EXECUTOR_ROLES]),
-          ),
-        );
+  return await orgDb(memberData.organizationId).transaction(async (tx) => {
+    const technicians = await tx
+      .select({
+        userId: member.userId,
+        userName: user.name,
+        role: member.role,
+      })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(
+        and(
+          eq(member.organizationId, memberData.organizationId),
+          inArray(member.role, [...CALIBRATION_EXECUTOR_ROLES]),
+        ),
+      );
 
-      const assetTypes = await tx
-        .select({ id: assetType.id, name: assetType.name })
-        .from(assetType)
-        .orderBy(assetType.name);
+    const assetTypes = await tx
+      .select({ id: assetType.id, name: assetType.name })
+      .from(assetType)
+      .orderBy(assetType.name);
 
-      const competences = await tx
-        .select({
-          id: personnelCompetence.id,
-          userId: personnelCompetence.userId,
-          assetTypeId: personnelCompetence.assetTypeId,
-          status: personnelCompetence.status,
-          expiresAt: personnelCompetence.expiresAt,
-        })
-        .from(personnelCompetence)
-        .where(
-          and(
-            eq(personnelCompetence.organizationId, memberData.organizationId),
-            isNull(personnelCompetence.deletedAt),
-          ),
-        );
+    const competences = await tx
+      .select({
+        id: personnelCompetence.id,
+        userId: personnelCompetence.userId,
+        assetTypeId: personnelCompetence.assetTypeId,
+        status: personnelCompetence.status,
+        expiresAt: personnelCompetence.expiresAt,
+      })
+      .from(personnelCompetence)
+      .where(
+        and(
+          eq(personnelCompetence.organizationId, memberData.organizationId),
+          isNull(personnelCompetence.deletedAt),
+        ),
+      );
 
-      return { technicians, assetTypes, competences };
-    });
-  },
-);
+    return { technicians, assetTypes, competences };
+  });
+});
 
 mount(
   competencesRouter,
   PREFIX,
   entityLabelEndpoints.getCompetence,
-  withLabPermission({ competence: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -220,7 +212,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.get,
-  withLabPermission({ competence: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -329,7 +320,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.create,
-  withLabPermission({ competence: ["create"] }),
   async (c, { body: input }) => {
     const memberData = c.get("member");
     const session = c.get("session");
@@ -454,7 +444,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.assignTraining,
-  withLabPermission({ competence: ["update"] }),
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -557,7 +546,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.startTraining,
-  withLabPermission({ competence: ["update"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -626,7 +614,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.completeTraining,
-  withLabPermission({ competence: ["update"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -698,7 +685,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.evaluate,
-  withLabPermission({ competence: ["evaluate"] }),
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
     const session = c.get("session");
@@ -842,7 +828,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.cancel,
-  withLabPermission({ competence: ["update"] }),
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -911,7 +896,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.suspend,
-  withLabPermission({ competence: ["update"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -976,7 +960,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.renew,
-  withLabPermission({ competence: ["update"] }),
   async (c, { params, body: input }) => {
     const memberData = c.get("member");
     const session = c.get("session");
@@ -1063,7 +1046,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.delete,
-  withLabPermission({ competence: ["delete"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const { id } = params;
@@ -1090,7 +1072,6 @@ mount(
   competencesRouter,
   PREFIX,
   competenceEndpoints.auditLog,
-  withLabPermission({ competence: ["read"] }),
   async (c, { params }) => {
     const memberData = c.get("member");
     const { id } = params;

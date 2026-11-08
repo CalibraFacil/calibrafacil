@@ -97,6 +97,7 @@ export const ssoEndpoints = {
     failure: "Falha ao carregar configuração SSO",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   createProvider: endpoint({
     method: "post",
@@ -110,6 +111,7 @@ export const ssoEndpoints = {
     failure: "Falha ao registrar provedor SSO",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   requestDomainVerification: endpoint({
     method: "post",
@@ -119,6 +121,7 @@ export const ssoEndpoints = {
     failure: "Falha ao gerar token DNS",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   verifyDomain: endpoint({
     method: "post",
@@ -128,6 +131,7 @@ export const ssoEndpoints = {
     failure: "Falha ao verificar domínio",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   deleteProvider: endpoint({
     method: "delete",
@@ -138,5 +142,6 @@ export const ssoEndpoints = {
     failure: "Falha ao remover provedor SSO",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
 } as const satisfies EndpointGroup;

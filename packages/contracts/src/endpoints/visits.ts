@@ -159,6 +159,7 @@ export const visitEndpoints = {
     failure: "Falha ao carregar visitas",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["read"] },
   }),
   get: endpoint({
     method: "get",
@@ -168,6 +169,7 @@ export const visitEndpoints = {
     failure: "Falha ao carregar visita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["read"] },
   }),
   assign: endpoint({
     method: "post",
@@ -178,6 +180,7 @@ export const visitEndpoints = {
     failure: "Erro ao atribuir técnico",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   confirm: endpoint({
     method: "post",
@@ -188,6 +191,7 @@ export const visitEndpoints = {
     failure: "Erro ao confirmar visita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   reschedule: endpoint({
     method: "patch",
@@ -198,6 +202,7 @@ export const visitEndpoints = {
     failure: "Erro ao reagendar visita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   cancel: endpoint({
     method: "post",
@@ -208,6 +213,7 @@ export const visitEndpoints = {
     failure: "Erro ao cancelar visita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   complete: endpoint({
     method: "post",
@@ -217,6 +223,7 @@ export const visitEndpoints = {
     failure: "Erro ao concluir visita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   addJob: endpoint({
     method: "post",
@@ -228,6 +235,7 @@ export const visitEndpoints = {
     failure: "Erro ao adicionar instrumento a visita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   removeJob: endpoint({
     method: "delete",
@@ -237,6 +245,7 @@ export const visitEndpoints = {
     failure: "Erro ao remover instrumento da visita",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   acceptRescheduleRequest: endpoint({
     method: "post",
@@ -247,6 +256,7 @@ export const visitEndpoints = {
     failure: "Erro ao aceitar o reagendamento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
   // Answers the resolved request(s) as a list (the update's `.returning()` rows), as it always did.
   declineRescheduleRequest: endpoint({
@@ -258,5 +268,6 @@ export const visitEndpoints = {
     failure: "Erro ao recusar o reagendamento",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { request: ["update"] },
   }),
 } as const satisfies EndpointGroup;

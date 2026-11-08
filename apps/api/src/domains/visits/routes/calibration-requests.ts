@@ -15,10 +15,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { CALIBRATION_REQUEST_MACHINE } from "@calibra-facil/schemas/machines";
-import {
-  withLabPermission,
-  type AuthVariables,
-} from "../../../middleware/permission";
+import { type AuthVariables } from "../../../middleware/permission";
 import { createCalibrationJob } from "../../jobs";
 import { notify } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../../../lib/units";
@@ -174,7 +171,6 @@ mount(
   calibrationRequestsRouter,
   PREFIX,
   calibrationRequestEndpoints.list,
-  withLabPermission({ request: ["read"] }),
   async (c, { query: filters }) => {
     const member = c.get("member");
     const { page, limit, query, status, customerId } = filters;
@@ -270,7 +266,6 @@ mount(
   calibrationRequestsRouter,
   PREFIX,
   calibrationRequestEndpoints.get,
-  withLabPermission({ request: ["read"] }),
   async (c, { params }) => {
     const member = c.get("member");
     const id = params.id;
@@ -296,7 +291,6 @@ mount(
   calibrationRequestsRouter,
   PREFIX,
   calibrationRequestEndpoints.review,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -372,7 +366,6 @@ mount(
   calibrationRequestsRouter,
   PREFIX,
   calibrationRequestEndpoints.approve,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -445,7 +438,6 @@ mount(
   calibrationRequestsRouter,
   PREFIX,
   calibrationRequestEndpoints.reject,
-  withLabPermission({ request: ["update"] }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;
@@ -524,10 +516,6 @@ mount(
   calibrationRequestsRouter,
   PREFIX,
   calibrationRequestEndpoints.convert,
-  withLabPermission({
-    request: ["convert"],
-    calibration: ["create"],
-  }),
   async (c, { params, body }) => {
     const member = c.get("member");
     const id = params.id;

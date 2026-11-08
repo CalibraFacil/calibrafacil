@@ -79,6 +79,7 @@ export const portalDomainEndpoints = {
     failure: "Falha ao salvar domínio",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   verify: endpoint({
     method: "post",
@@ -87,6 +88,7 @@ export const portalDomainEndpoints = {
     failure: "Falha ao verificar domínio",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   activate: endpoint({
     method: "post",
@@ -95,6 +97,7 @@ export const portalDomainEndpoints = {
     failure: "Falha ao ativar domínio",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
   delete: endpoint({
     method: "delete",
@@ -103,5 +106,6 @@ export const portalDomainEndpoints = {
     failure: "Falha ao remover domínio",
     policy: "cloud-only",
     desktopLabel: DESKTOP_LABEL,
+    permission: { organization: ["update"] },
   }),
 } as const satisfies EndpointGroup;
