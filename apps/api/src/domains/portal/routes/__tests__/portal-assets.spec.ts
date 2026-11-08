@@ -90,6 +90,7 @@ const LOCAL_ORIGIN = { origin: "http://localhost" };
 function fleetAssetRow(overrides: Record<string, unknown>) {
   return {
     id: 1,
+    publicId: "00000000-0000-4000-8000-000000000001",
     customerId: 1,
     customerName: "Cliente",
     assetTypeId: 1,

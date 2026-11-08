@@ -1,13 +1,9 @@
 import { createRouter } from "../../../server/router";
 import { mount } from "../../../lib/endpoint-mount";
 import { orgDb } from "../../../lib/org-db";
-import { serviceOrderEndpoints } from "@calibra-facil/contracts";
-import type {
-  PortalFinancialSummaryResponse,
-  PortalQuoteDecisionResponse,
-  PortalServiceOrderDetailResponse,
-  PortalServiceOrdersResponse,
-  ServerShape,
+import {
+  portalServiceOrderEndpoints,
+  serviceOrderEndpoints,
 } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -24,7 +20,6 @@ import {
   DeliverServiceOrderSchema,
   FinishServiceOrderExecutionSchema,
   IssueServiceOrderDeliveryDocumentSchema,
-  ListServiceOrdersQuerySchema,
   RedeemServiceOrderAccessCodeSchema,
   RejectServiceOrderQuoteManuallySchema,
   RejectServiceOrderQuotePortalSchema,
@@ -141,12 +136,6 @@ const QuotePdfParamSchema = z.object({
     .pipe(z.number().int().positive()),
 });
 const TokenParamSchema = z.object({ token: z.string().trim().min(16) });
-// Portal routes service orders by the opaque publicId, not the serial id.
-const PortalIdParamSchema = z.object({ id: z.string().trim().min(1) });
-const PortalQuoteParamSchema = z.object({
-  id: z.string().trim().min(1),
-  quoteId: z.coerce.number().int().positive(),
-});
 
 // The public (token) routes have no signed-in actor: the visitor's address and
 // browser go to the event log.
@@ -171,6 +160,8 @@ function withPublicNoStoreHeaders(c: {
 }
 
 const PREFIX = "/api/service-orders";
+// The portal routes service orders by the opaque publicId, not the serial id.
+const PORTAL_PREFIX = "/api/portal/service-orders";
 
 export const serviceOrdersRouter = createRouter<{
   Bindings: ServiceOrderEnv;
@@ -792,176 +783,176 @@ serviceOrdersRouter.delete(
 export const portalServiceOrdersRouter = createRouter<{
   Bindings: ServiceOrderEnv;
   Variables: AuthVariables;
-}>()
-  .get(
-    "/",
-    ...requirePortalProtected,
-    requirePermission({ service_order: ["read"] }),
-    zValidator("query", ListServiceOrdersQuerySchema),
-    async (c) => {
-      const member = c.get("member");
-      const linkedCustomer = await getPortalCustomerForAuthOrganization(
-        member.organizationId,
-      );
-      if (!linkedCustomer)
-        return c.json({
-          data: [],
-          pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
-        });
-      const query = c.req.valid("query");
-      return c.json(
-        (await listServiceOrdersForPortalCustomer(
-          linkedCustomer.id,
-          query,
-          linkedCustomer.labOrganizationId,
-        )) satisfies ServerShape<PortalServiceOrdersResponse>,
-      );
-    },
-  )
-  .get(
-    "/:id/financial-summary",
-    ...requirePortalProtected,
-    requirePermission({ service_order: ["read"] }),
-    zValidator("param", PortalIdParamSchema),
-    async (c) => {
-      if (c.get("authSource") !== "portal") throw serviceOrderNotFound();
+}>();
 
-      const member = c.get("member");
-      const linkedCustomer = await getPortalCustomerForAuthOrganization(
-        member.organizationId,
-      );
-      if (!linkedCustomer) throw serviceOrderNotFound();
+mount(
+  portalServiceOrdersRouter,
+  PORTAL_PREFIX,
+  portalServiceOrderEndpoints.list,
+  [...requirePortalProtected, requirePermission({ service_order: ["read"] })],
+  async (c, { query }) => {
+    const member = c.get("member");
+    const linkedCustomer = await getPortalCustomerForAuthOrganization(
+      member.organizationId,
+    );
+    if (!linkedCustomer)
+      return {
+        data: [],
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+      };
+    return await listServiceOrdersForPortalCustomer(
+      linkedCustomer.id,
+      query,
+      linkedCustomer.labOrganizationId,
+    );
+  },
+);
 
-      const id = await resolvePortalServiceOrderIdByPublicId(
-        c.req.valid("param").id,
-        linkedCustomer.id,
-        linkedCustomer.labOrganizationId,
-      );
-      if (id === null) throw serviceOrderNotFound();
-      const detail = await orgDb(linkedCustomer.labOrganizationId).transaction(
-        (o) => getServiceOrderDetail(o, id, linkedCustomer.labOrganizationId),
-      );
-      if (!detail || detail.customerId !== linkedCustomer.id) {
-        throw serviceOrderNotFound();
-      }
-      if (detail.unitId == null) throw serviceOrderNotFound();
+mount(
+  portalServiceOrdersRouter,
+  PORTAL_PREFIX,
+  portalServiceOrderEndpoints.financialSummary,
+  [...requirePortalProtected, requirePermission({ service_order: ["read"] })],
+  async (c, { params }) => {
+    if (c.get("authSource") !== "portal") throw serviceOrderNotFound();
 
-      let r2Client: ReturnType<typeof createR2Client> | null = null;
+    const member = c.get("member");
+    const linkedCustomer = await getPortalCustomerForAuthOrganization(
+      member.organizationId,
+    );
+    if (!linkedCustomer) throw serviceOrderNotFound();
 
-      const summary = await buildPortalServiceOrderFinancialSummary({
-        organizationId: linkedCustomer.labOrganizationId,
-        serviceOrderId: id,
-        // The portal route has already scoped the order by org and linked
-        // customer. The shared financial read model still requires a unit
-        // scope, so keep it limited to the visible order's unit instead of
-        // inventing a broader client-side unit scope for portal users.
-        scope: {
-          activeUnitId: detail.unitId,
-          accessibleUnitIds: [detail.unitId],
-          selectedUnitScope: "unit",
-        },
-        documentHrefSigner: (r2Key) => {
-          r2Client ??= createR2Client(c.env);
-          return generatePresignedUrl(r2Client, c.env.R2_BUCKET_NAME, r2Key);
-        },
-      });
+    const id = await resolvePortalServiceOrderIdByPublicId(
+      params.id,
+      linkedCustomer.id,
+      linkedCustomer.labOrganizationId,
+    );
+    if (id === null) throw serviceOrderNotFound();
+    const detail = await orgDb(linkedCustomer.labOrganizationId).transaction(
+      (o) => getServiceOrderDetail(o, id, linkedCustomer.labOrganizationId),
+    );
+    if (!detail || detail.customerId !== linkedCustomer.id) {
+      throw serviceOrderNotFound();
+    }
+    if (detail.unitId == null) throw serviceOrderNotFound();
 
-      if (!summary) throw serviceOrderNotFound();
-      return c.json({
-        data: summary,
-      } satisfies ServerShape<PortalFinancialSummaryResponse>);
-    },
-  )
-  .get(
-    "/:id",
-    ...requirePortalProtected,
-    requirePermission({ service_order: ["read"] }),
-    zValidator("param", PortalIdParamSchema),
-    async (c) => {
-      const member = c.get("member");
-      const linkedCustomer = await getPortalCustomerForAuthOrganization(
-        member.organizationId,
-      );
-      if (!linkedCustomer) throw serviceOrderNotFound();
-      const orderId = await resolvePortalServiceOrderIdByPublicId(
-        c.req.valid("param").id,
-        linkedCustomer.id,
-        linkedCustomer.labOrganizationId,
-      );
-      if (orderId === null) throw serviceOrderNotFound();
-      const detail = await orgDb(linkedCustomer.labOrganizationId).transaction(
-        (o) =>
-          getServiceOrderDetail(o, orderId, linkedCustomer.labOrganizationId),
-      );
-      if (!detail || detail.customerId !== linkedCustomer.id) {
-        throw serviceOrderNotFound();
-      }
-      return c.json({
-        data: toClientVisibleServiceOrderDetail(detail),
-      } satisfies ServerShape<PortalServiceOrderDetailResponse>);
-    },
-  )
-  .post(
-    "/:id/quotes/:quoteId/approve",
-    ...requirePortalProtected,
-    requirePermission({ service_order: ["read"] }),
-    zValidator("param", PortalQuoteParamSchema),
-    zValidator("json", ApproveServiceOrderQuotePortalSchema),
-    async (c) => {
-      const member = c.get("member");
-      const { id: publicId, quoteId } = c.req.valid("param");
-      const linkedCustomer = await getPortalCustomerForAuthOrganization(
-        member.organizationId,
-      );
-      if (!linkedCustomer) throw serviceOrderQuoteNotFound();
-      const id = await resolvePortalServiceOrderIdByPublicId(
-        publicId,
-        linkedCustomer.id,
-        linkedCustomer.labOrganizationId,
-      );
-      if (id === null) throw serviceOrderQuoteNotFound();
-      await withOrg(linkedCustomer.labOrganizationId, requestActor(c), (ctx) =>
-        approveServiceOrderQuoteByPortalUser(ctx, linkedCustomer, id, quoteId),
-      );
-      return c.json({
-        ok: true,
-      } satisfies ServerShape<PortalQuoteDecisionResponse>);
-    },
-  )
-  .post(
-    "/:id/quotes/:quoteId/reject",
-    ...requirePortalProtected,
-    requirePermission({ service_order: ["read"] }),
-    zValidator("param", PortalQuoteParamSchema),
-    zValidator("json", RejectServiceOrderQuotePortalSchema),
-    async (c) => {
-      const member = c.get("member");
-      const { id: publicId, quoteId } = c.req.valid("param");
-      const input = c.req.valid("json");
-      const linkedCustomer = await getPortalCustomerForAuthOrganization(
-        member.organizationId,
-      );
-      if (!linkedCustomer) throw serviceOrderQuoteNotFound();
-      const id = await resolvePortalServiceOrderIdByPublicId(
-        publicId,
-        linkedCustomer.id,
-        linkedCustomer.labOrganizationId,
-      );
-      if (id === null) throw serviceOrderQuoteNotFound();
-      await withOrg(linkedCustomer.labOrganizationId, requestActor(c), (ctx) =>
-        rejectServiceOrderQuoteByPortalUser(
-          ctx,
-          linkedCustomer,
-          id,
-          quoteId,
-          input,
-        ),
-      );
-      return c.json({
-        ok: true,
-      } satisfies ServerShape<PortalQuoteDecisionResponse>);
-    },
-  );
+    let r2Client: ReturnType<typeof createR2Client> | null = null;
+
+    const summary = await buildPortalServiceOrderFinancialSummary({
+      organizationId: linkedCustomer.labOrganizationId,
+      serviceOrderId: id,
+      // The portal route has already scoped the order by org and linked
+      // customer. The shared financial read model still requires a unit
+      // scope, so keep it limited to the visible order's unit instead of
+      // inventing a broader client-side unit scope for portal users.
+      scope: {
+        activeUnitId: detail.unitId,
+        accessibleUnitIds: [detail.unitId],
+        selectedUnitScope: "unit",
+      },
+      documentHrefSigner: (r2Key) => {
+        r2Client ??= createR2Client(c.env);
+        return generatePresignedUrl(r2Client, c.env.R2_BUCKET_NAME, r2Key);
+      },
+    });
+
+    if (!summary) throw serviceOrderNotFound();
+    return {
+      data: summary,
+    };
+  },
+);
+
+mount(
+  portalServiceOrdersRouter,
+  PORTAL_PREFIX,
+  portalServiceOrderEndpoints.get,
+  [...requirePortalProtected, requirePermission({ service_order: ["read"] })],
+  async (c, { params }) => {
+    const member = c.get("member");
+    const linkedCustomer = await getPortalCustomerForAuthOrganization(
+      member.organizationId,
+    );
+    if (!linkedCustomer) throw serviceOrderNotFound();
+    const orderId = await resolvePortalServiceOrderIdByPublicId(
+      params.id,
+      linkedCustomer.id,
+      linkedCustomer.labOrganizationId,
+    );
+    if (orderId === null) throw serviceOrderNotFound();
+    const detail = await orgDb(linkedCustomer.labOrganizationId).transaction(
+      (o) =>
+        getServiceOrderDetail(o, orderId, linkedCustomer.labOrganizationId),
+    );
+    if (!detail || detail.customerId !== linkedCustomer.id) {
+      throw serviceOrderNotFound();
+    }
+    return {
+      data: toClientVisibleServiceOrderDetail(detail),
+    };
+  },
+);
+
+mount(
+  portalServiceOrdersRouter,
+  PORTAL_PREFIX,
+  portalServiceOrderEndpoints.approveQuote,
+  [...requirePortalProtected, requirePermission({ service_order: ["read"] })],
+  async (c, { params }) => {
+    const member = c.get("member");
+    const { id: publicId, quoteId } = params;
+    const linkedCustomer = await getPortalCustomerForAuthOrganization(
+      member.organizationId,
+    );
+    if (!linkedCustomer) throw serviceOrderQuoteNotFound();
+    const id = await resolvePortalServiceOrderIdByPublicId(
+      publicId,
+      linkedCustomer.id,
+      linkedCustomer.labOrganizationId,
+    );
+    if (id === null) throw serviceOrderQuoteNotFound();
+    await withOrg(linkedCustomer.labOrganizationId, requestActor(c), (ctx) =>
+      approveServiceOrderQuoteByPortalUser(ctx, linkedCustomer, id, quoteId),
+    );
+    return {
+      ok: true,
+    };
+  },
+);
+
+mount(
+  portalServiceOrdersRouter,
+  PORTAL_PREFIX,
+  portalServiceOrderEndpoints.rejectQuote,
+  [...requirePortalProtected, requirePermission({ service_order: ["read"] })],
+  async (c, { params, body }) => {
+    const member = c.get("member");
+    const { id: publicId, quoteId } = params;
+    const input = body;
+    const linkedCustomer = await getPortalCustomerForAuthOrganization(
+      member.organizationId,
+    );
+    if (!linkedCustomer) throw serviceOrderQuoteNotFound();
+    const id = await resolvePortalServiceOrderIdByPublicId(
+      publicId,
+      linkedCustomer.id,
+      linkedCustomer.labOrganizationId,
+    );
+    if (id === null) throw serviceOrderQuoteNotFound();
+    await withOrg(linkedCustomer.labOrganizationId, requestActor(c), (ctx) =>
+      rejectServiceOrderQuoteByPortalUser(
+        ctx,
+        linkedCustomer,
+        id,
+        quoteId,
+        input,
+      ),
+    );
+    return {
+      ok: true,
+    };
+  },
+);
 
 export const publicServiceOrderAccessRouter = createRouter<{
   Variables: AuthVariables;

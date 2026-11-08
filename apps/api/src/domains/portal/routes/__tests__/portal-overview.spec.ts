@@ -121,6 +121,9 @@ describe("GET /overview", () => {
       [
         {
           id: 5,
+          publicId: "00000000-0000-4000-8000-000000000005",
+          customerId: 1,
+          customerName: "Cliente",
           name: "Paquímetro",
           tag: "EQ-5",
           nextCalibrationDate: "2026-05-20T00:00:00.000Z",
@@ -157,6 +160,7 @@ describe("GET /overview", () => {
       [
         {
           id: 8,
+          publicId: "00000000-0000-4000-8000-000000000008",
           serviceOrderNumber: "OS-8",
           status: "awaiting_quote_approval",
           openedAt: "2026-05-25T00:00:00.000Z",
@@ -166,6 +170,7 @@ describe("GET /overview", () => {
       [
         {
           id: 8,
+          publicId: "00000000-0000-4000-8000-000000000008",
           serviceOrderNumber: "OS-8",
           status: "awaiting_quote_approval",
           openedAt: "2026-05-25T00:00:00.000Z",

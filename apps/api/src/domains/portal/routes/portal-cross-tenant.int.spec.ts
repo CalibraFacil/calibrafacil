@@ -185,7 +185,7 @@ async function seedLab(params: {
         status: "PROPOSED",
         scheduledAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
         sourceRequestId: request.id,
-        address: `Rua ${label}`,
+        address: { street: `Rua ${label}` },
       })
       .returning({ id: calibrationVisit.id }),
   );
