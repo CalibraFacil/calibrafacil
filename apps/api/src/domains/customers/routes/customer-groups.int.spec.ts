@@ -1,16 +1,20 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { customerGroupsRouter } from "./customer-groups";
 import { db } from "@calibra-facil/db";
 import {
+  asset,
+  assetType,
   customer,
   customerAuditLog,
   customerGroup,
+  member,
   organization,
+  user,
 } from "@calibra-facil/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
-import { seedOrg } from "../../../../test/integration/seed";
+import { seedOrg, seedPortalAsset } from "../../../../test/integration/seed";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for customer-groups (redes/grupos). Only
@@ -35,6 +39,19 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 // ONLY — neither table has a unitId column (schema.ts), so unit-scope isolation
 // is structurally N/A for this router. groupId is the assignment target, not a
 // tenant boundary.
+
+// The identity service (Better Auth organizations and invitations) is not available in the
+// integration harness, which stubs the session only: these four calls are the boundary.
+const portalService = vi.hoisted(() => ({
+  createClientOrganizationAsServiceOwner: vi.fn(async () => ({
+    id: "group-org-new",
+  })),
+  createPortalInvitationAsService: vi.fn(async () => ({ id: "inv-1" })),
+  cancelPortalInvitationAsService: vi.fn(async () => ({ success: true })),
+  removePortalMemberAsService: vi.fn(async () => ({ success: true })),
+  enforceClientPortalMembershipBoundary: vi.fn(async () => undefined),
+}));
+vi.mock("../portal-service-account", () => portalService);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -107,11 +124,44 @@ async function seedCustomer(params: {
   return row.id;
 }
 
+/** Seed an ACTIVE instrument of a branch customer, due in `days` days from now. */
+async function seedInstrument(params: {
+  unitId: number;
+  customerId: number;
+  tag: string;
+  days: number;
+}): Promise<void> {
+  await db
+    .insert(assetType)
+    .values({ name: "Instrumento", slug: "cg-fixture-type", definition: [] })
+    .onConflictDoNothing();
+  const [type] = await db
+    .select({ id: assetType.id })
+    .from(assetType)
+    .where(eq(assetType.slug, "cg-fixture-type"));
+  await withStatusRepair((tx) =>
+    tx.insert(asset).values({
+      unitId: params.unitId,
+      customerId: params.customerId,
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+      assetTypeId: type?.id ?? 0,
+      name: `Instrumento ${params.tag}`,
+      serialNumber: `SN-${params.tag}`,
+      tag: params.tag,
+      status: "ACTIVE",
+      nextCalibrationDate: new Date(
+        Date.now() + params.days * 24 * 60 * 60 * 1000,
+      ),
+    }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 
 describe("customerGroupsRouter — real DB + real middleware", () => {
   beforeEach(async () => {
     await truncateAll();
+    vi.clearAllMocks();
   });
 
   // REQ-CG-001 [HIGH RISK]: tenant read isolation. The GET / list query filters
@@ -332,5 +382,267 @@ describe("customerGroupsRouter — real DB + real middleware", () => {
       .from(customer)
       .where(and(eq(customer.id, customerId), eq(customer.groupId, groupId)));
     expect(persisted?.groupId).toBe(groupId);
+  });
+
+  // REQ-CG-006: creating a group provisions its CLIENT organization and stores the group under
+  // the authed laboratory; an e-mail also invites the unified manager.
+  it("REQ-CG-006: POST / stores the group under the lab with the organization the identity service created, and invites the manager when an e-mail is given", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    // The identity service creates the CLIENT organization the group points at.
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: "group-org-new",
+        name: "Rede X",
+        slug: "group-org-new",
+        type: "CLIENT",
+        status: "ACTIVE",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const post = (body: unknown) =>
+      customerGroupsRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body),
+      });
+
+    const res = await post({ name: "Rede X", email: "qa@rede.com" });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body).toMatchObject({ name: "Rede X", invitationId: "inv-1" });
+    const [row] = await db
+      .select()
+      .from(customerGroup)
+      .where(eq(customerGroup.id, body.id));
+    expect(row).toMatchObject({
+      name: "Rede X",
+      labOrganizationId: org.orgId,
+      authOrganizationId: "group-org-new",
+    });
+    expect(portalService.createPortalInvitationAsService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "qa@rede.com",
+        organizationId: "group-org-new",
+      }),
+    );
+  });
+
+  // REQ-CG-007 [HIGH RISK]: a branch customer of another laboratory cannot be assigned.
+  it("REQ-CG-007: POST /:id/branches with another laboratory's customer -> 404, nothing assigned", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const groupId = await seedGroup({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-grp",
+      name: "Rede A",
+    });
+    const foreign = await seedCustomer({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b-branch",
+      name: "Filial B",
+    });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await customerGroupsRouter.request(`/${groupId}/branches`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ customerId: foreign }),
+    });
+
+    expect(res.status).toBe(404);
+    const [after] = await db
+      .select({ groupId: customer.groupId })
+      .from(customer)
+      .where(eq(customer.id, foreign));
+    expect(after?.groupId).toBeNull();
+  });
+
+  // REQ-CG-008: the group detail counts each branch's active instruments by due status.
+  it("REQ-CG-008: GET /:id enriches each branch with its instrument counts (zeros when none), and another lab's group is 404", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const groupId = await seedGroup({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-grp",
+      name: "Rede A",
+    });
+    const foreignGroup = await seedGroup({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b-grp",
+      name: "Rede B",
+    });
+    const withAssets = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-1",
+      name: "Unidade A",
+    });
+    const empty = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-2",
+      name: "Unidade B",
+    });
+    await db
+      .update(customer)
+      .set({ groupId })
+      .where(inArray(customer.id, [withAssets, empty]));
+    for (const [tag, days] of [
+      ["EQ-LATE", -5],
+      ["EQ-SOON", 10],
+      ["EQ-LATER", 300],
+    ] as const) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- three sequential inserts.
+      await seedInstrument({
+        unitId: orgA.unitId,
+        customerId: withAssets,
+        tag,
+        days,
+      });
+    }
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await customerGroupsRouter.request(`/${groupId}`, {
+      headers: JSON_HEADERS,
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const byName = new Map<string, Record<string, number>>(
+      body.branches.map((branch: { name: string }) => [branch.name, branch]),
+    );
+    expect(byName.get("Unidade A")).toMatchObject({
+      total: 3,
+      overdue: 1,
+      dueSoon: 1,
+    });
+    expect(byName.get("Unidade B")).toMatchObject({
+      total: 0,
+      overdue: 0,
+      dueSoon: 0,
+    });
+    const foreignRes = await customerGroupsRouter.request(`/${foreignGroup}`, {
+      headers: JSON_HEADERS,
+    });
+    expect(foreignRes.status).toBe(404);
+  });
+
+  // REQ-CG-009: members and invitations of the group's portal organization are reachable only
+  // through the laboratory's own group, and only portal members are listed or removable.
+  async function seedGroupMember(
+    clientOrgId: string,
+    userId: string,
+    role: string,
+  ) {
+    await db.insert(user).values({
+      id: userId,
+      name: `User ${userId}`,
+      email: `${userId}@rede.test`,
+    });
+    await db.insert(member).values({
+      id: `member-${userId}`,
+      organizationId: clientOrgId,
+      userId,
+      role,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+  }
+
+  it("REQ-CG-009: GET /:id/members lists only portal members of the lab's own group; another lab's group is 404", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const groupId = await seedGroup({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-grp",
+      name: "Rede A",
+    });
+    const foreignGroup = await seedGroup({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b-grp",
+      name: "Rede B",
+    });
+    await seedGroupMember("client-a-grp", "qa-portal", "client_user");
+    await seedGroupMember("client-a-grp", "lab-staff", "owner");
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await customerGroupsRouter.request(`/${groupId}/members`, {
+      headers: JSON_HEADERS,
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.map((row: { userId: string }) => row.userId)).toEqual([
+      "qa-portal",
+    ]);
+    expect(
+      (
+        await customerGroupsRouter.request(`/${foreignGroup}/members`, {
+          headers: JSON_HEADERS,
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it("REQ-CG-009: POST /:id/invitations invites on the group's portal organization; another lab's group is 404 and nobody is invited", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const groupId = await seedGroup({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-grp",
+      name: "Rede A",
+    });
+    const foreignGroup = await seedGroup({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b-grp",
+      name: "Rede B",
+    });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const invite = (id: number) =>
+      customerGroupsRouter.request(`/${id}/invitations`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ email: "qa@rede.com" }),
+      });
+
+    expect((await invite(foreignGroup)).status).toBe(404);
+    expect(
+      portalService.createPortalInvitationAsService,
+    ).not.toHaveBeenCalled();
+
+    expect((await invite(groupId)).status).toBe(201);
+    expect(
+      portalService.enforceClientPortalMembershipBoundary,
+    ).toHaveBeenCalledWith("client-a-grp");
+    expect(portalService.createPortalInvitationAsService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "qa@rede.com",
+        organizationId: "client-a-grp",
+      }),
+    );
+  });
+
+  it("REQ-CG-009: DELETE /:id/members/:memberId removes a portal member and refuses a laboratory member (403)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const groupId = await seedGroup({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a-grp",
+      name: "Rede A",
+    });
+    await seedGroupMember("client-a-grp", "qa-portal", "client_user");
+    await seedGroupMember("client-a-grp", "lab-staff", "owner");
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const remove = (memberId: string) =>
+      customerGroupsRouter.request(`/${groupId}/members/${memberId}`, {
+        method: "DELETE",
+      });
+
+    expect((await remove("member-lab-staff")).status).toBe(403);
+    expect(portalService.removePortalMemberAsService).not.toHaveBeenCalled();
+
+    expect((await remove("member-qa-portal")).status).toBe(200);
+    expect(portalService.removePortalMemberAsService).toHaveBeenCalledWith({
+      memberId: "member-qa-portal",
+      organizationId: "client-a-grp",
+    });
   });
 });

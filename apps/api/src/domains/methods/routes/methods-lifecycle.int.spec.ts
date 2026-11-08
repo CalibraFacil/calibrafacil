@@ -163,6 +163,26 @@ describe("methods router: lifecycle handlers (P2-18d)", () => {
     expect(created.status).toBe("DRAFT");
     expect(created.templateKey).toBe(template.key);
 
+    // Never accredited by adoption: the row says DRAFT, outside the accredited scope, at the
+    // template's version.
+    const [row] = await db
+      .select({
+        status: calibrationMethod.status,
+        accreditedScope: calibrationMethod.accreditedScope,
+        templateKey: calibrationMethod.templateKey,
+        templateVersion: calibrationMethod.templateVersion,
+      })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, created.id));
+    expect(row).toEqual({
+      status: "DRAFT",
+      accreditedScope: false,
+      templateKey: template.key,
+      templateVersion: template.templateVersion,
+    });
+
+    // The audit entry freezes the acknowledgements and an immutable snapshot of the cited
+    // sources, [VERIFICAR] items and omitted components at adoption time.
     const [audit] = await db
       .select({
         action: methodAuditLog.action,
@@ -171,7 +191,106 @@ describe("methods router: lifecycle handlers (P2-18d)", () => {
       .from(methodAuditLog)
       .where(eq(methodAuditLog.methodId, created.id));
     expect(audit?.action).toBe("create");
-    expect(audit?.changes).toMatchObject({ fromTemplate: template.key });
+    expect(audit?.changes).toMatchObject({
+      fromTemplate: template.key,
+      templateVersion: template.templateVersion,
+      acknowledgements: { acceptedVerificarRefs },
+      governanceSnapshot: {
+        sources: template.governance?.sources,
+        verificarItems: template.governance?.verificarItems,
+        omittedComponents: template.governance?.omittedComponents,
+      },
+    });
+  });
+
+  describe("adoption gates (REQ-18D-METH-2)", () => {
+    const electrical = listTemplates().find(
+      (t) => t.key === "electrical-indication",
+    );
+    const actionRefs = (electrical?.governance?.verificarItems ?? [])
+      .filter((item) => item.severity === "action")
+      .map((item) => item.ref)
+      .filter((ref): ref is string => typeof ref === "string");
+
+    function adopt(
+      overrides: {
+        accepted?: string[];
+        consent?: boolean;
+        templateKey?: string;
+      } = {},
+    ) {
+      return methodsRouter.request("/from-template", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          templateKey: overrides.templateKey ?? "electrical-indication",
+          acknowledgements: {
+            readVerificarAndOmitted: true,
+            acceptsVerificationDuty: true,
+            understandsDraftGate: overrides.consent ?? true,
+            acknowledgedAt: "2026-06-18T00:00:00.000Z",
+            templateVersion: electrical?.templateVersion ?? 1,
+            acceptedVerificarRefs: overrides.accepted ?? actionRefs,
+          },
+        }),
+      });
+    }
+
+    async function methodCount() {
+      return (
+        await db.select({ id: calibrationMethod.id }).from(calibrationMethod)
+      ).length;
+    }
+
+    it("the chosen template has action-severity [VERIFICAR] references to acknowledge (guard of the cases below)", () => {
+      expect(electrical).toBeTruthy();
+      expect(actionRefs.length).toBeGreaterThan(0);
+    });
+
+    it("refuses (400, naming the missing ones) an adoption that leaves an action-severity [VERIFICAR] unacknowledged, and persists nothing", async () => {
+      await twoLabs();
+
+      const res = await adopt({ accepted: [] });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.missing.length).toBeGreaterThan(0);
+      expect(await methodCount()).toBe(0);
+    });
+
+    it("refuses (400) at the schema gate when a consent is not true, and persists nothing", async () => {
+      await twoLabs();
+
+      expect((await adopt({ consent: false })).status).toBe(400);
+      expect(await methodCount()).toBe(0);
+    });
+
+    it("answers 404 for an unknown template and persists nothing", async () => {
+      await twoLabs();
+
+      expect((await adopt({ templateKey: "does-not-exist" })).status).toBe(404);
+      expect(await methodCount()).toBe(0);
+    });
+  });
+
+  it("GET /templates serves only governance-complete templates, each with the catalog DTO", async () => {
+    await twoLabs();
+
+    const res = await methodsRouter.request("/templates");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.length).toBeGreaterThan(0);
+    for (const entry of body) {
+      expect(entry.governance.reviewStatus).toBe("draft_pending_revalidation");
+      expect(entry.governance.sources.length).toBeGreaterThan(0);
+      expect(entry.governance.verificarItems.length).toBeGreaterThan(0);
+      expect(entry.spec).toBeTruthy();
+      expect(typeof entry.counts.verificar).toBe("number");
+    }
+    expect(
+      body.map((entry: { templateKey: string }) => entry.templateKey),
+    ).toContain("electrical-indication");
   });
 
   it("REQ-18D-METH-3: return-to-draft and archive move the status and audit", async () => {
