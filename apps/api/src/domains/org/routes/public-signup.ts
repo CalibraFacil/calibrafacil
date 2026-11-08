@@ -28,9 +28,9 @@ import {
   provisionLabAccount,
 } from "../lab-provisioning";
 import { mount } from "../../../lib/endpoint-mount";
+import { readAuthConfig } from "@calibra-facil/config";
 import { resolveTrustedAppUrl } from "../trusted-app-url";
 import { reportServerError } from "../../../lib/observability";
-import { toRecord } from "@calibra-facil/shared/record";
 
 /**
  * Public, UNAUTHENTICATED self-serve sign-up for a laboratory.
@@ -52,19 +52,8 @@ import { toRecord } from "@calibra-facil/shared/record";
  * the same handshake the invite flow uses.
  */
 
-function envValue(c: { env?: unknown }, key: string): string | undefined {
-  const runtimeEnv = toRecord(c.env);
-  const fromRuntime = runtimeEnv[key];
-  const value =
-    typeof fromRuntime === "string" ? fromRuntime : process.env[key];
-
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
-}
-
-function publicSignupEnabled(c: { env?: unknown }) {
-  return envValue(c, "PUBLIC_SIGNUP_ENABLED")?.toLowerCase() === "true";
+function publicSignupEnabled() {
+  return readAuthConfig().publicSignupEnabled;
 }
 
 /** True when this e-mail already belongs to a laboratory team (see `hasLabMembership`). */
@@ -92,7 +81,7 @@ mount(
   publicSignupEndpoints.start,
   [],
   async (c, { body }) => {
-    if (!publicSignupEnabled(c)) {
+    if (!publicSignupEnabled()) {
       throw notFound(
         "not_found",
         "O cadastro automático está indisponível. Fale com a nossa equipe.",
@@ -184,7 +173,7 @@ mount(
 
         try {
           await sendClaimEmail({
-            appUrl: resolveTrustedAppUrl(c),
+            appUrl: resolveTrustedAppUrl(),
             owner: provisioned.owner,
             organizationId: provisioned.organization.id,
             organizationName: provisioned.organization.name,

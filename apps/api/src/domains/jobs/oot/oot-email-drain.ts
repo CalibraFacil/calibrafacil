@@ -292,8 +292,7 @@ export async function drainOotEmailOutbox(options?: {
         }
 
         const brand = await getLabEmailBrand(row.organizationId);
-        const apiBaseUrl =
-          readOriginsConfig().apiUrl ?? "http://localhost:3000";
+        const apiBaseUrl = readOriginsConfig().apiBaseUrl;
         const ackUrl = `${apiBaseUrl}/api/public/oot-ack/${notification.ackToken}`;
 
         const sendResult = await sendOotCustomerEmail({
