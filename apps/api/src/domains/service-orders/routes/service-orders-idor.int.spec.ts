@@ -25,7 +25,7 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
 
-// SEC-01 — cross-tenant IDOR regression suite for the lab serviceOrdersRouter.
+// Cross-tenant IDOR regression suite for the lab serviceOrdersRouter.
 //
 // These three write endpoints resolved the target OS by its sequential numeric
 // `:id` WITHOUT filtering `organizationId`, so a member of org A could mutate an
@@ -106,7 +106,7 @@ async function seedAsset(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        // Per-org tag uniqueness — derive lab org from the customer.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
         assetTypeId: params.assetTypeId,
         name: "Test Asset",
@@ -604,7 +604,7 @@ describe("serviceOrdersRouter — SEC-01 cross-tenant IDORs (real DB + real RBAC
 // ---------------------------------------------------------------------------
 // Foreign-id (tenant-refs) guards: ids named in the request BODY / PATH that
 // point at another tenant's user, service order or certificate job. The target
-// OS itself is already scoped (SEC-01); these prove the ids it is linked to are
+// OS itself is already scoped; these prove the ids it is linked to are
 // scoped too, and that the refusal never reveals whether the id exists.
 // ---------------------------------------------------------------------------
 describe("serviceOrdersRouter — request-supplied foreign ids are tenant-scoped", () => {

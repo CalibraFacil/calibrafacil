@@ -1,7 +1,7 @@
 /**
  * service-order-numbers-per-lab.int.spec.ts — the tag, quote, intake and delivery document
  * numbers derive from the per-laboratory service-order number, so they are unique PER
- * LABORATORY (P0-4, migration 0125; same class as NC/CAPA, migration 0124). Before the fix a
+ * LABORATORY (migration 0125; same class as NC/CAPA, migration 0124). Before the fix a
  * second laboratory's first order of the year collided with the first laboratory's on the
  * global unique indexes and the request failed.
  *

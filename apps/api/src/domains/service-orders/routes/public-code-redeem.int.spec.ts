@@ -40,8 +40,8 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-// Public approval-code redemption — spec quote-approval-public-access
-// (issue #785), mini-spec B. Real DB; no session (the code IS the credential).
+// Public approval-code redemption — spec quote-approval-public-access.
+// Real DB; no session (the code IS the credential).
 //
 // REQ-QPUB-012  valid live code → 200 with a tokenized access URL that works
 // REQ-QPUB-013  every miss → the SAME generic 404 (no existence oracle)

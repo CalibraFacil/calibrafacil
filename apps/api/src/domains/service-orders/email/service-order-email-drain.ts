@@ -1,5 +1,5 @@
 /**
- * Outbox drain for service-order lifecycle emails (mini-spec E2 + mini-spec I).
+ * Outbox drain for service-order lifecycle emails.
  *
  * Drains the `service_order_email_outbox` table and sends the matching
  * customer email template for each pending row. The drain is designed for
@@ -35,7 +35,7 @@
  *   "quote_approved:*"       → dispatchOrcamentoAprovadoEmail via sendServiceOrderEmailOnce
  *   "quote_rejected:*"       → dispatchOrcamentoRecusadoEmail via sendServiceOrderEmailOnce
  *
- * Mini-spec I (REQ-SOEMAIL-073..075): B/C/D rows are routed by eventKey
+ * B/C/D rows (REQ-SOEMAIL-073..075) are routed by eventKey
  * namespace, payload is parsed with the matching Zod schema, and the
  * existing dispatch helpers are called inside sendServiceOrderEmailOnce so
  * the at-most-once ledger covers them exactly as the command path did.
@@ -76,30 +76,21 @@ import { dispatchOrcamentoAprovadoEmail } from "./orcamento-aprovado-email-dispa
 import { dispatchOrcamentoRecusadoEmail } from "./orcamento-recusado-email-dispatch";
 import { isReleaseExhausting } from "../../../lib/outbox-release";
 
-// =============================================================================
-// CONSTANTS
-// =============================================================================
-
 // Each row reloads the service order + customer, renders a template, and sends
-// an email (network) sequentially, all inside the cron's 30s maxDuration. A
-// batch sized so the whole drain reliably finishes well under 30s minimises the
-// chance of being killed mid-batch. If that does happen, the claimed_at lease
-// (see below) lets the in-flight row recover on a later drain, and the
-// at-most-once ledger keeps a recovered-but-already-sent row from being
-// re-emailed. At the */30min cadence, 20 rows/run keeps the backlog
-// draining with margin to spare.
+// an email (network) sequentially. A batch sized so the whole drain finishes
+// well within the cron lease (120s) keeps a run killed mid-batch rare. If that
+// does happen, the claimed_at lease (see below) lets the in-flight row recover
+// on a later drain, and the at-most-once ledger keeps a recovered-but-already-
+// sent row from being re-emailed. At the */30min cadence, 20 rows/run keeps the
+// backlog draining with margin to spare.
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_ATTEMPTS = 3;
 // How long a claim lease is held before another drain may reclaim the row. Must
 // exceed the worst-case time to process one row (re-load + render + send) but be
 // short enough that a row stranded by a killed run recovers within a few drain
-// cycles. The cron runs every 30 min and its function maxDuration is 30s, so
+// cycles. The cron runs every 30 min, so
 // 120s comfortably covers an in-flight row while bounding strand recovery.
 const CLAIM_LEASE_SECONDS = 120;
-
-// =============================================================================
-// TYPES
-// =============================================================================
 
 export interface DrainServiceOrderEmailsResult {
   processed: number;
@@ -110,10 +101,10 @@ export interface DrainServiceOrderEmailsResult {
 }
 
 // Internal row shape returned by the SELECT query.
-// eventKey and payload are included for B/C/D routing (mini-spec I).
+// eventKey and payload are included for B/C/D routing.
 // They may be absent on legacy status_email rows (no migration required — the
 // columns exist in the schema; the optional typing guards against test mocks
-// that pre-date mini-spec I and don't populate these fields).
+// that pre-date the B/C/D routing and don't populate these fields).
 interface OutboxRow {
   id: number;
   organizationId: string;
@@ -145,10 +136,6 @@ interface CustomerEmailData {
   name: string;
   email: string | null | undefined;
 }
-
-// =============================================================================
-// HELPERS
-// =============================================================================
 
 /**
  * Converts an `unknown` value to `Record<string, unknown> | null | undefined`
@@ -293,10 +280,6 @@ async function markOutboxRowProcessed(
     );
   });
 }
-
-// =============================================================================
-// B/C/D DISPATCH — mini-spec I
-// =============================================================================
 
 /**
  * Handle a B/C/D outbox row by parsing its payload and calling the appropriate
@@ -449,10 +432,6 @@ async function dispatchBcdEmailForRow(
   return false;
 }
 
-// =============================================================================
-// STATUS_EMAIL PATH (unchanged, E/F/G)
-// =============================================================================
-
 /**
  * Render and dispatch the correct email template for a given outbox row.
  * Returns true when the send path reports sent=true, false otherwise.
@@ -504,7 +483,7 @@ async function dispatchEmailForRow(
         subject: buildSubject(descriptor.emailType, so.serviceOrderNumber),
         // Use ctx.brand (not the closed-over brand): the send layer re-renders
         // with a sender-stripped brand when a lab-sender attempt falls back to
-        // the platform envelope (#584).
+        // the platform envelope.
         renderEmail: (ctx) =>
           renderTemplate(
             descriptor.emailType,
@@ -611,10 +590,6 @@ function renderTemplate(
   return null;
 }
 
-// =============================================================================
-// MAIN DRAIN FUNCTION
-// =============================================================================
-
 /**
  * Drain up to `batchSize` pending outbox rows and send the matching
  * customer email for each. Best-effort: errors are logged and rows are
@@ -679,7 +654,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
         result.processed++;
 
         // ==========================================================
-        // MINI-SPEC I: B/C/D namespace routing
+        // B/C/D namespace routing
         // Route by eventKey namespace BEFORE the status_email path.
         // Guard: only enter this path if eventKey is a string (existing
         // status_email rows always have eventKey; defensive guard for tests).
@@ -734,10 +709,6 @@ export async function drainServiceOrderEmailOutbox(options?: {
           }
           continue;
         }
-
-        // ==========================================================
-        // EXISTING STATUS_EMAIL PATH (E/F/G — unchanged)
-        // ==========================================================
 
         // 3. Re-load service order + customer (tenant-scoped by organizationId).
         // Raw SQL so the organization_id predicate is directly assertable in tests.

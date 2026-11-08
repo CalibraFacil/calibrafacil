@@ -63,7 +63,7 @@ export async function createServiceOrderEvaluation(
   }
   // `evaluate` in SERVICE_ORDER_MACHINE: an evaluation is recorded while the
   // order is still at intake (opened, awaiting or under evaluation, warranty
-  // return). Recording one later used to rewind a delivered or closed order.
+  // return). Recording one later would rewind a delivered or closed order.
   if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "evaluate")) {
     throw conflict(
       "status_transition_conflict",

@@ -1,5 +1,5 @@
 /**
- * "Novo Orçamento" email dispatch helper — mini-spec C
+ * "Novo Orçamento" email dispatch helper
  * (REQ-SOEMAIL-021, REQ-SOEMAIL-022, REQ-SOEMAIL-023, REQ-SOEMAIL-024).
  *
  * Called from sendServiceOrderQuote() AFTER the quote status transitions to
@@ -27,10 +27,6 @@ import { formatInstant } from "@calibra-facil/shared/format";
 import { QuoteEmail } from "@calibra-facil/email";
 import type { QuoteEmailItem } from "@calibra-facil/email";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 /**
  * All fields needed to dispatch the "Novo Orçamento" customer email.
  *
@@ -44,12 +40,11 @@ import type { QuoteEmailItem } from "@calibra-facil/email";
  * This function does NOT create or re-mint tokens.
  */
 export interface NovoOrcamentoEmailDispatchInput {
-  /** Numeric PK of the service order. */
   serviceOrderId: number;
   /**
    * Numeric PK of the quote being sent.
    * Used to build the per-quote idempotency key "orcamento_sent:<quoteId>"
-   * so a genuinely new quote version still sends (mini-spec H, REQ-SOEMAIL-008).
+   * so a genuinely new quote version still sends (REQ-SOEMAIL-008).
    */
   quoteId: number;
   /** Human-readable OS number, e.g. "OS-2026-001". */
@@ -58,30 +53,23 @@ export interface NovoOrcamentoEmailDispatchInput {
   organizationId: string;
   /** Opaque public ID of the service order (used for URL building). */
   publicId: string;
-  /** Numeric customer PK. */
   customerId: number;
   /**
    * Snapshot of the contact at intake (jsonb Record). Contains { email, name, … }
    * or null. The dispatcher resolves the recipient from this field first.
    */
   clientContactSnapshot: Record<string, unknown> | null | undefined;
-  /** Customer name (Razão Social). */
   customerName: string;
   /** Customer email — fallback if clientContactSnapshot has no email. */
   customerEmail: string | null | undefined;
-  /** Customer CNPJ/CPF (taxId). */
   customerTaxId?: string | null;
 
   // ---- Asset / Instrument fields (REQ-SOEMAIL-021) ----
-  /** Asset manufacturer / brand. */
   assetManufacturer?: string | null;
-  /** Asset model. */
   assetModel?: string | null;
   /** Asset inventory code (tag / cliente code). */
   assetInventoryCode?: string | null;
-  /** Service order intake timestamp (openedAt). */
   openedAt: Date;
-  /** Asset serial number. */
   assetSerialNumber?: string | null;
   /**
    * REQ-SOEMAIL-025: instrument-agnostic spec rows from
@@ -89,7 +77,6 @@ export interface NovoOrcamentoEmailDispatchInput {
    * to the template — NO hardcoded weighing fields.
    */
   displaySpecs?: { label: string; value: string }[] | null;
-  /** Claimed defect description. */
   claimedDefect: string;
 
   // ---- Quote items (REQ-SOEMAIL-022) ----
@@ -134,19 +121,11 @@ export interface NovoOrcamentoEmailDispatchInput {
   portalAppUrl: string;
 }
 
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Main dispatcher
-// ---------------------------------------------------------------------------
-
 /**
- * Dispatch the "novo orçamento" customer email (mini-spec C).
+ * Dispatch the "novo orçamento" customer email.
  *
  * Returns a ServiceOrderCustomerEmailResult so the CALLER can route through
- * sendServiceOrderEmailOnce (mini-spec H, REQ-SOEMAIL-007/008/009) using
+ * sendServiceOrderEmailOnce (REQ-SOEMAIL-007/008/009) using
  * eventKey `orcamento_sent:<quoteId>` — dedup is applied at the call site,
  * not here, so this helper remains testable without a DB mock.
  *

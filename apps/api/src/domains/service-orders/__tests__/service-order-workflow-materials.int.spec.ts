@@ -93,7 +93,7 @@ async function seedAssetRow(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        // Per-org tag uniqueness — derive lab org from the customer.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
         assetTypeId: type.id,
         name: `Asset ${params.tag}`,

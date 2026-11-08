@@ -123,7 +123,7 @@ async function seedAsset(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        // Per-org tag uniqueness — derive lab org from the customer.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
         assetTypeId: params.assetTypeId,
         name: params.name ?? "Test Asset",
@@ -1231,7 +1231,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
   });
 
   // ==========================================================================
-  // REQ-SO-COMM (#343): GET /:id/communications — per-OS customer email log
+  // REQ-SO-COMM: GET /:id/communications — per-OS customer email log
   // ==========================================================================
   it("REQ-SO-COMM-001: GET /:id/communications merges ledger + outbox with derived statuses, as a plain member", async () => {
     // member role: the log is operador-readable (service_order:read), not admin-only.

@@ -1,5 +1,5 @@
 /**
- * Tests for REQ-SOEMAIL-031 — mini-spec D "Orçamento Aprovado" dispatch wiring.
+ * Tests for REQ-SOEMAIL-031 "Orçamento Aprovado" dispatch wiring.
  *
  * Verifies:
  *  - WHEN a quote is approved (manual OR portal), the "orçamento aprovado"

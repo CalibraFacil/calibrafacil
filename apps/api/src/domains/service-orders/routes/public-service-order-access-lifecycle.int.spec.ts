@@ -36,8 +36,8 @@ import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 // The routers behind the app's error handler, as in production: a route throws
 // a `DomainError` and `app.onError` renders it.
 
-// Public quote-access token lifecycle — spec quote-approval-public-access
-// (issue #785), mini-spec A. Real DB, real routers, no session mock for the
+// Public quote-access token lifecycle — spec quote-approval-public-access.
+// Real DB, real routers, no session mock for the
 // public router (the token IS the credential).
 //
 // REQ-QPUB-001  default expiry: validUntil + 7d, else sentAt + 30d; explicit wins
@@ -656,7 +656,7 @@ describe("public quote-access token lifecycle (real DB)", () => {
   });
 
   // ==========================================================================
-  // Mini-spec D — public view correctness (REQ-QPUB-030/031/032)
+  // Public view correctness (REQ-QPUB-030/031/032)
   // ==========================================================================
 
   it("REQ-QPUB-030: a quote-scoped token views ITS quote, not a newer version's pricing", async () => {

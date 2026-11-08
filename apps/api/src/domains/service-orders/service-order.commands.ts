@@ -349,7 +349,7 @@ export async function updateServiceOrder(
           : existing.serviceStartedAt,
       updatedAt: new Date(),
     })
-    // Defense-in-depth (SEC-08): repeat the tenant scope already proven by the
+    // Defense-in-depth: repeat the tenant scope already proven by the
     // SELECT above so the final UPDATE stays org/unit-scoped even if a future
     // refactor drops the guarding read. Reuses the same in-scope member values.
     // A status change is a compare-and-set on the status it was checked from.
@@ -587,7 +587,7 @@ export async function closeServiceOrder(
       and(
         eq(serviceOrder.id, serviceOrderId),
         eq(serviceOrder.organizationId, ctx.org),
-        // Was missing here while deliver/cancel had it: without the unit scope
+        // The unit scope: without it
         // a member scoped to one unit could close another unit's OS.
         buildUnitScopeCondition(serviceOrder.unitId, scope),
         eq(serviceOrder.status, order.status),
@@ -598,7 +598,7 @@ export async function closeServiceOrder(
   if (!updated) throw serviceOrderInvalidTransition();
 
   // The billing document and the closure event follow the status change in the
-  // same transaction: a billing failure now rolls the close back instead of
+  // same transaction: a billing failure rolls the close back instead of
   // leaving a closed order that no retry would bill (a repeat close is a no-op).
   if (values.createBillingDocument) {
     await createBillingDocumentFromServiceOrder(ctx, {

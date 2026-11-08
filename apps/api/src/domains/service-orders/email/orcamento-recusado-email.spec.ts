@@ -1,5 +1,5 @@
 /**
- * Tests for REQ-SOEMAIL-032 — mini-spec D "Orçamento Recusado" dispatch wiring.
+ * Tests for REQ-SOEMAIL-032 "Orçamento Recusado" dispatch wiring.
  *
  * Verifies:
  *  - WHEN a quote is rejected (manual OR portal), the "orçamento recusado"

@@ -1,5 +1,5 @@
 /**
- * Tests for REQ-SOEMAIL-011 and REQ-SOEMAIL-012 — mini-spec B "Nova OS"
+ * Tests for REQ-SOEMAIL-011 and REQ-SOEMAIL-012 "Nova OS"
  *
  * Verifies:
  *  - REQ-011: WHEN a service order is created, a "nova OS" email is sent

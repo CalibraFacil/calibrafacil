@@ -1,5 +1,5 @@
 /**
- * repair-to-calibration-link.int.spec.ts — DOM-02 (#655): link a repair service
+ * repair-to-calibration-link.int.spec.ts — link a repair service
  * order to the calibration job opened as its follow-up.
  *
  * Real-DB + real-RBAC integration tier. Only the better-auth session and
@@ -108,7 +108,7 @@ async function seedAsset(params: {
       .values({
         unitId: params.unitId,
         customerId: params.customerId,
-        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        // Per-org tag uniqueness — derive lab org from the customer.
         labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
         assetTypeId: params.assetTypeId,
         name: "Test Instrument",

@@ -1,5 +1,5 @@
 /**
- * Command-level wiring tests — Layer 2 of 2. (Updated for mini-spec I Part 2)
+ * Command-level wiring tests — Layer 2 of 2.
  *
  * Verifies that EACH of the four quote-action commands calls
  * enqueueServiceOrderEmail (outbox enqueue) instead of the old fire-and-forget

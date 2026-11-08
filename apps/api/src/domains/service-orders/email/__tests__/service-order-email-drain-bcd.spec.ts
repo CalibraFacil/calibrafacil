@@ -1,5 +1,5 @@
 /**
- * Tests for mini-spec I — durability parity for B/C/D via the outbox.
+ * Tests for durability parity for B/C/D via the outbox.
  *
  * Covers:
  *  - REQ-SOEMAIL-073: drain routes nova_os / orcamento_sent:* /

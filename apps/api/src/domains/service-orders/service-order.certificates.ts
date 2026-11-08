@@ -94,7 +94,7 @@ export async function unlinkServiceOrderCertificate(
   serviceOrderId: number,
   certificateJobId: number,
 ) {
-  // SEC-01: a cross-tenant :id must not delete another org's link. The order
+  // A cross-tenant :id must not delete another org's link. The order
   // is resolved inside the caller's organization BEFORE the DELETE (the
   // handle scopes the read, so another tenant's order answers like a missing
   // one), mirroring the link sibling.

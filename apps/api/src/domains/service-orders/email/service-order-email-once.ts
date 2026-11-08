@@ -1,5 +1,5 @@
 /**
- * Send-once helper for service-order lifecycle emails — mini-spec H.
+ * Send-once helper for service-order lifecycle emails.
  *
  * REQ-SOEMAIL-007: records each sent transition email keyed by
  * (serviceOrderId, eventKey) in the service_order_email_log table.
@@ -21,10 +21,6 @@ import { serviceOrderEmailLog } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
 import { orgDb } from "../../../lib/org-db";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 /**
  * Input to sendServiceOrderEmailOnce.
@@ -55,10 +51,6 @@ export interface SendServiceOrderEmailOnceInput {
    */
   dispatch: () => Promise<ServiceOrderCustomerEmailResult>;
 }
-
-// ---------------------------------------------------------------------------
-// Core helper
-// ---------------------------------------------------------------------------
 
 /**
  * Outcome of an at-most-once send attempt:
@@ -156,7 +148,7 @@ export async function sendServiceOrderEmailOnce(
     return "failed";
   }
   // Step 5: sent: true → keep the log row (REQ-SOEMAIL-007) and stamp the
-  // resolved recipient on it so the per-OS communications log (#343) can show
+  // resolved recipient on it so the per-OS communications log can show
   // who was actually emailed. Best-effort: a failed stamp keeps the row valid.
   const recipientEmail =
     result?.sent === true ? result.recipientEmail : undefined;
