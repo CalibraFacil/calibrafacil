@@ -25,8 +25,9 @@ import {
   listEvidenceTables,
   organizationScopeSql,
 } from "@calibra-facil/db/records-retention";
-import { getExecuteRows } from "../../lib/db";
+import { executeRows } from "../../lib/db";
 import { orgDb } from "../../lib/org-db";
+import { z } from "zod";
 
 const SOFT_DELETE_SUSPENSION_REASON =
   "Organização excluída: registros regulados retidos";
@@ -58,8 +59,9 @@ export async function evidenceTablesHoldingRecords(
       ];
     });
   if (probes.length === 0) return [];
-  const rows = getExecuteRows<{ table_name: string }>(
+  const rows = executeRows(
     await executor.execute(sql.join(probes, sql` UNION ALL `)),
+    z.object({ table_name: z.string() }),
   );
   // oxlint-disable-next-line unicorn/no-array-sort -- fresh array; the api build targets ES2022 (no toSorted)
   return rows.map((row) => row.table_name).sort();

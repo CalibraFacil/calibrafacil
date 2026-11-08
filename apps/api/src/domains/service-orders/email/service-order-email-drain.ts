@@ -75,6 +75,8 @@ import { dispatchNovoOrcamentoEmail } from "./novo-orcamento-email-dispatch";
 import { dispatchOrcamentoAprovadoEmail } from "./orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "./orcamento-recusado-email-dispatch";
 import { isReleaseExhausting } from "../../../lib/outbox-release";
+import { executeRows } from "../../../lib/db";
+import { z } from "zod";
 
 // =============================================================================
 // CONSTANTS
@@ -193,22 +195,8 @@ async function claimOutboxRow(
         RETURNING id`,
       ),
   );
-  // Drizzle's db.execute returns a PG QueryResult — rows is on .rows
-  const rows: unknown =
-    typeof result === "object" && result !== null
-      ? (Reflect.get(result, "rows") ?? result)
-      : result;
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return undefined;
-  }
-  const first: unknown = rows[0];
-  if (typeof first === "object" && first !== null && "id" in first) {
-    const id = Reflect.get(first, "id");
-    if (typeof id === "number") {
-      return { id };
-    }
-  }
-  return undefined;
+  const [claimed] = executeRows(result, z.object({ id: z.number() }));
+  return claimed ? { id: claimed.id } : undefined;
 }
 
 /**
@@ -743,7 +731,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
         // Raw SQL so the organization_id predicate is directly assertable in tests.
         // One transaction that names the laboratory: the service order (raw SQL
         // so the organization predicate stays assertable) and its customer.
-        const { soResult, custRows } = await withOrg(
+        const { soRow, custRows } = await withOrg(
           row.organizationId,
           SYSTEM_ACTOR,
           async ({ o, tx }) => {
@@ -753,60 +741,42 @@ export async function drainServiceOrderEmailOutbox(options?: {
               WHERE id = ${row.serviceOrderId} AND organization_id = ${row.organizationId}
               LIMIT 1`,
             );
-            const rows: unknown = Reflect.get(loaded, "rows") ?? loaded;
-            const first: unknown = Array.isArray(rows) ? rows[0] : undefined;
-            const customerId =
-              typeof first === "object" && first !== null
-                ? Reflect.get(first, "customer_id")
-                : undefined;
-            const customers =
-              typeof customerId === "number"
-                ? await o
-                    .select({
-                      id: customer.id,
-                      name: customer.name,
-                      email: customer.email,
-                    })
-                    .from(customer)
-                    .where(eq(customer.id, customerId))
-                    .limit(1)
-                : [];
-            return { soResult: loaded, custRows: customers };
+            const [found] = executeRows(
+              loaded,
+              z.object({
+                id: z.number(),
+                public_id: z.string(),
+                organization_id: z.string(),
+                customer_id: z.number(),
+                service_order_number: z.string(),
+                client_contact_snapshot: z.unknown(),
+              }),
+            );
+            const customers = found
+              ? await o
+                  .select({
+                    id: customer.id,
+                    name: customer.name,
+                    email: customer.email,
+                  })
+                  .from(customer)
+                  .where(eq(customer.id, found.customer_id))
+                  .limit(1)
+              : [];
+            const order: ServiceOrderEmailData | undefined = found && {
+              id: found.id,
+              publicId: found.public_id,
+              organizationId: found.organization_id,
+              customerId: found.customer_id,
+              serviceOrderNumber: found.service_order_number,
+              clientContactSnapshot: toRecordOrNull(
+                found.client_contact_snapshot,
+              ),
+            };
+            return { soRow: order, custRows: customers };
           },
         );
-        const soResultRows: unknown = Reflect.get(soResult, "rows") ?? soResult;
-        const soRawRow: unknown = Array.isArray(soResultRows)
-          ? soResultRows[0]
-          : undefined;
 
-        function parseSoRow(raw: unknown): ServiceOrderEmailData | undefined {
-          if (typeof raw !== "object" || raw === null) return undefined;
-          const id = Reflect.get(raw, "id");
-          const publicId = Reflect.get(raw, "public_id");
-          const orgId = Reflect.get(raw, "organization_id");
-          const custId = Reflect.get(raw, "customer_id");
-          const soNum = Reflect.get(raw, "service_order_number");
-          const snapshot = Reflect.get(raw, "client_contact_snapshot");
-          if (
-            typeof id !== "number" ||
-            typeof publicId !== "string" ||
-            typeof orgId !== "string" ||
-            typeof custId !== "number" ||
-            typeof soNum !== "string"
-          ) {
-            return undefined;
-          }
-          return {
-            id,
-            publicId,
-            organizationId: orgId,
-            customerId: custId,
-            serviceOrderNumber: soNum,
-            clientContactSnapshot: toRecordOrNull(snapshot),
-          };
-        }
-
-        const soRow = parseSoRow(soRawRow);
         if (!soRow) {
           console.warn(
             `[ServiceOrderEmailDrain] Service order ${row.serviceOrderId} not found for org ${row.organizationId} (outbox id=${row.id}); marking processed.`,

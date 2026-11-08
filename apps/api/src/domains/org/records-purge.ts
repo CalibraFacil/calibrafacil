@@ -37,7 +37,8 @@ import {
   organizationScopeSql,
   recordDateColumns,
 } from "@calibra-facil/db/records-retention";
-import { getExecuteRows } from "../../lib/db";
+import { executeRows } from "../../lib/db";
+import { z } from "zod";
 
 type PurgeMode = "dry-run" | "execute";
 
@@ -109,10 +110,11 @@ async function newestEvidenceAt(
       ];
     });
   if (probes.length === 0) return null;
-  const rows = getExecuteRows<{ newest: unknown }>(
+  const rows = executeRows(
     await executor.execute(
       sql`SELECT max(newest) AS newest FROM (${sql.join(probes, sql` UNION ALL `)}) AS evidence`,
     ),
+    z.object({ newest: z.unknown() }),
   );
   return toDate(rows[0]?.newest);
 }
@@ -126,13 +128,7 @@ export async function evaluatePurgeCandidates(
   executor: Executor = systemDb,
   onlyOrganizationId: string | null = null,
 ): Promise<PurgeDecision[]> {
-  const organizations = getExecuteRows<{
-    id: string;
-    slug: string;
-    deleted_at: unknown;
-    retention_years: number;
-    legal_hold: boolean;
-  }>(
+  const organizations = executeRows(
     await executor.execute(sql`
       SELECT id, slug, deleted_at, retention_years, legal_hold
         FROM organization
@@ -140,6 +136,13 @@ export async function evaluatePurgeCandidates(
          AND coalesce(type, 'LAB') = 'LAB'
          AND (${onlyOrganizationId}::text IS NULL OR id = ${onlyOrganizationId})
        ORDER BY deleted_at, id`),
+    z.object({
+      id: z.string(),
+      slug: z.string(),
+      deleted_at: z.unknown(),
+      retention_years: z.coerce.number(),
+      legal_hold: z.boolean(),
+    }),
   );
 
   const decisions: PurgeDecision[] = [];
@@ -152,11 +155,12 @@ export async function evaluatePurgeCandidates(
       evidenceAt && evidenceAt.getTime() > deletedAt.getTime()
         ? evidenceAt
         : deletedAt;
-    const [until] = getExecuteRows<{ retain_until: unknown }>(
+    const [until] = executeRows(
       // oxlint-disable-next-line eslint/no-await-in-loop -- sequential on purpose: ordered deletes in one transaction, one organization at a time
       await executor.execute(
         sql`SELECT calibra_retain_until(${row.id}, ${newest.toISOString()}::timestamp) AS retain_until`,
       ),
+      z.object({ retain_until: z.unknown() }),
     );
     const retainUntil = toDate(until?.retain_until);
     const inRetention =
@@ -264,23 +268,25 @@ async function executePurge(
       }
 
       // Client organizations of the laboratory's customers (portal logins).
-      const clientOrganizations = getExecuteRows<{ id: string }>(
+      const clientOrganizations = executeRows(
         await tx.execute(sql`
           SELECT DISTINCT auth_organization_id AS id
             FROM customer
            WHERE lab_organization_id = ${organizationId}
              AND auth_organization_id IS NOT NULL`),
+        z.object({ id: z.string() }),
       ).map((row) => row.id);
 
       const counts: Record<string, number> = {};
       for (const table of organizationErasureOrder()) {
         const scope = organizationScopeSql(table, organizationId);
         if (!scope || !IDENTIFIER.test(table)) continue;
-        const [deleted] = getExecuteRows<{ n: number }>(
+        const [deleted] = executeRows(
           // oxlint-disable-next-line eslint/no-await-in-loop -- sequential on purpose: ordered deletes in one transaction, one organization at a time
           await tx.execute(
             sql`WITH removed AS (DELETE FROM ${sql.identifier(table)} WHERE ${scope} RETURNING 1) SELECT count(*)::int AS n FROM removed`,
           ),
+          z.object({ n: z.coerce.number() }),
         );
         if (deleted && deleted.n > 0) counts[table] = deleted.n;
       }

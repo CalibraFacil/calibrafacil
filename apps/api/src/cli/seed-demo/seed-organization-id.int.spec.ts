@@ -12,6 +12,7 @@
  *      organizationId (a source scan over apps/api/src/cli/seed-demo and the
  *      packages/db seeds, so a new writer cannot skip it).
  */
+import { z } from "zod";
 import { readdirSync, readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
@@ -23,7 +24,7 @@ import {
   seedTenant,
   seedTenantChildren,
 } from "../../../test/integration/tenancy-fixture";
-import { getExecuteRows } from "../../lib/db";
+import { executeRows } from "../../lib/db";
 import { applyJobTimeline } from "./timeline";
 
 function camel(table: string): string {
@@ -84,10 +85,11 @@ describe("REQ-ORG-5: the seeds set the lab organization on tenant child rows", (
       ["asset_audit_log", sql`asset_id = ${lab.assetId}`],
     ] as const) {
       // eslint-disable-next-line no-await-in-loop
-      const rows = getExecuteRows<{ organization_id: string | null }>(
+      const rows = executeRows(
         await db.execute(
           sql`select organization_id from ${sql.identifier(table)} where ${where}`,
         ),
+        z.object({ organization_id: z.string().nullable() }),
       );
       expect(rows.length, table).toBeGreaterThan(0);
       for (const row of rows) {

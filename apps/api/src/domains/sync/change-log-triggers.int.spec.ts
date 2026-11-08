@@ -3,6 +3,7 @@
  * real Postgres (REQ-CS-1: exactly the entities the desktop pull and bootstrap carry;
  * REQ-CS-2: deletes and scope moves are entries of their own).
  */
+import { z } from "zod";
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -33,7 +34,7 @@ import {
   seedStandard,
 } from "../../../test/integration/seed";
 import { seedJobForOrg } from "../../../test/integration/tenant-refs";
-import { getExecuteRows } from "../../lib/db";
+import { executeRows } from "../../lib/db";
 import { SYNC_ENTITY_SOURCES } from "./entity-sources";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
@@ -52,10 +53,16 @@ async function entries(organizationId?: string): Promise<Entry[]> {
       : sql`SELECT entity_type, entity_id, op, unit_id, organization_id FROM sync_change_log
             WHERE organization_id = ${organizationId} ORDER BY seq`,
   );
-  return getExecuteRows<Entry>(result).map((row) => ({
-    ...row,
-    entity_id: Number(row.entity_id),
-  }));
+  return executeRows(
+    result,
+    z.object({
+      entity_type: z.string(),
+      entity_id: z.coerce.number(),
+      op: z.string(),
+      unit_id: z.number().nullable(),
+      organization_id: z.string(),
+    }),
+  );
 }
 
 async function clearLog() {
@@ -76,11 +83,12 @@ describe("sync change log triggers", () => {
   });
 
   it("REQ-CS-1: every table of the sync entity list has its insert/delete and update triggers in the database", async () => {
-    const rows = getExecuteRows<{ tgname: string; relname: string }>(
+    const rows = executeRows(
       await db.execute(sql`
         SELECT t.tgname, c.relname FROM pg_trigger t
         JOIN pg_class c ON c.oid = t.tgrelid
         WHERE NOT t.tgisinternal AND t.tgname LIKE 'sync_change_log_%'`),
+      z.object({ tgname: z.string(), relname: z.string() }),
     );
     const found = rows.map((row) => `${row.relname}:${row.tgname}`).toSorted();
     const expected = syncChangeLogTables()

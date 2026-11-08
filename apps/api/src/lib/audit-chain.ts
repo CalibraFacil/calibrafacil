@@ -35,9 +35,10 @@ import { platformEventLog } from "@calibra-facil/db/schema";
 import { notifyAuditChainBroken } from "@calibra-facil/notifications";
 
 import { writeOrganizationAuditEvent } from "./audit";
-import { getExecuteRows } from "./db";
+import { executeRows } from "./db";
 import { orgDb } from "./org-db";
 import { isRecord } from "@calibra-facil/shared/record";
+import { z } from "zod";
 
 /** The tables that carry a chain (the SQL function `calibra_audit_chain_columns`). */
 const CHAINED_AUDIT_TABLES = ["job_audit_log"] as const;
@@ -129,7 +130,7 @@ async function firstBreakOf(
   table: ChainedAuditTable,
   organizationId: string,
 ): Promise<AuditChainBreak | null> {
-  const rows = getExecuteRows<unknown>(
+  const rows = executeRows(
     await executor.execute(sql`
       select out_row_id::text as row_id,
              out_chain_seq::text as chain_seq,
@@ -137,9 +138,16 @@ async function firstBreakOf(
              encode(out_expected, 'hex') as expected,
              encode(out_actual, 'hex') as actual
         from calibra_audit_chain_verify(${table}, ${organizationId})`),
+    z.object({
+      row_id: z.string().nullable(),
+      chain_seq: z.string().nullable(),
+      kind: z.string().nullable(),
+      expected: z.string().nullable(),
+      actual: z.string().nullable(),
+    }),
   );
   const [row] = rows;
-  if (!isRecord(row) || !isBreakKind(row.kind)) return null;
+  if (!row || !isBreakKind(row.kind)) return null;
   return {
     table,
     organizationId,
@@ -158,15 +166,20 @@ async function headOf(
   table: ChainedAuditTable,
   organizationId: string,
 ): Promise<Head | null> {
-  const rows = getExecuteRows<unknown>(
+  const rows = executeRows(
     await executor.execute(sql`
       select out_chain_seq::text as chain_seq,
              encode(out_row_hash, 'hex') as row_hash,
              out_links::text as links
         from calibra_audit_chain_head(${table}, ${organizationId})`),
+    z.object({
+      chain_seq: z.string().nullable(),
+      row_hash: z.string().nullable(),
+      links: z.string().nullable(),
+    }),
   );
   const [row] = rows;
-  if (!isRecord(row)) return null;
+  if (!row) return null;
   const chainSeq = numberOrNull(row.chain_seq);
   const rowHash = stringOrNull(row.row_hash);
   const links = numberOrNull(row.links);
@@ -180,12 +193,12 @@ async function linkHashOf(
   organizationId: string,
   chainSeq: number,
 ): Promise<string | null> {
-  const rows = getExecuteRows<unknown>(
+  const rows = executeRows(
     await executor.execute(sql`
       select encode(calibra_audit_chain_link_hash(${table}, ${organizationId}, ${chainSeq}), 'hex') as row_hash`),
+    z.object({ row_hash: z.string().nullable() }),
   );
-  const [row] = rows;
-  return isRecord(row) ? stringOrNull(row.row_hash) : null;
+  return rows[0]?.row_hash ?? null;
 }
 
 function entityIdOf(table: ChainedAuditTable, organizationId: string): string {
@@ -295,7 +308,7 @@ async function organizationsToVerify(
   organizationId: string | undefined,
 ): Promise<string[]> {
   if (organizationId !== undefined) return [organizationId];
-  const rows = getExecuteRows<unknown>(
+  const rows = executeRows(
     await systemDb.execute(sql`
       select o.id as id
         from organization o
@@ -308,10 +321,9 @@ async function organizationsToVerify(
             and p.entity_type = ${CHAIN_ENTITY_TYPE}
             and p.entity_id = ${table} || ':' || o.id)
        order by o.id`),
+    z.object({ id: z.string() }),
   );
-  return rows.flatMap((row) =>
-    isRecord(row) && typeof row.id === "string" ? [row.id] : [],
-  );
+  return rows.map((row) => row.id);
 }
 
 export type VerifyAuditChainsOptions = {

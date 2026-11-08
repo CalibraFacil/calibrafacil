@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
+import { executeRowCount } from "../lib/db";
 
 // Wraps every cron handler so the whole cron system fails loudly and safely:
 //
@@ -25,14 +26,6 @@ const DEFAULT_LEASE_SECONDS = 120;
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Erro desconhecido no cron";
-}
-
-// Drizzle's db.execute on postgres.js returns the rows as an array-like list;
-// a `{ rows }` object is read too (the shape the unit specs stub). No `as`
-// assertions (banned by oxlint).
-function rowsLength(result: unknown): number {
-  const rows: unknown = Reflect.get(Object(result), "rows") ?? result;
-  return Array.isArray(rows) ? rows.length : 0;
 }
 
 async function recordOutcome(
@@ -111,7 +104,7 @@ export async function runCron(
             AND (locked_until IS NULL OR locked_until < now())
           RETURNING job`,
     );
-    if (rowsLength(acquired) === 0) {
+    if (executeRowCount(acquired) === 0) {
       // Another invocation holds the lease — skip without touching its row.
       console.warn("[Cron] skipped: another run holds the lease", { job });
       return Response.json(

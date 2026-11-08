@@ -9,6 +9,7 @@
  *   REQ-ORG-3  a child cannot point at another tenant's parent: the composite
  *              (organization_id, parent_id) key refuses it
  */
+import { z } from "zod";
 import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -33,7 +34,7 @@ import { truncateAll } from "../../test/integration/db";
 import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
 import { QUOTE_ITEM, seedTenant } from "../../test/integration/tenancy-fixture";
 import { extractPgConstraintName, extractPgErrorCode } from "./db-errors";
-import { getExecuteRows } from "./db";
+import { executeRows } from "./db";
 
 async function rejection(
   statement: PromiseLike<unknown>,
@@ -56,7 +57,7 @@ describe("organization_id on every tenant table (migration 0118)", () => {
 
   describe("REQ-ORG-2: NOT NULL, foreign key to organization ON DELETE RESTRICT", () => {
     it("REQ-ORG-2: every table of the migration has organization_id NOT NULL in Postgres, except the 16 audit logs (nullable, CHECK NOT VALID)", async () => {
-      const rows = getExecuteRows<{ table_name: string; is_nullable: string }>(
+      const rows = executeRows(
         await db.execute(sql`
           select table_name, is_nullable from information_schema.columns
            where table_schema = 'public' and column_name = 'organization_id'
@@ -64,6 +65,7 @@ describe("organization_id on every tenant table (migration 0118)", () => {
                ORGANIZATION_BACKFILL.map((entry) => sql`${entry.table}`),
                sql`, `,
              )})`),
+        z.object({ table_name: z.string(), is_nullable: z.string() }),
       );
       expect(rows.map((row) => row.table_name).toSorted()).toEqual(
         ORGANIZATION_BACKFILL.map((entry) => entry.table).toSorted(),
@@ -79,11 +81,12 @@ describe("organization_id on every tenant table (migration 0118)", () => {
         );
       }
       // ... and each of those carries the CHECK, which stays NOT VALID.
-      const checks = getExecuteRows<{ table_name: string; validated: boolean }>(
+      const checks = executeRows(
         await db.execute(sql`
           select conrelid::regclass::text as table_name, convalidated as validated
             from pg_constraint
            where contype = 'c' and conname like '%\_organization\_id\_required'`),
+        z.object({ table_name: z.string(), validated: z.boolean() }),
       );
       expect(checks.map((row) => row.table_name).toSorted()).toEqual(
         [...auditLogs].toSorted(),
@@ -91,7 +94,7 @@ describe("organization_id on every tenant table (migration 0118)", () => {
     });
 
     it("REQ-ORG-2: ... and a foreign key to organization(id) with ON DELETE RESTRICT", async () => {
-      const rows = getExecuteRows<{ table_name: string; action: string }>(
+      const rows = executeRows(
         await db.execute(sql`
           select conrelid::regclass::text as table_name, confdeltype::text as action
             from pg_constraint
@@ -101,6 +104,7 @@ describe("organization_id on every tenant table (migration 0118)", () => {
                ORGANIZATION_BACKFILL.map((entry) => sql`${entry.table}`),
                sql`, `,
              )})`),
+        z.object({ table_name: z.string(), action: z.string() }),
       );
       expect(rows.map((row) => row.table_name).toSorted()).toEqual(
         ORGANIZATION_BACKFILL.map((entry) => entry.table).toSorted(),
@@ -153,10 +157,11 @@ describe("organization_id on every tenant table (migration 0118)", () => {
       // foreign keys of the evidence refuse the delete.
       const refused = await rejection(hardDeleteOrganizationAsPurge(t.orgId));
       expect(["23001", "23503"]).toContain(refused.code);
-      const [row] = getExecuteRows<{ remaining: string }>(
+      const [row] = executeRows(
         await db.execute(
           sql`select count(*)::text as remaining from job_audit_log where organization_id = ${t.orgId}`,
         ),
+        z.object({ remaining: z.string() }),
       );
       expect(row?.remaining).toBe("1");
     });
@@ -191,10 +196,11 @@ describe("organization_id on every tenant table (migration 0118)", () => {
         jobId: a.jobId,
         standardId: a.standardId,
       });
-      const [{ count }] = getExecuteRows<{ count: string }>(
+      const [{ count }] = executeRows(
         await db.execute(
           sql`select count(*)::text as count from job_standard where organization_id = ${a.orgId}`,
         ),
+        z.object({ count: z.string() }),
       );
       expect(count).toBe("1");
     });
@@ -340,10 +346,11 @@ describe("organization_id on every tenant table (migration 0118)", () => {
             eq(billingDocument.organizationId, a.orgId),
           ),
         );
-      const [{ count }] = getExecuteRows<{ count: string }>(
+      const [{ count }] = executeRows(
         await db.execute(
           sql`select (select count(*) from billing_document_item) + (select count(*) from receivable_installment) as count`,
         ),
+        z.object({ count: z.string() }),
       ).map((row) => ({ count: String(row.count) }));
       expect(count).toBe("0");
     });
@@ -358,19 +365,20 @@ async function fillerRow(
   table: string,
   explicit: Record<string, string>,
 ): Promise<{ columns: string; values: string }> {
-  const columns = getExecuteRows<{
-    column_name: string;
-    data_type: string;
-    is_nullable: string;
-    column_default: string | null;
-    is_identity: string;
-    is_generated: string;
-  }>(
+  const columns = executeRows(
     await db.execute(sql`
       select column_name, data_type, is_nullable, column_default, is_identity, is_generated
         from information_schema.columns
        where table_schema = 'public' and table_name = ${table}
        order by ordinal_position`),
+    z.object({
+      column_name: z.string(),
+      data_type: z.string(),
+      is_nullable: z.string(),
+      column_default: z.string().nullable(),
+      is_identity: z.string(),
+      is_generated: z.string(),
+    }),
   );
   const names: string[] = [];
   const values: string[] = [];
@@ -464,10 +472,11 @@ describe("REQ-ORG-3: every composite tenant key refuses a cross-tenant child (al
     let outcome: Awaited<ReturnType<typeof rejection>> | null = null;
     try {
       await db.transaction(async (tx) => {
-        const definition = getExecuteRows<{ definition: string }>(
+        const definition = executeRows(
           await tx.execute(sql`
             select pg_get_constraintdef(oid) as definition from pg_constraint
              where conname = ${key.name} and conrelid = ${key.table}::regclass`),
+          z.object({ definition: z.string() }),
         )[0]?.definition;
         if (!definition) throw new Error(`${key.name} does not exist`);
 
@@ -475,12 +484,13 @@ describe("REQ-ORG-3: every composite tenant key refuses a cross-tenant child (al
         const parentRow = await fillerRow(key.parent, {
           [key.parentOrgColumn]: "'org-xt-a'",
         });
-        const [parent] = getExecuteRows<{ id: number }>(
+        const [parent] = executeRows(
           await tx.execute(
             sql.raw(
               `insert into "${key.parent}" (${parentRow.columns}) values (${parentRow.values}) returning id`,
             ),
           ),
+          z.object({ id: z.number() }),
         );
         if (!parent) throw new Error("probe parent not stored");
         const childRow = await fillerRow(key.table, {
