@@ -115,7 +115,7 @@ export const requireApiKeyAuth = createMiddleware<{
 
   // A key authenticates straight to its organization, with no session in
   // between, so the tenant lifecycle has to be enforced here: a suspended or
-  // soft-deleted laboratory (records retention, decision Q16) gets nothing,
+  // soft-deleted laboratory (records retention) gets nothing,
   // revoked or not.
   const [lab] = await db
     .select({ status: organization.status, deletedAt: organization.deletedAt })

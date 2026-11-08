@@ -1,5 +1,5 @@
 /**
- * Verification of the audit-trail hash chain (roadmap 2 B1; ISO/IEC 17025 8.4
+ * Verification of the audit-trail hash chain (ISO/IEC 17025 8.4
  * control of records, 7.5.2 amendment of records).
  *
  * `job_audit_log` carries a per-organization hash chain (migration 0131): every
@@ -16,7 +16,7 @@
  *   - a TAIL deletion: each intact run records a checkpoint (the head it saw) in
  *     `platform_event_log`; the next run fails `checkpoint_missing` when that link
  *     is gone and `checkpoint_mismatch` when it changed. The checkpoint event is
- *     also the hook for the external timestamp of the head (roadmap 2 B4: an ACT
+ *     also the hook for the external timestamp of the head (an ACT
  *     timestamp over `headHash`), which would additionally defeat a rewrite of the
  *     whole chain by the owner.
  *   - a row that never got a link (`unchained_row`: the trigger was bypassed).
@@ -71,7 +71,6 @@ type AuditChainBreak = {
 export type AuditChainReport = {
   /** Chains recomputed (one per organization and table). */
   chains: number;
-  /** Links recomputed. */
   links: number;
   intact: number;
   /** Every break found, including ones announced by an earlier run. */
@@ -316,7 +315,6 @@ async function organizationsToVerify(
 }
 
 export type VerifyAuditChainsOptions = {
-  /** Verify this laboratory only. */
   organizationId?: string;
   /**
    * Record what the run finds: a checkpoint for an intact chain, the platform

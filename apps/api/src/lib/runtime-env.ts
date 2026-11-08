@@ -40,7 +40,7 @@ export type WorkerRuntimeEnv = WorkerSigningEnv & {
   CONTA_AZUL_CLIENT_ID?: string;
   CONTA_AZUL_CLIENT_SECRET?: string;
   CONTA_AZUL_OAUTH_REDIRECT_URI?: string;
-  // Pepper for public quote approval-code HMACs (REQ-QPUB-011).
+  // Pepper for public quote approval-code HMACs.
   QUOTE_APPROVAL_CODE_PEPPER?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;

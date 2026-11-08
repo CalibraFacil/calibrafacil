@@ -22,13 +22,6 @@ import {
 import { orgDb } from "../lib/org-db";
 import { toRecord } from "@calibra-facil/shared/record";
 
-// =============================================================================
-// CONTEXT TYPES
-// =============================================================================
-
-/**
- * Session data from Better Auth
- */
 export interface SessionData {
   user: {
     id: string;
@@ -55,9 +48,6 @@ export interface SessionData {
   };
 }
 
-/**
- * Member data for the active organization
- */
 export interface MemberData {
   id: string;
   role: RoleName;
@@ -77,9 +67,6 @@ export type GovernanceAccess = UnitGovernanceAccess;
 
 type AuthSource = "lab" | "portal";
 
-/**
- * Context type extension for authenticated requests
- */
 export interface AuthVariables {
   session: SessionData;
   member: MemberData;
@@ -288,7 +275,7 @@ const UNIT_SCOPED_RESOURCES = new Set([
 
 /**
  * `resource:action` pairs a unit role may elevate on a resource that is NOT unit
- * scoped as a whole (architecture review P0-11, decision Q49).
+ * scoped as a whole.
  *
  * NC, CAPA, proficiency-test, SPC and competence rows are laboratory-wide and
  * their routes carry no unit predicate, so a unit role must not raise the member
@@ -369,18 +356,7 @@ export function getGovernanceAccess(
   return getGovernanceAccessFromScope(member);
 }
 
-// =============================================================================
-// AUTHENTICATION MIDDLEWARE
-// =============================================================================
-
-/**
- * Middleware to require authentication using Lab auth.
- * For use on dashboard/lab routes.
- * Sets `session` in the context.
- *
- * @example
- * app.use("*", requireLabAuth);
- */
+/** Requires a lab session (dashboard routes); sets `session` in the context. */
 export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
     const authStartedAt = performance.now();
@@ -401,14 +377,7 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
   },
 );
 
-/**
- * Middleware to require authentication using Portal auth.
- * For use on client portal routes.
- * Sets `session` in the context.
- *
- * @example
- * app.use("*", requirePortalAuth);
- */
+/** Requires a portal session (client portal routes); sets `session` in the context. */
 export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
     const portalAuth = getRequestPortalAuth(c);
@@ -427,14 +396,7 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
   },
 );
 
-/**
- * Middleware to require authentication (tries both auth instances).
- * For use on routes that should accept both lab and portal users.
- * Sets `session` in the context.
- *
- * @example
- * app.use("*", requireAuth);
- */
+/** Requires a lab or portal session (portal tried first); sets `session` in the context. */
 export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
     const portalAuth = getRequestPortalAuth(c);
@@ -465,30 +427,12 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
   },
 );
 
-// =============================================================================
-// ORGANIZATION TYPE
-// =============================================================================
-
-/**
- * Organization types for access control
- */
 export type OrgType = "LAB" | "CLIENT";
 
-// =============================================================================
-// ORGANIZATION MIDDLEWARE
-// =============================================================================
-
 /**
- * Middleware to require an active organization.
- * Must be used after `requireAuth` (or requireLabAuth/requirePortalAuth).
- * Sets `member` in the context.
- *
- * Uses direct database query instead of auth API to avoid cookie conflicts
- * when both lab and portal sessions exist.
- *
- * @example
- * app.use("*", requireAuth);
- * app.use("*", requireOrganization);
+ * Requires an active organization; run it after the auth middleware. Sets
+ * `member` in the context. Reads the database directly instead of the auth API
+ * to avoid cookie conflicts when both lab and portal sessions exist.
  */
 const requireOrganization = createMiddleware<{
   Variables: AuthVariables;
@@ -505,8 +449,6 @@ const requireOrganization = createMiddleware<{
   const activeOrgId = session.session.activeOrganizationId;
   const userId = session.user.id;
 
-  // Query the database directly for member and organization info
-  // This avoids issues with multiple auth cookies
   // The membership row carries the active organization as its tenant column
   // (a laboratory, or a CLIENT organization for the portal), so that
   // organization is the one the transaction names for row-level security.
@@ -592,23 +534,7 @@ const requireOrganization = createMiddleware<{
   await next();
 });
 
-// =============================================================================
-// PERMISSION MIDDLEWARE
-// =============================================================================
-
-/**
- * Middleware factory to require specific permissions.
- * Must be used after `requireAuth` and `requireOrganization`.
- *
- * @example
- * app.post(
- *   "/calibrations",
- *   requireAuth,
- *   requireOrganization,
- *   requirePermission({ calibration: ["create"] }),
- *   handler
- * );
- */
+/** Requires the given permissions; run it after `requireAuth` and `requireOrganization`. */
 export function requirePermission(permissions: PermissionCheck) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const permStartedAt = performance.now();
@@ -677,23 +603,7 @@ export function requirePermission(permissions: PermissionCheck) {
   });
 }
 
-// =============================================================================
-// ROLE MIDDLEWARE
-// =============================================================================
-
-/**
- * Middleware factory to require one of multiple roles.
- * Must be used after `requireAuth` and `requireOrganization`.
- *
- * @example
- * app.get(
- *   "/audit",
- *   requireAuth,
- *   requireOrganization,
- *   requireRole(["admin", "owner"]),
- *   handler
- * );
- */
+/** Requires one of the given roles; run it after `requireAuth` and `requireOrganization`. */
 export function requireRole(allowedRoles: RoleName[]) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const member = c.get("member");
@@ -708,27 +618,11 @@ export function requireRole(allowedRoles: RoleName[]) {
   });
 }
 
-// =============================================================================
-// ORGANIZATION TYPE MIDDLEWARE
-// =============================================================================
-
 /**
- * Middleware factory to require a specific organization type.
- * Must be used after `requireAuth` and `requireOrganization`.
- *
- * This provides defense-in-depth by ensuring only LAB organizations
- * can access internal lab routes, regardless of RBAC permissions.
- * Essential for ISO 17025 auditability.
- *
- * @example
- * app.post(
- *   "/customers",
- *   requireAuth,
- *   requireOrganization,
- *   requireOrgType("LAB"),
- *   requirePermission({ client: ["create"] }),
- *   handler
- * );
+ * Requires a specific organization type; run it after `requireAuth` and
+ * `requireOrganization`. Defense in depth: only LAB organizations reach
+ * internal lab routes, regardless of RBAC permissions (ISO/IEC 17025
+ * auditability).
  */
 export function requireOrgType(allowedType: OrgType) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
@@ -744,18 +638,7 @@ export function requireOrgType(allowedType: OrgType) {
   });
 }
 
-// =============================================================================
-// COMBINED MIDDLEWARE
-// =============================================================================
-
-/**
- * Combined middleware for protected routes (accepts both lab and portal auth).
- * Requires authentication and active organization.
- *
- * @example
- * const protectedRoutes = new Hono<{ Variables: AuthVariables }>();
- * protectedRoutes.use("*", ...requireProtected);
- */
+/** Authentication (lab or portal) plus an active organization. */
 const requireProtected = [requireAuth, requireOrganization] as const;
 
 /**
@@ -796,12 +679,7 @@ export const requirePortalProtected = [
   requirePortalAccess,
 ] as const;
 
-/**
- * Create a protected route handler with permission check.
- *
- * @example
- * app.post("/calibrations", ...withPermission({ calibration: ["create"] }), handler);
- */
+/** `requireProtected` plus a permission check. */
 export function withPermission(permissions: PermissionCheck) {
   return [...requireProtected, requirePermission(permissions)] as const;
 }

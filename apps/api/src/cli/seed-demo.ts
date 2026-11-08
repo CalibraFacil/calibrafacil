@@ -20,7 +20,7 @@
  * renders them all. Refuses to run against anything but a local database (pass
  * --allow-remote to override).
  *
- * Row-level security (P2-18j): every CLI command is an operator tool and runs as
+ * Row-level security: every CLI command is an operator tool and runs as
  * the table OWNER by design, on the system connection (`systemDb`: the owner
  * URL `DATABASE_OWNER_URL`, or `DATABASE_URL` when the roles are not split). The
  * seed writes across the whole demo laboratory (and back-dates audit rows the

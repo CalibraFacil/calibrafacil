@@ -1,6 +1,6 @@
 /**
- * api-key-auth.int.spec.ts — real-Postgres proof of the API-key rules of roadmap 2
- * D3 (review 3.3), through the real `requireApiKeyAuth` middleware.
+ * api-key-auth.int.spec.ts — real-Postgres proof of the API-key rules, through the real
+ * `requireApiKeyAuth` middleware.
  *
  *   REQ-D3-1  an expired key is refused (401); a key without an expiry (made
  *             before expiry existed) still works

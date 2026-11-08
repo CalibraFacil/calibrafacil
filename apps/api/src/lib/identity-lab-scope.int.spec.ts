@@ -1,5 +1,5 @@
 /**
- * identity-lab-scope.int.spec.ts - P2-18j [HIGH RISK].
+ * identity-lab-scope.int.spec.ts [HIGH RISK].
  *
  * Identity runs BEFORE an organization is chosen (sign-in, sessions, invitations,
  * claiming an account, provisioning a laboratory) and across a person's

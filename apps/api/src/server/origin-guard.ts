@@ -3,7 +3,7 @@ import { getCorsOrigin } from "./cors";
 import type { Env } from "./env";
 
 /**
- * Cross-site request defence for the API's own routes (roadmap 2 D1, review 3.3).
+ * Cross-site request defence for the API's own routes.
  *
  * A state-changing request (anything but GET/HEAD/OPTIONS) that carries the
  * browser's ambient credentials (a cookie) must come from a page of an allowed

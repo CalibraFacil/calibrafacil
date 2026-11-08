@@ -1,6 +1,6 @@
 /**
  * user-cascade-soft-delete.int.spec.ts — Real-DB integration tests for the
- * Better Auth `deleteUser` preservation hook (CMP-07 / issue #692).
+ * Better Auth `deleteUser` preservation hook.
  *
  * ISO/IEC 17025 §6.2: a user self-deletion must NOT cascade-wipe the regulated
  * competence / training / authorized-signatory records that point at that user.
@@ -58,10 +58,8 @@ import { withStatusRepair } from "../../test/integration/state-fixtures";
 /**
  * postgres-js surfaces a duplicate insert as a Drizzle `DrizzleQueryError`
  * wrapper whose OWN `code` is undefined — the real Postgres error code
- * (23505 = unique_violation) lives one level down on `error.cause`. Mirrors
- * the `hasUniqueViolationCode` / `isUniqueConstraintError` pattern in
- * `apps/api/src/services/commercial/reconcile-webhook.ts` (as-free: uses
- * `Reflect.get`, not a type assertion).
+ * (23505 = unique_violation) lives one level down on `error.cause`. Reads it with
+ * `Reflect.get`, not a type assertion.
  */
 function hasCode(value: unknown, code: string): boolean {
   return Boolean(

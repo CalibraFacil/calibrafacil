@@ -1,4 +1,4 @@
-// SEC-09 (#669): the lab surface is passwordless by principle. These specs
+// SEC-09: the lab surface is passwordless by principle. These specs
 // assert the composed Better Auth instances behaviorally — they hit the real
 // request handler for POST <basePath>/sign-in/email and read the resolved
 // options — rather than mocking the config.

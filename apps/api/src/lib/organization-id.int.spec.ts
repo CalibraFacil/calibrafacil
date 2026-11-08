@@ -1,6 +1,6 @@
 /**
  * organization-id.int.spec.ts: real-Postgres proof that every tenant table
- * carries its organization (decision Q15, migration 0118,
+ * carries its organization (migration 0118,
  * docs/architecture/tenancy.md).
  *
  *   REQ-ORG-2  organization_id is NOT NULL, a foreign key to organization with

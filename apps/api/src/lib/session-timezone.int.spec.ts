@@ -1,5 +1,5 @@
 /**
- * session-timezone.int.spec.ts — roadmap 2 C5: every connection the application
+ * session-timezone.int.spec.ts — every connection the application
  * opens runs in UTC, even when the database (or the role) has another default,
  * because the clients send TimeZone=UTC as a startup parameter, which takes
  * precedence over those defaults.

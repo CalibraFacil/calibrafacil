@@ -2,8 +2,8 @@ import type { OrgDb } from "@calibra-facil/db/for-org";
 import { organizationComplianceAuditLog } from "@calibra-facil/db/schema";
 
 /**
- * Append-only audit of the laboratory's compliance configuration (roadmap 2 B4a,
- * ISO/IEC 17025 8.4): signing-credential create / replace / delete, the signing
+ * Append-only audit of the laboratory's compliance configuration (ISO/IEC 17025
+ * 8.4): signing-credential create / replace / delete, the signing
  * policy, and the accreditation profile. One row per change with the actor and
  * the before/after values.
  *

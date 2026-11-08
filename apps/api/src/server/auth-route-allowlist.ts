@@ -1,6 +1,5 @@
 /**
- * The Better Auth endpoints each surface exposes over HTTP (architecture review
- * P0-1).
+ * The Better Auth endpoints each surface exposes over HTTP.
  *
  * Better Auth mounts every endpoint of every plugin it is given: organization
  * create/update/delete, admin, SSO provider registration, member and invitation

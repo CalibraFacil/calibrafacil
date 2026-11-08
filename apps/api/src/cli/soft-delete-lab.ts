@@ -1,5 +1,5 @@
 /**
- * Soft-delete a laboratory (records retention, decision Q16):
+ * Soft-delete a laboratory (records retention):
  *
  *   pnpm --dir apps/api soft-delete-lab --slug lab-exemplo \
  *     --reason "Encerramento das atividades"
@@ -10,7 +10,7 @@
  * it once its newest record is older than its retention period and no legal
  * hold applies. Reads the same environment as the API (DATABASE_URL).
  *
- * An operator tool: it runs as the table owner (`systemDb`, P2-18j) to find the
+ * An operator tool: it runs as the table owner (`systemDb`) to find the
  * laboratory by slug, and the soft delete itself names the laboratory like the
  * route does (`softDeleteLabOrganization`).
  */

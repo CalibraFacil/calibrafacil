@@ -3,8 +3,8 @@ import type { Env } from "./env";
 import { isRecord } from "@calibra-facil/shared/record";
 
 /**
- * One error shape for a request that fails validation (roadmap 2 D2, review
- * 3.3). `zValidator` answers a failed parse with zod's own result
+ * One error shape for a request that fails validation.
+ * `zValidator` answers a failed parse with zod's own result
  * (`{ success: false, error: { name: "ZodError", ... } }`), so clients that read
  * `error` as the message got an object. Rewritten here, once, to the shape of
  * every other failure: `{ error, code: "invalid_request", details: { issues } }`.

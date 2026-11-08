@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Unit tier for the REL-03 orphan-job backstop decision logic. The DB reads are
+// Unit tier for the orphan-job backstop decision logic. The DB reads are
 // injected so this suite never touches a real DB — the integration proof lives in
 // stale-job-backstop.int.spec.ts against a real Postgres.
 //

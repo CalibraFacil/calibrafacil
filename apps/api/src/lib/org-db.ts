@@ -7,7 +7,7 @@ import {
 } from "@calibra-facil/db/for-org";
 
 /**
- * The data handle route handlers use (P2-2). It is the global `db` bound to one
+ * The data handle route handlers use. It is the global `db` bound to one
  * laboratory: every statement on a tenant table gets `organization_id = $org`
  * (select/update/delete) or has it set (insert) without the handler writing it,
  * so a handler cannot forget the predicate. See packages/db/src/for-org.ts.

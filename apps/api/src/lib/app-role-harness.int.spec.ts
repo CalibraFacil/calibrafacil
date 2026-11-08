@@ -10,7 +10,7 @@ import {
 } from "../../test/integration/app-role-mode";
 import { seedTenant } from "../../test/integration/tenancy-fixture";
 
-// The harness itself (P2-18k): the integration tier runs every request of a spec
+// The harness itself: the integration tier runs every request of a spec
 // as `calibra_app`, under the real `tenant_isolation` policies, so a statement
 // that forgets its organization fails the suite instead of a deployment. These
 // tests pin that: if the routing silently fell back to the owner, every other

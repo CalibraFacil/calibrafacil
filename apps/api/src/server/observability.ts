@@ -6,7 +6,7 @@ import { log } from "../lib/logger";
 import type { Env } from "./env";
 
 /**
- * Request id, access log and metrics of the API (roadmap 2 G2, review 3.6).
+ * Request id, access log and metrics of the API.
  *
  * - Every response carries `X-Request-Id`: the caller's, when it is a plain
  *   token (a proxy or a client correlating its own logs), else a new one.

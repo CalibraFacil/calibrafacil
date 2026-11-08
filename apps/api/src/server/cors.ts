@@ -91,7 +91,7 @@ function isPrivateDevOrigin(origin: string, nodeEnv?: string): boolean {
 /**
  * The origins allowed to call the API with credentials: the configured app and
  * portal addresses (plus the desktop shell and, in development, the local dev
- * servers). Nothing else (roadmap 2 D1, review 3.3).
+ * servers). Nothing else.
  *
  * A laboratory's verified custom portal domain is NOT one of them: credentialed
  * CORS for every such domain let whoever controls one read and write the API as

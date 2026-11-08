@@ -1,6 +1,6 @@
 /**
  * audit-chain.int.spec.ts: real-Postgres proof of the audit-trail hash chain
- * (migration 0131, roadmap 2 B1):
+ * (migration 0131):
  *
  *   REQ-CHAIN-4  inserting audit rows (as the owner and as calibra_app) builds a correct
  *                per-organization chain, and an insert cannot choose its own link

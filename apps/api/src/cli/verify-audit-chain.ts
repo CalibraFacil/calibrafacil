@@ -1,5 +1,5 @@
 /**
- * Verify the audit-trail hash chain on demand (roadmap 2 B1):
+ * Verify the audit-trail hash chain on demand:
  *
  *   pnpm --dir apps/api verify-audit-chain                 every laboratory
  *   pnpm --dir apps/api verify-audit-chain --slug lab-x    one laboratory, by slug

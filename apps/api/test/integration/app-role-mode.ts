@@ -19,7 +19,7 @@ import {
   sourceModuleFromStack,
 } from "./rls-shadow-report-lib";
 
-// The application role of the integration tier (roadmap P2-3, P2-18k).
+// The application role of the integration tier.
 //
 // Every HTTP request a spec sends (`app.request(...)`) is handled with its
 // database access on a pool whose sessions run as `calibra_app`, so the
