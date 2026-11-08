@@ -44,7 +44,12 @@ export type UnitGovernanceAccess = {
   managedUnitIds: number[];
 };
 
-const GLOBAL_MULTI_UNIT_ROLES = new Set<RoleName>(["owner", "admin"]);
+/** The organization roles that reach every unit without an assignment. */
+export const GLOBAL_UNIT_ROLES = [
+  "owner",
+  "admin",
+] as const satisfies readonly RoleName[];
+const GLOBAL_MULTI_UNIT_ROLES = new Set<RoleName>(GLOBAL_UNIT_ROLES);
 const DEFAULT_UNIT_NAME = "Matriz";
 const DEFAULT_UNIT_SLUG = slugify(DEFAULT_UNIT_NAME);
 

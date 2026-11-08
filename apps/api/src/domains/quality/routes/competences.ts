@@ -29,6 +29,7 @@ import {
   type AuthVariables,
 } from "../../../middleware/permission";
 import { notify } from "@calibra-facil/notifications";
+import { CALIBRATION_EXECUTOR_ROLES } from "@calibra-facil/auth/access";
 import { eq, and, isNull, desc, count, lte, gte, inArray } from "drizzle-orm";
 import { COMPETENCE_MACHINE } from "@calibra-facil/schemas/machines";
 
@@ -150,7 +151,7 @@ mount(
         .where(
           and(
             eq(member.organizationId, memberData.organizationId),
-            inArray(member.role, ["technician", "admin", "owner"]),
+            inArray(member.role, [...CALIBRATION_EXECUTOR_ROLES]),
           ),
         );
 
