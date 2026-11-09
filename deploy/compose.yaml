@@ -290,7 +290,7 @@ services:
       - s3-data:/data
 
   gotenberg:
-    image: gotenberg/gotenberg:8.39.0
+    image: gotenberg/gotenberg:9.0.0
     restart: unless-stopped
     logging: *logging
     # Chromium and LibreOffice render the PDFs; the heaviest container.

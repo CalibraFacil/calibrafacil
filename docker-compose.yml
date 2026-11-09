@@ -66,7 +66,7 @@ services:
       - "${CALIBRA_MAILPIT_SMTP_PORT:-1025}:1025"
 
   gotenberg:
-    image: gotenberg/gotenberg:8.39.0
+    image: gotenberg/gotenberg:9.0.0
     ports:
       - "${CALIBRA_GOTENBERG_PORT:-3001}:3000"
 
