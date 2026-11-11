@@ -159,6 +159,39 @@ describe("sensitivities", () => {
     // 10.3 to 10.7 all truncate to ν = 10: the output does not move with n.
     expect(Math.abs(Number(result.sensitivityCoefficients.n))).toBeLessThanOrEqual(1e-15);
   });
+
+  it("an uncertainty too small for a double to resolve does not set the step", () => {
+    const engine = createCalculationEngine();
+    const sensitivity = (standardUncertainty: string) => {
+      const result = engine.evaluateMeasurementModel({
+        formula: "s * student_t_inverse_2t(a, 10)",
+        quantities: {
+          a: { estimate: "0.05", standardUncertainty },
+          s: { estimate: "1", standardUncertainty: "0" },
+        },
+      });
+      const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.details?.symbol === "a");
+      return {
+        coefficient: Number(result.sensitivityCoefficients.a),
+        fallback: diagnostics.find((diagnostic) => diagnostic.code === "SENSITIVITY_NUMERICAL_FALLBACK")?.details,
+        unstable: diagnostics.some((diagnostic) => diagnostic.code === "LINEARIZATION_NUMERICAL_INSTABILITY"),
+      };
+    };
+    // dt/dα of the two-tailed quantile at α = 0.05, ν = 10: −1/(2·f(t)), mpmath.
+    const exact = -11.796630431732665;
+    const ordinary = sensitivity("0.0001");
+    expect(ordinary.fallback).toMatchObject({ stepBasis: "standardUncertainty", step: 0.00005 });
+    expect(Math.abs(ordinary.coefficient - exact) / -exact).toBeLessThanOrEqual(1e-9);
+    // u/|x| = 2e-14: over x ± u the stencil has two digits left (the coefficient
+    // came out 8 % off, and with the wrong sign at 2e-15). The step is then
+    // numericalDerivativeRelativeStep·|x|.
+    for (const tiny of ["0.000000000000001", "0.0000000000000001", "0.000000000000000001"]) {
+      const result = sensitivity(tiny);
+      expect(result.fallback).toMatchObject({ stepBasis: "relativeFloor", step: 1e-6 * 0.05 });
+      expect(Math.abs(result.coefficient - exact) / -exact).toBeLessThanOrEqual(1e-9);
+      expect(result.unstable).toBe(false);
+    }
+  });
 });
 
 describe("the calculation fingerprint of a correlated model", () => {

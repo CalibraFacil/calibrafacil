@@ -1710,8 +1710,17 @@ function resolveSensitivityCoefficients(
     // whatever the magnitude of the quantity. Up to 0.5.0 the step was
     // 1e-6·max(|x|, 1), absolute below 1: at x = 1e-6 it reached x = 0 (review).
     // A quantity with no uncertainty contributes nothing and keeps that step.
-    const uncertaintyStep = quantity.standardUncertainty / 2;
-    const stepBasis = uncertaintyStep > 0 ? "standardUncertainty" : "relative";
+    //
+    // The step is never below numericalDerivativeRelativeStep·|x|: a double
+    // carries 16 digits, so a difference taken over x ± u with u/|x| = 1e-13
+    // has three of them left, and below 1e-16 the stencil does not move at all.
+    // Over an interval that narrow the wider stencil sees the same slope.
+    const halfUncertainty = quantity.standardUncertainty / 2;
+    const resolvableStep =
+      options.numericalDerivativeRelativeStep * Math.abs(estimates[quantity.symbol] ?? 0);
+    const uncertaintyStep = halfUncertainty > 0 ? Math.max(halfUncertainty, resolvableStep) : 0;
+    const stepBasis =
+      uncertaintyStep === 0 ? "relative" : uncertaintyStep === halfUncertainty ? "standardUncertainty" : "relativeFloor";
     const derivativeOptions = {
       maxExponentMagnitude: options.maxExponentMagnitude,
       decimalPrecision: options.decimalPrecision,

@@ -10,13 +10,12 @@
   },
   "sourcePin": {
     "algorithm": "sha256 over the `<sha256(file)>  <path>\\n` listing (sha256sum format) of every src/**/*.ts file except specs, src/testing/ and the gate machinery, paths POSIX relative to the package root, sorted by code unit; CRLF normalised to LF before hashing",
-    "sha256": "081935f58e0ce10ffaf69a1c6ad543ebd2038a90ee68d986b3f2aca3e0cc376d",
+    "sha256": "65114b4739547872e9299582d01222bf98e1f021fccba5b8de927a2dd668b853",
     "files": {
       "src/audit/canonical-json.ts": "9ddb111bbe4b2586133c91fa218f8af69d6da8922bbfebc5fa09b3fcd1daba3d",
       "src/audit/fingerprint.ts": "be552506ed0eadc6af21cb625b4a783943a64e7b8b78bd51bcf52a4976cfb52e",
       "src/audit/index.ts": "7ced227576f253c967bd19fc10cf3b73605c717c330e7644b83de1b753395375",
       "src/engine/create.ts": "d3105ce0ed1143af759fe46d0a6961a7b14609117cfe02584852e7f3e72c512e",
-      "src/engine/index.ts": "b8e56582cdddcff82bc9982b00bf03e9ead0234b2ed11063da77c736de07368e",
       "src/engine/options.ts": "09775a08e3b061c4dd297b6c57f3b374c5f1f4df289dc5e0ae73b98454ca063e",
       "src/errors/codes.ts": "8790563d58b772305ae4069df5f6df0753a5a594b49f7931e47946838241c3fb",
       "src/errors/errors.ts": "16bb09bd5c6fdb00ebeee1667d1bfec007d7edeee069da3f76c8a342b22f4b40",
@@ -28,7 +27,7 @@
       "src/formula/index.ts": "e3409442f2520d7be68440a2957d93094642dd560d03fd3ce3da08111b3ef6be",
       "src/formula/normalize.ts": "b85d7b7be831f954842dbf4172a4290471fa19d522dc1a29688ca11830c29e37",
       "src/gum/index.ts": "fd433d3bbf258a16df8c331de58404a1281ad504b752b560383cd1f9f05a1aed",
-      "src/gum/measurement.ts": "214e981041b8499c3c70e9a1a01820fe197f6f024f5e9770d4b7575db002a53f",
+      "src/gum/measurement.ts": "7bc8beeacc572f88df46faee8eb5004f3d1b443b06cc6882adb415b4c20137b1",
       "src/gum/psd.ts": "6445b978852e1aca779a53cb566401abcfb1ba080db6687a329696f8beab90de",
       "src/gum/statistics.ts": "bf672bce051d6a99f5c67dab7eaf547e87752959d5d041dbc4f7547a4c2e992c",
       "src/index.ts": "c6f241fa86b850d841bc37e80f1e10ec39a28ce571c97b7dd18e5e58070d10b7",

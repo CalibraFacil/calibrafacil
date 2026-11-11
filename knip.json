@@ -116,12 +116,10 @@
     "packages/math-engine": {
       "entry": ["scripts/*.ts"],
       "project": ["src/**/*.ts", "scripts/*.ts"],
-      // The engine source is byte-pinned by validation/math-engine (any change,
-      // comments included, needs a new ENGINE_VERSION and dossier). These barrels
-      // are unimported today; deleting them is a versioned engine release.
+      // Unimported, and outside the byte pin of validation/math-engine: the pin's
+      // algorithm names src/testing/ as excluded, so removing the directory is a
+      // change to the gate's contract.
       "ignore": [
-        "src/engine/index.ts",
-        "src/evaluator/index.ts",
         "src/testing/index.ts"
       ]
     },
