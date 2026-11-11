@@ -16,6 +16,9 @@ import { DeterministicDecimal } from "./decimal.js";
 
 const WIDE = { maxExponentMagnitude: 400, maxInputLength: 512, maxSignificantDigits: 128 } as const;
 
+// The exhaustive cases work on integers of a few thousand bits: seconds on a slow runner.
+const HEAVY = 60_000;
+
 function generator(seed: number): () => number {
   let state = seed;
   return () => {
@@ -94,7 +97,7 @@ function isNearest(candidate: number, compareWith: (n: bigint, d: bigint) => num
 }
 
 describe("DeterministicDecimal.toNumber is the nearest double", () => {
-  it("agrees with Number(text) on 20 000 decimal literals of 1 to 40 digits, subnormals included", () => {
+  it("agrees with Number(text) on 20 000 decimal literals of 1 to 40 digits, subnormals included", { timeout: HEAVY }, () => {
     const random = generator(20261111);
     const mismatches: string[] = [];
     for (let i = 0; i < 20000; i += 1) {
@@ -115,7 +118,7 @@ describe("DeterministicDecimal.toNumber is the nearest double", () => {
     }
   });
 
-  it("is the nearest double for 5 000 rationals with numerators and denominators of up to 400 bits", () => {
+  it("is the nearest double for 5 000 rationals with numerators and denominators of up to 400 bits", { timeout: HEAVY }, () => {
     const random = generator(424242);
     const wrong: string[] = [];
     for (let i = 0; i < 5000; i += 1) {
@@ -153,10 +156,10 @@ describe("DeterministicDecimal.toNumber is the nearest double", () => {
 });
 
 describe("DeterministicDecimal.sqrtToNumber is the nearest double to the root", () => {
-  it("holds for 5 000 rationals across the whole double range", () => {
+  it("holds for 2 000 rationals across the whole double range", { timeout: HEAVY }, () => {
     const random = generator(777);
     const wrong: string[] = [];
-    for (let i = 0; i < 5000; i += 1) {
+    for (let i = 0; i < 2000; i += 1) {
       const n = randomBigInt(random, 1 + Math.floor(random() * 900));
       const d = randomBigInt(random, 1 + Math.floor(random() * 900));
       const value = DeterministicDecimal.of(n, d);

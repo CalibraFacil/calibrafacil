@@ -54,7 +54,7 @@ Every calculation fingerprint changes (the version is part of the digest).
 
 ## Tests
 
-- math-engine 427 (12 files): `gum/statistics.spec.ts` (193: reference tables from `scripts/statistics-reference.py`, closed forms for ν = 1 and ν = 2, the corrections of items 1 to 6 and 9), `numeric/decimal-rounding.spec.ts` (20 000 literals against `Number(text)`, 10 000 rationals and roots against their two neighbouring doubles in integer fractions), `formula/derivative.spec.ts`, `audit/canonical-json.spec.ts`; the existing KAT, EA-4/02, audit and gate suites unchanged and passing.
+- math-engine 427 (12 files): `gum/statistics.spec.ts` (193: reference tables from `scripts/statistics-reference.py`, closed forms for ν = 1 and ν = 2, the corrections of items 1 to 6 and 9), `numeric/decimal-rounding.spec.ts` (20 000 literals against `Number(text)`, 5 000 rationals and 2 000 roots against their two neighbouring doubles in integer fractions), `formula/derivative.spec.ts`, `audit/canonical-json.spec.ts`; the existing KAT, EA-4/02, audit and gate suites unchanged and passing.
 - method-definition 194, method-templates 135 (example lab method fingerprint fixture bumped: `method:7deeb2cb… → method:5b1f62cc…`, it embeds the engine version), apps/api 1205 (KAT pin 0.5.0), apps/local-server 202, apps/web 1270.
 
 ## Operator steps (production)
