@@ -144,6 +144,11 @@ export class NumberBackend implements NumericBackend<number> {
         { exponent: b },
       );
     }
+    // 0 to a negative power is a division by zero, in this mode as in the
+    // decimal one (it used to surface here as a non-finite result).
+    if (a === 0 && b < 0) {
+      throw makeError(ERROR_CODES.DIVISION_BY_ZERO, "Division by zero.", { operation: "power", exponent: b });
+    }
     return this.fromNumber(Math.pow(a, b), "power");
   }
   sqrt(a: number): number {
@@ -311,10 +316,7 @@ export class DecimalBackend implements NumericBackend<DeterministicDecimal> {
         { exponent },
       );
     }
-    if (
-      b.isInteger() &&
-      absSafeBigInt(b.numerator) <= BigInt(this.maxExponentMagnitude)
-    ) {
+    if (b.isInteger()) {
       return a.powInteger(b.numerator);
     }
     return DeterministicDecimal.fromNumberFunction(
@@ -396,10 +398,6 @@ export class DecimalBackend implements NumericBackend<DeterministicDecimal> {
   }
 }
 
-function absSafeBigInt(value: bigint): bigint {
-  return value < 0n ? -value : value;
-}
-
 function unaryDecimal(
   fn: string,
   input: DeterministicDecimal,
@@ -427,26 +425,4 @@ function unaryDecimal(
   );
 }
 
-export function createNumericBackend(
-  mode: NumericMode,
-  decimalPrecision: number,
-  maxExponentMagnitude: number,
-  maxNumericInputLength = 512,
-  maxSignificantDigits = 128,
-): NumericBackend<number> | NumericBackend<DeterministicDecimal> {
-  return mode === "number"
-    ? new NumberBackend(
-        decimalPrecision,
-        maxExponentMagnitude,
-        maxNumericInputLength,
-        maxSignificantDigits,
-      )
-    : new DecimalBackend(
-        decimalPrecision,
-        maxExponentMagnitude,
-        maxNumericInputLength,
-        maxSignificantDigits,
-      );
-}
-
-export { canonicalNumber, canonicalRoundTripNumber };
+export { canonicalRoundTripNumber };

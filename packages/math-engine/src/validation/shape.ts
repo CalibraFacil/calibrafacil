@@ -2,7 +2,7 @@ import { ERROR_CODES } from "../errors/codes.js";
 import { makeError } from "../errors/errors.js";
 import type { CalculationErrorCode } from "../errors/codes.js";
 
-const DANGEROUS_KEYS = new Set([
+export const DANGEROUS_KEYS: ReadonlySet<string> = new Set([
   "__proto__",
   "prototype",
   "constructor",

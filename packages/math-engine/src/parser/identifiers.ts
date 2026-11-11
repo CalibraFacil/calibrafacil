@@ -1,22 +1,13 @@
 import { ERROR_CODES } from "../errors/codes.js";
 import { makeError } from "../errors/errors.js";
+import { DANGEROUS_KEYS } from "../validation/shape.js";
 
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
+// The keys no record may carry (one list, in validation/shape.ts) and the names
+// that would read as host capabilities.
 const RESERVED_IDENTIFIERS = new Set([
-  "__proto__",
-  "prototype",
-  "constructor",
-  "toString",
-  "toLocaleString",
-  "valueOf",
-  "hasOwnProperty",
-  "isPrototypeOf",
-  "propertyIsEnumerable",
-  "__defineGetter__",
-  "__defineSetter__",
-  "__lookupGetter__",
-  "__lookupSetter__",
+  ...DANGEROUS_KEYS,
   "import",
   "require",
   "process",

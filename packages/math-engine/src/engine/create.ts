@@ -1,5 +1,5 @@
 import type { CompileFormulaOptions, CompiledFormula, FormulaEvaluationOptions } from "../formula/compiled.js";
-import { compileFormulaInternal, isCompiledFormula } from "../formula/compiled.js";
+import { compileFormulaInternal, isCompiledFormula, splitFormulaOptions } from "../formula/compiled.js";
 import type { FormulaEvaluationResult } from "../formula/compiled.js";
 import type { NumericInput } from "../numeric/types.js";
 import type { MeasurementModelInput, MeasurementModelResult } from "../gum/measurement.js";
@@ -34,7 +34,11 @@ class DefaultCalculationEngine implements CalculationEngine {
     inputs: Readonly<Record<string, NumericInput>>,
     options: CompileFormulaOptions | FormulaEvaluationOptions = {}
   ): FormulaEvaluationResult {
-    if (typeof expression === "string") return compileFormulaInternal(expression, this.options, options).evaluate(inputs);
+    // Both kinds of option hold for both kinds of formula. Up to 0.5.0 a string
+    // took only the compile options (rejectUnusedInputs was refused) and a
+    // compiled formula only the evaluation ones (review).
+    const { compile, evaluation } = splitFormulaOptions(options);
+    if (typeof expression === "string") return compileFormulaInternal(expression, this.options, compile).evaluate(inputs, evaluation);
     if (!isCompiledFormula(expression)) {
       throw makeError(ERROR_CODES.INVALID_INPUT_SHAPE, "Formula must be a string or a CompiledFormula returned by this package.", {
         path: "formula",
@@ -42,7 +46,15 @@ class DefaultCalculationEngine implements CalculationEngine {
       });
     }
     expression.assertCompatibleWithOptions(this.options);
-    return expression.evaluate(inputs, options as FormulaEvaluationOptions);
+    if (compile.allowedVariables !== undefined) {
+      const allowed = new Set(compile.allowedVariables);
+      for (const variable of expression.variables) {
+        if (!allowed.has(variable)) {
+          throw makeError(ERROR_CODES.UNKNOWN_IDENTIFIER, "Formula references an unknown identifier.", { identifier: variable });
+        }
+      }
+    }
+    return expression.evaluate(inputs, evaluation);
   }
 
   evaluateMeasurementModel(input: MeasurementModelInput): MeasurementModelResult {

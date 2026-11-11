@@ -1,4 +1,5 @@
 import { NumberBackend } from "../numeric/backend.js";
+import { DeterministicDecimal } from "../numeric/decimal.js";
 import type { FormulaAstNode, SafeFunctionName } from "../parser/ast.js";
 import { evaluateAst } from "../evaluator/evaluate.js";
 
@@ -62,6 +63,18 @@ function isOne(node: FormulaAstNode): boolean {
   return isNumber(node, 1);
 }
 
+// n - 1 for the power rule, taken on the literal's exact decimal value: in
+// binary64, 1.1 - 1 is 0.10000000000000009 and the derivative of x^1.1 carried
+// that exponent (review). A literal the exact parser does not take keeps the
+// double difference.
+function exponentMinusOne(raw: string): string {
+  try {
+    return DeterministicDecimal.parse(raw).sub(DeterministicDecimal.of(1n)).toExactString();
+  } catch {
+    return (Number(raw) - 1).toString();
+  }
+}
+
 function dependsOn(ast: FormulaAstNode, variable: string): boolean {
   switch (ast.kind) {
     case "NumberLiteral":
@@ -121,7 +134,7 @@ export function symbolicDerivative(
                 binary(
                   "*",
                   num(exponent),
-                  binary("^", ast.left, num(exponent - 1)),
+                  binary("^", ast.left, num(exponentMinusOne(ast.right.raw))),
                 ),
                 dl,
               );
@@ -207,6 +220,14 @@ export interface NumericalDerivativeOptions {
   readonly maxExponentMagnitude: number;
   readonly decimalPrecision: number;
   readonly relativeStep?: number;
+  /**
+   * The step itself, when the caller knows the scale of the quantity: the
+   * measurement model passes half its standard uncertainty, so the stencil
+   * spans x ± u(x) (JCGM 100:2008, 5.1.3, note 2). Without it the step is
+   * `relativeStep · max(|x|, 1)`, which is absolute below 1 and only right for
+   * quantities of the order of 1 or more.
+   */
+  readonly step?: number;
 }
 
 export function numericalDerivative(
@@ -224,7 +245,10 @@ export function numericalDerivative(
     throw new Error(`Missing finite estimate for ${variable}`);
   }
   const relativeStep = options.relativeStep ?? 1e-6;
-  const h = relativeStep * Math.max(Math.abs(x0), 1);
+  const h =
+    options.step !== undefined && Number.isFinite(options.step) && options.step > 0
+      ? options.step
+      : relativeStep * Math.max(Math.abs(x0), 1);
   const evaluateAt = (offset: number): number => {
     const scope: Record<string, number> = {
       ...estimates,

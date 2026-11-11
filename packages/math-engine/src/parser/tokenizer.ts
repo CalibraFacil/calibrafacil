@@ -79,7 +79,7 @@ export function tokenizeFormula(expression: string, limits: FormulaLimits): read
       validateNumericString(value, {
         maxExponentMagnitude: limits.maxExponentMagnitude,
         maxInputLength: limits.maxNumberLiteralLength,
-        maxSignificantDigits: limits.maxNumberLiteralLength,
+        maxSignificantDigits: limits.maxSignificantDigits ?? limits.maxNumberLiteralLength,
         label: "number literal"
       });
       tokens.push({ type: "number", value, position: start });

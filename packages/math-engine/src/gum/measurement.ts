@@ -1204,6 +1204,19 @@ interface CovarianceFromRelationships {
    * declare no relationship, so the model is uncorrelated (review).
    */
   readonly relationshipCount: number;
+  /**
+   * The relationships as the calculation used them, for the canonical input:
+   * one entry per pair, the value in canonical number text. `undefined` when
+   * the field was not given at all.
+   */
+  readonly canonicalCorrelations: CanonicalJsonValue | undefined;
+  readonly canonicalCovariances: CanonicalJsonValue | undefined;
+}
+
+function offDiagonalCount(relationships: ReadonlyMap<string, RelationshipEntry>): number {
+  let count = 0;
+  for (const entry of relationships.values()) if (entry.i !== entry.j) count += 1;
+  return count;
 }
 
 function covarianceFromRelationships(
@@ -1310,19 +1323,25 @@ function covarianceFromRelationships(
       message:
         "Combined standard uncertainty includes validated covariance/correlation terms.",
       details: {
-        correlations: correlations.size,
-        covariances: covariances.size,
+        // Pairs, as in the canonical input: a matrix that also spells out its
+        // diagonal declares no more relationships than a list of the pairs.
+        correlations: offDiagonalCount(correlations),
+        covariances: offDiagonalCount(covariances),
         covarianceMatrix: covariance.map((row) =>
           row.map((value) => numberText(value, options)),
         ),
       },
     });
   }
-  let relationshipCount = 0;
-  for (const entry of [...correlations.values(), ...covariances.values()]) {
-    if (entry.i !== entry.j) relationshipCount += 1;
-  }
-  return { covariance, relationshipCount };
+  const relationshipCount = offDiagonalCount(correlations) + offDiagonalCount(covariances);
+  return {
+    covariance,
+    relationshipCount,
+    canonicalCorrelations:
+      input.correlations === undefined ? undefined : canonicalRelationships(correlations),
+    canonicalCovariances:
+      input.covariances === undefined ? undefined : canonicalRelationships(covariances),
+  };
 }
 
 function validateCovarianceMatrix(
@@ -1686,36 +1705,44 @@ function resolveSensitivityCoefficients(
     }
 
     const estimates = getNumberScopeForAst(formula.ast, quantities, options);
-    const numerical = numericalDerivative(
-      formula.ast,
-      quantity.symbol,
-      estimates,
-      {
-        maxExponentMagnitude: options.maxExponentMagnitude,
-        decimalPrecision: options.decimalPrecision,
-        relativeStep: options.numericalDerivativeRelativeStep,
-      },
-    );
-    const numericalHalfStep = numericalDerivative(
-      formula.ast,
-      quantity.symbol,
-      estimates,
-      {
-        maxExponentMagnitude: options.maxExponentMagnitude,
-        decimalPrecision: options.decimalPrecision,
-        relativeStep: options.numericalDerivativeRelativeStep / 2,
-      },
-    );
+    // The stencil spans the estimate ± its standard uncertainty (JCGM 100:2008,
+    // 5.1.3, note 2): that is the interval the linearization has to hold over,
+    // whatever the magnitude of the quantity. Up to 0.5.0 the step was
+    // 1e-6·max(|x|, 1), absolute below 1: at x = 1e-6 it reached x = 0 (review).
+    // A quantity with no uncertainty contributes nothing and keeps that step.
+    const uncertaintyStep = quantity.standardUncertainty / 2;
+    const stepBasis = uncertaintyStep > 0 ? "standardUncertainty" : "relative";
+    const derivativeOptions = {
+      maxExponentMagnitude: options.maxExponentMagnitude,
+      decimalPrecision: options.decimalPrecision,
+    };
+    const numerical = numericalDerivative(formula.ast, quantity.symbol, estimates, {
+      ...derivativeOptions,
+      ...(uncertaintyStep > 0
+        ? { step: uncertaintyStep }
+        : { relativeStep: options.numericalDerivativeRelativeStep }),
+    });
+    const numericalHalfStep = numericalDerivative(formula.ast, quantity.symbol, estimates, {
+      ...derivativeOptions,
+      ...(uncertaintyStep > 0
+        ? { step: uncertaintyStep / 2 }
+        : { relativeStep: options.numericalDerivativeRelativeStep / 2 }),
+    });
+    // Relative to the sensitivities themselves: a floor of 1 hid the
+    // instability of any coefficient well below 1.
+    const sensitivityScale = Math.max(Math.abs(numerical), Math.abs(numericalHalfStep));
     const relativeDifference =
-      Math.abs(numerical - numericalHalfStep) /
-      Math.max(1, Math.abs(numerical), Math.abs(numericalHalfStep));
+      sensitivityScale === 0 ? 0 : Math.abs(numerical - numericalHalfStep) / sensitivityScale;
     diagnostics.push({
       code: "SENSITIVITY_NUMERICAL_FALLBACK",
       severity: "warning",
       message: `Sensitivity coefficient for ${quantity.symbol} used deterministic numerical differentiation in double precision.`,
       details: {
         symbol: quantity.symbol,
-        relativeStep: options.numericalDerivativeRelativeStep,
+        stepBasis,
+        ...(uncertaintyStep > 0
+          ? { step: uncertaintyStep }
+          : { relativeStep: options.numericalDerivativeRelativeStep }),
         precision: "IEEE-754 double",
         relativeDifference,
       },
@@ -1849,7 +1876,7 @@ export function evaluateMeasurementModelInternal(
   const symbolToIndex = new Map<string, number>(
     quantities.map((quantity, index) => [quantity.symbol, index]),
   );
-  const { covariance, relationshipCount } = covarianceFromRelationships(
+  const { covariance, relationshipCount, canonicalCorrelations, canonicalCovariances } = covarianceFromRelationships(
     quantities,
     typedInput,
     symbolToIndex,
@@ -2029,8 +2056,8 @@ export function evaluateMeasurementModelInternal(
     kind: "measurementModel",
     formulaFingerprint: compiledFormula.formulaFingerprint,
     quantities: quantities.map(quantityCanonical),
-    correlations: normalizePairwiseInput(typedInput.correlations),
-    covariances: normalizePairwiseInput(typedInput.covariances),
+    correlations: canonicalCorrelations,
+    covariances: canonicalCovariances,
     ...(hasDeclaredRelationships ? { correlatedDegreesOfFreedom } : {}),
     options: {
       numericMode: options.numericMode,
@@ -2186,52 +2213,23 @@ function validateMeasurementResult(result: MeasurementModelResult): void {
   }
 }
 
-function normalizePairwiseInput(
-  input:
-    | MeasurementModelInput["correlations"]
-    | MeasurementModelInput["covariances"],
-): CanonicalJsonValue | undefined {
-  if (input === undefined) return undefined;
-  const entries: CanonicalJsonValue[] = [];
-  if (Array.isArray(input)) {
-    for (const entry of input) {
-      if (Array.isArray(entry))
-        entries.push({
-          symbols: [String(entry[0]), String(entry[1])].sort(),
-          value: String(entry[2]),
-        });
-      else {
-        const record = entry as Record<string, unknown>;
-        const symbols = Array.isArray(record.symbols)
-          ? record.symbols
-          : ["", ""];
-        const value = hasOwn(record, "coefficient")
-          ? record.coefficient
-          : hasOwn(record, "correlation")
-            ? record.correlation
-            : record.covariance;
-        entries.push({
-          symbols: [String(symbols[0]), String(symbols[1])].sort(),
-          value: String(value),
-        });
-      }
-    }
-  } else {
-    const matrix = input as PairwiseMatrixInput;
-    for (const symbolA of Object.keys(matrix).sort()) {
-      const row = matrix[symbolA];
-      if (row === undefined) continue;
-      for (const symbolB of Object.keys(row).sort())
-        entries.push({
-          symbols: [symbolA, symbolB].sort(),
-          value: String(row[symbolB]),
-        });
-    }
+// The declared relationships as they enter the calculation fingerprint: the
+// parsed pairs, not the text they were written in. Up to 0.5.0 the raw input was
+// recorded, so "0.5", "0.50" and 5e-1, or the same pair given as a list and as
+// both halves of a matrix, were four fingerprints for one model (review). The
+// diagonal says nothing the quantities do not (it is checked against them) and
+// is left out. Ordered by code unit, like every other sort of the canonical form.
+function canonicalRelationships(
+  relationships: ReadonlyMap<string, RelationshipEntry>,
+): CanonicalJsonValue {
+  const entries: { readonly symbols: readonly string[]; readonly value: string }[] = [];
+  for (const entry of relationships.values()) {
+    if (entry.i === entry.j) continue;
+    entries.push({
+      symbols: [entry.symbolA, entry.symbolB].sort(),
+      value: canonicalRoundTripNumber(entry.value),
+    });
   }
-  // Ordered by code unit, like every other sort of the canonical form:
-  // localeCompare follows the locale of the process (et-EE puts z before t), and
-  // this order goes into the calculation fingerprint. Each entry is serialized
-  // once, not once per comparison.
   return entries
     .map((entry) => ({ entry, key: canonicalJson(entry) }))
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))

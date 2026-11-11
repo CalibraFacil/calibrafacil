@@ -1,0 +1,279 @@
+{
+  "engineVersion": "0.6.0",
+  "referenceFormula": "reference + correction - drift",
+  "fingerprint": "sha256:bb09d4575ccaaa6d2bb8ff2f0d11f0ce070e830fa9ec8cba3942a7d5ab9be3a7",
+  "engineOptions": {
+    "numericMode": "decimal",
+    "rejectUnusedInputs": true,
+    "maxExponentMagnitude": 12,
+    "maxSignificantDigits": 24
+  },
+  "sourcePin": {
+    "algorithm": "sha256 over the `<sha256(file)>  <path>\\n` listing (sha256sum format) of every src/**/*.ts file except specs, src/testing/ and the gate machinery, paths POSIX relative to the package root, sorted by code unit; CRLF normalised to LF before hashing",
+    "sha256": "081935f58e0ce10ffaf69a1c6ad543ebd2038a90ee68d986b3f2aca3e0cc376d",
+    "files": {
+      "src/audit/canonical-json.ts": "9ddb111bbe4b2586133c91fa218f8af69d6da8922bbfebc5fa09b3fcd1daba3d",
+      "src/audit/fingerprint.ts": "be552506ed0eadc6af21cb625b4a783943a64e7b8b78bd51bcf52a4976cfb52e",
+      "src/audit/index.ts": "7ced227576f253c967bd19fc10cf3b73605c717c330e7644b83de1b753395375",
+      "src/engine/create.ts": "d3105ce0ed1143af759fe46d0a6961a7b14609117cfe02584852e7f3e72c512e",
+      "src/engine/index.ts": "b8e56582cdddcff82bc9982b00bf03e9ead0234b2ed11063da77c736de07368e",
+      "src/engine/options.ts": "09775a08e3b061c4dd297b6c57f3b374c5f1f4df289dc5e0ae73b98454ca063e",
+      "src/errors/codes.ts": "8790563d58b772305ae4069df5f6df0753a5a594b49f7931e47946838241c3fb",
+      "src/errors/errors.ts": "16bb09bd5c6fdb00ebeee1667d1bfec007d7edeee069da3f76c8a342b22f4b40",
+      "src/errors/index.ts": "c05e8faa5861eb02a8202249dc0a64f3524704bd0c8d65636e14b9710a83419f",
+      "src/evaluator/evaluate.ts": "ad07ae183d20b118dec3c08e3563844491ff9c8675a92d6c07a0ea83e60286d1",
+      "src/formula/compiled.ts": "d5c3bb2238963ef3b7f0efee749416757fdd71a3d04262e9edbab4f2b8210151",
+      "src/formula/derivative.ts": "059bc0dd3a14d3d3c7958f9ac55d0ae1887b21f76378527845029530d3b68ebf",
+      "src/formula/diagnostics.ts": "d4c1b3e52304fc65d17929edcfc5920ffe8af62c8c936537f7e22793819136d8",
+      "src/formula/index.ts": "e3409442f2520d7be68440a2957d93094642dd560d03fd3ce3da08111b3ef6be",
+      "src/formula/normalize.ts": "b85d7b7be831f954842dbf4172a4290471fa19d522dc1a29688ca11830c29e37",
+      "src/gum/index.ts": "fd433d3bbf258a16df8c331de58404a1281ad504b752b560383cd1f9f05a1aed",
+      "src/gum/measurement.ts": "214e981041b8499c3c70e9a1a01820fe197f6f024f5e9770d4b7575db002a53f",
+      "src/gum/psd.ts": "6445b978852e1aca779a53cb566401abcfb1ba080db6687a329696f8beab90de",
+      "src/gum/statistics.ts": "bf672bce051d6a99f5c67dab7eaf547e87752959d5d041dbc4f7547a4c2e992c",
+      "src/index.ts": "c6f241fa86b850d841bc37e80f1e10ec39a28ce571c97b7dd18e5e58070d10b7",
+      "src/numeric/backend.ts": "9e6445ce33192d46496cb25eacc83bfb92bf8a86dea036159a3ef68d28ec620f",
+      "src/numeric/decimal.ts": "1b1203a09e5efb5c56a0e10b0148096376b95fd947057728a822370ace55c8b9",
+      "src/numeric/index.ts": "88f127c11a234ec2a7c13a7f9a4d2aebe01d6a3ec0fbbf8d52f240aefdcb3f36",
+      "src/numeric/types.ts": "965b41033eebeffc65ed01191ae9c34d19baeec28cb4daabda544b0781375bbd",
+      "src/numeric/validation.ts": "0e7224975823372b3a837ed2784df52f02305821db519b84c45f89d9c168a977",
+      "src/parser/ast.ts": "af259fe745dd75038062ae6cc5e8827cbe9eceb8f4110b682c9b83c7122c8d06",
+      "src/parser/identifiers.ts": "83605bc6c68e667a8502128abde63815608136f4d8e834af18977ca0e8bbb70e",
+      "src/parser/index.ts": "36abe7c3dab917a4a6de69b0d506cd896e7fd8ac21b8b2b7e16c9fffdc3bf327",
+      "src/parser/options.ts": "445f834e204cb991697fa912523dc8909c3ad462ace707301f185a9ea67ad1a0",
+      "src/parser/parser.ts": "63463a69afbd72232399e61ae5a2633c3aa9891b92a9485aa412cfde82589061",
+      "src/parser/tokenizer.ts": "cb0600398627d813739679f1717442679b7ee775f90a2235a96f66a721f9095e",
+      "src/parser/validate.ts": "731d045bcbe38df7c18012d9981a924d2a78a1636e716252eb43de7fb9937f86",
+      "src/uncertainty/index.ts": "a8bf3450e01f1a70e5e6d3fe8541bdd114bc4511476fc56757e56212a84ef166",
+      "src/uncertainty/type-a.ts": "97d110915cbc59954d8e9c65178d280b4fb6f2b715fcace159c082b09941b18b",
+      "src/uncertainty/type-b.ts": "70f40586ce46ee8d90de3594436257c77b31f1be618d097b9d76cd67c565d4a2",
+      "src/units/index.ts": "cef67ef93e2bb3d7c8eb134b923f8c653278b84677ffa177e844e9c80c063da7",
+      "src/validation/shape.ts": "13bd8da8512a9ebb4a947fb8e432292e4423fcf9e51e0cd512c390453e413681"
+    }
+  },
+  "propagationGoldens": [
+    {
+      "id": "additive-type-a-type-b-finite-dof",
+      "description": "y = a + b1 + b2: Type A mean of five readings (nu 4), rectangular Type B with 24 assigned degrees of freedom, triangular Type B with infinite degrees of freedom; k from Student-t at nu_eff of about 36, p = 95.45 %.",
+      "model": {
+        "formula": "a + b1 + b2",
+        "quantities": {
+          "a": {
+            "repeatedObservations": [
+              0.1835,
+              0.1835,
+              0.197,
+              0.2105,
+              0.2105
+            ]
+          },
+          "b1": {
+            "estimate": 0,
+            "typeB": {
+              "distribution": "rectangular",
+              "halfWidth": 0.065
+            },
+            "degreesOfFreedom": 24
+          },
+          "b2": {
+            "estimate": 0,
+            "typeB": {
+              "distribution": "triangular",
+              "halfWidth": 0.041
+            },
+            "degreesOfFreedom": "Infinity"
+          }
+        },
+        "coverageProbability": 0.9545
+      },
+      "expected": {
+        "value": "0.197",
+        "combinedStandardUncertainty": "0.04153251738096308",
+        "effectiveDegreesOfFreedom": "35.860087545059095",
+        "coverageFactor": "2.0721627200224506",
+        "expandedUncertainty": "0.08606213418551616",
+        "sensitivityCoefficients": {
+          "a": "1",
+          "b1": "1",
+          "b2": "1"
+        },
+        "calculationFingerprint": "sha256:fcdd46f21a9e1b21e5a9f159f33f7af481f972a39572fafcbc0c0a62dc523452"
+      }
+    },
+    {
+      "id": "nonlinear-thermal-expansion",
+      "description": "L = L0 (1 + alpha (T - 20)) + dl: product model with symbolic sensitivities, Type A temperature with 9 degrees of freedom, rectangular alpha, triangular dl, p = 95 %.",
+      "model": {
+        "formula": "L0 * (1 + alpha * (T - 20)) + dl",
+        "quantities": {
+          "L0": {
+            "estimate": "100.0004",
+            "standardUncertainty": "0.0003",
+            "degreesOfFreedom": 15
+          },
+          "alpha": {
+            "estimate": "0.0000115",
+            "typeB": {
+              "distribution": "rectangular",
+              "halfWidth": "0.000001"
+            },
+            "degreesOfFreedom": "Infinity"
+          },
+          "T": {
+            "estimate": "23.4",
+            "standardUncertainty": "0.3",
+            "degreesOfFreedom": 9
+          },
+          "dl": {
+            "estimate": 0,
+            "typeB": {
+              "distribution": "triangular",
+              "halfWidth": "0.0002"
+            },
+            "degreesOfFreedom": "Infinity"
+          }
+        },
+        "coverageProbability": 0.95
+      },
+      "expected": {
+        "value": "100.00431001564",
+        "combinedStandardUncertainty": "0.0005042155279310431",
+        "effectiveDegreesOfFreedom": "30.571423346886203",
+        "coverageFactor": "2.040672923003558",
+        "expandedUncertainty": "0.0010289389752068238",
+        "sensitivityCoefficients": {
+          "L0": "1.0000391",
+          "T": "0.0011500046",
+          "alpha": "340.00136",
+          "dl": "1"
+        },
+        "calculationFingerprint": "sha256:6ab57e84e76318105054e6039839826fffb1430fb2e1430cb9e386e368b44831"
+      }
+    },
+    {
+      "id": "nonlinear-quotient-and-power",
+      "description": "P = V^2 / R: quotient and integer power, sensitivities 2V/R and -V^2/R^2, small effective degrees of freedom (dominated by a three-reading Type A input), p = 95 %.",
+      "model": {
+        "formula": "V ^ 2 / R",
+        "quantities": {
+          "V": {
+            "repeatedObservations": [
+              "12.341",
+              "12.352",
+              "12.347"
+            ]
+          },
+          "R": {
+            "estimate": "47.5",
+            "standardUncertainty": "0.05",
+            "degreesOfFreedom": 12
+          }
+        },
+        "coverageProbability": 0.95
+      },
+      "expected": {
+        "value": "3.209266900584797",
+        "combinedStandardUncertainty": "0.0037609360182966093",
+        "effectiveDegreesOfFreedom": "13.716246271332928",
+        "coverageFactor": "2.1489568102926992",
+        "expandedUncertainty": "0.008082089069593606",
+        "sensitivityCoefficients": {
+          "R": "-0.06756351369652204",
+          "V": "0.5198596491228071"
+        },
+        "calculationFingerprint": "sha256:176efd6c651eda1ed045fef82a3ecb93be676667fab2890316f1707afbb12760"
+      }
+    },
+    {
+      "id": "correlated-generalized-welch-satterthwaite",
+      "description": "y = x + y1 + z with correlations x-y1 = 0.5 and y1-z = 0.3: shared-index cross-terms of the generalized nu_eff (Castrup 2010/2020 Eq. 46), p = 95 %.",
+      "model": {
+        "formula": "x + y1 + z",
+        "quantities": {
+          "x": {
+            "estimate": "10.01",
+            "standardUncertainty": "0.020",
+            "degreesOfFreedom": 6
+          },
+          "y1": {
+            "estimate": "9.98",
+            "standardUncertainty": "0.015",
+            "degreesOfFreedom": 8
+          },
+          "z": {
+            "estimate": "0.004",
+            "standardUncertainty": "0.010",
+            "degreesOfFreedom": 11
+          }
+        },
+        "correlations": [
+          [
+            "x",
+            "y1",
+            "0.5"
+          ],
+          [
+            "y1",
+            "z",
+            "0.3"
+          ]
+        ],
+        "coverageProbability": 0.95
+      },
+      "expected": {
+        "value": "19.994",
+        "combinedStandardUncertainty": "0.033391615714128",
+        "effectiveDegreesOfFreedom": "16.659874611133997",
+        "coverageFactor": "2.113101542630774",
+        "expandedUncertainty": "0.07055987467645787",
+        "sensitivityCoefficients": {
+          "x": "1",
+          "y1": "1",
+          "z": "1"
+        },
+        "calculationFingerprint": "sha256:2c1e72f9fea17253fa432fa8dbeeb33e8086c647947ca35d4114cefe88c84555"
+      }
+    },
+    {
+      "id": "explicit-coverage-factor",
+      "description": "y = gain * reading + offset with an explicitly assigned coverage factor k = 2 (the path that bypasses the Student-t quantile).",
+      "model": {
+        "formula": "gain * reading + offset",
+        "quantities": {
+          "gain": {
+            "estimate": "1.0002",
+            "standardUncertainty": "0.0001",
+            "degreesOfFreedom": "Infinity"
+          },
+          "reading": {
+            "estimate": "250.00",
+            "standardUncertainty": "0.05",
+            "degreesOfFreedom": "Infinity"
+          },
+          "offset": {
+            "estimate": "0.02",
+            "typeB": {
+              "distribution": "rectangular",
+              "halfWidth": "0.05"
+            },
+            "degreesOfFreedom": "Infinity"
+          }
+        },
+        "coverageFactor": 2
+      },
+      "expected": {
+        "value": "250.07",
+        "combinedStandardUncertainty": "0.06292323444748635",
+        "effectiveDegreesOfFreedom": "Infinity",
+        "coverageFactor": "2",
+        "expandedUncertainty": "0.1258464688949727",
+        "sensitivityCoefficients": {
+          "gain": "250",
+          "offset": "1",
+          "reading": "1.0002"
+        },
+        "calculationFingerprint": "sha256:49a7a58e2676514a76034a4fe7a897fc817dea7c2cab3813590d65f1096a4d88"
+      }
+    }
+  ]
+}

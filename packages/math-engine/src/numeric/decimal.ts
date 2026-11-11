@@ -1,6 +1,6 @@
 import { ERROR_CODES } from "../errors/codes.js";
 import { makeError } from "../errors/errors.js";
-import { assertFiniteResult, validateNumericString } from "./validation.js";
+import { assertFiniteResult, numberInputText, validateNumericString } from "./validation.js";
 
 export interface DecimalParseOptions {
   readonly maxExponentMagnitude?: number;
@@ -368,7 +368,7 @@ export class DeterministicDecimal {
   ): DeterministicDecimal {
     if (typeof value === "number") {
       assertFiniteResult(value, label);
-      return DeterministicDecimal.parse(value.toString(), label, options);
+      return DeterministicDecimal.parse(numberInputText(value), label, options);
     }
     return DeterministicDecimal.parse(value, label, options);
   }

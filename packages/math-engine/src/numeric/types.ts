@@ -2,14 +2,6 @@ export type NumericMode = "number" | "decimal";
 export type NumericInput = number | string;
 export type NumericOutput = number | string;
 
-export interface NumericOptions {
-  readonly mode: NumericMode;
-  readonly decimalPrecision: number;
-  readonly maxExponentMagnitude: number;
-  readonly maxNumericInputLength?: number;
-  readonly maxSignificantDigits?: number;
-}
-
 export interface NumericBackend<T> {
   readonly mode: NumericMode;
   readonly decimalPrecision: number;
