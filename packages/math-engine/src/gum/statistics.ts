@@ -96,9 +96,66 @@ export function standardUncertaintyOfMean(values: readonly number[]): number {
   return assertFiniteStatisticResult(sampleStandardDeviation(checked) / Math.sqrt(checked.length), "standardUncertaintyOfMean");
 }
 
-export function normalQuantile(p: number): number {
-  const probability = assertProbability(p, "p");
+const SQRT_PI = Math.sqrt(Math.PI);
+const SQRT_TWO_PI = Math.sqrt(2 * Math.PI);
 
+// Below this the series for erf is used and erfc is 1 - erf; from here on erfc
+// comes from its continued fraction, which keeps the relative accuracy of the
+// tail (57 terms at 2, fewer beyond).
+const ERFC_CONTINUED_FRACTION_FROM = 2;
+
+/**
+ * erf(x) for 0 <= x < 2 by the series with positive terms (Abramowitz and
+ * Stegun 7.1.6): erf(x) = (2/√π) e^(-x²) Σ 2ⁿ x^(2n+1) / (1·3·…·(2n+1)).
+ * No cancellation, so it is exact to the last bits and erf(0) is exactly 0.
+ */
+function erfSeries(x: number): number {
+  const twoXSquared = 2 * x * x;
+  let term = x;
+  let sum = x;
+  for (let n = 1; n <= 200; n += 1) {
+    term *= twoXSquared / (2 * n + 1);
+    const next = sum + term;
+    if (next === sum) break;
+    sum = next;
+  }
+  return (2 / SQRT_PI) * Math.exp(-x * x) * sum;
+}
+
+/**
+ * erfc(x) for x >= 2 by the continued fraction (Abramowitz and Stegun 7.1.14)
+ * erfc(x) = e^(-x²) / (√π (x + (1/2)/(x + 1/(x + (3/2)/(x + …))))), evaluated
+ * with the modified Lentz method. Every term is positive.
+ */
+function erfcContinuedFraction(x: number): number {
+  let fraction = x;
+  let c = x;
+  let d = 0;
+  for (let n = 1; n <= 200; n += 1) {
+    const numerator = n / 2;
+    d = 1 / (x + numerator * d);
+    c = x + numerator / c;
+    const delta = c * d;
+    fraction *= delta;
+    if (Math.abs(delta - 1) <= Number.EPSILON) break;
+  }
+  return Math.exp(-x * x) / (SQRT_PI * fraction);
+}
+
+function erfcUnchecked(x: number): number {
+  if (x < 0) return 2 - erfcUnchecked(-x);
+  if (x < ERFC_CONTINUED_FRACTION_FROM) return 1 - erfSeries(x);
+  return erfcContinuedFraction(x);
+}
+
+/** Φ(t), the standard normal distribution function, with a relatively accurate lower tail. */
+function standardNormalCdf(t: number): number {
+  return 0.5 * erfcUnchecked(-t / Math.SQRT2);
+}
+
+// Acklam's rational approximation of the normal quantile for 0 < p <= 0.5
+// (relative error below 1.15e-9), before refinement.
+function acklamLowerQuantile(probability: number): number {
   const a = [
     -3.969683028665376e+1,
     2.209460984245205e+2,
@@ -129,34 +186,36 @@ export function normalQuantile(p: number): number {
     3.754408661907416
   ] as const;
 
-  const pLow = 0.02425;
-  const pHigh = 1 - pLow;
-
-  if (probability < pLow) {
+  if (probability < 0.02425) {
     const q = Math.sqrt(-2 * Math.log(probability));
-    return assertFiniteStatisticResult(
-      (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
-        ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1),
-      "normalQuantile"
-    );
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
   }
+  const q = probability - 0.5;
+  const r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+    (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
 
-  if (probability <= pHigh) {
-    const q = probability - 0.5;
-    const r = q * q;
-    return assertFiniteStatisticResult(
-      (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
-        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1),
-      "normalQuantile"
-    );
-  }
+// The refinement divides by the normal density; below this probability the
+// density and Φ are subnormal and the step would add noise instead of digits.
+const NORMAL_QUANTILE_REFINEMENT_FROM = 1e-300;
 
-  const q = Math.sqrt(-2 * Math.log(1 - probability));
-  return assertFiniteStatisticResult(
-    -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
-      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1),
-    "normalQuantile"
-  );
+/** Normal quantile for 0 < p <= 0.5: Acklam's approximation and one step of Halley's method on Φ(x) - p. */
+function normalLowerQuantile(probability: number): number {
+  const x = acklamLowerQuantile(probability);
+  if (probability < NORMAL_QUANTILE_REFINEMENT_FROM) return x;
+  const error = standardNormalCdf(x) - probability;
+  const step = error * SQRT_TWO_PI * Math.exp((x * x) / 2);
+  return x - step / (1 + (x * step) / 2);
+}
+
+export function normalQuantile(p: number): number {
+  const probability = assertProbability(p, "p");
+  // The upper half is the mirror of the lower one: 1 - p is exact for
+  // p >= 0.5, and the lower tail is the one Φ resolves.
+  const quantile = probability > 0.5 ? -normalLowerQuantile(1 - probability) : normalLowerQuantile(probability);
+  return assertFiniteStatisticResult(quantile, "normalQuantile");
 }
 
 export function logGamma(z: number): number {
@@ -176,8 +235,12 @@ export function logGamma(z: number): number {
   return assertFiniteStatisticResult(0.5 * Math.log(2 * Math.PI) + (adjusted + 0.5) * Math.log(t) - t + Math.log(x), "logGamma");
 }
 
+// The continued fraction of the incomplete beta function converges in about
+// √max(a, b) terms at its slowest point. Student's t (b = 1/2) needs fewer than
+// 150 for every ν; the cap only bounds the exported helper for very large a and b.
+const BETA_CONTINUED_FRACTION_MAX_ITERATIONS = 10000;
+
 function betaContinuedFraction(x: number, a: number, b: number): number {
-  const maxIterations = 200;
   const epsilon = 3e-14;
   const fpMin = 1e-300;
   const qab = a + b;
@@ -189,7 +252,7 @@ function betaContinuedFraction(x: number, a: number, b: number): number {
   d = 1 / d;
   let h = d;
 
-  for (let m = 1; m <= maxIterations; m += 1) {
+  for (let m = 1; m <= BETA_CONTINUED_FRACTION_MAX_ITERATIONS; m += 1) {
     const m2 = 2 * m;
     let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
     d = 1 + aa * d;
@@ -207,10 +270,75 @@ function betaContinuedFraction(x: number, a: number, b: number): number {
     d = 1 / d;
     const del = d * c;
     h *= del;
-    if (Math.abs(del - 1) <= epsilon) break;
+    if (Math.abs(del - 1) <= epsilon) return h;
   }
 
-  return h;
+  // A truncated fraction is a wrong value, not an approximate one (a = b = 1e6
+  // at x = 0.5 read 0.4997 with the 200 terms of up to 0.4.0): refuse it.
+  throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Incomplete beta continued fraction did not converge for these parameters.", {
+    x,
+    a,
+    b,
+    maxIterations: BETA_CONTINUED_FRACTION_MAX_ITERATIONS,
+    suggestedRemediation: "Use parameters within a smaller operational range or validate this calculation with a domain-specific numerical method."
+  });
+}
+
+// From here on ln Γ comes from Stirling's series, whose terms can be subtracted
+// analytically; the first neglected term is below 3e-17 at 10.
+const STIRLING_SERIES_FROM = 10;
+
+/** ln Γ(z) - [(z - ½) ln z - z + ½ ln 2π] for z >= 10: Stirling's series (Abramowitz and Stegun 6.1.40). */
+function stirlingCorrection(z: number): number {
+  const w = 1 / (z * z);
+  return (1 / 12 - (1 / 360 - (1 / 1260 - (1 / 1680 - (1 / 1188 - (691 / 360360 - w / 156) * w) * w) * w) * w) * w) / z;
+}
+
+/**
+ * ln B(a, b) = ln Γ(a) + ln Γ(b) - ln Γ(a + b). With one argument large the
+ * last two are huge and nearly equal (ν = 1e7 lost eight digits to that
+ * subtraction up to 0.4.0), so their difference is taken analytically:
+ * ln Γ(L) - ln Γ(L + s) = -(L - ½) ln(1 + s/L) - s ln(L + s) + s + δ(L) - δ(L + s),
+ * δ being Stirling's correction.
+ */
+function logBeta(a: number, b: number): number {
+  const small = Math.min(a, b);
+  const large = Math.max(a, b);
+  if (large < STIRLING_SERIES_FROM) return logGamma(a) + logGamma(b) - logGamma(a + b);
+  const sum = large + small;
+  return logGamma(small)
+    - (large - 0.5) * Math.log1p(small / large)
+    - small * Math.log(sum)
+    + small
+    + stirlingCorrection(large)
+    - stirlingCorrection(sum);
+}
+
+/**
+ * I_x(a, b) from x, y = 1 - x and their logarithms. The caller gives all four
+ * because each can carry what the others lost: near x = 1 the information is
+ * in y, and an x too small for a double still has a usable logarithm.
+ */
+function regularizedIncompleteBetaCore(x: number, y: number, logX: number, logY: number, a: number, b: number): number {
+  const bt = Math.exp(a * logX + b * logY - logBeta(a, b));
+  const value = x < (a + 1) / (a + b + 2)
+    ? bt * betaContinuedFraction(x, a, b) / a
+    : 1 - bt * betaContinuedFraction(y, b, a) / b;
+  // Rounding can leave the value a few units in the last place outside [0, 1].
+  return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * I_x(a, b) with y = 1 - x given by the caller: Student's t passes
+ * y = t²/(ν + t²) exactly, which is what keeps the distribution function from
+ * going flat around t = 0 (1 - x computed here would have lost it).
+ */
+function regularizedIncompleteBetaWithComplement(x: number, y: number, a: number, b: number): number {
+  if (x === 0) return 0;
+  if (y === 0) return 1;
+  const logX = x > 0.5 ? Math.log1p(-y) : Math.log(x);
+  const logY = y > 0.5 ? Math.log1p(-x) : Math.log(y);
+  return regularizedIncompleteBetaCore(x, y, logX, logY, a, b);
 }
 
 export function regularizedIncompleteBeta(x: number, a: number, b: number): number {
@@ -220,54 +348,88 @@ export function regularizedIncompleteBeta(x: number, a: number, b: number): numb
   if (!(checkedX >= 0 && checkedX <= 1) || !(checkedA > 0) || !(checkedB > 0)) {
     throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Invalid parameters for regularized incomplete beta.", { x: checkedX, a: checkedA, b: checkedB });
   }
-  if (checkedX === 0 || checkedX === 1) return checkedX;
+  return assertFiniteStatisticResult(regularizedIncompleteBetaWithComplement(checkedX, 1 - checkedX, checkedA, checkedB), "regularizedIncompleteBeta");
+}
 
-  const bt = Math.exp(logGamma(checkedA + checkedB) - logGamma(checkedA) - logGamma(checkedB) + checkedA * Math.log(checkedX) + checkedB * Math.log(1 - checkedX));
-  if (checkedX < (checkedA + 1) / (checkedA + checkedB + 2)) {
-    return assertFiniteStatisticResult(bt * betaContinuedFraction(checkedX, checkedA, checkedB) / checkedA, "regularizedIncompleteBeta");
+// Above this the normal distribution stands in for Student's t: the quantiles
+// differ by (z² + 1)/(4ν) relative, 1.25e-7 at k = 2 just past the switch. Below
+// it t is evaluated directly; the continued fraction in x = ν/(ν + t²) loses
+// about ν·1e-17 near x = 1, which is why the switch is not placed higher
+// (5e-10 at 1e7, against LibreOffice's TINV and mpmath).
+const STUDENT_T_NORMAL_FROM = 1e7;
+
+/**
+ * P(T > |t|) for Student's t with ν degrees of freedom: ½ I_x(ν/2, ½) with
+ * x = ν/(ν + t²). x and its complement are both formed from t², so neither end
+ * loses digits. When t² overflows or x underflows, x^(ν/2) can still be an
+ * ordinary number (ν = 1 at t = 1e200 has a tail of 3e-201): x is then carried
+ * by its logarithm.
+ */
+function studentTUpperTail(absT: number, degreesOfFreedom: number): number {
+  const a = degreesOfFreedom / 2;
+  const tSquared = absT * absT;
+  if (Number.isFinite(tSquared)) {
+    const denominator = degreesOfFreedom + tSquared;
+    const x = degreesOfFreedom / denominator;
+    if (x > 0) return 0.5 * regularizedIncompleteBetaWithComplement(x, tSquared / denominator, a, 0.5);
   }
-  return assertFiniteStatisticResult(1 - bt * betaContinuedFraction(1 - checkedX, checkedB, checkedA) / checkedB, "regularizedIncompleteBeta");
+  const logX = Math.log(degreesOfFreedom) - 2 * Math.log(absT);
+  return 0.5 * regularizedIncompleteBetaCore(Math.exp(logX), 1, logX, 0, a, 0.5);
 }
 
 export function studentTCdf(t: number, degreesOfFreedom: number): number {
   const checkedT = assertFiniteStatisticNumber(t, "t");
   const checkedDof = assertDegreesOfFreedom(degreesOfFreedom, "degreesOfFreedom", true);
-  if (!Number.isFinite(checkedDof) || checkedDof > 1e7) {
-    return assertFiniteStatisticResult(0.5 * (1 + erf(checkedT / Math.SQRT2)), "studentTCdf");
+  if (checkedDof > STUDENT_T_NORMAL_FROM) {
+    return assertFiniteStatisticResult(standardNormalCdf(checkedT), "studentTCdf");
   }
-  const x = checkedDof / (checkedDof + checkedT * checkedT);
-  const ib = regularizedIncompleteBeta(x, checkedDof / 2, 0.5);
-  return assertFiniteStatisticResult(checkedT >= 0 ? 1 - 0.5 * ib : 0.5 * ib, "studentTCdf");
+  const tail = studentTUpperTail(Math.abs(checkedT), checkedDof);
+  return assertFiniteStatisticResult(checkedT >= 0 ? 1 - tail : tail, "studentTCdf");
 }
 
 export function erf(x: number): number {
   const checkedX = assertFiniteStatisticNumber(x, "x");
-  // Abramowitz and Stegun 7.1.26. Sufficient for coverage-factor diagnostics and large-df fallback.
-  const sign = checkedX < 0 ? -1 : 1;
   const absX = Math.abs(checkedX);
-  const t = 1 / (1 + 0.3275911 * absX);
-  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-absX * absX);
-  return assertFiniteStatisticResult(sign * y, "erf");
+  const value = absX < ERFC_CONTINUED_FRACTION_FROM ? erfSeries(absX) : 1 - erfcContinuedFraction(absX);
+  return assertFiniteStatisticResult(checkedX < 0 ? -value : value, "erf");
 }
 
 export function studentTQuantile(p: number, degreesOfFreedom: number): number {
   const probability = assertProbability(p, "p");
   const checkedDof = assertDegreesOfFreedom(degreesOfFreedom, "degreesOfFreedom", true);
-  if (!Number.isFinite(checkedDof) || checkedDof > 1e7) {
+  if (checkedDof > STUDENT_T_NORMAL_FROM) {
     return normalQuantile(probability);
   }
+  if (probability === 0.5) return 0;
 
-  let low = -1;
+  // Solve on the tail, where the distribution function has its digits: find
+  // a > 0 with P(T > a) = min(p, 1 - p) and give it the sign of p - 0.5.
+  // 1 - p is exact for p > 0.5.
+  const tailProbability = probability < 0.5 ? probability : 1 - probability;
+  let low = 0;
   let high = 1;
-  while (studentTCdf(low, checkedDof) > probability) low *= 2;
-  while (studentTCdf(high, checkedDof) < probability) high *= 2;
-
-  for (let i = 0; i < 90; i += 1) {
-    const mid = (low + high) / 2;
-    if (studentTCdf(mid, checkedDof) < probability) low = mid;
+  while (studentTUpperTail(high, checkedDof) > tailProbability) {
+    low = high;
+    high *= 2;
+    if (!Number.isFinite(high)) {
+      throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Student t quantile is outside the finite numeric range supported by this API.", {
+        path: "studentTQuantile",
+        p: String(probability),
+        degreesOfFreedom: String(checkedDof)
+      });
+    }
+  }
+  // Bisect until the two ends are neighbouring doubles. The bound is far above
+  // what any bracket needs (1075 halvings span every double) and only keeps the
+  // loop finite by construction.
+  for (let i = 0; i < 2200; i += 1) {
+    const mid = low + (high - low) / 2;
+    if (!(mid > low && mid < high)) break;
+    if (studentTUpperTail(mid, checkedDof) > tailProbability) low = mid;
     else high = mid;
   }
-  return assertFiniteStatisticResult((low + high) / 2, "studentTQuantile");
+  // `high` is the smallest double whose tail does not exceed the target.
+  return assertFiniteStatisticResult(probability < 0.5 ? -high : high, "studentTQuantile");
 }
 
 export function coverageFactorForProbability(coverageProbability: number, effectiveDegreesOfFreedom: number): number {

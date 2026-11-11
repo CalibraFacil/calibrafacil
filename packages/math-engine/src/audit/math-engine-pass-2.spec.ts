@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createCalculationEngine } from "../engine/create.js";
 import { ERROR_CODES } from "../errors/codes.js";
 import {
-  mean,
   sampleStandardDeviation,
   standardUncertaintyOfMean,
   welchSatterthwaiteDegreesOfFreedom,

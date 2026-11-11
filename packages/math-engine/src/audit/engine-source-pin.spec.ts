@@ -94,6 +94,22 @@ describe("REQ-DOM-GAT-004: engine source is pinned to the validated version", ()
     expect(Object.keys(pin.files).sort()).toStrictEqual([...listPinnedSourceFiles(packageRoot)]);
   });
 
+  it("REQ-DOM-GAT-004 — src/ holds nothing the pin cannot see", () => {
+    // The pin hashes regular `.ts` files. The engine imports its modules as
+    // `./x.js`, so an emitted `x.js` beside `x.ts` would be the code that runs,
+    // unhashed; a symbolic link is skipped by the walk the same way.
+    const unpinnable: string[] = [];
+    const walk = (relativeDirectory: string): void => {
+      for (const entry of readdirSync(join(packageRoot, relativeDirectory), { withFileTypes: true })) {
+        const relativePath = `${relativeDirectory}/${entry.name}`;
+        if (entry.isDirectory()) walk(relativePath);
+        else if (!entry.isFile() || !entry.name.endsWith(".ts")) unpinnable.push(relativePath);
+      }
+    };
+    walk("src");
+    expect(unpinnable).toStrictEqual([]);
+  });
+
   it("REQ-DOM-GAT-004 — the propagation code is part of the pin", () => {
     const files = listPinnedSourceFiles(packageRoot);
     for (const required of [

@@ -324,7 +324,19 @@ export class DecimalBackend implements NumericBackend<DeterministicDecimal> {
     );
   }
   sqrt(a: DeterministicDecimal): DeterministicDecimal {
-    return unaryDecimal("sqrt", a, Math.sqrt, this.internalParseOptions());
+    // The root is taken on the exact value, not on its double: a non-zero value
+    // below the double range narrowed to 0 and came back as sqrt = 0 (review).
+    if (a.numerator < 0n) {
+      throw makeError(ERROR_CODES.DOMAIN_ERROR, "Function sqrt produced a non-finite result.", {
+        function: "sqrt",
+        input: a.toCanonicalString(),
+      });
+    }
+    return DeterministicDecimal.fromNumberFunction(
+      a.sqrtToNumber(),
+      "sqrt result",
+      this.internalParseOptions(),
+    );
   }
   sin(a: DeterministicDecimal): DeterministicDecimal {
     return unaryDecimal("sin", a, Math.sin, this.internalParseOptions());
