@@ -5,7 +5,7 @@
  * manifest of the CURRENT validated dossier (highest-semver directory under
  * `validation/math-engine/`), for a deliberate release.
  *
- * Release procedure (see validation/math-engine/v0.4.0/README.md):
+ * Release procedure (see the README.md of the current dossier directory):
  *   1. bump ENGINE_VERSION and the package.json version together;
  *   2. create `validation/math-engine/v<new>/` with `dossier.tex` and a
  *      `manifest.json` copied from the previous version WITHOUT its `sourcePin`

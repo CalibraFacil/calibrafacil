@@ -33,7 +33,7 @@ const FINGERPRINT_FIXTURES: ReadonlyArray<{
     methodId: 6,
     version: 1,
     fingerprint:
-      "method:7deeb2cbe489497293dc6b271c90741e093de8be98f6b1525bba1252d0d0da7c",
+      "method:5b1f62ccd0d27d6dffbee8c20341feefecd60bc57f82a871d85e3b230d1d476e",
   },
 ];
 

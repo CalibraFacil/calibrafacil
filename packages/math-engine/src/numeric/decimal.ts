@@ -8,11 +8,6 @@ export interface DecimalParseOptions {
   readonly maxSignificantDigits?: number;
 }
 
-// Smallest positive normal double (2^-1022). Below it a double carries fewer
-// than 53 significant bits, so its decimal digits are not trustworthy — the
-// square-root helper uses it to decide when narrowing first is safe.
-const MIN_NORMAL_DOUBLE = 2.2250738585072014e-308;
-
 const DEFAULT_DECIMAL_PARSE_OPTIONS: Required<DecimalParseOptions> = {
   maxExponentMagnitude: 12,
   maxInputLength: 512,
@@ -120,36 +115,89 @@ function assertWithinMagnitude(numerator: bigint, denominator: bigint): void {
   }
 }
 
-// Convert an exact rational to the nearest double without the silent-zero failure
-// of `Number(num) / Number(den)` when a component overflows the double range (see
-// audit finding on toNumber): build a normalized scientific string instead so tiny
-// (denormal-range) and very large finite values round-trip correctly.
-function ratioToNumber(numerator: bigint, denominator: bigint): number {
-  if (numerator === 0n) return 0;
-  const negative = numerator < 0n !== denominator < 0n;
-  let n = absBigInt(numerator);
-  let d = absBigInt(denominator);
-  const precisionDigits = 18;
-  const scale = d.toString().length - n.toString().length + precisionDigits;
-  if (scale >= 0) n *= 10n ** BigInt(scale);
-  else d *= 10n ** BigInt(-scale);
-  const quotient = n / d;
-  const magnitude = Number(`${quotient.toString()}e${(-scale).toString()}`);
-  return negative ? -magnitude : magnitude;
+const DOUBLE_BITS = new DataView(new ArrayBuffer(8));
+
+/**
+ * The double nearest (q + ε)·2^(-shift), ties to even, where q has at least 55
+ * bits and ε in [0, 1) is zero unless `inexact`. Two bits below the 53 kept are
+ * therefore always in q, so `inexact` only ever breaks a tie. The double is
+ * assembled from its sign, exponent and fraction: no floating-point operation
+ * takes part, so the result does not depend on the runtime. Returns ±Infinity
+ * above the double range and ±0 below half the smallest subnormal.
+ */
+function roundScaledToDouble(q: bigint, inexact: boolean, shift: number, negative: boolean): number {
+  const qBits = bitLength(q);
+  // Exponent of the leading bit; below -1022 the double is subnormal and keeps fewer bits.
+  const leadingExponent = qBits - 1 - shift;
+  let drop = qBits - 53;
+  if (leadingExponent < -1022) drop += -1022 - leadingExponent;
+  const dropBits = BigInt(drop);
+  let mantissa = q >> dropBits;
+  const remainder = q - (mantissa << dropBits);
+  const half = 1n << (dropBits - 1n);
+  if (remainder > half || (remainder === half && (inexact || (mantissa & 1n) === 1n))) {
+    mantissa += 1n;
+  }
+  let exponent = drop - shift;
+  if (mantissa === 1n << 53n) {
+    mantissa = 1n << 52n;
+    exponent += 1;
+  }
+  let biasedExponent = 0;
+  if (mantissa >= 1n << 52n) {
+    biasedExponent = exponent + 1075;
+    if (biasedExponent >= 2047) return negative ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+    mantissa -= 1n << 52n;
+  }
+  DOUBLE_BITS.setBigUint64(0, (negative ? 1n << 63n : 0n) | (BigInt(biasedExponent) << 52n) | mantissa);
+  return DOUBLE_BITS.getFloat64(0);
 }
 
-// The double nearest an exact rational, or a non-finite value when the rational
-// is outside the double range. Callers that must not fail on an out-of-range
-// value (canonical text) use this directly; `toNumber` wraps it with the
-// finite-result assertion.
+// The double nearest an exact rational (ties to even), or a non-finite value
+// when the rational is outside the double range. Callers that must not fail on
+// an out-of-range value (canonical text) use this directly; `toNumber` wraps it
+// with the finite-result assertion. Up to 0.4.0 this was
+// Number(numerator) / Number(denominator), three roundings that left about one
+// input in five with 18 or more significant digits a unit or two in the last
+// place off (review).
 function ratioToDouble(numerator: bigint, denominator: bigint): number {
-  const direct = Number(numerator) / Number(denominator);
-  if (Number.isFinite(direct) && (direct !== 0 || numerator === 0n)) {
-    return direct;
+  if (numerator === 0n) return 0;
+  const negative = numerator < 0n !== denominator < 0n;
+  const n = absBigInt(numerator);
+  const d = absBigInt(denominator);
+  // n/d is within a factor of two of 2^(bits(n) - bits(d)): this shift gives the
+  // quotient 55 or 56 bits.
+  const shift = 55 - (bitLength(n) - bitLength(d));
+  const scaledNumerator = shift >= 0 ? n << BigInt(shift) : n;
+  const scaledDenominator = shift >= 0 ? d : d << BigInt(-shift);
+  const quotient = scaledNumerator / scaledDenominator;
+  const inexact = scaledNumerator % scaledDenominator !== 0n;
+  return roundScaledToDouble(quotient, inexact, shift, negative);
+}
+
+/** floor(√value) for value >= 0, by Newton's iteration from above. */
+function integerSquareRoot(value: bigint): bigint {
+  if (value < 2n) return value;
+  let x = 1n << BigInt((bitLength(value) + 1) >> 1);
+  for (;;) {
+    const next = (x + value / x) >> 1n;
+    if (next >= x) return x;
+    x = next;
   }
-  // A component overflowed the double range, or the quotient underflowed to 0
-  // while the value is non-zero; fall back to an exact normalized conversion.
-  return ratioToNumber(numerator, denominator);
+}
+
+// The double nearest √(numerator/denominator) for a positive rational (ties to
+// even): floor(√(n·4^k/d)) = ⌊√⌊n·4^k/d⌋⌋ is taken on integers with k chosen to
+// give the root 56 or 57 bits, and both remainders decide the rounding.
+function sqrtRatioToDouble(numerator: bigint, denominator: bigint): number {
+  const halfExponent = (bitLength(numerator) - bitLength(denominator)) >> 1;
+  const shift = 56 - halfExponent;
+  const scaledNumerator = shift >= 0 ? numerator << BigInt(2 * shift) : numerator;
+  const scaledDenominator = shift >= 0 ? denominator : denominator << BigInt(-2 * shift);
+  const radicand = scaledNumerator / scaledDenominator;
+  const root = integerSquareRoot(radicand);
+  const inexact = root * root !== radicand || scaledNumerator % scaledDenominator !== 0n;
+  return roundScaledToDouble(root, inexact, shift, false);
 }
 
 function canonicalizeNumberString(text: string): string {
@@ -468,12 +516,10 @@ export class DeterministicDecimal {
   }
 
   /**
-   * The double nearest the square root of a non-negative value, computed so the
-   * squared quantity never has to be representable as a normal double: a
-   * variance such as 5e-401 narrows to 0 while its standard deviation
-   * (~7.07e-201) is an ordinary double (review). The plain narrow-then-sqrt
-   * arithmetic runs first and is returned whenever it is reliable, so results
-   * already produced by that path stay byte-for-byte identical.
+   * The double nearest the square root of a non-negative value (ties to even),
+   * taken on the exact rational: the squared quantity never has to be
+   * representable as a double (a variance of 5e-401 has a standard deviation of
+   * 7.07e-201), and the root is not rounded twice.
    */
   sqrtToNumber(): number {
     if (this.numerator < 0n) {
@@ -484,22 +530,8 @@ export class DeterministicDecimal {
       );
     }
     if (this.numerator === 0n) return 0;
-    const narrowed = ratioToDouble(this.numerator, this.denominator);
-    if (Number.isFinite(narrowed) && narrowed >= MIN_NORMAL_DOUBLE) {
-      return Math.sqrt(narrowed);
-    }
-    // Scale the rational by an even power of ten into the normal double range,
-    // take the root there, and undo half the scale on the result.
-    const decimalExponent =
-      this.numerator.toString().length - this.denominator.toString().length;
-    const halfScale = Math.round(-decimalExponent / 2);
-    const shift = pow10(Math.abs(halfScale) * 2);
-    const scaled =
-      halfScale >= 0
-        ? ratioToDouble(this.numerator * shift, this.denominator)
-        : ratioToDouble(this.numerator, this.denominator * shift);
     return assertFiniteResult(
-      Math.sqrt(scaled) * Math.pow(10, -halfScale),
+      sqrtRatioToDouble(this.numerator, this.denominator),
       "decimal square root",
     );
   }

@@ -62,6 +62,21 @@ function isOne(node: FormulaAstNode): boolean {
   return isNumber(node, 1);
 }
 
+function dependsOn(ast: FormulaAstNode, variable: string): boolean {
+  switch (ast.kind) {
+    case "NumberLiteral":
+      return false;
+    case "Variable":
+      return ast.name === variable;
+    case "UnaryExpression":
+      return dependsOn(ast.argument, variable);
+    case "BinaryExpression":
+      return dependsOn(ast.left, variable) || dependsOn(ast.right, variable);
+    case "CallExpression":
+      return ast.args.some((arg) => dependsOn(arg, variable));
+  }
+}
+
 export function symbolicDerivative(
   ast: FormulaAstNode,
   variable: string,
@@ -125,6 +140,11 @@ export function symbolicDerivative(
       }
     }
     case "CallExpression": {
+      // A call the variable does not appear in is a constant, whatever the
+      // function: student_t_inverse_2t(0.05, 10) as a factor, or min/abs of
+      // other quantities, used to make the whole formula non-differentiable and
+      // send every sensitivity to the numerical fallback (review).
+      if (!dependsOn(ast, variable)) return num(0);
       if (ast.args.length !== 1) return null;
       const arg = ast.args[0] as FormulaAstNode;
       const dArg = symbolicDerivative(arg, variable);

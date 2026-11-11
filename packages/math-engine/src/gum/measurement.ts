@@ -2228,9 +2228,14 @@ function normalizePairwiseInput(
         });
     }
   }
-  return entries.sort((a, b) =>
-    canonicalJson(a).localeCompare(canonicalJson(b)),
-  );
+  // Ordered by code unit, like every other sort of the canonical form:
+  // localeCompare follows the locale of the process (et-EE puts z before t), and
+  // this order goes into the calculation fingerprint. Each entry is serialized
+  // once, not once per comparison.
+  return entries
+    .map((entry) => ({ entry, key: canonicalJson(entry) }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .map(({ entry }) => entry);
 }
 
 function numberText(
