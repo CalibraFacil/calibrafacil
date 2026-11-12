@@ -11,10 +11,27 @@ export type CanonicalJsonValue =
   | { readonly [key: string]: CanonicalJsonValue | undefined };
 
 export function canonicalJson(value: CanonicalJsonValue): string {
-  if (value === null) return "null";
+  // Written into one list of parts and joined once: building each level's text
+  // from its children's made a deep tree quadratic (a sum of 3000 terms took
+  // 350 ms to normalize; review).
+  const parts: string[] = [];
+  writeCanonicalJson(value, parts);
+  return parts.join("");
+}
 
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "string") return JSON.stringify(value);
+function writeCanonicalJson(value: CanonicalJsonValue, parts: string[]): void {
+  if (value === null) {
+    parts.push("null");
+    return;
+  }
+  if (typeof value === "boolean") {
+    parts.push(value ? "true" : "false");
+    return;
+  }
+  if (typeof value === "string") {
+    parts.push(JSON.stringify(value));
+    return;
+  }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
       throw makeError(
@@ -25,12 +42,14 @@ export function canonicalJson(value: CanonicalJsonValue): string {
         },
       );
     }
-    return canonicalRoundTripNumber(value);
+    parts.push(canonicalRoundTripNumber(value));
+    return;
   }
 
   if (Array.isArray(value)) {
-    // `map` skips the holes of a sparse array and `join` writes nothing for
-    // them: "[,1]" is not JSON, and not what any reader would rebuild.
+    // A sparse array has no value to write for its holes: "[,1]" is not JSON,
+    // and not what any reader would rebuild.
+    parts.push("[");
     for (let index = 0; index < value.length; index += 1) {
       if (!(index in value)) {
         throw makeError(
@@ -39,8 +58,11 @@ export function canonicalJson(value: CanonicalJsonValue): string {
           { index },
         );
       }
+      if (index > 0) parts.push(",");
+      writeCanonicalJson(value[index] as CanonicalJsonValue, parts);
     }
-    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+    parts.push("]");
+    return;
   }
 
   if (typeof value === "object") {
@@ -62,7 +84,15 @@ export function canonicalJson(value: CanonicalJsonValue): string {
     const keys = Object.keys(record)
       .filter((key) => record[key] !== undefined)
       .sort();
-    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as CanonicalJsonValue)}`).join(",")}}`;
+    parts.push("{");
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index] as string;
+      if (index > 0) parts.push(",");
+      parts.push(JSON.stringify(key), ":");
+      writeCanonicalJson(record[key] as CanonicalJsonValue, parts);
+    }
+    parts.push("}");
+    return;
   }
 
   throw makeError(
@@ -70,8 +100,4 @@ export function canonicalJson(value: CanonicalJsonValue): string {
     "Value cannot be represented as canonical JSON.",
     { valueType: typeof value },
   );
-}
-
-export function canonicalClone<T extends CanonicalJsonValue>(value: T): T {
-  return JSON.parse(canonicalJson(value)) as T;
 }

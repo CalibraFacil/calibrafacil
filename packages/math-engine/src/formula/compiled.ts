@@ -181,6 +181,40 @@ function assertCompileFormulaOptions(value: unknown): CompileFormulaOptions {
   return record as unknown as CompileFormulaOptions;
 }
 
+/**
+ * The options of `evaluateFormula`, which compiles and evaluates in one call:
+ * the compile options and the evaluation options together, each handed to its
+ * own check.
+ */
+export function splitFormulaOptions(value: unknown): {
+  readonly compile: CompileFormulaOptions;
+  readonly evaluation: FormulaEvaluationOptions;
+} {
+  if (value === undefined) return { compile: {}, evaluation: {} };
+  const record = assertPlainRecord(
+    value,
+    "options",
+    ERROR_CODES.INVALID_INPUT_SHAPE,
+    "Formula options must be a plain object.",
+  );
+  assertNoDangerousKeys(record, "options", ERROR_CODES.INVALID_INPUT_SHAPE);
+  assertAllowedKeys(
+    record,
+    new Set([...COMPILE_OPTION_KEYS, ...EVALUATION_OPTION_KEYS]),
+    "options",
+  );
+  const compile: Record<string, unknown> = {};
+  const evaluation: Record<string, unknown> = {};
+  for (const key of Object.keys(record)) {
+    if (record[key] === undefined) continue;
+    (COMPILE_OPTION_KEYS.has(key) ? compile : evaluation)[key] = record[key];
+  }
+  return {
+    compile: assertCompileFormulaOptions(compile),
+    evaluation: assertFormulaEvaluationOptions(evaluation),
+  };
+}
+
 function assertFormulaEvaluationOptions(
   value: unknown,
 ): FormulaEvaluationOptions {
@@ -309,35 +343,12 @@ export class CompiledFormula {
     Object.freeze(this);
   }
 
+  // The instance and its AST are frozen in the constructor, and only instances
+  // built there are recognized: what is evaluated is what was fingerprinted. Up
+  // to 0.5.0 every evaluation also normalized and hashed the AST again to compare
+  // it with itself, half the time of an evaluation (review).
   private assertAuditIntegrity(): void {
     assertRecognizedCompiledFormulaInstance(this);
-    const literalOptions = decimalParseOptions(this.options);
-    const currentNormalizedAst = normalizeAst(this.ast, literalOptions);
-    const currentAstFingerprint = fingerprintText(
-      currentNormalizedAst,
-      "ast-sha256",
-    );
-    const currentNormalizedFormula = formatNormalizedFormula(
-      this.ast,
-      literalOptions,
-    );
-    if (
-      currentNormalizedAst !== this.normalizedAst ||
-      currentAstFingerprint !== this.astFingerprint ||
-      currentNormalizedFormula !== this.normalizedFormula
-    ) {
-      throw makeError(
-        ERROR_CODES.INCOMPATIBLE_COMPILED_FORMULA,
-        "CompiledFormula audit metadata no longer matches the AST that would be evaluated.",
-        {
-          formulaFingerprint: this.formulaFingerprint,
-          storedAstFingerprint: this.astFingerprint,
-          currentAstFingerprint,
-          suggestedRemediation:
-            "Discard the mutated object and compile the formula text again.",
-        },
-      );
-    }
   }
 
   assertCompatibleWithOptions(

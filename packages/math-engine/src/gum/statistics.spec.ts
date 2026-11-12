@@ -5,7 +5,7 @@
  * Every expected value below was computed outside the engine, with mpmath at 60
  * significant digits (erf, erfinv and betainc; the t quantile by bisection on the
  * t tail), and is written with 20. The tolerances are the ones the dossier
- * declares for 0.5.0 (section "Limitações Declaradas").
+ * declares (section "Limitações Declaradas").
  *
  * The cases under "0.5.0 corrections" failed on 0.4.0.
  */
@@ -202,6 +202,12 @@ describe("Student's t", () => {
     [0.97725, 100000, 2.0000274442852842113],
     [0.995, 100000, 2.5758784699083749963],
     [0.9999, 100000, 3.7191543826413721848],
+    [0.6, 100001, 0.25334777715043972844],
+    [0.841345, 100001, 1.0000060494165394058],
+    [0.975, 100001, 1.9599877072973788629],
+    [0.97725, 100001, 2.000027444035279792],
+    [0.995, 100001, 2.5758784694167074834],
+    [0.9999, 100001, 3.7191543812623683728],
     [0.6, 9268196, 0.25334711040820014714],
     [0.841345, 9268196, 1.0000011033790923694],
     [0.975, 9268196, 1.9599642404983368736],
@@ -214,6 +220,24 @@ describe("Student's t", () => {
     [0.97725, 10000000, 2.000002693900427904],
     [0.995, 10000000, 2.5758297952037486634],
     [0.9999, 10000000, 3.719017864382277737],
+    [0.6, 10000024, 0.2533471098759867916],
+    [0.841345, 10000024, 1.0000010994310324897],
+    [0.975, 10000024, 1.9599642217666357666],
+    [0.97725, 10000024, 2.0000026938998279033],
+    [0.995, 10000024, 2.5758297952025686944],
+    [0.9999, 10000024, 3.71901786437896832],
+    [0.6, 1000000000, 0.25334710320320177253],
+    [0.841345, 1000000000, 1.0000010499310460962],
+    [0.975, 1000000000, 1.9599639869123250887],
+    [0.97725, 1000000000, 2.0000024463996109563],
+    [0.995, 1000000000, 2.5758293084654480613],
+    [0.9999, 1000000000, 3.7190164992449695516],
+    [0.6, 1e15, 0.25334710313579980873],
+    [0.841345, 1e15, 1.0000010494310455465],
+    [0.975, 1e15, 1.9599639845400562279],
+    [0.97725, 1e15, 2.0000024438996055105],
+    [0.995, 1e15, 2.5758293035489053704],
+    [0.9999, 1e15, 3.719016485455722176],
   ];
   // [t, ν, P(T <= t)]
   const distribution: readonly (readonly [number, number, number])[] = [
@@ -272,7 +296,18 @@ describe("Student's t", () => {
     [1.7, 1000, 0.95527905652037998315],
     [1.75, 1000, 0.9597874953202710974],
     [3, 1000, 0.99861664547788090377],
-    [-40, 1000000, 0.0],
+    [-40, 100000, 2.0731343228002414848e-347],
+    [-6, 100000, 9.899647278008812792e-10],
+    [-2, 100000, 0.022751481728753231625],
+    [-1e-4, 100000, 0.49996010587176179304],
+    [-1e-8, 100000, 0.49999999601058716953],
+    [-1e-12, 100000, 0.49999999999960105872],
+    [1e-9, 100000, 0.50000000039894128305],
+    [0.5, 100000, 0.69146191117279098053],
+    [1.7, 100000, 0.95543298237566855124],
+    [1.75, 100000, 0.95993930969130256813],
+    [3, 100000, 0.9986497695579676404],
+    [-40, 1000000, 6.9341452709792962472e-350],
     [-6, 1000000, 9.8692490617721733495e-10],
     [-2, 1000000, 0.022750266925659604211],
     [-1e-4, 1000000, 0.49996010578199990293],
@@ -283,11 +318,23 @@ describe("Student's t", () => {
     [1.7, 1000000, 0.95543438175482561966],
     [1.75, 1000000, 0.95994068979172606048],
     [3, 1000000, 0.99865006872928910147],
+    [-40, 1000000000, 3.6582369848466825615e-350],
+    [-6, 1000000000, 9.865879822492459432e-10],
+    [-2, 1000000000, 0.022750132083156623547],
+    [-1e-4, 1000000000, 0.49996010577203632067],
+    [-1e-8, 1000000000, 0.49999999601057719698],
+    [-1e-12, 1000000000, 0.49999999999960105772],
+    [1e-9, 1000000000, 0.5000000003989422803],
+    [0.5, 1000000000, 0.69146246121900289634],
+    [1.7, 1000000000, 0.95543453708597032335],
+    [1.75, 1000000000, 0.95994084298283845619],
+    [3, 1000000000, 0.99865010193513104217],
   ];
 
-  // Declared: 1e-11 up to ν = 1e4; 1e-9 from there to 1e7, where the continued
-  // fraction in x = ν/(ν + t²) loses about ν·1e-17 near x = 1.
-  const quantileTolerance = (nu: number): number => (nu <= 1e4 ? 1e-11 : 1e-9);
+  // Declared: 1e-11 up to ν = 1e5, where the continued fraction in
+  // x = ν/(ν + t²) loses about ν·1e-17 near x = 1; 1e-13 above, where the series
+  // in 1/ν takes over (for |t| <= 8; every row here is).
+  const quantileTolerance = (nu: number): number => (nu <= 1e5 ? 1e-11 : 1e-13);
 
   it.each(quantiles)("studentTQuantile(%d, ν = %d) agrees with the reference", (p, nu, expected) => {
     expect(relativeError(studentTQuantile(p, nu), expected)).toBeLessThanOrEqual(quantileTolerance(nu));
@@ -371,15 +418,47 @@ describe("Student's t", () => {
       expect(relativeError(studentTCdf(-3, Number.POSITIVE_INFINITY), 0.0013498980316300945267)).toBeLessThanOrEqual(1e-13);
       expect(relativeError(studentTCdf(-37, Number.POSITIVE_INFINITY), 5.7255712225239266e-300)).toBeLessThanOrEqual(1e-11);
     });
+  });
 
-    it("the step where the normal distribution takes over (ν > 1e7) stays within (z² + 1)/(4ν)", () => {
-      for (const p of [0.975, 0.97725, 0.995]) {
-        const below = studentTQuantile(p, 1e7);
-        const above = studentTQuantile(p, 1e7 + 1);
-        const bound = (above * above + 1) / (4 * 1e7);
-        expect(below).toBeGreaterThan(above);
-        expect((below - above) / above).toBeLessThanOrEqual(bound * 1.01);
+  describe("0.6.0: large ν", () => {
+    it("has no step where the series in 1/ν takes over (ν = 1e5), nor at 1e7 (0.5.0: 1.25e-7 there)", () => {
+      for (const p of [0.6, 0.975, 0.97725, 0.995, 0.999999]) {
+        for (const nu of [1e5, 1e7]) {
+          const below = studentTQuantile(p, nu);
+          const above = studentTQuantile(p, nu + 1);
+          // t_p decreases with ν by about (z³ + z)/(4ν²) per unit of ν.
+          expect(below).toBeGreaterThan(above);
+          const expectedDrop = (below ** 3 + below) / (4 * nu * nu);
+          expect(Math.abs(below - above - expectedDrop)).toBeLessThanOrEqual(1e-11 * below);
+        }
       }
+    });
+
+    it("tends to the normal quantile as (z² + 1)/(4ν)", () => {
+      for (const p of [0.841345, 0.97725, 0.9995]) {
+        const z = normalQuantile(p);
+        for (const nu of [1e6, 1e9, 1e12]) {
+          const excess = studentTQuantile(p, nu) / z - 1;
+          expect(Math.abs(excess - (z * z + 1) / (4 * nu))).toBeLessThanOrEqual(1e-14 + 10 / (nu * nu));
+        }
+        expect(studentTQuantile(p, 1e300)).toBe(studentTQuantile(p, 1e200));
+        expect(relativeError(studentTQuantile(p, 1e300), z)).toBeLessThanOrEqual(1e-14);
+      }
+    });
+
+    it("the distribution function and the quantile are inverse of each other above 1e5", () => {
+      for (const nu of [100001, 1e6, 1e9, 1e15]) {
+        for (const p of [1e-12, 0.001, 0.02275, 0.3, 0.7, 0.975, 0.999999]) {
+          const roundTrip = studentTCdf(studentTQuantile(p, nu), nu);
+          expect(Math.abs(roundTrip - p)).toBeLessThanOrEqual(4e-16 + 1e-13 * Math.min(p, 1 - p));
+        }
+      }
+    });
+
+    it("a tail below the smallest double is 0, not an error", () => {
+      expect(studentTCdf(-41, 1e6)).toBe(0);
+      expect(studentTCdf(41, 1e6)).toBe(1);
+      expect(studentTCdf(-1e200, 1e9)).toBe(0);
     });
   });
 });

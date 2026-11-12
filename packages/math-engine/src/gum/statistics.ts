@@ -351,21 +351,52 @@ export function regularizedIncompleteBeta(x: number, a: number, b: number): numb
   return assertFiniteStatisticResult(regularizedIncompleteBetaWithComplement(checkedX, 1 - checkedX, checkedA, checkedB), "regularizedIncompleteBeta");
 }
 
-// Above this the normal distribution stands in for Student's t: the quantiles
-// differ by (z² + 1)/(4ν) relative, 1.25e-7 at k = 2 just past the switch. Below
-// it t is evaluated directly; the continued fraction in x = ν/(ν + t²) loses
-// about ν·1e-17 near x = 1, which is why the switch is not placed higher
-// (5e-10 at 1e7, against LibreOffice's TINV and mpmath).
-const STUDENT_T_NORMAL_FROM = 1e7;
+// From here on the continued fraction in x = ν/(ν + t²) loses too much (about
+// ν·1e-17 near x = 1) and Student's t is read off the normal distribution
+// through the series below. At 1e5 the two agree to 1e-12, so there is no step
+// (up to 0.5.0 the normal distribution itself took over at 1e7, 1.25e-7 off).
+const STUDENT_T_SERIES_FROM = 1e5;
+
+// Past this |t| the tail of a t with ν > 1e5 is below the smallest double.
+const STUDENT_T_SERIES_TAIL_END = 40;
 
 /**
- * P(T > |t|) for Student's t with ν degrees of freedom: ½ I_x(ν/2, ½) with
- * x = ν/(ν + t²). x and its complement are both formed from t², so neither end
- * loses digits. When t² overflows or x underflows, x^(ν/2) can still be an
- * ordinary number (ν = 1 at t = 1e200 has a tail of 3e-201): x is then carried
- * by its logarithm.
+ * The normal deviate z with Φ(z) = F_ν(t), for large ν:
+ *
+ *   z = t - t(t² + 1)/(4ν) + t(13t⁴ + 8t² + 3)/(96ν²)
+ *         - t(35t⁶ + 19t⁴ + t² - 15)/(384ν³)
+ *         + t(6271t⁸ + 3224t⁶ - 102t⁴ - 1680t² - 945)/(92160ν⁴)
+ *
+ * This is the Cornish–Fisher expansion of the t quantile (Abramowitz and Stegun
+ * 26.7.5) reverted term by term. The first neglected term is about
+ * 0.05·(t²/ν)⁵ relative: under 1e-15 for |t| <= 12 at ν = 1e5, 5e-11 at the end
+ * of the range, |t| = 40. With ν = ∞ it is z = t.
+ */
+function studentTNormalDeviate(absT: number, degreesOfFreedom: number): number {
+  const t2 = absT * absT;
+  const e = 1 / degreesOfFreedom;
+  const h1 = -(t2 + 1) / 4;
+  const h2 = ((13 * t2 + 8) * t2 + 3) / 96;
+  const h3 = -(((35 * t2 + 19) * t2 + 1) * t2 - 15) / 384;
+  const h4 = ((((6271 * t2 + 3224) * t2 - 102) * t2 - 1680) * t2 - 945) / 92160;
+  return absT * (1 + e * (h1 + e * (h2 + e * (h3 + e * h4))));
+}
+
+/**
+ * P(T > |t|) for Student's t with ν degrees of freedom.
+ *
+ * Up to ν = 1e5: ½ I_x(ν/2, ½) with x = ν/(ν + t²). x and its complement are
+ * both formed from t², so neither end loses digits. When t² overflows or x
+ * underflows, x^(ν/2) can still be an ordinary number (ν = 1 at t = 1e200 has a
+ * tail of 3e-201): x is then carried by its logarithm.
+ *
+ * Above 1e5, ν = ∞ included: the normal tail at the deviate of the series.
  */
 function studentTUpperTail(absT: number, degreesOfFreedom: number): number {
+  if (degreesOfFreedom > STUDENT_T_SERIES_FROM) {
+    if (absT > STUDENT_T_SERIES_TAIL_END) return 0;
+    return 0.5 * erfcUnchecked(studentTNormalDeviate(absT, degreesOfFreedom) / Math.SQRT2);
+  }
   const a = degreesOfFreedom / 2;
   const tSquared = absT * absT;
   if (Number.isFinite(tSquared)) {
@@ -380,9 +411,6 @@ function studentTUpperTail(absT: number, degreesOfFreedom: number): number {
 export function studentTCdf(t: number, degreesOfFreedom: number): number {
   const checkedT = assertFiniteStatisticNumber(t, "t");
   const checkedDof = assertDegreesOfFreedom(degreesOfFreedom, "degreesOfFreedom", true);
-  if (checkedDof > STUDENT_T_NORMAL_FROM) {
-    return assertFiniteStatisticResult(standardNormalCdf(checkedT), "studentTCdf");
-  }
   const tail = studentTUpperTail(Math.abs(checkedT), checkedDof);
   return assertFiniteStatisticResult(checkedT >= 0 ? 1 - tail : tail, "studentTCdf");
 }
@@ -397,7 +425,7 @@ export function erf(x: number): number {
 export function studentTQuantile(p: number, degreesOfFreedom: number): number {
   const probability = assertProbability(p, "p");
   const checkedDof = assertDegreesOfFreedom(degreesOfFreedom, "degreesOfFreedom", true);
-  if (checkedDof > STUDENT_T_NORMAL_FROM) {
+  if (!Number.isFinite(checkedDof)) {
     return normalQuantile(probability);
   }
   if (probability === 0.5) return 0;

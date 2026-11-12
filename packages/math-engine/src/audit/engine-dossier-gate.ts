@@ -55,8 +55,12 @@ export interface GateResult {
   readonly mismatches: readonly GateMismatch[];
 }
 
-// `v<major>.<minor>.<patch>` with an optional pre-release/build suffix.
-const SEMVER_DIR = /^v(\d+)\.(\d+)\.(\d+)(?:[-.].*)?$/;
+// Exactly `v<major>.<minor>.<patch>`. A suffixed directory (`v0.6.0-rc1`,
+// `v0.6.0.bak`, `v1.0.0-draft`) is not a released dossier: it used to compete
+// with the release of the same number, the winner depending on the order the
+// file system listed them in, and a draft of a higher number outranked the
+// release in force (review).
+const SEMVER_DIR = /^v(\d+)\.(\d+)\.(\d+)$/;
 const DOC_VERSION = /\\newcommand\{\\docVersion\}\{([^}]+)\}/;
 
 type SemverTuple = readonly [number, number, number];

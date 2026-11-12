@@ -49,7 +49,7 @@ export interface NormalizedNumericValidationOptionSubset {
 }
 
 function assertPositiveIntegerOption(record: Record<string, unknown>, key: keyof NormalizedNumericValidationOptionSubset, max: number): void {
-  if (!hasOwn(record, key)) return;
+  if (!hasOwn(record, key) || record[key] === undefined) return;
   const value = record[key];
   if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > max) {
     throw makeError(ERROR_CODES.INVALID_OPTIONS, `${key} must be an integer between 1 and ${max}.`, {
@@ -67,7 +67,7 @@ export function normalizeNumericValidationOptions(options: unknown = {}): Normal
   assertPositiveIntegerOption(record, "decimalPrecision", 21);
   assertPositiveIntegerOption(record, "maxNumericInputLength", 10000);
   assertPositiveIntegerOption(record, "maxSignificantDigits", 10000);
-  if (hasOwn(record, "maxExponentMagnitude")) {
+  if (hasOwn(record, "maxExponentMagnitude") && record.maxExponentMagnitude !== undefined) {
     const value = record.maxExponentMagnitude;
     if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 100000) {
       throw makeError(ERROR_CODES.INVALID_OPTIONS, "maxExponentMagnitude must be an integer between 0 and 100000.", {

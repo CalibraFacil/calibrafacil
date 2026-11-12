@@ -5,7 +5,7 @@ import { mergeFormulaLimits } from "../parser/options.js";
 import type { NumericMode } from "../numeric/types.js";
 import { assertAllowedKeys, assertBoolean, assertNoDangerousKeys, assertPlainRecord, hasOwn } from "../validation/shape.js";
 
-export const ENGINE_VERSION = "0.5.0";
+export const ENGINE_VERSION = "0.6.0";
 
 /**
  * The canonical engine configuration for certificate-producing method
@@ -76,7 +76,10 @@ export function normalizeEngineOptions(options: CalculationEngineOptions = {}): 
   const limits = mergeFormulaLimits(options);
 
   assertPositiveInteger(limits.maxExpressionLength, "maxExpressionLength", 100000);
-  assertPositiveInteger(limits.maxAstDepth, "maxAstDepth", 10000);
+  // The parser, the validator, the normalizer and the evaluator all recurse on
+  // the tree. 500 levels is inside the stack of every runtime the engine runs
+  // in; the 10000 accepted up to 0.5.0 overflowed it from about 1500 (review).
+  assertPositiveInteger(limits.maxAstDepth, "maxAstDepth", 500);
   assertPositiveInteger(limits.maxAstNodes, "maxAstNodes", 100000);
   assertPositiveInteger(limits.maxIdentifierLength, "maxIdentifierLength", 1024);
   assertPositiveInteger(limits.maxNumberLiteralLength, "maxNumberLiteralLength", 10000);
@@ -96,13 +99,17 @@ export function normalizeEngineOptions(options: CalculationEngineOptions = {}): 
   const decimalPrecision = options.decimalPrecision ?? 16;
   assertPositiveInteger(decimalPrecision, "decimalPrecision", 21);
 
-  const maxNumericInputLength = options.maxNumericInputLength ?? limits.maxNumberLiteralLength;
+  // 512, as the Type A and Type B helpers and the backends default it: with the
+  // literal limit (128) a signed or fractional input could not use the 128
+  // significant digits allowed (review).
+  const maxNumericInputLength = options.maxNumericInputLength ?? 512;
   assertPositiveInteger(maxNumericInputLength, "maxNumericInputLength", 10000);
 
   const maxSignificantDigits = options.maxSignificantDigits ?? 128;
   assertPositiveInteger(maxSignificantDigits, "maxSignificantDigits", 10000);
 
-  if (hasOwn(optionsRecord, "rejectUnusedInputs")) {
+  // undefined is "not given", here as for every other option.
+  if (hasOwn(optionsRecord, "rejectUnusedInputs") && optionsRecord.rejectUnusedInputs !== undefined) {
     assertBoolean(optionsRecord.rejectUnusedInputs, "rejectUnusedInputs", ERROR_CODES.INVALID_OPTIONS);
   }
 

@@ -53,7 +53,6 @@ export type {
   NumericBackend,
   NumericInput,
   NumericMode,
-  NumericOptions,
   NumericOutput,
 } from "./numeric/index.js";
 

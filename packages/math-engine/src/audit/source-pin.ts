@@ -75,8 +75,16 @@ function sha256Hex(data: string | Uint8Array): string {
 
 /** SHA-256 of a source file's bytes with CRLF normalised to LF (checkout-independent). */
 function hashSourceFile(packageRoot: string, relativePath: string): string {
-  const text = readFileSync(join(packageRoot, relativePath), "utf8");
-  return sha256Hex(text.replaceAll("\r\n", "\n"));
+  // On the bytes, not on the decoded text: decoding maps every invalid sequence
+  // to U+FFFD, so two files that differ only there had one digest (review). For
+  // valid UTF-8 the digest is the one the text gave.
+  const bytes = readFileSync(join(packageRoot, relativePath));
+  const normalised: number[] = [];
+  for (let index = 0; index < bytes.length; index += 1) {
+    if (bytes[index] === 0x0d && bytes[index + 1] === 0x0a) continue;
+    normalised.push(bytes[index] as number);
+  }
+  return sha256Hex(Uint8Array.from(normalised));
 }
 
 export interface SourcePin {

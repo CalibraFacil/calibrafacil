@@ -16,6 +16,19 @@ export interface AstValidationOptions {
   readonly allowedVariables?: ReadonlySet<string>;
 }
 
+// The exponent of a power when it is a literal, signs included: x^-13 is as
+// much a literal exponent as x^13, and up to 0.5.0 it compiled and then failed
+// at every evaluation (review). Anything else is only known at evaluation.
+function literalExponent(node: FormulaAstNode): number | null {
+  if (node.kind === "NumberLiteral") return Number(node.raw);
+  if (node.kind === "UnaryExpression") {
+    const inner = literalExponent(node.argument);
+    if (inner === null) return null;
+    return node.operator === "-" ? -inner : inner;
+  }
+  return null;
+}
+
 export function validateAst(
   ast: FormulaAstNode,
   limits: FormulaLimits,
@@ -71,8 +84,8 @@ export function validateAst(
         break;
       }
       case "BinaryExpression": {
-        if (node.operator === "^" && node.right.kind === "NumberLiteral") {
-          const exponent = Number(node.right.raw);
+        const exponent = node.operator === "^" ? literalExponent(node.right) : null;
+        if (exponent !== null) {
           if (!Number.isFinite(exponent) || Math.abs(exponent) > limits.maxExponentMagnitude) {
             throw makeError(ERROR_CODES.EXPONENT_TOO_LARGE, "Power exponent exceeds the configured limit.", {
               exponent,

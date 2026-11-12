@@ -61,6 +61,31 @@ function codeForNumericInput(raw: unknown, label: string, reason: string, extra:
   });
 }
 
+/**
+ * The decimal text of a JavaScript number given as input, in plain positional
+ * notation. `Number.prototype.toString` switches to exponent notation below
+ * 1e-6 and from 1e21 on, and the exponent limit then refused 1.5e-13 while the
+ * same value written "0.00000000000015" was accepted (review). The digits are
+ * the shortest that round-trip; only the notation changes.
+ */
+export function numberInputText(value: number): string {
+  const text = value.toString();
+  const exponentIndex = text.indexOf("e");
+  if (exponentIndex < 0) return text;
+  const negative = text.startsWith("-");
+  const coefficient = text.slice(negative ? 1 : 0, exponentIndex);
+  const exponent = Number(text.slice(exponentIndex + 1));
+  const [integerPart = "", fractionPart = ""] = coefficient.split(".");
+  const digits = `${integerPart}${fractionPart}`;
+  // Position of the decimal point, counted from the left of `digits`.
+  const point = integerPart.length + exponent;
+  let plain: string;
+  if (point <= 0) plain = `0.${"0".repeat(-point)}${digits}`;
+  else if (point >= digits.length) plain = `${digits}${"0".repeat(point - digits.length)}`;
+  else plain = `${digits.slice(0, point)}.${digits.slice(point)}`;
+  return negative ? `-${plain}` : plain;
+}
+
 export function assertFiniteNumberInput(value: number, limits: NumericValidationLimits): number {
   const label = limits.label ?? "value";
   if (!Number.isFinite(value)) {
@@ -68,16 +93,15 @@ export function assertFiniteNumberInput(value: number, limits: NumericValidation
     codeForNumericInput(value, label, "non_finite");
   }
   if (Object.is(value, -0)) return 0;
-  const text = value.toString();
-  validateNumericString(text, { ...limits, label });
+  validateNumericString(numberInputText(value), { ...limits, label });
   return value;
 }
 
 export function validateNumericInput(value: NumericInput, limits: NumericValidationLimits): ValidatedNumericString {
   const label = limits.label ?? "value";
   if (typeof value === "number") {
-    assertFiniteNumberInput(value, { ...limits, label });
-    return validateNumericString(value.toString(), { ...limits, label });
+    if (!Number.isFinite(value)) assertFiniteNumberInput(value, { ...limits, label });
+    return validateNumericString(numberInputText(value), { ...limits, label });
   }
   return validateNumericString(value, { ...limits, label });
 }
@@ -176,6 +200,14 @@ export function safeNumberFromInput(value: NumericInput, limits: NumericValidati
   const numeric = Number(validation.raw);
   if (!Number.isFinite(numeric)) {
     throw makeError(ERROR_CODES.NUMERIC_OVERFLOW, `${label} cannot be represented as a finite JavaScript number.`, {
+      path: label,
+      value: validation.raw
+    });
+  }
+  // A non-zero input that a double reads as 0 (1e-400 under a raised exponent
+  // limit) is refused like one that overflows, not taken as 0 (review).
+  if (numeric === 0 && /[1-9]/u.test(validation.raw.split(/e/iu)[0] ?? "")) {
+    throw makeError(ERROR_CODES.UNSAFE_NUMERIC_RANGE, `${label} is too small to be represented as a JavaScript number.`, {
       path: label,
       value: validation.raw
     });

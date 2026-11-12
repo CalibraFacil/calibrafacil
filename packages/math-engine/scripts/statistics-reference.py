@@ -28,7 +28,11 @@ def t_upper_tail(t, nu):
     t, nu = mpf(t), mpf(nu)
     z = t * t / (nu + t * t)
     if z < mpf(1) / 2:
-        return (1 - betainc(mpf(1) / 2, nu / 2, 0, z, regularized=True)) / 2
+        # 1 - I_z cancels in the tail: the working precision follows the size of the tail.
+        mp.dps = 60 + int(float(t * t) / 4) + 20
+        value = (1 - betainc(mpf(1) / 2, nu / 2, 0, z, regularized=True)) / 2
+        mp.dps = 60
+        return +value
     return betainc(nu / 2, mpf(1) / 2, 0, nu / (nu + t * t), regularized=True) / 2
 
 
@@ -67,12 +71,12 @@ for p in ["0.84134474606854293", "0.95", "0.975", "0.97725", "0.99", "0.995", "0
     print(f"    [{p}, {lit(normal_quantile(mpf(float(p))))}],")
 
 print("studentTQuantile: [p, nu, t]")
-for nu in ["0.5", "1", "2", "3", "4.6", "10", "50", "1000", "9430", "100000", "9268196", "10000000"]:
+for nu in ["0.5", "1", "2", "3", "4.6", "10", "50", "1000", "9430", "100000", "100001", "9268196", "10000000", "10000024", "1000000000", "1e15"]:
     for p in ["0.6", "0.841345", "0.975", "0.97725", "0.995", "0.9999"]:
         print(f"    [{p}, {nu}, {lit(t_quantile(mpf(float(p)), mpf(float(nu))))}],")
 
 print("studentTCdf: [t, nu, P(T <= t)]")
-for nu in ["0.5", "1", "3", "10", "1000", "1000000"]:
+for nu in ["0.5", "1", "3", "10", "1000", "100000", "1000000", "1000000000"]:
     for t in ["-40", "-6", "-2", "-1e-4", "-1e-8", "-1e-12", "1e-9", "0.5", "1.7", "1.75", "3"]:
         tail = t_upper_tail(abs(mpf(t)), nu)
         print(f"    [{t}, {nu}, {lit(tail if mpf(t) < 0 else 1 - tail)}],")
