@@ -5,6 +5,64 @@ Every release of Calibra Fácil, newest first. Entries are written by
 [Conventional Commits](https://www.conventionalcommits.org/) merged to `main`; see
 [`DEPLOYMENT.md`](./DEPLOYMENT.md#updating) before updating an instance.
 
+## [0.5.0](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.3...v0.5.0) (2026-11-12)
+
+
+### Features
+
+* **api:** an endpoint definition may carry its permission, and mount applies it ([#383](https://github.com/CalibraFacil/calibrafacil/issues/383)) ([12ee41c](https://github.com/CalibraFacil/calibrafacil/commit/12ee41cc4805c45399b58d1888724dbe73e925f1))
+* **contracts:** endpoint definitions validate path params ([#241](https://github.com/CalibraFacil/calibrafacil/issues/241)) ([1c08cba](https://github.com/CalibraFacil/calibrafacil/commit/1c08cba79085a082ad3b4c128c25bc201790f193))
+* every lifecycle is an explicit state machine, enforced in Postgres ([#189](https://github.com/CalibraFacil/calibrafacil/issues/189)) ([430d2f1](https://github.com/CalibraFacil/calibrafacil/commit/430d2f1efc7515de41c63d5ce46fb32fd81267cb))
+* **lint:** calibra/no-literal-query-keys; settings and integrations on key factories (F9) ([#264](https://github.com/CalibraFacil/calibrafacil/issues/264)) ([b6024ff](https://github.com/CalibraFacil/calibrafacil/commit/b6024ffc1441fd1a14de3261684ff4ae82f24a78))
+
+
+### Bug fixes
+
+* **api:** a customer route identifier longer than an integer is a tax id, not an id ([#347](https://github.com/CalibraFacil/calibrafacil/issues/347)) ([ab7df76](https://github.com/CalibraFacil/calibrafacil/commit/ab7df767871d802b0d39bcbfb3e6f8452998e5de))
+* **api:** a failed query's text no longer reaches a response body ([#391](https://github.com/CalibraFacil/calibrafacil/issues/391)) ([4bdbeab](https://github.com/CalibraFacil/calibrafacil/commit/4bdbeab48465d94a2a7ae0f51e2c91289cd35d7a))
+* **api:** caught errors go through the redacting reporter, not console.error ([#344](https://github.com/CalibraFacil/calibrafacil/issues/344)) ([c1ec0f9](https://github.com/CalibraFacil/calibrafacil/commit/c1ec0f9fe9dc30bc09c1fb93c24f533ce88bea9a))
+* **api:** failed-query text never reaches the device, the API-key holder or a stored row ([#374](https://github.com/CalibraFacil/calibrafacil/issues/374)) ([52d6ad4](https://github.com/CalibraFacil/calibrafacil/commit/52d6ad49834a1822fe4f83254faee528871adeb6))
+* **api:** frozen method and calibration snapshots are parsed with their schema, not guessed from a few fields ([#345](https://github.com/CalibraFacil/calibrafacil/issues/345)) ([33d2d98](https://github.com/CalibraFacil/calibrafacil/commit/33d2d984589e0b2334dc40331c8ddef5cbb67928))
+* **api:** raw SQL rows are parsed with a schema, and an unknown result shape throws ([#342](https://github.com/CalibraFacil/calibrafacil/issues/342)) ([a6a5e4c](https://github.com/CalibraFacil/calibrafacil/commit/a6a5e4cf4e770adbdf5d80f61778a0400be3d4e6))
+* **api:** the post-approval automatic ERP send is awaited and reported, not a floating promise ([#334](https://github.com/CalibraFacil/calibrafacil/issues/334)) ([a4f8d20](https://github.com/CalibraFacil/calibrafacil/commit/a4f8d202ecf8f1c5044ae178793b7c30bc72ae2d))
+* **api:** the rate limiter counts a credential on its own only once the API accepted it ([#367](https://github.com/CalibraFacil/calibrafacil/issues/367)) ([0303386](https://github.com/CalibraFacil/calibrafacil/commit/03033862a4800007822cac96a061b66fd5d3e367))
+* **auth:** one lab web URL resolver; invitation links no longer fall back to localhost ([#370](https://github.com/CalibraFacil/calibrafacil/issues/370)) ([d0b926c](https://github.com/CalibraFacil/calibrafacil/commit/d0b926c65c4a565977e3274c482091c097c375a2))
+* **client-runtime:** parse the local server's JSON with the contract schemas ([#373](https://github.com/CalibraFacil/calibrafacil/issues/373)) ([eddafe4](https://github.com/CalibraFacil/calibrafacil/commit/eddafe4d7c073643a16ac1e4e5a76dda65a5b78b))
+* **contracts:** list service_order_not_found once in API_ERROR_CODES ([#217](https://github.com/CalibraFacil/calibrafacil/issues/217)) ([7a899e5](https://github.com/CalibraFacil/calibrafacil/commit/7a899e5611ba5b8595d6c42b8bdb5bd7acc62d3b))
+* **contracts:** main does not compile: the push-operation table still named LEGACY_SYNC_PROTOCOL_VERSION ([#276](https://github.com/CalibraFacil/calibrafacil/issues/276)) ([5c94646](https://github.com/CalibraFacil/calibrafacil/commit/5c9464673fd6803796ada4a1c9294384a72262c8))
+* **contracts:** restore signatures, visits and calibration-requests endpoint definitions ([#234](https://github.com/CalibraFacil/calibrafacil/issues/234)) ([9ec2e2b](https://github.com/CalibraFacil/calibrafacil/commit/9ec2e2ba14ae9cd3905904061b42b0be757cd6ce))
+* **deploy:** the portal CSP pins the current hash of its inline theme script ([#300](https://github.com/CalibraFacil/calibrafacil/issues/300)) ([d7f7e11](https://github.com/CalibraFacil/calibrafacil/commit/d7f7e11de43ba14d7f1b0338b68f953925d05b1a))
+* **deps:** node-forge 1.4.3 and fast-xml-parser 5.12.0; the inline-script check reads any script tag ([#402](https://github.com/CalibraFacil/calibrafacil/issues/402)) ([12b5c52](https://github.com/CalibraFacil/calibrafacil/commit/12b5c5286b0379173d49d614a88adf24f026cdaf))
+* **jobs-core:** the worker reads and writes dates as UTC whatever the host time zone ([#362](https://github.com/CalibraFacil/calibrafacil/issues/362)) ([9ea8351](https://github.com/CalibraFacil/calibrafacil/commit/9ea8351f959c9118616ae244f13e01062508a128))
+* **jobs:** job creation refusals are mapped by DomainError, not by their Portuguese sentence ([#364](https://github.com/CalibraFacil/calibrafacil/issues/364)) ([2acb9de](https://github.com/CalibraFacil/calibrafacil/commit/2acb9ded4df78ad9ad33404e45f5d840e12b0791))
+* **local-server:** job execute/submit answer refusals with their 4xx and our bugs with 500 ([#294](https://github.com/CalibraFacil/calibrafacil/issues/294)) ([fb90ed1](https://github.com/CalibraFacil/calibrafacil/commit/fb90ed1d5b65d6345bae08e91bfe1f6d683d2e82))
+* **math-engine:** engine 0.5.0, ten defects found by a review of 0.4.0 ([#400](https://github.com/CalibraFacil/calibrafacil/issues/400)) ([0ab0804](https://github.com/CalibraFacil/calibrafacil/commit/0ab08040760aa793d236727a4fdb06f64dc08d0a))
+* **math-engine:** engine 0.6.0, the open items of the 0.4.0 review ([#401](https://github.com/CalibraFacil/calibrafacil/issues/401)) ([e451727](https://github.com/CalibraFacil/calibrafacil/commit/e451727b87efb024a5dfe217ec782d2f843a2e98))
+* **nc:** the manual 7.10 acknowledgement no longer returns the public ack token ([#242](https://github.com/CalibraFacil/calibrafacil/issues/242)) ([8a4603f](https://github.com/CalibraFacil/calibrafacil/commit/8a4603f9438577fd65de1a3e7b58f7ba4d3ee33e))
+* **notifications:** the Resend webhook records its ledger row and the suppression in one transaction ([#365](https://github.com/CalibraFacil/calibrafacil/issues/365)) ([8351b81](https://github.com/CalibraFacil/calibrafacil/commit/8351b813fca8f14063128d18fdfb411db32c237c))
+* **portal:** a failed organization switch keeps the old org's cache and stored choice; the tenant-scope docs of web and portal agree; one theme storage key ([#289](https://github.com/CalibraFacil/calibrafacil/issues/289)) ([53f6d1e](https://github.com/CalibraFacil/calibrafacil/commit/53f6d1e6a3eef7f2e1dd66d3dc9aaecdb3d0109d))
+* **portal:** one portal-host scope; an unknown host no longer sees every laboratory ([#200](https://github.com/CalibraFacil/calibrafacil/issues/200)) ([8688fb7](https://github.com/CalibraFacil/calibrafacil/commit/8688fb714c7c5b1bfdf19734a1c5e510a8b3d882))
+* **schemas,contracts,auth:** drop the priority leaked into the notification types; one canonical spelling for twin error codes; calibration role matrix derived from the job machine ([#267](https://github.com/CalibraFacil/calibrafacil/issues/267)) ([b5e100b](https://github.com/CalibraFacil/calibrafacil/commit/b5e100b95ca2b44b5563dec1eda72dbb58fbb332))
+* **schemas:** one NC and one CAPA create schema for contract, server and form ([#366](https://github.com/CalibraFacil/calibrafacil/issues/366)) ([31e907d](https://github.com/CalibraFacil/calibrafacil/commit/31e907dc626461c702cb0169f4fcf8763f3404ab))
+* **schemas:** one query flag that reads "false" as false ([#238](https://github.com/CalibraFacil/calibrafacil/issues/238)) ([11dd6a8](https://github.com/CalibraFacil/calibrafacil/commit/11dd6a86ed8fb29fcc9c350452c553f4bd7799d8))
+* **telemetry:** redact errors in the worker, jobs-core, db queue and notifications ([#368](https://github.com/CalibraFacil/calibrafacil/issues/368)) ([a5b74b2](https://github.com/CalibraFacil/calibrafacil/commit/a5b74b29243dc006445c656a6cecfdd00e0c90fa))
+* **web,portal,shared:** redirect allow-list, lab handoff, one decimal parser, label errors, unknown statuses ([#268](https://github.com/CalibraFacil/calibrafacil/issues/268)) ([0d62941](https://github.com/CalibraFacil/calibrafacil/commit/0d62941774a1b33afd10fe3a1bc321af1852cb2a))
+* **web,portal:** a tab follows an organization or unit switch made in another tab ([#290](https://github.com/CalibraFacil/calibrafacil/issues/290)) ([662b724](https://github.com/CalibraFacil/calibrafacil/commit/662b724a0d61368d991b890a759d1df1fa2647f9))
+* **web,portal:** refresh the lists after creating an NC/CAPA and after a portal quote decision ([#266](https://github.com/CalibraFacil/calibrafacil/issues/266)) ([07f50d6](https://github.com/CalibraFacil/calibrafacil/commit/07f50d610651a89355962dab6d19ec92ce635d3c))
+* **web:** an expired desktop session shows the notice and a way back in, not a silent no-op ([#292](https://github.com/CalibraFacil/calibrafacil/issues/292)) ([e185897](https://github.com/CalibraFacil/calibrafacil/commit/e1858979e8f8eb612da299160d1c47fd76cf4357))
+* **web:** read the signed-in user's own role, not the first member's ([#203](https://github.com/CalibraFacil/calibrafacil/issues/203)) ([7fa0d80](https://github.com/CalibraFacil/calibrafacil/commit/7fa0d80e479720d53923ee561c0ed7b9f962b89e))
+
+
+### Performance
+
+* **portal:** leave the lab's schemas out of the portal bundle; run the bundle budgets in CI ([#296](https://github.com/CalibraFacil/calibrafacil/issues/296)) ([fb6c1b1](https://github.com/CalibraFacil/calibrafacil/commit/fb6c1b1939ebc3c96ee922f7edd0a0e8134970f5))
+
+
+### Documentation
+
+* **jobs:** say why five raw job routes have no endpoint definition ([#378](https://github.com/CalibraFacil/calibrafacil/issues/378)) ([34e3d9d](https://github.com/CalibraFacil/calibrafacil/commit/34e3d9d1eef4aeac9b44d80bb8b5be05656af598))
+* **schemas:** state machine comments cite current paths, no line numbers ([#350](https://github.com/CalibraFacil/calibrafacil/issues/350)) ([955cbd9](https://github.com/CalibraFacil/calibrafacil/commit/955cbd9b21920e212e1e8a3a18974b4b597f946b))
+
 ## [0.4.3](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.2...v0.4.3) (2026-11-04)
 
 
