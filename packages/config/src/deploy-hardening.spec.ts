@@ -19,6 +19,15 @@ function read(path: string): string {
   return readFileSync(join(repoRoot, path), "utf8");
 }
 
+// An inline script is a <script> element with no src attribute: the browser
+// runs its text, and the CSP has to carry its hash. Tag and attribute names are
+// case-insensitive in HTML and the tag may carry other attributes
+// (<SCRIPT>, <script type="module">), so the patterns are not the literal
+// "<script>" (CodeQL js/bad-tag-filter).
+const INLINE_SCRIPT_TAG = /<script\b(?![^>]*\bsrc\s*=)[^>]*>/i;
+const INLINE_SCRIPT =
+  /<script\b(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi;
+
 /** The text of each service under `services:`, by name. */
 function composeServices(): Map<string, string> {
   const compose = read("deploy/compose.yaml");
@@ -242,7 +251,7 @@ describe("deploy/Caddyfile", () => {
 
   it("the portal CSP pins the hash of the inline theme script of its index.html", () => {
     const html = read("apps/portal/index.html");
-    const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+    const inline = [...html.matchAll(INLINE_SCRIPT)];
     expect(inline).toHaveLength(1);
     const hash = createHash("sha256")
       .update(inline[0]?.[1] ?? "")
@@ -253,7 +262,7 @@ describe("deploy/Caddyfile", () => {
   });
 
   it("the lab app's index.html has no inline script the policy would block", () => {
-    expect(read("apps/web/index.html")).not.toMatch(/<script>/);
+    expect(read("apps/web/index.html")).not.toMatch(INLINE_SCRIPT_TAG);
   });
 });
 
