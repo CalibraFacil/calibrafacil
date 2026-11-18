@@ -282,3 +282,14 @@ allowBuilds:
 minimumReleaseAge: 4320
 
 minimumReleaseAgeExclude: []
+
+auditConfig:
+  ignoreGhsas:
+    # GHSA-fc5q-39xc-vjpf (high): picomatch <=4.0.7 ReDoS on single-branch
+    # repeated extglobs such as +(*). No patched release exists yet (the
+    # advisory names 4.0.8, which is unpublished). Every path is build or docs
+    # tooling (vite, vitest, rollup, unplugin, knip, and tinyglobby/fdir under
+    # fumadocs in apps/docs), and every glob it compiles comes from repo
+    # configuration, never from a request. Remove this entry and override
+    # picomatch to the patched release once it is published.
+    - GHSA-fc5q-39xc-vjpf
