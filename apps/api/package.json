@@ -51,7 +51,7 @@
     "@scalar/hono-api-reference": "^0.10.20",
     "croner": "^10.0.1",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.13.7",
+    "hono": "^4.13.18",
     "kysely": "^0.28.17",
     "zod": "^4.6.6"
   },

@@ -20,8 +20,10 @@ overrides:
   # GHSA-vcvr-r3jv-pc5j: next >=16.2.0 <16.3.6 remote code execution in
   # next/og ImageResponse. GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr
   # (critical, unauthenticated RCE) and GHSA-p3m5-59mp-jv5r (high, DoS):
-  # next >=16.0.0 <=16.4.0. apps/docs and packages/auth pin the same version.
-  next: 16.4.2
+  # next >=16.0.0 <=16.4.0. A 'use cache' function called through
+  # unstable_cache() leaked across root params before 16.4.5. apps/docs and
+  # packages/auth pin the same version.
+  next: 16.4.6
   # GHSA-474x-hrwr-fgx4 (low): fast-xml-parser <=5.11.2 takes quadratic time
   # scanning an unterminated stop-node tag. Reached through @aws-sdk/xml-builder
   # and @better-auth/sso.
@@ -175,11 +177,13 @@ overrides:
   "@hono/node-server@<1.19.15": ^1.19.15
   # Seven advisories against hono <4.12.34 (body-limit bypass, proxy header
   # trust, path-normalisation confusion), then GHSA-hxh3-vqpv-xpqv: hono/jsx
-  # renders plain strings unescaped in boundary components (<4.13.7). Every
-  # workspace package declares ^4.13.7 directly, but the shadcn CLI pulls its
-  # own older 4.x through @modelcontextprotocol/sdk, so the range is forced
-  # tree-wide.
-  "hono@<4.13.7": ^4.13.7
+  # renders plain strings unescaped in boundary components (<4.13.7), then
+  # five advisories fixed in 4.13.16 (csrf() and text/ping, mount() middleware
+  # bypass, css helper injection, RegExpRouter wildcard middleware, multipart
+  # validator('form') skip). Every workspace package declares ^4.13.18
+  # directly, but the shadcn CLI pulls its own older 4.x through
+  # @modelcontextprotocol/sdk, so the range is forced tree-wide.
+  "hono@<4.13.18": ^4.13.18
   # 18 advisories (14 moderate, 4 low) against dompurify — a long tail of
   # mXSS sanitizer bypasses, all superseded by 3.4.13. Transitive via Payload
   # (apps/cms) for the rich-text editor.
@@ -278,3 +282,14 @@ allowBuilds:
 minimumReleaseAge: 4320
 
 minimumReleaseAgeExclude: []
+
+auditConfig:
+  ignoreGhsas:
+    # GHSA-fc5q-39xc-vjpf (high): picomatch <=4.0.7 ReDoS on single-branch
+    # repeated extglobs such as +(*). No patched release exists yet (the
+    # advisory names 4.0.8, which is unpublished). Every path is build or docs
+    # tooling (vite, vitest, rollup, unplugin, knip, and tinyglobby/fdir under
+    # fumadocs in apps/docs), and every glob it compiles comes from repo
+    # configuration, never from a request. Remove this entry and override
+    # picomatch to the patched release once it is published.
+    - GHSA-fc5q-39xc-vjpf
