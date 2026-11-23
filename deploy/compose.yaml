@@ -290,7 +290,7 @@ services:
       - s3-data:/data
 
   gotenberg:
-    image: gotenberg/gotenberg:9.5.1
+    image: gotenberg/gotenberg:9.9.1
     restart: unless-stopped
     logging: *logging
     # Chromium and LibreOffice render the PDFs; the heaviest container.
@@ -303,7 +303,7 @@ services:
       start_period: 15s
 
   mailpit:
-    image: axllent/mailpit:v1.33.1
+    image: axllent/mailpit:v1.34.0
     profiles: ["mailpit"]
     restart: unless-stopped
     logging: *logging
